@@ -1,0 +1,34 @@
+# dependencies
+/node_modules
+/dashboard/node_modules
+
+# build artifacts
+/dist
+/dashboard/.next
+/dashboard/out
+/dashboard/build
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/coverage
+/coverage_data
+
+# environment variables
+.env
+.env.local
+.env.*.local
+dashboard/.env.local
+
+# misc
+.DS_Store
+.idea
+.vscode
+*.swp
+*.bak
+
+# Deno
+.deno
+.deno_plugins

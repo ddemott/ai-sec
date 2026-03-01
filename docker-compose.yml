@@ -1,0 +1,13 @@
+services:
+  db:
+    image: ankane/pgvector:latest
+    container_name: ai-sec-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

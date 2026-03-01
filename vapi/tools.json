@@ -1,0 +1,55 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "get_customer_context",
+      "description": "Retrieves the history and context for a customer based on their phone number. Call this at the start of every conversation to see if they are a returning caller.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone": { "type": "string", "description": "The caller's E.164 phone number." },
+          "tenant_id": { "type": "string", "description": "The unique ID for the business (tenant)." }
+        },
+        "required": ["phone", "tenant_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "check_availability",
+      "description": "Checks if a specific time slot is available for booking.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "resource_id": { "type": "string", "description": "The ID of the truck or person to book." },
+          "start_time": { "type": "string", "format": "date-time", "description": "ISO 8601 start time." },
+          "end_time": { "type": "string", "format": "date-time", "description": "ISO 8601 end time." }
+        },
+        "required": ["tenant_id", "resource_id", "start_time", "end_time"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "book_appointment",
+      "description": "Books an appointment in the calendar. Always check availability first.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "resource_id": { "type": "string" },
+          "phone": { "type": "string" },
+          "name": { "type": "string" },
+          "start_time": { "type": "string", "format": "date-time" },
+          "end_time": { "type": "string", "format": "date-time" },
+          "description": { "type": "string", "description": "What the appointment is for (e.g., 'Flat tire repair')." },
+          "call_id": { "type": "string", "description": "Pass the 'call.id' from the conversation context." }
+        },
+        "required": ["tenant_id", "resource_id", "phone", "start_time", "end_time"]
+      }
+    }
+  }
+]
