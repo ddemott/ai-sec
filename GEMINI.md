@@ -2,6 +2,7 @@
 
 ## Project Status
 - **Current Phase**: **PoC Complete**.
+- **Source Control**: Pushed to [github.com/ddemott/ai-sec](https://github.com/ddemott/ai-sec) (Private).
 - **Ready for**: Live Integration Testing with real phone calls.
 - **Backend Strategy**: **Edge-First / Serverless**.
 - **Dashboard Goal**: **Management & Intervention** (Achieved).
