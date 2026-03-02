@@ -29,6 +29,7 @@ The Dashboard provides business owners with transparency and control.
 - **CRM Viewer**: View customer history, notes, and AI-generated "Contextual Memories."
 - **AI Tuner**: Live editor for the `system_prompt`, `voice_id`, and `working_hours`.
 - **Call Explorer**: List of all calls with transcripts, sentiment analysis, and audio playback.
+ - **Scheduling View**: Outlook-style calendar that surfaces not only raw appointment times but also the **effective load** on each resource (including prep/cleanup/admin and travel for mobile tenants) so operators can see slack at a glance.
 
 ---
 
@@ -48,5 +49,12 @@ The Dashboard provides business owners with transparency and control.
 
 ## 6. Data Storage Strategy (Source of Truth: Supabase)
 - **Structured Data**: `tenants`, `resources`, `customers`, `appointments`.
+- **Metadata**: JSONB `metadata` fields on core tables (e.g., customers, appointments) capture vertical-specific details like vehicle info, services, or special instructions without changing the base schema. This includes **per-service timing metadata** (prep/setup, base duration, cleanup/admin, travel) that the scheduler uses to compute effective booking blocks.
 - **Contextual Memory**: `call_summaries` using **pgvector** for semantic recall.
 - **Audit Logs**: `call_transcripts` with sentiment tracking.
+
+## 7. Tenant Knowledge Base & RAG Layer
+- **Tenant Knowledge Base (Planned)**: A `tenant_docs`-style table stores per-tenant business knowledge (hours, policies, services, FAQs) as small text chunks with embeddings (`vector(1536)`), sourced from PDFs, website copy, and manually entered notes.
+- **Ingestion Pipeline**: PDFs and other artifacts are converted to text, chunked, and embedded via OpenAI `text-embedding-3-small`, either through a Deno script or n8n workflow, and written into the knowledge table under the correct `tenant_id` (protected by RLS).
+- **Retrieval-Augmented Generation**: A dedicated Vapi tool (e.g., `get_company_policy_answer`) computes an embedding for the caller's question, retrieves the top-N knowledge chunks for that tenant using pgvector, and passes them plus the question into the LLM with a strict system prompt so answers are consistent and policy-correct.
+- **Unified Memory View (Future)**: Over time, both `call_summaries` and tenant knowledge docs may be queried together so the secretary can combine "what happened with this customer" and "what the business policy says" in a single answer.

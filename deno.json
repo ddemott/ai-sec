@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "test": "deno test --allow-net --allow-env --allow-read"
+    "test": "deno test --allow-net --allow-env --allow-read --allow-sys supabase/functions/vapi-tools/service_test.ts supabase/functions/vapi-tools/integration_test.ts tests/schema_test.ts tests/template_test.ts"
   },
   "imports": {
     "@std/testing": "jsr:@std/testing@^1.0.0",

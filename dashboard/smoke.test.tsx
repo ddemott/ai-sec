@@ -5,9 +5,8 @@ import Home from './app/page'
 
 test('Dashboard Home Page Smoke Test', () => {
   render(<Home />)
-  
-  // Verify that the Sidebar navigation exists
-  // We look for the "Appointments" title or the text in the bottom nav
-  expect(screen.getAllByText(/Appointments/i).length).toBeGreaterThan(0)
-  expect(screen.getAllByText(/People/i).length).toBeGreaterThan(0)
+
+  // Verify that the login portal renders correctly
+  expect(screen.getByText(/AI Secretary Portal/i)).toBeTruthy()
+  expect(screen.getByText(/Sign In to Dashboard/i)).toBeTruthy()
 })

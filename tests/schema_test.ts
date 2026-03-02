@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { assertEquals, assertNotEquals } from "@std/assert";
 
-const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5432/postgres";
+const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres";
 const sql = postgres(DB_URL);
 
 // Helper to clear the DB before tests
@@ -43,7 +43,8 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${startTime}, 
                 ${endTime}, 
                 'Flat tire repair', 
-                'call_001'
+                'call_001',
+                NULL
             );
         `;
 
@@ -64,7 +65,8 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${startTime}, 
                 ${endTime}, 
                 'Overlapping appointment', 
-                'call_002'
+                'call_002',
+                NULL
             );
         `;
 
@@ -73,8 +75,8 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
         assertEquals(result[0].error_message, "Slot already booked");
     });
 
-    await t.step("Should allow booking a back-to-back slot", async () => {
-        const startTime = new Date("2026-03-01T11:00:00Z"); // Exactly starts when previous ends
+    await t.step("Should enforce buffers and reject tight back-to-back slots", async () => {
+        const startTime = new Date("2026-03-01T11:00:00Z"); // Immediately after prior 10:00-11:00 service window
         const endTime = new Date("2026-03-01T12:00:00Z");
 
         const result = await sql`
@@ -84,8 +86,32 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${customer.id}, 
                 ${startTime}, 
                 ${endTime}, 
-                'Back-to-back appointment', 
-                'call_003'
+                'Back-to-back appointment (should fail due to buffers)', 
+                'call_003',
+                NULL
+            );
+        `;
+
+        assertEquals(result[0].success, false);
+        assertEquals(result[0].appointment_id, null);
+        assertEquals(result[0].error_message, "Slot already booked");
+    });
+
+    await t.step("Should allow booking when respecting buffer gap", async () => {
+        // Leave enough room after the 10:00-11:00 appointment plus its buffers
+        const startTime = new Date("2026-03-01T12:00:00Z");
+        const endTime = new Date("2026-03-01T13:00:00Z");
+
+        const result = await sql`
+            SELECT * FROM book_appointment_atomic(
+                ${tenant.id}, 
+                ${resource.id}, 
+                ${customer.id}, 
+                ${startTime}, 
+                ${endTime}, 
+                'Properly spaced appointment', 
+                'call_004',
+                NULL
             );
         `;
 

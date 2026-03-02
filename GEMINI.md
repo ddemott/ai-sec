@@ -13,6 +13,7 @@
 3. **Multi-Tenancy**: Secured via Postgres RLS and `api_user` role.
 4. **Strict TDD**: **100% Test Pass Rate**. Backend, Edge, and Frontend are fully verified.
 5. **Repeatability**: `start-all.sh` brings up the entire stack from scratch.
+6. **Template + Metadata System**: Core models stay generic (tenants, customers, resources, appointments) while vertical-specific details are captured in JSONB `metadata` and driven by per-industry templates.
 
 ## Recent Progress
 - **Dashboard UI**: Built a responsive Outlook-style manager for Appointments, CRM, and AI Tuning.

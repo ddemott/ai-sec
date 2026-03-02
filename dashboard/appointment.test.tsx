@@ -17,9 +17,10 @@ const { mockSupabase } = vi.hoisted(() => {
             description: 'Test Appointment', 
             start_time: '2026-03-01T10:00:00Z',
             end_time: '2026-03-01T11:00:00Z',
-            customers: { name: 'Bob', phone: '123' },
+            customers: { name: 'Bob', phone: '123', metadata: {} },
             resources: { name: 'Truck 1' },
-            status: 'scheduled'
+            status: 'scheduled',
+            tenant_id: 'tenant-1'
         }], 
         error: null 
       }))
@@ -31,30 +32,49 @@ vi.mock('@/lib/supabase', () => ({
   supabase: mockSupabase
 }))
 
-test('AppointmentView: should reschedule an appointment', async () => {
+test('AppointmentView: clicking calendar event opens detail view', async () => {
   render(<AppointmentView />)
-  
-  // Wait for load and select the header specifically
-  await waitFor(() => expect(screen.getAllByText(/Test Appointment/i).length).toBeGreaterThan(0))
-  
-  // Click Reschedule
-  const rescheduleBtn = screen.getByRole('button', { name: /Reschedule/i })
-  fireEvent.click(rescheduleBtn)
-  
-  // Verify date input exists
-  const dateInput = screen.getByDisplayValue(/2026-03-01T10:00/i)
-  expect(dateInput).toBeDefined()
-  
-  // Change time
-  fireEvent.change(dateInput, { target: { value: '2026-03-01T11:00' } })
-  
-  // Mock success response
-  mockSupabase.then.mockImplementationOnce((resolve) => resolve({ error: null }))
-  
-  // Confirm Change (using text match)
-  const confirmBtn = screen.getByText(/Confirm/i)
-  fireEvent.click(confirmBtn)
-  
-  // Verify modal/form closes
-  await waitFor(() => expect(screen.queryByText(/Confirm/i)).toBeNull())
+
+  // Wait for the calendar event for Bob to render
+  const eventButton = await screen.findByRole('button', { name: /Bob/i })
+  fireEvent.click(eventButton)
+
+  // Detail header should now show the appointment description
+  const heading = await screen.findByRole('heading', { name: /Test Appointment/i })
+  expect(heading).toBeTruthy()
+})
+
+test('AppointmentView: can modify and save an appointment', async () => {
+  // Ensure the component believes a tenant is logged in so updates are allowed
+  window.localStorage.setItem('tenantId', 'tenant-1')
+
+  const fetchMock = vi
+    .spyOn(globalThis, 'fetch' as any)
+    .mockResolvedValue({ ok: true, json: async () => ({ success: true }) } as any)
+
+  render(<AppointmentView />)
+
+  // Select the appointment via the calendar event
+  const eventButton = await screen.findByRole('button', { name: /Bob/i })
+  fireEvent.click(eventButton)
+
+  // Enter edit mode (there may be more than one Modify button rendered)
+  const [modifyButton] = await screen.findAllByRole('button', { name: /Modify/i })
+  fireEvent.click(modifyButton)
+
+  // Change the start time via the datetime-local input bound to start_time
+  const startInput = screen.getByDisplayValue(/2026-03-01T10:00/i) as HTMLInputElement
+  expect(startInput.value).toContain('10:00')
+  fireEvent.change(startInput, { target: { value: '2026-03-01T11:00' } })
+
+  const updateButton = screen.getByRole('button', { name: /Update Appointment/i })
+  fireEvent.click(updateButton)
+
+  await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/appointments/apt-1/update'),
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+  fetchMock.mockRestore()
 })

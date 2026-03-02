@@ -26,3 +26,22 @@ export interface Customer {
   address: string;
   metadata: any;
 }
+
+export interface Tenant {
+  id: string;
+  name: string;
+  business_type: string;
+  system_prompt: string;
+  voice_id: string;
+  first_message: string;
+}
+
+export interface BusinessTemplate {
+  business_type: string;
+  display_name: string;
+  system_prompt_template: string;
+  first_message: string;
+  voice_id: string;
+  default_resource_name: string;
+  default_resource_description: string;
+}

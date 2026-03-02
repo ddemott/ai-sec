@@ -50,6 +50,15 @@ For a deeper technical view of the architecture (Edge, Postgres, Orchestration),
 - **AI Tools (Edge)**: `vapi-tools` implemented with `get_customer_context`, `check_availability`, and `book_appointment`.
 - **TDD Compliance**: Verified with integration tests covering Happy and Sad paths.
 
+**Smart Scheduling & Service Timing**
+- **Service-Aware Durations**: Templates define not just base duration, but also **prep**, **cleanup/admin**, and (for mobile tenants) **travel time** per service type.
+- **Effective Blocks**: The `book_appointment_atomic` RPC now expands requested service windows into full blocked intervals (prep + service + cleanup + travel) and stores those as `start_time`/`end_time`, so all overlap checks operate on the true occupied time.
+- **Slack & Utilization Policies**: Per-tenant knobs (e.g., max daily utilization, minimum gaps, “keep one trailing slot open”) will layer on top of the effective blocks to ensure the system leaves room to move appointments forward and avoids over-packing the day.
+
+**Tenant Knowledge & Company FAQs (Planned)**
+- **Tenant-Scoped Knowledge Base**: A Supabase table (e.g., `tenant_docs`) will hold per-tenant business knowledge (hours, policies, FAQs) as chunked text with pgvector embeddings, sourced from PDFs and other artifacts, behind the same RLS boundaries as CRM and appointments.
+- **RAG Answering Flow**: Vapi tools will answer questions like “What are your hours?” or “Do you do tire changes at 3 AM?” by embedding the question, retrieving the most relevant knowledge chunks for that tenant, and asking the LLM to respond strictly based on those snippets.
+
 **Planning artifacts**
 - [GEMINI.md](GEMINI.md) (Project journal & decisions).
 - [docs/PLAN.md](docs/PLAN.md) (Updated multi-phase plan).
@@ -94,7 +103,18 @@ npm test                    # runs Vitest TDD suite
 
 ## 7. Next Steps
 
-1. Configure the **Vapi Agent** with DynaTire persona and tool definitions.
-2. Link the **Telnyx phone number** to the Vapi agent.
-3. Implement the **post-call summarization** worker in n8n.
-4. Add **Owner SMS** notifications when a job is booked.
+The initial PoC through Phase 5 (tools, async layer, and dashboard) is complete. Upcoming work focuses on integrations, observability, and making the core more template-driven:
+
+1. **Go Live & Telephony Wiring**
+  - Configure the Vapi Agent with the current tenant persona and tool definitions.
+  - Link Telnyx phone numbers to the Vapi agent for real inbound calls.
+2. **Expand Async Workflows (n8n)**
+  - Harden and monitor the existing post-call summarization worker.
+  - Add calendar sync (Google/Outlook) and Owner SMS notifications driven by `appointments` webhooks.
+  - Standardize how external calendar webhooks and internal tools hit the `/calendar/sync` HTTP endpoint as the single entry point for calendar updates.
+3. **Template & Metadata System**
+  - Introduce `metadata` fields on customers/appointments and drive intake questions from per-industry templates.
+  - Ensure AI prompts and tools use this metadata instead of hard-coded vertical logic, including **per-service timing profiles** (prep, cleanup/admin, travel) that inform scheduling.
+4. **Analytics & Observability**
+  - Implement ROI analytics (answered calls vs. bookings) and a usage dashboard per tenant.
+  - Add centralized logging/metrics for Edge Functions, Vapi tool calls, and n8n workflows.

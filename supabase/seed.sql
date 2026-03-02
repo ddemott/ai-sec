@@ -1,4 +1,18 @@
--- Seed Data for AI Secretary SaaS (DynaTire PoC)
+-- Seed Data for AI Secretary SaaS (Platform + Demo Tenants)
+
+-- 0. Create a Platform Tenant for the Site Owner (Super Admin)
+INSERT INTO tenants (id, name, business_type, timezone)
+VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    'AI Sec Platform',
+    'platform-admin',
+    'America/New_York'
+) ON CONFLICT (id) DO NOTHING;
+
+-- 0b. Create a Site Owner User (Platform Admin)
+INSERT INTO users (tenant_id, email, password_hash, full_name)
+VALUES ('00000000-0000-0000-0000-000000000000', 'dale@ai-sec.com', 'password', 'Site Owner')
+ON CONFLICT (email) DO NOTHING;
 
 -- 1. Create a default tenant
 INSERT INTO tenants (id, name, business_type, timezone, system_prompt, voice_id)
@@ -10,6 +24,11 @@ VALUES (
     'You are a professional, helpful secretary for DynaTire...',
     'ba124806-6962-4354-94a0-7607775952f4'
 ) ON CONFLICT (id) DO NOTHING;
+
+-- 1b. Create a User Account for the default tenant
+INSERT INTO users (tenant_id, email, password_hash, full_name)
+VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'admin@dynatire.com', 'password', 'DynaTire Admin')
+ON CONFLICT (email) DO NOTHING;
 
 -- 2. Create a bookable resource (Truck 1)
 INSERT INTO resources (id, tenant_id, name, description)
@@ -49,3 +68,16 @@ VALUES
         'scheduled'
     )
 ON CONFLICT DO NOTHING;
+
+-- 5. Create a Second Tenant and User for Multi-Tenancy Testing
+DO $$
+DECLARE
+    v_new_tenant_id UUID;
+BEGIN
+    INSERT INTO tenants (name, business_type)
+    VALUES ('Suds & Scissors', 'salon')
+    RETURNING id INTO v_new_tenant_id;
+
+    INSERT INTO users (tenant_id, email, password_hash, full_name)
+    VALUES (v_new_tenant_id, 'owner@sportclips.com', 'password', 'Salon Owner');
+END $$;

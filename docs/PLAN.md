@@ -33,6 +33,18 @@
 - [x] **Responsive Design**: Mobile-first bottom navigation and touch-friendly controls.
 
 ## Future Phases (Post-PoC)
+- [ ] **Calendar & CRM Integrations**: First-class sync with Google/Outlook calendars and optional CRMs (HubSpot/Pipedrive), driven by tenant-level settings.
+- [ ] **Template & Metadata System**: Per-industry intake playbooks that write structured data into JSONB `metadata` on customers/appointments while keeping the core schema generic, including **service timing profiles** (prep, base duration, cleanup/admin, travel) that drive smart scheduling.
 - [ ] **ROI Analytics**: View calls Answered vs. Appointments Booked.
 - [ ] **Centralized Observability**: Pino/Winston logging to Axiom/Datadog.
 - [ ] **Usage Dashboard**: Monitor Vapi/Groq costs per tenant.
+
+### Knowledge Base & RAG Layer
+- [ ] **Tenant Knowledge Schema**: Add a `tenant_docs` (or similar) table keyed by `tenant_id` with fields for `title`, `section`, `content`, `source`, and `embedding vector(1536)` to store hours, policies, and FAQs per business.
+- [ ] **PDF / Content Ingestion**: Build a repeatable path (Deno script or n8n workflow) to extract text from PDFs, chunk it, generate embeddings (`text-embedding-3-small`), and populate the tenant knowledge table.
+- [ ] **Policy Q&A Tooling**: Expose a Vapi tool (e.g., `get_company_policy_answer`) that performs tenant-scoped semantic search over this table and feeds the retrieved snippets plus the caller's question into the LLM for consistent answers to "What are your hours?", "Do you work at 3 AM?", etc.
+- [ ] **Dashboard Management (Future)**: Allow owners to upload/update their knowledge artifacts (PDFs, FAQs) and see what content the AI is using to answer company questions.
+
+### Smart Scheduling & Slack Policies
+- Encode per-tenant scheduling policies such as max daily utilization, minimum gaps between effective appointments, and “keep at least one trailing slot open” so the system avoids over-packing days.
+- Ensure availability tools and the Vapi agent only offer times that respect these timing profiles and policies, leaving room for admin work and future schedule adjustments.

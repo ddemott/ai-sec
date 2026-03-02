@@ -11,6 +11,7 @@ const getFixedDate = (daysOut: number, hours: number, minutes: number) => {
 export const MOCK_TENANT = {
   id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
   name: 'DynaTire PoC',
+  business_type: 'mobile-tire',
   system_prompt: 'You are a professional, helpful secretary for DynaTire...',
   voice_id: 'ba124806-6962-4354-94a0-7607775952f4'
 }

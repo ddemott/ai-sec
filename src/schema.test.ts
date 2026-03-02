@@ -20,10 +20,10 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         const startTime = new Date("2026-03-01T10:00:00Z");
         const endTime = new Date("2026-03-01T11:00:00Z");
 
-        const result = await client.query(
-            "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7);",
-            [tenantId, resourceId, customerId, startTime, endTime, 'Flat tire repair', 'call_001']
-        );
+            const result = await client.query(
+                "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8);",
+                [tenantId, resourceId, customerId, startTime, endTime, 'Flat tire repair', 'call_001', null]
+            );
 
         expect(result.rows[0].success).toBe(true);
         expect(result.rows[0].appointment_id).not.toBeNull();
@@ -34,12 +34,14 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         const { tenantId, resourceId, customerId } = await setupBasicTenant(client);
 
         // Book initial
-        await client.query("SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7);",
-            [tenantId, resourceId, customerId, new Date("2026-03-01T10:00:00Z"), new Date("2026-03-01T11:00:00Z"), 'First', 'call_1']);
+            await client.query(
+                "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8);",
+                [tenantId, resourceId, customerId, new Date("2026-03-01T10:00:00Z"), new Date("2026-03-01T11:00:00Z"), 'First', 'call_1', null]
+            );
 
         const result = await client.query(
-            "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7);",
-            [tenantId, resourceId, customerId, new Date("2026-03-01T10:30:00Z"), new Date("2026-03-01T11:30:00Z"), 'Overlap', 'call_002']
+            "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8);",
+            [tenantId, resourceId, customerId, new Date("2026-03-01T10:30:00Z"), new Date("2026-03-01T11:30:00Z"), 'Overlap', 'call_002', null]
         );
 
         expect(result.rows[0].success).toBe(false);

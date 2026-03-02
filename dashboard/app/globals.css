@@ -2,21 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  color: var(--foreground);
-  background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -24,4 +10,55 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Dark theme adjustments for react-big-calendar */
+.dark .rbc-calendar {
+  background-color: #020617; /* near-black */
+  color: #e5e7eb; /* gray-200 */
+}
+
+.dark .rbc-month-view,
+.dark .rbc-time-view,
+.dark .rbc-agenda-view {
+  background-color: #020617;
+}
+
+.dark .rbc-header {
+  background-color: #020617;
+  color: #9ca3af; /* gray-400 */
+  border-color: #1f2937; /* gray-800 */
+}
+
+.dark .rbc-time-header,
+.dark .rbc-time-content,
+.dark .rbc-month-row {
+  border-color: #1f2937;
+}
+
+.dark .rbc-off-range-bg {
+  background-color: #020617;
+}
+
+.dark .rbc-today {
+  background-color: rgba(37, 99, 235, 0.25); /* blue-600 at low opacity */
+}
+
+.dark .rbc-event {
+  background-color: #2563eb; /* blue-600 */
+  border-radius: 0.25rem;
+  color: #f9fafb; /* gray-50 */
+}
+
+.dark .rbc-toolbar button {
+  background: transparent;
+  border-color: #4b5563; /* gray-600 */
+  color: #e5e7eb;
+}
+
+.dark .rbc-toolbar button.rbc-active,
+.dark .rbc-toolbar button:active,
+.dark .rbc-toolbar button:focus {
+  background-color: #2563eb;
+  color: #f9fafb;
 }
