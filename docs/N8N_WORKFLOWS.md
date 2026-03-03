@@ -5,7 +5,9 @@ To maintain ultra-low latency in the voice call, all high-latency external tasks
 ---
 
 ## 1. Workflow: Post-Call Summarizer & Memory (Implemented)
-**Trigger:** HTTP Webhook (Called by Vapi's `end-of-call-report`).
+**Trigger (recommended):** Supabase Database Webhook on `appointments` (or call-log) insert.
+
+> You can also wire this to Vapi's `end-of-call-report` webhook if you prefer call-level triggering. The current deployment TODO assumes Supabase Database Webhooks as the primary entrypoint.
 
 1.  **Extract Data:** Get the `call_id` and `transcript` from the payload.
 2.  **LLM Call (GPT-4o-mini):**
@@ -57,12 +59,14 @@ To maintain ultra-low latency in the voice call, all high-latency external tasks
 ---
 ## 5. How to Import (Repeatability)
 To reproduce these workflows:
-1.  **Install n8n:** `docker run -it --rm --name n8n -p 5678:5678 n8nio/n8n`.
+1.  **Choose n8n Deployment:**
+    - **n8n Cloud (recommended for production):** Sign up at `app.n8n.cloud`, create an instance, and open the hosted editor.
+    - **Self-Hosted (local/dev):** `docker run -it --rm --name n8n -p 5678:5678 n8nio/n8n`.
 2.  **Import JSON:**
-    -   Use `n8n/post_call_summarizer.json` for the Post-Call Summarizer.
-    -   Future JSON blueprints for Calendar Sync and Owner Notification will be added to the `n8n/` directory.
-3.  **Set Environment Variables:**
-    -   `SUPABASE_URL`
-    -   `SUPABASE_KEY`
-    -   `OPENAI_API_KEY` (for embeddings/summarization)
-    -   `TELNYX_API_KEY`
+    - Use `n8n/post_call_summarizer.json` for the Post-Call Summarizer.
+    - Future JSON blueprints for Calendar Sync and Owner Notification will be added to the `n8n/` directory.
+3.  **Set Environment Variables (where applicable):**
+    - `SUPABASE_URL`
+    - `SUPABASE_KEY`
+    - `OPENAI_API_KEY` (for embeddings/summarization)
+    - `TELNYX_API_KEY`

@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000) to access the dashboard.
+Then open [http://localhost:3001](http://localhost:3001) to access the dashboard.
 
 You should see:
 - A multi-tenant appointment view (list/calendar).

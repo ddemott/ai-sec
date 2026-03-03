@@ -1,11 +1,11 @@
 # AI Secretary SaaS – Project Context & Decisions
 
 ## Project Status
-- **Current Phase**: **PoC Complete**.
+- **Current Phase**: **Multi-Tenant SaaS MVP Ready** (PoC + Dashboard complete).
 - **Source Control**: Pushed to [github.com/ddemott/ai-sec](https://github.com/ddemott/ai-sec) (Private).
-- **Ready for**: Live Integration Testing with real phone calls.
-- **Backend Strategy**: **Edge-First / Serverless**.
-- **Dashboard Goal**: **Management & Intervention** (Achieved).
+- **Ready for**: Live integration testing with real phone calls for the first production tenants.
+- **Backend Strategy**: **Edge-First / Serverless** (Supabase Edge Functions + Postgres).
+- **Dashboard Goal**: **SuperAdmin Multi-Tenant Management & Intervention** (Achieved).
 
 ## Key Architecture Decisions
 1. **Zero-Scale Infrastructure**: Supabase Edge Functions + Postgres.
@@ -16,11 +16,14 @@
 6. **Template + Metadata System**: Core models stay generic (tenants, customers, resources, appointments) while vertical-specific details are captured in JSONB `metadata` and driven by per-industry templates.
 
 ## Recent Progress
-- **Dashboard UI**: Built a responsive Outlook-style manager for Appointments, CRM, and AI Tuning.
-- **Full Coverage**: Achieved 94%+ coverage on core logic and verified RLS isolation.
-- **Manual Intervention**: Owners can now Reschedule, Cancel, and Edit Notes directly.
+- **Edge Tools & Smart Scheduling**: Implemented `vapi-tools` (get_customer_context, check_availability, book_appointment) with Postgres `book_appointment_atomic` enforcing timing profiles (prep, base, cleanup, travel) per service.
+- **Multi-Tenant Dashboard**: Built a SuperAdmin dashboard to launch new businesses from templates, manage tenants/resources, and view appointments/CRM across tenants.
+- **Test Coverage**: Maintained high coverage on core logic (schema, tools, booking) and verified RLS isolation.
+- **Local Stack**: `bootstrap` + `start-all` bring up Docker Postgres, backend, and dashboard for end-to-end local testing.
 
 ## Next Steps (Live)
-1.  **Deploy**: Push Edge Functions to Supabase and Dashboard to Vercel.
-2.  **Connect**: Link the Vapi Agent to the live Edge Function URL.
-3.  **Call**: Test the system with a real phone call to DynaTire.
+1.  **Configure Base Vapi Agent**: In Vapi, set the Agent's **Server URL** to the deployed Supabase Edge Function (`/vapi-tools`) and configure the shared `x-vapi-secret`.
+2.  **Per-Tenant Persona Wiring**: For each new tenant, create/update a Vapi Agent persona that injects the tenant's `tenant_id` and `resource_id` into the System Prompt and attaches the 3 global tools.
+3.  **Async Layer (n8n)**: Run n8n (Cloud or self-hosted), import `n8n/post_call_summarizer.json`, and attach it to Supabase via Database Webhooks on `appointments` (or call logs) inserts.
+4.  **Telephony**: Use Telnyx + Vapi to assign real phone numbers to the appropriate Vapi Agents.
+5.  **Live Call Tests**: Place real calls for a test tenant, verify bookings land in the correct tenant's dashboard view, and confirm post-call summaries flow into the knowledge layer.
