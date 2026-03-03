@@ -68,7 +68,7 @@ export default function AppointmentView() {
     [locales]
   )
 
-  const DnDCalendar = useMemo(() => withDragAndDrop<BigCalendar<any>>(BigCalendar as any), [])
+  const DnDCalendar = useMemo(() => withDragAndDrop(BigCalendar as any), [])
 
   const calendarEvents = useMemo(
     () =>
@@ -330,9 +330,9 @@ export default function AppointmentView() {
             localizer={localizer}
             events={calendarEvents}
             view={calendarView}
-            onView={view => setCalendarView(view)}
+            onView={(view: CalendarViewType) => setCalendarView(view)}
             date={calendarDate}
-            onNavigate={date => setCalendarDate(date)}
+            onNavigate={(date: Date) => setCalendarDate(date)}
             startAccessor="start"
             endAccessor="end"
             style={{ height: '100%', width: '100%' }}
@@ -645,7 +645,7 @@ export default function AppointmentView() {
                                                 <StickyNote className="w-3 h-3 mr-1" /> Customer Notes
                                             </p>
                                             <p className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed">
-                                                {(selectedAppointment.customers as any).metadata.notes}
+                                                {(selectedAppointment!.customers as any).metadata.notes}
                                             </p>
                                         </div>
                                     )}

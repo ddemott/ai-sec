@@ -5,21 +5,21 @@
 - [x] **Dynamic Templating**: Industry templates updated with `{{business_name}}` logic.
 
 ## 2. Vapi Agent Configuration (The "Multi-Tenant" Brain)
-- [ ] **Create Global Vapi Tools** (One-time setup)
-  - [ ] Add `get_customer_context` tool.
-  - [ ] Add `check_availability` tool.
-  - [ ] Add `book_appointment` tool.
-  - [ ] **Security**: Ensure all 3 tools have `x-vapi-secret: 734987fcfcchsd82`.
+- [x] **Create Global Vapi Tools** (One-time setup)
+  - [x] Add `get_customer_context` tool.
+  - [x] Add `check_availability` tool.
+  - [x] Add `book_appointment` tool.
+  - [x] **Security**: Ensure all 3 tools have `x-vapi-secret: 734987fcfcchsd82`.
 - [ ] **Configure the Base Agent**
   - [ ] Set `Server URL` to `https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools`.
   - [ ] **Multi-Tenancy Note**: You can now create multiple agents in Vapi, each with a different `Tenant ID` and `Resource ID` in their System Prompt to launch different businesses.
 
 ## 3. SaaS Operations (How to Launch a New Client)
-- [ ] **Launch via Dashboard**
-  - [ ] Open SuperAdmin Dashboard.
-  - [ ] Click 🏢 (Launch New Business).
-  - [ ] Select Template (e.g., Salon, Auto Shop).
-  - [ ] **Copy the generated Tenant ID and Resource ID** from the dashboard.
+- [x] **Launch via Dashboard**
+  - [x] Open SuperAdmin Dashboard.
+  - [x] Click 🏢 (Launch New Business).
+  - [x] Select Template (e.g., Salon, Auto Shop).
+  - [x] **Copy the generated Tenant ID and Resource ID** from the dashboard.
 - [ ] **Update Vapi Persona**
   - [ ] Create a new Agent in Vapi for the new client.
   - [ ] Paste the new `Tenant ID` and `Resource ID` into the System Prompt.
@@ -36,8 +36,8 @@
   - [ ] Verify booking appears in the specific tenant's view in the dashboard.
 
 ## 6. Template & Metadata System (Business-Agnostic Core)
-- [ ] **Add Flexible Metadata Fields**
-  - [ ] Add `metadata JSONB` to `appointments` and `customers` so vertical-specific details (vehicles, pets, services, etc.) can be stored without changing the core schema.
+- [x] **Add Flexible Metadata Fields**
+  - [x] Add `metadata JSONB` to `appointments` and `customers` so vertical-specific details (vehicles, pets, services, etc.) can be stored without changing the core schema. **This is implemented in the current schema; remaining work in this section is about defining templates and wiring prompts/UX.**
 - [ ] **Define Industry Playbooks / Templates**
   - [ ] For each template (e.g., Auto Shop, Salon, Dentist), define a config that lists required intake fields and questions (e.g., vehicle info, tire positions, customer presence, owner vs. non-owner).
   - [ ] Map each question to a key in `appointment.metadata` and/or `customer.metadata`.

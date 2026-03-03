@@ -20,10 +20,26 @@ import {
   Trash2
 } from 'lucide-react'
 
+type Tenant = {
+    id: string
+    name: string
+    business_type: string
+    timezone: string
+    owner_phone?: string | null
+    voice_id?: string | null
+    first_message?: string | null
+    system_prompt?: string | null
+}
+
+type Template = {
+    business_type: string
+    display_name: string
+}
+
 export default function SuperAdminDashboard() {
-  const [tenants, setTenants] = useState<any[]>([])
-  const [selectedTenant, setSelectedTenant] = useState<any | null>(null)
-  const [templates, setTemplates] = useState<any[]>([])
+    const [tenants, setTenants] = useState<Tenant[]>([])
+    const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null)
+    const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -31,7 +47,7 @@ export default function SuperAdminDashboard() {
   const [success, setSuccess] = useState(false)
   
   // Edit form state
-  const [form, setForm] = useState<any>(null)
+    const [form, setForm] = useState<Tenant | null>(null)
   
   // Create Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -43,9 +59,10 @@ export default function SuperAdminDashboard() {
     owner_pass: ''
   })
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+    useEffect(() => {
+      void fetchData()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
   useEffect(() => {
     if (selectedTenant) {
@@ -56,7 +73,7 @@ export default function SuperAdminDashboard() {
     }
   }, [selectedTenant])
 
-  async function fetchData() {
+    const fetchData = async () => {
     setLoading(true)
     try {
       console.log('Fetching from http://localhost:3000/tenants...')
@@ -64,8 +81,8 @@ export default function SuperAdminDashboard() {
         fetch('http://localhost:3000/tenants'),
         fetch('http://localhost:3000/templates')
       ])
-      const tData = await tRes.json()
-      const tempData = await tempRes.json()
+    const tData: Tenant[] = await tRes.json()
+    const tempData: Template[] = await tempRes.json()
       console.log('Fetched tenants:', tData)
       
       setTenants(Array.isArray(tData) ? tData : [])
@@ -73,7 +90,7 @@ export default function SuperAdminDashboard() {
       if (tData.length > 0 && !selectedTenant) {
         setSelectedTenant(tData[0])
       }
-    } catch (e) {
+    } catch {
       setError('Failed to load data from backend')
     } finally {
       setLoading(false)
@@ -102,7 +119,7 @@ export default function SuperAdminDashboard() {
       } else {
         setError('Failed to update business attributes')
       }
-    } catch (e) {
+    } catch {
       setError('Connection error')
     } finally {
       setSaving(false)
@@ -121,8 +138,8 @@ export default function SuperAdminDashboard() {
             setSelectedTenant(null)
             fetchData()
         }
-    } catch (e) {
-        console.error(e)
+    } catch {
+      console.error('Failed to delete tenant')
     }
   }
 
@@ -148,8 +165,8 @@ export default function SuperAdminDashboard() {
         } else {
             setError('Failed to create new business')
         }
-    } catch (e) {
-        setError('Connection error')
+    } catch {
+      setError('Connection error')
     } finally {
         setSaving(false)
     }
@@ -455,14 +472,14 @@ export default function SuperAdminDashboard() {
                             <MessageSquare className="w-3 h-3 mr-1" /> First Message (Greeting)
                         </label>
                         {isEditing ? (
-                            <input 
-                                type="text" 
-                                value={form.first_message || ''} 
-                                onChange={e => setForm({...form, first_message: e.target.value})}
-                                className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-inner dark:text-gray-100" 
-                            />
+                          <input 
+                            type="text" 
+                            value={form.first_message || ''} 
+                            onChange={e => setForm({...form, first_message: e.target.value})}
+                            className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-inner dark:text-gray-100" 
+                          />
                         ) : (
-                            <p className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl text-gray-700 dark:text-gray-300 italic border-l-4 border-blue-200 dark:border-l-blue-900 leading-relaxed">"{selectedTenant.first_message || 'No greeting set'}"</p>
+                          <p className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl text-gray-700 dark:text-gray-300 italic border-l-4 border-blue-200 dark:border-l-blue-900 leading-relaxed">&quot;{selectedTenant.first_message || 'No greeting set'}&quot;</p>
                         )}
                     </div>
 
