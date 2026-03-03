@@ -73,7 +73,7 @@ test('SuperAdminDashboard: lists tenants and selects one', async () => {
   render(<SuperAdminDashboard />)
 
   // Wait for the DynaTire tenant to appear in the sidebar
-  const tenantItem = await screen.findByText(/DynaTire PoC/i)
+  const [tenantItem] = await screen.findAllByText(/DynaTire PoC/i)
   expect(tenantItem).toBeTruthy()
 
   // Clicking the tenant should show its detail header
@@ -89,10 +89,10 @@ test('SuperAdminDashboard: can launch new business via modal', async () => {
   render(<SuperAdminDashboard />)
 
   // Wait for initial data load
-  await screen.findByText(/DynaTire PoC/i)
+  await screen.findAllByText(/DynaTire PoC/i)
 
   // Open the create modal using the title on the icon button
-  const launchButton = screen.getByTitle(/Launch New Business/i)
+  const [launchButton] = screen.getAllByTitle(/Launch New Business/i)
   fireEvent.click(launchButton)
 
   // Modal content should be visible
@@ -143,11 +143,11 @@ test('SuperAdminDashboard: can delete a business', async () => {
   render(<SuperAdminDashboard />)
 
   // Wait for tenant to load and select it
-  const tenantItem = await screen.findByText(/DynaTire PoC/i)
+  const [tenantItem] = await screen.findAllByText(/DynaTire PoC/i)
   fireEvent.click(tenantItem)
 
   // Click the trash icon button with title "Delete Business"
-  const deleteButton = await screen.findByTitle(/Delete Business/i)
+  const [deleteButton] = await screen.findAllByTitle(/Delete Business/i)
   fireEvent.click(deleteButton)
 
   await waitFor(() => {

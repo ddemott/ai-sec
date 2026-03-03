@@ -33,6 +33,10 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 test('AppointmentView: clicking calendar event opens detail view', async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, 'fetch' as any)
+    .mockResolvedValue({ ok: true, json: async () => ([] as any) } as any)
+
   render(<AppointmentView />)
 
   // Wait for the calendar event for Bob to render
@@ -42,6 +46,8 @@ test('AppointmentView: clicking calendar event opens detail view', async () => {
   // Detail header should now show the appointment description
   const heading = await screen.findByRole('heading', { name: /Test Appointment/i })
   expect(heading).toBeTruthy()
+
+  fetchMock.mockRestore()
 })
 
 test('AppointmentView: can modify and save an appointment', async () => {
