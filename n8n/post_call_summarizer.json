@@ -31,8 +31,8 @@
         "columns": "summary, tenant_id, customer_id, call_id",
         "values": {
           "summary": "={{$json.choices[0].message.content}}",
-          "tenant_id": "={{$node["Webhook: Vapi Call Ended"].json.body.message.call.tenantId}}",
-          "call_id": "={{$node["Webhook: Vapi Call Ended"].json.body.message.call.id}}"
+          "tenant_id": "={{$node[\"Webhook: Vapi Call Ended\"].json.body.message.call.tenantId}}",
+          "call_id": "={{$node[\"Webhook: Vapi Call Ended\"].json.body.message.call.id}}"
         }
       },
       "name": "Supabase: Save Summary",
