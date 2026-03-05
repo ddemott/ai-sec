@@ -20,6 +20,7 @@
 - **Multi-Tenant Dashboard**: Built a SuperAdmin dashboard to launch new businesses from templates, manage tenants/resources, and view appointments/CRM across tenants.
 - **Test Coverage**: Maintained high coverage on core logic (schema, tools, booking) and verified RLS isolation.
 - **Local Stack**: `bootstrap` + `start-all` bring up Docker Postgres, backend, and dashboard for end-to-end local testing.
+ - **User Accounts & Onboarding**: Extended the `users` table to store `first_name`, `last_name`, and `full_name`, and wired the Settings + SuperAdmin onboarding flows so each new business gets an owner account with separated names instead of a single opaque full name.
 
 ## Next Steps (Live)
 1.  **Configure Base Vapi Agent**: In Vapi, set the Agent's **Server URL** to the deployed Supabase Edge Function (`/vapi-tools`) and configure the shared `x-vapi-secret`.

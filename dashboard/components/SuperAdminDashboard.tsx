@@ -10,15 +10,17 @@ import {
   Loader2, 
   Globe, 
   MessageSquare, 
-  Mic, 
+  X, 
   Phone,
   LayoutTemplate,
   Edit,
-  X,
   Clock,
   ShieldAlert,
-  Trash2
+  Trash2,
+  Mic
 } from 'lucide-react'
+import { API_BASE_URL } from '../lib/api'
+import { formatPhone, normalizePhone } from '../lib/phone'
 
 type Tenant = {
     id: string
@@ -35,6 +37,16 @@ type Template = {
     business_type: string
     display_name: string
 }
+
+const US_TIMEZONES = [
+  { label: '(UTC-5) Eastern Time - New York, Miami, Atlanta', value: 'America/New_York' },
+  { label: '(UTC-6) Central Time - Chicago, Houston, Dallas', value: 'America/Chicago' },
+  { label: '(UTC-7) Mountain Time - Denver, Salt Lake City', value: 'America/Denver' },
+  { label: '(UTC-7) Mountain Time (No DST) - Phoenix, Tucson', value: 'America/Phoenix' },
+  { label: '(UTC-8) Pacific Time - Los Angeles, San Francisco, Seattle', value: 'America/Los_Angeles' },
+  { label: '(UTC-9) Alaska Time - Anchorage, Fairbanks', value: 'America/Anchorage' },
+  { label: '(UTC-10) Hawaii Time - Honolulu, Maui', value: 'Pacific/Honolulu' },
+]
 
 export default function SuperAdminDashboard() {
     const [tenants, setTenants] = useState<Tenant[]>([])
@@ -54,7 +66,8 @@ export default function SuperAdminDashboard() {
   const [newBusiness, setNewBusiness] = useState({
     tenant_name: '',
     business_type: 'mobile-tire',
-    owner_name: '',
+    owner_first_name: '',
+    owner_last_name: '',
     owner_email: '',
     owner_pass: ''
   })
@@ -75,23 +88,34 @@ export default function SuperAdminDashboard() {
 
     const fetchData = async () => {
     setLoading(true)
+    setError(null)
     try {
-      console.log('Fetching from http://localhost:3000/tenants...')
+      console.log('Fetching from API backend...', API_BASE_URL)
       const [tRes, tempRes] = await Promise.all([
-        fetch('http://localhost:3000/tenants'),
-        fetch('http://localhost:3000/templates')
+        fetch(`${API_BASE_URL}/tenants`),
+        fetch(`${API_BASE_URL}/templates`)
       ])
-    const tData: Tenant[] = await tRes.json()
-    const tempData: Template[] = await tempRes.json()
+      
+      if (!tRes.ok || !tempRes.ok) {
+        throw new Error('Backend responded with error')
+      }
+
+      const tData = await tRes.json()
+      const tempData = await tempRes.json()
       console.log('Fetched tenants:', tData)
       
-      setTenants(Array.isArray(tData) ? tData : [])
-      setTemplates(Array.isArray(tempData) ? tempData : [])
-      if (tData.length > 0 && !selectedTenant) {
-        setSelectedTenant(tData[0])
+      const tenantsArray = Array.isArray(tData) ? tData : []
+      const templatesArray = Array.isArray(tempData) ? tempData : []
+
+      setTenants(tenantsArray)
+      setTemplates(templatesArray)
+      
+      if (tenantsArray.length > 0 && !selectedTenant) {
+        setSelectedTenant(tenantsArray[0])
       }
-    } catch {
-      setError('Failed to load data from backend')
+    } catch (e) {
+      console.error('Fetch error:', e)
+      setError('Failed to load data from backend. Ensure server is reachable.')
     } finally {
       setLoading(false)
     }
@@ -103,19 +127,24 @@ export default function SuperAdminDashboard() {
     setError(null)
     setSuccess(false)
 
+    const normalizedForm = {
+      ...form,
+      owner_phone: form.owner_phone ? normalizePhone(form.owner_phone) : null
+    }
+
     try {
-      const response = await fetch(`http://localhost:3000/tenants/${form.id}/update-attributes`, {
+      const response = await fetch(`${API_BASE_URL}/tenants/${form.id}/update-attributes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(normalizedForm),
       })
 
       if (response.ok) {
         setSuccess(true)
         setIsEditing(false)
-        const updatedTenants = tenants.map(t => t.id === form.id ? { ...form } : t)
+        const updatedTenants = tenants.map(t => t.id === form.id ? { ...normalizedForm } : t)
         setTenants(updatedTenants)
-        setSelectedTenant({ ...form })
+        setSelectedTenant({ ...normalizedForm })
       } else {
         setError('Failed to update business attributes')
       }
@@ -131,7 +160,7 @@ export default function SuperAdminDashboard() {
     if (!confirm(`Permanently delete ${selectedTenant.name}? This will remove all their data.`)) return
     
     try {
-        const res = await fetch(`http://localhost:3000/tenants/${selectedTenant.id}`, {
+      const res = await fetch(`${API_BASE_URL}/tenants/${selectedTenant.id}`, {
             method: 'DELETE'
         })
         if (res.ok) {
@@ -147,7 +176,7 @@ export default function SuperAdminDashboard() {
     setSaving(true)
     setError(null)
     try {
-        const res = await fetch('http://localhost:3000/tenants/create', {
+      const res = await fetch(`${API_BASE_URL}/tenants/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newBusiness)
@@ -157,7 +186,8 @@ export default function SuperAdminDashboard() {
             setNewBusiness({
                 tenant_name: '',
                 business_type: 'mobile-tire',
-                owner_name: '',
+            owner_first_name: '',
+            owner_last_name: '',
                 owner_email: '',
                 owner_pass: ''
             })
@@ -218,9 +248,9 @@ export default function SuperAdminDashboard() {
                         <div className="grid grid-cols-2 gap-3">
                             <input 
                                 type="text" 
-                                placeholder="Full Name"
-                                value={newBusiness.owner_name}
-                                onChange={e => setNewBusiness({...newBusiness, owner_name: e.target.value})}
+                          placeholder="First Name"
+                          value={newBusiness.owner_first_name}
+                          onChange={e => setNewBusiness({...newBusiness, owner_first_name: e.target.value})}
                                 className="w-full p-3 bg-gray-50 dark:bg-[#222] border border-gray-100 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:text-gray-100"
                             />
                             <input 
@@ -231,6 +261,15 @@ export default function SuperAdminDashboard() {
                                 className="w-full p-3 bg-gray-50 dark:bg-[#222] border border-gray-100 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:text-gray-100"
                             />
                         </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <input 
+                                type="text" 
+                                placeholder="Last Name"
+                                value={newBusiness.owner_last_name}
+                                onChange={e => setNewBusiness({...newBusiness, owner_last_name: e.target.value})}
+                                className="w-full p-3 bg-gray-50 dark:bg-[#222] border border-gray-100 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:text-gray-100"
+                              />
+                            </div>
                         <input 
                             type="password" 
                             placeholder="Owner Password"
@@ -413,14 +452,19 @@ export default function SuperAdminDashboard() {
                                 <Clock className="w-3 h-3 mr-1" /> Timezone
                             </label>
                             {isEditing ? (
-                                <input 
-                                    type="text" 
+                                <select 
                                     value={form.timezone} 
                                     onChange={e => setForm({...form, timezone: e.target.value})}
-                                    className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-inner dark:text-gray-100" 
-                                />
+                                    className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-inner dark:text-gray-100"
+                                >
+                                    {US_TIMEZONES.map(tz => (
+                                        <option key={tz.value} value={tz.value}>{tz.label}</option>
+                                    ))}
+                                </select>
                             ) : (
-                                <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium">{selectedTenant.timezone}</p>
+                                <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium text-sm">
+                                    {US_TIMEZONES.find(tz => tz.value === selectedTenant.timezone)?.label || selectedTenant.timezone}
+                                </p>
                             )}
                         </div>
                         <div className="space-y-1">
@@ -432,11 +476,10 @@ export default function SuperAdminDashboard() {
                                     type="text" 
                                     value={form.owner_phone || ''} 
                                     onChange={e => setForm({...form, owner_phone: e.target.value})}
-                                    className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-inner dark:text-gray-100" 
-                                    placeholder="+15550000000"
-                                />
-                            ) : (
-                                <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium font-mono">{selectedTenant.owner_phone || 'Not set'}</p>
+                                    className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-inner dark:text-gray-100"
+                                    placeholder="+1-555-010-9999"
+                                    />                            ) : (
+                              <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium font-mono">{selectedTenant.owner_phone ? formatPhone(selectedTenant.owner_phone) : 'Not set'}</p>
                             )}
                         </div>
                     </div>

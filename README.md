@@ -55,6 +55,11 @@ For a deeper technical view of the architecture (Edge, Postgres, Orchestration),
 - **Effective Blocks**: The `book_appointment_atomic` RPC now expands requested service windows into full blocked intervals (prep + service + cleanup + travel) and stores those as `start_time`/`end_time`, so all overlap checks operate on the true occupied time.
 - **Slack & Utilization Policies**: Per-tenant knobs (e.g., max daily utilization, minimum gaps, “keep one trailing slot open”) will layer on top of the effective blocks to ensure the system leaves room to move appointments forward and avoids over-packing the day.
 
+**User Accounts & Owner Identity**
+- Each tenant has at least one **owner user** stored in a `users` table.
+- Users now store `first_name`, `last_name`, and `full_name`. Onboarding flows in the dashboard create owners with **separated first and last names** (and compose `full_name` consistently), avoiding brittle name parsing.
+- These owner identities drive login and multi-tenant administration but are never exposed directly to callers.
+
 **Tenant Knowledge & Company FAQs (Planned)**
 - **Tenant-Scoped Knowledge Base**: A Supabase table (e.g., `tenant_docs`) will hold per-tenant business knowledge (hours, policies, FAQs) as chunked text with pgvector embeddings, sourced from PDFs and other artifacts, behind the same RLS boundaries as CRM and appointments.
 - **RAG Answering Flow**: Vapi tools will answer questions like “What are your hours?” or “Do you do tire changes at 3 AM?” by embedding the question, retrieving the most relevant knowledge chunks for that tenant, and asking the LLM to respond strictly based on those snippets.
@@ -96,8 +101,15 @@ From the project root:
 
 ```bash
 bash scripts/bootstrap.sh   # installs deps, starts docker pg, runs migrations
-npm test                    # runs Vitest TDD suite
+npm test                    # runs Vitest TDD suite for the backend (DB-backed tests auto-skip if Postgres is down)
+cd dashboard && npm test    # runs Vitest suite for the dashboard
 ```
+
+Notes on tests and Postgres:
+- The backend Vitest suites under `src/` include **integration tests that talk directly to Postgres**.
+- If Docker Postgres on port `5433` is not running, those DB-backed tests will **log a skip message and no longer fail the suite**; they execute fully once the database is up.
+
+Important: For appointments to show up in the dashboard calendar, the **Edge tools**, the Fastify backend (`src/index.ts`), and the dashboard must all talk to the **same Postgres database** per environment. If you run both a local Docker Postgres and a Supabase project, make sure `DATABASE_URL` (for the backend) and your Supabase connection strings used by Vapi/n8n all point at the same instance; otherwise bookings may land in one DB while the calendar queries another.
 
 ---
 

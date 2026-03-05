@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Pool } from 'pg';
+import fs from 'node:fs';
+import path from 'node:path';
 import { InMemoryBookingStorage } from './storage/inMemoryBookingStorage';
 import { LoggingTelephonyProvider } from './providers/loggingTelephonyProvider';
 import { ConsoleNotificationProvider } from './providers/consoleNotificationProvider';
@@ -8,7 +10,36 @@ import { BookingService } from './services/bookingService';
 import { MockLlmProvider } from './services/mockLlmProvider';
 import type { TimeWindow } from './core/models';
 
-const app = Fastify({ logger: true });
+const useHttps = process.env.NODE_ENV !== 'production';
+
+const app = Fastify(
+  useHttps
+    ? {
+        logger: true,
+        https: {
+          key: fs.readFileSync(path.join(__dirname, '..', 'certs', 'localhost-key.pem')),
+          cert: fs.readFileSync(path.join(__dirname, '..', 'certs', 'localhost-cert.pem')),
+        },
+      }
+    : { logger: true }
+);
+
+// Enforce HTTPS when behind a proxy that sets x-forwarded-proto.
+// This is noop for local/tests (no header), but in production any HTTP
+// request proxied to this service will be 301-redirected to HTTPS.
+app.addHook('onRequest', async (request, reply) => {
+  const protoHeader = request.headers['x-forwarded-proto'];
+  const proto = Array.isArray(protoHeader) ? protoHeader[0] : protoHeader;
+
+  if (proto && proto !== 'https') {
+    const hostHeader = request.headers['host'];
+    const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    if (host) {
+      const url = `https://${host}${request.raw.url}`;
+      return reply.redirect(301, url);
+    }
+  }
+});
 
 // Register CORS
 app.register(cors, {
@@ -167,6 +198,52 @@ app.post('/appointments/create', async (req, reply) => {
     }
 });
 
+const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+// NEW: List Appointments for a tenant (including basic customer/resource info)
+app.get('/appointments', async (req, reply) => {
+  const tenantId = (req.query as any)['tenant_id'];
+
+  if (!tenantId) {
+    return reply.status(400).send({ error: 'tenant_id is required' });
+  }
+
+  const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
+
+  const client = await pool.connect();
+  try {
+    const query = `
+      SELECT
+         a.*,
+         jsonb_build_object(
+           'name', c.name,
+           'first_name', c.first_name,
+           'last_name', c.last_name,
+           'phone', c.phone,
+           'metadata', c.metadata
+         ) AS customers,
+         jsonb_build_object(
+           'name', r.name
+         ) AS resources
+       FROM appointments a
+       LEFT JOIN customers c ON c.id = a.customer_id
+       LEFT JOIN resources r ON r.id = a.resource_id
+       ${isSuperAdmin ? '' : 'WHERE a.tenant_id = $1'}
+       ORDER BY a.start_time ASC`;
+    
+    const res = isSuperAdmin 
+      ? await client.query(query)
+      : await client.query(query, [tenantId]);
+      
+    return reply.send(res.rows);
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to fetch appointments' });
+  } finally {
+    client.release();
+  }
+});
+
 // Calendar sync stub endpoint for future Outlook/Google integrations
 app.post('/calendar/sync', async (req, reply) => {
   const body = req.body as any;
@@ -177,9 +254,16 @@ app.post('/calendar/sync', async (req, reply) => {
 // NEW: Get Resources for a tenant
 app.get('/resources', async (req, reply) => {
   const tenantId = (req.query as any)['tenant_id'];
+  const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
+  
     const client = await pool.connect();
     try {
-        const res = await client.query('SELECT * FROM resources WHERE tenant_id = $1', [tenantId]);
+        const query = isSuperAdmin 
+          ? 'SELECT * FROM resources' 
+          : 'SELECT * FROM resources WHERE tenant_id = $1';
+        const res = isSuperAdmin
+          ? await client.query(query)
+          : await client.query(query, [tenantId]);
         return reply.send(res.rows);
     } catch (err) {
         return reply.status(500).send({ error: 'Failed to fetch resources' });
@@ -188,14 +272,71 @@ app.get('/resources', async (req, reply) => {
     }
 });
 
+// NEW: Get Customers for a tenant
+app.get('/customers', async (req, reply) => {
+  const tenantId = (req.query as any)['tenant_id'];
+
+  if (!tenantId) {
+    return reply.status(400).send({ error: 'tenant_id is required' });
+  }
+
+  const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
+
+  const client = await pool.connect();
+  try {
+    const query = isSuperAdmin
+      ? 'SELECT * FROM customers ORDER BY name'
+      : 'SELECT * FROM customers WHERE tenant_id = $1 ORDER BY name';
+    
+    const res = isSuperAdmin
+      ? await client.query(query)
+      : await client.query(query, [tenantId]);
+      
+    return reply.send(res.rows);
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to fetch customers' });
+  } finally {
+    client.release();
+  }
+});
+
 // NEW: Manual Customer Creation
 app.post('/customers/create', async (req, reply) => {
     const body = req.body as any;
     const client = await pool.connect();
     try {
         const res = await client.query(
-            'INSERT INTO customers (tenant_id, name, phone, email, address, metadata) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-            [body.tenant_id, body.name, body.phone, body.email, body.address, body.metadata || {}]
+            `INSERT INTO customers (
+               tenant_id,
+               name,
+               phone,
+               email,
+               address,
+               address_line2,
+               city,
+               state,
+               postal_code,
+               metadata,
+               first_name,
+               last_name,
+               timezone
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+            [
+              body.tenant_id,
+              body.name,
+              body.phone,
+              body.email,
+              body.address,
+              body.address_line2 || null,
+              body.city || null,
+              body.state || null,
+              body.postal_code || null,
+              body.metadata || {},
+              body.first_name || null,
+              body.last_name || null,
+              body.timezone || 'America/New_York'
+            ]
         );
         return reply.send({ success: true, customer: res.rows[0] });
     } catch (err) {
@@ -205,6 +346,54 @@ app.post('/customers/create', async (req, reply) => {
         client.release();
     }
 });
+
+// NEW: Update existing customer
+app.put('/customers/:id', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const body = req.body as any;
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE customers SET
+         first_name = $1,
+         last_name = $2,
+         name = $3,
+         phone = $4,
+         email = $5,
+         address = $6,
+         address_line2 = $7,
+         city = $8,
+         state = $9,
+         postal_code = $10,
+         metadata = $11,
+         timezone = $12
+       WHERE id = $13`,
+      [
+        body.first_name || null,
+        body.last_name || null,
+        body.name || null,
+        body.phone,
+        body.email,
+        body.address,
+        body.address_line2 || null,
+        body.city || null,
+        body.state || null,
+        body.postal_code || null,
+        body.metadata || {},
+        body.timezone || 'America/New_York',
+        id
+      ]
+    );
+    return reply.send({ success: true });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to update customer' });
+  } finally {
+    client.release();
+  }
+});
+
+
 
 app.post('/tenants/:id/update-attributes', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -247,13 +436,22 @@ app.post('/tenants/create', async (req, reply) => {
   const body = req.body as {
     tenant_name: string;
     business_type: string;
-    owner_name: string;
+    owner_first_name: string;
+    owner_last_name: string;
     owner_email: string;
     owner_pass: string;
   };
 
   const client = await pool.connect();
   try {
+    const firstName = (body.owner_first_name || '').trim();
+    const lastName = (body.owner_last_name || '').trim();
+
+    if (!firstName || !lastName) {
+      client.release();
+      return reply.status(400).send({ error: 'owner_first_name and owner_last_name are required' });
+    }
+
     await client.query('BEGIN');
 
     // 1. Create Tenant (Trigger will apply business template defaults)
@@ -263,10 +461,12 @@ app.post('/tenants/create', async (req, reply) => {
     );
     const tenantId = tenantRes.rows[0].id;
 
-    // 2. Create Owner User
+    // 2. Create Owner User with explicit first/last name
+    const fullName = [firstName, lastName].filter(Boolean).join(' ');
+
     await client.query(
-      'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
-      [tenantId, body.owner_email, body.owner_pass, body.owner_name]
+      'INSERT INTO users (tenant_id, email, password_hash, full_name, first_name, last_name) VALUES ($1, $2, $3, $4, $5, $6)',
+      [tenantId, body.owner_email, body.owner_pass, fullName, firstName || null, lastName || null]
     );
 
     await client.query('COMMIT');

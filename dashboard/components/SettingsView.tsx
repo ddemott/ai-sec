@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Settings
 } from 'lucide-react'
+import { API_BASE_URL } from '../lib/api'
 
 export default function SettingsView() {
   const [isAdmin, setIsAdmin] = useState(false)
@@ -23,18 +24,20 @@ export default function SettingsView() {
   const [form, setForm] = useState({
     tenant_name: '',
     business_type: '',
-    owner_name: '',
+    owner_first_name: '',
+    owner_last_name: '',
     owner_email: '',
     owner_pass: ''
   })
 
   useEffect(() => {
-    // Check if current user is the super-admin
-    const email = localStorage.getItem('userName') // We used userName to store the name, but login uses email. 
-    // Wait, LoginPage.tsx stores data.user_name. Let's fix that to be more robust.
-    // For PoC, let's just check if tenantId is the DynaTire one.
+    // Check if current user is an admin / super-admin
+    // For this PoC we treat both the platform owner tenant
+    // and the default DynaTire tenant as admin-capable.
+    const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000'
+    const DEFAULT_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a'
     const tenantId = localStorage.getItem('tenantId')
-    if (tenantId === 'f234e471-0e60-4163-86c9-93cfd9338e3a') {
+    if (tenantId === PLATFORM_TENANT_ID || tenantId === DEFAULT_TENANT_ID) {
       setIsAdmin(true)
       fetchTemplates()
     }
@@ -42,7 +45,7 @@ export default function SettingsView() {
 
   async function fetchTemplates() {
     try {
-      const res = await fetch('http://localhost:3000/templates')
+      const res = await fetch(`${API_BASE_URL}/templates`)
       const data = await res.json()
       setTemplates(data)
       if (data.length > 0) setForm(f => ({ ...f, business_type: data[0].business_type }))
@@ -58,7 +61,7 @@ export default function SettingsView() {
     setSuccess(false)
 
     try {
-      const response = await fetch('http://localhost:3000/tenants/create', {
+      const response = await fetch(`${API_BASE_URL}/tenants/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -71,7 +74,8 @@ export default function SettingsView() {
         setForm({
           tenant_name: '',
           business_type: templates[0]?.business_type || '',
-          owner_name: '',
+          owner_first_name: '',
+          owner_last_name: '',
           owner_email: '',
           owner_pass: ''
         })
@@ -175,16 +179,27 @@ export default function SettingsView() {
               2. Owner Account
             </h2>
             <div className="space-y-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Owner Full Name</label>
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Owner First Name</label>
                   <input 
                     type="text" 
                     required
-                    value={form.owner_name}
-                    onChange={e => setForm({...form, owner_name: e.target.value})}
+                    value={form.owner_first_name}
+                    onChange={e => setForm({...form, owner_first_name: e.target.value})}
                     className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm dark:text-gray-100" 
-                    placeholder="John Doe"
+                    placeholder="John"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Owner Last Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={form.owner_last_name}
+                    onChange={e => setForm({...form, owner_last_name: e.target.value})}
+                    className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm dark:text-gray-100" 
+                    placeholder="Doe"
                   />
                 </div>
                 <div className="space-y-1">

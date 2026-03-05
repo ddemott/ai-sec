@@ -22,6 +22,54 @@ import {
   UserPlus,
   Loader2
 } from 'lucide-react'
+import { API_BASE_URL } from '../lib/api'
+import { formatPhone, normalizePhone } from '../lib/phone'
+
+const US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
+  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'
+]
+
+const US_TIMEZONES = [
+  { label: '(UTC-5) Eastern Time - New York, Miami, Atlanta', value: 'America/New_York' },
+  { label: '(UTC-6) Central Time - Chicago, Houston, Dallas', value: 'America/Chicago' },
+  { label: '(UTC-7) Mountain Time - Denver, Salt Lake City', value: 'America/Denver' },
+  { label: '(UTC-7) Mountain Time (No DST) - Phoenix, Tucson', value: 'America/Phoenix' },
+  { label: '(UTC-8) Pacific Time - Los Angeles, San Francisco, Seattle', value: 'America/Los_Angeles' },
+  { label: '(UTC-9) Alaska Time - Anchorage, Fairbanks', value: 'America/Anchorage' },
+  { label: '(UTC-10) Hawaii Time - Honolulu, Maui', value: 'Pacific/Honolulu' },
+]
+
+// Simple mapping for auto-detection
+const CITY_TIMEZONE_MAP: Record<string, string> = {
+  'chicago': 'America/Chicago',
+  'new york': 'America/New_York',
+  'los angeles': 'America/Los_Angeles',
+  'denver': 'America/Denver',
+  'phoenix': 'America/Phoenix',
+  'houston': 'America/Chicago',
+  'miami': 'America/New_York',
+  'seattle': 'America/Los_Angeles',
+  'atlanta': 'America/New_York',
+  'dallas': 'America/Chicago'
+}
+
+const STATE_TIMEZONE_MAP: Record<string, string> = {
+  'NY': 'America/New_York',
+  'CA': 'America/Los_Angeles',
+  'IL': 'America/Chicago',
+  'FL': 'America/New_York',
+  'TX': 'America/Chicago',
+  'GA': 'America/New_York',
+  'WA': 'America/Los_Angeles',
+  'CO': 'America/Denver',
+  'AZ': 'America/Phoenix'
+}
+
+const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'
 
 export default function CRMView() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -34,7 +82,19 @@ export default function CRMView() {
   const [isEditing, setIsEditing] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' })
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    phone: '',
+    email: '',
+    address: '',
+    address_line2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    timezone: 'America/New_York',
+    notes: ''
+  })
 
   useEffect(() => {
     fetchCustomers()
@@ -43,11 +103,21 @@ export default function CRMView() {
   useEffect(() => {
     if (selectedCustomer) {
         fetchHistory(selectedCustomer.id)
+      const fullName = selectedCustomer.name || ''
+      const [first, ...rest] = fullName.split(' ')
+      const derivedFirst = (selectedCustomer as any).first_name || first || ''
+      const derivedLast = (selectedCustomer as any).last_name || rest.join(' ') || ''
         setEditForm({
-            name: selectedCustomer.name || '',
+        first_name: derivedFirst,
+        last_name: derivedLast,
             phone: selectedCustomer.phone || '',
             email: selectedCustomer.email || '',
             address: selectedCustomer.address || '',
+        address_line2: (selectedCustomer as any).address_line2 || '',
+        city: (selectedCustomer as any).city || '',
+        state: (selectedCustomer as any).state || '',
+        postal_code: (selectedCustomer as any).postal_code || '',
+        timezone: (selectedCustomer as any).timezone || 'America/New_York',
             notes: selectedCustomer.metadata?.notes || ''
         })
         setIsEditing(false)
@@ -55,16 +125,28 @@ export default function CRMView() {
     }
   }, [selectedCustomer])
 
+  // Auto-detect timezone
+  useEffect(() => {
+    if (!isEditing && !isCreating) return
+    
+    const cityLower = editForm.city.toLowerCase().trim()
+    if (CITY_TIMEZONE_MAP[cityLower]) {
+      setEditForm(prev => ({ ...prev, timezone: CITY_TIMEZONE_MAP[cityLower] }))
+    } else if (STATE_TIMEZONE_MAP[editForm.state]) {
+      setEditForm(prev => ({ ...prev, timezone: STATE_TIMEZONE_MAP[editForm.state] }))
+    }
+  }, [editForm.city, editForm.state, isEditing, isCreating])
+
   async function fetchCustomers() {
     setLoading(true)
     const tenantId = localStorage.getItem('tenantId')
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('name', { ascending: true })
-      if (error || !data || data.length === 0) {
+      const res = await fetch(`${API_BASE_URL}/customers?tenant_id=${tenantId}`)
+      if (!res.ok) {
+        throw new Error('Failed to fetch customers')
+      }
+      const data = await res.json()
+      if (!data || data.length === 0) {
         setCustomers(MOCK_CUSTOMERS)
         if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0])
       } else {
@@ -99,22 +181,43 @@ export default function CRMView() {
   async function handleSave() {
     if (!selectedCustomer) return
     setSaving(true)
-    const tenantId = localStorage.getItem('tenantId')
+    const currentTenantId = localStorage.getItem('tenantId')
 
-    const { error } = await supabase
-        .from('customers')
-        .update({
-            name: editForm.name,
-            phone: editForm.phone,
-            email: editForm.email,
-            address: editForm.address,
-            metadata: { ...selectedCustomer.metadata, notes: editForm.notes }
+    // Use original tenant_id if SuperAdmin
+    const targetTenantId = currentTenantId === SUPER_ADMIN_TENANT_ID 
+      ? selectedCustomer.tenant_id 
+      : currentTenantId
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/customers/${selectedCustomer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: targetTenantId,
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
+          name: `${editForm.first_name} ${editForm.last_name}`.trim(),
+          phone: normalizePhone(editForm.phone),
+          email: editForm.email,
+          address: editForm.address,
+          address_line2: editForm.address_line2,
+          city: editForm.city,
+          state: editForm.state,
+          postal_code: editForm.postal_code,
+          timezone: editForm.timezone,
+          metadata: { ...selectedCustomer.metadata, notes: editForm.notes }
         })
-        .eq('id', selectedCustomer.id)
-    
-    if (!error) {
+      })
+
+      if (res.ok) {
         setIsEditing(false)
-        fetchCustomers()
+        setIsCreating(false)
+        await fetchCustomers()
+      } else {
+        console.error('Failed to update customer', await res.text())
+      }
+    } catch (e) {
+      console.error(e)
     }
     setSaving(false)
   }
@@ -124,18 +227,25 @@ export default function CRMView() {
     const tenantId = localStorage.getItem('tenantId')
     
     try {
-        const res = await fetch('http://localhost:3000/customers/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                tenant_id: tenantId,
-                name: editForm.name,
-                phone: editForm.phone,
-                email: editForm.email,
-                address: editForm.address,
-                metadata: { notes: editForm.notes }
-            })
+      const res = await fetch(`${API_BASE_URL}/customers/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
+          name: `${editForm.first_name} ${editForm.last_name}`.trim(),
+          phone: normalizePhone(editForm.phone),
+          email: editForm.email,
+          address: editForm.address,
+          address_line2: editForm.address_line2,
+          city: editForm.city,
+          state: editForm.state,
+          postal_code: editForm.postal_code,
+          timezone: editForm.timezone,
+          metadata: { notes: editForm.notes }
         })
+      })
         if (res.ok) {
             setIsCreating(false)
             fetchCustomers()
@@ -151,7 +261,7 @@ export default function CRMView() {
     if (!confirm(`Are you sure you want to delete ${selectedCustomer.name}? This cannot be undone.`)) return
     
     try {
-        const res = await fetch(`http://localhost:3000/customers/${selectedCustomer.id}`, {
+      const res = await fetch(`${API_BASE_URL}/customers/${selectedCustomer.id}`, {
             method: 'DELETE'
         })
         if (res.ok) {
@@ -167,7 +277,18 @@ export default function CRMView() {
     setIsCreating(true)
     setIsEditing(false)
     setSelectedCustomer(null)
-    setEditForm({ name: '', phone: '', email: '', address: '', notes: '' })
+    setEditForm({
+      first_name: '',
+      last_name: '',
+      phone: '',
+      email: '',
+      address: '',
+      address_line2: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      notes: ''
+    })
   }
 
   return (
@@ -201,7 +322,7 @@ export default function CRMView() {
             >
               <div>
                 <p className={`text-sm font-semibold ${selectedCustomer?.id === c.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>{c.name || 'Unknown'}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{c.phone}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatPhone(c.phone)}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />
             </div>
@@ -229,7 +350,7 @@ export default function CRMView() {
                     <h1 className="text-xl md:text-3xl font-bold dark:text-white">{isCreating ? 'New Customer' : (selectedCustomer?.name || 'Unknown')}</h1>
                     {!isCreating && (
                         <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base flex items-center">
-                            <Phone className="w-4 h-4 mr-2" /> {selectedCustomer?.phone}
+                        <Phone className="w-4 h-4 mr-2" /> {formatPhone(selectedCustomer?.phone)}
                         </p>
                     )}
                     </div>
@@ -282,7 +403,27 @@ export default function CRMView() {
                         </div>
                         <div className="flex items-start">
                             <MapPin className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
-                            <span className="dark:text-gray-300">{selectedCustomer?.address || 'No address on file'}</span>
+                            <span className="dark:text-gray-300">
+                              {selectedCustomer
+                                ? [
+                                    selectedCustomer.address,
+                                    (selectedCustomer as any).address_line2,
+                                    (selectedCustomer as any).city,
+                                    [
+                                      (selectedCustomer as any).state,
+                                      (selectedCustomer as any).postal_code
+                                    ].filter(Boolean).join(' ')
+                                  ]
+                                  .filter(Boolean)
+                                  .join(', ') || 'No address on file'
+                                : 'No address on file'}
+                            </span>
+                         </div>
+                        <div className="flex items-start">
+                            <RefreshCw className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
+                            <span className="dark:text-gray-300">
+                              Timezone: {US_TIMEZONES.find(t => t.value === (selectedCustomer as any).timezone)?.label || (selectedCustomer as any).timezone || 'Not set'}
+                            </span>
                         </div>
                         <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
                             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Internal Notes</p>
@@ -293,25 +434,35 @@ export default function CRMView() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Full Name</label>
-                                <input 
-                                    type="text" 
-                                    value={editForm.name} 
-                                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                                    className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                                    placeholder="Customer Name"
-                                />
-                            </div>
-                            <div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">First Name</label>
+                            <input 
+                              type="text" 
+                              value={editForm.first_name} 
+                              onChange={(e) => setEditForm({...editForm, first_name: e.target.value})}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                              placeholder="First Name"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Last Name</label>
+                            <input 
+                              type="text" 
+                              value={editForm.last_name} 
+                              onChange={(e) => setEditForm({...editForm, last_name: e.target.value})}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                              placeholder="Last Name"
+                            />
+                          </div>
+                          <div>
                                 <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Phone Number</label>
                                 <input 
                                     type="text" 
                                     value={editForm.phone} 
                                     onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
                                     className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                                    placeholder="+15550000000"
+                                    placeholder="+1-555-010-9999"
                                 />
                             </div>
                         </div>
@@ -325,15 +476,74 @@ export default function CRMView() {
                                 placeholder="customer@email.com"
                             />
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Address</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Address Line 1</label>
                             <input 
-                                type="text" 
-                                value={editForm.address} 
-                                onChange={(e) => setEditForm({...editForm, address: e.target.value})}
-                                className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                                placeholder="123 Street St, City, ST"
+                              type="text" 
+                              value={editForm.address} 
+                              onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                              placeholder="123 Street St"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Address Line 2</label>
+                            <input 
+                              type="text" 
+                              value={editForm.address_line2} 
+                              onChange={(e) => setEditForm({...editForm, address_line2: e.target.value})}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                              placeholder="Apt / Suite / Unit"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">City</label>
+                            <input
+                              type="text"
+                              value={editForm.city}
+                              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                              placeholder="New York"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">State</label>
+                            <select
+                              value={editForm.state}
+                              onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                            >
+                              <option value="">Select state</option>
+                              {US_STATES.map((code) => (
+                                <option key={code} value={code}>{code}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">ZIP</label>
+                            <input 
+                              type="text" 
+                              value={editForm.postal_code} 
+                              onChange={(e) => setEditForm({...editForm, postal_code: e.target.value})}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                              placeholder="10001"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Timezone</label>
+                            <select
+                              value={editForm.timezone}
+                              onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
+                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                            >
+                              {US_TIMEZONES.map((tz) => (
+                                <option key={tz.value} value={tz.value}>{tz.label}</option>
+                              ))}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>

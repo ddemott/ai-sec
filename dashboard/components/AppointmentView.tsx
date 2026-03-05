@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { API_BASE_URL } from '../lib/api'
+import { formatPhone, normalizePhone } from '../lib/phone'
 import { Appointment, Customer } from '@/lib/types'
 import { MOCK_APPOINTMENTS } from '@/lib/mockData'
 import { 
@@ -55,6 +56,16 @@ export default function AppointmentView() {
   const [calendarView, setCalendarView] = useState<CalendarViewType>('week')
   const [calendarDate, setCalendarDate] = useState<Date>(new Date())
 
+  const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000'
+
+  // Helper to format date for datetime-local input without timezone shift
+  const toLocalISO = (date: Date | string) => {
+    const d = new Date(date)
+    const offset = d.getTimezoneOffset()
+    const localDate = new Date(d.getTime() - (offset * 60 * 1000))
+    return localDate.toISOString().slice(0, 16)
+  }
+
   const locales = useMemo(() => ({ 'en-US': enUS }), [])
   const localizer = useMemo(
     () =>
@@ -72,12 +83,19 @@ export default function AppointmentView() {
 
   const calendarEvents = useMemo(
     () =>
-      appointments.map(apt => ({
-        id: apt.id,
-        title: apt.customers?.name || 'Appointment',
-        start: new Date(apt.start_time),
-        end: new Date(apt.end_time),
-      })),
+      appointments.map(apt => {
+        const customer: any = apt.customers || {}
+        const first = customer.first_name || ''
+        const last = customer.last_name || ''
+        const structured = `${first} ${last}`.trim()
+        const title = structured || customer.name || 'Appointment'
+        return {
+          id: apt.id,
+          title,
+          start: new Date(apt.start_time),
+          end: new Date(apt.end_time),
+        }
+      }),
     [appointments]
   )
 
@@ -89,10 +107,25 @@ export default function AppointmentView() {
     start_time: '',
     end_time: '',
     location: '',
-    customer_name: '', // for display/update
+    customer_first_name: '',
+    customer_last_name: '',
     customer_phone: '',
     customer_notes: ''
   })
+
+  const findCustomerById = (id: string) => customers.find(c => c.id === id) as any
+
+  const formatCustomerAddress = (customer: any | undefined) => {
+    if (!customer) return ''
+    return [
+      customer.address,
+      customer.address_line2,
+      customer.city,
+      [customer.state, customer.postal_code].filter(Boolean).join(' ')
+    ]
+      .filter(Boolean)
+      .join(', ')
+  }
 
   useEffect(() => {
     fetchAppointments()
@@ -101,59 +134,104 @@ export default function AppointmentView() {
 
   useEffect(() => {
     if (selectedAppointment) {
-        setIsEditing(false)
-        setIsCreating(false)
-        const customerMetadata = (selectedAppointment.customers as any)?.metadata || {}
-        setForm({
-            customer_id: selectedAppointment.customer_id,
-            resource_id: selectedAppointment.resource_id,
-            description: selectedAppointment.description || '',
-            start_time: new Date(selectedAppointment.start_time).toISOString().slice(0, 16),
-            end_time: new Date(selectedAppointment.end_time).toISOString().slice(0, 16),
-            location: selectedAppointment.location || '',
-            customer_name: selectedAppointment.customers?.name || '',
-            customer_phone: selectedAppointment.customers?.phone || '',
-            customer_notes: customerMetadata.notes || ''
-        })
+      setIsEditing(false)
+      setIsCreating(false)
+      const customer: any = selectedAppointment.customers || {}
+      const customerMetadata = customer.metadata || {}
+      const fullName: string = customer.name || ''
+      const [firstFromFull, ...restFromFull] = fullName.split(/\s+/)
+      const derivedFirst = customer.first_name || firstFromFull || ''
+      const derivedLast = customer.last_name || (restFromFull.join(' ') || '')
+
+      setForm({
+        customer_id: selectedAppointment.customer_id,
+        resource_id: selectedAppointment.resource_id,
+        description: selectedAppointment.description || '',
+        start_time: toLocalISO(selectedAppointment.start_time),
+        end_time: toLocalISO(selectedAppointment.end_time),
+        location: selectedAppointment.location || '',
+        customer_first_name: derivedFirst,
+        customer_last_name: derivedLast,
+        customer_phone: customer.phone || '',
+        customer_notes: customerMetadata.notes || ''
+      })
     }
   }, [selectedAppointment])
 
   async function fetchStaticData() {
     const tenantId = localStorage.getItem('tenantId')
-    const [cRes, rRes] = await Promise.all([
-        supabase.from('customers').select('*').eq('tenant_id', tenantId).order('name'),
-        fetch(`http://localhost:3000/resources?tenant_id=${tenantId}`).then(r => r.json())
-    ])
-    if (cRes.data) setCustomers(cRes.data)
-    if (Array.isArray(rRes)) setResources(rRes)
+    try {
+      const [cRes, rRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/customers?tenant_id=${tenantId}`).then(r => r.json()),
+        fetch(`${API_BASE_URL}/resources?tenant_id=${tenantId}`).then(r => r.json())
+      ])
+      if (Array.isArray(cRes)) setCustomers(cRes)
+      if (Array.isArray(rRes)) setResources(rRes)
+    } catch (e) {
+      console.error('Failed to fetch customers/resources', e)
+    }
   }
 
-  async function fetchAppointments() {
+  async function fetchAppointments(selectId?: string) {
     setLoading(true)
     const tenantId = localStorage.getItem('tenantId')
     try {
-      const { data, error } = await supabase
-        .from('appointments')
-        .select('*, customers (name, phone, metadata), resources (name)')
-        .eq('tenant_id', tenantId)
-        .order('start_time', { ascending: true })
-      
-      if (error || !data || data.length === 0) {
+      const res = await fetch(`${API_BASE_URL}/appointments?tenant_id=${tenantId}`)
+      if (!res.ok) {
+        throw new Error('Failed to fetch appointments')
+      }
+      const data = await res.json()
+
+      if (!data || data.length === 0) {
         setAppointments(MOCK_APPOINTMENTS)
         setUsingMockData(true)
         if (!selectedAppointment) setSelectedAppointment(MOCK_APPOINTMENTS[0])
       } else {
         setAppointments(data)
         setUsingMockData(false)
-        if (!selectedAppointment) {
-            setSelectedAppointment(data[0])
+
+        // If supporting data failed to load for any reason, derive
+        // basic customer/resource options from the appointments we have.
+        if (customers.length === 0) {
+          const customerMap = new Map<string, { id: string; name: string; phone: string }>()
+          data.forEach((a: any) => {
+            if (a.customer_id) {
+              customerMap.set(a.customer_id, {
+                id: a.customer_id,
+                name: a.customers?.name || 'Unknown',
+                phone: a.customers?.phone || ''
+              })
+            }
+          })
+          setCustomers(Array.from(customerMap.values()) as any)
+        }
+
+        if (resources.length === 0) {
+          const resourceMap = new Map<string, { id: string; name: string }>()
+          data.forEach((a: any) => {
+            if (a.resource_id) {
+              resourceMap.set(a.resource_id, {
+                id: a.resource_id,
+                name: a.resources?.name || 'Resource'
+              })
+            }
+          })
+          setResources(Array.from(resourceMap.values()) as any)
+        }
+        
+        if (selectId) {
+          const newlyCreated = data.find((a: any) => a.id === selectId)
+          if (newlyCreated) setSelectedAppointment(newlyCreated)
+        } else if (!selectedAppointment) {
+          setSelectedAppointment(data[0])
         } else {
-            const updated = data.find(a => a.id === selectedAppointment.id)
-            if (updated) setSelectedAppointment(updated)
+          const updated = data.find((a: any) => a.id === selectedAppointment.id)
+          if (updated) setSelectedAppointment(updated)
         }
       }
     } catch (e) {
       setAppointments(MOCK_APPOINTMENTS)
+      setUsingMockData(true)
       if (!selectedAppointment) setSelectedAppointment(MOCK_APPOINTMENTS[0])
     }
     setLoading(false)
@@ -177,13 +255,20 @@ export default function AppointmentView() {
       return
     }
 
+    // Use the appointment's original tenant_id if we are SuperAdmin
+    const targetTenantId = tenantId === PLATFORM_TENANT_ID 
+      ? selectedAppointment.tenant_id 
+      : tenantId
+
     try {
-      const response = await fetch(`http://localhost:3000/appointments/${selectedAppointment.id}/update`, {
+      const response = await fetch(`${API_BASE_URL}/appointments/${selectedAppointment.id}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenant_id: tenantId,
-          ...form
+          tenant_id: targetTenantId,
+          ...form,
+          customer_name: `${form.customer_first_name} ${form.customer_last_name}`.trim(),
+          customer_phone: normalizePhone(form.customer_phone)
         })
       })
       const data = await response.json()
@@ -211,19 +296,34 @@ export default function AppointmentView() {
       return
     }
 
+    // For now, if SuperAdmin creates an appointment, we need a way to assign it
+    // to a tenant. We'll default to the first customer's tenant if SuperAdmin.
+    let targetTenantId = tenantId
+    if (tenantId === PLATFORM_TENANT_ID) {
+      const selectedCustomerObj = customers.find(c => c.id === form.customer_id)
+      if (selectedCustomerObj) {
+        targetTenantId = selectedCustomerObj.tenant_id
+      } else {
+        setError('Cannot determine target tenant for new appointment.')
+        setSaving(false)
+        return
+      }
+    }
+
     try {
-        const res = await fetch('http://localhost:3000/appointments/create', {
+      const res = await fetch(`${API_BASE_URL}/appointments/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                tenant_id: tenantId,
-                ...form
+                tenant_id: targetTenantId,
+                ...form,
+                customer_phone: normalizePhone(form.customer_phone)
             })
         })
         const data = await res.json()
         if (res.ok && data.success) {
             setIsCreating(false)
-            fetchAppointments()
+            fetchAppointments(data.appointment_id)
         } else {
             setError(data.error || 'Failed to create appointment')
         }
@@ -247,7 +347,7 @@ export default function AppointmentView() {
     }
     
     try {
-        const res = await fetch(`http://localhost:3000/appointments/${selectedAppointment.id}`, {
+      const res = await fetch(`${API_BASE_URL}/appointments/${selectedAppointment.id}`, {
             method: 'DELETE'
         })
         if (res.ok) {
@@ -265,16 +365,20 @@ export default function AppointmentView() {
     setSelectedAppointment(null)
     const now = new Date()
     const inOneHour = new Date(now.getTime() + 60 * 60 * 1000)
+    const defaultCustomerId = customers[0]?.id || ''
+    const defaultCustomer = findCustomerById(defaultCustomerId)
+    const defaultLocation = formatCustomerAddress(defaultCustomer)
     setForm({
-        customer_id: customers[0]?.id || '',
-        resource_id: resources[0]?.id || '',
-        description: '',
-        start_time: now.toISOString().slice(0, 16),
-        end_time: inOneHour.toISOString().slice(0, 16),
-        location: '',
-        customer_name: '',
-        customer_phone: '',
-        customer_notes: ''
+      customer_id: defaultCustomerId,
+      resource_id: resources[0]?.id || '',
+      description: '',
+      start_time: now.toISOString().slice(0, 16),
+      end_time: inOneHour.toISOString().slice(0, 16),
+      location: defaultLocation,
+      customer_first_name: '',
+      customer_last_name: '',
+      customer_phone: '',
+      customer_notes: ''
     })
   }
 
@@ -341,37 +445,34 @@ export default function AppointmentView() {
             onSelectSlot={(slot: any) => {
               const start = slot.start as Date
               const end = slot.end as Date
-              const startIso = start.toISOString().slice(0, 16)
-              const endIso = end.toISOString().slice(0, 16)
+              const startIso = toLocalISO(start)
+              const endIso = toLocalISO(end)
 
-              if (selectedAppointment) {
-                // Reschedule existing appointment locally; user still confirms via Save
-                setIsEditing(true)
-                setShowDetailOnMobile(true)
-                setForm(prev => ({
-                  ...prev,
-                  start_time: startIso,
-                  end_time: endIso
-                }))
-              } else {
-                // No selection: start a new appointment at this time
-                setIsCreating(true)
-                setIsEditing(false)
-                const defaultCustomerId = customers[0]?.id || ''
-                const defaultResourceId = resources[0]?.id || ''
-                setForm({
-                  customer_id: defaultCustomerId,
-                  resource_id: defaultResourceId,
-                  description: '',
-                  start_time: startIso,
-                  end_time: endIso,
-                  location: '',
-                  customer_name: '',
-                  customer_phone: '',
-                  customer_notes: ''
-                })
-                setShowDetailOnMobile(true)
-              }
+              // Always treat clicking an empty slot as starting a NEW appointment.
+              // Updating/rescheduling existing appointments is handled via the
+              // Modify button or by dragging/resizing events, so users don't
+              // accidentally overwrite an existing booking when they meant to
+              // create a fresh one.
+              setSelectedAppointment(null)
+              setIsCreating(true)
+              setIsEditing(false)
+              const defaultCustomerId = customers[0]?.id || ''
+              const defaultCustomer = findCustomerById(defaultCustomerId)
+              const defaultLocation = formatCustomerAddress(defaultCustomer)
+              const defaultResourceId = resources[0]?.id || ''
+              setForm({
+                customer_id: defaultCustomerId,
+                resource_id: defaultResourceId,
+                description: '',
+                start_time: startIso,
+                end_time: endIso,
+                location: defaultLocation,
+                customer_first_name: '',
+                customer_last_name: '',
+                customer_phone: '',
+                customer_notes: ''
+              })
+              setShowDetailOnMobile(true)
             }}
             onSelectEvent={(event: any) => {
               const apt = appointments.find(a => a.id === event.id)
@@ -398,8 +499,8 @@ export default function AppointmentView() {
               setShowDetailOnMobile(true)
               setForm(prev => ({
                 ...prev,
-                start_time: startIso.slice(0, 16),
-                end_time: endIso.slice(0, 16)
+                start_time: toLocalISO(start),
+                end_time: toLocalISO(end)
               }))
             }}
             onEventResize={({ event, start, end }: any) => {
@@ -417,8 +518,8 @@ export default function AppointmentView() {
               setShowDetailOnMobile(true)
               setForm(prev => ({
                 ...prev,
-                start_time: startIso.slice(0, 16),
-                end_time: endIso.slice(0, 16)
+                start_time: toLocalISO(start),
+                end_time: toLocalISO(end)
               }))
             }}
             eventPropGetter={(event: any) => {
@@ -531,8 +632,26 @@ export default function AppointmentView() {
                                     <div className="space-y-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Customer</label>
-                                            <select value={form.customer_id} onChange={e => setForm({...form, customer_id: e.target.value})} className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none dark:text-gray-100">
-                                                {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
+                                            <select
+                                              value={form.customer_id}
+                                              onChange={e => {
+                                                const newCustomerId = e.target.value
+                                                const customer = findCustomerById(newCustomerId)
+                                                const suggestedLocation = formatCustomerAddress(customer)
+                                                setForm(prev => ({
+                                                  ...prev,
+                                                  customer_id: newCustomerId,
+                                                  // If user hasn't typed a location yet, prefill from CRM
+                                                  location: prev.location || suggestedLocation
+                                                }))
+                                              }}
+                                              className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none dark:text-gray-100"
+                                            >
+                                                {customers.map(c => (
+                                                  <option key={c.id} value={c.id}>
+                                                    {c.name} ({formatPhone(c.phone)})
+                                                  </option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div>
@@ -543,16 +662,38 @@ export default function AppointmentView() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Name</label>
-                                            <input type="text" value={form.customer_name} onChange={e => setForm({...form, customer_name: e.target.value})} className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
-                                            <input type="text" value={form.customer_phone} onChange={e => setForm({...form, customer_phone: e.target.value})} className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100" />
-                                        </div>
-                                    </>
+                                  <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer First Name</label>
+                                        <input
+                                          type="text"
+                                          value={form.customer_first_name}
+                                          onChange={e => setForm({ ...form, customer_first_name: e.target.value })}
+                                          className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Last Name</label>
+                                        <input
+                                          type="text"
+                                          value={form.customer_last_name}
+                                          onChange={e => setForm({ ...form, customer_last_name: e.target.value })}
+                                          className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
+                                      <input
+                                        type="text"
+                                        value={form.customer_phone}
+                                        onChange={e => setForm({ ...form, customer_phone: e.target.value })}
+                                        className="w-full p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                                        placeholder="+1-555-010-9999"
+                                      />
+                                    </div>
+                                  </>
                                 )}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Internal Notes</label>
@@ -633,7 +774,12 @@ export default function AppointmentView() {
                                     </div>
                                     <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
                                         <span className="text-gray-500 dark:text-gray-400 text-sm">Phone</span>
-                                        <a href={`tel:${selectedAppointment?.customers?.phone}`} className="font-bold text-blue-600 dark:text-blue-400 underline">{selectedAppointment?.customers?.phone}</a>
+                                        <a
+                                          href={`tel:${selectedAppointment?.customers?.phone}`}
+                                          className="font-bold text-blue-600 dark:text-blue-400 underline"
+                                        >
+                                          {formatPhone(selectedAppointment?.customers?.phone)}
+                                        </a>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-500 dark:text-gray-400 text-sm">Service Unit</span>

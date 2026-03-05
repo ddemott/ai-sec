@@ -21,7 +21,7 @@ The Dashboard provides business owners with transparency and control.
 
 ### 3.1 Tech Stack
 - **Framework**: Next.js (React) + Tailwind CSS.
-- **Auth**: Supabase Auth (JWT-based multi-tenancy).
+- **Auth**: Application-level `users` table + backend `/login` endpoint providing tenant-scoped sessions (Supabase Auth can be swapped in later).
 - **Hosting**: Vercel (Edge-compatible).
 
 ### 3.2 Key Views & Features
@@ -30,6 +30,7 @@ The Dashboard provides business owners with transparency and control.
 - **AI Tuner**: Live editor for the `system_prompt`, `voice_id`, and `working_hours`.
 - **Call Explorer**: List of all calls with transcripts, sentiment analysis, and audio playback.
  - **Scheduling View**: Outlook-style calendar that surfaces not only raw appointment times but also the **effective load** on each resource (including prep/cleanup/admin and travel for mobile tenants) so operators can see slack at a glance.
+ - **SuperAdmin – All Businesses View**: A multi-tenant "All Businesses" view for the super admin that lists all tenants and provides a "Launch New Business" flow. Each launch creates a tenant plus an initial owner user with `first_name`, `last_name`, and `full_name` stored in the `users` table.
 
 ---
 
@@ -52,6 +53,11 @@ The Dashboard provides business owners with transparency and control.
 - **Metadata**: JSONB `metadata` fields on core tables (e.g., customers, appointments) capture vertical-specific details like vehicle info, services, or special instructions without changing the base schema. This includes **per-service timing metadata** (prep/setup, base duration, cleanup/admin, travel) that the scheduler uses to compute effective booking blocks.
 - **Contextual Memory**: `call_summaries` using **pgvector** for semantic recall.
 - **Audit Logs**: `call_transcripts` with sentiment tracking.
+ - **User Accounts**: A `users` table stores tenant-scoped application users (owners/admins) with `email`, `password_hash`, and separated `first_name`, `last_name`, plus a composed `full_name` used in UI and logs.
+
+**Single Source-of-Truth Database**
+
+All write and read paths are designed around a single Postgres database per environment. Supabase Edge Functions, the Fastify backend (`src/index.ts`), the dashboard, and n8n workflows must be configured to talk to the **same** database instance; otherwise bookings created by the voice tools (e.g., via `book_appointment_atomic`) will not appear in the dashboard's `/appointments` feed. In local development, either point `DATABASE_URL` at your Supabase project or ensure that all components use the local Docker Postgres.
 
 ## 7. Tenant Knowledge Base & RAG Layer
 - **Tenant Knowledge Base (Planned)**: A `tenant_docs`-style table stores per-tenant business knowledge (hours, policies, services, FAQs) as small text chunks with embeddings (`vector(1536)`), sourced from PDFs, website copy, and manually entered notes.

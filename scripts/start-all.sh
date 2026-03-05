@@ -25,8 +25,8 @@ fi
 
 # 2. Start services concurrently
 echo "[ai-sec] 🚦 Launching Backend and Dashboard..."
-echo "[ai-sec]    Backend: http://localhost:3000"
-echo "[ai-sec]    Dashboard: http://localhost:3001"
+echo "[ai-sec]    Backend: https://localhost:3000 (self-signed in dev)"
+echo "[ai-sec]    Dashboard: https://localhost:3001 (self-signed in dev)"
 
 ./node_modules/.bin/concurrently \
   -n "BACKEND,DASHBOARD" \

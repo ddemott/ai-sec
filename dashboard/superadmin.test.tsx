@@ -102,8 +102,11 @@ test('SuperAdminDashboard: can launch new business via modal', async () => {
   const nameInput = screen.getByPlaceholderText(/Elite Salon/i)
   fireEvent.change(nameInput, { target: { value: 'Acme Tires' } })
 
-  const ownerNameInput = screen.getByPlaceholderText(/Full Name/i)
-  fireEvent.change(ownerNameInput, { target: { value: 'Alice Owner' } })
+  const ownerFirstNameInput = screen.getByPlaceholderText(/First Name/i)
+  fireEvent.change(ownerFirstNameInput, { target: { value: 'Alice' } })
+
+  const ownerLastNameInput = screen.getByPlaceholderText(/Last Name/i)
+  fireEvent.change(ownerLastNameInput, { target: { value: 'Owner' } })
 
   const ownerEmailInput = screen.getByPlaceholderText(/Email/i)
   fireEvent.change(ownerEmailInput, { target: { value: 'alice@example.com' } })
@@ -129,8 +132,10 @@ test('SuperAdminDashboard: can launch new business via modal', async () => {
   const body = lastCall[1]?.body as string
   expect(JSON.parse(body)).toMatchObject({
     tenant_name: 'Acme Tires',
-    owner_name: 'Alice Owner',
+    owner_first_name: 'Alice',
+    owner_last_name: 'Owner',
     owner_email: 'alice@example.com',
+    owner_pass: 'super-secret',
   })
 })
 

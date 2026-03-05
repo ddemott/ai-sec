@@ -55,13 +55,24 @@ BEGIN
         location = p_location
     WHERE id = p_appointment_id;
 
-    -- 4. Update Customer Metadata (atomic JSON merge for notes)
-    UPDATE customers
-    SET 
-        name = p_customer_name,
-        phone = p_customer_phone,
-        metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{notes}', to_jsonb(p_customer_notes))
-    WHERE id = v_customer_id AND tenant_id = p_tenant_id;
+        -- 4. Update Customer Metadata and Structured Name (atomic JSON merge for notes)
+        UPDATE customers
+        SET 
+                name = p_customer_name,
+                first_name = NULLIF(split_part(COALESCE(p_customer_name, ''), ' ', 1), ''),
+                last_name = NULLIF(
+                    btrim(
+                        CASE
+                            WHEN position(' ' IN COALESCE(p_customer_name, '')) > 0 
+                            THEN substring(COALESCE(p_customer_name, '') FROM position(' ' IN COALESCE(p_customer_name, '')) + 1)
+                            ELSE ''
+                        END
+                    ),
+                    ''
+                ),
+                phone = p_customer_phone,
+                metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{notes}', to_jsonb(p_customer_notes))
+        WHERE id = v_customer_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY SELECT TRUE, NULL::TEXT;
 END;

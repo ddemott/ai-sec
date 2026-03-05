@@ -30,7 +30,7 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
         }]
       }
     };
-    const req = new Request("http://localhost", { method: "POST", body: JSON.stringify(payload) });
+    const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
     const res = await handler(req);
     const data = await res.json();
     assertEquals(res.status, 400);
@@ -49,7 +49,7 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
         }]
       }
     };
-    const req = new Request("http://localhost", { method: "POST", body: JSON.stringify(payload) });
+    const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
     const res = await handler(req);
     assertEquals(res.status, 400);
   });
@@ -61,7 +61,7 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
         toolCalls: []
       }
     };
-    const req = new Request("http://localhost", { method: "POST", body: JSON.stringify(payload) });
+    const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
     const res = await handler(req);
     assertEquals(res.status, 400);
   });

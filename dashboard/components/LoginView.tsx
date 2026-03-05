@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { Calendar, Lock, Mail, Loader2, Bot } from 'lucide-react'
+import { API_BASE_URL } from '../lib/api'
 
 interface LoginViewProps {
   onLoginSuccess: (data: { tenant_id: string; user_name: string }) => void;
@@ -19,7 +20,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setError(null)
 
     try {
-      const response = await fetch('http://localhost:3000/login', {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

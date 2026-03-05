@@ -33,7 +33,7 @@ Supabase stores all your data (customers, bookings) and hosts your "Tool" logic.
     - Open the file `supabase/migrations/20260228000000_initial_schema.sql` in this project.
     - Copy **everything** in that file and paste it into the Supabase SQL Editor.
     - Click **Run**.
-    - Repeat this for the other `.sql` files in the `supabase/migrations/` folder in order (000001, 000002, 000003).
+    - Repeat this for **every** `.sql` file in the `supabase/migrations/` folder in filename order (e.g., `20260228000000_initial_schema.sql`, ..., `20260305000000_users_split_name.sql`). This ensures the `users` table and its `first_name` / `last_name` columns are created and backfilled correctly.
 6.  **Get Keys**:
     - Click the **Settings** (gear icon) → **API**.
     - You need two things for your Dashboard:
@@ -89,3 +89,21 @@ n8n is like "Zapier" but more powerful. It handles the "slow" tasks after the ca
         - `NEXT_PUBLIC_SUPABASE_URL`: (Your Supabase Project URL)
         - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: (Your Supabase Anon Key)
 4.  **Deploy**: Vercel will give you a URL (e.g., `https://my-dashboard.vercel.app`). This is where you will manage your business.
+
+---
+
+## 7. Initial Users & Business Onboarding
+
+Once Supabase, Vapi, n8n, and the dashboard are configured and your backend is running:
+
+1. **Open the Dashboard**: Visit your local or deployed dashboard URL (e.g., `https://localhost:3001` in local dev).
+2. **SuperAdmin Access (Dev)**: In local development, you can use the `[DEV] Bypass to SuperAdmin` option on the login screen to open the **All Businesses** view for the global admin tenant.
+3. **Launch New Businesses**:
+    - From the All Businesses view, use **Launch New Business** to create tenants from templates.
+    - Or, from the Settings view, use the Business Onboarding section.
+4. **Owner Accounts with Separated Names**:
+    - Both onboarding flows create an initial **owner user** in the `users` table.
+    - Owner names are stored as `first_name`, `last_name`, and `full_name` (composed), so you should enter the owner's **first and last name explicitly** where prompted.
+    - The owner email + password you specify here are what that business owner will use to log into the dashboard.
+
+For appointments and CRM data to line up between the dashboard and the voice layer, ensure that the backend (`DATABASE_URL`), Supabase Edge Functions, and any n8n workflows all point at the **same Postgres database** per environment.

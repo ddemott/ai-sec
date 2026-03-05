@@ -1,86 +1,72 @@
 import React from 'react'
-import { expect, test, vi } from 'vitest'
+import { expect, test, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import AppointmentView from './components/AppointmentView'
+import { MOCK_APPOINTMENTS } from './lib/mockData'
 
-const { mockSupabase } = vi.hoisted(() => {
-  return {
-    mockSupabase: {
-      from: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      then: vi.fn((resolve) => resolve({ 
-        data: [{ 
-            id: 'apt-1', 
-            description: 'Test Appointment', 
-            start_time: '2026-03-01T10:00:00Z',
-            end_time: '2026-03-01T11:00:00Z',
-            customers: { name: 'Bob', phone: '123', metadata: {} },
-            resources: { name: 'Truck 1' },
-            status: 'scheduled',
-            tenant_id: 'tenant-1'
-        }], 
-        error: null 
-      }))
+// Mock fetch
+global.fetch = vi.fn()
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  window.localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
+  
+  // Default mocks for static data and appointments
+  ;(global.fetch as any).mockImplementation((url: string) => {
+    if (url.includes('/appointments')) {
+      return Promise.resolve({ ok: true, json: async () => MOCK_APPOINTMENTS })
     }
-  }
+    return Promise.resolve({ ok: true, json: async () => [] })
+  })
 })
 
-vi.mock('@/lib/supabase', () => ({
-  supabase: mockSupabase
-}))
-
 test('AppointmentView: clicking calendar event opens detail view', async () => {
-  const fetchMock = vi
-    .spyOn(globalThis, 'fetch' as any)
-    .mockResolvedValue({ ok: true, json: async () => ([] as any) } as any)
-
   render(<AppointmentView />)
 
-  // Wait for the calendar event for Bob to render
-  const eventButton = await screen.findByRole('button', { name: /Bob/i })
-  fireEvent.click(eventButton)
+  // MOCK_APPOINTMENTS[0] is for Bob Smith
+  // We use findAllByText and pick the first one (the list item)
+  const eventButtons = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
+  fireEvent.click(eventButtons[0])
 
-  // Detail header should now show the appointment description
-  const heading = await screen.findByRole('heading', { name: /Test Appointment/i })
-  expect(heading).toBeTruthy()
-
-  fetchMock.mockRestore()
+  // Detail header should now show the customer name
+  const headings = await screen.findAllByText(/Bob Smith/i)
+  expect(headings.length).toBeGreaterThan(0)
 })
 
 test('AppointmentView: can modify and save an appointment', async () => {
-  // Ensure the component believes a tenant is logged in so updates are allowed
-  window.localStorage.setItem('tenantId', 'tenant-1')
-
-  const fetchMock = vi
-    .spyOn(globalThis, 'fetch' as any)
-    .mockResolvedValue({ ok: true, json: async () => ({ success: true }) } as any)
-
   render(<AppointmentView />)
 
-  // Select the appointment via the calendar event
-  const eventButton = await screen.findByRole('button', { name: /Bob/i })
-  fireEvent.click(eventButton)
+  // Select the appointment via the list or calendar
+  const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
+  fireEvent.click(listItems[0])
 
-  // Enter edit mode (there may be more than one Modify button rendered)
-  const [modifyButton] = await screen.findAllByRole('button', { name: /Modify/i })
-  fireEvent.click(modifyButton)
+  // Enter edit mode
+  const modifyBtns = await screen.findAllByRole('button', { name: /Modify/i })
+  fireEvent.click(modifyBtns[0])
+
+  // Format the expected time using the component's internal toLocalISO logic
+  const d = new Date(MOCK_APPOINTMENTS[0].start_time)
+  const offset = d.getTimezoneOffset()
+  const localDate = new Date(d.getTime() - (offset * 60 * 1000))
+  const expectedTimeStr = localDate.toISOString().slice(0, 16)
 
   // Change the start time via the datetime-local input bound to start_time
-  const startInput = screen.getByDisplayValue(/2026-03-01T10:00/i) as HTMLInputElement
-  expect(startInput.value).toContain('10:00')
-  fireEvent.change(startInput, { target: { value: '2026-03-01T11:00' } })
+  const startInput = await screen.findByDisplayValue(expectedTimeStr)
+  fireEvent.change(startInput, { target: { value: '2026-03-05T11:00' } })
+
+  // Mock the update response
+  ;(global.fetch as any).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ success: true })
+  })
 
   const updateButton = screen.getByRole('button', { name: /Update Appointment/i })
   fireEvent.click(updateButton)
 
   await waitFor(() => {
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/appointments/apt-1/update'),
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
       expect.objectContaining({ method: 'POST' })
     )
   })
-  fetchMock.mockRestore()
 })

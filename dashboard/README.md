@@ -7,6 +7,7 @@ This is the **management UI** for the AI Secretary SaaS. It lets owners and admi
 - Tweak AI persona settings (system prompt, voice, working hours).
 
 The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**, and talks directly to Supabase and the Edge Functions defined in the root project.
+In practice it calls the Fastify backend API (`src/index.ts`), which in turn reads and writes to the shared Postgres database (Supabase or local Docker), so that bookings created by the voice tools and the dashboard all hit the same source of truth.
 
 ---
 

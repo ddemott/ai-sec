@@ -12,7 +12,11 @@ export interface Appointment {
     name: string;
     phone: string;
   };
-  resources?: {
+    // Structured name fields
+    first_name?: string;
+    last_name?: string;
+    // Combined display name (legacy / convenience)
+    name: string;
     name: string;
   };
 }
@@ -21,9 +25,17 @@ export interface Customer {
   id: string;
   tenant_id: string;
   phone: string;
-  name: string;
+  name: string; // full name (legacy)
   email: string;
-  address: string;
+  address: string; // address line 1
+  // Optional structured fields
+  first_name?: string;
+  last_name?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  timezone?: string;
   metadata: any;
 }
 
