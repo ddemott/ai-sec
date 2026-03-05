@@ -29,7 +29,7 @@ The Dashboard provides business owners with transparency and control.
 - **CRM Viewer**: View customer history, notes, and AI-generated "Contextual Memories."
 - **AI Tuner**: Live editor for the `system_prompt`, `voice_id`, and `working_hours`.
 - **Call Explorer**: List of all calls with transcripts, sentiment analysis, and audio playback.
- - **Scheduling View**: Outlook-style calendar that surfaces not only raw appointment times but also the **effective load** on each resource (including prep/cleanup/admin and travel for mobile tenants) so operators can see slack at a glance.
+ - **Scheduling View**: Outlook-style calendar that surfaces not only raw appointment times but also the **effective load** on each resource (including prep/cleanup/admin and travel for mobile tenants) so operators can see slack at a glance. Multiple resources per tenant (trucks, stylists, service bays) allow **parallel appointments** as long as each resource is individually available.
  - **SuperAdmin – All Businesses View**: A multi-tenant "All Businesses" view for the super admin that lists all tenants and provides a "Launch New Business" flow. Each launch creates a tenant plus an initial owner user with `first_name`, `last_name`, and `full_name` stored in the `users` table.
 
 ---

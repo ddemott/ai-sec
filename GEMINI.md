@@ -22,6 +22,7 @@
 - **Local Stack**: `bootstrap` + `start-all` bring up Docker Postgres, backend, and dashboard for end-to-end local testing. Test suites now auto-detect DB availability and **skip (not fail)** DB-heavy integration specs when Postgres is down, which keeps CI/local runs stable while preserving full coverage when the DB is up.
 - **User Accounts & Onboarding**: Extended the `users` table to store `first_name`, `last_name`, and `full_name`, and wired the Settings + SuperAdmin onboarding flows so each new business gets an owner account with separated names instead of a single opaque full name.
 - **Dashboard Appointment Safety**: The appointment editor now uses an in-app confirmation modal ("Make this change permanent?") before persisting updates; choosing to keep the original leaves the appointment unchanged and skips the update call.
+ - **Multi-Bay Auto Shop Support**: The booking logic treats each resource as an independent capacity unit; tests now verify that overlapping appointments are allowed across different resources for the same tenant (e.g., an auto shop running parallel jobs in multiple bays).
 
 ## Next Steps (Live)
 1.  **Configure Base Vapi Agent**: In Vapi, set the Agent's **Server URL** to the deployed Supabase Edge Function (`/vapi-tools`) and configure the shared `x-vapi-secret`.

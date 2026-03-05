@@ -47,6 +47,7 @@ For a deeper technical view of the architecture (Edge, Postgres, Orchestration),
 **Data Model & Storage (Phase 1 & 2 Complete)**
 - **SQL Schema**: Tenants, Resources, Customers, Appointments, and Call Logs.
 - **Atomic Booking**: Postgres RPC `book_appointment_atomic` handles race conditions.
+- **Multi-Bay / Multi-Resource**: Appointments are scoped to a specific `resource_id` (bay/truck/chair). Overlap checks run per resource, so an auto shop can run **parallel appointments across multiple bays** as long as each individual bay is free.
 - **AI Tools (Edge)**: `vapi-tools` implemented with `get_customer_context`, `check_availability`, and `book_appointment`.
 - **TDD Compliance**: Verified with integration tests covering Happy and Sad paths.
 

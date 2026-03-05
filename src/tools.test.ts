@@ -80,4 +80,32 @@ describe("AI Tools: Modular Integration", () => {
         expect(bookRes.rows[0].success).toBe(false);
         expect(bookRes.rows[0].error_message).toBe("Slot already booked");
     });
+
+    it("Multi-bay: overlapping slots allowed on different resources", async () => {
+        if (!dbAvailable) return;
+        const { tenantId, resourceId, customerId } = await setupTestData();
+
+        const secondResource = await client.query(
+            "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 2') RETURNING id;",
+            [tenantId]
+        );
+        const otherResourceId = secondResource.rows[0].id;
+
+        const start = "2026-06-01T10:00:00Z";
+        const end = "2026-06-01T11:00:00Z";
+
+        // Book in first bay
+        await client.query(
+            "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8)",
+            [tenantId, resourceId, customerId, start, end, "First bay", "call_bay1", null]
+        );
+
+        // Overlapping time in second bay should still succeed
+        const bookRes = await client.query(
+            "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8)",
+            [tenantId, otherResourceId, customerId, "2026-06-01T10:30:00Z", "2026-06-01T11:30:00Z", "Second bay", "call_bay2", null]
+        );
+
+        expect(bookRes.rows[0].success).toBe(true);
+    });
 });
