@@ -109,6 +109,10 @@ Notes on tests and Postgres:
 - The backend Vitest suites under `src/` include **integration tests that talk directly to Postgres**.
 - If Docker Postgres on port `5433` is not running, those DB-backed tests will **log a skip message and no longer fail the suite**; they execute fully once the database is up.
 
+Dashboard appointment editing UX:
+- Editing an existing appointment and clicking **Update Appointment** now opens an in-app confirmation modal ("Make this change permanent?").
+- Choosing **Save Changes** saves the change and keeps the updated booking; choosing **Keep Original** reverts any in-session edits and does **not** call the update API.
+
 Important: For appointments to show up in the dashboard calendar, the **Edge tools**, the Fastify backend (`src/index.ts`), and the dashboard must all talk to the **same Postgres database** per environment. If you run both a local Docker Postgres and a Supabase project, make sure `DATABASE_URL` (for the backend) and your Supabase connection strings used by Vapi/n8n all point at the same instance; otherwise bookings may land in one DB while the calendar queries another.
 
 ---

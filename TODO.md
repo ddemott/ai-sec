@@ -10,9 +10,9 @@
   - [x] Add `check_availability` tool.
   - [x] Add `book_appointment` tool.
   - [x] **Security**: Ensure all 3 tools have `x-vapi-secret: 734987fcfcchsd82`.
-- [ ] **Configure the Base Agent**
-  - [ ] Set `Server URL` to `https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools`.
-  - [ ] **Multi-Tenancy Note**: You can now create multiple agents in Vapi, each with a different `Tenant ID` and `Resource ID` in their System Prompt to launch different businesses.
+- [x] **Configure the Base Agent**
+  - [x] Set `serverUrl` and `serverUrlSecret` in `vapi/agent.json` to `https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools` and `734987fcfcchsd82` (enforced by `src/vapiAgentConfig.test.ts`).
+  - [ ] In the Vapi Dashboard, set the Agent's **Server URL** and **Server URL Secret** to match `vapi/agent.json` so the live agent uses the deployed tools.
 
 ## 3. SaaS Operations (How to Launch a New Client)
 - [x] **Launch via Dashboard**

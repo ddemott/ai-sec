@@ -40,6 +40,8 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 export default function AppointmentView() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [originalAppointment, setOriginalAppointment] = useState<Appointment | null>(null)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [resources, setResources] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -239,6 +241,7 @@ export default function AppointmentView() {
 
   async function handleUpdate() {
     if (!selectedAppointment) return
+    setShowConfirmModal(false)
     setSaving(true)
     setError(null)
     const tenantId = localStorage.getItem('tenantId')
@@ -382,6 +385,23 @@ export default function AppointmentView() {
     })
   }
 
+  const requestUpdateConfirmation = () => {
+    if (!selectedAppointment) return
+    setShowConfirmModal(true)
+  }
+
+  const cancelUpdate = () => {
+    if (originalAppointment) {
+      setAppointments(prev =>
+        prev.map(a => (a.id === originalAppointment.id ? originalAppointment : a))
+      )
+      setSelectedAppointment(originalAppointment as any)
+    }
+    setError(null)
+    setIsEditing(false)
+    setShowConfirmModal(false)
+  }
+
   return (
     <div className="flex flex-1 overflow-hidden relative text-gray-900 dark:text-gray-100 transition-colors duration-200 flex-col">
 
@@ -478,6 +498,7 @@ export default function AppointmentView() {
               const apt = appointments.find(a => a.id === event.id)
               if (apt) {
                 setSelectedAppointment(apt)
+                setOriginalAppointment(apt) // Set originalAppointment when selecting an appointment
                 setShowDetailOnMobile(true)
                 setIsCreating(false)
               }
@@ -485,6 +506,8 @@ export default function AppointmentView() {
             onEventDrop={({ event, start, end }: any) => {
               const apt = appointments.find(a => a.id === event.id)
               if (!apt) return
+
+              setOriginalAppointment(apt as any) // Set originalAppointment when dragging an event
 
               const startIso = (start as Date).toISOString()
               const endIso = (end as Date).toISOString()
@@ -506,6 +529,8 @@ export default function AppointmentView() {
             onEventResize={({ event, start, end }: any) => {
               const apt = appointments.find(a => a.id === event.id)
               if (!apt) return
+
+              setOriginalAppointment(apt as any) // Set originalAppointment when resizing an event
 
               const startIso = (start as Date).toISOString()
               const endIso = (end as Date).toISOString()
@@ -602,14 +627,22 @@ export default function AppointmentView() {
               </div>
               <div className="flex items-center space-x-2">
                 {!isEditing && !isCreating ? (
-                    <>
-                        <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition" title="Delete record"><Trash2 className="w-5 h-5" /></button>
-                        {selectedAppointment?.status === 'scheduled' && (
-                            <button onClick={() => setIsEditing(true)} className="flex items-center px-4 py-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition font-bold text-sm border border-blue-200 dark:border-blue-800">
-                                <Edit className="w-4 h-4 mr-2" /> Modify
-                            </button>
-                        )}
-                    </>
+                  <>
+                    <button onClick={handleDelete} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition" title="Delete record"><Trash2 className="w-5 h-5" /></button>
+                    {selectedAppointment?.status === 'scheduled' && (
+                      <button
+                        onClick={() => {
+                        if (selectedAppointment) {
+                          setOriginalAppointment(selectedAppointment)
+                        }
+                        setIsEditing(true)
+                        }}
+                        className="flex items-center px-4 py-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition font-bold text-sm border border-blue-200 dark:border-blue-800"
+                      >
+                        <Edit className="w-4 h-4 mr-2" /> Modify
+                      </button>
+                    )}
+                  </>
                 ) : (
                     <button onClick={() => { setIsEditing(false); setIsCreating(false); }} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333] rounded-lg"><X className="w-6 h-6" /></button>
                 )}
@@ -731,7 +764,7 @@ export default function AppointmentView() {
                                 Discard
                             </button>
                             <button 
-                                onClick={isCreating ? handleCreate : handleUpdate} 
+                              onClick={isCreating ? handleCreate : requestUpdateConfirmation} 
                                 disabled={saving}
                                 className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg flex items-center justify-center disabled:opacity-50"
                             >
@@ -807,6 +840,34 @@ export default function AppointmentView() {
                     </div>
                 )}
             </div>
+            {showConfirmModal && !isCreating && (
+              <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40">
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 max-w-sm w-full p-6 space-y-4">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    Make this change permanent?
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Save these changes to the appointment, or keep the original details.
+                  </p>
+                  <div className="flex justify-end space-x-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={cancelUpdate}
+                      className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#333] text-sm font-medium"
+                    >
+                      Keep Original
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUpdate}
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic flex-col">

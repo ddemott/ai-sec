@@ -63,10 +63,35 @@ test('AppointmentView: can modify and save an appointment', async () => {
   const updateButton = screen.getByRole('button', { name: /Update Appointment/i })
   fireEvent.click(updateButton)
 
+  // Confirm in modal
+  const saveChangesButton = await screen.findByRole('button', { name: /Save Changes/i })
+  fireEvent.click(saveChangesButton)
+
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining(`/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
       expect.objectContaining({ method: 'POST' })
     )
   })
+})
+
+test('AppointmentView: canceling confirmation reverts changes and does not save', async () => {
+  render(<AppointmentView />)
+
+  const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
+  fireEvent.click(listItems[0])
+
+  const modifyBtns = await screen.findAllByRole('button', { name: /Modify/i })
+  fireEvent.click(modifyBtns[0])
+
+  const updateButton = screen.getByRole('button', { name: /Update Appointment/i })
+  fireEvent.click(updateButton)
+
+  const keepOriginalButton = await screen.findByRole('button', { name: /Keep Original/i })
+  fireEvent.click(keepOriginalButton)
+
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringContaining(`/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
+    expect.objectContaining({ method: 'POST' })
+  )
 })

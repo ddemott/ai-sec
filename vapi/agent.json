@@ -22,6 +22,6 @@
   },
   "firstMessage": "Thanks for calling DynaTire! This is your AI assistant. How can I help you today?",
   "endCallMessage": "Thank you for calling DynaTire. Have a great day!",
-  "serverUrl": "https://your-supabase-project.functions.supabase.co/vapi-tools",
-  "serverUrlSecret": "your-vapi-secret"
+  "serverUrl": "https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools",
+  "serverUrlSecret": "734987fcfcchsd82"
 }
