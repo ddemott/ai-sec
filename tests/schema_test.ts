@@ -75,7 +75,7 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
         assertEquals(result[0].error_message, "Slot already booked");
     });
 
-    await t.step("Should enforce buffers and reject tight back-to-back slots", async () => {
+    await t.step("Should reject overlapping slots on the same resource", async () => {
         const startTime = new Date("2026-03-01T11:00:00Z"); // Immediately after prior 10:00-11:00 service window
         const endTime = new Date("2026-03-01T12:00:00Z");
 
@@ -86,7 +86,7 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${customer.id}, 
                 ${startTime}, 
                 ${endTime}, 
-                'Back-to-back appointment (should fail due to buffers)', 
+                'Back-to-back appointment (should fail due to overlap)', 
                 'call_003',
                 NULL
             );
@@ -97,8 +97,8 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
         assertEquals(result[0].error_message, "Slot already booked");
     });
 
-    await t.step("Should allow booking when respecting buffer gap", async () => {
-        // Leave enough room after the 10:00-11:00 appointment plus its buffers
+    await t.step("Should allow non-overlapping booking on the same resource", async () => {
+        // Leave a true gap after the 10:00-11:00 appointment so windows do not overlap
         const startTime = new Date("2026-03-01T12:00:00Z");
         const endTime = new Date("2026-03-01T13:00:00Z");
 
@@ -109,7 +109,7 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${customer.id}, 
                 ${startTime}, 
                 ${endTime}, 
-                'Properly spaced appointment', 
+                'Properly spaced appointment (no overlap)', 
                 'call_004',
                 NULL
             );

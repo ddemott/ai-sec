@@ -49,7 +49,7 @@
 - [ ] **Dashboard Support for Templates**
   - [ ] Allow SuperAdmin to choose an industry template when launching a new business.
   - [ ] Show key metadata fields for appointments in the dashboard (e.g., vehicle summary for auto shops) without hard-coding per-industry logic.
-  - [x] For each service type, capture **timing profiles** (prep/setup, base duration, cleanup/admin, travel for mobile) so scheduling can reason about the *full* blocked interval, not just customer-facing time. **Core enforcement is now in `book_appointment_atomic`, which expands requested service windows into effective blocked intervals and records the timing profile in `appointments.metadata`.**
+  - [x] Ensure that appointments are stored and enforced using the exact start and end times requested by the user, with no hidden prep/cleanup/travel buffers. **Core enforcement is now in `book_appointment_atomic`, which checks overlaps using the literal requested window and stores that as `start_time`/`end_time`.**
 
 ## 7. Calendar Integrations
 - [ ] **Decide Supported Calendar Providers**

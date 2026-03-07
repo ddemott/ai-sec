@@ -58,6 +58,17 @@ describe("AI Tools: Modular Integration", () => {
             [tenantId, resourceId, customerId, start, end, "Tire Swap", "call_abc", null]
         );
         expect(bookRes.rows[0].success).toBe(true);
+
+        // Verify that the stored appointment window fully covers the requested window.
+        // Newer deployments should store exactly [start, end]; older buffered
+        // deployments may expand it but must not shrink it.
+        const stored = await client.query(
+            "SELECT start_time, end_time FROM appointments WHERE id = $1",
+            [bookRes.rows[0].appointment_id]
+        );
+
+        expect(stored.rows[0].start_time <= new Date(start)).toBe(true);
+        expect(stored.rows[0].end_time >= new Date(end)).toBe(true);
     });
 
     it("Sad Path: should fail when booking an overlapping slot", async () => {

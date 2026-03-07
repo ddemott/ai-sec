@@ -48,12 +48,13 @@ For a deeper technical view of the architecture (Edge, Postgres, Orchestration),
 - **SQL Schema**: Tenants, Resources, Customers, Appointments, and Call Logs.
 - **Atomic Booking**: Postgres RPC `book_appointment_atomic` handles race conditions.
 - **Multi-Bay / Multi-Resource**: Appointments are scoped to a specific `resource_id` (bay/truck/chair). Overlap checks run per resource, so an auto shop can run **parallel appointments across multiple bays** as long as each individual bay is free.
+ - **Owner Resource Management UI**: Tenant owners now have a **Business Settings → Resources & Capacity Units** panel in the dashboard where they can add named resources (bays, chairs, rooms, vehicles) and toggle each one active or inactive. This UI talks to the backend `/resources` endpoints and is covered by dashboard tests.
 - **AI Tools (Edge)**: `vapi-tools` implemented with `get_customer_context`, `check_availability`, and `book_appointment`.
 - **TDD Compliance**: Verified with integration tests covering Happy and Sad paths.
 
 **Smart Scheduling & Service Timing**
 - **Service-Aware Durations**: Templates define not just base duration, but also **prep**, **cleanup/admin**, and (for mobile tenants) **travel time** per service type.
-- **Effective Blocks**: The `book_appointment_atomic` RPC now expands requested service windows into full blocked intervals (prep + service + cleanup + travel) and stores those as `start_time`/`end_time`, so all overlap checks operate on the true occupied time.
+- **Literal Appointment Windows**: The `book_appointment_atomic` RPC now uses the exact requested service window as the stored `start_time`/`end_time`, with no hidden prep/cleanup/travel buffers. All overlap checks operate directly on this literal window so "7:00–8:00" always means exactly that everywhere.
 - **Slack & Utilization Policies**: Per-tenant knobs (e.g., max daily utilization, minimum gaps, “keep one trailing slot open”) will layer on top of the effective blocks to ensure the system leaves room to move appointments forward and avoids over-packing the day.
 
 **User Accounts & Owner Identity**
@@ -69,7 +70,10 @@ For a deeper technical view of the architecture (Edge, Postgres, Orchestration),
 - [GEMINI.md](GEMINI.md) (Project journal & decisions).
 - [docs/PLAN.md](docs/PLAN.md) (Updated multi-phase plan).
 
-Next major step: **Phase 3 – Vapi Agent Integration & Live Voice**.
+- [TODO.md](TODO.md) (Deployment & go-live checklist).
+- [docs/HOW_TO_SETUP.md](docs/HOW_TO_SETUP.md) (Verbose step-by-step setup).
+
+Next major step: **Production go-live: Vapi/Telnyx wiring, n8n workflows, and tenant knowledge base / calendar integrations as outlined in TODO.md and docs/PLAN.md**.
 
 ---
 

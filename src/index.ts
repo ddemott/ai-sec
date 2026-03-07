@@ -13,7 +13,7 @@ import type { TimeWindow } from './core/models';
 const useHttps = process.env.NODE_ENV !== 'production';
 
 const app = Fastify(
-  useHttps
+  (useHttps
     ? {
         logger: true,
         https: {
@@ -21,7 +21,7 @@ const app = Fastify(
           cert: fs.readFileSync(path.join(__dirname, '..', 'certs', 'localhost-cert.pem')),
         },
       }
-    : { logger: true }
+    : { logger: true }) as any
 );
 
 // Enforce HTTPS when behind a proxy that sets x-forwarded-proto.
@@ -168,34 +168,57 @@ app.delete('/customers/:id', async (req, reply) => {
 
 // NEW: Manual Appointment Creation
 app.post('/appointments/create', async (req, reply) => {
-    const body = req.body as any;
-    const client = await pool.connect();
-    try {
-        const res = await client.query(
-            'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8)',
-            [
-                body.tenant_id,
-                body.resource_id,
-                body.customer_id,
-                body.start_time,
-                body.end_time,
-                body.description,
-                'manual-entry',
-                body.location
-            ]
-        );
-        const result = res.rows[0];
-        if (result.success) {
-            return reply.send({ success: true, appointment_id: result.appointment_id });
-        } else {
-            return reply.status(400).send({ success: false, error: result.error_message });
-        }
-    } catch (err) {
-        app.log.error(err);
-        return reply.status(500).send({ error: 'Internal server error' });
-    } finally {
-        client.release();
+  const body = req.body as any;
+
+  const required = [
+    'tenant_id',
+    'resource_id',
+    'customer_id',
+    'start_time',
+    'end_time',
+    'description',
+  ];
+
+  const missing = required.filter((key) => !body?.[key]);
+  if (missing.length > 0) {
+    return reply
+    .status(400)
+    .send({ success: false, error: 'Missing required fields', missing });
+  }
+
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8)',
+      [
+        body.tenant_id,
+        body.resource_id,
+        body.customer_id,
+        body.start_time,
+        body.end_time,
+        body.description,
+        'manual-entry',
+        body.location || null,
+      ]
+    );
+    const result = res.rows[0];
+    if (result.success) {
+      return reply.send({ success: true, appointment_id: result.appointment_id });
+    } else {
+      return reply.status(400).send({ success: false, error: result.error_message });
     }
+  } catch (err: any) {
+    app.log.error(err);
+    // Surface common data/format issues as 400s instead of generic 500s
+    if (err.code === '22P02') {
+      return reply
+      .status(400)
+      .send({ success: false, error: 'Invalid identifier or time format', detail: err.detail });
+    }
+    return reply.status(500).send({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
 });
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
@@ -270,6 +293,73 @@ app.get('/resources', async (req, reply) => {
     } finally {
         client.release();
     }
+});
+
+// NEW: Create a resource (bay / service unit) for a tenant
+app.post('/resources/create', async (req, reply) => {
+  const body = req.body as { tenant_id: string; name: string; description?: string };
+
+  if (!body.tenant_id || !body.name) {
+    return reply.status(400).send({ success: false, error: 'tenant_id and name are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      'INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING *',
+      [body.tenant_id, body.name, body.description || null]
+    );
+    return reply.send({ success: true, resource: res.rows[0] });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to create resource' });
+  } finally {
+    client.release();
+  }
+});
+
+// NEW: Update basic resource attributes (name, description, active flag)
+app.post('/resources/:id/update', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const body = req.body as { name?: string; description?: string; is_active?: boolean };
+
+  const client = await pool.connect();
+  try {
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (body.name !== undefined) {
+      fields.push('name');
+      values.push(body.name);
+    }
+    if (body.description !== undefined) {
+      fields.push('description');
+      values.push(body.description || null);
+    }
+    if (body.is_active !== undefined) {
+      fields.push('is_active');
+      values.push(body.is_active);
+    }
+
+    if (fields.length === 0) {
+      return reply.status(400).send({ success: false, error: 'No updatable fields provided' });
+    }
+
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 1}`)
+      .join(', ');
+
+    values.push(id);
+
+    await client.query(`UPDATE resources SET ${setClause} WHERE id = $${values.length}`, values);
+
+    return reply.send({ success: true });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to update resource' });
+  } finally {
+    client.release();
+  }
 });
 
 // NEW: Get Customers for a tenant

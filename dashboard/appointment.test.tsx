@@ -95,3 +95,22 @@ test('AppointmentView: canceling confirmation reverts changes and does not save'
     expect.objectContaining({ method: 'POST' })
   )
 })
+
+test('AppointmentView: month navigation moves between months', async () => {
+  render(<AppointmentView />)
+
+  // Switch to month view
+  const [monthButton] = await screen.findAllByRole('button', { name: /Set month view/i })
+  fireEvent.click(monthButton)
+
+  // Capture current header label (e.g., "January 2025")
+  const [header] = await screen.findAllByRole('heading', { level: 2 })
+  const before = header.textContent
+
+  const [nextButton] = screen.getAllByRole('button', { name: /Next period/i })
+  fireEvent.click(nextButton)
+
+  await waitFor(() => {
+    expect(header.textContent).not.toBe(before)
+  })
+})

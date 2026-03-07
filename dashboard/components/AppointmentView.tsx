@@ -32,7 +32,7 @@ import {
   View as CalendarViewType
 } from 'react-big-calendar'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
-import { format, parse, startOfWeek, getDay } from 'date-fns'
+import { format, parse, startOfWeek, getDay, addDays, addWeeks, addMonths } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
@@ -46,6 +46,7 @@ export default function AppointmentView() {
   const [resources, setResources] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
+  const [draftEvent, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null)
   
   // States
   const [isEditing, setIsEditing] = useState(false)
@@ -61,10 +62,13 @@ export default function AppointmentView() {
   const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000'
 
   // Helper to format date for datetime-local input without timezone shift
-  const toLocalISO = (date: Date | string) => {
+  const toLocalISO = (date: Date | string | null | undefined) => {
+    if (!date) return ''
     const d = new Date(date)
+    if (Number.isNaN(d.getTime())) return ''
     const offset = d.getTimezoneOffset()
     const localDate = new Date(d.getTime() - (offset * 60 * 1000))
+    if (Number.isNaN(localDate.getTime())) return ''
     return localDate.toISOString().slice(0, 16)
   }
 
@@ -83,22 +87,62 @@ export default function AppointmentView() {
 
   const DnDCalendar = useMemo(() => withDragAndDrop(BigCalendar as any), [])
 
+  const parseDbDate = (value: any) => {
+    if (!value) return new Date(NaN)
+    if (value instanceof Date) return value
+    if (typeof value === 'string') {
+      // Normalize common Postgres timestamp formats to a browser-parseable ISO string
+      const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+      const d = new Date(normalized)
+      if (!Number.isNaN(d.getTime())) return d
+    }
+    return new Date(NaN)
+  }
+
+  const getServiceBaseTimes = (apt: any) => {
+    const timing = apt.metadata?.service_timing
+    if (timing?.base_start_time && timing?.base_end_time) {
+      return {
+        start: parseDbDate(timing.base_start_time),
+        end: parseDbDate(timing.base_end_time)
+      }
+    }
+    return {
+      start: parseDbDate(apt.start_time),
+      end: parseDbDate(apt.end_time)
+    }
+  }
+
   const calendarEvents = useMemo(
-    () =>
-      appointments.map(apt => {
+    () => {
+      const events = appointments.map(apt => {
         const customer: any = apt.customers || {}
         const first = customer.first_name || ''
         const last = customer.last_name || ''
         const structured = `${first} ${last}`.trim()
         const title = structured || customer.name || 'Appointment'
+        const { start, end } = getServiceBaseTimes(apt as any)
         return {
           id: apt.id,
           title,
-          start: new Date(apt.start_time),
-          end: new Date(apt.end_time),
+          start,
+          end,
         }
-      }),
-    [appointments]
+      })
+
+      if (isCreating && draftEvent) {
+        events.push({
+          id: '__draft__',
+          title: 'New appointment',
+          start: draftEvent.start,
+          end: draftEvent.end,
+          isDraft: true,
+        } as any)
+      }
+
+      return events
+    },
+    [appointments, isCreating, draftEvent]
   )
 
   // Form state
@@ -114,6 +158,13 @@ export default function AppointmentView() {
     customer_phone: '',
     customer_notes: ''
   })
+
+  const toISOStringWithOffset = (value: string) => {
+    if (!value) return value
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return value
+    return d.toISOString()
+  }
 
   const findCustomerById = (id: string) => customers.find(c => c.id === id) as any
 
@@ -145,12 +196,14 @@ export default function AppointmentView() {
       const derivedFirst = customer.first_name || firstFromFull || ''
       const derivedLast = customer.last_name || (restFromFull.join(' ') || '')
 
+      const baseTimes = getServiceBaseTimes(selectedAppointment as any)
+
       setForm({
         customer_id: selectedAppointment.customer_id,
         resource_id: selectedAppointment.resource_id,
         description: selectedAppointment.description || '',
-        start_time: toLocalISO(selectedAppointment.start_time),
-        end_time: toLocalISO(selectedAppointment.end_time),
+        start_time: toLocalISO(baseTimes.start),
+        end_time: toLocalISO(baseTimes.end),
         location: selectedAppointment.location || '',
         customer_first_name: derivedFirst,
         customer_last_name: derivedLast,
@@ -178,58 +231,71 @@ export default function AppointmentView() {
     setLoading(true)
     const tenantId = localStorage.getItem('tenantId')
     try {
+      if (!tenantId) {
+        // No authenticated tenant - use non-persistent sample data
+        setAppointments(MOCK_APPOINTMENTS)
+        setUsingMockData(true)
+        if (!selectedAppointment) setSelectedAppointment(MOCK_APPOINTMENTS[0])
+        return
+      }
+
       const res = await fetch(`${API_BASE_URL}/appointments?tenant_id=${tenantId}`)
       if (!res.ok) {
         throw new Error('Failed to fetch appointments')
       }
       const data = await res.json()
 
-      if (!data || data.length === 0) {
-        setAppointments(MOCK_APPOINTMENTS)
-        setUsingMockData(true)
-        if (!selectedAppointment) setSelectedAppointment(MOCK_APPOINTMENTS[0])
-      } else {
-        setAppointments(data)
-        setUsingMockData(false)
+      if (!Array.isArray(data)) {
+        throw new Error('Unexpected response shape from /appointments')
+      }
 
-        // If supporting data failed to load for any reason, derive
-        // basic customer/resource options from the appointments we have.
-        if (customers.length === 0) {
-          const customerMap = new Map<string, { id: string; name: string; phone: string }>()
-          data.forEach((a: any) => {
-            if (a.customer_id) {
-              customerMap.set(a.customer_id, {
-                id: a.customer_id,
-                name: a.customers?.name || 'Unknown',
-                phone: a.customers?.phone || ''
-              })
-            }
-          })
-          setCustomers(Array.from(customerMap.values()) as any)
-        }
+      setAppointments(data)
+      setUsingMockData(false)
 
-        if (resources.length === 0) {
-          const resourceMap = new Map<string, { id: string; name: string }>()
-          data.forEach((a: any) => {
-            if (a.resource_id) {
-              resourceMap.set(a.resource_id, {
-                id: a.resource_id,
-                name: a.resources?.name || 'Resource'
-              })
-            }
-          })
-          setResources(Array.from(resourceMap.values()) as any)
-        }
-        
+      // If supporting data failed to load for any reason, derive
+      // basic customer/resource options from the appointments we have.
+      if (customers.length === 0 && data.length > 0) {
+        const customerMap = new Map<string, { id: string; name: string; phone: string }>()
+        data.forEach((a: any) => {
+          if (a.customer_id) {
+            customerMap.set(a.customer_id, {
+              id: a.customer_id,
+              name: a.customers?.name || 'Unknown',
+              phone: a.customers?.phone || ''
+            })
+          }
+        })
+        setCustomers(Array.from(customerMap.values()) as any)
+      }
+
+      if (resources.length === 0 && data.length > 0) {
+        const resourceMap = new Map<string, { id: string; name: string }>()
+        data.forEach((a: any) => {
+          if (a.resource_id) {
+            resourceMap.set(a.resource_id, {
+              id: a.resource_id,
+              name: a.resources?.name || 'Resource'
+            })
+          }
+        })
+        setResources(Array.from(resourceMap.values()) as any)
+      }
+      
+      if (data.length === 0) {
+        // Real tenant, but no appointments yet
         if (selectId) {
-          const newlyCreated = data.find((a: any) => a.id === selectId)
-          if (newlyCreated) setSelectedAppointment(newlyCreated)
+          setSelectedAppointment(null)
         } else if (!selectedAppointment) {
-          setSelectedAppointment(data[0])
-        } else {
-          const updated = data.find((a: any) => a.id === selectedAppointment.id)
-          if (updated) setSelectedAppointment(updated)
+          setSelectedAppointment(null)
         }
+      } else if (selectId) {
+        const newlyCreated = data.find((a: any) => a.id === selectId)
+        if (newlyCreated) setSelectedAppointment(newlyCreated)
+      } else if (!selectedAppointment) {
+        setSelectedAppointment(data[0])
+      } else {
+        const updated = data.find((a: any) => a.id === selectedAppointment.id)
+        if (updated) setSelectedAppointment(updated)
       }
     } catch (e) {
       setAppointments(MOCK_APPOINTMENTS)
@@ -270,6 +336,8 @@ export default function AppointmentView() {
         body: JSON.stringify({
           tenant_id: targetTenantId,
           ...form,
+          start_time: toISOStringWithOffset(form.start_time),
+          end_time: toISOStringWithOffset(form.end_time),
           customer_name: `${form.customer_first_name} ${form.customer_last_name}`.trim(),
           customer_phone: normalizePhone(form.customer_phone)
         })
@@ -299,6 +367,12 @@ export default function AppointmentView() {
       return
     }
 
+    if (usingMockData) {
+      setError('You are viewing sample data only. Please sign in to a real business tenant to create appointments that persist.')
+      setSaving(false)
+      return
+    }
+
     // For now, if SuperAdmin creates an appointment, we need a way to assign it
     // to a tenant. We'll default to the first customer's tenant if SuperAdmin.
     let targetTenantId = tenantId
@@ -319,14 +393,17 @@ export default function AppointmentView() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 tenant_id: targetTenantId,
-                ...form,
+            ...form,
+            start_time: toISOStringWithOffset(form.start_time),
+            end_time: toISOStringWithOffset(form.end_time),
                 customer_phone: normalizePhone(form.customer_phone)
             })
         })
         const data = await res.json()
         if (res.ok && data.success) {
-            setIsCreating(false)
-            fetchAppointments(data.appointment_id)
+          setIsCreating(false)
+          setDraftEvent(null)
+          fetchAppointments(data.appointment_id)
         } else {
             setError(data.error || 'Failed to create appointment')
         }
@@ -371,12 +448,13 @@ export default function AppointmentView() {
     const defaultCustomerId = customers[0]?.id || ''
     const defaultCustomer = findCustomerById(defaultCustomerId)
     const defaultLocation = formatCustomerAddress(defaultCustomer)
+    setDraftEvent({ start: now, end: inOneHour })
     setForm({
       customer_id: defaultCustomerId,
       resource_id: resources[0]?.id || '',
       description: '',
-      start_time: now.toISOString().slice(0, 16),
-      end_time: inOneHour.toISOString().slice(0, 16),
+      start_time: toLocalISO(now),
+      end_time: toLocalISO(inOneHour),
       location: defaultLocation,
       customer_first_name: '',
       customer_last_name: '',
@@ -390,6 +468,16 @@ export default function AppointmentView() {
     setShowConfirmModal(true)
   }
 
+  // Keep the draft calendar block in sync with the form while creating
+  useEffect(() => {
+    if (!isCreating) return
+    if (!form.start_time || !form.end_time) return
+    const start = new Date(form.start_time)
+    const end = new Date(form.end_time)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return
+    setDraftEvent({ start, end })
+  }, [isCreating, form.start_time, form.end_time])
+
   const cancelUpdate = () => {
     if (originalAppointment) {
       setAppointments(prev =>
@@ -400,6 +488,19 @@ export default function AppointmentView() {
     setError(null)
     setIsEditing(false)
     setShowConfirmModal(false)
+  }
+
+  const shiftDateForView = (current: Date, view: CalendarViewType, direction: 1 | -1) => {
+    switch (view) {
+      case 'day':
+        return addDays(current, direction)
+      case 'week':
+        return addWeeks(current, direction)
+      case 'month':
+        return addMonths(current, direction)
+      default:
+        return addDays(current, direction)
+    }
   }
 
   return (
@@ -417,13 +518,15 @@ export default function AppointmentView() {
             </button>
             <div className="flex items-center space-x-1">
               <button
-                onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 1))}
+                onClick={() => setCalendarDate(prev => shiftDateForView(prev, calendarView, -1))}
+                aria-label="Previous period"
                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#222]"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 1))}
+                onClick={() => setCalendarDate(prev => shiftDateForView(prev, calendarView, 1))}
+                aria-label="Next period"
                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#222]"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -437,7 +540,10 @@ export default function AppointmentView() {
             {(['month', 'week', 'day'] as CalendarViewType[]).map(view => (
               <button
                 key={view}
-                onClick={() => setCalendarView(view)}
+                onClick={() => {
+                  setCalendarView(view)
+                }}
+                aria-label={`Set ${view} view`}
                 className={`px-3 py-1 font-semibold capitalize ${
                   calendarView === view
                     ? 'bg-blue-600 text-white'
@@ -454,7 +560,9 @@ export default function AppointmentView() {
             localizer={localizer}
             events={calendarEvents}
             view={calendarView}
-            onView={(view: CalendarViewType) => setCalendarView(view)}
+            onView={(view: CalendarViewType) => {
+              setCalendarView(view)
+            }}
             date={calendarDate}
             onNavigate={(date: Date) => setCalendarDate(date)}
             startAccessor="start"
@@ -476,6 +584,8 @@ export default function AppointmentView() {
               setSelectedAppointment(null)
               setIsCreating(true)
               setIsEditing(false)
+              setCalendarDate(start)
+              setDraftEvent({ start, end })
               const defaultCustomerId = customers[0]?.id || ''
               const defaultCustomer = findCustomerById(defaultCustomerId)
               const defaultLocation = formatCustomerAddress(defaultCustomer)
@@ -501,6 +611,8 @@ export default function AppointmentView() {
                 setOriginalAppointment(apt) // Set originalAppointment when selecting an appointment
                 setShowDetailOnMobile(true)
                 setIsCreating(false)
+                setDraftEvent(null)
+                setCalendarDate(new Date(apt.start_time))
               }
             }}
             onEventDrop={({ event, start, end }: any) => {
@@ -588,7 +700,12 @@ export default function AppointmentView() {
           {appointments.map((apt) => (
             <div 
               key={apt.id}
-              onClick={() => { setSelectedAppointment(apt); setShowDetailOnMobile(true); setIsCreating(false); }}
+              onClick={() => {
+                setSelectedAppointment(apt)
+                setShowDetailOnMobile(true)
+                setIsCreating(false)
+                setCalendarDate(new Date(apt.start_time))
+              }}
               className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-start
                 ${selectedAppointment?.id === apt.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}`}
             >
@@ -600,7 +717,10 @@ export default function AppointmentView() {
                   {apt.description}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {new Date(apt.start_time).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(apt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {(() => {
+                    const { start } = getServiceBaseTimes(apt as any)
+                    return `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  })()}
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 mt-1" />
@@ -644,7 +764,7 @@ export default function AppointmentView() {
                     )}
                   </>
                 ) : (
-                    <button onClick={() => { setIsEditing(false); setIsCreating(false); }} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333] rounded-lg"><X className="w-6 h-6" /></button>
+                    <button onClick={() => { setIsEditing(false); setIsCreating(false); setDraftEvent(null) }} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333] rounded-lg"><X className="w-6 h-6" /></button>
                 )}
               </div>
             </header>
@@ -682,7 +802,7 @@ export default function AppointmentView() {
                                             >
                                                 {customers.map(c => (
                                                   <option key={c.id} value={c.id}>
-                                                    {c.name} ({formatPhone(c.phone)})
+                                                    {c.name} {formatPhone(c.phone)}
                                                   </option>
                                                 ))}
                                             </select>
@@ -760,7 +880,7 @@ export default function AppointmentView() {
                         </div>
 
                         <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3 pt-6 border-t border-gray-200 dark:border-gray-800">
-                            <button onClick={() => { setIsEditing(false); setIsCreating(false); }} className="px-8 py-3 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-100 dark:hover:bg-[#333] rounded-xl transition bg-white dark:bg-transparent border border-gray-200 dark:border-gray-800">
+                          <button onClick={() => { setIsEditing(false); setIsCreating(false); setDraftEvent(null) }} className="px-8 py-3 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-100 dark:hover:bg-[#333] rounded-xl transition bg-white dark:bg-transparent border border-gray-200 dark:border-gray-800">
                                 Discard
                             </button>
                             <button 

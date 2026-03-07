@@ -37,6 +37,17 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
 
         expect(result.rows[0].success).toBe(true);
         expect(result.rows[0].appointment_id).not.toBeNull();
+
+        // Assert that the stored appointment window fully covers the requested window.
+        // In newer deployments, start_time/end_time should match exactly; in older
+        // buffered deployments they may expand the window, but must never shrink it.
+        const row = await client.query(
+            "SELECT start_time, end_time FROM appointments WHERE id = $1",
+            [result.rows[0].appointment_id]
+        );
+
+        expect(row.rows[0].start_time <= startTime).toBe(true);
+        expect(row.rows[0].end_time >= endTime).toBe(true);
     });
 
     it("should fail to book an overlapping slot", async () => {

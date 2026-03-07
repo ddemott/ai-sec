@@ -49,4 +49,4 @@ The dashboard is intended to be deployed on **Vercel**:
 3. Configure the same Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
 4. Deploy.
 
-Once deployed, owners can log in via Supabase Auth and manage their schedules from the hosted dashboard.
+Once deployed, owners log in using the app's own `users`-table-backed login flow (via the backend `/login` endpoint); Supabase Auth can be wired in later if desired but is not required for the current MVP.
