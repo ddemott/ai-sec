@@ -42,26 +42,14 @@ else
   echo "[ai-sec] ⚠️ Docker Compose not found. Please start the DB manually."
 fi
 
-# 3. Apply Migrations
-echo "[ai-sec] 🚀 Applying SQL migrations..."
+# 3. Apply Migrations and Seed
+echo "[ai-sec] 🚀 Setting up database schema and seed data..."
 DB_URLS=("postgres://postgres:postgres@localhost:5433/postgres" "postgres://postgres:postgres@localhost:5433/test_db")
 
-if command -v psql >/dev/null 2>&1; then
-  for url in "${DB_URLS[@]}"; do
-    echo "[ai-sec]   Targeting $url..."
-    for f in supabase/migrations/*.sql; do
-      echo "[ai-sec]     Applying $f..."
-      PGPASSWORD=postgres psql "$url" -f "$f" > /dev/null
-    done
-  done
+for url in "${DB_URLS[@]}"; do
+  bash scripts/setup-db.sh "$url"
+done
 
-  # Apply Seed Data only to the main DB
-  echo "[ai-sec] 🌱 Seeding main database..."
-  PGPASSWORD=postgres psql "postgres://postgres:postgres@localhost:5433/postgres" -f supabase/seed.sql > /dev/null
-else
-  echo "[ai-sec] ⚠️ psql not found. Cannot apply migrations automatically."
-  echo "[ai-sec] Please ensure the schema in 'supabase/migrations/' is applied."
-fi
 
 # 4. Final Verification
 echo "[ai-sec] 🧪 Running Backend TDD Test Suite (Vitest)..."

@@ -1,6 +1,7 @@
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { IRepository } from "../core/interfaces.ts";
 import { Logger, baseLogger } from "../core/logger.ts";
+import type { ResourceCandidate, EmployeeCandidate, ExistingAppointment, TimeWindow } from "../core/scheduling.ts";
 
 const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres";
 
@@ -75,6 +76,55 @@ export class PostgresRepository implements IRepository {
         [resourceId, end, start]
       );
       return parseInt(res.rows[0].count) > 0;
+    });
+  }
+
+  // NOTE: These selector-oriented primitives are currently stubs.
+  // They will be wired to real tables (resources, employees, services)
+  // in a later migration. For now, they throw if accidentally invoked
+  // from production paths.
+  async getSchedulingResources(tenantId: string, logger: Logger): Promise<ResourceCandidate[]> {
+    logger.info({ tenantId }, "Loading scheduling resources");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{ id: string }>(
+        "SELECT id FROM resources WHERE tenant_id = $1 AND is_active = true",
+        [tenantId],
+      );
+      return res.rows.map((row) => ({
+        id: row.id,
+        capabilities: [],
+      }));
+    });
+  }
+
+  async getSchedulingEmployees(_tenantId: string, _logger: Logger): Promise<EmployeeCandidate[]> {
+    // Until we have an employees table, return an empty list so selectors
+    // that require employees will find no matches.
+    return [];
+  }
+
+  async getExistingAppointments(tenantId: string, window: TimeWindow, logger: Logger): Promise<ExistingAppointment[]> {
+    logger.info({ tenantId, window }, "Loading existing appointments for scheduling window");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{
+        resource_id: string;
+        start_time: string;
+        end_time: string;
+      }>(
+        `SELECT resource_id, start_time, end_time
+         FROM appointments
+         WHERE tenant_id = $1
+           AND status = 'scheduled'
+           AND start_time < $2
+           AND end_time > $3`,
+        [tenantId, window.to.toISOString(), window.from.toISOString()],
+      );
+
+      return res.rows.map((row) => ({
+        resourceId: row.resource_id,
+        start: new Date(row.start_time),
+        end: new Date(row.end_time),
+      }));
     });
   }
 

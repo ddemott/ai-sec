@@ -58,6 +58,39 @@ export class Dispatcher {
       case "book_appointment":
         response = await this.service.bookAppointment(args, toolLogger);
         break;
+      case "get_scheduling_options": {
+        const window = {
+          from: new Date(args.window.from),
+          to: new Date(args.window.to),
+        };
+        response = await this.service.getSchedulingOptions(
+          args.tenant_id,
+          args.requirements,
+          window,
+          toolLogger,
+        );
+        break;
+      }
+      case "book_with_scheduling": {
+        const window = {
+          from: new Date(args.window.from),
+          to: new Date(args.window.to),
+        };
+        response = await this.service.bookWithScheduling(
+          {
+            tenant_id: args.tenant_id,
+            phone: args.phone,
+            name: args.name,
+            description: args.description,
+            call_id: args.call_id,
+            location: args.location,
+            requirements: args.requirements,
+            window,
+          },
+          toolLogger,
+        );
+        break;
+      }
       default:
         return new Response(JSON.stringify({ error: `Unknown tool: ${name}` }), { status: 400 });
     }

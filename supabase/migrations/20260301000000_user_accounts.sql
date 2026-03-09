@@ -12,11 +12,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- Enable RLS on users
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can only see their own user record
-CREATE POLICY user_isolation_users ON users 
-    USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', TRUE), '')::UUID);
-
--- Function to authenticate a user and return tenant_id
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'user_isolation_users' AND tablename = 'users') THEN
+        CREATE POLICY user_isolation_users ON users USING (tenant_id = current_setting('request.jwt.claim.tenant_id', true)::uuid);
+    END IF;
+END $$;
 -- In a real app, you'd use a more secure hash like bcrypt. 
 -- For this PoC/Dev environment, we'll do a simple check.
 CREATE OR REPLACE FUNCTION authenticate_user(p_email TEXT, p_password TEXT)

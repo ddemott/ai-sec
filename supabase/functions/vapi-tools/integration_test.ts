@@ -4,6 +4,18 @@ import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres";
 
+async function isDbAvailable(): Promise<boolean> {
+  try {
+    const client = new Client(DB_URL);
+    await client.connect();
+    await client.end();
+    return true;
+  } catch (_e) {
+    console.warn("[integration_test] Skipping DB-dependent steps: Postgres not available at", DB_URL);
+    return false;
+  }
+}
+
 async function setup() {
     const client = new Client(DB_URL);
     await client.connect();
@@ -16,7 +28,10 @@ async function setup() {
 }
 
 Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
-  const { tenantId, resourceId } = await setup();
+  // This test currently exercises only non-DB sad paths, so it
+  // does not require Postgres. DB-backed happy-path tests will
+  // guard on isDbAvailable() when added.
+  const { tenantId, resourceId } = { tenantId: "00000000-0000-0000-0000-000000000000", resourceId: "resource-unused" };
 
   await t.step("Sad Path: Malformed JSON arguments", async () => {
     const payload = {
@@ -64,5 +79,48 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
     const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
     const res = await handler(req);
     assertEquals(res.status, 400);
+  });
+
+  await t.step("Happy Path: book_with_scheduling end-to-end (skips if DB down)", async () => {
+    if (!(await isDbAvailable())) return;
+
+    const { tenantId, resourceId } = await setup();
+
+    const payload = {
+      message: {
+        type: "tool-calls",
+        toolCalls: [{
+          function: {
+            name: "book_with_scheduling",
+            arguments: JSON.stringify({
+              tenant_id: tenantId,
+              call_id: "call-int-1",
+              phone: "+15551112222",
+              name: "Integration Caller",
+              description: "Integration haircut",
+              location: "Main St",
+              requirements: {
+                serviceType: "haircut",
+                // No capabilities/skills yet; current DB-backed selector
+                // uses active resources with empty capabilities.
+                requiredResourceCapabilities: [],
+              },
+              window: {
+                from: "2026-10-01T10:00:00Z",
+                to: "2026-10-01T11:00:00Z",
+              },
+            }),
+          },
+        }],
+      },
+    };
+
+    const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
+    const res = await handler(req);
+    const data = await res.json();
+
+    assertEquals(res.status, 200);
+    assertEquals(data.result.success, true);
+    assertEquals(typeof data.result.appointment_id, "string");
   });
 });

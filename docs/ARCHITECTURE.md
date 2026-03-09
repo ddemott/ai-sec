@@ -64,3 +64,51 @@ All write and read paths are designed around a single Postgres database per envi
 - **Ingestion Pipeline**: PDFs and other artifacts are converted to text, chunked, and embedded via OpenAI `text-embedding-3-small`, either through a Deno script or n8n workflow, and written into the knowledge table under the correct `tenant_id` (protected by RLS).
 - **Retrieval-Augmented Generation**: A dedicated Vapi tool (e.g., `get_company_policy_answer`) computes an embedding for the caller's question, retrieves the top-N knowledge chunks for that tenant using pgvector, and passes them plus the question into the LLM with a strict system prompt so answers are consistent and policy-correct.
 - **Unified Memory View (Future)**: Over time, both `call_summaries` and tenant knowledge docs may be queried together so the secretary can combine "what happened with this customer" and "what the business policy says" in a single answer.
+
+## 8. Resources, Employees, Skills & Capabilities
+
+Many businesses share the same scheduling engine but differ in **what is being scheduled**:
+
+- **Salon**: Customers care about a **person** (stylist); chairs are physical capacity.
+- **Auto shop**: Customers care about a **service done**; bays and technicians determine feasibility.
+
+To keep the core schema generic while supporting these patterns, the architecture uses a **resource + employee + skills/capabilities** layer:
+
+- **Resources**
+	- Stored in the existing `resources` table, scoped by `tenant_id`.
+	- Typed per-tenant via metadata/config (e.g., `STYLIST`, `BAY`, `ROOM`, `TRUCK`).
+	- May declare **capabilities** (e.g., a Bay with `['alignment', 'tire-change']`, a treatment room with `['massage', 'facial']`).
+
+- **Employees / People**
+	- Stored in `users` (and/or an employee-specific table) and linked to resources where appropriate:
+		- Salon: user ↔ stylist resource (1–1 or 1–many if stylists move between chairs).
+		- Auto shop: user ↔ technician; technicians are assigned to bays via shifts.
+	- Each employee can carry a **skills** set (e.g., John: `['oil-change']`; Rick: `['alignment', 'brakes', 'oil-change']`).
+
+- **Services & Templates**
+	- Each tenant defines **service types** (e.g., `haircut`, `color`, `alignment`, `oil-change`) with:
+		- Duration and timing profile (prep/cleanup/travel) in metadata.
+		- Required **resource capabilities** and/or **employee skills**.
+	- Business-type templates (salon, auto-shop, clinic, etc.) provide sensible defaults for services, capabilities, and skills names, which can then be customized per tenant.
+
+- **Scheduling Rules (Conceptual)**
+	- For any requested service and time window, availability is computed by checking:
+		- Is there at least one **resource** of the right type with the required capabilities free in that window?
+		- Is there at least one **employee** on shift in that window with the required skills?
+	- Examples:
+		- Salon: resource = stylist; capability = `haircut`; customer may also express a **preferred stylist** (Suzy). The engine prefers that resource if free.
+		- Auto shop: resource = bay; capability = `alignment`; employee = technician with `alignment` skill. Customer does not care who does the work; the engine picks any valid combination.
+
+- **Views & Permissions**
+	- **Manager/Owner views**: can see and manage all resources, employees, skills, services, and shifts for their tenant.
+	- **Employee views**: see only "my schedule" (appointments where they are the assigned stylist/technician) and, optionally, their own declared skills and shifts.
+
+- **Admin CRUD Requirements**
+	- Per-tenant admin screens allow full **Create/Read/Update/Delete** for:
+		- Resources (add/remove chairs, bays, rooms, trucks; change status active/inactive).
+		- Employees (add/remove staff; map them to resources).
+		- Skills and capabilities (declare which services a person or resource can handle).
+		- Services (define/update service catalog and required skills/capabilities).
+	- This reflects real-world churn: people join/leave, learn new skills, change roles, and physical capacity changes over time.
+
+This model keeps the **core booking engine** generic while allowing each tenant and vertical template to express rich, real-world constraints without schema churn.

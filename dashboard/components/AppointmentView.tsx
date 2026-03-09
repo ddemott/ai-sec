@@ -683,10 +683,10 @@ export default function AppointmentView() {
             <h2 className="text-lg font-bold">Appointments</h2>
             <div className="flex space-x-1">
                 <button onClick={startNewAppointment} title="Add Appointment" className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                    <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4" />
                 </button>
-                <button onClick={fetchAppointments} className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#333] rounded text-gray-500 dark:text-gray-400">
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <button onClick={() => fetchAppointments()} className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#333] rounded text-gray-500 dark:text-gray-400">
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
             </div>
           </div>
@@ -936,7 +936,9 @@ export default function AppointmentView() {
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-500 dark:text-gray-400 text-sm">Service Unit</span>
-                                        <span className="font-bold text-gray-900 dark:text-white">{selectedAppointment?.resources?.name}</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">{
+                                          resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'
+                                        }</span>
                                     </div>
                                     {(selectedAppointment?.customers as any)?.metadata?.notes && (
                                         <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800">
@@ -954,7 +956,7 @@ export default function AppointmentView() {
                         <div className="bg-blue-900 dark:bg-blue-950 p-6 rounded-2xl text-white shadow-xl h-fit border dark:border-gray-800">
                             <h3 className="font-bold mb-4 flex items-center text-blue-200 dark:text-blue-400 text-sm uppercase tracking-widest">AI Secretary Summary</h3>
                             <p className="text-lg leading-relaxed font-medium italic">
-                                "This appointment for {selectedAppointment?.customers?.name} was scheduled for {selectedAppointment?.description.toLowerCase()}. The AI has verified availability for {selectedAppointment?.resources?.name}."
+                                {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'}.`}
                             </p>
                         </div>
                     </div>

@@ -48,3 +48,10 @@
 ### Smart Scheduling & Slack Policies
 - Encode per-tenant scheduling policies such as max daily utilization, minimum gaps between effective appointments, and “keep at least one trailing slot open” so the system avoids over-packing days.
 - Ensure availability tools and the Vapi agent only offer times that respect these timing profiles and policies, leaving room for admin work and future schedule adjustments.
+
+### Resource, Skills & Employee Management
+- [ ] **Resource Typing & Capabilities**: Evolve `resources` so tenants can declare types (e.g., STYLIST, BAY, ROOM, TRUCK) and per-resource capabilities (e.g., `alignment`, `color`, `massage`) without schema changes.
+- [ ] **Employee Skills & Mapping**: Add an employee/technician model (or extend `users`) that captures per-person skills and maps employees to resources where appropriate (e.g., stylist ↔ chair, technician ↔ bay).
+- [ ] **Service Catalog per Tenant**: Allow tenants to define a catalog of services with durations, timing profiles, and required resource capabilities/employee skills.
+- [ ] **Admin CRUD UI**: Build per-tenant admin screens to Create/Read/Update/Delete resources, employees, skills, and services so owners can react to real-world changes (staff turnover, training, new equipment).
+- [ ] **Template-Aware Defaults**: For each vertical template (salon, auto shop, clinic, etc.), ship sensible defaults for resource types, skills, and services that can be overridden per tenant.

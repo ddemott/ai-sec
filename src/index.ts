@@ -74,6 +74,7 @@ app.get('/health', async () => ({ status: 'ok' }));
 // Login endpoint for multi-tenancy
 app.post('/login', async (req, reply) => {
   const { email, password } = req.body as any;
+  app.log.info({ email }, 'Login attempt');
 
   const client = await pool.connect();
   try {
@@ -85,6 +86,7 @@ app.post('/login', async (req, reply) => {
     const auth = res.rows[0];
 
     if (auth && auth.success) {
+      app.log.info({ email, tenant_id: auth.tenant_id }, 'Login success');
       return reply.send({
         success: true,
         tenant_id: auth.tenant_id,
@@ -92,6 +94,7 @@ app.post('/login', async (req, reply) => {
         user_name: auth.user_name
       });
     } else {
+      app.log.warn({ email }, 'Login failed: invalid email or password');
       return reply.status(401).send({
         success: false,
         error: 'Invalid email or password'

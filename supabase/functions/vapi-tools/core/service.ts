@@ -1,6 +1,7 @@
 import { IRepository } from "./interfaces.ts";
 import { AvailabilityError, ValidationError } from "./errors.ts";
 import { Logger } from "./logger.ts";
+import { selectAssignments, type ServiceRequirements, type TimeWindow, type AssignmentOption } from "./scheduling.ts";
 
 export class AISecretaryService {
   private repo: IRepository;
@@ -34,9 +35,48 @@ export class AISecretaryService {
       logger.warn({ startTime, endTime }, "Invalid date format provided");
       throw new ValidationError("Invalid date format provided for availability check.");
     }
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (end <= start) {
+      logger.warn({ startTime, endTime }, "End time is not after start time");
+      throw new ValidationError("End time must be after start time.");
+    }
     const hasOverlap = await this.repo.checkOverlap(resourceId, tenantId, startTime, endTime, logger);
     logger.info({ available: !hasOverlap }, "Availability check result");
     return { result: { available: !hasOverlap } };
+  }
+
+  /**
+   * Pure-selector based scheduling helper: given a tenant, service
+   * requirements, and a time window, compute all valid
+   * (resource, employee?) assignment options using IRepository
+   * primitives. This is not yet wired to Vapi tools, but exercised
+   * via unit tests with an in-memory IRepository implementation.
+   */
+  async getSchedulingOptions(
+    tenantId: string,
+    requirements: ServiceRequirements,
+    window: TimeWindow,
+    logger: Logger,
+  ): Promise<{ result: { options: AssignmentOption[] } }> {
+    logger.info({ tenantId, requirements, window }, "Computing scheduling options");
+
+    const [resources, employees, existing] = await Promise.all([
+      this.repo.getSchedulingResources(tenantId, logger),
+      this.repo.getSchedulingEmployees(tenantId, logger),
+      this.repo.getExistingAppointments(tenantId, window, logger),
+    ]);
+
+    const options = selectAssignments({
+      requirements,
+      window,
+      resources,
+      employees,
+      existingAppointments: existing,
+    });
+
+    logger.info({ optionCount: options.length }, "Scheduling options computed");
+    return { result: { options } };
   }
 
   async bookAppointment(args: {
@@ -78,5 +118,60 @@ export class AISecretaryService {
 
     logger.info({ appointmentId: bookingResult.appointment_id }, "Booking successful");
     return { result: bookingResult };
+  }
+
+  /**
+   * Experimental: booking flow driven by selector-derived options.
+   * Uses getSchedulingOptions to choose the first viable assignment
+   * and then calls bookAtomic. Currently only used in unit tests
+   * with fake repositories.
+   */
+  async bookWithScheduling(args: {
+    tenant_id: string;
+    phone: string;
+    name?: string;
+    description: string;
+    call_id: string;
+    location?: string;
+    requirements: ServiceRequirements;
+    window: TimeWindow;
+  }, logger: Logger) {
+    logger.info({ tenantId: args.tenant_id, requirements: args.requirements, window: args.window }, "Starting selector-driven booking");
+
+    const optionsResult = await this.getSchedulingOptions(args.tenant_id, args.requirements, args.window, logger);
+    const options = optionsResult.result.options;
+
+    if (!options.length) {
+      logger.warn({ tenantId: args.tenant_id }, "No scheduling options available");
+      throw new AvailabilityError("No available scheduling options");
+    }
+
+    const chosen = options[0];
+
+    let customer = await this.repo.findCustomerByPhone(args.tenant_id, args.phone, logger);
+    let customerId = customer?.id;
+
+    if (!customerId) {
+      customerId = await this.repo.createCustomer(args.tenant_id, args.phone, args.name || "Valued Customer", logger);
+    }
+
+    const bookingResult = await this.repo.bookAtomic({
+      tenantId: args.tenant_id,
+      resourceId: chosen.resourceId,
+      customerId,
+      startTime: args.window.from.toISOString(),
+      endTime: args.window.to.toISOString(),
+      description: args.description,
+      callId: args.call_id,
+      location: args.location,
+    }, logger);
+
+    if (!bookingResult.success) {
+      logger.warn({ error: bookingResult.error_message }, "Selector booking failed due to conflict");
+      throw new AvailabilityError(bookingResult.error_message);
+    }
+
+    logger.info({ appointmentId: bookingResult.appointment_id }, "Selector booking successful");
+    return { result: { ...bookingResult, option: chosen } };
   }
 }

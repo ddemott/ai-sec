@@ -11,13 +11,16 @@ import {
   User,
   Globe,
   Sun,
-  Moon
+  Moon,
+  Wrench
 } from 'lucide-react'
+
+type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources';
 
 interface LayoutProps {
   children: ReactNode;
-  activeTab: string;
-  setActiveTab: (tab: any) => void;
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
   onLogout?: () => void;
   userName?: string | null;
   isAdmin?: boolean;
@@ -103,6 +106,14 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
             className={`p-3 rounded-md transition-all ${activeTab === 'analytics' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
             <BarChart3 className="w-6 h-6" />
+          </button>
+
+          <button 
+            title="Manage Resources"
+            onClick={() => setActiveTab('manage-resources')}
+            className={`p-3 rounded-md transition-all ${activeTab === 'manage-resources' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <Wrench className="w-6 h-6" />
           </button>
         </nav>
 

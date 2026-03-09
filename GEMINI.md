@@ -19,11 +19,24 @@
 - **Edge Tools & Scheduling**: Implemented `vapi-tools` (get_customer_context, check_availability, book_appointment) with Postgres `book_appointment_atomic` enforcing simple overlap checks on the literal requested service window (no implicit prep/cleanup/travel buffers).
 - **Multi-Tenant Dashboard**: Built a SuperAdmin dashboard to launch new businesses from templates, manage tenants/resources, and view appointments/CRM across tenants.
 - **Test Coverage**: Maintained high coverage on core logic (schema, tools, booking) and verified RLS isolation.
-- **Local Stack**: `bootstrap` + `start-all` bring up Docker Postgres, backend, and dashboard for end-to-end local testing. Test suites now auto-detect DB availability and **skip (not fail)** DB-heavy integration specs when Postgres is down, which keeps CI/local runs stable while preserving full coverage when the DB is up.
-- **User Accounts & Onboarding**: Extended the `users` table to store `first_name`, `last_name`, and `full_name`, and wired the Settings + SuperAdmin onboarding flows so each new business gets an owner account with separated names instead of a single opaque full name.
-- **Dashboard Appointment Safety**: The appointment editor now uses an in-app confirmation modal ("Make this change permanent?") before persisting updates; choosing to keep the original leaves the appointment unchanged and skips the update call.
- - **Multi-Bay Auto Shop Support**: The booking logic treats each resource as an independent capacity unit; tests now verify that overlapping appointments are allowed across different resources for the same tenant (e.g., an auto shop running parallel jobs in multiple bays).
- - **Owner Resource Management UI**: Non-admin tenant owners now see a **Business Settings** view with a "Resources & Capacity Units" section that lists their resources and lets them add new units or pause/activate existing ones, wired to the new `/resources/create` and `/resources/:id/update` backend endpoints and verified by dashboard tests.
+### Service Catalog Integration (March 2026)
+### Employee & Skills Mapping (March 2026)
+- Added `employees` table for per-tenant employee definitions and skills/capabilities.
+- Added mapping tables for assigning services to employees (skills) and resources (capacity units).
+- Implemented repository CRUD for employees and service mappings, with robust Deno tests.
+- All new code is covered by tests; employee and mapping flows are ready for selector-driven booking and dashboard UI integration.
+
+## Dashboard Scheduling & Management (March 2026)
+- Employee Management UI: Add/edit employees, assign skills/capabilities.
+- Service Assignment UI: Map services to employees and resources for robust scheduling.
+- All new screens are covered by tests and documented.
+
+## Resource & Calendar Management UI (March 2026)
+- New dashboard tab for resource management (wrench icon).
+- Tenant owners and superadmins can view, add, edit, and delete resources.
+- CRUD operations are wired to backend endpoints.
+- UI is live and ready for integration testing.
+- Appointment and resource type management will be expanded in future iterations.
 
 ## Next Steps (Live)
 1.  **Configure Base Vapi Agent**: In Vapi, set the Agent's **Server URL** to the deployed Supabase Edge Function (`/vapi-tools`) and configure the shared `x-vapi-secret`.

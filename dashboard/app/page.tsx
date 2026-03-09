@@ -8,8 +8,9 @@ import SettingsView from '@/components/SettingsView'
 import SuperAdminDashboard from '@/components/SuperAdminDashboard'
 import LoginView from '@/components/LoginView'
 import { OutlookLayout } from '@/components/OutlookLayout'
+import ResourceManagerView from '@/components/ResourceManagerView'
 
-type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses'
+type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources'
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -94,6 +95,7 @@ export default function DashboardPage() {
           </div>
         )}
         {activeTab === 'settings' && <SettingsView />}
+        {activeTab === 'manage-resources' && <ResourceManagerView />}
     </OutlookLayout>
   )
 }

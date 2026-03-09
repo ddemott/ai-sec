@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Kill any process using port 3000 (backend)
+PORT=3000
+PID=$(lsof -ti :$PORT || true)
+if [ ! -z "$PID" ]; then
+  echo "Killing process on port $PORT (PID: $PID)"
+  kill -9 $PID
+else
+  echo "No process found on port $PORT"
+fi
+
+# Kill any process using port 3001 (dashboard)
+PORT_DASH=3001
+PID_DASH=$(lsof -ti :$PORT_DASH || true)
+if [ ! -z "$PID_DASH" ]; then
+  echo "Killing process on port $PORT_DASH (PID: $PID_DASH)"
+  kill -9 $PID_DASH
+else
+  echo "No process found on port $PORT_DASH"
+fi
+
+# Delete lock files (ignore errors if not present)
+rm -f .next/dev/lock dashboard/.next/dev/lock || true
+
 # Start script for the complete AI Secretary SaaS stack
 # Usage: ./scripts/start-all.sh
 
@@ -24,12 +47,13 @@ else
 fi
 
 # 2. Start services concurrently
-echo "[ai-sec] 🚦 Launching Backend and Dashboard..."
-echo "[ai-sec]    Backend: https://localhost:3000 (self-signed in dev)"
-echo "[ai-sec]    Dashboard: https://localhost:3001 (self-signed in dev)"
+setsid node dist/index.js > backend.log 2>&1 &
+echo "Backend server started on port 3000 (dist/index.js)"
+(cd dashboard && setsid npm run dev > ../dashboard.log 2>&1 &)
+echo "Dashboard server started on port 3001 (dashboard/server.js)"
 
-./node_modules/.bin/concurrently \
-  -n "BACKEND,DASHBOARD" \
-  -c "blue,green" \
-  "npm run dev:backend" \
-  "npm run dev:dashboard"
+# Show status
+sleep 5
+echo "--- Server Status ---"
+lsof -i :3000
+lsof -i :3001
