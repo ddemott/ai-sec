@@ -14,8 +14,10 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ---
 
-## Main Components
 
+## Main Components & Test Coverage
+
+- **All tests pass:** backend, dashboard, edge logic. AppointmentView and dashboard calendar logic are fully verified.
 - **Postgres (Supabase)** – Single source of truth for:
   - Tenants, resources (bays/trucks/chairs), customers, appointments.
   - Call summaries (for memory) and audit tables.
@@ -46,8 +48,6 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
   - Handles latency-tolerant work:
     - Post-call summarization + embeddings into `call_summaries`.
     - Planned: calendar sync (Google/Outlook), owner SMS notifications, tenant knowledge ingestion.
-
----
 
 ## Runtime Surfaces
 

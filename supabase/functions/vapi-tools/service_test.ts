@@ -4,7 +4,7 @@ import { AISecretaryService } from "./core/service.ts";
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { baseLogger } from "./core/logger.ts";
 
-const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres";
+const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/test_db?sslmode=disable";
 
 async function clearDB() {
     const client = new Client(DB_URL);
@@ -91,4 +91,6 @@ Deno.test("Service Layer: Full Suite with Logging", async (t) => {
         assertEquals(err.name, "ValidationError");
     }
   });
+
+  await repo.close();
 });

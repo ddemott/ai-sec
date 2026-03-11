@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import "react-big-calendar/lib/css/react-big-calendar.css";
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",

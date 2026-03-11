@@ -20,6 +20,8 @@ vi.mock('@/lib/supabase', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Set tenantId so useSession/fetchCustomers trigger
+  window.localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
   // Default successful fetch for customers
   ;(global.fetch as any).mockResolvedValue({
     ok: true,

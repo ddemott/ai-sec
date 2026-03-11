@@ -1,31 +1,36 @@
-import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { IRepository } from "../core/interfaces.ts";
 import { Logger, baseLogger } from "../core/logger.ts";
 import type { ResourceCandidate, EmployeeCandidate, ExistingAppointment, TimeWindow } from "../core/scheduling.ts";
 
-const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres";
+const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable";
 
 export class PostgresRepository implements IRepository {
-  private client: Client;
+  private pool: Pool;
   private logger: Logger = baseLogger;
 
   constructor() {
-    this.client = new Client(DB_URL);
+    // Create a pool with a few connections
+    this.pool = new Pool(DB_URL, 3, true);
   }
 
   setLogger(logger: Logger) {
     this.logger = logger;
   }
 
-  private async withClient<T>(tenantId: string | null, fn: (client: Client) => Promise<T>): Promise<T> {
-    await this.client.connect();
+  async close() {
+    await this.pool.end();
+  }
+
+  private async withClient<T>(tenantId: string | null, fn: (client: any) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
     try {
       if (tenantId) {
-        await this.client.queryArray(`SELECT set_tenant_context($1::UUID)`, [tenantId]);
+        await client.queryArray(`SELECT set_tenant_context($1::UUID)`, [tenantId]);
       }
-      return await fn(this.client);
+      return await fn(client);
     } finally {
-      await this.client.end();
+      client.release();
     }
   }
 
@@ -79,28 +84,40 @@ export class PostgresRepository implements IRepository {
     });
   }
 
-  // NOTE: These selector-oriented primitives are currently stubs.
-  // They will be wired to real tables (resources, employees, services)
-  // in a later migration. For now, they throw if accidentally invoked
-  // from production paths.
   async getSchedulingResources(tenantId: string, logger: Logger): Promise<ResourceCandidate[]> {
     logger.info({ tenantId }, "Loading scheduling resources");
     return this.withClient(tenantId, async (c) => {
-      const res = await c.queryObject<{ id: string }>(
-        "SELECT id FROM resources WHERE tenant_id = $1 AND is_active = true",
+      const res = await c.queryObject<{ id: string; capabilities: string[] }>(
+        `SELECT r.id, 
+                COALESCE(array_agg(DISTINCT cap) FILTER (WHERE cap IS NOT NULL), '{}') as capabilities
+         FROM resources r
+         LEFT JOIN service_resource sr ON r.id = sr.resource_id
+         LEFT JOIN services s ON sr.service_id = s.id
+         LEFT JOIN LATERAL unnest(s.required_resources) cap ON true
+         WHERE r.tenant_id = $1 AND r.is_active = true
+         GROUP BY r.id`,
         [tenantId],
       );
       return res.rows.map((row) => ({
         id: row.id,
-        capabilities: [],
+        capabilities: row.capabilities,
       }));
     });
   }
 
-  async getSchedulingEmployees(_tenantId: string, _logger: Logger): Promise<EmployeeCandidate[]> {
-    // Until we have an employees table, return an empty list so selectors
-    // that require employees will find no matches.
-    return [];
+  async getSchedulingEmployees(tenantId: string, logger: Logger): Promise<EmployeeCandidate[]> {
+    logger.info({ tenantId }, "Loading scheduling employees");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{ id: string; skills: string[] }>(
+        "SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true",
+        [tenantId],
+      );
+      return res.rows.map((row) => ({
+        id: row.id.toString(), // id is SERIAL (integer) in migrations
+        skills: row.skills || [],
+        onShift: true, // For now, everyone active is on shift
+      }));
+    });
   }
 
   async getExistingAppointments(tenantId: string, window: TimeWindow, logger: Logger): Promise<ExistingAppointment[]> {
@@ -137,11 +154,12 @@ export class PostgresRepository implements IRepository {
     description: string;
     callId: string;
     location?: string;
+    employeeId?: string;
   }, logger: Logger) {
     logger.info(params, "Executing atomic booking RPC");
     return this.withClient(params.tenantId, async (c) => {
       const res = await c.queryObject<{ success: boolean; appointment_id: string; error_message: string }>(
-        "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8)",
+        "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         [
           params.tenantId,
           params.resourceId,
@@ -151,6 +169,7 @@ export class PostgresRepository implements IRepository {
           params.description,
           params.callId,
           params.location || null,
+          params.employeeId ? parseInt(params.employeeId) : null,
         ]
       );
       return res.rows[0];

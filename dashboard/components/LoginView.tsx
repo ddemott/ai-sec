@@ -93,6 +93,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-[#2a2a2a] outline-none transition-all text-sm text-gray-900 dark:text-gray-100"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                 />
               </div>
             </div>

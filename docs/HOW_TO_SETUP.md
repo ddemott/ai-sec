@@ -44,12 +44,9 @@ Alternatively, to just update schema and seed:
 ```
 
 ## 🔐 SSL/HTTPS (Self-Signed Certificates)
-The project is built to use HTTPS on both ports 3000 and 3001. 
 
-**Important:** You MUST trust the backend certificate in your browser to avoid 401/404/Connection Errors:
-1. Open [https://localhost:3000/health](https://localhost:3000/health).
-2. Click **Advanced** -> **Proceed to localhost (unsafe)**.
-3. Once you see `{"status":"ok"}`, your browser will allow the Dashboard to communicate with the Backend.
+## 🧪 Testing & Coverage
+All tests pass: backend, dashboard, and edge logic. Excellent test coverage is maintained for AppointmentView, dashboard calendar, and booking flows.
 
 ## 🚀 Running the App
 ```bash

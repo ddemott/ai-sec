@@ -5,7 +5,7 @@ import { DomainError } from "./core/errors.ts";
 import { createLogger } from "./core/logger.ts";
 import { Dispatcher } from "./core/dispatcher.ts";
 
-const repo = new PostgresRepository();
+export const repo = new PostgresRepository();
 const service = new AISecretaryService(repo);
 const dispatcher = new Dispatcher(service);
 
@@ -33,7 +33,8 @@ const BookAppointmentSchema = z.object({
   end_time: z.string().datetime(),
   description: z.string().default("Booking via AI Secretary"),
   call_id: z.string().min(1),
-  location: z.string().optional() // New field
+  location: z.string().optional(),
+  employee_id: z.string().or(z.number()).optional().transform(v => v?.toString()) // Support string or number from tool call
 });
 
 export async function handler(req: Request): Promise<Response> {

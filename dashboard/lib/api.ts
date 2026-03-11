@@ -1,5 +1,193 @@
+import { normalizePhone } from './phone'
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   (typeof window !== 'undefined'
     ? 'https://localhost:3000'
     : 'https://localhost:3000');
+
+export const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Common headers for all API requests
+ */
+const getHeaders = () => ({
+  'Content-Type': 'application/json',
+});
+
+/**
+ * Safe localStorage access utility
+ */
+export function getLocalStorageItem(key: string) {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage.getItem(key);
+  }
+  return null;
+}
+
+/**
+ * Logic to determine which tenant_id to send based on current session
+ * If current user is SuperAdmin, we use the specific entity's tenant_id
+ */
+export function getTargetTenantId(entityTenantId?: string) {
+  const currentTenantId = getLocalStorageItem('tenantId');
+  if (currentTenantId === SUPER_ADMIN_TENANT_ID && entityTenantId) {
+    return entityTenantId;
+  }
+  return currentTenantId;
+}
+
+/**
+ * Generic Fetcher
+ */
+export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
+  let url = `${API_BASE_URL}${endpoint}`;
+  if (params) {
+    const searchParams = new URLSearchParams(params);
+    url += `?${searchParams.toString()}`;
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `API Error: ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Generic Mutation (POST/PUT/DELETE)
+ */
+async function apiMutate<T>(
+  endpoint: string, 
+  method: 'POST' | 'PUT' | 'DELETE', 
+  body?: any
+): Promise<{ success: boolean; error?: string } & T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  const response = await fetch(url, {
+    method,
+    headers: getHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    return { success: false, error: data.error || `Error: ${response.status}`, ...data };
+  }
+  return { success: true, ...data };
+}
+
+/**
+ * Entity-Specific API Library
+ */
+export const Api = {
+  // --- CUSTOMERS ---
+  customers: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/customers`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    create: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/customers/create`, 'POST', { 
+        tenant_id: tenantId, 
+        ...data,
+        phone: normalizePhone(data.phone)
+      }),
+    
+    update: (id: string, entityTenantId: string, data: any) => 
+      apiMutate<any>(`/customers/${id}`, 'PUT', { 
+        tenant_id: getTargetTenantId(entityTenantId), 
+        ...data,
+        phone: normalizePhone(data.phone)
+      }),
+    
+    delete: (id: string) => 
+      apiMutate<any>(`/customers/${id}`, 'DELETE'),
+  },
+
+  // --- APPOINTMENTS ---
+  appointments: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/appointments`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    create: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/appointments/create`, 'POST', { 
+        tenant_id: tenantId, 
+        ...data,
+        customer_phone: normalizePhone(data.customer_phone)
+      }),
+    
+    update: (id: string, entityTenantId: string, data: any) => 
+      apiMutate<any>(`/appointments/${id}/update`, 'POST', { 
+        tenant_id: getTargetTenantId(entityTenantId), 
+        ...data,
+        customer_phone: normalizePhone(data.customer_phone)
+      }),
+    
+    delete: (id: string) => 
+      apiMutate<any>(`/appointments/${id}`, 'DELETE'),
+  },
+
+  // --- RESOURCES ---
+  resources: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/resources`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    create: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/resources/create`, 'POST', { tenant_id: tenantId, ...data }),
+    
+    update: (id: string, data: any) => 
+      apiMutate<any>(`/resources/${id}/update`, 'POST', data),
+    
+    delete: (id: string) => 
+      apiMutate<any>(`/resources/${id}/delete`, 'DELETE'),
+  },
+
+  // --- EMPLOYEES ---
+  employees: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/employees`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    create: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/employees/create`, 'POST', { tenant_id: tenantId, ...data }),
+    
+    update: (id: number, data: any) => 
+      apiMutate<any>(`/employees/${id}/update`, 'POST', data),
+    
+    delete: (id: number) => 
+      apiMutate<any>(`/employees/${id}/delete`, 'DELETE'),
+  },
+
+  // --- MAPPINGS ---
+  mappings: {
+    listServiceResource: (tenantId: string | null) => 
+      apiFetch<any[]>(`/mappings/service-resource`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    assignServiceResource: (serviceId: number, resourceId: string, tenantId: string | null) => 
+      apiMutate<any>(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', { tenant_id: tenantId }),
+    
+    unassignServiceResource: (serviceId: number, resourceId: string, tenantId: string | null) => 
+      apiMutate<any>(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', { tenant_id: tenantId }),
+  },
+
+  // --- SERVICES ---
+  services: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/services`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- TENANTS & TEMPLATES ---
+  tenants: {
+    list: () => apiFetch<any[]>(`/tenants`),
+    getConfig: (tenantId: string | null) => apiFetch<any>(`/tenants/${tenantId}/config`),
+    update: (id: string, data: any) => apiMutate<any>(`/tenants/${id}/update-attributes`, 'POST', data),
+    updateConfig: (id: string, data: any) => apiMutate<any>(`/tenants/${id}/update-config`, 'POST', data),
+    delete: (id: string) => apiMutate<any>(`/tenants/${id}`, 'DELETE'),
+    create: (data: any) => apiMutate<any>(`/tenants/create`, 'POST', data),
+  },
+  
+  templates: {
+    list: () => apiFetch<any[]>(`/templates`),
+    listFull: () => apiFetch<any[]>(`/templates/full`),
+  }
+};

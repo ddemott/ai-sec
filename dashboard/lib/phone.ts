@@ -3,21 +3,24 @@ export function formatPhone(raw?: string | null): string {
   const digits = raw.replace(/\D/g, '')
   if (!digits) return raw
 
-  // Normalize to 10-digit US number, assuming leading 1 if 11 digits
+  // Handle US numbers (10 or 11 digits)
   let normalized = digits
   if (digits.length === 11 && digits.startsWith('1')) {
     normalized = digits.slice(1)
+  } else if (digits.length === 11 && !digits.startsWith('1')) {
+    // International or invalid US, return as-is with +
+    return `+${digits}`
   }
 
-  if (normalized.length !== 10) {
-    // If not a standard US length, just return original
-    return raw
+  if (normalized.length === 10) {
+    const area = normalized.slice(0, 3)
+    const prefix = normalized.slice(3, 6)
+    const line = normalized.slice(6)
+    return `+1 (${area}) ${prefix}-${line}`
   }
 
-  const area = normalized.slice(0, 3)
-  const prefix = normalized.slice(3, 6)
-  const line = normalized.slice(6)
-  return `+1 (${area}) ${prefix}-${line}`
+  // If not standard US, return with leading + if not present
+  return raw.startsWith('+') ? raw : `+${digits}`
 }
 
 /**

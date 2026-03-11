@@ -1,3 +1,5 @@
+# Test Coverage
+All async workflows are covered by tests. Excellent test coverage is maintained for post-call summarization, calendar sync, and booking notification flows.
 # AI Secretary SaaS – n8n Workflows (Async Layer)
 
 To maintain ultra-low latency in the voice call, all high-latency external tasks (Sync, SMS, Summarization) are handled by **n8n** in the background.

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import React from 'react'
 import { expect, test, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
@@ -9,14 +10,52 @@ global.fetch = vi.fn()
 
 beforeEach(() => {
   vi.clearAllMocks()
-  window.localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
-  
-  // Default mocks for static data and appointments
-  ;(global.fetch as any).mockImplementation((url: string) => {
-    if (url.includes('/appointments')) {
-      return Promise.resolve({ ok: true, json: async () => MOCK_APPOINTMENTS })
+  // Mock window and localStorage for Node/test env
+  if (typeof window === 'undefined') {
+    global.window = Object.create(global)
+  }
+  if (!window.localStorage) {
+    let store = {} as Record<string, string>
+    window.localStorage = {
+      getItem: (key: string) => store[key] || null,
+      setItem: (key: string, value: string) => { store[key] = value },
+      removeItem: (key: string) => { delete store[key] },
+      clear: () => { store = {} },
+      key: (i: number) => Object.keys(store)[i] || null,
+      length: 0
     }
-    return Promise.resolve({ ok: true, json: async () => [] })
+  }
+  window.localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
+  // Use vi.fn() directly for fetch so all calls are tracked
+  global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    console.log('TEST DEBUG: fetch called', input, init);
+    // Helper to create Response-like object
+    function createMockResponse(data: unknown) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        redirected: false,
+        type: 'basic',
+        url: typeof input === 'string' ? input : '',
+        json: async () => data,
+        text: async () => JSON.stringify(data),
+        clone: function () { return this },
+        body: null,
+        bodyUsed: false,
+      } as Response;
+    }
+    // POST update endpoint
+    if (typeof input === 'string' && input.match(/\/appointments\/([\w-]+)\/update$/) && init?.method === 'POST') {
+      return Promise.resolve(createMockResponse({ success: true }))
+    }
+    // Mock GET appointments (simulate real tenant, not mock mode)
+    if (typeof input === 'string' && input.includes('/appointments') && (!init || init.method === 'GET')) {
+      return Promise.resolve(createMockResponse([...MOCK_APPOINTMENTS]))
+    }
+    // Mock GET customers/resources
+    return Promise.resolve(createMockResponse([]))
   })
 })
 
@@ -34,6 +73,8 @@ test('AppointmentView: clicking calendar event opens detail view', async () => {
 })
 
 test('AppointmentView: can modify and save an appointment', async () => {
+
+  window.localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
   render(<AppointmentView />)
 
   // Select the appointment via the list or calendar
@@ -54,22 +95,24 @@ test('AppointmentView: can modify and save an appointment', async () => {
   const startInput = await screen.findByDisplayValue(expectedTimeStr)
   fireEvent.change(startInput, { target: { value: '2026-03-05T11:00' } })
 
-  // Mock the update response
-  ;(global.fetch as any).mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ success: true })
-  })
 
-  const updateButton = screen.getByRole('button', { name: /Update Appointment/i })
+  // Use data-testid to uniquely select the Update Appointment button
+  const updateButton = screen.getByTestId('update-appointment-btn')
   fireEvent.click(updateButton)
 
-  // Confirm in modal
-  const saveChangesButton = await screen.findByRole('button', { name: /Save Changes/i })
+
+  // Wait for modal to appear
+  await waitFor(() => {
+    const btn = screen.queryByTestId('save-changes-btn');
+    expect(btn).not.toBeNull();
+  });
+  // Click Save Changes in modal
+  const saveChangesButton = screen.getByTestId('save-changes-btn');
   fireEvent.click(saveChangesButton)
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(`/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
+      expect.stringContaining(`https://localhost:3000/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
       expect.objectContaining({ method: 'POST' })
     )
   })
@@ -97,20 +140,27 @@ test('AppointmentView: canceling confirmation reverts changes and does not save'
 })
 
 test('AppointmentView: month navigation moves between months', async () => {
-  render(<AppointmentView />)
+  const { container } = render(<AppointmentView />)
 
   // Switch to month view
-  const [monthButton] = await screen.findAllByRole('button', { name: /Set month view/i })
-  fireEvent.click(monthButton)
+  const monthButtons = await screen.findAllByRole('button', { name: /Month/i })
+  fireEvent.click(monthButtons[0])
 
-  // Capture current header label (e.g., "January 2025")
-  const [header] = await screen.findAllByRole('heading', { level: 2 })
-  const before = header.textContent
+  // Capture all header labels (e.g., "March 2026")
+  const headersBefore = screen.getAllByText(/March 20\d{2}/)
+  const beforeLabels = headersBefore.map(h => h.textContent)
 
-  const [nextButton] = screen.getAllByRole('button', { name: /Next period/i })
-  fireEvent.click(nextButton)
+  // Find the Next button inside the calendar toolbar
+  const toolbar = container.querySelector('.rbc-toolbar')
+  const nextButton = toolbar && Array.from(toolbar.querySelectorAll('button')).find(btn => btn.textContent?.match(/Next/i))
+  expect(nextButton).toBeTruthy()
+  fireEvent.click(nextButton!)
 
   await waitFor(() => {
-    expect(header.textContent).not.toBe(before)
+    // Search for any Month 2026 header
+    const headersAfter = screen.getAllByText(/[A-Z][a-z]+ 20\d{2}/)
+    const afterLabels = headersAfter.map(h => h.textContent)
+    // At least one label should change
+    expect(afterLabels.some(label => !beforeLabels.includes(label))).toBe(true)
   })
 })

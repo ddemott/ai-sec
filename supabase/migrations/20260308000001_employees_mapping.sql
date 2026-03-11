@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS service_employee (
 
 CREATE TABLE IF NOT EXISTS service_resource (
     service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
-    resource_id INTEGER REFERENCES resources(id) ON DELETE CASCADE,
+    resource_id UUID REFERENCES resources(id) ON DELETE CASCADE,
     PRIMARY KEY (service_id, resource_id)
 );
 

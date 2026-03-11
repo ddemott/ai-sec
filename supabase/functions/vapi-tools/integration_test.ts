@@ -1,8 +1,8 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { handler } from "./index.ts";
+import { handler, repo } from "./index.ts";
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
-const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres";
+const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/test_db?sslmode=disable";
 
 async function isDbAvailable(): Promise<boolean> {
   try {
@@ -123,4 +123,6 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
     assertEquals(data.result.success, true);
     assertEquals(typeof data.result.appointment_id, "string");
   });
+
+  await repo.close();
 });

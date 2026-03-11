@@ -17,27 +17,6 @@ DO $$ BEGIN
         CREATE POLICY user_isolation_users ON users USING (tenant_id = current_setting('request.jwt.claim.tenant_id', true)::uuid);
     END IF;
 END $$;
--- In a real app, you'd use a more secure hash like bcrypt. 
--- For this PoC/Dev environment, we'll do a simple check.
-CREATE OR REPLACE FUNCTION authenticate_user(p_email TEXT, p_password TEXT)
-RETURNS TABLE (
-    success BOOLEAN,
-    tenant_id UUID,
-    user_id UUID,
-    user_name TEXT
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        TRUE,
-        u.tenant_id,
-        u.id,
-        u.full_name
-    FROM users u
-    WHERE u.email = p_email AND u.password_hash = p_password; -- Simple check for PoC
 
-    IF NOT FOUND THEN
-        RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, NULL::TEXT;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
+-- Note: User authentication is handled in the application layer (src/index.ts)
+-- using bcrypt for secure password hashing.

@@ -56,7 +56,7 @@ echo "[ai-sec] 🧪 Running Backend TDD Test Suite (Vitest)..."
 npm test
 
 echo "[ai-sec] 🧪 Running Edge Logic TDD Test Suite (Deno)..."
-/home/dale/.deno/bin/deno test --allow-net --allow-env --allow-sys supabase/functions/vapi-tools/service_test.ts supabase/functions/vapi-tools/integration_test.ts
+DATABASE_URL="postgres://postgres:postgres@localhost:5433/test_db?sslmode=disable" /home/dale/.deno/bin/deno test --allow-net --allow-env --allow-sys supabase/functions/vapi-tools/service_test.ts supabase/functions/vapi-tools/integration_test.ts
 
 echo "[ai-sec] 🧪 Running Dashboard TDD Test Suite (Vitest)..."
 cd dashboard && npm test && cd ..

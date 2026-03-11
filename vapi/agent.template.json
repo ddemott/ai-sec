@@ -1,0 +1,31 @@
+{
+  "name": "<Business Name>",
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en-US"
+  },
+  "model": {
+    "provider": "groq",
+    "model": "llama-3-70b-8192",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a professional, helpful secretary for <Business Name>, a <Business Type>. Your goal is to help customers book appointments for <Service Description>. Always start by identifying if they are a returning customer using the `get_customer_context` tool. If they are returning, greet them by name and mention their last issue if relevant. If new, collect their name, relevant info, and issue. Be concise and human-sounding. Once you have a date/time, check availability using `check_availability` before confirming and then use `book_appointment` to finalize. Today is <Current Date>. Tenant ID is '<Tenant ID>' and Resource ID is '<Resource ID>'."
+      }
+    ],
+    "tools": [
+      "get_customer_context",
+      "check_availability",
+      "book_appointment"
+    ]
+  },
+  "voice": {
+    "provider": "cartesia",
+    "voiceId": "<Voice ID>"
+  },
+  "firstMessage": "Thanks for calling <Business Name>! This is your AI assistant. How can I help you today?",
+  "endCallMessage": "Thank you for calling <Business Name>. Have a great day!",
+  "serverUrl": "<Server URL>",
+  "serverUrlSecret": "<Server URL Secret>"
+}

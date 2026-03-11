@@ -28,6 +28,7 @@
     },
     "target": "ES2017"
   },
+  "types": ["vitest", "jest"],
   "include": [
     "next-env.d.ts",
     "**/*.ts",

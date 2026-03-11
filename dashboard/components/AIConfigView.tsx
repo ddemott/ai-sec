@@ -1,20 +1,23 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { MOCK_TENANT } from '@/lib/mockData'
 import { Tenant, BusinessTemplate } from '@/lib/types'
 import { 
   Settings, 
   MessageSquare, 
   Mic, 
-  Save, 
-  RefreshCw,
   Info,
   LayoutTemplate
 } from 'lucide-react'
+import { Api } from '../lib/api'
+import { useSession } from '../lib/hooks'
+import { Card } from './ui/Card'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
 
 export default function AIConfigView() {
+  const { tenantId } = useSession()
   const [config, setConfig] = useState<Tenant | null>(null)
   const [templates, setTemplates] = useState<BusinessTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,21 +25,17 @@ export default function AIConfigView() {
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
-    fetchConfig()
-    fetchTemplates()
-  }, [])
+    if (tenantId) {
+      fetchConfig()
+      fetchTemplates()
+    }
+  }, [tenantId])
 
   async function fetchConfig() {
     setLoading(true)
-    const tenantId = localStorage.getItem('tenantId')
     try {
-      const { data, error } = await supabase
-        .from('tenants')
-        .select('id, name, business_type, system_prompt, voice_id, first_message')
-        .eq('id', tenantId)
-        .single()
-      
-      if (error || !data) {
+      const data = await Api.tenants.getConfig(tenantId)
+      if (!data) {
         setConfig(MOCK_TENANT as any)
       } else {
         setConfig(data)
@@ -48,27 +47,31 @@ export default function AIConfigView() {
   }
 
   async function fetchTemplates() {
-    const { data } = await supabase.from('business_templates').select('*')
-    if (data) setTemplates(data)
+    try {
+      const data = await Api.templates.listFull()
+      if (data) setTemplates(data)
+    } catch (e) {
+      console.error('Failed to fetch templates', e)
+    }
   }
 
   async function handleSave() {
     if (!config) return
     setSaving(true)
     
-    const { error } = await supabase
-      .from('tenants')
-      .update({
+    try {
+      const res = await Api.tenants.updateConfig(config.id, {
         system_prompt: config.system_prompt,
         voice_id: config.voice_id,
         business_type: config.business_type,
         first_message: config.first_message
       })
-      .eq('id', config.id)
-    
-    setSuccess(!error)
+      setSuccess(res.success)
+      if (res.success) setTimeout(() => setSuccess(false), 3000)
+    } catch (e) {
+      console.error('Failed to save config', e)
+    }
     setSaving(false)
-    if (!error) setTimeout(() => setSuccess(false), 3000)
   }
 
   function applyTemplate(template: BusinessTemplate) {
@@ -98,14 +101,14 @@ export default function AIConfigView() {
             <p className="text-sm text-gray-500 dark:text-gray-400">Customize how your AI Secretary talks and behaves</p>
           </div>
         </div>
-        <button 
+        <Button 
           onClick={handleSave}
-          disabled={saving}
-          className="flex items-center px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold text-sm shadow-sm disabled:opacity-50"
+          loading={saving}
+          variant={success ? 'success' : 'primary'}
+          className="px-6 py-2.5"
         >
-          {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
           {success ? "Saved!" : "Save Changes"}
-        </button>
+        </Button>
       </header>
 
       <div className="p-4 md:p-8 space-y-8 max-w-4xl">
@@ -159,11 +162,9 @@ export default function AIConfigView() {
             <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
             First Message (Greeting)
           </h2>
-          <input 
-            type="text"
+          <Input 
             value={config?.first_message || ''}
             onChange={(e) => setConfig(prev => prev ? {...prev, first_message: e.target.value} : null)}
-            className="w-full p-4 border border-gray-200 dark:border-gray-800 rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 focus:ring-blue-500 outline-none shadow-inner bg-gray-50/30 dark:bg-[#1a1a1a] dark:text-gray-200"
             placeholder="Ex: Thanks for calling! How can I help you today?"
           />
         </section>
@@ -175,60 +176,38 @@ export default function AIConfigView() {
             Voice Identity
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div 
-                onClick={() => setConfig(prev => prev ? {...prev, voice_id: 'ba124806-6962-4354-94a0-7607775952f4'} : null)}
-                className={`p-4 border rounded-xl transition cursor-pointer bg-white dark:bg-[#1a1a1a] shadow-sm flex items-center justify-between ${config?.voice_id === 'ba124806-6962-4354-94a0-7607775952f4' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200 dark:border-gray-800 hover:border-blue-300'}`}
-            >
-              <div>
-                <p className="font-bold dark:text-gray-100">Cartesia - British Female</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Professional, Calm, Clear</p>
-              </div>
-              <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === 'ba124806-6962-4354-94a0-7607775952f4' ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'}`} />
-            </div>
-            <div 
-                onClick={() => setConfig(prev => prev ? {...prev, voice_id: '21m00Tcm4llvDq8ikWAM'} : null)}
-                className={`p-4 border rounded-xl transition cursor-pointer bg-white dark:bg-[#1a1a1a] shadow-sm flex items-center justify-between ${config?.voice_id === '21m00Tcm4llvDq8ikWAM' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200 dark:border-gray-800 hover:border-blue-300'}`}
-            >
-              <div>
-                <p className="font-bold dark:text-gray-100">Rachel - US Female</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Soft, Friendly, Warm</p>
-              </div>
-              <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === '21m00Tcm4llvDq8ikWAM' ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'}`} />
-            </div>
-            <div 
-                onClick={() => setConfig(prev => prev ? {...prev, voice_id: 'pNInz6ovDWjNkhCspfAY'} : null)}
-                className={`p-4 border rounded-xl transition cursor-pointer bg-white dark:bg-[#1a1a1a] shadow-sm flex items-center justify-between ${config?.voice_id === 'pNInz6ovDWjNkhCspfAY' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200 dark:border-gray-800 hover:border-blue-300'}`}
-            >
-              <div>
-                <p className="font-bold dark:text-gray-100">Josh - US Male</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Deep, Trustworthy</p>
-              </div>
-              <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === 'pNInz6ovDWjNkhCspfAY' ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'}`} />
-            </div>
-            <div 
-                onClick={() => setConfig(prev => prev ? {...prev, voice_id: 'ErXwSzhRj4IW3zYCt9a2'} : null)}
-                className={`p-4 border rounded-xl transition cursor-pointer bg-white dark:bg-[#1a1a1a] shadow-sm flex items-center justify-between ${config?.voice_id === 'ErXwSzhRj4IW3zYCt9a2' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200 dark:border-gray-800 hover:border-blue-300'}`}
-            >
-              <div>
-                <p className="font-bold dark:text-gray-100">Antoni - US Male</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Casual, Conversational</p>
-              </div>
-              <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === 'ErXwSzhRj4IW3zYCt9a2' ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'}`} />
-            </div>
+            {[
+              { id: 'ba124806-6962-4354-94a0-7607775952f4', name: 'Cartesia - British Female', desc: 'Professional, Calm, Clear' },
+              { id: '21m00Tcm4llvDq8ikWAM', name: 'Rachel - US Female', desc: 'Soft, Friendly, Warm' },
+              { id: 'pNInz6ovDWjNkhCspfAY', name: 'Josh - US Male', desc: 'Deep, Trustworthy' },
+              { id: 'ErXwSzhRj4IW3zYCt9a2', name: 'Antoni - US Male', desc: 'Casual, Conversational' }
+            ].map(voice => (
+              <Card 
+                key={voice.id}
+                onClick={() => setConfig(prev => prev ? {...prev, voice_id: voice.id} : null)}
+                className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'border-blue-500 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}
+              >
+                <div>
+                  <p className="font-bold">{voice.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{voice.desc}</p>
+                </div>
+                <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === voice.id ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'}`} />
+              </Card>
+            ))}
           </div>
         </section>
 
         {/* Test Section */}
         <section className="pt-8 border-t border-gray-100 dark:border-gray-800">
-          <div className="p-6 bg-gray-900 dark:bg-[#1a1a1a] rounded-2xl text-white flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 border dark:border-gray-800">
+          <Card className="p-6 bg-gray-900 dark:bg-[#1a1a1a] text-white flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
             <div>
               <h3 className="text-lg font-bold">Ready to test?</h3>
               <p className="text-gray-400 text-sm">Save your changes and call your business number to hear the new persona.</p>
             </div>
-            <button className="px-6 py-2 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition shadow-lg text-sm">
+            <Button variant="secondary" className="bg-white text-gray-900 hover:bg-gray-100">
               Call My AI Now
-            </button>
-          </div>
+            </Button>
+          </Card>
         </section>
 
       </div>

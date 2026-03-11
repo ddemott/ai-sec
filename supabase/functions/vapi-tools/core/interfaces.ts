@@ -27,7 +27,9 @@ export interface IRepository {
     endTime: string;
     description: string;
     callId: string;
-    location?: string; // New field
+    location?: string;
+    employeeId?: string;
   }, logger: Logger): Promise<{ success: boolean; appointment_id: string; error_message: string }>;
   setLogger(logger: Logger): void;
+  close(): Promise<void>;
 }

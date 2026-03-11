@@ -54,6 +54,7 @@ A robust internal calendar model that:
 - Represents resources (stylists, bays, trucks, clinicians, etc.).
 - Defines working hours and availability rules.
 - Stores all appointments and their statuses.
+- **Excellent test coverage:** All calendar and booking logic is fully verified; all tests pass.
 
 And a sync layer that:
 - Mirrors appointments into external calendars (Outlook/Google) so owners and staff can see their schedule where they already work.

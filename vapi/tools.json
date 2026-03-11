@@ -46,9 +46,78 @@
           "start_time": { "type": "string", "format": "date-time" },
           "end_time": { "type": "string", "format": "date-time" },
           "description": { "type": "string", "description": "What the appointment is for (e.g., 'Flat tire repair')." },
-          "call_id": { "type": "string", "description": "Pass the 'call.id' from the conversation context." }
+          "call_id": { "type": "string", "description": "Pass the 'call.id' from the conversation context." },
+          "employee_id": { "type": "string", "description": "Optional: Specific employee ID to book." }
         },
         "required": ["tenant_id", "resource_id", "phone", "start_time", "end_time"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_scheduling_options",
+      "description": "Returns available scheduling options (resource and employee pairs) for a given service and time window.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "requirements": {
+            "type": "object",
+            "properties": {
+              "serviceType": { "type": "string" },
+              "requiredResourceCapabilities": { "type": "array", "items": { "type": "string" } },
+              "requiredEmployeeSkills": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["serviceType"]
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "from": { "type": "string", "format": "date-time" },
+              "to": { "type": "string", "format": "date-time" }
+            },
+            "required": ["from", "to"]
+          }
+        },
+        "required": ["tenant_id", "requirements", "window"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "book_with_scheduling",
+      "description": "Books an appointment by automatically selecting an available resource (and employee if needed) based on service requirements and a time window.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "phone": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "call_id": { "type": "string" },
+          "location": { "type": "string" },
+          "requirements": {
+            "type": "object",
+            "properties": {
+              "serviceType": { "type": "string", "description": "The type of service being requested." },
+              "requiredResourceCapabilities": { "type": "array", "items": { "type": "string" } },
+              "requiredEmployeeSkills": { "type": "array", "items": { "type": "string" } },
+              "preferredResourceId": { "type": "string" }
+            },
+            "required": ["serviceType"]
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "from": { "type": "string", "format": "date-time" },
+              "to": { "type": "string", "format": "date-time" }
+            },
+            "required": ["from", "to"]
+          }
+        },
+        "required": ["tenant_id", "phone", "description", "call_id", "requirements", "window"]
       }
     }
   }

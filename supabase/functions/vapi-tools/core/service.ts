@@ -89,8 +89,9 @@ export class AISecretaryService {
     description: string;
     call_id: string;
     location?: string;
+    employee_id?: string;
   }, logger: Logger) {
-    logger.info({ phone: args.phone, time: args.start_time, location: args.location }, "Starting booking flow");
+    logger.info({ phone: args.phone, time: args.start_time, location: args.location, employee_id: args.employee_id }, "Starting booking flow");
     
     let customer = await this.repo.findCustomerByPhone(args.tenant_id, args.phone, logger);
     let customerId = customer?.id;
@@ -108,7 +109,8 @@ export class AISecretaryService {
       endTime: args.end_time,
       description: args.description,
       callId: args.call_id,
-      location: args.location
+      location: args.location,
+      employeeId: args.employee_id
     }, logger);
 
     if (!bookingResult.success) {
@@ -164,6 +166,7 @@ export class AISecretaryService {
       description: args.description,
       callId: args.call_id,
       location: args.location,
+      employeeId: chosen.employeeId,
     }, logger);
 
     if (!bookingResult.success) {

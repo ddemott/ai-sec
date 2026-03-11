@@ -12,13 +12,14 @@ import type { TimeWindow } from './core/models';
 
 const useHttps = process.env.NODE_ENV !== 'production';
 
+const certDir = path.resolve(__dirname, '..', 'certs');
 const app = Fastify(
   (useHttps
     ? {
         logger: true,
         https: {
-          key: fs.readFileSync(path.join(__dirname, '..', 'certs', 'localhost-key.pem')),
-          cert: fs.readFileSync(path.join(__dirname, '..', 'certs', 'localhost-cert.pem')),
+          key: fs.readFileSync(path.join(certDir, 'localhost-key.pem')),
+          cert: fs.readFileSync(path.join(certDir, 'localhost-cert.pem')),
         },
       }
     : { logger: true }) as any
@@ -74,27 +75,31 @@ app.get('/health', async () => ({ status: 'ok' }));
 // Login endpoint for multi-tenancy
 app.post('/login', async (req, reply) => {
   const { email, password } = req.body as any;
-  app.log.info({ email }, 'Login attempt');
-
   const client = await pool.connect();
   try {
+    // Fetch user by email
     const res = await client.query(
-      'SELECT * FROM authenticate_user($1, $2)',
-      [email, password]
+      'SELECT * FROM users WHERE email = $1',
+      [email]
     );
-
-    const auth = res.rows[0];
-
-    if (auth && auth.success) {
-      app.log.info({ email, tenant_id: auth.tenant_id }, 'Login success');
+    const user = res.rows[0];
+    if (!user) {
+      return reply.status(401).send({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+    // Use bcrypt to compare password
+    const bcrypt = await import('bcrypt');
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (match) {
       return reply.send({
         success: true,
-        tenant_id: auth.tenant_id,
-        user_id: auth.user_id,
-        user_name: auth.user_name
+        tenant_id: user.tenant_id,
+        user_id: user.id,
+        user_name: user.full_name
       });
     } else {
-      app.log.warn({ email }, 'Login failed: invalid email or password');
       return reply.status(401).send({
         success: false,
         error: 'Invalid email or password'
@@ -171,7 +176,16 @@ app.delete('/customers/:id', async (req, reply) => {
 
 // NEW: Manual Appointment Creation
 app.post('/appointments/create', async (req, reply) => {
-  const body = req.body as any;
+  const body = req.body as {
+    tenant_id: string;
+    resource_id: string;
+    customer_id: string;
+    start_time: string;
+    end_time: string;
+    description: string;
+    location?: string;
+    employee_id?: string | number;
+  };
 
   const required = [
     'tenant_id',
@@ -182,7 +196,7 @@ app.post('/appointments/create', async (req, reply) => {
     'description',
   ];
 
-  const missing = required.filter((key) => !body?.[key]);
+    const missing = required.filter((key) => !body?.[key as keyof typeof body]);
   if (missing.length > 0) {
     return reply
     .status(400)
@@ -192,7 +206,7 @@ app.post('/appointments/create', async (req, reply) => {
   const client = await pool.connect();
   try {
     const res = await client.query(
-      'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8)',
+      'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)',
       [
         body.tenant_id,
         body.resource_id,
@@ -202,6 +216,7 @@ app.post('/appointments/create', async (req, reply) => {
         body.description,
         'manual-entry',
         body.location || null,
+        body.employee_id ? body.employee_id.toString() : null
       ]
     );
     const result = res.rows[0];
@@ -241,6 +256,7 @@ app.get('/appointments', async (req, reply) => {
     const query = `
       SELECT
          a.*,
+         COALESCE(a.employee_id::text, a.assigned_to_user_id::text) as employee_id,
          jsonb_build_object(
            'name', c.name,
            'first_name', c.first_name,
@@ -524,6 +540,200 @@ app.post('/tenants/:id/update-attributes', async (req, reply) => {
     }
 });
 
+// --- Employees Management ---
+app.get('/employees', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    const client = await pool.connect();
+    try {
+        // We UNION employees (integer IDs) and users (UUID IDs). 
+        // We cast IDs to TEXT to allow the UNION.
+        const res = await client.query(`
+            SELECT id::text, name, skills, is_active, 'employee' as type
+            FROM employees 
+            WHERE tenant_id = $1
+            UNION ALL
+            SELECT id::text, COALESCE(full_name, email) as name, '{}'::text[] as skills, true as is_active, 'user' as type
+            FROM users
+            WHERE tenant_id = $1
+            ORDER BY name ASC
+        `, [tenantId]);
+        return reply.send(res.rows);
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to fetch employees' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/employees/create', async (req, reply) => {
+    const body = req.body as { tenant_id: string; name: string; skills?: string[] };
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING *',
+            [body.tenant_id, body.name, body.skills || []]
+        );
+        return reply.send({ success: true, employee: res.rows[0] });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to create employee' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/employees/:id/update', async (req, reply) => {
+    const id = (req.params as any).id;
+    const body = req.body as { name?: string; skills?: string[]; is_active?: boolean };
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'UPDATE employees SET name = COALESCE($1, name), skills = COALESCE($2, skills), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $4 RETURNING *',
+            [body.name, body.skills, body.is_active, id]
+        );
+        return reply.send({ success: true, employee: res.rows[0] });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to update employee' });
+    } finally {
+        client.release();
+    }
+});
+
+// --- Services Management ---
+app.get('/services', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM services WHERE tenant_id = $1 ORDER BY name ASC', [tenantId]);
+        return reply.send(res.rows);
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to fetch services' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/create', async (req, reply) => {
+    const body = req.body as { tenant_id: string; name: string; description?: string; duration_minutes: number; required_skills?: string[]; required_resources?: string[] };
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'INSERT INTO services (tenant_id, name, description, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [body.tenant_id, body.name, body.description, body.duration_minutes, body.required_skills || [], body.required_resources || []]
+        );
+        return reply.send({ success: true, service: res.rows[0] });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to create service' });
+    } finally {
+        client.release();
+    }
+});
+
+// --- Mappings ---
+app.post('/services/:serviceId/employees/:employeeId/assign', async (req, reply) => {
+    const { serviceId, employeeId } = req.params as any;
+    const { tenant_id } = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'INSERT INTO service_employee (service_id, employee_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [serviceId, employeeId, tenant_id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to assign employee to service' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/:serviceId/resources/:resourceId/assign', async (req, reply) => {
+    const { serviceId, resourceId } = req.params as any;
+    const { tenant_id } = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'INSERT INTO service_resource (service_id, resource_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [serviceId, resourceId, tenant_id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to assign resource to service' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/:serviceId/resources/:resourceId/unassign', async (req, reply) => {
+    const { serviceId, resourceId } = req.params as any;
+    const { tenant_id } = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'DELETE FROM service_resource WHERE service_id = $1 AND resource_id = $2 AND tenant_id = $3',
+            [serviceId, resourceId, tenant_id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to unassign resource' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/:serviceId/employees/:employeeId/unassign', async (req, reply) => {
+    const { serviceId, employeeId } = req.params as any;
+    const { tenant_id } = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'DELETE FROM service_employee WHERE service_id = $1 AND employee_id = $2 AND tenant_id = $3',
+            [serviceId, employeeId, tenant_id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to unassign employee' });
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/mappings/service-resource', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM service_resource WHERE tenant_id = $1', [tenantId]);
+        return reply.send(res.rows);
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to fetch resource mappings' });
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/mappings/service-employee', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM service_employee WHERE tenant_id = $1', [tenantId]);
+        return reply.send(res.rows);
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to fetch employee mappings' });
+    } finally {
+        client.release();
+    }
+});
+
 // NEW: Create a new Tenant and Owner
 app.post('/tenants/create', async (req, reply) => {
   const body = req.body as {
@@ -556,10 +766,12 @@ app.post('/tenants/create', async (req, reply) => {
 
     // 2. Create Owner User with explicit first/last name
     const fullName = [firstName, lastName].filter(Boolean).join(' ');
+    const bcrypt = await import('bcrypt');
+    const hashedPass = await bcrypt.hash(body.owner_pass, 10);
 
     await client.query(
       'INSERT INTO users (tenant_id, email, password_hash, full_name, first_name, last_name) VALUES ($1, $2, $3, $4, $5, $6)',
-      [tenantId, body.owner_email, body.owner_pass, fullName, firstName || null, lastName || null]
+      [tenantId, body.owner_email, hashedPass, fullName, firstName || null, lastName || null]
     );
 
     await client.query('COMMIT');
@@ -586,6 +798,55 @@ app.get('/templates', async (req, reply) => {
     }
 });
 
+// NEW: List all templates with full details
+app.get('/templates/full', async (req, reply) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM business_templates');
+        return reply.send(res.rows);
+    } catch (err) {
+        return reply.status(500).send({ error: 'Failed to fetch full templates' });
+    } finally {
+        client.release();
+    }
+});
+
+// NEW: Get Tenant Config
+app.get('/tenants/:id/config', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'SELECT id, name, business_type, system_prompt, voice_id, first_message FROM tenants WHERE id = $1',
+            [id]
+        );
+        if (res.rows.length === 0) return reply.status(404).send({ error: 'Tenant not found' });
+        return reply.send(res.rows[0]);
+    } catch (err) {
+        return reply.status(500).send({ error: 'Failed to fetch tenant config' });
+    } finally {
+        client.release();
+    }
+});
+
+// NEW: Update Tenant Config
+app.post('/tenants/:id/update-config', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE id = $5',
+            [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        return reply.status(500).send({ error: 'Failed to update tenant config' });
+    } finally {
+        client.release();
+    }
+});
+
 app.post('/appointments/:id/update', async (req, reply) => {
   const { id } = req.params as { id: string };
   const body = req.body as {
@@ -594,6 +855,8 @@ app.post('/appointments/:id/update', async (req, reply) => {
     end_time: string;
     description: string;
     location: string;
+    resource_id: string;
+    employee_id: string | number | null;
     customer_name: string;
     customer_phone: string;
     customer_notes: string;
@@ -602,7 +865,7 @@ app.post('/appointments/:id/update', async (req, reply) => {
   const client = await pool.connect();
   try {
     const res = await client.query(
-      'SELECT * FROM update_appointment_customer($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      'SELECT * FROM update_appointment_customer($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
       [
         id, 
         body.tenant_id, 
@@ -610,6 +873,8 @@ app.post('/appointments/:id/update', async (req, reply) => {
         body.end_time, 
         body.description, 
         body.location, 
+        body.resource_id,
+        body.employee_id ? body.employee_id.toString() : null,
         body.customer_name, 
         body.customer_phone,
         body.customer_notes

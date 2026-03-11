@@ -1,0 +1,18 @@
+                                Table "public.users"
+    Column     |           Type           | Collation | Nullable |      Default      
+---------------+--------------------------+-----------+----------+-------------------
+ id            | uuid                     |           | not null | gen_random_uuid()
+ tenant_id     | uuid                     |           | not null | 
+ email         | text                     |           | not null | 
+ password_hash | text                     |           | not null | 
+ full_name     | text                     |           |          | 
+ created_at    | timestamp with time zone |           |          | now()
+Indexes:
+    "users_pkey" PRIMARY KEY, btree (id)
+    "users_email_key" UNIQUE CONSTRAINT, btree (email)
+Foreign-key constraints:
+    "users_tenant_id_fkey" FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+Policies:
+    POLICY "user_isolation_users"
+      USING ((tenant_id = (current_setting('request.jwt.claim.tenant_id'::text, true))::uuid))
+

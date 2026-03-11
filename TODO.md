@@ -1,5 +1,11 @@
 # AI Secretary SaaS - Deployment TODO
 
+## Priority #1: Database password_hash truncation issue
+- [x] Investigate why the password_hash column in the users table is storing only 34 characters instead of the full 60-character bcrypt hash.
+- [x] Confirm there are no triggers, constraints, or application logic truncating the value.
+- [x] Ensure seed and update scripts write the full bcrypt hash.
+- [x] Document findings and resolution steps.
+
 ## 1. Database Initialization (Prerequisite)
 - [x] **Deploy Migrations**: Schema applied to main and test databases.
 - [x] **Automated Setup Script**: `scripts/setup-db.sh` created for repeatable deployment.
@@ -37,4 +43,11 @@
 - [x] **Service Definitions**: Added `services` table and seeded data.
 - [x] **Employee Skills**: Added `employees` table and skill mappings.
 - [x] **ResourceManager UI**: Fixed port 3000 communication bug; now viewing live resources.
-- [ ] **Scheduling Integration**: Wire up the "book_appointment" edge function to use the new service/employee mapping logic.
+- [x] **Scheduling Integration**: Wire up the "book_appointment" edge function to use the new service/employee mapping logic.
+
+## 7. Infrastructure & Stability (March 2026)
+- [x] **Database Persistence**: Added Docker volumes to ensure data persists across restarts.
+- [x] **Test Isolation**: Redirected edge function tests to a dedicated `test_db` to prevent wiping dev data.
+- [x] **Port Standardization**: Fixed conflict; Backend now defaults to 3000, Dashboard to 3001.
+- [x] **Build Reliability**: Resolved TypeScript compilation errors and added missing type definitions for `bcrypt`.
+

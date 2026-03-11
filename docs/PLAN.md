@@ -26,6 +26,7 @@
 - [x] **Appointment Management**:
     - [x] **Outlook-Style UI**: Three-pane responsive layout.
     - [x] **Calendar Features**: List, Search, Reschedule, Cancel.
+    - [x] **Excellent test coverage:** All tests pass for AppointmentView, dashboard calendar, and booking flows.
 - [x] **CRM & Notes Management**:
     - [x] **Customer Profiles**: Searchable list and detail view.
     - [x] **Edit Mode**: Update internal notes and contact info.

@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import type { Appointment, Customer, Resource, TimeSlot, TimeWindow } from '../core/models';
 import type { BookingStorage, NewAppointmentInput } from '../core/bookingStorage';
 

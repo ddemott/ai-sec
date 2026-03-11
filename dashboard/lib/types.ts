@@ -12,13 +12,11 @@ export interface Appointment {
     name: string;
     phone: string;
   };
-    // Structured name fields
-    first_name?: string;
-    last_name?: string;
-    // Combined display name (legacy / convenience)
-    name: string;
-    name: string;
-  };
+  // Structured name fields
+  first_name?: string;
+  last_name?: string;
+  // Combined display name (legacy / convenience)
+  name: string;
 }
 
 export interface Customer {

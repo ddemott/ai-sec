@@ -6,28 +6,27 @@ import {
   Building2, 
   UserPlus, 
   ShieldCheck, 
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
   Settings
 } from 'lucide-react'
-import { API_BASE_URL } from '../lib/api'
+import { Api } from '../lib/api'
+import { useSession, useStaticData } from '../lib/hooks'
+import { Card } from './ui/Card'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
+import { Select } from './ui/Select'
+import { Badge } from './ui/Badge'
 
 export default function SettingsView() {
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { tenantId, isSuperAdmin } = useSession()
+  const { resources, loading: resourcesLoading, error: resourcesError, refresh: refreshResources } = useStaticData(tenantId)
+  
   const [templates, setTemplates] = useState<{business_type: string, display_name: string}[]>([])
-  const [tenantId, setTenantId] = useState<string | null>(null)
-
-  // Resource management state (for tenant owners)
-  const [resources, setResources] = useState<Array<{ id: string; name: string; description?: string | null; is_active?: boolean }>>([])
-  const [resourcesLoading, setResourcesLoading] = useState(false)
-  const [resourcesError, setResourcesError] = useState<string | null>(null)
+  const [onboardingLoading, setOnboardingLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [newResource, setNewResource] = useState({ name: '', description: '' })
 
-  // Form State
+  // Form State for onboarding
   const [form, setForm] = useState({
     tenant_name: '',
     business_type: '',
@@ -38,26 +37,14 @@ export default function SettingsView() {
   })
 
   useEffect(() => {
-    // Check if current user is an admin / super-admin
-    // For this PoC we treat both the platform owner tenant
-    // and the default DynaTire tenant as admin-capable.
-    const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000'
-    const DEFAULT_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a'
-    const tenantId = localStorage.getItem('tenantId')
-    if (tenantId) {
-      setTenantId(tenantId)
-      fetchResourcesForTenant(tenantId)
-    }
-    if (tenantId === PLATFORM_TENANT_ID || tenantId === DEFAULT_TENANT_ID) {
-      setIsAdmin(true)
+    if (isSuperAdmin) {
       fetchTemplates()
     }
-  }, [])
+  }, [isSuperAdmin])
 
   async function fetchTemplates() {
     try {
-      const res = await fetch(`${API_BASE_URL}/templates`)
-      const data = await res.json()
+      const data = await Api.templates.list()
       setTemplates(data)
       if (data.length > 0) setForm(f => ({ ...f, business_type: data[0].business_type }))
     } catch (e) {
@@ -65,98 +52,43 @@ export default function SettingsView() {
     }
   }
 
-  async function fetchResourcesForTenant(id: string) {
-    setResourcesLoading(true)
-    setResourcesError(null)
-    try {
-      const res = await fetch(`${API_BASE_URL}/resources?tenant_id=${id}`)
-      if (!res.ok) {
-        throw new Error('Failed to fetch resources')
-      }
-      const data = await res.json()
-      if (Array.isArray(data)) {
-        setResources(data)
-      } else {
-        setResources([])
-      }
-    } catch (e) {
-      console.error('Failed to fetch resources', e)
-      setResourcesError('Could not load resources for this business.')
-    } finally {
-      setResourcesLoading(false)
-    }
-  }
-
   async function handleCreateResource(e: React.FormEvent) {
     e.preventDefault()
     if (!tenantId || !newResource.name.trim()) return
-    setResourcesError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/resources/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: tenantId,
+      const res = await Api.resources.create(tenantId, {
           name: newResource.name.trim(),
           description: newResource.description.trim() || undefined
-        })
       })
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to create resource')
+      if (res.success) {
+        refreshResources()
+        setNewResource({ name: '', description: '' })
       }
-      if (data.resource) {
-        setResources(prev => [...prev, data.resource])
-      } else {
-        // Fallback: refresh from server
-        fetchResourcesForTenant(tenantId)
-      }
-      setNewResource({ name: '', description: '' })
     } catch (e) {
       console.error('Failed to create resource', e)
-      setResourcesError('Failed to create resource')
     }
   }
 
   async function toggleResourceActive(resourceId: string, currentActive: boolean | undefined) {
-    setResourcesError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/resources/${resourceId}/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !currentActive })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || data.success === false) {
-        throw new Error(data.error || 'Failed to update resource')
+      const res = await Api.resources.update(resourceId, { is_active: !currentActive })
+      if (res.success) {
+        refreshResources()
       }
-      setResources(prev =>
-        prev.map(r =>
-          r.id === resourceId ? { ...r, is_active: !currentActive } : r
-        )
-      )
     } catch (e) {
       console.error('Failed to update resource', e)
-      setResourcesError('Failed to update resource')
     }
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreateOnboarding(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
+    setOnboardingLoading(true)
+    setOnboardingError(null)
     setSuccess(false)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/tenants/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
+      const res = await Api.tenants.create(form)
+      if (res.success) {
         setSuccess(true)
         setForm({
           tenant_name: '',
@@ -167,16 +99,16 @@ export default function SettingsView() {
           owner_pass: ''
         })
       } else {
-        setError(data.error || 'Failed to create business')
+        setOnboardingError(res.error || 'Failed to create business')
       }
     } catch (err) {
-      setError('Connection error to backend')
+      setOnboardingError('Connection error to backend')
     } finally {
-      setLoading(false)
+      setOnboardingLoading(false)
     }
   }
 
-  if (!isAdmin) {
+  if (!isSuperAdmin) {
     return (
       <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
         <header className="mb-8 flex items-center">
@@ -189,47 +121,44 @@ export default function SettingsView() {
             </div>
         </header>
         <div className="space-y-8">
-          <div className="bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 p-8 rounded-3xl text-center">
+          <Card className="p-8 text-center bg-gray-50 dark:bg-[#1a1a1a]">
             <p className="text-gray-400 dark:text-gray-500 italic">User profile settings coming soon...</p>
-          </div>
+          </Card>
 
-          <section className="bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 p-6 rounded-3xl">
+          <Card className="p-6 bg-gray-50 dark:bg-[#1a1a1a]">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Resources & Capacity Units</h2>
+                <h2 className="text-lg font-bold">Resources & Capacity Units</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Each unit (bay, chair, room, or vehicle) is a resource that can run its own appointments in parallel.</p>
               </div>
             </div>
 
             {resourcesError && (
-              <div className="mb-4 text-sm text-red-600 dark:text-red-400 flex items-center">
-                <AlertCircle className="w-4 h-4 mr-2" />
-                <span>{resourcesError}</span>
+              <div className="mb-4 text-sm text-red-600 dark:text-red-400">
+                {resourcesError}
               </div>
             )}
 
             <form onSubmit={handleCreateResource} className="flex flex-col md:flex-row gap-3 mb-6">
-              <input
-                type="text"
+              <Input
                 placeholder="Resource Name (e.g. Station 2)"
                 value={newResource.name}
                 onChange={e => setNewResource(prev => ({ ...prev, name: e.target.value }))}
-                className="flex-1 p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg text-sm outline-none dark:text-gray-100"
+                className="flex-1"
               />
-              <input
-                type="text"
+              <Input
                 placeholder="Optional description"
                 value={newResource.description}
                 onChange={e => setNewResource(prev => ({ ...prev, description: e.target.value }))}
-                className="flex-1 p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg text-sm outline-none dark:text-gray-100"
+                className="flex-1"
               />
-              <button
+              <Button
                 type="submit"
                 disabled={!tenantId || !newResource.name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                icon={PlusCircle}
               >
                 Add Resource
-              </button>
+              </Button>
             </form>
 
             <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
@@ -237,7 +166,7 @@ export default function SettingsView() {
                 <span>Name</span>
                 <span className="w-32 text-right">Status</span>
               </div>
-              {resourcesLoading ? (
+              {resourcesLoading && resources.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading resources...</div>
               ) : resources.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No resources yet. Add your first bay or service unit above.</div>
@@ -245,27 +174,25 @@ export default function SettingsView() {
                 resources.map(r => (
                   <div key={r.id} className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-sm">
                     <div>
-                      <div className="font-semibold text-gray-900 dark:text-gray-100">{r.name}</div>
+                      <div className="font-semibold">{r.name}</div>
                       {r.description && (
                         <div className="text-xs text-gray-500 dark:text-gray-400">{r.description}</div>
                       )}
                     </div>
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      className="h-8 text-xs px-3"
                       onClick={() => toggleResourceActive(r.id, r.is_active ?? true)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                        r.is_active ?? true
-                          ? 'bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/40'
-                          : 'bg-gray-100 dark:bg-[#222] text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
-                      }`}
                     >
-                      {r.is_active ?? true ? 'Active – Click to Pause' : 'Inactive – Click to Activate'}
-                    </button>
+                      <Badge variant={r.is_active ?? true ? 'success' : 'default'}>
+                        {r.is_active ?? true ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </Button>
                   </div>
                 ))
               )}
             </div>
-          </section>
+          </Card>
         </div>
       </div>
     )
@@ -287,19 +214,17 @@ export default function SettingsView() {
         
         {success && (
           <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/40 text-green-700 dark:text-green-400 rounded-xl flex items-center font-bold">
-            <CheckCircle2 className="w-5 h-5 mr-3" />
             Business created successfully! The owner can now log in.
           </div>
         )}
 
-        {error && (
-          <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl flex items-center font-bold">
-            <AlertCircle className="w-5 h-5 mr-3" />
-            {error}
+        {onboardingError && (
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl flex items-center font-bold">
+            {onboardingError}
           </div>
         )}
 
-        <form onSubmit={handleCreate} className="space-y-8">
+        <form onSubmit={handleCreateOnboarding} className="space-y-8">
           
           {/* Business Info */}
           <section className="space-y-4">
@@ -307,32 +232,26 @@ export default function SettingsView() {
               <Building2 className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
               1. Business Information
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <Card className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 border-gray-100 dark:border-gray-800">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Company Name</label>
-                <input 
-                  type="text" 
+                <Input 
                   required
                   value={form.tenant_name}
                   onChange={e => setForm({...form, tenant_name: e.target.value})}
-                  className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm dark:text-gray-100" 
                   placeholder="e.g. Sunny Day Spa"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Business Template</label>
-                <select 
+                <Select 
                   required
                   value={form.business_type}
                   onChange={e => setForm({...form, business_type: e.target.value})}
-                  className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm appearance-none dark:text-gray-100"
-                >
-                  {templates.map(t => (
-                    <option key={t.business_type} value={t.business_type}>{t.display_name}</option>
-                  ))}
-                </select>
+                  options={templates.map(t => ({ label: t.display_name, value: t.business_type }))}
+                />
               </div>
-            </div>
+            </Card>
           </section>
 
           {/* Owner Info */}
@@ -341,80 +260,60 @@ export default function SettingsView() {
               <UserPlus className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
               2. Owner Account
             </h2>
-            <div className="space-y-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <Card className="space-y-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 border-gray-100 dark:border-gray-800">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Owner First Name</label>
-                  <input 
-                    type="text" 
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">First Name</label>
+                  <Input 
                     required
                     value={form.owner_first_name}
                     onChange={e => setForm({...form, owner_first_name: e.target.value})}
-                    className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm dark:text-gray-100" 
                     placeholder="John"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Owner Last Name</label>
-                  <input 
-                    type="text" 
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Last Name</label>
+                  <Input 
                     required
                     value={form.owner_last_name}
                     onChange={e => setForm({...form, owner_last_name: e.target.value})}
-                    className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm dark:text-gray-100" 
                     placeholder="Doe"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Owner Email</label>
-                  <input 
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Email</label>
+                  <Input 
                     type="email" 
                     required
                     value={form.owner_email}
                     onChange={e => setForm({...form, owner_email: e.target.value})}
-                    className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm dark:text-gray-100" 
                     placeholder="owner@business.com"
                   />
                 </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Password</label>
-                <input 
+                <Input 
                   type="password" 
                   required
                   value={form.owner_pass}
                   onChange={e => setForm({...form, owner_pass: e.target.value})}
-                  className="w-full p-3 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm font-mono dark:text-gray-100" 
                   placeholder="••••••••"
                 />
               </div>
-            </div>
+            </Card>
           </section>
 
-          <button 
+          <Button 
             type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center"
+            disabled={onboardingLoading}
+            loading={onboardingLoading}
+            className="w-full py-4 text-lg"
+            icon={PlusCircle}
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-6 h-6 mr-3 animate-spin" />
-                Processing Onboarding...
-              </>
-            ) : (
-              <>
-                <PlusCircle className="w-6 h-6 mr-3" />
-                Finalize & Create Business
-              </>
-            )}
-          </button>
+            Finalize & Create Business
+          </Button>
         </form>
-
-        <div className="pt-8 border-t border-gray-100 dark:border-gray-800 flex items-center text-gray-400 dark:text-gray-500 text-xs">
-            <CheckCircle2 className="w-4 h-4 mr-2" />
-            <span>Template triggers will automatically create default resources and AI persona for the new business.</span>
-        </div>
-
       </div>
     </div>
   )

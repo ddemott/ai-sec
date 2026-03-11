@@ -1,21 +1,43 @@
+import { describe, test, expect, beforeEach, vi } from 'vitest';
+import '@testing-library/jest-dom';
 import React from 'react';
-import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import EmployeeManagementView from './EmployeeManagementView';
-import ServiceAssignmentView from './ServiceAssignmentView';
+
+// Mock fetch
+global.fetch = vi.fn();
 
 describe('EmployeeManagementView', () => {
-  test('renders employee form and list', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => []
+    });
+  });
+
+  test('renders employee form and list', async () => {
     render(<EmployeeManagementView />);
-    expect(screen.getByText(/Employee Management/i)).toBeDefined();
-    expect(screen.getByPlaceholderText(/Employee Name/i)).toBeDefined();
-    expect(screen.getByPlaceholderText(/Skills/i)).toBeDefined();
+    expect(await screen.findByText(/Staff & Expertise/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Enter full name/i)).toBeInTheDocument();
   });
 });
 
+import ServiceAssignmentView from './ServiceAssignmentView';
+
 describe('ServiceAssignmentView', () => {
-  test('renders service assignment UI', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      json: async () => []
+    });
+  });
+
+  test('renders service assignment UI', async () => {
     render(<ServiceAssignmentView />);
-    expect(screen.getByText(/Service Assignment/i)).toBeDefined();
+    expect(await screen.findByText(/Service Catalog/i)).toBeInTheDocument();
   });
 });

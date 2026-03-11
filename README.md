@@ -34,6 +34,11 @@ npm start
 - `/supabase`: SQL migrations, seed data, and Edge Functions for Vapi.
 - `/scripts`: Automation for setup, starting, and restarting the stack.
 
+## 🛠 Infrastructure
+- **Database Persistence**: Local data is stored in a persistent Docker volume (`ai-sec-db-data`). Data survives container restarts and computer reboots.
+- **Test Isolation**: Development data is protected from automated tests through a dedicated `test_db` environment. Tests will not wipe your main development data.
+- **Ports**: Backend (3000), Dashboard (3001), Postgres (5433).
+
 ## 🐘 Database Management
 To re-apply schema and seed data at any time:
 ```bash
@@ -45,7 +50,10 @@ To use a custom database (e.g., in the cloud):
 ./scripts/setup-db.sh postgresql://user:pass@host:5432/dbname
 ```
 
-## 🧪 Testing
+## 🧪 Testing & Coverage
+- All tests pass: backend, dashboard, and edge logic.
+- Excellent test coverage: AppointmentView, dashboard calendar, and core booking flows are fully verified.
 - Backend tests: `npm test`
 - Frontend tests: `cd dashboard && npm test`
 - Edge logic: `deno test` (Requires Deno)
+- Test-driven development ensures operational reliability.

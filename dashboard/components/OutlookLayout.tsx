@@ -12,10 +12,11 @@ import {
   Globe,
   Sun,
   Moon,
-  Wrench
+  Wrench,
+  ShieldCheck
 } from 'lucide-react'
 
-type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources';
+type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources' | 'service-catalog' | 'staff';
 
 interface LayoutProps {
   children: ReactNode;
@@ -85,11 +86,27 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
           </button>
           
           <button 
-            title="People"
+            title="People (CRM)"
             onClick={() => setActiveTab('crm')}
             className={`p-3 rounded-md transition-all ${activeTab === 'crm' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
             <Users className="w-6 h-6" />
+          </button>
+
+          <button 
+            title="Staff & Skills"
+            onClick={() => setActiveTab('staff')}
+            className={`p-3 rounded-md transition-all ${activeTab === 'staff' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <ShieldCheck className="w-6 h-6" />
+          </button>
+
+          <button 
+            title="Service Catalog"
+            onClick={() => setActiveTab('service-catalog')}
+            className={`p-3 rounded-md transition-all ${activeTab === 'service-catalog' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <Settings className="w-6 h-6" />
           </button>
 
           <button 

@@ -56,7 +56,10 @@ export class Dispatcher {
         response = await this.service.checkAvailability(args.tenant_id, args.resource_id, args.start_time, args.end_time, toolLogger);
         break;
       case "book_appointment":
-        response = await this.service.bookAppointment(args, toolLogger);
+        response = await this.service.bookAppointment({
+          ...args,
+          employee_id: args.employee_id
+        }, toolLogger);
         break;
       case "get_scheduling_options": {
         const window = {

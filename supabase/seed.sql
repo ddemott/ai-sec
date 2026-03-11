@@ -11,8 +11,8 @@ VALUES (
 
 -- 0b. Create a Site Owner User (Platform Admin)
 INSERT INTO users (tenant_id, email, password_hash, full_name)
-VALUES ('00000000-0000-0000-0000-000000000000', 'dale@ai-sec.com', 'password', 'Site Owner')
-ON CONFLICT (email) DO NOTHING;
+VALUES ('00000000-0000-0000-0000-000000000000', 'dale@ai-sec.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Site Owner')
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- 1. Create a default tenant
 INSERT INTO tenants (id, name, business_type, timezone, system_prompt, voice_id)
@@ -27,8 +27,8 @@ VALUES (
 
 -- 1b. Create a User Account for the default tenant
 INSERT INTO users (tenant_id, email, password_hash, full_name)
-VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'admin@dynatire.com', 'password', 'DynaTire Admin')
-ON CONFLICT (email) DO NOTHING;
+VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'admin@dynatire.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'DynaTire Admin')
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- 2. Create a bookable resource (Truck 1)
 INSERT INTO resources (id, tenant_id, name, description)
@@ -81,7 +81,7 @@ BEGIN
 
     IF v_new_tenant_id IS NOT NULL THEN
         INSERT INTO users (tenant_id, email, password_hash, full_name)
-        VALUES (v_new_tenant_id, 'owner@sportclips.com', 'password', 'Salon Owner')
+        VALUES (v_new_tenant_id, 'owner@sportclips.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Salon Owner')
         ON CONFLICT (email) DO NOTHING;
     END IF;
 END $$;

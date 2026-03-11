@@ -14,64 +14,24 @@ import {
   Mail,
   MapPin,
   History,
-  MessageSquare,
   Edit2,
   Save,
   X,
   Trash2,
   UserPlus,
-  Loader2
 } from 'lucide-react'
-import { API_BASE_URL } from '../lib/api'
-import { formatPhone, normalizePhone } from '../lib/phone'
-
-const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
-  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
-  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
-  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'
-]
-
-const US_TIMEZONES = [
-  { label: '(UTC-5) Eastern Time - New York, Miami, Atlanta', value: 'America/New_York' },
-  { label: '(UTC-6) Central Time - Chicago, Houston, Dallas', value: 'America/Chicago' },
-  { label: '(UTC-7) Mountain Time - Denver, Salt Lake City', value: 'America/Denver' },
-  { label: '(UTC-7) Mountain Time (No DST) - Phoenix, Tucson', value: 'America/Phoenix' },
-  { label: '(UTC-8) Pacific Time - Los Angeles, San Francisco, Seattle', value: 'America/Los_Angeles' },
-  { label: '(UTC-9) Alaska Time - Anchorage, Fairbanks', value: 'America/Anchorage' },
-  { label: '(UTC-10) Hawaii Time - Honolulu, Maui', value: 'Pacific/Honolulu' },
-]
-
-// Simple mapping for auto-detection
-const CITY_TIMEZONE_MAP: Record<string, string> = {
-  'chicago': 'America/Chicago',
-  'new york': 'America/New_York',
-  'los angeles': 'America/Los_Angeles',
-  'denver': 'America/Denver',
-  'phoenix': 'America/Phoenix',
-  'houston': 'America/Chicago',
-  'miami': 'America/New_York',
-  'seattle': 'America/Los_Angeles',
-  'atlanta': 'America/New_York',
-  'dallas': 'America/Chicago'
-}
-
-const STATE_TIMEZONE_MAP: Record<string, string> = {
-  'NY': 'America/New_York',
-  'CA': 'America/Los_Angeles',
-  'IL': 'America/Chicago',
-  'FL': 'America/New_York',
-  'TX': 'America/Chicago',
-  'GA': 'America/New_York',
-  'WA': 'America/Los_Angeles',
-  'CO': 'America/Denver',
-  'AZ': 'America/Phoenix'
-}
-
-const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'
+import { Api } from '../lib/api'
+import { US_STATES, US_TIMEZONES, detectTimezone } from '../lib/constants'
+import { formatPhone } from '../lib/phone'
+import { splitFullName } from '../lib/utils'
+import { useSession } from '../lib/hooks'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
+import { Select } from './ui/Select'
+import { Card } from './ui/Card'
 
 export default function CRMView() {
+  const { tenantId } = useSession();
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [summaries, setSummaries] = useState<any[]>([])
@@ -97,20 +57,21 @@ export default function CRMView() {
   })
 
   useEffect(() => {
-    fetchCustomers()
-  }, [])
+    if (tenantId) {
+      fetchCustomers()
+    }
+  }, [tenantId])
 
   useEffect(() => {
     if (selectedCustomer) {
         fetchHistory(selectedCustomer.id)
-      const fullName = selectedCustomer.name || ''
-      const [first, ...rest] = fullName.split(' ')
+      const { first, last } = splitFullName(selectedCustomer.name || '')
       const derivedFirst = (selectedCustomer as any).first_name || first || ''
-      const derivedLast = (selectedCustomer as any).last_name || rest.join(' ') || ''
+      const derivedLast = (selectedCustomer as any).last_name || last || ''
         setEditForm({
         first_name: derivedFirst,
         last_name: derivedLast,
-            phone: selectedCustomer.phone || '',
+            phone: formatPhone(selectedCustomer.phone) || '',
             email: selectedCustomer.email || '',
             address: selectedCustomer.address || '',
         address_line2: (selectedCustomer as any).address_line2 || '',
@@ -128,27 +89,23 @@ export default function CRMView() {
   // Auto-detect timezone
   useEffect(() => {
     if (!isEditing && !isCreating) return
-    
-    const cityLower = editForm.city.toLowerCase().trim()
-    if (CITY_TIMEZONE_MAP[cityLower]) {
-      setEditForm(prev => ({ ...prev, timezone: CITY_TIMEZONE_MAP[cityLower] }))
-    } else if (STATE_TIMEZONE_MAP[editForm.state]) {
-      setEditForm(prev => ({ ...prev, timezone: STATE_TIMEZONE_MAP[editForm.state] }))
+    const tz = detectTimezone(editForm.city, editForm.state)
+    if (tz) {
+      setEditForm(prev => ({ ...prev, timezone: tz }))
     }
   }, [editForm.city, editForm.state, isEditing, isCreating])
 
   async function fetchCustomers() {
     setLoading(true)
-    const tenantId = localStorage.getItem('tenantId')
     try {
-      const res = await fetch(`${API_BASE_URL}/customers?tenant_id=${tenantId}`)
-      if (!res.ok) {
-        throw new Error('Failed to fetch customers')
-      }
-      const data = await res.json()
+      const data = await Api.customers.list(tenantId)
       if (!data || data.length === 0) {
-        setCustomers(MOCK_CUSTOMERS)
-        if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0])
+        if (!tenantId) {
+            setCustomers(MOCK_CUSTOMERS)
+            if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0])
+        } else {
+            setCustomers([])
+        }
       } else {
         setCustomers(data)
         if (!selectedCustomer) setSelectedCustomer(data[0])
@@ -181,40 +138,29 @@ export default function CRMView() {
   async function handleSave() {
     if (!selectedCustomer) return
     setSaving(true)
-    const currentTenantId = localStorage.getItem('tenantId')
-
-    // Use original tenant_id if SuperAdmin
-    const targetTenantId = currentTenantId === SUPER_ADMIN_TENANT_ID 
-      ? selectedCustomer.tenant_id 
-      : currentTenantId
 
     try {
-      const res = await fetch(`${API_BASE_URL}/customers/${selectedCustomer.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: targetTenantId,
-          first_name: editForm.first_name,
-          last_name: editForm.last_name,
-          name: `${editForm.first_name} ${editForm.last_name}`.trim(),
-          phone: normalizePhone(editForm.phone),
-          email: editForm.email,
-          address: editForm.address,
-          address_line2: editForm.address_line2,
-          city: editForm.city,
-          state: editForm.state,
-          postal_code: editForm.postal_code,
-          timezone: editForm.timezone,
-          metadata: { ...selectedCustomer.metadata, notes: editForm.notes }
-        })
+      const res = await Api.customers.update(selectedCustomer.id, selectedCustomer.tenant_id, {
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        name: `${editForm.first_name} ${editForm.last_name}`.trim(),
+        phone: editForm.phone,
+        email: editForm.email,
+        address: editForm.address,
+        address_line2: editForm.address_line2,
+        city: editForm.city,
+        state: editForm.state,
+        postal_code: editForm.postal_code,
+        timezone: editForm.timezone,
+        notes: editForm.notes
       })
 
-      if (res.ok) {
+      if (res.success) {
         setIsEditing(false)
         setIsCreating(false)
         await fetchCustomers()
       } else {
-        console.error('Failed to update customer', await res.text())
+        console.error('Failed to update customer', res.error)
       }
     } catch (e) {
       console.error(e)
@@ -224,18 +170,13 @@ export default function CRMView() {
 
   async function handleCreate() {
     setSaving(true)
-    const tenantId = localStorage.getItem('tenantId')
     
     try {
-      const res = await fetch(`${API_BASE_URL}/customers/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: tenantId,
+      const res = await Api.customers.create(tenantId, {
           first_name: editForm.first_name,
           last_name: editForm.last_name,
           name: `${editForm.first_name} ${editForm.last_name}`.trim(),
-          phone: normalizePhone(editForm.phone),
+          phone: editForm.phone,
           email: editForm.email,
           address: editForm.address,
           address_line2: editForm.address_line2,
@@ -243,13 +184,12 @@ export default function CRMView() {
           state: editForm.state,
           postal_code: editForm.postal_code,
           timezone: editForm.timezone,
-          metadata: { notes: editForm.notes }
-        })
+          notes: editForm.notes
       })
-        if (res.ok) {
-            setIsCreating(false)
-            fetchCustomers()
-        }
+      if (res.success) {
+          setIsCreating(false)
+          fetchCustomers()
+      }
     } catch (e) {
         console.error(e)
     }
@@ -261,13 +201,11 @@ export default function CRMView() {
     if (!confirm(`Are you sure you want to delete ${selectedCustomer.name}? This cannot be undone.`)) return
     
     try {
-      const res = await fetch(`${API_BASE_URL}/customers/${selectedCustomer.id}`, {
-            method: 'DELETE'
-        })
-        if (res.ok) {
-            setSelectedCustomer(null)
-            fetchCustomers()
-        }
+      const res = await Api.customers.delete(selectedCustomer.id)
+      if (res.success) {
+          setSelectedCustomer(null)
+          fetchCustomers()
+      }
     } catch (e) {
         console.error(e)
     }
@@ -287,6 +225,7 @@ export default function CRMView() {
       city: '',
       state: '',
       postal_code: '',
+      timezone: 'America/New_York',
       notes: ''
     })
   }
@@ -299,12 +238,12 @@ export default function CRMView() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold">People</h2>
             <div className="flex space-x-1">
-                <button onClick={startNewCustomer} title="Add Customer" className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                <Button onClick={startNewCustomer} size="sm" className="p-1.5">
                     <UserPlus className="w-4 h-4" />
-                </button>
-                <button onClick={fetchCustomers} className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#333] rounded text-gray-500 dark:text-gray-400">
+                </Button>
+                <Button variant="ghost" onClick={fetchCustomers} size="sm" className="p-1.5">
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
+                </Button>
             </div>
           </div>
           <div className="relative">
@@ -360,41 +299,32 @@ export default function CRMView() {
               <div className="flex items-center space-x-2">
                 {!isEditing && !isCreating ? (
                     <>
-                        <button 
-                            onClick={handleDelete}
-                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-md transition"
-                            title="Delete Customer"
-                        >
+                        <Button variant="danger" size="sm" onClick={handleDelete} title="Delete Customer">
                             <Trash2 className="w-5 h-5" />
-                        </button>
-                        <button 
-                            onClick={() => setIsEditing(true)}
-                            className="flex items-center px-4 py-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition font-medium text-sm border border-blue-100 dark:border-blue-800"
-                        >
+                        </Button>
+                        <Button variant="secondary" onClick={() => setIsEditing(true)}>
                             <Edit2 className="w-4 h-4 mr-2" /> Edit Info
-                        </button>
+                        </Button>
                     </>
                 ) : (
                     <div className="flex space-x-2">
-                        <button onClick={() => { setIsEditing(false); setIsCreating(false); }} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333] rounded-md">
+                        <Button variant="ghost" onClick={() => { setIsEditing(false); setIsCreating(false); }}>
                             <X className="w-5 h-5" />
-                        </button>
-                        <button 
+                        </Button>
+                        <Button 
                             onClick={isCreating ? handleCreate : handleSave} 
-                            disabled={saving}
-                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition font-medium text-sm shadow-sm disabled:opacity-50"
+                            isLoading={saving}
                         >
-                            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                            {!saving && <Save className="w-4 h-4 mr-2" />}
                             {isCreating ? 'Create Customer' : 'Save Changes'}
-                        </button>
+                        </Button>
                     </div>
                 )}
               </div>
             </header>
 
             <div className="p-4 md:p-8 space-y-8">
-              <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm max-w-2xl">
-                <h3 className="font-bold mb-4 flex items-center text-sm uppercase tracking-wider text-gray-400 dark:text-gray-500">Contact Details & Notes</h3>
+              <Card title="Contact Details & Notes" className="max-w-2xl">
                 {(!isEditing && !isCreating) ? (
                     <div className="space-y-4 text-sm">
                         <div className="flex items-start">
@@ -435,129 +365,44 @@ export default function CRMView() {
                 ) : (
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">First Name</label>
-                            <input 
-                              type="text" 
-                              value={editForm.first_name} 
-                              onChange={(e) => setEditForm({...editForm, first_name: e.target.value})}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                              placeholder="First Name"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Last Name</label>
-                            <input 
-                              type="text" 
-                              value={editForm.last_name} 
-                              onChange={(e) => setEditForm({...editForm, last_name: e.target.value})}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                              placeholder="Last Name"
-                            />
-                          </div>
-                          <div>
-                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Phone Number</label>
-                                <input 
-                                    type="text" 
-                                    value={editForm.phone} 
-                                    onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                                    className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                                    placeholder="+1-555-010-9999"
-                                />
-                            </div>
+                            <Input label="First Name" value={editForm.first_name} onChange={(e) => setEditForm({...editForm, first_name: e.target.value})} placeholder="First Name" />
+                            <Input label="Last Name" value={editForm.last_name} onChange={(e) => setEditForm({...editForm, last_name: e.target.value})} placeholder="Last Name" />
+                            <Input label="Phone Number" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} placeholder="+1-555-010-9999" />
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Email</label>
-                            <input 
-                                type="email" 
-                                value={editForm.email} 
-                                onChange={(e) => setEditForm({...editForm, email: e.target.value})}
-                                className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                                placeholder="customer@email.com"
-                            />
-                        </div>
+                        <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} placeholder="customer@email.com" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Address Line 1</label>
-                            <input 
-                              type="text" 
-                              value={editForm.address} 
-                              onChange={(e) => setEditForm({...editForm, address: e.target.value})}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                              placeholder="123 Street St"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Address Line 2</label>
-                            <input 
-                              type="text" 
-                              value={editForm.address_line2} 
-                              onChange={(e) => setEditForm({...editForm, address_line2: e.target.value})}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                              placeholder="Apt / Suite / Unit"
-                            />
-                          </div>
+                            <Input label="Address Line 1" value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} placeholder="123 Street St" />
+                            <Input label="Address Line 2" value={editForm.address_line2} onChange={(e) => setEditForm({...editForm, address_line2: e.target.value})} placeholder="Apt / Suite / Unit" />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">City</label>
-                            <input
-                              type="text"
-                              value={editForm.city}
-                              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                              placeholder="New York"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">State</label>
-                            <select
-                              value={editForm.state}
-                              onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                            >
-                              <option value="">Select state</option>
-                              {US_STATES.map((code) => (
-                                <option key={code} value={code}>{code}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">ZIP</label>
-                            <input 
-                              type="text" 
-                              value={editForm.postal_code} 
-                              onChange={(e) => setEditForm({...editForm, postal_code: e.target.value})}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                              placeholder="10001"
-                            />
-                          </div>
+                          <Input label="City" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} placeholder="New York" />
+                          <Select 
+                            label="State" 
+                            value={editForm.state} 
+                            onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} 
+                            options={[{ label: 'Select state', value: '' }, ...US_STATES.map(code => ({ label: code, value: code }))]}
+                          />
+                          <Input label="ZIP" value={editForm.postal_code} onChange={(e) => setEditForm({...editForm, postal_code: e.target.value})} placeholder="10001" />
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Timezone</label>
-                            <select
-                              value={editForm.timezone}
-                              onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
-                              className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                            >
-                              {US_TIMEZONES.map((tz) => (
-                                <option key={tz.value} value={tz.value}>{tz.label}</option>
-                              ))}
-                            </select>
-                        </div>
+                        <Select
+                            label="Timezone"
+                            value={editForm.timezone}
+                            onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
+                            options={US_TIMEZONES}
+                        />
                         <div>
                             <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>
                             <textarea 
                                 rows={4}
                                 value={editForm.notes} 
                                 onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
-                                className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+                                className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100 transition"
                                 placeholder="Add private notes the AI should consider..."
                             />
                         </div>
                     </div>
                 )}
-              </div>
+              </Card>
 
               {!isCreating && (
                 <div className="space-y-6">

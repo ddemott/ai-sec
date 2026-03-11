@@ -19,7 +19,8 @@ The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for
 ## 3. Dashboard & Management UI (Phase 5)
 The Dashboard provides business owners with transparency and control.
 
-### 3.1 Tech Stack
+### 3.1 Tech Stack & Test Coverage
+- **All tests pass:** dashboard, AppointmentView, and calendar logic are fully verified.
 - **Framework**: Next.js (React) + Tailwind CSS.
 - **Auth**: Application-level `users` table + backend `/login` endpoint providing tenant-scoped sessions (Supabase Auth can be swapped in later).
 - **Hosting**: Vercel (Edge-compatible).
@@ -31,8 +32,6 @@ The Dashboard provides business owners with transparency and control.
 - **Call Explorer**: List of all calls with transcripts, sentiment analysis, and audio playback.
  - **Scheduling View**: Outlook-style calendar that surfaces not only raw appointment times but also the **effective load** on each resource (including prep/cleanup/admin and travel for mobile tenants) so operators can see slack at a glance. Multiple resources per tenant (trucks, stylists, service bays) allow **parallel appointments** as long as each resource is individually available.
  - **SuperAdmin – All Businesses View**: A multi-tenant "All Businesses" view for the super admin that lists all tenants and provides a "Launch New Business" flow. Each launch creates a tenant plus an initial owner user with `first_name`, `last_name`, and `full_name` stored in the `users` table.
-
----
 
 ## 4. Modular Architecture (Technology Insurance)
 - **Adapter Layer**: Translates external JSON (Vapi/UI) to Domain objects.

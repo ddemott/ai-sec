@@ -1,110 +1,221 @@
-import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../lib/api';
+'use client'
+
+import React, { useState } from 'react'
+import { 
+  Users, 
+  PlusCircle, 
+  Shield, 
+  Tag
+} from 'lucide-react'
+import { Api } from '../lib/api'
+import { useSession, useStaticData } from '../lib/hooks'
+import { Card } from './ui/Card'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
+import { Badge } from './ui/Badge'
+import { Modal } from './ui/Modal'
+
+type Employee = {
+  id: string | number
+  name: string
+  skills: string[]
+  is_active: boolean
+  type?: string
+}
 
 export default function EmployeeManagementView() {
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  const [employees, setEmployees] = useState<Array<{ id: string; name: string; skills: string[]; is_active: boolean }>>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [newEmployee, setNewEmployee] = useState({ name: '', skills: '' });
+  const { tenantId } = useSession()
+  const { employees, loading, error, refresh } = useStaticData(tenantId)
 
-  useEffect(() => {
-    const tid = localStorage.getItem('tenantId');
-    if (tid) {
-      setTenantId(tid);
-      fetchEmployees(tid);
-    }
-  }, []);
+  // Edit State
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [newSkill, setNewSkill] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  async function fetchEmployees(id: string) {
-    setLoading(true);
-    setError(null);
+  // Add Employee State
+  const [newEmployeeName, setNewEmployeeName] = useState('')
+
+  async function handleAddEmployee(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newEmployeeName.trim() || !tenantId) return
+    setSaving(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/employees?tenant_id=${id}`);
-      if (!res.ok) throw new Error('Failed to fetch employees');
-      const data = await res.json();
-      setEmployees(Array.isArray(data) ? data : []);
-    } catch {
-      setError('Could not load employees for this business.');
+      const res = await Api.employees.create(tenantId, { name: newEmployeeName.trim(), skills: [] })
+      if (res.success) {
+        setNewEmployeeName('')
+        refresh()
+      }
+    } catch (err) {
+      console.error("Failed to create employee", err)
     } finally {
-      setLoading(false);
+      setSaving(false)
     }
   }
 
-  async function handleCreateEmployee(e: React.FormEvent) {
-    e.preventDefault();
-    if (!tenantId || !newEmployee.name.trim()) return;
-    setError(null);
+  async function handleUpdateSkills(employee: Employee, updatedSkills: string[]) {
+    setSaving(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/employees/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          name: newEmployee.name.trim(),
-          skills: newEmployee.skills.split(',').map(s => s.trim()).filter(Boolean)
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to create employee');
-      if (data.employee) {
-        setEmployees(prev => [...prev, data.employee]);
-      } else {
-        fetchEmployees(tenantId);
+      const res = await Api.employees.update(employee.id as number, { skills: updatedSkills })
+      if (res.success) {
+        refresh()
+        if (selectedEmployee?.id === employee.id) {
+          setSelectedEmployee({ ...employee, skills: updatedSkills })
+        }
       }
-      setNewEmployee({ name: '', skills: '' });
-    } catch {
-      setError('Failed to create employee');
+    } catch (err) {
+      console.error("Failed to update skills", err)
+    } finally {
+      setSaving(false)
     }
+  }
+
+  const removeSkill = (skill: string) => {
+    if (!selectedEmployee) return
+    const updated = selectedEmployee.skills.filter(s => s !== skill)
+    handleUpdateSkills(selectedEmployee, updated)
+  }
+
+  const addSkill = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedEmployee || !newSkill.trim()) return
+    const updated = [...new Set([...selectedEmployee.skills, newSkill.trim()])]
+    handleUpdateSkills(selectedEmployee, updated)
+    setNewSkill('')
+  }
+
+  if (loading && employees.length === 0) {
+    return <div className="p-8 text-gray-500 italic">Loading staff data...</div>
   }
 
   return (
-    <div className="bg-white dark:bg-[#111] p-8 rounded-3xl text-gray-900 dark:text-gray-100">
-      <h2 className="text-lg font-bold mb-4">Employee Management</h2>
-      <form onSubmit={handleCreateEmployee} className="flex flex-col md:flex-row gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Employee Name"
-          value={newEmployee.name}
-          onChange={e => setNewEmployee(prev => ({ ...prev, name: e.target.value }))}
-          className="flex-1 p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg text-sm outline-none dark:text-gray-100"
-        />
-        <input
-          type="text"
-          placeholder="Skills (comma separated)"
-          value={newEmployee.skills}
-          onChange={e => setNewEmployee(prev => ({ ...prev, skills: e.target.value }))}
-          className="flex-1 p-2.5 bg-white dark:bg-[#222] border border-gray-300 dark:border-gray-700 rounded-lg text-sm outline-none dark:text-gray-100"
-        />
-        <button
-          type="submit"
-          disabled={!tenantId || !newEmployee.name.trim()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-        >
-          Add Employee
-        </button>
-      </form>
-      {error && <div className="mb-4 text-sm text-red-600 dark:text-red-400">{error}</div>}
-      <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-        <div className="bg-gray-100 dark:bg-[#222] px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 flex justify-between">
-          <span>Name</span>
-          <span>Skills</span>
-          <span>Status</span>
+    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+      <header className="mb-8">
+        <div className="flex items-center mb-6">
+          <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg mr-4 text-green-600 dark:text-green-400">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold">Staff & Expertise</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Manage your team members and their certified skills.</p>
+          </div>
         </div>
-        {loading ? (
-          <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading employees...</div>
-        ) : employees.length === 0 ? (
-          <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No employees yet. Add your first employee above.</div>
-        ) : (
-          employees.map(e => (
-            <div key={e.id} className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-sm">
-              <div className="font-semibold text-gray-900 dark:text-gray-100">{e.name}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">{e.skills.join(', ')}</div>
-              <div className={e.is_active ? 'text-green-600' : 'text-gray-400'}>{e.is_active ? 'Active' : 'Inactive'}</div>
+
+        <form onSubmit={handleAddEmployee} className="max-w-md flex gap-3">
+          <Input 
+            placeholder="Enter full name..."
+            value={newEmployeeName}
+            onChange={e => setNewEmployeeName(e.target.value)}
+            className="flex-1"
+          />
+          <Button 
+            type="submit"
+            disabled={saving || !newEmployeeName.trim()}
+            icon={PlusCircle}
+            loading={saving}
+          >
+            Add
+          </Button>
+        </form>
+      </header>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl text-red-700 dark:text-red-400 flex items-center">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {employees.filter(e => e.type !== 'user').map(emp => (
+          <Card 
+            key={emp.id} 
+            onClick={() => { setSelectedEmployee(emp); setIsEditModalOpen(true); }}
+            className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="bg-white dark:bg-[#222] p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                <Users className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <Badge variant={emp.is_active ? 'success' : 'default'}>
+                {emp.is_active ? 'Active' : 'On Leave'}
+              </Badge>
             </div>
-          ))
-        )}
+            
+            <h3 className="text-xl font-bold mb-2">{emp.name}</h3>
+            
+            <div className="flex flex-wrap gap-1">
+              {emp.skills && emp.skills.length > 0 ? (
+                emp.skills.slice(0, 3).map(skill => (
+                  <Badge key={skill} variant="info" className="text-[10px] uppercase">
+                    {skill}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-xs text-gray-400 italic">No skills assigned</span>
+              )}
+              {emp.skills && emp.skills.length > 3 && (
+                <span className="text-[10px] font-bold text-gray-400 px-2 py-0.5">+{emp.skills.length - 3} more</span>
+              )}
+            </div>
+          </Card>
+        ))}
       </div>
+
+      {/* QUICK-EDIT MODAL */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title={selectedEmployee?.name || ''}
+        subtitle="Expertise Profile"
+        footer={
+          <Button onClick={() => setIsEditModalOpen(false)} className="w-32">
+            Done
+          </Button>
+        }
+      >
+        {selectedEmployee && (
+          <div className="space-y-8">
+            {/* Skills Management */}
+            <section>
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
+                <Tag className="w-3 h-3 mr-2" /> Certified Skills
+              </h4>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {selectedEmployee.skills?.map(skill => (
+                  <Badge key={skill} variant="info" className="flex items-center py-1.5 px-3">
+                    {skill}
+                    <button onClick={(e) => { e.stopPropagation(); removeSkill(skill); }} className="ml-2 hover:text-red-500">
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <form onSubmit={addSkill} className="flex gap-2">
+                <Input 
+                  placeholder="Add skill (e.g. alignment)"
+                  value={newSkill}
+                  onChange={e => setNewSkill(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="submit" variant="secondary">
+                  Add
+                </Button>
+              </form>
+            </section>
+
+            {/* Service Associations Info */}
+            <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-3xl border border-blue-100 dark:border-blue-800/30">
+              <h4 className="text-sm font-bold text-blue-800 dark:text-blue-400 mb-2 flex items-center">
+                <Shield className="w-4 h-4 mr-2" /> Scheduling Role
+              </h4>
+              <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                The AI uses these skills to match {selectedEmployee.name.split(' ')[0]} with service requirements. 
+                Adding a skill makes them eligible for any service that requires it.
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
-  );
+  )
 }
