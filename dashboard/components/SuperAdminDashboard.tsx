@@ -34,6 +34,7 @@ type Tenant = {
     business_type: string
     timezone: string
     owner_phone?: string | null
+    inbound_phone?: string | null
     voice_id?: string | null
     first_message?: string | null
     system_prompt?: string | null
@@ -44,7 +45,12 @@ type Template = {
     display_name: string
 }
 
-export default function SuperAdminDashboard() {
+interface SuperAdminProps {
+  onSelectTenant?: (id: string, name: string) => void;
+  currentTenantId?: string | null;
+}
+
+export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }: SuperAdminProps) {
     const [tenants, setTenants] = useState<Tenant[]>([])
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null)
     const [templates, setTemplates] = useState<Template[]>([])
@@ -101,7 +107,11 @@ export default function SuperAdminDashboard() {
       setTemplates(templatesArray)
       
       if (tenantsArray.length > 0 && !selectedTenant) {
-        setSelectedTenant(tenantsArray[0])
+        const initial = currentTenantId 
+          ? (tenantsArray.find(t => t.id === currentTenantId) || tenantsArray[0])
+          : tenantsArray[0];
+        setSelectedTenant(initial)
+        if (onSelectTenant && !currentTenantId) onSelectTenant(initial.id, initial.name);
       }
     } catch (e) {
       console.error('Fetch error:', e)
@@ -119,7 +129,8 @@ export default function SuperAdminDashboard() {
 
     const normalizedForm = {
       ...form,
-      owner_phone: form.owner_phone ? normalizePhone(form.owner_phone) : null
+      owner_phone: form.owner_phone ? normalizePhone(form.owner_phone) : null,
+      inbound_phone: form.inbound_phone ? normalizePhone(form.inbound_phone) : null
     }
 
     try {
@@ -131,6 +142,7 @@ export default function SuperAdminDashboard() {
         const updatedTenants = tenants.map(t => t.id === form.id ? { ...normalizedForm } : t)
         setTenants(updatedTenants)
         setSelectedTenant({ ...normalizedForm } as Tenant)
+        if (onSelectTenant) onSelectTenant(form.id, form.name);
       } else {
         setError(res.error || 'Failed to update business attributes')
       }
@@ -278,7 +290,10 @@ export default function SuperAdminDashboard() {
           {tenants.map((t) => (
             <div 
               key={t.id}
-              onClick={() => setSelectedTenant(t)}
+              onClick={() => {
+                setSelectedTenant(t);
+                if (onSelectTenant) onSelectTenant(t.id, t.name);
+              }}
               className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-center
                 ${selectedTenant?.id === t.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}`}
             >
@@ -415,6 +430,21 @@ export default function SuperAdminDashboard() {
                                     <Phone className="w-3 h-3 mr-1" /> Owner Notification Phone
                                 </label>
                                 <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium font-mono">{selectedTenant.owner_phone ? formatPhone(selectedTenant.owner_phone) : 'Not set'}</p>
+                            </div>
+                        )}
+                        {isEditing ? (
+                            <Input 
+                                label="Vapi Inbound Phone"
+                                value={form.inbound_phone || ''} 
+                                onChange={e => setForm({...form, inbound_phone: e.target.value})}
+                                placeholder="+1-555-000-0000"
+                            />
+                        ) : (
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center text-blue-600">
+                                    <Globe className="w-3 h-3 mr-1" /> Vapi Inbound Phone (Routing)
+                                </label>
+                                <p className="p-2.5 text-blue-700 dark:text-blue-400 font-bold font-mono">{selectedTenant.inbound_phone ? formatPhone(selectedTenant.inbound_phone) : 'Not connected'}</p>
                             </div>
                         )}
                     </div>

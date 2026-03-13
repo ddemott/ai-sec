@@ -4,19 +4,28 @@ import { Api, getLocalStorageItem, SUPER_ADMIN_TENANT_ID } from './api';
 /**
  * Hook to manage session and authentication logic
  */
-export function useSession() {
+export function useSession(overrideTenantId?: string | null) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
-    const storedTenantId = getLocalStorageItem('tenantId');
-    const storedUserName = getLocalStorageItem('userName');
-    
-    setTenantId(storedTenantId);
-    setUserName(storedUserName);
-    setIsSuperAdmin(storedTenantId === SUPER_ADMIN_TENANT_ID);
-  }, []);
+    // If override provided, use it. Otherwise use localStorage
+    if (overrideTenantId) {
+      setTenantId(overrideTenantId);
+      const storedUserName = getLocalStorageItem('userName');
+      setUserName(storedUserName);
+      const storedTenantId = getLocalStorageItem('tenantId');
+      setIsSuperAdmin(storedTenantId === SUPER_ADMIN_TENANT_ID);
+    } else {
+      const storedTenantId = getLocalStorageItem('tenantId');
+      const storedUserName = getLocalStorageItem('userName');
+      
+      setTenantId(storedTenantId);
+      setUserName(storedUserName);
+      setIsSuperAdmin(storedTenantId === SUPER_ADMIN_TENANT_ID);
+    }
+  }, [overrideTenantId]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('tenantId');

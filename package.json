@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@fastify/cors": "^8.5.0",
+    "@fastify/multipart": "^9.4.0",
     "bcrypt": "^6.0.0",
     "fastify": "^4.29.1",
     "next": "^16.1.6",
+    "pdf-parse": "^2.4.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -25,6 +27,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.15",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.16.0",
     "@types/testing-library__react": "^10.0.1",
     "@vitest/coverage-v8": "^4.0.18",

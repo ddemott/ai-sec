@@ -5,9 +5,40 @@ import { DomainError } from "./core/errors.ts";
 import { createLogger } from "./core/logger.ts";
 import { Dispatcher } from "./core/dispatcher.ts";
 
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+
+/**
+ * Helper to generate embeddings via OpenAI
+ */
+async function getEmbedding(text: string): Promise<number[]> {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured in environment");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      input: text.replace(/\n/g, " "),
+      model: "text-embedding-3-small",
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`OpenAI Embedding Error: ${JSON.stringify(error)}`);
+  }
+
+  const result = await response.json();
+  return result.data[0].embedding;
+}
+
 export const repo = new PostgresRepository();
 const service = new AISecretaryService(repo);
-const dispatcher = new Dispatcher(service);
+const dispatcher = new Dispatcher(service, getEmbedding);
 
 const VAPI_SECRET = Deno.env.get("VAPI_SERVER_URL_SECRET") || "unset";
 
@@ -34,7 +65,12 @@ const BookAppointmentSchema = z.object({
   description: z.string().default("Booking via AI Secretary"),
   call_id: z.string().min(1),
   location: z.string().optional(),
-  employee_id: z.string().or(z.number()).optional().transform(v => v?.toString()) // Support string or number from tool call
+  employee_id: z.string().or(z.number()).optional().transform(v => v?.toString())
+});
+
+const GetPolicyAnswerSchema = z.object({
+  tenant_id: z.string().uuid(),
+  question: z.string().min(1)
 });
 
 export async function handler(req: Request): Promise<Response> {
@@ -61,8 +97,28 @@ export async function handler(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ error: "Invalid message format" }), { status: 400 });
     }
 
-    // Since schemas are here in index.ts for now, the dispatcher needs to handle the logic
-    // or we move schemas to core. For now, let's keep it simple.
+    // Validation for specific tool calls if needed
+    if (message.type === "tool-calls") {
+      if (!message.toolCalls || message.toolCalls.length === 0) {
+        return new Response(JSON.stringify({ error: "No tool calls provided" }), { status: 400 });
+      }
+      
+      const toolCall = message.toolCalls[0];
+      const { name, arguments: argsString } = toolCall.function;
+      
+      let args;
+      try {
+        args = JSON.parse(argsString);
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Invalid JSON in arguments" }), { status: 400 });
+      }
+
+      if (name === "get_customer_context") GetContextSchema.parse(args);
+      if (name === "check_availability") CheckAvailabilitySchema.parse(args);
+      if (name === "book_appointment") BookAppointmentSchema.parse(args);
+      if (name === "get_company_policy_answer") GetPolicyAnswerSchema.parse(args);
+    }
+
     return await dispatcher.dispatch(message, logger);
 
   } catch (e) {

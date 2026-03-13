@@ -1,0 +1,93 @@
+{
+  "name": "AI Secretary: Calendar Sync (Google/Outlook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-appointment",
+        "options": {}
+      },
+      "name": "Webhook: New Appointment",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM tenant_calendar_settings WHERE tenant_id = :tenant_id AND is_active = true",
+        "additionalFields": {
+          "queryParams": "tenant_id={{$json.body.record.tenant_id}}"
+        }
+      },
+      "name": "Supabase: Get Settings",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.provider}}",
+              "value2": "google"
+            }
+          ]
+        }
+      },
+      "name": "Router: Provider",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "calendar": "={{$node[\"Supabase: Get Settings\"].json[\"external_calendar_id\"]}}",
+        "start": "={{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"start_time\"]}}",
+        "end": "={{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"end_time\"]}}",
+        "summary": "AI Booking: {{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"description\"]}}",
+        "additionalFields": {
+          "description": "Booked via AI Secretary. Call ID: {{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"call_id\"]}}"
+        }
+      },
+      "name": "Google Calendar: Create Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "table": "appointment_sync_map",
+        "columns": "appointment_id,external_event_id,provider",
+        "data": {
+          "appointment_id": "={{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"id\"]}}",
+          "external_event_id": "={{$json.id}}",
+          "provider": "google"
+        }
+      },
+      "name": "Supabase: Save Sync Map",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [950, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: New Appointment": {
+      "main": [[{ "node": "Supabase: Get Settings", "type": "main", "index": 0 }]]
+    },
+    "Supabase: Get Settings": {
+      "main": [[{ "node": "Router: Provider", "type": "main", "index": 0 }]]
+    },
+    "Router: Provider": {
+      "main": [
+        [{ "node": "Google Calendar: Create Event", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Google Calendar: Create Event": {
+      "main": [[{ "node": "Supabase: Save Sync Map", "type": "main", "index": 0 }]]
+    }
+  }
+}

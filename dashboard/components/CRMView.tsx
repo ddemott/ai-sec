@@ -30,8 +30,8 @@ import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Card } from './ui/Card'
 
-export default function CRMView() {
-  const { tenantId } = useSession();
+export default function CRMView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+  const { tenantId } = useSession(overrideTenantId);
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [summaries, setSummaries] = useState<any[]>([])

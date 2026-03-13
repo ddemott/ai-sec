@@ -48,8 +48,8 @@ const localizer = dateFnsLocalizer({
 
 const DnDCalendar = withDragAndDrop(BigCalendar)
 
-export default function AppointmentView() {
-  const { tenantId } = useSession();
+export default function AppointmentView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+  const { tenantId } = useSession(overrideTenantId);
   const { customers, resources, employees, refresh: refreshStaticData } = useStaticData(tenantId);
 
   // Appointments state

@@ -9,8 +9,7 @@ const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@loc
 async function clearServices() {
   const client = new Client(DB_URL);
   await client.connect();
-  await client.queryArray("TRUNCATE services CASCADE;");
-  await client.queryArray("TRUNCATE tenants CASCADE;");
+  await client.queryArray("TRUNCATE tenants, resources, customers, appointments, call_summaries, service_resource, service_employee, tenant_docs CASCADE;");
   await client.end();
 }
 
@@ -56,6 +55,7 @@ Deno.test({
     assertEquals(services[0].duration_minutes, 30);
     assertEquals(services[0].required_skills, ["mechanic"]);
     assertEquals(services[0].required_resources, ["lift"]);
+    await repo.close();
   },
 });
 
@@ -98,5 +98,6 @@ Deno.test({
     await repo.deleteService(tenantId, serviceId, baseLogger);
     const afterDelete = await repo.getServices(tenantId, baseLogger);
     assertEquals(afterDelete.length, 0);
+    await repo.close();
   },
 });

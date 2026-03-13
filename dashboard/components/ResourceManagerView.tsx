@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { 
   Wrench, 
   PlusCircle, 
-  X, 
   CheckCircle2, 
   Trash2,
   AlertCircle,
@@ -31,8 +30,8 @@ type Mapping = {
   resource_id: string;
 };
 
-export default function ResourceManagerView() {
-  const { tenantId } = useSession();
+export default function ResourceManagerView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+  const { tenantId } = useSession(overrideTenantId);
   const { resources: staticResources, services, loading: staticLoading, refresh } = useStaticData(tenantId);
   const [resources, setResources] = useState<Resource[]>([]);
   const [mappings, setMappings] = useState<Mapping[]>([]);
@@ -42,6 +41,7 @@ export default function ResourceManagerView() {
   // Create/Edit State
   const [newResource, setNewResource] = useState({ name: '', description: '' });
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', description: '' });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +85,27 @@ export default function ResourceManagerView() {
     }
   }
 
+  async function handleUpdateResource() {
+    if (!selectedResource || !editForm.name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await Api.resources.update(selectedResource.id, {
+        name: editForm.name.trim(),
+        description: editForm.description.trim()
+      });
+      if (res.success) {
+        refresh();
+        setIsEditModalOpen(false);
+      } else {
+        setError(res.error || "Failed to update resource");
+      }
+    } catch {
+      setError("Failed to update resource");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Are you sure you want to delete this resource?')) return;
     setError(null);
@@ -101,7 +122,7 @@ export default function ResourceManagerView() {
   }
 
   async function toggleServiceMapping(serviceId: number, resourceId: string) {
-    const isMapped = mappings.some(m => m.service_id === serviceId && m.resource_id === resourceId);
+    const isMapped = (mappings || []).some(m => m.service_id === serviceId && m.resource_id === resourceId);
     
     try {
       const res = isMapped 
@@ -138,8 +159,8 @@ export default function ResourceManagerView() {
             <Wrench className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Resources & Facilities</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Manage your bays, stations, and equipment.</p>
+            <h1 className="text-3xl font-bold">Resources & Services</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Define which services can be performed at each location.</p>
           </div>
         </div>
 
@@ -162,10 +183,9 @@ export default function ResourceManagerView() {
             type="submit"
             isLoading={saving}
             disabled={!newResource.name.trim()}
-            className="self-start py-3"
+            className="self-start py-3 whitespace-nowrap"
           >
-            {!saving && <PlusCircle className="w-5 h-5 mr-2" />}
-            Add
+            Add Resource
           </Button>
         </form>
       </header>
@@ -179,10 +199,14 @@ export default function ResourceManagerView() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {resources.map(res => (
-          <div 
+          <Card 
             key={res.id} 
-            onClick={() => { setSelectedResource(res); setIsEditModalOpen(true); }}
-            className="bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 p-6 rounded-3xl cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
+            onClick={() => { 
+              setSelectedResource(res); 
+              setEditForm({ name: res.name, description: res.description });
+              setIsEditModalOpen(true); 
+            }}
+            className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="bg-white dark:bg-[#222] p-3 rounded-2xl shadow-sm">
@@ -197,23 +221,20 @@ export default function ResourceManagerView() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-1">{res.description || 'No description provided'}</p>
             
             <div className="flex flex-wrap gap-1">
-              {mappings.filter(m => m.resource_id === res.id).length > 0 ? (
-                mappings.filter(m => m.resource_id === res.id).slice(0, 3).map(m => {
-                  const s = services.find(s => s.id === m.service_id);
+              {(mappings || []).filter(m => m.resource_id === res.id).length > 0 ? (
+                (mappings || []).filter(m => m.resource_id === res.id).map(m => {
+                  const s = (services || []).find(s => s.id === m.service_id);
                   return s ? (
-                    <Badge key={s.id} variant="primary">
+                    <Badge key={s.id} variant="info" className="text-[10px] uppercase">
                       {s.name}
                     </Badge>
                   ) : null;
                 })
               ) : (
-                <span className="text-xs text-gray-400 italic">No services assigned</span>
-              )}
-              {mappings.filter(m => m.resource_id === res.id).length > 3 && (
-                <span className="text-[10px] font-bold text-gray-400 px-2 py-0.5">+{mappings.filter(m => m.resource_id === res.id).length - 3} more</span>
+                <span className="text-xs text-gray-400 italic">No services supported</span>
               )}
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
@@ -222,38 +243,66 @@ export default function ResourceManagerView() {
         onClose={() => setIsEditModalOpen(false)}
         title={selectedResource?.name || 'Resource'}
         footer={
-          <Button onClick={() => setIsEditModalOpen(false)} className="px-8">Done</Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateResource} isLoading={saving}>Save Changes</Button>
+          </div>
         }
       >
-        <div className="space-y-8 max-h-[60vh] overflow-y-auto">
+        <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">
+          {/* IDENTIFICATION EDIT */}
+          <section className="space-y-4">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+              <Wrench className="w-3 h-3 mr-2" /> Basic Info
+            </h4>
+            <div className="space-y-3">
+              <Input 
+                label="Resource Name"
+                value={editForm.name}
+                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+              />
+              <Input 
+                label="Description"
+                value={editForm.description}
+                onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+              />
+            </div>
+          </section>
+
+          {/* Service Toggle Section */}
           <section>
             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
               <Tag className="w-3 h-3 mr-2" /> Supported Services
             </h4>
             <div className="grid grid-cols-1 gap-2">
-              {services.map(service => {
-                const isMapped = mappings.some(m => m.service_id === service.id && m.resource_id === selectedResource?.id);
+              {(services || []).map(service => {
+                const isMapped = (mappings || []).some(m => m.service_id === service.id && m.resource_id === selectedResource?.id);
                 return (
                   <button 
                     key={service.id}
                     onClick={() => selectedResource && toggleServiceMapping(service.id, selectedResource.id)}
-                    className={`flex items-center justify-between p-3 rounded-xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 dark:bg-[#222] text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
+                    className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 dark:bg-[#222] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                   >
                     {service.name}
-                    {isMapped ? <CheckCircle2 className="w-4 h-4" /> : <PlusCircle className="w-4 h-4 opacity-50" />}
+                    {isMapped ? <CheckCircle2 className="w-5 h-5 text-white" /> : <PlusCircle className="w-5 h-5 opacity-30" />}
                   </button>
                 );
               })}
+              {(services || []).length === 0 && (
+                <div className="text-center p-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-3xl text-gray-400">
+                  No services defined in the catalog.
+                </div>
+              )}
             </div>
           </section>
 
           <Card variant="info">
-            <h4 className="text-sm font-bold mb-2 flex items-center">
-              <Info className="w-4 h-4 mr-2" /> Dynamic Scheduling
+            <h4 className="text-sm font-bold mb-2 flex items-center gap-2">
+              <Info className="w-4 h-4 mr-2" /> Capacity Alignment
             </h4>
             <p className="text-xs leading-relaxed">
               Toggling services here determines which appointments can be booked for this resource.
-              The AI agent will only schedule a service if it's enabled for the specific resource.
+              The AI agent will only schedule a service if it's enabled for the specific location or piece of equipment.
             </p>
           </Card>
 

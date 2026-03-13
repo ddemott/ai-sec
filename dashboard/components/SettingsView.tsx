@@ -6,7 +6,11 @@ import {
   Building2, 
   UserPlus, 
   ShieldCheck, 
-  Settings
+  Settings,
+  Calendar,
+  ExternalLink,
+  Unlink,
+  CheckCircle2
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
@@ -16,8 +20,8 @@ import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Badge } from './ui/Badge'
 
-export default function SettingsView() {
-  const { tenantId, isSuperAdmin } = useSession()
+export default function SettingsView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+  const { tenantId, isSuperAdmin } = useSession(overrideTenantId)
   const { resources, loading: resourcesLoading, error: resourcesError, refresh: refreshResources } = useStaticData(tenantId)
   
   const [templates, setTemplates] = useState<{business_type: string, display_name: string}[]>([])
@@ -25,6 +29,10 @@ export default function SettingsView() {
   const [success, setSuccess] = useState(false)
   const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [newResource, setNewResource] = useState({ name: '', description: '' })
+
+  // Calendar State
+  const [calendarSettings, setCalendarSettings] = useState<any>(null)
+  const [calLoading, setCalLoading] = useState(false)
 
   // Form State for onboarding
   const [form, setForm] = useState({
@@ -39,8 +47,52 @@ export default function SettingsView() {
   useEffect(() => {
     if (isSuperAdmin) {
       fetchTemplates()
+    } else if (tenantId) {
+      fetchCalendarSettings()
     }
-  }, [isSuperAdmin])
+  }, [isSuperAdmin, tenantId])
+
+  async function fetchCalendarSettings() {
+    try {
+      const data = await Api.calendar.getSettings(tenantId)
+      setCalendarSettings(data)
+    } catch (e) {
+      console.error("Failed to fetch calendar settings")
+    }
+  }
+
+  async function handleConnectCalendar(provider: 'google' | 'outlook') {
+    setCalLoading(true)
+    try {
+      // Mocking the OAuth flow for the prototype
+      const mockCalendarId = provider === 'google' ? 'primary' : 'me/calendar'
+      const res = await Api.calendar.updateSettings(tenantId, {
+        provider,
+        external_calendar_id: mockCalendarId
+      })
+      if (res.success) {
+        setCalendarSettings(res.settings)
+      }
+    } catch (e) {
+      console.error("Connection failed")
+    } finally {
+      setCalLoading(false)
+    }
+  }
+
+  async function handleDisconnectCalendar() {
+    setCalLoading(true)
+    try {
+      const res = await Api.calendar.disconnect(tenantId)
+      if (res.success) {
+        setCalendarSettings(null)
+      }
+    } catch (e) {
+      console.error("Disconnect failed")
+    } finally {
+      setCalLoading(false)
+    }
+  }
 
   async function fetchTemplates() {
     try {
@@ -123,6 +175,72 @@ export default function SettingsView() {
         <div className="space-y-8">
           <Card className="p-8 text-center bg-gray-50 dark:bg-[#1a1a1a]">
             <p className="text-gray-400 dark:text-gray-500 italic">User profile settings coming soon...</p>
+          </Card>
+
+          {/* CALENDAR SYNC SECTION */}
+          <Card className="p-6 bg-gray-50 dark:bg-[#1a1a1a]">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold">Calendar Synchronization</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Automatically push AI bookings to your Google or Outlook calendar.
+                  </p>
+                </div>
+              </div>
+              {calendarSettings && (
+                <Badge variant="success" className="flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Connected
+                </Badge>
+              )}
+            </div>
+
+            {!calendarSettings ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => handleConnectCalendar('google')}
+                  disabled={calLoading}
+                  className="flex items-center justify-center gap-3 p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 transition-all font-bold group"
+                >
+                  <div className="w-8 h-8 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center text-red-600">G</div>
+                  <span>Connect Google Calendar</span>
+                  <ExternalLink className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+                </button>
+                <button
+                  onClick={() => handleConnectCalendar('outlook')}
+                  disabled={calLoading}
+                  className="flex items-center justify-center gap-3 p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 transition-all font-bold group"
+                >
+                  <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center text-blue-600">O</div>
+                  <span>Connect Outlook Calendar</span>
+                  <ExternalLink className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${calendarSettings.provider === 'google' ? 'bg-red-500' : 'bg-blue-500'}`}>
+                    {calendarSettings.provider === 'google' ? 'G' : 'O'}
+                  </div>
+                  <div>
+                    <div className="font-bold capitalize">{calendarSettings.provider} Calendar Connected</div>
+                    <div className="text-xs text-gray-500">ID: {calendarSettings.external_calendar_id}</div>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  onClick={handleDisconnectCalendar}
+                  disabled={calLoading}
+                  className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  icon={Unlink}
+                >
+                  Disconnect
+                </Button>
+              </div>
+            )}
           </Card>
 
           <Card className="p-6 bg-gray-50 dark:bg-[#1a1a1a]">

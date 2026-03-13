@@ -9,8 +9,7 @@ const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@loc
 async function clearEmployees() {
   const client = new Client(DB_URL);
   await client.connect();
-  await client.queryArray("TRUNCATE employees CASCADE;");
-  await client.queryArray("TRUNCATE tenants CASCADE;");
+  await client.queryArray("TRUNCATE tenants, resources, customers, appointments, call_summaries, service_resource, service_employee, tenant_docs CASCADE;");
   await client.end();
 }
 
@@ -53,6 +52,7 @@ Deno.test({
     assertEquals(employees[0].name, "Bob");
     assertEquals(employees[0].skills, ["tire_alignment", "oil_change"]);
     assertEquals(employees[0].is_active, true);
+    await repo.close();
   },
 });
 
@@ -93,6 +93,7 @@ Deno.test({
     await repo.deleteEmployee(tenantId, employeeId, baseLogger);
     const afterDelete = await repo.getEmployees(tenantId, baseLogger);
     assertEquals(afterDelete.length, 0);
+    await repo.close();
   },
 });
 
@@ -120,8 +121,8 @@ Deno.test({
     await client.end();
 
     const repo = new PostgresRepository();
-    await repo.assignEmployeeToService(serviceId, employeeId, baseLogger);
-    await repo.assignResourceToService(serviceId, resourceId, baseLogger);
+    await repo.assignEmployeeToService(serviceId, employeeId, tenantId, baseLogger);
+    await repo.assignResourceToService(serviceId, resourceId, tenantId, baseLogger);
 
     const serviceEmployees = await repo.getServiceEmployees(serviceId, baseLogger);
     assertEquals(serviceEmployees, [employeeId]);
@@ -134,5 +135,6 @@ Deno.test({
     assertEquals(afterEmp, []);
     const afterRes = await repo.getServiceResources(serviceId, baseLogger);
     assertEquals(afterRes, []);
+    await repo.close();
   },
 });

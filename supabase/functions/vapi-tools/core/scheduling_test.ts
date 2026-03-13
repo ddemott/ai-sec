@@ -36,8 +36,13 @@ Deno.test("Scheduling selector (Deno) – auto shop alignment requires bay + ski
   ];
 
   const employees: EmployeeCandidate[] = [
-    { id: "john", skills: ["oil-change"], onShift: true },
-    { id: "rick", skills: ["alignment", "oil-change"], onShift: true },
+    { id: "101", skills: ["oil-change"] },
+    { id: "102", skills: ["alignment", "oil-change"] },
+  ];
+
+  const shifts = [
+    { employee_id: 101, day_of_week: 4, start_time: "08:00", end_time: "18:00" }, // Thursday
+    { employee_id: 102, day_of_week: 4, start_time: "08:00", end_time: "18:00" },
   ];
 
   const result = selectAssignments({
@@ -46,12 +51,13 @@ Deno.test("Scheduling selector (Deno) – auto shop alignment requires bay + ski
       requiredResourceCapabilities: ["alignment"],
       requiredEmployeeSkills: ["alignment"],
     },
-    window: window("2026-10-01T10:00:00Z", "2026-10-01T11:00:00Z"),
+    window: window("2026-10-01T10:00:00Z", "2026-10-01T11:00:00Z"), // Thursday
     resources,
     employees,
+    shifts,
   });
 
-  assertEquals(result, [{ resourceId: "bay4", employeeId: "rick" }]);
+  assertEquals(result, [{ resourceId: "bay4", employeeId: "102" }]);
 });
 
 Deno.test("Scheduling selector (Deno) – no options when bay busy", () => {
@@ -60,7 +66,11 @@ Deno.test("Scheduling selector (Deno) – no options when bay busy", () => {
   ];
 
   const employees: EmployeeCandidate[] = [
-    { id: "rick", skills: ["alignment"], onShift: true },
+    { id: "102", skills: ["alignment"] },
+  ];
+
+  const shifts = [
+    { employee_id: 102, day_of_week: 4, start_time: "08:00", end_time: "18:00" },
   ];
 
   const existing: ExistingAppointment[] = [
@@ -76,6 +86,7 @@ Deno.test("Scheduling selector (Deno) – no options when bay busy", () => {
     window: window("2026-10-01T10:00:00Z", "2026-10-01T11:00:00Z"),
     resources,
     employees,
+    shifts,
     existingAppointments: existing,
   });
 

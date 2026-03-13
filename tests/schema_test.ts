@@ -6,10 +6,18 @@ const sql = postgres(DB_URL);
 
 // Helper to clear the DB before tests
 async function clearDB() {
-    await sql`TRUNCATE tenants, resources, customers, appointments, call_summaries CASCADE;`;
+    await sql`TRUNCATE tenants, resources, customers, appointments, call_summaries, service_resource, service_employee, tenant_docs CASCADE;`;
+}
+
+// Drop old signatures to avoid "not unique" errors
+async function dropOldFunctions() {
+    await sql`DROP FUNCTION IF EXISTS book_appointment_atomic(UUID, UUID, UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT);`;
+    await sql`DROP FUNCTION IF EXISTS book_appointment_atomic(UUID, UUID, UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT);`;
+    await sql`DROP FUNCTION IF EXISTS book_appointment_atomic(UUID, UUID, UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, INTEGER);`;
 }
 
 Deno.test("TDD: Schema and Atomic Booking", async (t) => {
+    await dropOldFunctions();
     await clearDB();
 
     // 1. Setup Test Data
@@ -44,6 +52,7 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${endTime}, 
                 'Flat tire repair', 
                 'call_001',
+                NULL,
                 NULL
             );
         `;
@@ -66,17 +75,20 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${endTime}, 
                 'Overlapping appointment', 
                 'call_002',
+                NULL,
                 NULL
             );
         `;
 
         assertEquals(result[0].success, false);
         assertEquals(result[0].appointment_id, null);
-        assertEquals(result[0].error_message, "Slot already booked");
+        assertEquals(result[0].error_message, "Resource slot already booked");
     });
 
     await t.step("Should reject overlapping slots on the same resource", async () => {
-        const startTime = new Date("2026-03-01T11:00:00Z"); // Immediately after prior 10:00-11:00 service window
+        // Our RPC now uses < and > for overlap, so 11:00-12:00 DOES NOT overlap with 10:00-11:00.
+        // To test overlap, we use 10:59.
+        const startTime = new Date("2026-03-01T10:59:00Z");
         const endTime = new Date("2026-03-01T12:00:00Z");
 
         const result = await sql`
@@ -86,19 +98,19 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${customer.id}, 
                 ${startTime}, 
                 ${endTime}, 
-                'Back-to-back appointment (should fail due to overlap)', 
+                'Overlapping appointment (should fail)', 
                 'call_003',
+                NULL,
                 NULL
             );
         `;
 
         assertEquals(result[0].success, false);
         assertEquals(result[0].appointment_id, null);
-        assertEquals(result[0].error_message, "Slot already booked");
+        assertEquals(result[0].error_message, "Resource slot already booked");
     });
 
     await t.step("Should allow non-overlapping booking on the same resource", async () => {
-        // Leave a true gap after the 10:00-11:00 appointment so windows do not overlap
         const startTime = new Date("2026-03-01T12:00:00Z");
         const endTime = new Date("2026-03-01T13:00:00Z");
 
@@ -111,6 +123,7 @@ Deno.test("TDD: Schema and Atomic Booking", async (t) => {
                 ${endTime}, 
                 'Properly spaced appointment (no overlap)', 
                 'call_004',
+                NULL,
                 NULL
             );
         `;

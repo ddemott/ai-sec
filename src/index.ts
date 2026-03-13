@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import pdfParse from 'pdf-parse';
 import { Pool } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,6 +11,37 @@ import { ConsoleNotificationProvider } from './providers/consoleNotificationProv
 import { BookingService } from './services/bookingService';
 import { MockLlmProvider } from './services/mockLlmProvider';
 import type { TimeWindow } from './core/models';
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+
+/**
+ * Helper to generate embeddings via OpenAI
+ */
+async function getEmbedding(text: string): Promise<number[]> {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured in environment');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      input: text.replace(/\n/g, ' '),
+      model: 'text-embedding-3-small',
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`OpenAI Embedding Error: ${JSON.stringify(error)}`);
+  }
+
+  const result = await response.json() as any;
+  return result.data[0].embedding;
+}
 
 const useHttps = process.env.NODE_ENV !== 'production';
 
@@ -46,6 +79,13 @@ app.addHook('onRequest', async (request, reply) => {
 app.register(cors, {
   origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+});
+
+// Register Multipart for file uploads
+app.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
 });
 
 // Database Connection
@@ -511,26 +551,29 @@ app.post('/tenants/:id/update-attributes', async (req, reply) => {
     const client = await pool.connect();
     try {
         await client.query(
-            `UPDATE tenants SET 
-                name = $1, 
-                business_type = $2, 
-                timezone = $3, 
-                voice_id = $4, 
-                system_prompt = $5, 
+            `UPDATE tenants SET
+                name = $1,
+                business_type = $2,
+                timezone = $3,
+                voice_id = $4,
+                system_prompt = $5,
                 first_message = $6,
-                owner_phone = $7
-             WHERE id = $8`,
+                owner_phone = $7,
+                inbound_phone = $8
+             WHERE id = $9`,
             [
-                body.name, 
-                body.business_type, 
-                body.timezone, 
-                body.voice_id, 
-                body.system_prompt, 
+                body.name,
+                body.business_type,
+                body.timezone,
+                body.voice_id,
+                body.system_prompt,
                 body.first_message,
                 body.owner_phone,
+                body.inbound_phone,
                 id
             ]
         );
+
         return reply.send({ success: true });
     } catch (err) {
         app.log.error(err);
@@ -601,6 +644,156 @@ app.post('/employees/:id/update', async (req, reply) => {
     }
 });
 
+// --- Shift Management ---
+app.get('/shifts', async (req, reply) => {
+  const tenantId = (req.query as any).tenant_id;
+  const client = await pool.connect();
+  try {
+    const res = await client.query('SELECT * FROM employee_shifts WHERE tenant_id = $1 ORDER BY day_of_week, start_time', [tenantId]);
+    return reply.send(res.rows);
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to fetch shifts' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/shifts/create', async (req, reply) => {
+  const body = req.body as { tenant_id: string; employee_id: number; day_of_week: number; start_time: string; end_time: string };
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      'INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [body.tenant_id, body.employee_id, body.day_of_week, body.start_time, body.end_time]
+    );
+    return reply.send({ success: true, shift: res.rows[0] });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to create shift' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/shifts/:id', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const tenantId = (req.query as any).tenant_id;
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    return reply.send({ success: true });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to delete shift' });
+  } finally {
+    client.release();
+  }
+});
+
+// --- Calendar Settings ---
+app.get('/calendar/settings', async (req, reply) => {
+  const tenantId = (req.query as any).tenant_id;
+  const client = await pool.connect();
+  try {
+    const res = await client.query('SELECT * FROM tenant_calendar_settings WHERE tenant_id = $1', [tenantId]);
+    return reply.send(res.rows[0] || null);
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to fetch calendar settings' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/calendar/settings', async (req, reply) => {
+  const body = req.body as any;
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      `INSERT INTO tenant_calendar_settings (tenant_id, provider, external_calendar_id, is_active)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (tenant_id) 
+       DO UPDATE SET provider = $2, external_calendar_id = $3, is_active = true, updated_at = NOW()
+       RETURNING *`,
+      [body.tenant_id, body.provider, body.external_calendar_id]
+    );
+    return reply.send({ success: true, settings: res.rows[0] });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to update calendar settings' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/calendar/settings/disconnect', async (req, reply) => {
+  const { tenant_id } = req.body as any;
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM tenant_calendar_settings WHERE tenant_id = $1', [tenant_id]);
+    return reply.send({ success: true });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to disconnect calendar' });
+  } finally {
+    client.release();
+  }
+});
+
+// --- Analytics ---
+app.post('/analytics/stats', async (req, reply) => {
+  // Existing analytics logic...
+});
+
+// --- Master Skills Management ---
+app.get('/skills', async (req, reply) => {
+  const tenantId = (req.query as any).tenant_id;
+  const client = await pool.connect();
+  try {
+    const res = await client.query('SELECT * FROM tenant_skills WHERE tenant_id = $1 ORDER BY name', [tenantId]);
+    return reply.send(res.rows);
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to fetch master skills' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/skills/create', async (req, reply) => {
+  const body = req.body as { tenant_id: string; name: string; description?: string };
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      'INSERT INTO tenant_skills (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING *',
+      [body.tenant_id, body.name.toLowerCase().trim().replace(/\s+/g, '-'), body.description]
+    );
+    return reply.send({ success: true, skill: res.rows[0] });
+  } catch (err: any) {
+    if (err.code === '23505') return reply.status(400).send({ error: 'Skill already exists' });
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to create skill' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/skills/:id', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const tenantId = (req.query as any).tenant_id;
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM tenant_skills WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    return reply.send({ success: true });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to delete skill' });
+  } finally {
+    client.release();
+  }
+});
+
 // --- Services Management ---
 app.get('/services', async (req, reply) => {
     const tenantId = (req.query as any).tenant_id;
@@ -611,6 +804,47 @@ app.get('/services', async (req, reply) => {
     } catch (err) {
         app.log.error(err);
         return reply.status(500).send({ error: 'Failed to fetch services' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/:id/update', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { name?: string; description?: string; duration_minutes?: number; price?: number };
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'UPDATE services SET name = COALESCE($1, name), description = COALESCE($2, description), duration_minutes = COALESCE($3, duration_minutes), price = COALESCE($4, price), updated_at = NOW() WHERE id = $5 RETURNING *',
+            [body.name, body.description, body.duration_minutes, body.price, id]
+        );
+        return reply.send({ success: true, service: res.rows[0] });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to update service' });
+    } finally {
+        client.release();
+    }
+});
+
+app.delete('/services/:id/delete', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const client = await pool.connect();
+    try {
+        // Check for active appointments or mappings
+        const mappings = await client.query(
+            'SELECT (SELECT count(*) FROM service_resource WHERE service_id = $1) + (SELECT count(*) FROM service_employee WHERE service_id = $1) as count', 
+            [id]
+        );
+        if (parseInt(mappings.rows[0].count) > 0) {
+            return reply.status(400).send({ error: 'Cannot delete: Service is still mapped to staff or resources. Unassign them first.' });
+        }
+        
+        await client.query('DELETE FROM services WHERE id = $1', [id]);
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to delete service' });
     } finally {
         client.release();
     }
@@ -634,6 +868,53 @@ app.post('/services/create', async (req, reply) => {
 });
 
 // --- Mappings ---
+// --- Mappings Management ---
+app.get('/mappings/service-resource', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM service_resource WHERE tenant_id = $1', [tenantId]);
+        return reply.send(res.rows);
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to fetch resource mappings' });
+    } finally {
+        client.release();
+    }
+});
+
+app.get('/mappings/service-employee', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM service_employee WHERE tenant_id = $1', [tenantId]);
+        return reply.send(res.rows);
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to fetch employee mappings' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/:serviceId/employees/:employeeId/unassign', async (req, reply) => {
+    const { serviceId, employeeId } = req.params as any;
+    const { tenant_id } = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'DELETE FROM service_employee WHERE service_id = $1 AND employee_id = $2 AND tenant_id = $3',
+            [serviceId, employeeId, tenant_id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to unassign employee' });
+    } finally {
+        client.release();
+    }
+});
+
 app.post('/services/:serviceId/employees/:employeeId/assign', async (req, reply) => {
     const { serviceId, employeeId } = req.params as any;
     const { tenant_id } = req.body as any;
@@ -647,6 +928,24 @@ app.post('/services/:serviceId/employees/:employeeId/assign', async (req, reply)
     } catch (err) {
         app.log.error(err);
         return reply.status(500).send({ error: 'Failed to assign employee to service' });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/services/:serviceId/resources/:resourceId/unassign', async (req, reply) => {
+    const { serviceId, resourceId } = req.params as any;
+    const { tenant_id } = req.body as any;
+    const client = await pool.connect();
+    try {
+        await client.query(
+            'DELETE FROM service_resource WHERE service_id = $1 AND resource_id = $2 AND tenant_id = $3',
+            [serviceId, resourceId, tenant_id]
+        );
+        return reply.send({ success: true });
+    } catch (err) {
+        app.log.error(err);
+        return reply.status(500).send({ error: 'Failed to unassign resource' });
     } finally {
         client.release();
     }
@@ -892,6 +1191,92 @@ app.post('/appointments/:id/update', async (req, reply) => {
     return reply.status(500).send({ error: 'Internal server error' });
   } finally {
     client.release();
+  }
+});
+
+// --- Knowledge Base (RAG) ---
+app.get('/knowledge', async (req, reply) => {
+  const tenantId = (req.query as any).tenant_id;
+  if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      'SELECT id, title, content, source, created_at FROM tenant_docs WHERE tenant_id = $1 ORDER BY created_at DESC',
+      [tenantId]
+    );
+    return reply.send(res.rows);
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to fetch knowledge base' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/knowledge/:id', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const tenantId = (req.query as any).tenant_id;
+  if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    return reply.send({ success: true });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to delete entry' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/knowledge/ingest', async (req, reply) => {
+  const data = await req.file();
+  if (!data) return reply.status(400).send({ error: 'No file uploaded' });
+
+  // Fields are stored in data.fields
+  const tenantId = (data.fields.tenant_id as any)?.value;
+  if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+  const buffer = await data.toBuffer();
+  const filename = data.filename;
+  let text = '';
+
+  try {
+    if (filename.toLowerCase().endsWith('.pdf')) {
+      let pdfData;
+      pdfData = await (pdfParse as any)(buffer);
+      text = pdfData.text;
+    } else {
+      text = buffer.toString('utf8');
+    }
+
+    if (!text || text.trim().length < 10) {
+      return reply.status(400).send({ error: 'No readable text found in file' });
+    }
+
+    // Chunking logic (simple split by double newlines)
+    const chunks = text.split('\n\n').filter(c => c.trim().length > 20);
+    
+    const client = await pool.connect();
+    try {
+      for (const chunk of chunks) {
+        const trimmedChunk = chunk.trim();
+        const embedding = await getEmbedding(trimmedChunk);
+        
+        await client.query(
+          'INSERT INTO tenant_docs (tenant_id, content, source, embedding) VALUES ($1, $2, $3, $4::vector)',
+          [tenantId, trimmedChunk, filename, JSON.stringify(embedding)]
+        );
+      }
+      return reply.send({ success: true, chunksIngested: chunks.length });
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    app.log.error(err);
+    return reply.status(500).send({ error: `Ingestion failed: ${err.message}` });
   }
 });
 

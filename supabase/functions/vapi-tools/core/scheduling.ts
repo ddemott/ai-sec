@@ -12,7 +12,13 @@ export interface ResourceCandidate {
 export interface EmployeeCandidate {
   id: string;
   skills: string[];
-  onShift: boolean;
+}
+
+export interface Shift {
+  employee_id: number;
+  day_of_week: number;
+  start_time: string; // "HH:MM"
+  end_time: string;   // "HH:MM"
 }
 
 export interface ExistingAppointment {
@@ -54,15 +60,35 @@ function isResourceFree(
   });
 }
 
+function isEmployeeOnShift(
+  employeeId: string,
+  window: TimeWindow,
+  shifts: Shift[],
+): boolean {
+  const day = window.from.getUTCDay();
+  // Format as HH:MM
+  const startStr = window.from.toISOString().substring(11, 16);
+  const endStr = window.to.toISOString().substring(11, 16);
+
+  return shifts.some((s) => {
+    if (s.employee_id.toString() !== employeeId) return false;
+    if (s.day_of_week !== day) return false;
+    // Window must be entirely within the shift
+    return s.start_time <= startStr && s.end_time >= endStr;
+  });
+}
+
 export function selectAssignments(args: {
   requirements: ServiceRequirements;
   window: TimeWindow;
   resources: ResourceCandidate[];
   employees?: EmployeeCandidate[];
+  shifts?: Shift[];
   existingAppointments?: ExistingAppointment[];
 }): AssignmentOption[] {
   const { requirements, window } = args;
   const employees = args.employees ?? [];
+  const shifts = args.shifts ?? [];
   const existing = args.existingAppointments ?? [];
 
   const resourceMatches = args.resources.filter((r) => {
@@ -79,7 +105,7 @@ export function selectAssignments(args: {
   if (needEmployee) {
     for (const r of resourceMatches) {
       for (const e of employees) {
-        if (!e.onShift) continue;
+        if (!isEmployeeOnShift(e.id, window, shifts)) continue;
         if (!hasAll(e.skills, requirements.requiredEmployeeSkills)) continue;
         options.push({ resourceId: r.id, employeeId: e.id });
       }

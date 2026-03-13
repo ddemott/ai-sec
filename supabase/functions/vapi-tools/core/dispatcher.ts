@@ -9,9 +9,11 @@ export type MessageHandler = (message: any, logger: Logger) => Promise<Response>
 export class Dispatcher {
   private handlers: Map<string, MessageHandler> = new Map();
   private service: AISecretaryService;
+  private getEmbedding: (text: string) => Promise<number[]>;
 
-  constructor(service: AISecretaryService) {
+  constructor(service: AISecretaryService, getEmbedding: (text: string) => Promise<number[]>) {
     this.service = service;
+    this.getEmbedding = getEmbedding;
     this.registerDefaults();
   }
 
@@ -49,9 +51,16 @@ export class Dispatcher {
 
     let response;
     switch (name) {
-      case "get_customer_context":
-        response = await this.service.getCustomerContext(args.phone, args.tenant_id, toolLogger);
+      case "get_customer_context": {
+        const inboundPhone = message.call?.phoneNumber;
+        response = await this.service.getCustomerContextWithRouting(
+          args.phone,
+          toolLogger,
+          inboundPhone,
+          args.tenant_id
+        );
         break;
+      }
       case "check_availability":
         response = await this.service.checkAvailability(args.tenant_id, args.resource_id, args.start_time, args.end_time, toolLogger);
         break;
@@ -94,6 +103,14 @@ export class Dispatcher {
         );
         break;
       }
+      case "get_company_policy_answer":
+        response = await this.service.getCompanyPolicyAnswer(
+          args.tenant_id,
+          args.question,
+          toolLogger,
+          this.getEmbedding
+        );
+        break;
       default:
         return new Response(JSON.stringify({ error: `Unknown tool: ${name}` }), { status: 400 });
     }

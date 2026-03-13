@@ -154,8 +154,8 @@ export const Api = {
     update: (id: number, data: any) => 
       apiMutate<any>(`/employees/${id}/update`, 'POST', data),
     
-    delete: (id: number) => 
-      apiMutate<any>(`/employees/${id}/delete`, 'DELETE'),
+    delete: (id: number, tenantId: string | null) => 
+      apiMutate<any>(`/employees/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
   },
 
   // --- MAPPINGS ---
@@ -168,15 +168,75 @@ export const Api = {
     
     unassignServiceResource: (serviceId: number, resourceId: string, tenantId: string | null) => 
       apiMutate<any>(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', { tenant_id: tenantId }),
+
+    assignServiceEmployee: (serviceId: number, employeeId: string | number, tenantId: string | null) => 
+      apiMutate<any>(`/services/${serviceId}/employees/${employeeId}/assign`, 'POST', { tenant_id: tenantId }),
+    
+    unassignServiceEmployee: (serviceId: number, employeeId: string | number, tenantId: string | null) => 
+      apiMutate<any>(`/services/${serviceId}/employees/${employeeId}/unassign`, 'POST', { tenant_id: tenantId }),
+
+    listServiceEmployee: (tenantId: string | null) => 
+      apiFetch<any[]>(`/mappings/service-employee`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- SERVICES ---
   services: {
     list: (tenantId: string | null) => 
       apiFetch<any[]>(`/services`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    create: (tenantId: string | null, data: any) =>
+      apiMutate<any>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    update: (id: number, tenantId: string | null, data: any) =>
+      apiMutate<any>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
+
+    delete: (id: number, tenantId: string | null) =>
+      apiMutate<any>(`/services/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
   },
 
-  // --- TENANTS & TEMPLATES ---
+    // --- SHIFTS ---
+    shifts: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/shifts`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    create: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/shifts/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    delete: (id: number, tenantId: string | null) => 
+      apiMutate<any>(`/shifts/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
+    },
+
+    // --- CALENDAR SYNC ---
+    calendar: {
+    getSettings: (tenantId: string | null) => 
+      apiFetch<any>(`/calendar/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    updateSettings: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/calendar/settings`, 'POST', { tenant_id: tenantId, ...data }),
+
+    disconnect: (tenantId: string | null) => 
+      apiMutate<any>(`/calendar/settings/disconnect`, 'POST', { tenant_id: tenantId }),
+    },
+
+    // --- ANALYTICS ---
+    analytics: {
+    getStats: (tenantId: string | null) => 
+      apiFetch<any>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
+    },
+
+    // --- MASTER SKILLS ---
+    skills: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/skills`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    create: (tenantId: string | null, data: any) => 
+      apiMutate<any>(`/skills/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    delete: (id: number, tenantId: string | null) => 
+      apiMutate<any>(`/skills/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
+    },
+
+    // --- TENANTS & TEMPLATES ---
   tenants: {
     list: () => apiFetch<any[]>(`/tenants`),
     getConfig: (tenantId: string | null) => apiFetch<any>(`/tenants/${tenantId}/config`),
@@ -189,5 +249,27 @@ export const Api = {
   templates: {
     list: () => apiFetch<any[]>(`/templates`),
     listFull: () => apiFetch<any[]>(`/templates/full`),
+  },
+
+  // --- KNOWLEDGE BASE (RAG) ---
+  knowledge: {
+    list: (tenantId: string | null) => 
+      apiFetch<any[]>(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
+    
+    delete: (id: string, tenantId: string | null) => 
+      apiMutate<any>(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
+    
+    ingest: async (tenantId: string | null, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (tenantId) formData.append('tenant_id', tenantId);
+
+      const response = await fetch(`${API_BASE_URL}/knowledge/ingest`, {
+        method: 'POST',
+        body: formData, // No JSON headers for multipart/form-data
+      });
+
+      return response.json();
+    }
   }
 };

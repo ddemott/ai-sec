@@ -131,6 +131,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 4. Update book_appointment_atomic to handle polymorphic assignment
+-- Drop old signatures to avoid "not unique" errors
+DROP FUNCTION IF EXISTS book_appointment_atomic(UUID, UUID, UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT);
+DROP FUNCTION IF EXISTS book_appointment_atomic(UUID, UUID, UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS book_appointment_atomic(UUID, UUID, UUID, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, INTEGER);
+
 CREATE OR REPLACE FUNCTION book_appointment_atomic(
     p_tenant_id UUID,
     p_resource_id UUID,

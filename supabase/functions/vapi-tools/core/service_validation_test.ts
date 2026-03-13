@@ -6,33 +6,37 @@ import { ValidationError } from "./errors.ts";
 import { baseLogger } from "./logger.ts";
 
 class FakeRepo implements IRepository {
-  ping(): Promise<void> {
-    return Promise.resolve();
-  }
+  ping(): Promise<void> { return Promise.resolve(); }
+  findCustomerByPhone(): Promise<any> { return Promise.resolve(null); }
+  createCustomer(): Promise<string> { return Promise.resolve("fake-customer-id"); }
+  getRecentSummaries(): Promise<any[]> { return Promise.resolve([]); }
+  checkOverlap(): Promise<boolean> { return Promise.resolve(false); }
+  bookAtomic(): Promise<any> { return Promise.resolve({ success: true, appointment_id: "appt-1", error_message: "" }); }
+  setLogger(): void {}
+  close(): Promise<void> { return Promise.resolve(); }
 
-  findCustomerByPhone(): Promise<{ id: string; name: string } | null> {
-    return Promise.resolve(null);
-  }
+  createEmployee(): Promise<number> { return Promise.resolve(1); }
+  updateEmployee(): Promise<boolean> { return Promise.resolve(true); }
+  deleteEmployee(): Promise<boolean> { return Promise.resolve(true); }
+  getEmployees(): Promise<any[]> { return Promise.resolve([]); }
+  getEmployeeShifts(): Promise<any[]> { return Promise.resolve([]); }
+  
+  createService(): Promise<number> { return Promise.resolve(1); }
+  updateService(): Promise<boolean> { return Promise.resolve(true); }
+  deleteService(): Promise<boolean> { return Promise.resolve(true); }
+  getServices(): Promise<any[]> { return Promise.resolve([]); }
 
-  createCustomer(): Promise<string> {
-    return Promise.resolve("fake-customer-id");
-  }
+  assignEmployeeToService(): Promise<boolean> { return Promise.resolve(true); }
+  assignResourceToService(): Promise<boolean> { return Promise.resolve(true); }
+  removeEmployeeFromService(): Promise<boolean> { return Promise.resolve(true); }
+  removeResourceFromService(): Promise<boolean> { return Promise.resolve(true); }
+  getServiceEmployees(): Promise<number[]> { return Promise.resolve([]); }
+  getServiceResources(): Promise<string[]> { return Promise.resolve([]); }
+  searchKnowledgeBase(): Promise<any[]> { return Promise.resolve([]); }
 
-  getRecentSummaries(): Promise<Array<{ summary: string; created_at: string }>> {
-    return Promise.resolve([]);
-  }
-
-  checkOverlap(): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-
-  bookAtomic(): Promise<{ success: boolean; appointment_id: string; error_message: string }> {
-    return Promise.resolve({ success: true, appointment_id: "appt-1", error_message: "" });
-  }
-
-  setLogger(): void {
-    // no-op for tests
-  }
+  getSchedulingResources(): Promise<any[]> { return Promise.resolve([]); }
+  getSchedulingEmployees(): Promise<any[]> { return Promise.resolve([]); }
+  getExistingAppointments(): Promise<any[]> { return Promise.resolve([]); }
 }
 
 Deno.test({

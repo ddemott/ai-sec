@@ -36,9 +36,16 @@ echo "[ai-sec] 🚀 Starting full stack..."
 if command -v docker-compose >/dev/null 2>&1 || docker compose version >/dev/null 2>&1; then
   echo "[ai-sec] 🐘 Ensuring Local Postgres is running..."
   docker compose up -d
-  
+
+  # Find the actual container name for Postgres
+  POSTGRES_CONTAINER=$(docker ps -a --format '{{.Names}}' | grep ai-sec-db | head -n 1)
+  if [ -z "$POSTGRES_CONTAINER" ]; then
+    echo "[ai-sec] ❌ Could not find Postgres container."
+    exit 1
+  fi
+
   echo "[ai-sec] ⏳ Waiting for Postgres to be healthy..."
-  until [ "$(docker inspect -f '{{.State.Health.Status}}' ai-sec-db)" == "healthy" ]; do
+  until [ "$(docker inspect -f '{{.State.Health.Status}}' $POSTGRES_CONTAINER)" == "healthy" ]; do
     sleep 1
   done
   echo "[ai-sec] ✅ Postgres is ready."

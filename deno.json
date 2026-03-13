@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "test": "deno test --allow-net --allow-env --allow-read --allow-sys supabase/functions/vapi-tools/core/scheduling_test.ts supabase/functions/vapi-tools/service_test.ts supabase/functions/vapi-tools/integration_test.ts tests/schema_test.ts tests/template_test.ts",
+    "test": "deno test --allow-net --allow-env --allow-read --allow-sys supabase/functions/vapi-tools/ tests/",
     "test:unit": "deno test --allow-env --allow-read --allow-sys supabase/functions/vapi-tools/core/scheduling_test.ts supabase/functions/vapi-tools/core/service_validation_test.ts supabase/functions/vapi-tools/core/service_scheduling_test.ts supabase/functions/vapi-tools/core/service_scheduling_booking_test.ts supabase/functions/vapi-tools/core/dispatcher_scheduling_test.ts supabase/functions/vapi-tools/core/dispatcher_booking_test.ts"
   },
   "imports": {

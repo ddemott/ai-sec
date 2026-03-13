@@ -13,10 +13,16 @@ import {
   Sun,
   Moon,
   Wrench,
-  ShieldCheck
+  ShieldCheck,
+  LayoutGrid,
+  BookOpen,
+  Clock,
+  Award,
+  ChevronRight
 } from 'lucide-react'
+import { Api } from '../lib/api'
 
-type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources' | 'service-catalog' | 'staff';
+type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources' | 'service-catalog' | 'staff' | 'skill-matrix' | 'knowledge-base' | 'staff-shifts';
 
 interface LayoutProps {
   children: ReactNode;
@@ -25,11 +31,25 @@ interface LayoutProps {
   onLogout?: () => void;
   userName?: string | null;
   isAdmin?: boolean;
+  managedTenantName?: string | null;
+  managedTenantId?: string | null;
+  onSelectTenant?: (id: string, name: string) => void;
 }
 
-export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, userName, isAdmin }: LayoutProps) {
+export function OutlookLayout({ 
+  children, 
+  activeTab, 
+  setActiveTab, 
+  onLogout, 
+  userName, 
+  isAdmin, 
+  managedTenantName,
+  managedTenantId,
+  onSelectTenant
+}: LayoutProps) {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [allTenants, setAllTenants] = useState<any[]>([])
 
   useEffect(() => {
     // Initial load
@@ -54,6 +74,12 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
     }
   }, [isDarkMode, mounted])
 
+  useEffect(() => {
+    if (isAdmin) {
+      Api.tenants.list().then(data => setAllTenants(Array.isArray(data) ? data : []))
+    }
+  }, [isAdmin])
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode)
   }
@@ -67,7 +93,7 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
           <Calendar className="text-white w-6 h-6" />
         </div>
         
-        <nav className="flex flex-col space-y-4 flex-1 text-gray-900 dark:text-gray-100">
+        <nav className="flex flex-col space-y-4 flex-1 text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar">
           {isAdmin && (
             <button 
               title="All Businesses"
@@ -94,11 +120,35 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
           </button>
 
           <button 
-            title="Staff & Skills"
+            title="Skill Matrix"
+            onClick={() => setActiveTab('skill-matrix')}
+            className={`p-3 rounded-md transition-all ${activeTab === 'skill-matrix' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <LayoutGrid className="w-6 h-6" />
+          </button>
+
+          <button 
+            title="Knowledge Base"
+            onClick={() => setActiveTab('knowledge-base')}
+            className={`p-3 rounded-md transition-all ${activeTab === 'knowledge-base' ? 'bg-white dark:bg-[#333] shadow-sm text-orange-600 dark:text-orange-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <BookOpen className="w-6 h-6" />
+          </button>
+
+          <button 
+            title="Staff Management"
             onClick={() => setActiveTab('staff')}
             className={`p-3 rounded-md transition-all ${activeTab === 'staff' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
             <ShieldCheck className="w-6 h-6" />
+          </button>
+
+          <button 
+            title="Staff Shifts"
+            onClick={() => setActiveTab('staff-shifts')}
+            className={`p-3 rounded-md transition-all ${activeTab === 'staff-shifts' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <Clock className="w-6 h-6" />
           </button>
 
           <button 
@@ -168,8 +218,50 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
       </aside>
 
       {/* 2. DYNAMIC CONTENT AREA */}
-      <div className="flex flex-1 overflow-hidden bg-white dark:bg-[#111] transition-colors duration-200">
-        {children}
+      <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-[#111] transition-colors duration-200">
+        {isAdmin && managedTenantName && (
+          <header className="bg-blue-600 text-white px-6 py-2 flex items-center justify-between shadow-sm shrink-0">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Admin Mode</span>
+              <span className="mx-2 opacity-30">|</span>
+              
+              {/* Quick Switcher */}
+              <div className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-lg border border-white/10 hover:bg-white/20 transition-all cursor-pointer group relative">
+                <span className="text-sm font-bold truncate max-w-[200px]">{managedTenantName}</span>
+                <ChevronRight className="w-3 h-3 rotate-90 opacity-50 group-hover:opacity-100 transition-all" />
+                
+                {/* Hidden hover dropdown */}
+                <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-[#222] text-gray-900 dark:text-gray-100 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 hidden group-hover:block z-[100] animate-in fade-in slide-in-from-top-1 overflow-hidden">
+                  <div className="p-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a] text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    Switch Active Business
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {allTenants.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => onSelectTenant && onSelectTenant(t.id, t.name)}
+                        className={`w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex flex-col transition-colors border-b border-gray-50 dark:border-gray-800/50 ${managedTenantId === t.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                      >
+                        <span className="text-sm font-bold">{t.name}</span>
+                        <span className="text-[10px] opacity-50 uppercase tracking-tighter">{t.business_type}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setActiveTab('all-businesses')}
+              className="text-[10px] font-bold uppercase tracking-widest bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all"
+            >
+              Configure Businesses
+            </button>
+          </header>
+        )}
+        <div className="flex-1 flex overflow-hidden">
+          {children}
+        </div>
       </div>
 
       {/* 3. BOTTOM NAVIGATION (Mobile Only) */}
@@ -182,25 +274,25 @@ export function OutlookLayout({ children, activeTab, setActiveTab, onLogout, use
           <span className="text-[10px] mt-1 font-medium">Schedule</span>
         </button>
         <button 
-          onClick={() => setActiveTab('crm')}
-          className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'crm' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+          onClick={() => setActiveTab('skill-matrix')}
+          className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'skill-matrix' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
         >
-          <Users className="w-5 h-5" />
-          <span className="text-[10px] mt-1 font-medium">People</span>
+          <LayoutGrid className="w-5 h-5" />
+          <span className="text-[10px] mt-1 font-medium">Skills</span>
         </button>
         <button 
-          onClick={() => setActiveTab('ai-tuning')}
-          className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'ai-tuning' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+          onClick={() => setActiveTab('staff-shifts')}
+          className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'staff-shifts' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
         >
-          <Bot className="w-5 h-5" />
-          <span className="text-[10px] mt-1 font-medium">Tuning</span>
+          <Clock className="w-5 h-5" />
+          <span className="text-[10px] mt-1 font-medium">Shifts</span>
         </button>
         <button 
-          onClick={toggleDarkMode}
-          className="flex-1 flex flex-col items-center justify-center text-gray-500"
+          onClick={() => setActiveTab('knowledge-base')}
+          className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'knowledge-base' ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}
         >
-          {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
-          <span className="text-[10px] mt-1 font-medium">{isDarkMode ? 'Light' : 'Dark'}</span>
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[10px] mt-1 font-medium">Knowledge</span>
         </button>
         <button 
           onClick={onLogout}

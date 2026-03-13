@@ -10,6 +10,36 @@ export class AISecretaryService {
     this.repo = repo;
   }
 
+  /**
+   * Enhanced context lookup that detects the tenant based on the inbound phone number
+   * if tenantId is not provided.
+   */
+  async getCustomerContextWithRouting(
+    phone: string, 
+    logger: Logger, 
+    inboundPhone?: string, 
+    explicitTenantId?: string
+  ) {
+    let tenantId = explicitTenantId;
+
+    // 1. Route based on phone number if tenantId isn't known
+    if (!tenantId && inboundPhone) {
+      const tenant = await this.repo.findTenantByPhone(inboundPhone, logger);
+      if (tenant) {
+        tenantId = tenant.id;
+        logger.info({ tenantId, tenantName: tenant.name }, "Auto-routed call to tenant");
+      }
+    }
+
+    if (!tenantId) {
+      logger.error({ inboundPhone }, "Could not resolve tenant for call");
+      return { result: "Service temporarily unavailable. Please try again later." };
+    }
+
+    // 2. Proceed with normal context lookup
+    return this.getCustomerContext(phone, tenantId, logger);
+  }
+
   async getCustomerContext(phone: string, tenantId: string, logger: Logger) {
     logger.info({ phone, tenantId }, "Getting customer context");
     const customer = await this.repo.findCustomerByPhone(tenantId, phone, logger);
@@ -61,9 +91,10 @@ export class AISecretaryService {
   ): Promise<{ result: { options: AssignmentOption[] } }> {
     logger.info({ tenantId, requirements, window }, "Computing scheduling options");
 
-    const [resources, employees, existing] = await Promise.all([
+    const [resources, employees, shifts, existing] = await Promise.all([
       this.repo.getSchedulingResources(tenantId, logger),
       this.repo.getSchedulingEmployees(tenantId, logger),
+      this.repo.getEmployeeShifts(tenantId, logger),
       this.repo.getExistingAppointments(tenantId, window, logger),
     ]);
 
@@ -72,6 +103,7 @@ export class AISecretaryService {
       window,
       resources,
       employees,
+      shifts,
       existingAppointments: existing,
     });
 
@@ -176,5 +208,36 @@ export class AISecretaryService {
 
     logger.info({ appointmentId: bookingResult.appointment_id }, "Selector booking successful");
     return { result: { ...bookingResult, option: chosen } };
+  }
+
+  /**
+   * Performs semantic search to answer business policy/FAQ questions.
+   */
+  async getCompanyPolicyAnswer(
+    tenantId: string, 
+    question: string, 
+    logger: Logger,
+    getEmbedding: (text: string) => Promise<number[]>
+  ) {
+    logger.info({ tenantId, question }, "Answering company policy question");
+
+    // 1. Generate embedding for the question
+    const embedding = await getEmbedding(question);
+
+    // 2. Search knowledge base
+    const matches = await this.repo.searchKnowledgeBase(tenantId, embedding, logger);
+
+    if (matches.length === 0) {
+      logger.info("No knowledge base matches found");
+      return { 
+        result: "I'm sorry, I don't have information on that specific topic. Let me check with the team for you." 
+      };
+    }
+
+    // 3. Combine results into a context string for the LLM
+    const context = matches.map(m => m.content).join("\n\n---\n\n");
+    logger.info({ matchCount: matches.length }, "Knowledge base search successful");
+
+    return { result: context };
   }
 }

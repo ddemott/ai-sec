@@ -6,118 +6,68 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## What This System Does
 
-- Answers inbound calls for appointment-driven businesses (e.g., mobile tire, salons, auto shops).
-- Speaks with a low-latency, human-like voice via a voice AI orchestrator (Vapi).
-- Books, reschedules, and cancels appointments in an internal calendar.
-- Maintains per-tenant CRM and call history so the AI can "remember" callers.
-- Exposes a multi-tenant dashboard for owners and a SuperAdmin.
+- **Voice AI Reception**: Answers inbound calls with a low-latency, human-like voice (Vapi).
+- **Grounding (RAG)**: Answers business-specific questions using a Knowledge Base built from uploaded PDFs.
+- **Atomic Booking**: Checks availability and books appointments instantly while respecting staff shifts and expertise.
+- **Performance Analytics**: Tracks call volume, booking conversion, and estimated revenue.
+- **Multi-Tenant Dashboard**: Provides owners with a control center for staff, resources, and AI settings.
 
 ---
 
+## Main Components & Verification
 
-## Main Components & Test Coverage
-
-- **All tests pass:** backend, dashboard, edge logic. AppointmentView and dashboard calendar logic are fully verified.
-- **Postgres (Supabase)** – Single source of truth for:
-  - Tenants, resources (bays/trucks/chairs), customers, appointments.
-  - Call summaries (for memory) and audit tables.
-  - Row-Level Security (RLS) enforces tenant isolation.
-- **Supabase Edge Function – `vapi-tools`**
-  - Deno function that receives **Vapi tool calls** (HTTP POST with `x-vapi-secret`).
-  - Dispatches to `AISecretaryService` methods:
-    - `getCustomerContext` – look up customer + recent summaries.
-    - `checkAvailability` – overlap checks for a resource/time window.
-    - `bookAppointment` – atomic booking via Postgres RPC.
-  - Uses a `PostgresRepository` to talk to the DB with tenant context set.
-- **Fastify Backend (Helper API)**
-  - Lives in `src/index.ts`.
-  - Provides:
-    - `/login` – authenticates against `authenticate_user(...)` in Postgres and returns `tenant_id`/`user_id`.
-    - `/tenants`, `/tenants/create`, `/tenants/:id` – SuperAdmin tenant management.
-    - `/appointments` and related admin endpoints.
-  - Used primarily by the dashboard; does **not** handle live calls.
-- **Dashboard (Next.js, `dashboard/`)**
-  - Multi-tenant management UI for owners and SuperAdmin.
-  - Key views:
-    - Appointment calendar + editor (with confirmation modal and multi-resource support).
-    - CRM/customer detail view.
-    - Settings (AI persona, business metadata, resources).
-    - SuperAdmin launchpad to create/delete tenants from templates.
-  - Talks to the Fastify backend, which in turn talks to the same Postgres DB.
-- **Async / Background (n8n)**
-  - Handles latency-tolerant work:
-    - Post-call summarization + embeddings into `call_summaries`.
-    - Planned: calendar sync (Google/Outlook), owner SMS notifications, tenant knowledge ingestion.
+- **100% Test Pass Rate**: All core logic is verified across Vitest (UI) and Deno (Backend).
+- **Postgres (Supabase)**: Single source of truth with Row-Level Security (RLS) for tenant isolation.
+- **Supabase Edge Function (`vapi-tools`)**:
+  - `getCustomerContext` – CRM history lookup.
+  - `checkAvailability` – Multi-resource overlap checks.
+  - `bookAppointment` – Shift-aware atomic booking.
+  - `getCompanyPolicyAnswer` – Semantic search over business docs.
+- **Fastify Backend (Helper API)**: Handles administrative tasks, document ingestion, and analytics.
+- **Dashboard (Next.js)**: 
+  - **Knowledge Base**: PDF/Text upload for RAG training.
+  - **Shift Manager**: Employee working hours and availability.
+  - **Skill Matrix**: Grid for matching staff expertise to resource capabilities.
+  - **ROI Analytics**: Business performance monitoring.
+- **Async Layer (n8n)**:
+  - Post-call summarization and sentiment analysis.
+  - Calendar Sync (Google/Outlook).
 
 ## Runtime Surfaces
 
-- **Live Calls**
-  - Telnyx → Vapi (voice orchestration) → Supabase Edge Function (`/vapi-tools`) → Postgres.
-- **Owner / Staff UI**
-  - Browser → Vercel-hosted (or local) Next.js dashboard → Fastify backend → Postgres.
-- **Async Workflows**
-  - Supabase Database Webhooks → n8n workflows → Postgres (and external APIs like OpenAI, calendars, SMS).
-
-All three surfaces share the **same database per environment**, so bookings and CRM stay consistent.
+- **Live Voice Loop**: Telnyx → Vapi → Supabase Edge Function → Postgres.
+- **Management UI**: Next.js Dashboard → Fastify Backend → Postgres.
+- **Automation**: Supabase Webhooks → n8n → External APIs (Calendars, SMS, OpenAI).
 
 ---
 
 ## Data & Multi-Tenancy
 
-- Multi-tenancy is modeled explicitly in the schema (`tenants`, `resources`, `customers`, `appointments`).
-- RLS and a `set_tenant_context(...)` helper ensure that:
-  - Edge tools run in the correct tenant context.
-  - Dashboard users only see their own data.
-- Vertical-specific details (vehicle info, services, policies) are stored in JSONB `metadata` fields and/or future `tenant_docs` tables, keeping the core schema generic.
-- Resources (stylists, bays, rooms, trucks) and employees (stylists, technicians, clinicians) can declare capabilities/skills and be managed per-tenant via admin screens so owners can adapt as people, equipment, and services change.
+- **Multi-Tenancy**: Built into the core schema; RLS ensures no data leakage between businesses.
+- **Dynamic Config**: System prompts, voices, and pricing models are configurable per-tenant.
+- **Semantic Memory**: `pgvector` powers both customer history recall and the business knowledge base.
 
 ---
 
-## Typical Call Flow (Happy Path)
+## Typical Call Flow
 
-1. Caller dials a Telnyx number for a tenant (e.g., DynaTire).
-2. Telnyx forwards the call to Vapi; Vapi runs STT/LLM/TTS.
-3. The LLM decides to use a tool:
-   - `get_customer_context` to see if this is a returning caller.
-   - `check_availability` to propose appointment times.
-   - `book_appointment` once the caller confirms.
-4. Vapi calls the Supabase Edge Function (`/vapi-tools`) with a JSON payload describing the tool call.
-5. The Edge function:
-   - Validates and logs the request.
-   - Calls into `AISecretaryService` which uses `PostgresRepository`.
-   - Executes `book_appointment_atomic(...)` in Postgres.
-6. The result (success/slot conflict/etc.) flows back up to the LLM, which responds naturally to the caller.
-7. Separately, a DB webhook can trigger n8n to summarize the call and update analytics.
+1. Caller dials the business number (e.g., DynaTire).
+2. Vapi runs the voice loop; LLM identifies a question about "Cancellation Policy."
+3. Vapi calls the Edge Function tool `get_company_policy_answer`.
+4. Edge Function searches `tenant_docs` via semantic vector search.
+5. AI reads the relevant policy snippet back to the caller.
+6. Caller books an appointment; AI verifies the technician is on-shift and the bay is free.
+7. Postgres writes the booking; Webhook triggers n8n to sync the owner's Google Calendar.
 
 ---
 
-## Local Dev & Testing (Very Short)
+## Local Dev & Testing
 
-- **Backend tests**: from repo root
-
-  ```bash
-  npm test
-  ```
-
-  - DB-backed cases talk directly to Postgres at `localhost:5433` and auto-skip if the DB is down.
-
-- **Dashboard tests**:
-
-  ```bash
-  cd dashboard
-  npm test
-  ```
-
-- **Edge + Schema tests (Deno)**:
-
-  ```bash
-  deno task test
-  ```
-
-  Requires Postgres reachable at `DATABASE_URL` (same schema/migrations as Supabase).
+- **Backend (Jest)**: `npm test`
+- **Dashboard (Vitest)**: `cd dashboard && npm test`
+- **Edge Functions (Deno)**: `deno task test --no-check`
 
 For a deeper dive, see:
-- [README.md](../README.md) – Project journal & current status.
 - [docs/ARCHITECTURE.md](ARCHITECTURE.md) – Detailed architecture.
+- [docs/PLAN.md](PLAN.md) – Development roadmap.
 - [docs/HOW_TO_SETUP.md](HOW_TO_SETUP.md) – Step-by-step setup.
-- [docs/N8N_WORKFLOWS.md](N8N_WORKFLOWS.md) – Async workflow designs.

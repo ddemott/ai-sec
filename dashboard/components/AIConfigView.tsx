@@ -16,8 +16,9 @@ import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 
-export default function AIConfigView() {
-  const { tenantId } = useSession()
+export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+  const { tenantId } = useSession(overrideTenantId)
+  const [tenant, setTenant] = useState<Tenant | null>(null)
   const [config, setConfig] = useState<Tenant | null>(null)
   const [templates, setTemplates] = useState<BusinessTemplate[]>([])
   const [loading, setLoading] = useState(true)

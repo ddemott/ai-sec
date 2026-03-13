@@ -6,6 +6,7 @@ interface CardProps {
   icon?: React.ReactNode;
   className?: string;
   variant?: 'default' | 'success' | 'info' | 'dark';
+  onClick?: () => void;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -14,6 +15,7 @@ export const Card: React.FC<CardProps> = ({
   icon,
   className = '',
   variant = 'default',
+  onClick,
 }) => {
   const variants = {
     default: 'bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100',
@@ -30,7 +32,10 @@ export const Card: React.FC<CardProps> = ({
   };
 
   return (
-    <div className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${className}`}>
+    <div 
+      className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${className}`}
+      onClick={onClick}
+    >
       {title && (
         <h3 className={`font-bold mb-4 flex items-center text-sm uppercase tracking-widest ${titleColors[variant]}`}>
           {icon && <span className="mr-2">{icon}</span>}
