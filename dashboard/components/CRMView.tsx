@@ -364,42 +364,42 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <Input label="First Name" value={editForm.first_name} onChange={(e) => setEditForm({...editForm, first_name: e.target.value})} placeholder="First Name" />
-                            <Input label="Last Name" value={editForm.last_name} onChange={(e) => setEditForm({...editForm, last_name: e.target.value})} placeholder="Last Name" />
-                            <Input label="Phone Number" value={editForm.phone} onChange={(e) => setEditForm({...editForm, phone: e.target.value})} placeholder="+1-555-010-9999" />
-                        </div>
-                        <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm({...editForm, email: e.target.value})} placeholder="customer@email.com" />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input label="Address Line 1" value={editForm.address} onChange={(e) => setEditForm({...editForm, address: e.target.value})} placeholder="123 Street St" />
-                            <Input label="Address Line 2" value={editForm.address_line2} onChange={(e) => setEditForm({...editForm, address_line2: e.target.value})} placeholder="Apt / Suite / Unit" />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Input label="City" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} placeholder="New York" />
-                          <Select 
-                            label="State" 
-                            value={editForm.state} 
-                            onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} 
-                            options={[{ label: 'Select state', value: '' }, ...US_STATES.map(code => ({ label: code, value: code }))]}
-                          />
-                          <Input label="ZIP" value={editForm.postal_code} onChange={(e) => setEditForm({...editForm, postal_code: e.target.value})} placeholder="10001" />
-                        </div>
-                        <Select
-                            label="Timezone"
-                            value={editForm.timezone}
-                            onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
-                            options={US_TIMEZONES}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Input label="First Name" value={editForm.first_name} onChange={(e) => handleEditFormChange('first_name', e.target.value)} placeholder="First Name" />
+                        <Input label="Last Name" value={editForm.last_name} onChange={(e) => handleEditFormChange('last_name', e.target.value)} placeholder="Last Name" />
+                        <Input label="Phone Number" value={editForm.phone} onChange={(e) => handleEditFormChange('phone', e.target.value)} placeholder="+1-555-010-9999" />
+                      </div>
+                      <Input label="Email" type="email" value={editForm.email} onChange={(e) => handleEditFormChange('email', e.target.value)} placeholder="customer@email.com" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label="Address Line 1" value={editForm.address} onChange={(e) => handleEditFormChange('address', e.target.value)} placeholder="123 Street St" />
+                        <Input label="Address Line 2" value={editForm.address_line2} onChange={(e) => handleEditFormChange('address_line2', e.target.value)} placeholder="Apt / Suite / Unit" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Input label="City" value={editForm.city} onChange={(e) => handleEditFormChange('city', e.target.value)} placeholder="New York" />
+                        <Select 
+                        label="State" 
+                        value={editForm.state} 
+                        onChange={(e) => handleEditFormChange('state', e.target.value)} 
+                        options={[{ label: 'Select state', value: '' }, ...US_STATES.map(code => ({ label: code, value: code }))]}
                         />
-                        <div>
-                            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>
-                            <textarea 
-                                rows={4}
-                                value={editForm.notes} 
-                                onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
-                                className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100 transition"
-                                placeholder="Add private notes the AI should consider..."
-                            />
-                        </div>
+                        <Input label="ZIP" value={editForm.postal_code} onChange={(e) => handleEditFormChange('postal_code', e.target.value)} placeholder="10001" />
+                      </div>
+                      <Select
+                        label="Timezone"
+                        value={editForm.timezone}
+                        onChange={(e) => handleEditFormChange('timezone', e.target.value)}
+                        options={US_TIMEZONES}
+                      />
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>
+                        <textarea 
+                          rows={4}
+                          value={editForm.notes} 
+                          onChange={(e) => handleEditFormChange('notes', e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100 transition"
+                          placeholder="Add private notes the AI should consider..."
+                        />
+                      </div>
                     </div>
                 )}
               </Card>

@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Api, SUPER_ADMIN_TENANT_ID } from '../lib/api.ts';
-import { formatPhone } from '../lib/phone.ts';
-import { Appointment } from '../lib/types.ts';
-import { MOCK_APPOINTMENTS } from '../lib/mockData.ts';
-import { toLocalISO, toISOStringWithOffset, formatCustomerAddress, splitFullName } from '../lib/utils.ts';
-import { useSession, useStaticData } from '../lib/hooks.ts';
-import { Button } from './ui/Button.tsx';
-import { Input } from './ui/Input.tsx';
-import { Select } from './ui/Select.tsx';
-import { Card } from './ui/Card.tsx';
-import { Badge } from './ui/Badge.tsx';
-import { Modal } from './ui/Modal.tsx';
+import { Api, SUPER_ADMIN_TENANT_ID } from '../lib/api';
+import { formatPhone } from '../lib/phone';
+import { Appointment } from '../lib/types';
+import { MOCK_APPOINTMENTS } from '../lib/mockData';
+import { toLocalISO, toISOStringWithOffset, formatCustomerAddress, splitFullName } from '../lib/utils';
+import { useSession, useStaticData } from '../lib/hooks';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Select } from './ui/Select';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { Modal } from './ui/Modal';
 import { 
   Calendar as CalendarIcon, 
   RefreshCw, 
@@ -23,7 +23,7 @@ import {
   Navigation,
   Copy,
   Edit,
-  Loader2,
+  // Loader2,
   StickyNote,
   Trash2,
   Plus
@@ -35,7 +35,8 @@ import {
 } from 'react-big-calendar'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 
-import { format, enUS } from 'date-fns'
+import { format } from 'date-fns'
+import { enUS } from 'date-fns/locale/en-US'
 import { parse, startOfWeek, getDay } from 'date-fns'
 
 const localizer = dateFnsLocalizer({
@@ -80,7 +81,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
     // Appointment selection state
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
     // Draft event state for calendar block
-    const [draftEvent, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
+    // const [draftEvent, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
     // Form state
     const [form, setForm] = useState({
       customer_id: '',
@@ -187,7 +188,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
         const updated = data.find((a: any) => a.id === selectedAppointment.id)
         if (updated) setSelectedAppointment(updated)
       }
-    } catch (e) {
+    } catch {
       setAppointments(MOCK_APPOINTMENTS)
       setUsingMockData(true)
       if (!selectedAppointment) setSelectedAppointment(MOCK_APPOINTMENTS[0])
@@ -228,7 +229,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
       } else {
         setError(res.error || 'Failed to update appointment');
       }
-    } catch (err) {
+    } catch {
       setError('Connection error');
     } finally {
       setSaving(false);
@@ -279,10 +280,10 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
         } else {
             setError(res.error || 'Failed to create appointment')
         }
-    } catch (e) {
-        setError('Connection error')
+    } catch {
+      setError('Connection error');
+      setSaving(false);
     }
-    setSaving(false)
   }
 
   async function handleDelete() {
@@ -378,9 +379,9 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
               date={calendarDate}
               resizable
               draggableAccessor={() => true}
-              onView={view => setCalendarView(view)}
-              onNavigate={date => setCalendarDate(date)}
-              onSelectEvent={event => {
+              onView={(view: CalendarViewType) => setCalendarView(view)}
+              onNavigate={(date: Date) => setCalendarDate(date)}
+              onSelectEvent={(event: any) => {
                 setSelectedAppointment(appointments.find(a => a.id === event.id))
                 setShowDetailOnMobile(true)
                 setIsCreating(false)
@@ -524,9 +525,9 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                       <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
                           {isCreating ? 'New Appointment' : (isEditing ? 'Edit Appointment' : selectedAppointment?.description)}
                       </h1>
-                      {selectedAppointment?.status === 'canceled' && (
-                          <Badge variant="danger" className="mt-1">Canceled</Badge>
-                      )}
+                        {selectedAppointment?.status === 'canceled' && (
+                          <Badge variant="danger">Canceled</Badge>
+                        )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">

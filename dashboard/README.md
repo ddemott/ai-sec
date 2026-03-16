@@ -1,4 +1,5 @@
 ## AI Secretary Dashboard
+## README.MD
 
 This is the **management UI** for the AI Secretary SaaS. It lets owners and admins:
 

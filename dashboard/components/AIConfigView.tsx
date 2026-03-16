@@ -24,6 +24,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
     if (tenantId) {
@@ -45,6 +46,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
       setConfig(MOCK_TENANT as any)
     }
     setLoading(false)
+    setDirty(false)
   }
 
   async function fetchTemplates() {
@@ -68,7 +70,10 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
         first_message: config.first_message
       })
       setSuccess(res.success)
-      if (res.success) setTimeout(() => setSuccess(false), 3000)
+      if (res.success) {
+        setDirty(false)
+        setTimeout(() => setSuccess(false), 3000)
+      }
     } catch (e) {
       console.error('Failed to save config', e)
     }
@@ -85,6 +90,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
             voice_id: template.voice_id,
             first_message: template.first_message
         })
+        setDirty(true)
     }
   }
 
@@ -105,10 +111,11 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
         <Button 
           onClick={handleSave}
           loading={saving}
-          variant={success ? 'success' : 'primary'}
-          className="px-6 py-2.5"
+          variant={success ? 'success' : dirty ? 'warning' : 'primary'}
+          className={`px-6 py-2.5 transition-shadow ${dirty ? 'ring-2 ring-yellow-400 shadow-lg' : ''}`}
+          disabled={!dirty || saving}
         >
-          {success ? "Saved!" : "Save Changes"}
+          {success ? "Saved!" : dirty ? "Save Changes*" : "Save Changes"}
         </Button>
       </header>
 
@@ -151,7 +158,10 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
           <textarea 
             rows={10}
             value={config?.system_prompt || ''}
-            onChange={(e) => setConfig(prev => prev ? {...prev, system_prompt: e.target.value} : null)}
+            onChange={(e) => {
+              setConfig(prev => prev ? {...prev, system_prompt: e.target.value} : null);
+              setDirty(true);
+            }}
             className="w-full p-4 border border-gray-200 dark:border-gray-800 rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 focus:ring-blue-500 outline-none shadow-inner bg-gray-50/30 dark:bg-[#1a1a1a] font-mono dark:text-gray-200"
             placeholder="Ex: You are a helpful assistant for DynaTire. Be professional and concise..."
           />
@@ -165,7 +175,10 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
           </h2>
           <Input 
             value={config?.first_message || ''}
-            onChange={(e) => setConfig(prev => prev ? {...prev, first_message: e.target.value} : null)}
+            onChange={(e) => {
+              setConfig(prev => prev ? {...prev, first_message: e.target.value} : null);
+              setDirty(true);
+            }}
             placeholder="Ex: Thanks for calling! How can I help you today?"
           />
         </section>
@@ -183,11 +196,14 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
               { id: 'pNInz6ovDWjNkhCspfAY', name: 'Josh - US Male', desc: 'Deep, Trustworthy' },
               { id: 'ErXwSzhRj4IW3zYCt9a2', name: 'Antoni - US Male', desc: 'Casual, Conversational' }
             ].map(voice => (
-              <Card 
-                key={voice.id}
-                onClick={() => setConfig(prev => prev ? {...prev, voice_id: voice.id} : null)}
-                className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'border-blue-500 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}
-              >
+                <Card 
+                  key={voice.id}
+                  onClick={() => {
+                    setConfig(prev => prev ? {...prev, voice_id: voice.id} : null);
+                    setDirty(true);
+                  }}
+                  className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'border-blue-500 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}
+                >
                 <div>
                   <p className="font-bold">{voice.name}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{voice.desc}</p>
