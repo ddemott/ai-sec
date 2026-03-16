@@ -38,7 +38,7 @@
 - [ ] **Cloud Migration**: Move from local Docker/Deno to a production Supabase project.
 - [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, and `VAPI_SERVER_URL_SECRET` in cloud secrets.
 - [ ] **Vapi Agent**: Point the official Vapi Agent to the production Edge Function URL.
-- [ ] **Agent Template**: Templatize `agent.json` — replace hardcoded tenant ID and date (BUG-049).
+- [x] **Agent Template**: Templatize `agent.json` — replace hardcoded tenant ID and date (BUG-049).
 - [ ] **Telephony**: Connect a real phone number via Telnyx or Vapi.
 - [ ] **Beta Testing**: Conduct real-world call tests with PoC tenants (DynaTire).
 
@@ -65,16 +65,15 @@
 These are known issues from the March 2026 code review (see BUGS.md for details).
 
 ### Pre-Production (should fix before go-live)
-- [ ] **Route Extraction**: Break `src/index.ts` monolith into route modules (BUG-017).
+- [x] **Route Extraction**: Break `src/index.ts` monolith into 13 route modules (BUG-017).
 - [ ] **ID Standardization**: Migrate SERIAL PKs (services, employees) to UUID (BUG-015).
 - [ ] **Customer Timezone**: Respect customer timezone in availability checks (BUG-031).
-- [ ] **Orphan Transcript Linking**: Background job to re-link orphaned `call_transcripts` by phone/call_id (BUG-030).
-- [ ] **Accessibility**: Add ARIA labels to interactive dashboard elements (BUG-039).
+- [x] **Orphan Transcript Linking**: `link_orphaned_transcripts()` SQL function matches via call_id (BUG-030).
+- [x] **Accessibility**: ARIA labels on nav, modals, inputs, buttons, and error messages (BUG-039).
 
 ### Post-Launch (can defer)
 - [ ] **Code Dedup**: Consolidate scheduling logic between Node and Deno (BUG-016).
 - [ ] **Code Dedup**: Consolidate `getEmbedding()` between Node and Deno (BUG-024).
-- [ ] **Dead Code**: Wire BookingService into endpoints or remove (BUG-018).
-- [ ] **Dead Code**: Wire Provider pattern into booking flow or remove (BUG-019).
-- [ ] **Audit Logging**: Add audit trail table with before/after snapshots (BUG-037).
-- [ ] **Soft Deletes**: Add `is_deleted`/`deleted_at` columns to prevent data loss (BUG-038).
+- [x] **Dead Code**: Removed BookingService, Provider pattern, InMemoryBookingStorage, MockLlmProvider, and `/chat` endpoint (BUG-018, BUG-019).
+- [x] **Audit Logging**: `audit_log` table with triggers on appointments, customers, resources (BUG-037).
+- [x] **Soft Deletes**: `is_deleted`/`deleted_at` columns on appointments, customers, resources, employees (BUG-038).

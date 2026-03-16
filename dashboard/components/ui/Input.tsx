@@ -21,11 +21,13 @@ export const Input: React.FC<InputProps> = ({
       )}
       <input
         id={id}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && id ? `${id}-error` : undefined}
         className={`w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-sm font-bold text-gray-900 dark:text-gray-100 transition focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${error ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : ''} ${className}`}
         {...props}
       />
       {error && (
-        <p className="mt-1 text-xs text-red-500">{error}</p>
+        <p id={id ? `${id}-error` : undefined} role="alert" className="mt-1 text-xs text-red-500">{error}</p>
       )}
     </div>
   );

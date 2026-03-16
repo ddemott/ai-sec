@@ -88,12 +88,12 @@ export function OutlookLayout({
     <div className="flex h-screen bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 overflow-hidden font-sans flex-col md:flex-row transition-colors duration-200">
       
       {/* 1. SIDEBAR (Desktop / iPad) */}
-      <aside className="hidden md:flex w-16 flex-col items-center py-4 bg-[#f3f2f1] dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 transition-colors duration-200">
+      <aside aria-label="Main navigation" className="hidden md:flex w-16 flex-col items-center py-4 bg-[#f3f2f1] dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 transition-colors duration-200">
         <div className="mb-8 p-2 bg-blue-600 rounded-md shadow-md">
           <Calendar className="text-white w-6 h-6" />
         </div>
         
-        <nav className="flex flex-col space-y-4 flex-1 text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar">
+        <nav aria-label="Sidebar navigation" className="flex flex-col space-y-4 flex-1 text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar">
           {isAdmin && (
             <button 
               title="All Businesses"
@@ -218,7 +218,7 @@ export function OutlookLayout({
       </aside>
 
       {/* 2. DYNAMIC CONTENT AREA */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-[#111] transition-colors duration-200">
+      <div role="main" className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-[#111] transition-colors duration-200">
         {isAdmin && managedTenantName && (
           <header className="bg-blue-600 text-white px-6 py-2 flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ export function OutlookLayout({
       </div>
 
       {/* 3. BOTTOM NAVIGATION (Mobile Only) */}
-      <nav className="md:hidden flex bg-[#f3f2f1] dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-gray-800 h-16 safe-area-pb transition-colors duration-200">
+      <nav aria-label="Mobile navigation" className="md:hidden flex bg-[#f3f2f1] dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-gray-800 h-16 safe-area-pb transition-colors duration-200">
         <button 
           onClick={() => setActiveTab('appointments')}
           className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'appointments' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
