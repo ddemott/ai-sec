@@ -20,44 +20,70 @@ The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for
 ## 3. Dashboard & Management UI
 The Dashboard provides business owners with transparency and control.
 
-### 3.1 Tech Stack & Test Coverage
+### 3.1 Tech Stack
 - **Framework**: Next.js (React) + Tailwind CSS.
-- **Auth**: Application-level `users` table + backend `/login` endpoint.
-- **Verification**: 100% Test Pass Rate across Vitest (UI) and Deno (Backend).
+- **State Management**: `SessionProvider` React Context for auth/session; `useStaticData` hook for shared tenant data.
+- **Auth**: JWT-based authentication (8h expiry) via `/login` endpoint. Auto-logout on 401. Tokens stored in localStorage and sent as `Authorization: Bearer` headers.
+- **Error Handling**: React `ErrorBoundary` wraps all views. Structured JSON logging via `createLogger()` utility.
+- **Testing**: Vitest + React Testing Library (jsdom environment). 25+ tests across smoke, appointment, CRM, settings, and component suites.
 
 ### 3.2 Key Views & Features
 - **Business Analytics**: High-level metrics for call volume, booking conversion, and estimated revenue generated.
 - **Knowledge Base**: Document management system for uploading PDFs and text to "train" the AI on business policies.
-- **Staff Working Hours**: Interface for managing employee shifts (Day of Week + Time Ranges).
-- **Skill & Capability Matrix**: Unified grid for matching staff expertise with physical resource (bay/chair) capabilities.
+- **Staff Working Hours**: Interface for managing employee shifts (Day of Week + Time Ranges) with create/edit support.
+- **Skill & Capability Matrix**: Unified grid for matching staff expertise with physical resource (bay/chair) capabilities. Debounce guard prevents duplicate requests.
 - **Outlook-style Calendar**: Multi-resource schedule view showing all confirmed appointments.
 - **CRM Viewer**: Deep-dive into customer history, including AI-generated call summaries and sentiment.
 
 ---
 
-## 4. Multi-Tenant Knowledge Base (RAG)
+## 4. Backend API (Fastify)
+The Fastify backend serves as the management API for the dashboard and administrative tasks.
+
+### 4.1 Security
+- **RLS Enforcement**: Critical routes use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. This ensures all data access goes through Postgres Row-Level Security.
+- **Least Privilege**: The `api_user` role has explicit `SELECT, INSERT, UPDATE, DELETE` grants per table (not `ALL PRIVILEGES`).
+- **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
+- **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
+
+### 4.2 Testing
+- **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
+- **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
+- **Coverage**: 75+ tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, tools, scheduling, and index suites.
+
+---
+
+## 5. Multi-Tenant Knowledge Base (RAG)
 - **Data Storage**: A `tenant_docs` table stores business knowledge as text chunks with `vector(1536)` embeddings.
-- **Ingestion**: PDFs and text files are parsed, chunked, and embedded via OpenAI `text-embedding-3-small`.
+- **Ingestion**: PDFs and text files are parsed, chunked (paragraph-aware with overlap), and embedded via OpenAI `text-embedding-3-small`. Duplicate detection deletes existing chunks before re-ingesting.
 - **Retrieval**: The `get_company_policy_answer` tool performs semantic search to provide the AI with factual context during a call, grounding the LLM and preventing hallucinations.
 
 ---
 
-## 5. Advanced Scheduling Engine
-The scheduler ensures valid bookings by verifying three layers of constraints in a single atomic transaction:
+## 6. Advanced Scheduling Engine
+The scheduler ensures valid bookings by verifying multiple layers of constraints in a single atomic transaction (`book_appointment_atomic`):
 1.  **Resource Availability**: Is the bay/chair free during this window?
 2.  **Staff Expertise**: Does the assigned employee have the required skills for the service?
-3.  **Staff Working Hours**: Is the employee currently on-shift according to the `employee_shifts` table?
+3.  **Resource Capabilities**: Does the resource have the required capabilities for the service?
+4.  **Staff Working Hours**: Is the employee currently on-shift? (DST-safe via `AT TIME ZONE`.)
+5.  **Auto End-Time**: When `end_time` is NULL, derives it from `service.duration_minutes`.
+6.  **Customer Upsert**: When `customer_id` is NULL but phone is provided, auto-creates or finds the customer.
+7.  **Assignment Validation**: Validates `assignment_id` format (UUID or integer) and rejects malformed input.
 
 ---
 
-## 6. Async Integration Layer (n8n)
+## 7. Async Integration Layer (n8n)
 - **Post-Call Processing**: Generates summaries and sentiment analysis.
 - **Calendar Synchronization**: Bi-directional sync with Google Calendar and Outlook via the `tenant_calendar_settings` and `appointment_sync_map` tables.
 - **Notifications**: Automated SMS/Email alerts to business owners upon new bookings.
+- **Note**: The Postgres trigger (`notify_n8n_on_appointment`) is currently a placeholder. Production deployment requires wiring via `pg_net` or Supabase Database Webhooks.
 
 ---
 
-## 7. Data Resiliency & Security
-- **Atomic Bookings**: Postgres RPCs (`book_appointment_atomic`) with strict conflict resolution.
-- **Row Level Security (RLS)**: Every table is isolated by `tenant_id`, ensuring businesses can never access each other's data.
+## 8. Data Resiliency & Security
+- **Atomic Bookings**: Postgres RPCs (`book_appointment_atomic`) with strict conflict resolution and multi-layer validation.
+- **Row Level Security (RLS)**: Every table is isolated by `tenant_id`. All RLS policies standardized on `app.current_tenant_id`. Backend enforces RLS via `withTenantClient()`.
+- **JWT Authentication**: 8-hour token expiry with auto-logout. No more plain localStorage sessions.
+- **Input Validation**: Zod at API boundaries; CHECK constraints on JSONB metadata columns.
+- **Name Sync**: Database triggers keep `full_name` ↔ `first_name`/`last_name` in sync on both users and customers tables.
 - **Persistence**: Managed Supabase Postgres with Docker-backed local development.

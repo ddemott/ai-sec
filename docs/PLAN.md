@@ -36,8 +36,33 @@
 - [x] **ROI Analytics**: Dashboard showing call conversion and estimated revenue.
 - [x] **Calendar Sync**: Schema and n8n blueprint for Google/Outlook integration.
 
+## Phase 7.5: Security & Quality Hardening (Complete ✅)
+Full code review identified 58 bugs across all severity levels. All Critical, High, Medium, and Low bugs resolved.
+
+- [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
+- [x] **RLS**: Standardized policies, Fastify enforces via `withTenantClient()`, least-privilege DB role.
+- [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, assignment_id format validation.
+- [x] **Booking Engine**: DST-safe shift checks, auto end-time from service duration, customer upsert, service requirement enforcement.
+- [x] **Dashboard**: Error boundaries, SessionContext, structured logging, Promise.allSettled, timezone maps, debounce guards.
+- [x] **Data Integrity**: Name sync triggers, seed idempotency, metadata constraints, call_id indexing.
+- [x] **Edge Functions**: Single-pass Zod validation, set_tenant_context error handling.
+- [x] **Knowledge Base**: Paragraph-aware chunking with overlap, duplicate detection.
+- [x] **Test Coverage**: 75 backend + 25 dashboard tests, all passing.
+
 ## Phase 8: Production Go-Live (Current 🚀)
 - [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
 - [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents.
-- [ ] **n8n Plumbing**: Activate Database Webhooks for live sync and summaries.
+- [ ] **Agent Template**: Templatize `agent.json` (currently hardcoded to one tenant).
+- [ ] **n8n Plumbing**: Replace placeholder triggers with real HTTP calls; activate Database Webhooks.
+- [ ] **Outlook Sync**: Implement the empty Outlook calendar sync branch.
+- [ ] **Route Extraction**: Break `index.ts` monolith into route modules for maintainability.
 - [ ] **Beta Testing**: Conduct real-world call tests with PoC tenants (DynaTire).
+
+## Phase 9: Scale & Polish (Future)
+- [ ] **ID Standardization**: Migrate SERIAL PKs to UUID across all tables.
+- [ ] **Code Consolidation**: Deduplicate scheduling logic and `getEmbedding()` between Node/Deno.
+- [ ] **Dead Code Cleanup**: Wire or remove unused BookingService and Provider patterns.
+- [ ] **Audit Logging**: Add audit trail with before/after snapshots.
+- [ ] **Soft Deletes**: Add `is_deleted`/`deleted_at` to prevent accidental data loss.
+- [ ] **Accessibility**: ARIA labels and WCAG compliance across dashboard.
+- [ ] **Customer Timezone**: Respect customer timezone in availability checks.

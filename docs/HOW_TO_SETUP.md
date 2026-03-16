@@ -58,11 +58,11 @@ The backend and dashboard use HTTPS for local development. Certificates are loca
 
 ## 🧪 Testing
 ```bash
-# Backend (Jest)
-npm test
+# Backend (Vitest — runs against test_db on port 5433)
+npx vitest run src/ --fileParallelism=false
 
-# Dashboard (Vitest)
-cd dashboard && npm test
+# Dashboard (Vitest — jsdom environment)
+cd dashboard && npx vitest run
 
 # Edge Functions (Deno)
 export DATABASE_URL=postgres://postgres:postgres@localhost:5433/test_db

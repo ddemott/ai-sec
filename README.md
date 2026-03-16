@@ -51,9 +51,9 @@ To use a custom database (e.g., in the cloud):
 ```
 
 ## 🧪 Testing & Coverage
-- All tests pass: backend, dashboard, and edge logic.
-- Excellent test coverage: AppointmentView, dashboard calendar, and core booking flows are fully verified.
-- Backend tests: `npm test`
-- Frontend tests: `cd dashboard && npm test`
-- Edge logic: `deno test` (Requires Deno)
+- **100+ tests passing** across backend and dashboard suites.
+- Test coverage spans: booking engine, RLS, auth, scheduling, name sync, timezone detection, form validation, UI components, and error boundaries.
+- Backend tests: `npx vitest run src/ --fileParallelism=false`
+- Dashboard tests: `cd dashboard && npx vitest run`
+- Edge logic: `deno task test --no-check` (Requires Deno)
 - Test-driven development ensures operational reliability.

@@ -8,7 +8,7 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 - **Voice AI Reception**: Answers inbound calls with a low-latency, human-like voice (Vapi).
 - **Grounding (RAG)**: Answers business-specific questions using a Knowledge Base built from uploaded PDFs.
-- **Atomic Booking**: Checks availability and books appointments instantly while respecting staff shifts and expertise.
+- **Atomic Booking**: Checks availability and books appointments instantly while respecting staff shifts, expertise, and resource capabilities.
 - **Performance Analytics**: Tracks call volume, booking conversion, and estimated revenue.
 - **Multi-Tenant Dashboard**: Provides owners with a control center for staff, resources, and AI settings.
 
@@ -16,19 +16,20 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## Main Components & Verification
 
-- **100% Test Pass Rate**: All core logic is verified across Vitest (UI) and Deno (Backend).
+- **100+ Tests Passing**: All core logic verified via Vitest (backend + dashboard).
 - **Postgres (Supabase)**: Single source of truth with Row-Level Security (RLS) for tenant isolation.
 - **Supabase Edge Function (`vapi-tools`)**:
   - `getCustomerContext` – CRM history lookup.
   - `checkAvailability` – Multi-resource overlap checks.
-  - `bookAppointment` – Shift-aware atomic booking.
+  - `bookAppointment` – Shift-aware atomic booking with auto end-time calculation.
   - `getCompanyPolicyAnswer` – Semantic search over business docs.
-- **Fastify Backend (Helper API)**: Handles administrative tasks, document ingestion, and analytics.
-- **Dashboard (Next.js)**: 
+- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes for administrative tasks, document ingestion, analytics, and CRUD operations.
+- **Dashboard (Next.js)**:
   - **Knowledge Base**: PDF/Text upload for RAG training.
-  - **Shift Manager**: Employee working hours and availability.
+  - **Shift Manager**: Employee working hours and availability (create + edit).
   - **Skill Matrix**: Grid for matching staff expertise to resource capabilities.
   - **ROI Analytics**: Business performance monitoring.
+  - **SessionContext**: Centralized auth state via React Context.
 - **Async Layer (n8n)**:
   - Post-call summarization and sentiment analysis.
   - Calendar Sync (Google/Outlook).
@@ -49,6 +50,15 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ---
 
+## Security
+
+- **JWT Authentication**: 8-hour token expiry, auto-logout on 401.
+- **RLS Enforcement**: Fastify uses `withTenantClient()` to enforce row-level security on every query.
+- **Input Validation**: Zod schemas at API boundaries; CHECK constraints on JSONB metadata.
+- **Least-Privilege DB**: `api_user` role has explicit per-table grants (not `ALL PRIVILEGES`).
+
+---
+
 ## Typical Call Flow
 
 1. Caller dials the business number (e.g., DynaTire).
@@ -63,9 +73,17 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## Local Dev & Testing
 
-- **Backend (Jest)**: `npm test`
-- **Dashboard (Vitest)**: `cd dashboard && npm test`
-- **Edge Functions (Deno)**: `deno task test --no-check`
+```bash
+# Backend tests (Vitest)
+npx vitest run src/ --fileParallelism=false
+
+# Dashboard tests (Vitest)
+cd dashboard && npx vitest run
+
+# Edge Functions (Deno)
+export DATABASE_URL=postgres://postgres:postgres@localhost:5433/test_db
+deno task test --no-check
+```
 
 For a deeper dive, see:
 - [docs/ARCHITECTURE.md](ARCHITECTURE.md) – Detailed architecture.
