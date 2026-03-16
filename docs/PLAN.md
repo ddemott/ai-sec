@@ -40,7 +40,7 @@
 Full code review identified 58 bugs across all severity levels. All Critical, High, Medium, and Low bugs resolved.
 
 - [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
-- [x] **RLS**: Standardized policies, Fastify enforces via `withTenantClient()`, least-privilege DB role.
+- [x] **RLS**: Standardized policies, all 11 tenant-scoped route modules enforce via `withTenantClient()`, least-privilege DB role. Only super-admin and auth routes use the admin pool.
 - [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID assignment_id validation.
 - [x] **Booking Engine**: DST-safe shift checks, auto end-time from service duration, customer upsert, service requirement enforcement.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, Promise.allSettled, timezone maps, debounce guards.

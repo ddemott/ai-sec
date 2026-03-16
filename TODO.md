@@ -50,7 +50,7 @@
 
 ## 7. Security & Quality Hardening (Completed March 2026)
 - [x] **JWT Auth**: Token-based authentication with 8h expiry and auto-logout on 401 (BUG-012).
-- [x] **RLS Enforcement**: Fastify routes use `withTenantClient()` with `api_user` role (BUG-007).
+- [x] **RLS Enforcement**: All 11 tenant-scoped route modules use `withTenantClient()` with `api_user` role (BUG-007). Only super-admin and auth routes use the admin pool.
 - [x] **Least-Privilege DB**: `api_user` downgraded from `ALL PRIVILEGES` to explicit grants (BUG-008).
 - [x] **Form Validation**: Zod schemas for login, customer, and appointment creation (BUG-011).
 - [x] **Error Boundaries**: React ErrorBoundary wraps all dashboard views (BUG-010).

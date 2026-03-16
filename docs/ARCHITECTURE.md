@@ -41,7 +41,7 @@ The Dashboard provides business owners with transparency and control.
 The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 13 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics).
 
 ### 4.1 Security
-- **RLS Enforcement**: Critical routes use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. This ensures all data access goes through Postgres Row-Level Security.
+- **RLS Enforcement**: All 11 tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
 - **Least Privilege**: The `api_user` role has explicit `SELECT, INSERT, UPDATE, DELETE` grants per table (not `ALL PRIVILEGES`).
 - **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
 - **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
