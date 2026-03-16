@@ -19,36 +19,13 @@ import { registerSkillRoutes } from './routes/skills';
 import { registerCalendarRoutes } from './routes/calendar';
 import { registerKnowledgeRoutes } from './routes/knowledge';
 import { registerAnalyticsRoutes } from './routes/analytics';
+import { createGetEmbedding } from '../shared/getEmbedding';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
-async function getEmbedding(text: string): Promise<number[]> {
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured in environment');
-  }
-
-  const response = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      input: text.replace(/\n/g, ' '),
-      model: 'text-embedding-3-small',
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`OpenAI Embedding Error: ${JSON.stringify(error)}`);
-  }
-
-  const result = await response.json() as any;
-  return result.data[0].embedding;
-}
+const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 
 // --- Server Setup ---
 

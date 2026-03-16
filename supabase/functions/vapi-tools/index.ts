@@ -4,37 +4,10 @@ import { AISecretaryService } from "./core/service.ts";
 import { DomainError } from "./core/errors.ts";
 import { createLogger } from "./core/logger.ts";
 import { Dispatcher } from "./core/dispatcher.ts";
+import { createGetEmbedding } from "../../../shared/getEmbedding.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
-
-/**
- * Helper to generate embeddings via OpenAI
- */
-async function getEmbedding(text: string): Promise<number[]> {
-  if (!OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured in environment");
-  }
-
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      input: text.replace(/\n/g, " "),
-      model: "text-embedding-3-small",
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`OpenAI Embedding Error: ${JSON.stringify(error)}`);
-  }
-
-  const result = await response.json();
-  return result.data[0].embedding;
-}
+const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 
 export const repo = new PostgresRepository();
 const service = new AISecretaryService(repo);

@@ -29,7 +29,7 @@
 - [x] **n8n Blueprint**: Create `n8n/calendar_sync.json` for Google/Outlook.
 - [x] **Dashboard UI**: Add "Calendar Sync" section to Settings.
 - [ ] **Plumbing**: Enable Supabase Database Webhooks to trigger the n8n sync workflow.
-- [ ] **n8n Trigger**: Replace placeholder `notify_n8n_on_appointment` with real HTTP call via `pg_net` (BUG-034).
+- [x] **n8n Trigger**: `notify_n8n_on_appointment` now uses `pg_net` when available, falls back to NOTICE (BUG-034).
 - [ ] **Outlook Branch**: Implement Outlook calendar sync (currently empty) (BUG-033).
 - [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook sync (BUG-033).
 - [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow (BUG-032).
@@ -66,14 +66,14 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 
 ### Pre-Production (should fix before go-live)
 - [x] **Route Extraction**: Break `src/index.ts` monolith into 13 route modules (BUG-017).
-- [ ] **ID Standardization**: Migrate SERIAL PKs (services, employees) to UUID (BUG-015).
-- [ ] **Customer Timezone**: Respect customer timezone in availability checks (BUG-031).
+- [x] **ID Standardization**: Migrated services and employees from SERIAL to UUID (BUG-015).
+- [x] **Customer Timezone**: `check_availability_with_tz()` function respects customer timezone (BUG-031).
 - [x] **Orphan Transcript Linking**: `link_orphaned_transcripts()` SQL function matches via call_id (BUG-030).
 - [x] **Accessibility**: ARIA labels on nav, modals, inputs, buttons, and error messages (BUG-039).
 
 ### Post-Launch (can defer)
-- [ ] **Code Dedup**: Consolidate scheduling logic between Node and Deno (BUG-016).
-- [ ] **Code Dedup**: Consolidate `getEmbedding()` between Node and Deno (BUG-024).
+- [x] **Code Dedup**: Shared `scheduling.ts` in `shared/` — both Node and Deno re-export from it (BUG-016).
+- [x] **Code Dedup**: Shared `getEmbedding.ts` in `shared/` — both Node and Deno use `createGetEmbedding()` (BUG-024).
 - [x] **Dead Code**: Removed BookingService, Provider pattern, InMemoryBookingStorage, MockLlmProvider, and `/chat` endpoint (BUG-018, BUG-019).
 - [x] **Audit Logging**: `audit_log` table with triggers on appointments, customers, resources (BUG-037).
 - [x] **Soft Deletes**: `is_deleted`/`deleted_at` columns on appointments, customers, resources, employees (BUG-038).

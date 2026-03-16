@@ -41,10 +41,7 @@ export interface Appointment {
   status: AppointmentStatus;
 }
 
-export interface TimeWindow {
-  from: Date;
-  to: Date;
-}
+export type { TimeWindow } from '../../shared/scheduling';
 
 export interface TimeSlot {
   start: Date;
