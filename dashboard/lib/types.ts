@@ -15,8 +15,8 @@ export interface Appointment {
   // Structured name fields
   first_name?: string;
   last_name?: string;
-  // Combined display name (legacy / convenience)
-  name: string;
+  // Combined display name (legacy / convenience — prefer customers.name)
+  name?: string;
 }
 
 export interface Customer {

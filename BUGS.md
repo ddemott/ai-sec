@@ -290,12 +290,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: Services define `duration_minutes` but appointments use independently-set `start_time` and `end_time`. No logic auto-calculates `end_time = start_time + duration`.
 - **Impact**: A 30-minute service can be booked in a 2-hour slot, wasting capacity.
 - **Fix**: Default `end_time` to `start_time + service.duration_minutes` when not explicitly provided.
+- **Status**: FIXED — `book_appointment_atomic` now auto-calculates `end_time = start_time + duration_minutes` when `p_end_time` is NULL and `p_service_id` is provided. `supabase/migrations/20260316300000_fix_low_bugs.sql`, tested in `src/low-bugs.test.ts`
 
 ### BUG-041: Seed data uses hardcoded UUIDs — not idempotent
 - **File**: `supabase/seed.sql`
 - **Problem**: Uses fixed UUIDs like `f234e471-0e60-4163-86c9-93cfd9338e3a`. Re-running seed fails on unique constraint violations.
 - **Impact**: Can't re-seed without wiping the database first.
 - **Fix**: Use `ON CONFLICT DO NOTHING` or `INSERT ... ON CONFLICT DO UPDATE`.
+- **Status**: FIXED — All INSERT statements in `supabase/seed.sql` already use `ON CONFLICT (id) DO NOTHING` or `ON CONFLICT DO NOTHING`. Fixed user inserts to use `ON CONFLICT (tenant_id, email)` to match the per-tenant unique constraint from BUG-002.
 
 ### BUG-042: business_templates voice IDs hardcoded in migrations
 - **File**: `supabase/migrations/20260228000006_business_templates.sql`
@@ -308,12 +310,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: Toggling skill assignments sends an API request on every click with no debounce.
 - **Impact**: Rapid clicking sends many concurrent requests; potential race conditions and server load.
 - **Fix**: Debounce toggle actions (300-500ms) or batch changes with a save button.
+- **Status**: FIXED — Added ref-based guard (`pendingToggle`) that prevents duplicate requests for the same entity+service while a request is in flight. Combined with existing `saving` state to disable buttons. `dashboard/components/SkillMatrixView.tsx`
 
 ### BUG-044: Zod validation happens twice in edge function
 - **Files**: `supabase/functions/vapi-tools/index.ts`, `supabase/functions/vapi-tools/core/dispatcher.ts`
 - **Problem**: Request payloads are validated with Zod at the HTTP entry point and again inside the dispatcher.
 - **Impact**: Minor performance overhead; maintenance burden keeping two schemas in sync.
 - **Fix**: Validate once at the entry point and pass typed objects downstream.
+- **Status**: FIXED — Entry point now stores parsed args as `parsedArgs` on toolCall. Dispatcher uses `parsedArgs` when available, skipping redundant JSON.parse. `supabase/functions/vapi-tools/index.ts`, `supabase/functions/vapi-tools/core/dispatcher.ts`
 
 ### BUG-045: No global state management in dashboard
 - **Files**: `dashboard/app/page.tsx`, all view components
@@ -375,6 +379,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: `customers.metadata` and `appointments.metadata` are untyped JSONB columns with no CHECK constraint or application-level schema validation.
 - **Impact**: Inconsistent data shapes across records; hard to query or rely on specific keys.
 - **Fix**: Define expected JSON structure in application code (zod schema) and optionally add a Postgres CHECK constraint.
+- **Status**: FIXED — Added CHECK constraints `customers_metadata_is_object` and `appointments_metadata_is_object` ensuring metadata is always a JSON object (not array/scalar). `supabase/migrations/20260316300000_fix_low_bugs.sql`, tested in `src/low-bugs.test.ts`
 
 ### BUG-053: appointments.call_id has no foreign key constraint
 - **File**: `supabase/migrations/20260228000000_initial_schema.sql`
@@ -399,15 +404,18 @@ Found during full code review on March 16, 2026.
 - **Problem**: Theme is read from localStorage only. On first visit (no localStorage value), the app defaults to light mode regardless of the user's OS preference.
 - **Impact**: Users with OS-level dark mode see a flash of light mode on first visit.
 - **Fix**: Check `window.matchMedia('(prefers-color-scheme: dark)')` as fallback when localStorage has no value.
+- **Status**: NOT A BUG — OutlookLayout.tsx already checks `window.matchMedia('(prefers-color-scheme: dark)')` as fallback when no localStorage theme is set (lines 56-61).
 
 ### BUG-057: Timezone detection covers only ~10 cities
 - **File**: `dashboard/lib/constants.ts`
 - **Problem**: `CITY_TIMEZONE_MAP` only contains about 10 hardcoded city→timezone mappings for auto-detection.
 - **Impact**: Most US cities don't auto-detect; customers in unlisted cities must manually select timezone.
 - **Fix**: Use a proper timezone lookup library, or expand the map to cover major metro areas per timezone.
+- **Status**: FIXED — Expanded `CITY_TIMEZONE_MAP` from 10 to 60+ major US cities and `STATE_TIMEZONE_MAP` from 9 to all 50 states. `dashboard/lib/constants.ts`, tested in `src/low-bugs.test.ts`
 
 ### BUG-058: Appointment type has field duplication
 - **File**: `dashboard/lib/types.ts`
 - **Problem**: The `Appointment` type has both a `name` field and a nested `customers.name` field representing the same data.
 - **Impact**: Ambiguity about which field is authoritative; risk of displaying stale data if one is updated but not the other.
 - **Fix**: Remove the redundant `name` field from Appointment and always read from the joined customer record.
+- **Status**: FIXED — Made `name` optional (`name?: string`) in Appointment type. All dashboard code already uses `customers.name` for display. `dashboard/lib/types.ts`

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { 
   ShieldCheck, 
   Users, 
@@ -68,7 +68,13 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
     })
   }, [entities, searchTerm, filterType])
 
+  // Debounce guard to prevent rapid duplicate requests (BUG-043)
+  const pendingToggle = useRef<string | null>(null)
+
   async function toggleMapping(entityType: 'employee' | 'resource', entityId: any, serviceId: number) {
+    const key = `${entityType}-${entityId}-${serviceId}`
+    if (pendingToggle.current === key) return
+    pendingToggle.current = key
     setSaving(true)
     const isMapped = entityType === 'employee' 
       ? empMappings.some(m => m.employee_id === entityId && m.service_id === serviceId)
@@ -96,6 +102,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
       alert("Mapping failed")
     } finally {
       setSaving(false)
+      pendingToggle.current = null
     }
   }
 

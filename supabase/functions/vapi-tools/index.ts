@@ -97,15 +97,11 @@ export async function handler(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ error: "Invalid message format" }), { status: 400 });
     }
 
-    // Validation for specific tool calls if needed
-    if (message.type === "tool-calls") {
-      if (!message.toolCalls || message.toolCalls.length === 0) {
-        return new Response(JSON.stringify({ error: "No tool calls provided" }), { status: 400 });
-      }
-      
+    // Validate tool-call arguments at the entry point (single validation pass — BUG-044)
+    if (message.type === "tool-calls" && message.toolCalls?.length > 0) {
       const toolCall = message.toolCalls[0];
       const { name, arguments: argsString } = toolCall.function;
-      
+
       let args;
       try {
         args = JSON.parse(argsString);
@@ -113,10 +109,14 @@ export async function handler(req: Request): Promise<Response> {
         return new Response(JSON.stringify({ error: "Invalid JSON in arguments" }), { status: 400 });
       }
 
+      // Validate with Zod — typed args are passed to dispatcher via toolCall
       if (name === "get_customer_context") GetContextSchema.parse(args);
       if (name === "check_availability") CheckAvailabilitySchema.parse(args);
       if (name === "book_appointment") BookAppointmentSchema.parse(args);
       if (name === "get_company_policy_answer") GetPolicyAnswerSchema.parse(args);
+
+      // Store parsed args back so dispatcher doesn't re-parse
+      toolCall.function.parsedArgs = args;
     }
 
     return await dispatcher.dispatch(message, logger);

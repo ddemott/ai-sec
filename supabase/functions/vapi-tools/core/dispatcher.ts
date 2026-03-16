@@ -37,13 +37,16 @@ export class Dispatcher {
     }
 
     const toolCall = message.toolCalls[0];
-    const { name, arguments: argsString } = toolCall.function;
-    
-    let args;
-    try {
-      args = JSON.parse(argsString);
-    } catch (e) {
-      return new Response(JSON.stringify({ error: "Invalid JSON in arguments" }), { status: 400 });
+    const { name, arguments: argsString, parsedArgs } = toolCall.function;
+
+    // Use pre-parsed args from entry-point validation when available (BUG-044)
+    let args = parsedArgs;
+    if (!args) {
+      try {
+        args = JSON.parse(argsString);
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Invalid JSON in arguments" }), { status: 400 });
+      }
     }
 
     // Create a specific logger for this tool execution
