@@ -41,7 +41,7 @@ Full code review identified 58 bugs across all severity levels. All Critical, Hi
 
 - [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
 - [x] **RLS**: Standardized policies, Fastify enforces via `withTenantClient()`, least-privilege DB role.
-- [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, assignment_id format validation.
+- [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID assignment_id validation.
 - [x] **Booking Engine**: DST-safe shift checks, auto end-time from service duration, customer upsert, service requirement enforcement.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, Promise.allSettled, timezone maps, debounce guards.
 - [x] **Data Integrity**: Name sync triggers, seed idempotency, metadata constraints, call_id indexing.
@@ -50,12 +50,17 @@ Full code review identified 58 bugs across all severity levels. All Critical, Hi
 - [x] **Test Coverage**: 75 backend + 25 dashboard tests, all passing.
 
 ## Phase 8: Production Go-Live (Current 🚀)
-- [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
-- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents.
 - [x] **Agent Template**: Templatize `agent.json` with Mustache variables for tenant-specific deployment.
 - [x] **n8n Plumbing**: `notify_n8n_on_appointment` now uses `pg_net` for real HTTP calls (falls back to NOTICE on local dev).
-- [ ] **Outlook Sync**: Implement the empty Outlook calendar sync branch.
 - [x] **Route Extraction**: Broke `index.ts` monolith into 13 focused route modules under `src/routes/`.
+- [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
+- [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, and `VAPI_SERVER_URL_SECRET` in cloud secrets.
+- [ ] **Vapi Agent**: Point the official Vapi Agent to the production Edge Function URL.
+- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx.
+- [ ] **Database Webhooks**: Enable Supabase Database Webhooks to trigger the n8n sync workflow.
+- [ ] **Outlook Sync**: Implement the empty Outlook calendar sync branch.
+- [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook calendar sync.
+- [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow.
 - [ ] **Beta Testing**: Conduct real-world call tests with PoC tenants (DynaTire).
 
 ## Phase 9: Scale & Polish (Complete ✅)
@@ -66,3 +71,4 @@ Full code review identified 58 bugs across all severity levels. All Critical, Hi
 - [x] **Soft Deletes**: `is_deleted`/`deleted_at` columns with partial indexes on appointments, customers, resources, and employees.
 - [x] **Accessibility**: ARIA labels (`role="dialog"`, `aria-modal`, `aria-invalid`, `aria-describedby`, `aria-busy`) across dashboard.
 - [x] **Customer Timezone**: `check_availability_with_tz()` respects customer timezone in availability checks.
+- [x] **Orphan Transcript Linking**: `link_orphaned_transcripts()` SQL function matches transcripts via call_id.
