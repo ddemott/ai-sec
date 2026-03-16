@@ -1,7 +1,7 @@
 # AI Secretary SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. It follows a **Modular (Hexagonal) Architecture** to ensure technology swappability and long-term maintenance.
+The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 13 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
@@ -38,7 +38,7 @@ The Dashboard provides business owners with transparency and control.
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks.
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 13 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics).
 
 ### 4.1 Security
 - **RLS Enforcement**: Critical routes use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. This ensures all data access goes through Postgres Row-Level Security.
@@ -68,7 +68,7 @@ The scheduler ensures valid bookings by verifying multiple layers of constraints
 4.  **Staff Working Hours**: Is the employee currently on-shift? (DST-safe via `AT TIME ZONE`.)
 5.  **Auto End-Time**: When `end_time` is NULL, derives it from `service.duration_minutes`.
 6.  **Customer Upsert**: When `customer_id` is NULL but phone is provided, auto-creates or finds the customer.
-7.  **Assignment Validation**: Validates `assignment_id` format (UUID or integer) and rejects malformed input.
+7.  **Assignment Validation**: Validates `assignment_id` as UUID (all entity IDs are now UUID after SERIAL→UUID migration).
 
 ---
 
@@ -76,7 +76,7 @@ The scheduler ensures valid bookings by verifying multiple layers of constraints
 - **Post-Call Processing**: Generates summaries and sentiment analysis.
 - **Calendar Synchronization**: Bi-directional sync with Google Calendar and Outlook via the `tenant_calendar_settings` and `appointment_sync_map` tables.
 - **Notifications**: Automated SMS/Email alerts to business owners upon new bookings.
-- **Note**: The Postgres trigger (`notify_n8n_on_appointment`) is currently a placeholder. Production deployment requires wiring via `pg_net` or Supabase Database Webhooks.
+- **Trigger**: The Postgres trigger (`notify_n8n_on_appointment`) uses `pg_net` for real HTTP calls to the tenant's n8n webhook URL. Falls back to `RAISE NOTICE` on local dev without `pg_net`.
 
 ---
 
@@ -87,3 +87,5 @@ The scheduler ensures valid bookings by verifying multiple layers of constraints
 - **Input Validation**: Zod at API boundaries; CHECK constraints on JSONB metadata columns.
 - **Name Sync**: Database triggers keep `full_name` ↔ `first_name`/`last_name` in sync on both users and customers tables.
 - **Persistence**: Managed Supabase Postgres with Docker-backed local development.
+- **Audit Logging**: `audit_log` table with triggers on appointments, customers, and resources capturing before/after snapshots.
+- **Soft Deletes**: `is_deleted`/`deleted_at` columns with partial indexes on key tables (appointments, customers, resources, employees) to prevent accidental data loss while maintaining query performance.

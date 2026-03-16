@@ -52,17 +52,17 @@ Full code review identified 58 bugs across all severity levels. All Critical, Hi
 ## Phase 8: Production Go-Live (Current 🚀)
 - [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
 - [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents.
-- [ ] **Agent Template**: Templatize `agent.json` (currently hardcoded to one tenant).
-- [ ] **n8n Plumbing**: Replace placeholder triggers with real HTTP calls; activate Database Webhooks.
+- [x] **Agent Template**: Templatize `agent.json` with Mustache variables for tenant-specific deployment.
+- [x] **n8n Plumbing**: `notify_n8n_on_appointment` now uses `pg_net` for real HTTP calls (falls back to NOTICE on local dev).
 - [ ] **Outlook Sync**: Implement the empty Outlook calendar sync branch.
-- [ ] **Route Extraction**: Break `index.ts` monolith into route modules for maintainability.
+- [x] **Route Extraction**: Broke `index.ts` monolith into 13 focused route modules under `src/routes/`.
 - [ ] **Beta Testing**: Conduct real-world call tests with PoC tenants (DynaTire).
 
-## Phase 9: Scale & Polish (Future)
-- [ ] **ID Standardization**: Migrate SERIAL PKs to UUID across all tables.
-- [ ] **Code Consolidation**: Deduplicate scheduling logic and `getEmbedding()` between Node/Deno.
-- [ ] **Dead Code Cleanup**: Wire or remove unused BookingService and Provider patterns.
-- [ ] **Audit Logging**: Add audit trail with before/after snapshots.
-- [ ] **Soft Deletes**: Add `is_deleted`/`deleted_at` to prevent accidental data loss.
-- [ ] **Accessibility**: ARIA labels and WCAG compliance across dashboard.
-- [ ] **Customer Timezone**: Respect customer timezone in availability checks.
+## Phase 9: Scale & Polish (Complete ✅)
+- [x] **ID Standardization**: Migrated services and employees from SERIAL to UUID. All assignment IDs are now UUID.
+- [x] **Code Consolidation**: `shared/scheduling.ts` and `shared/getEmbedding.ts` used by both Node and Deno runtimes.
+- [x] **Dead Code Cleanup**: Removed BookingService, Provider pattern, InMemoryBookingStorage, MockLlmProvider, and `/chat` endpoint.
+- [x] **Audit Logging**: `audit_log` table with triggers on appointments, customers, and resources (before/after snapshots).
+- [x] **Soft Deletes**: `is_deleted`/`deleted_at` columns with partial indexes on appointments, customers, resources, and employees.
+- [x] **Accessibility**: ARIA labels (`role="dialog"`, `aria-modal`, `aria-invalid`, `aria-describedby`, `aria-busy`) across dashboard.
+- [x] **Customer Timezone**: `check_availability_with_tz()` respects customer timezone in availability checks.
