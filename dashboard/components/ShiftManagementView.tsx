@@ -1,16 +1,17 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { 
-  Clock, 
-  Plus, 
-  Trash2, 
-  Users, 
+import {
+  Clock,
+  Plus,
+  Trash2,
+  Users,
   Calendar as CalendarIcon,
   Copy,
   Check,
   AlertCircle,
-  Loader2
+  Loader2,
+  Edit2
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
@@ -38,6 +39,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
   
   const [isAddModalOpen, setIsWizardOpen] = useState(false)
+  const [editingShift, setEditingShift] = useState<any>(null)
   const [newShift, setNewShift] = useState({
     day_of_week: 1,
     start_time: '09:00',
@@ -75,6 +77,30 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
       }
     } catch (err) {
       alert("Failed to create shift")
+    }
+  }
+
+  function startEditShift(shift: any) {
+    setEditingShift(shift)
+    setNewShift({
+      day_of_week: shift.day_of_week,
+      start_time: shift.start_time.substring(0, 5),
+      end_time: shift.end_time.substring(0, 5),
+    })
+    setIsWizardOpen(true)
+  }
+
+  async function handleUpdateShift() {
+    if (!editingShift || !tenantId) return
+    try {
+      const res = await Api.shifts.update(editingShift.id, tenantId, newShift)
+      if (res.success) {
+        setShifts(shifts.map(s => s.id === editingShift.id ? res.shift : s))
+        setIsWizardOpen(false)
+        setEditingShift(null)
+      }
+    } catch (err) {
+      alert("Failed to update shift")
     }
   }
 
@@ -183,13 +209,20 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
                           <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
                             {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
                           </span>
-                          <button 
+                          <button
+                            onClick={() => startEditShift(s)}
+                            className="text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Edit shift"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => handleDeleteShift(s.id)}
                             className="text-gray-300 hover:text-red-500 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                          <button 
+                          <button
                             onClick={() => copyToAllDays(s)}
                             className="text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
                             title="Copy to all days"
@@ -211,12 +244,14 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
 
       <Modal
         isOpen={isAddModalOpen}
-        onClose={() => setIsWizardOpen(false)}
-        title="Add Working Shift"
+        onClose={() => { setIsWizardOpen(false); setEditingShift(null); }}
+        title={editingShift ? "Edit Working Shift" : "Add Working Shift"}
         footer={
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setIsWizardOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleAddShift}>Create Shift</Button>
+            <Button variant="ghost" onClick={() => { setIsWizardOpen(false); setEditingShift(null); }}>Cancel</Button>
+            <Button variant="primary" onClick={editingShift ? handleUpdateShift : handleAddShift}>
+              {editingShift ? 'Update Shift' : 'Create Shift'}
+            </Button>
           </div>
         }
       >

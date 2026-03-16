@@ -3,11 +3,13 @@ import React from 'react';
 interface BadgeProps {
   children: React.ReactNode;
   variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning';
+  className?: string;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
   variant = 'primary',
+  className = '',
 }) => {
   const variants = {
     primary: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400',
@@ -18,7 +20,7 @@ export const Badge: React.FC<BadgeProps> = ({
   };
 
   return (
-    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest inline-block ${variants[variant]}`}>
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest inline-block ${variants[variant]} ${className}`}>
       {children}
     </span>
   );

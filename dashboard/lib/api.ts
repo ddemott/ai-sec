@@ -232,7 +232,10 @@ export const Api = {
     create: (tenantId: string | null, data: any) => 
       apiMutate<any>(`/shifts/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-    delete: (id: number, tenantId: string | null) => 
+    update: (id: number, tenantId: string | null, data: any) =>
+      apiMutate<any>(`/shifts/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
+
+    delete: (id: number, tenantId: string | null) =>
       apiMutate<any>(`/shifts/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
     },
 

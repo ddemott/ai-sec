@@ -57,14 +57,40 @@ export class InMemoryBookingStorage implements BookingStorage {
   }
 
   async getNextAvailableSlot(resourceId: string, window: TimeWindow): Promise<TimeSlot | null> {
-    // Very naive implementation: just return the requested window start as a single slot.
     const durationMinutes = 60;
     const start = new Date(window.from);
     const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+
+    // Check for overlaps with existing appointments on this resource
+    const hasOverlap = state.appointments.some(
+      (a) =>
+        a.resourceId === resourceId &&
+        a.status === 'scheduled' &&
+        new Date(a.startTime) < end &&
+        new Date(a.endTime) > start
+    );
+
+    if (hasOverlap) {
+      return null;
+    }
+
     return { start, end };
   }
 
   async createAppointment(input: NewAppointmentInput): Promise<Appointment> {
+    // Check for resource overlap before inserting
+    const hasOverlap = state.appointments.some(
+      (a) =>
+        a.resourceId === input.resourceId &&
+        a.status === 'scheduled' &&
+        new Date(a.startTime) < input.endTime &&
+        new Date(a.endTime) > input.startTime
+    );
+
+    if (hasOverlap) {
+      throw new Error('Resource slot already booked');
+    }
+
     const appointment: Appointment = {
       id: randomUUID(),
       tenantId: input.tenantId,

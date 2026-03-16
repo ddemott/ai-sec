@@ -53,32 +53,38 @@ export function useStaticData(tenantId: string | null) {
   const [resources, setResources] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!tenantId) return;
-    
+
     setLoading(true);
     setError(null);
-    try {
-      const [cRes, rRes, eRes, sRes] = await Promise.all([
-        Api.customers.list(tenantId),
-        Api.resources.list(tenantId),
-        Api.employees.list(tenantId),
-        Api.services.list(tenantId)
-      ]);
-      
-      setCustomers(Array.isArray(cRes) ? cRes : []);
-      setResources(Array.isArray(rRes) ? rRes : []);
-      setEmployees(Array.isArray(eRes) ? eRes : []);
-      setServices(Array.isArray(sRes) ? sRes : []);
-    } catch (err: any) {
-      console.error('Failed to fetch static data', err);
-      setError(err.message || 'Failed to fetch data');
-    } finally {
-      setLoading(false);
+
+    const [cRes, rRes, eRes, sRes, skRes] = await Promise.allSettled([
+      Api.customers.list(tenantId),
+      Api.resources.list(tenantId),
+      Api.employees.list(tenantId),
+      Api.services.list(tenantId),
+      Api.skills.list(tenantId),
+    ]);
+
+    setCustomers(cRes.status === 'fulfilled' && Array.isArray(cRes.value) ? cRes.value : []);
+    setResources(rRes.status === 'fulfilled' && Array.isArray(rRes.value) ? rRes.value : []);
+    setEmployees(eRes.status === 'fulfilled' && Array.isArray(eRes.value) ? eRes.value : []);
+    setServices(sRes.status === 'fulfilled' && Array.isArray(sRes.value) ? sRes.value : []);
+    setSkills(skRes.status === 'fulfilled' && Array.isArray(skRes.value) ? skRes.value : []);
+
+    const failures = [cRes, rRes, eRes, sRes, skRes].filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      const firstError = (failures[0] as PromiseRejectedResult).reason;
+      console.error('Some data fetches failed', failures);
+      setError(firstError?.message || 'Some data failed to load');
     }
+
+    setLoading(false);
   }, [tenantId]);
 
   useEffect(() => {
@@ -90,6 +96,7 @@ export function useStaticData(tenantId: string | null) {
     resources,
     employees,
     services,
+    skills,
     loading,
     error,
     refresh: fetchData

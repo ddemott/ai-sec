@@ -482,6 +482,11 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
           </header>
 
           <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+            {usingMockData && (
+              <div className="p-3 m-2 text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                Showing sample data. Log in to see real appointments.
+              </div>
+            )}
             {appointments.map((apt) => (
               <div 
                 key={apt.id}

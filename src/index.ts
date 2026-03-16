@@ -192,6 +192,20 @@ const llm = new MockLlmProvider();
 
 app.get('/health', async () => ({ status: 'ok' }));
 
+// BUG-013: Purge expired soft reservations (callable via cron or admin)
+app.post('/admin/purge-soft-reservations', async (req, reply) => {
+  const client = await pool.connect();
+  try {
+    const res = await client.query('SELECT purge_expired_soft_reservations() as deleted_count');
+    return reply.send({ success: true, deleted_count: res.rows[0].deleted_count });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to purge soft reservations' });
+  } finally {
+    client.release();
+  }
+});
+
 // BUG-012: JWT authentication preHandler for protected routes
 // Extracts tenant_id from JWT and attaches to request
 const PUBLIC_ROUTES = ['/health', '/login', '/'];
@@ -378,9 +392,11 @@ app.post('/appointments/create', async (req, reply) => {
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
-// NEW: List Appointments for a tenant (BUG-007: RLS-enforced for non-admin)
+// NEW: List Appointments for a tenant (BUG-007: RLS-enforced for non-admin, BUG-020: pagination)
 app.get('/appointments', async (req, reply) => {
   const tenantId = (req.query as any)['tenant_id'];
+  const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
+  const offset = parseInt((req.query as any)['offset']) || 0;
 
   if (!tenantId) {
     return reply.status(400).send({ error: 'tenant_id is required' });
@@ -388,7 +404,7 @@ app.get('/appointments', async (req, reply) => {
 
   const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
-  const query = `
+  const baseQuery = `
     SELECT
        a.*,
        COALESCE(a.employee_id::text, a.assigned_to_user_id::text) as employee_id,
@@ -410,18 +426,16 @@ app.get('/appointments', async (req, reply) => {
 
   try {
     if (isSuperAdmin) {
-      // Super-admin uses root pool (no RLS filtering)
       const client = await pool.connect();
       try {
-        const res = await client.query(query);
+        const res = await client.query(`${baseQuery} LIMIT $1 OFFSET $2`, [limit, offset]);
         return reply.send(res.rows);
       } finally {
         client.release();
       }
     } else {
-      // Regular tenant: RLS-enforced
       const res = await withTenantClient(tenantId, async (client) => {
-        return client.query(query, [tenantId]);
+        return client.query(`${baseQuery} LIMIT $2 OFFSET $3`, [tenantId, limit, offset]);
       });
       return reply.send(res.rows);
     }
@@ -526,9 +540,11 @@ app.post('/resources/:id/update', async (req, reply) => {
   }
 });
 
-// NEW: Get Customers for a tenant (BUG-007: RLS-enforced for non-admin)
+// NEW: Get Customers for a tenant (BUG-007: RLS-enforced for non-admin, BUG-020: pagination)
 app.get('/customers', async (req, reply) => {
   const tenantId = (req.query as any)['tenant_id'];
+  const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
+  const offset = parseInt((req.query as any)['offset']) || 0;
 
   if (!tenantId) {
     return reply.status(400).send({ error: 'tenant_id is required' });
@@ -540,14 +556,14 @@ app.get('/customers', async (req, reply) => {
     if (isSuperAdmin) {
       const client = await pool.connect();
       try {
-        const res = await client.query('SELECT * FROM customers ORDER BY name');
+        const res = await client.query('SELECT * FROM customers ORDER BY name LIMIT $1 OFFSET $2', [limit, offset]);
         return reply.send(res.rows);
       } finally {
         client.release();
       }
     } else {
       const res = await withTenantClient(tenantId, async (client) => {
-        return client.query('SELECT * FROM customers WHERE tenant_id = $1 ORDER BY name', [tenantId]);
+        return client.query('SELECT * FROM customers WHERE tenant_id = $1 ORDER BY name LIMIT $2 OFFSET $3', [tenantId, limit, offset]);
       });
       return reply.send(res.rows);
     }
@@ -771,6 +787,34 @@ app.post('/shifts/create', async (req, reply) => {
   } catch (err) {
     app.log.error(err);
     return reply.status(500).send({ error: 'Failed to create shift' });
+  } finally {
+    client.release();
+  }
+});
+
+// BUG-047: Update shift times
+app.post('/shifts/:id/update', async (req, reply) => {
+  const { id } = req.params as { id: string };
+  const body = req.body as { tenant_id: string; start_time?: string; end_time?: string; day_of_week?: number; is_active?: boolean };
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      `UPDATE employee_shifts SET
+        start_time = COALESCE($1, start_time),
+        end_time = COALESCE($2, end_time),
+        day_of_week = COALESCE($3, day_of_week),
+        is_active = COALESCE($4, is_active)
+      WHERE id = $5 AND tenant_id = $6
+      RETURNING *`,
+      [body.start_time, body.end_time, body.day_of_week, body.is_active, id, body.tenant_id]
+    );
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ success: false, error: 'Shift not found' });
+    }
+    return reply.send({ success: true, shift: res.rows[0] });
+  } catch (err) {
+    app.log.error(err);
+    return reply.status(500).send({ error: 'Failed to update shift' });
   } finally {
     client.release();
   }

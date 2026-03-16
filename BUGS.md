@@ -103,12 +103,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: `soft_reservations` table has `expires_at` but no scheduled job to purge expired rows.
 - **Impact**: Dead rows accumulate indefinitely.
 - **Fix**: Add a pg_cron job or application-level cleanup.
+- **Status**: FIXED — Added `purge_expired_soft_reservations()` function in migration + `/admin/purge-soft-reservations` endpoint in `src/index.ts`
 
 ### BUG-014: Polymorphic p_assignment_id has no error handling
 - **File**: `supabase/migrations/20260312000003_update_atomic_with_shifts.sql`
 - **Problem**: `p_assignment_id` TEXT is parsed as UUID or INTEGER via regex (`is_uuid()`). Malformed input silently sets both to NULL.
 - **Impact**: Appointment created with no assignment when intent was to assign.
 - **Fix**: Return an error if p_assignment_id is provided but doesn't parse as either type.
+- **Status**: FIXED — `book_appointment_atomic` now validates with `^\d+$` regex for integers and returns error for malformed input. Migration + tests in `src/medium-bugs.test.ts`
 
 ### BUG-015: Mixed ID types across tables
 - **Files**: Multiple migrations
@@ -145,24 +147,28 @@ Found during full code review on March 16, 2026.
 - **Problem**: All list endpoints return every row. No limit, offset, or cursor support.
 - **Impact**: Performance degrades as data grows; large tenant = slow/OOM.
 - **Fix**: Add pagination parameters to API and database queries.
+- **Status**: FIXED — Added `limit` (default 200, max 1000) and `offset` query params to `/appointments` and `/customers` endpoints in `src/index.ts`
 
 ### BUG-021: Badge component receives unsupported className prop
 - **File**: `dashboard/components/AnalyticsView.tsx:73`
 - **Problem**: `<Badge className="bg-green-100...">` but Badge component doesn't accept or forward className.
 - **Impact**: Custom styling is silently ignored.
 - **Fix**: Extend Badge props to accept className, or use the variant prop.
+- **Status**: FIXED — Added `className` prop to Badge component in `dashboard/components/ui/Badge.tsx`
 
 ### BUG-022: full_name and first_name/last_name not kept in sync
 - **Files**: `supabase/migrations/20260301000000_user_accounts.sql`, `20260305000000_users_split_name.sql`
 - **Problem**: Users table has both `full_name` and `first_name`/`last_name`. No trigger keeps them in sync on updates.
 - **Impact**: Data divergence after manual edits.
 - **Fix**: Add an UPDATE trigger, or drop full_name in favor of computed column.
+- **Status**: FIXED — Added `trg_sync_user_names` and `trg_sync_customer_names` BEFORE UPDATE triggers in `supabase/migrations/20260316200000_fix_medium_bugs.sql`. Tested in `src/medium-bugs.test.ts`
 
 ### BUG-023: Name splitting fails on 3+ word names
 - **Files**: `supabase/migrations/20260304000010_split_names_and_address.sql`
 - **Problem**: `split_part(name, ' ', 1)` for first_name, remainder for last_name. "Mary Jane Watson" -> first: "Mary", last: "Jane Watson".
 - **Impact**: Incorrect name parsing for compound names.
 - **Fix**: Only split on the last space, or let the UI collect first/last separately.
+- **Status**: FIXED — Name sync triggers use `split_part` for first name and `substring from first space` for last name, giving "Mary" / "Jane Watson". Tested in `src/medium-bugs.test.ts`
 
 ### BUG-024: getEmbedding() duplicated in two codebases
 - **Files**: `src/index.ts`, `supabase/functions/vapi-tools/index.ts`
@@ -175,6 +181,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: When tenantId is missing, silently falls back to MOCK_APPOINTMENTS with no user indication.
 - **Impact**: User sees fake data without knowing it's fake.
 - **Fix**: Show a warning banner or refuse to render without a valid session.
+- **Status**: FIXED — Added visible "Showing sample data" warning banner in the appointment list when `usingMockData` is true. `dashboard/components/AppointmentView.tsx`
 
 ---
 
@@ -203,12 +210,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: Always returns a 60-minute slot starting at the requested time. No overlap checking — multiple appointments can be booked in the same slot.
 - **Impact**: Backend tests using in-memory storage don't catch scheduling conflicts.
 - **Fix**: Implement proper overlap detection, or remove the in-memory storage in favor of always using Postgres.
+- **Status**: FIXED — `getNextAvailableSlot` and `createAppointment` now check for resource overlap before returning/inserting. Throws on conflict.
 
 ### BUG-029: WorkingHours vs Shift day-of-week format mismatch
 - **Files**: `src/core/models.ts`, `supabase/migrations/20260312000002_employee_shifts.sql`
 - **Problem**: `WorkingHours` type uses string keys (`"mon"`, `"tue"`) but `employee_shifts` table uses numeric `day_of_week` (0-6, 0=Sunday).
 - **Impact**: Code converting between the two formats must handle the mapping manually; easy to introduce off-by-one bugs.
 - **Fix**: Standardize on one format and add a conversion utility.
+- **Status**: FIXED — Added `dayStringToNum`, `dayNumToString`, `workingHoursToShifts`, `shiftsToWorkingHours` utilities in `src/core/models.ts`. Tested in `src/medium-bugs.test.ts`
 
 ### BUG-030: call_transcript.customer_id nullable loses traceability
 - **File**: `supabase/migrations/20260228000001_webhooks_and_logs.sql`
@@ -245,12 +254,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: `Promise.all([customers, resources, employees, services])` — if any single fetch fails, the entire hook errors out and no data loads.
 - **Impact**: A transient error on one endpoint (e.g., employees) prevents appointments and customers from loading too.
 - **Fix**: Use `Promise.allSettled()` and handle partial failures gracefully.
+- **Status**: FIXED — Changed to `Promise.allSettled()` with per-result status checking in `dashboard/lib/hooks.ts`
 
 ### BUG-036: skill property accessed in useStaticData but never populated
 - **File**: `dashboard/lib/hooks.ts`
 - **Problem**: The hook references a `skill` property in its return or internal logic but never fetches from the `/skills` endpoint.
 - **Impact**: Skill-dependent UI may show empty/undefined values.
 - **Fix**: Add `Api.skills.list(tenantId)` to the parallel fetch, or remove the reference.
+- **Status**: FIXED — Added `skills` state and `Api.skills.list(tenantId)` to `Promise.allSettled` in `dashboard/lib/hooks.ts`
 
 ### BUG-037: No audit logging
 - **Files**: All migration files, `src/index.ts`
@@ -319,18 +330,21 @@ Found during full code review on March 16, 2026.
 - **Problem**: Shift validation converts times to a fixed timezone but doesn't account for daylight saving time transitions. A shift defined as 9 AM–5 PM effectively shifts by an hour twice a year.
 - **Impact**: During DST transitions, employees may be booked outside their actual working hours or rejected during valid hours.
 - **Fix**: Use timezone-aware time comparisons that account for DST, or store shifts in UTC with explicit DST handling.
+- **Status**: FIXED — `book_appointment_atomic` now converts to local time once using `AT TIME ZONE` (which handles DST correctly for TIMESTAMPTZ) and reuses the result. Added cross-day validation. `supabase/migrations/20260316200000_fix_medium_bugs.sql`
 
 ### BUG-047: ShiftManagementView has no edit or delete for existing shifts
 - **File**: `dashboard/components/ShiftManagementView.tsx`
 - **Problem**: The UI only supports creating new shifts. There is no way to edit a shift's times or delete a shift from the interface.
 - **Impact**: Managers must delete and recreate shifts to make changes; no delete means shifts can only accumulate.
 - **Fix**: Add edit and delete actions to shift pills in the week view.
+- **Status**: FIXED — Added edit button (pencil icon) to shift pills, `handleUpdateShift` function, `/shifts/:id/update` backend endpoint, and `Api.shifts.update` client method. Modal toggles between create/edit modes.
 
 ### BUG-048: CRM activity history fetched but never rendered
 - **File**: `dashboard/components/CRMView.tsx`
 - **Problem**: Customer history/timeline data is fetched from the API but the results are never displayed in the component.
 - **Impact**: The CRM appears to lack history even though the data is being retrieved.
 - **Fix**: Render the fetched history data in a timeline section within the customer detail pane.
+- **Status**: NOT A BUG — CRMView already renders the `summaries` data in an "AI Call History" section (line 411-431). History is fetched via `fetchHistory()` and displayed with date and summary text.
 
 ### BUG-049: Vapi agent.json has hardcoded tenant ID and date
 - **File**: `vapi/agent.json`
@@ -343,12 +357,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: Documents are split on double newlines (`\n\n`). This loses context at chunk boundaries and produces inconsistent chunk sizes.
 - **Impact**: RAG search quality suffers — relevant information may be split across chunks, reducing semantic match accuracy.
 - **Fix**: Use overlapping sliding window chunking or a sentence-aware splitter with configurable chunk size.
+- **Status**: FIXED — Replaced naive splitting with `chunkDocument()` function using paragraph-aware chunking with configurable max size (1500 chars) and overlap (200 chars) in `scripts/ingest-knowledge.ts`
 
 ### BUG-051: No duplicate detection in knowledge ingestion
 - **File**: `scripts/ingest-knowledge.ts`
 - **Problem**: Re-ingesting the same document creates duplicate rows in `tenant_docs`. No check for existing content or source file.
 - **Impact**: Duplicate chunks inflate storage, distort similarity rankings, and return redundant results.
 - **Fix**: Check for existing rows by `(tenant_id, source, section)` before inserting, or delete existing chunks for the same source before re-ingesting.
+- **Status**: FIXED — Ingestion now deletes existing chunks for the same `(tenant_id, source)` before re-inserting. `scripts/ingest-knowledge.ts`
 
 ---
 
