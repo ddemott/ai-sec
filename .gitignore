@@ -22,6 +22,10 @@ yarn-error.log*
 .env.*.local
 dashboard/.env.local
 
+# sensitive files
+pw.txt
+output.txt
+
 # misc
 .DS_Store
 .idea
