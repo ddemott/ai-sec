@@ -81,7 +81,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
     // Appointment selection state
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
     // Draft event state for calendar block
-    // const [draftEvent, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
+    const [draftEvent, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
     // Form state
     const [form, setForm] = useState({
       customer_id: '',

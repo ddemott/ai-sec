@@ -18,7 +18,7 @@ export async function getApiClient() {
 }
 
 export async function clearDB(client: Client) {
-    await client.query("TRUNCATE tenants, resources, customers, appointments, call_summaries, call_transcripts, soft_reservations CASCADE;");
+    await client.query("TRUNCATE tenants, resources, customers, appointments, call_summaries, call_transcripts, soft_reservations, users, services, employees, employee_shifts, service_employee, service_resource, tenant_docs, tenant_skills CASCADE;");
 }
 
 export async function setupBasicTenant(client: Client) {

@@ -9,11 +9,18 @@ export const API_BASE_URL =
 export const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
- * Common headers for all API requests
+ * Common headers for all API requests (BUG-012: includes JWT token)
  */
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-});
+const getHeaders = () => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = getLocalStorageItem('authToken');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
 
 /**
  * Safe localStorage access utility
@@ -47,7 +54,19 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
     url += `?${searchParams.toString()}`;
   }
 
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: getHeaders() });
+
+  // BUG-012: Auto-logout on expired/invalid token
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tenantId');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('authToken');
+      window.location.href = '/';
+    }
+    throw new Error('Session expired. Please log in again.');
+  }
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || `API Error: ${response.status}`);
@@ -70,6 +89,17 @@ async function apiMutate<T>(
     headers: getHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
+
+  // BUG-012: Auto-logout on expired/invalid token
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tenantId');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('authToken');
+      window.location.href = '/';
+    }
+    return { success: false, error: 'Session expired. Please log in again.' } as any;
+  }
 
   const data = await response.json();
   if (!response.ok) {

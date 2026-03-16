@@ -26,9 +26,19 @@ export class PostgresRepository implements IRepository {
     const client = await this.pool.connect();
     try {
       if (tenantId) {
+        // BUG-026: Verify tenant context was set successfully
         await client.queryArray(`SELECT set_tenant_context($1::UUID)`, [tenantId]);
+        const verify = await client.queryObject<{ val: string }>(
+          "SELECT current_setting('app.current_tenant_id', true) as val"
+        );
+        if (!verify.rows[0]?.val || verify.rows[0].val !== tenantId) {
+          throw new Error(`Failed to set tenant context for ${tenantId}`);
+        }
       }
       return await fn(client);
+    } catch (err) {
+      this.logger.error({ err, tenantId }, "Database operation failed");
+      throw err;
     } finally {
       client.release();
     }

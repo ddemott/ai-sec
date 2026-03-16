@@ -15,6 +15,7 @@ import SkillMatrixView from '@/components/SkillMatrixView'
 import KnowledgeBaseView from '@/components/KnowledgeBaseView'
 import ShiftManagementView from '@/components/ShiftManagementView'
 import AnalyticsView from '@/components/AnalyticsView'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources' | 'service-catalog' | 'staff' | 'skill-matrix' | 'knowledge-base' | 'staff-shifts'
 
@@ -72,6 +73,7 @@ export default function DashboardPage() {
   const handleLogout = () => {
     localStorage.removeItem('tenantId')
     localStorage.removeItem('userName')
+    localStorage.removeItem('authToken')
     setTenantId(null)
     setManagedTenantId(null)
     setManagedTenantName(null)
@@ -90,15 +92,6 @@ export default function DashboardPage() {
     return (
       <div className="relative h-screen w-screen overflow-hidden">
         <LoginView onLoginSuccess={handleLoginSuccess} />
-        {/* DEV BYPASS */}
-        <div className="absolute bottom-4 right-4 z-50">
-          <button 
-            onClick={() => handleLoginSuccess({ tenant_id: SUPER_ADMIN_TENANT_ID, user_name: 'Dev Admin' })}
-            className="px-4 py-2 bg-gray-100 text-gray-400 text-[10px] font-bold uppercase rounded hover:bg-gray-200 transition"
-          >
-            [DEV] Bypass to SuperAdmin
-          </button>
-        </div>
       </div>
     )
   }
@@ -114,6 +107,7 @@ export default function DashboardPage() {
       managedTenantId={managedTenantId}
       onSelectTenant={handleSelectManagedTenant}
     >
+      <ErrorBoundary>
         {activeTab === 'all-businesses' && (
           <SuperAdminDashboard onSelectTenant={handleSelectManagedTenant} currentTenantId={managedTenantId} />
         )}
@@ -128,6 +122,7 @@ export default function DashboardPage() {
         {activeTab === 'skill-matrix' && <SkillMatrixView overrideTenantId={managedTenantId} />}
         {activeTab === 'staff-shifts' && <ShiftManagementView overrideTenantId={managedTenantId} />}
         {activeTab === 'knowledge-base' && <KnowledgeBaseView overrideTenantId={managedTenantId} />}
+      </ErrorBoundary>
     </OutlookLayout>
   )
 }

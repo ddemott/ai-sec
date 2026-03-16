@@ -30,6 +30,7 @@ export function useSession(overrideTenantId?: string | null) {
   const logout = useCallback(() => {
     localStorage.removeItem('tenantId');
     localStorage.removeItem('userName');
+    localStorage.removeItem('authToken');
     setTenantId(null);
     setUserName(null);
     setIsSuperAdmin(false);

@@ -56,6 +56,10 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
     notes: ''
   })
 
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditForm(prev => ({ ...prev, [field]: value }))
+  }
+
   useEffect(() => {
     if (tenantId) {
       fetchCustomers()

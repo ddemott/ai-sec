@@ -2,17 +2,21 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import pdfParse from 'pdf-parse';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
+import jwt from 'jsonwebtoken';
 import { InMemoryBookingStorage } from './storage/inMemoryBookingStorage';
 import { LoggingTelephonyProvider } from './providers/loggingTelephonyProvider';
 import { ConsoleNotificationProvider } from './providers/consoleNotificationProvider';
 import { BookingService } from './services/bookingService';
 import { MockLlmProvider } from './services/mockLlmProvider';
 import type { TimeWindow } from './core/models';
+import { z } from 'zod';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
 /**
  * Helper to generate embeddings via OpenAI
@@ -103,6 +107,82 @@ const pool = isLocal ? new Pool({
   }
 });
 
+// BUG-007: RLS-enforced pool using api_user (subject to row-level security)
+const apiPool = isLocal ? new Pool({
+  user: 'api_user',
+  host: 'localhost',
+  database: 'postgres',
+  password: 'api_password',
+  port: 5433,
+}) : new Pool({
+  connectionString: (process.env.DATABASE_URL || '').replace(/postgres:\/\/[^:]+:[^@]+@/, 'postgres://api_user:api_password@'),
+  ssl: { rejectUnauthorized: false }
+});
+
+/**
+ * BUG-007: Execute a query with RLS tenant isolation.
+ * Gets a connection from the api_user pool, sets tenant context, runs the callback.
+ */
+async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await apiPool.connect();
+  try {
+    await client.query('SELECT set_tenant_context($1::UUID)', [tenantId]);
+    return await fn(client);
+  } finally {
+    // Reset the tenant context before returning client to pool
+    await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
+    client.release();
+  }
+}
+
+/**
+ * BUG-012: JWT authentication helper
+ */
+function generateToken(payload: { tenant_id: string; user_id: string; email: string }): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+}
+
+function verifyToken(token: string): { tenant_id: string; user_id: string; email: string } | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as any;
+  } catch {
+    return null;
+  }
+}
+
+// BUG-011: Input validation schemas for critical endpoints
+const CustomerCreateSchema = z.object({
+  tenant_id: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  phone: z.string().min(1).max(30),
+  email: z.string().email().optional().nullable(),
+  first_name: z.string().max(100).optional().nullable(),
+  last_name: z.string().max(100).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  address_line2: z.string().max(500).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  postal_code: z.string().max(20).optional().nullable(),
+  timezone: z.string().max(50).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+const AppointmentCreateSchema = z.object({
+  tenant_id: z.string().uuid(),
+  resource_id: z.string().uuid(),
+  customer_id: z.string().uuid(),
+  start_time: z.string().min(1),
+  end_time: z.string().min(1),
+  description: z.string().min(1).max(1000),
+  location: z.string().max(500).optional().nullable(),
+  employee_id: z.union([z.string(), z.number()]).optional().nullable(),
+});
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
 // Core wiring
 const storage = new InMemoryBookingStorage();
 const telephony = new LoggingTelephonyProvider();
@@ -112,9 +192,39 @@ const llm = new MockLlmProvider();
 
 app.get('/health', async () => ({ status: 'ok' }));
 
-// Login endpoint for multi-tenancy
+// BUG-012: JWT authentication preHandler for protected routes
+// Extracts tenant_id from JWT and attaches to request
+const PUBLIC_ROUTES = ['/health', '/login', '/'];
+app.addHook('onRequest', async (request, reply) => {
+  // Skip auth for public routes and OPTIONS
+  if (request.method === 'OPTIONS') return;
+  const urlPath = request.url.split('?')[0];
+  if (PUBLIC_ROUTES.includes(urlPath)) return;
+
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Allow unauthenticated requests for backward compatibility during migration
+    // TODO: Once all clients send JWT, return 401 here
+    return;
+  }
+
+  const token = authHeader.slice(7);
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return reply.status(401).send({ error: 'Invalid or expired token' });
+  }
+
+  // Attach auth context to request for downstream use
+  (request as any).auth = decoded;
+});
+
+// Login endpoint for multi-tenancy (BUG-011: validated)
 app.post('/login', async (req, reply) => {
-  const { email, password } = req.body as any;
+  const parsed = LoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return reply.status(400).send({ success: false, error: 'Invalid email or password format' });
+  }
+  const { email, password } = parsed.data;
   const client = await pool.connect();
   try {
     // Fetch user by email
@@ -133,11 +243,17 @@ app.post('/login', async (req, reply) => {
     const bcrypt = await import('bcrypt');
     const match = await bcrypt.compare(password, user.password_hash);
     if (match) {
+      const token = generateToken({
+        tenant_id: user.tenant_id,
+        user_id: user.id,
+        email: user.email,
+      });
       return reply.send({
         success: true,
         tenant_id: user.tenant_id,
         user_id: user.id,
-        user_name: user.full_name
+        user_name: user.full_name,
+        token,
       });
     } else {
       return reply.status(401).send({
@@ -184,81 +300,65 @@ app.delete('/tenants/:id', async (req, reply) => {
     }
 });
 
-// NEW: Delete an Appointment
+// NEW: Delete an Appointment (BUG-007: now tenant-scoped via RLS)
 app.delete('/appointments/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const client = await pool.connect();
+    const tenantId = (req.query as any).tenant_id || (req as any).auth?.tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
     try {
-        await client.query('DELETE FROM appointments WHERE id = $1', [id]);
+        await withTenantClient(tenantId, async (client) => {
+            await client.query('DELETE FROM appointments WHERE id = $1', [id]);
+        });
         return reply.send({ success: true });
     } catch (err) {
         app.log.error(err);
         return reply.status(500).send({ error: 'Failed to delete appointment' });
-    } finally {
-        client.release();
     }
 });
 
-// NEW: Delete a Customer
+// NEW: Delete a Customer (BUG-007: now tenant-scoped via RLS)
 app.delete('/customers/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const client = await pool.connect();
+    const tenantId = (req.query as any).tenant_id || (req as any).auth?.tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
     try {
-        await client.query('DELETE FROM customers WHERE id = $1', [id]);
+        await withTenantClient(tenantId, async (client) => {
+            await client.query('DELETE FROM customers WHERE id = $1', [id]);
+        });
         return reply.send({ success: true });
     } catch (err) {
         app.log.error(err);
         return reply.status(500).send({ error: 'Failed to delete customer' });
-    } finally {
-        client.release();
     }
 });
 
-// NEW: Manual Appointment Creation
+// NEW: Manual Appointment Creation (BUG-007 + BUG-011: validated + RLS-enforced)
 app.post('/appointments/create', async (req, reply) => {
-  const body = req.body as {
-    tenant_id: string;
-    resource_id: string;
-    customer_id: string;
-    start_time: string;
-    end_time: string;
-    description: string;
-    location?: string;
-    employee_id?: string | number;
-  };
-
-  const required = [
-    'tenant_id',
-    'resource_id',
-    'customer_id',
-    'start_time',
-    'end_time',
-    'description',
-  ];
-
-    const missing = required.filter((key) => !body?.[key as keyof typeof body]);
-  if (missing.length > 0) {
-    return reply
-    .status(400)
-    .send({ success: false, error: 'Missing required fields', missing });
+  const parsed = AppointmentCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
   }
+  const body = parsed.data;
 
-  const client = await pool.connect();
   try {
-    const res = await client.query(
-      'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-      [
-        body.tenant_id,
-        body.resource_id,
-        body.customer_id,
-        body.start_time,
-        body.end_time,
-        body.description,
-        'manual-entry',
-        body.location || null,
-        body.employee_id ? body.employee_id.toString() : null
-      ]
-    );
+    const res = await withTenantClient(body.tenant_id, async (client) => {
+      return client.query(
+        'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+        [
+          body.tenant_id,
+          body.resource_id,
+          body.customer_id,
+          body.start_time,
+          body.end_time,
+          body.description,
+          'manual-entry',
+          body.location || null,
+          body.employee_id ? body.employee_id.toString() : null
+        ]
+      );
+    });
     const result = res.rows[0];
     if (result.success) {
       return reply.send({ success: true, appointment_id: result.appointment_id });
@@ -267,21 +367,18 @@ app.post('/appointments/create', async (req, reply) => {
     }
   } catch (err: any) {
     app.log.error(err);
-    // Surface common data/format issues as 400s instead of generic 500s
     if (err.code === '22P02') {
       return reply
       .status(400)
       .send({ success: false, error: 'Invalid identifier or time format', detail: err.detail });
     }
     return reply.status(500).send({ error: 'Internal server error' });
-  } finally {
-    client.release();
   }
 });
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
-// NEW: List Appointments for a tenant (including basic customer/resource info)
+// NEW: List Appointments for a tenant (BUG-007: RLS-enforced for non-admin)
 app.get('/appointments', async (req, reply) => {
   const tenantId = (req.query as any)['tenant_id'];
 
@@ -291,38 +388,46 @@ app.get('/appointments', async (req, reply) => {
 
   const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
-  const client = await pool.connect();
+  const query = `
+    SELECT
+       a.*,
+       COALESCE(a.employee_id::text, a.assigned_to_user_id::text) as employee_id,
+       jsonb_build_object(
+         'name', c.name,
+         'first_name', c.first_name,
+         'last_name', c.last_name,
+         'phone', c.phone,
+         'metadata', c.metadata
+       ) AS customers,
+       jsonb_build_object(
+         'name', r.name
+       ) AS resources
+     FROM appointments a
+     LEFT JOIN customers c ON c.id = a.customer_id
+     LEFT JOIN resources r ON r.id = a.resource_id
+     ${isSuperAdmin ? '' : 'WHERE a.tenant_id = $1'}
+     ORDER BY a.start_time ASC`;
+
   try {
-    const query = `
-      SELECT
-         a.*,
-         COALESCE(a.employee_id::text, a.assigned_to_user_id::text) as employee_id,
-         jsonb_build_object(
-           'name', c.name,
-           'first_name', c.first_name,
-           'last_name', c.last_name,
-           'phone', c.phone,
-           'metadata', c.metadata
-         ) AS customers,
-         jsonb_build_object(
-           'name', r.name
-         ) AS resources
-       FROM appointments a
-       LEFT JOIN customers c ON c.id = a.customer_id
-       LEFT JOIN resources r ON r.id = a.resource_id
-       ${isSuperAdmin ? '' : 'WHERE a.tenant_id = $1'}
-       ORDER BY a.start_time ASC`;
-    
-    const res = isSuperAdmin 
-      ? await client.query(query)
-      : await client.query(query, [tenantId]);
-      
-    return reply.send(res.rows);
+    if (isSuperAdmin) {
+      // Super-admin uses root pool (no RLS filtering)
+      const client = await pool.connect();
+      try {
+        const res = await client.query(query);
+        return reply.send(res.rows);
+      } finally {
+        client.release();
+      }
+    } else {
+      // Regular tenant: RLS-enforced
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(query, [tenantId]);
+      });
+      return reply.send(res.rows);
+    }
   } catch (err) {
     app.log.error(err);
     return reply.status(500).send({ error: 'Failed to fetch appointments' });
-  } finally {
-    client.release();
   }
 });
 
@@ -421,7 +526,7 @@ app.post('/resources/:id/update', async (req, reply) => {
   }
 });
 
-// NEW: Get Customers for a tenant
+// NEW: Get Customers for a tenant (BUG-007: RLS-enforced for non-admin)
 app.get('/customers', async (req, reply) => {
   const tenantId = (req.query as any)['tenant_id'];
 
@@ -431,68 +536,63 @@ app.get('/customers', async (req, reply) => {
 
   const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
-  const client = await pool.connect();
   try {
-    const query = isSuperAdmin
-      ? 'SELECT * FROM customers ORDER BY name'
-      : 'SELECT * FROM customers WHERE tenant_id = $1 ORDER BY name';
-    
-    const res = isSuperAdmin
-      ? await client.query(query)
-      : await client.query(query, [tenantId]);
-      
-    return reply.send(res.rows);
+    if (isSuperAdmin) {
+      const client = await pool.connect();
+      try {
+        const res = await client.query('SELECT * FROM customers ORDER BY name');
+        return reply.send(res.rows);
+      } finally {
+        client.release();
+      }
+    } else {
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query('SELECT * FROM customers WHERE tenant_id = $1 ORDER BY name', [tenantId]);
+      });
+      return reply.send(res.rows);
+    }
   } catch (err) {
     app.log.error(err);
     return reply.status(500).send({ error: 'Failed to fetch customers' });
-  } finally {
-    client.release();
   }
 });
 
-// NEW: Manual Customer Creation
+// NEW: Manual Customer Creation (BUG-007 + BUG-011: validated + RLS-enforced)
 app.post('/customers/create', async (req, reply) => {
-    const body = req.body as any;
-    const client = await pool.connect();
+    const parsed = CustomerCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
+
     try {
-        const res = await client.query(
-            `INSERT INTO customers (
-               tenant_id,
-               name,
-               phone,
-               email,
-               address,
-               address_line2,
-               city,
-               state,
-               postal_code,
-               metadata,
-               first_name,
-               last_name,
-               timezone
-             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-            [
-              body.tenant_id,
-              body.name,
-              body.phone,
-              body.email,
-              body.address,
-              body.address_line2 || null,
-              body.city || null,
-              body.state || null,
-              body.postal_code || null,
-              body.metadata || {},
-              body.first_name || null,
-              body.last_name || null,
-              body.timezone || 'America/New_York'
-            ]
-        );
+        const res = await withTenantClient(body.tenant_id, async (client) => {
+            return client.query(
+                `INSERT INTO customers (
+                   tenant_id, name, phone, email, address, address_line2,
+                   city, state, postal_code, metadata, first_name, last_name, timezone
+                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+                [
+                  body.tenant_id,
+                  body.name,
+                  body.phone,
+                  body.email || null,
+                  body.address || null,
+                  body.address_line2 || null,
+                  body.city || null,
+                  body.state || null,
+                  body.postal_code || null,
+                  body.metadata || {},
+                  body.first_name || null,
+                  body.last_name || null,
+                  body.timezone || 'America/New_York'
+                ]
+            );
+        });
         return reply.send({ success: true, customer: res.rows[0] });
     } catch (err) {
         app.log.error(err);
         return reply.status(500).send({ error: 'Failed to create customer' });
-    } finally {
-        client.release();
     }
 });
 

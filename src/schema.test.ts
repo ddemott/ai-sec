@@ -67,6 +67,6 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         );
 
         expect(result.rows[0].success).toBe(false);
-        expect(result.rows[0].error_message).toBe("Slot already booked");
+        expect(result.rows[0].error_message).toBe("Resource slot already booked");
     });
 });

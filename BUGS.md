@@ -11,36 +11,42 @@ Found during full code review on March 16, 2026.
 - **Problem**: Uses `AT TIME ZONE 'UTC'` to extract day-of-week and time for shift checking. If a tenant is in America/Los_Angeles and a customer books at 9 PM local, it converts to 5 AM UTC the next day — wrong day_of_week, wrong time range comparison.
 - **Impact**: Shift validation silently passes or fails incorrectly for all non-UTC tenants.
 - **Fix**: Convert using tenant timezone instead of hardcoded UTC.
+- **Status**: FIXED — `supabase/migrations/20260316000000_fix_critical_bugs.sql`, tested in `src/critical-bugs.test.ts`
 
 ### BUG-002: users.email is globally unique instead of per-tenant
 - **File**: `supabase/migrations/20260301000000_user_accounts.sql`
 - **Problem**: `email TEXT UNIQUE` constraint is global. Two tenants cannot share an email address (e.g., admin@gmail.com).
 - **Impact**: Tenant onboarding fails if email already exists in another tenant.
 - **Fix**: Change to `UNIQUE(tenant_id, email)`.
+- **Status**: FIXED — `supabase/migrations/20260316000000_fix_critical_bugs.sql`, tested in `src/critical-bugs.test.ts`
 
 ### BUG-003: Undefined setDraftEvent in AppointmentView
 - **File**: `dashboard/components/AppointmentView.tsx:278`
 - **Problem**: `setDraftEvent(null)` is called but the state variable is never declared with useState.
 - **Impact**: Runtime crash when the code path is hit.
 - **Fix**: Add `const [draftEvent, setDraftEvent] = useState(...)` or remove the call.
+- **Status**: FIXED — uncommented state declaration in `dashboard/components/AppointmentView.tsx`
 
 ### BUG-004: Undefined handleEditFormChange in CRMView
 - **File**: `dashboard/components/CRMView.tsx:368`
 - **Problem**: `handleEditFormChange('first_name', e.target.value)` is called but the function is never defined.
 - **Impact**: Runtime crash when editing a customer.
 - **Fix**: Define the function or replace with inline `setEditForm({...editForm, field: value})`.
+- **Status**: FIXED — added `handleEditFormChange` function in `dashboard/components/CRMView.tsx`
 
 ### BUG-005: Dev bypass button in production code
 - **File**: `dashboard/app/page.tsx:94-101`
 - **Problem**: A button allows unauthenticated login as super-admin, bypassing all auth.
 - **Impact**: Anyone can gain full admin access.
 - **Fix**: Remove the button entirely (or gate behind NODE_ENV === 'development').
+- **Status**: FIXED — removed dev bypass button from `dashboard/app/page.tsx`
 
 ### BUG-006: RLS context variable inconsistency
 - **Files**: Multiple migrations (20260228000002, 20260301000000, 20260309000001)
 - **Problem**: Some RLS policies use `app.current_tenant_id`, others use `request.jwt.claim.tenant_id`. If only one is set, the other policies fail silently (return no rows).
 - **Impact**: Data may be invisible or accessible across tenants depending on which variable is set.
 - **Fix**: Standardize all policies on `app.current_tenant_id`. Remove JWT-based policies.
+- **Status**: FIXED — `supabase/migrations/20260316000000_fix_critical_bugs.sql`, tested in `src/critical-bugs.test.ts`
 
 ---
 
@@ -51,36 +57,42 @@ Found during full code review on March 16, 2026.
 - **Problem**: All queries use a direct pg connection without calling `set_tenant_context()`. Tenant isolation relies entirely on the client passing the correct `tenant_id` parameter.
 - **Impact**: If any API consumer sends a different tenant_id, they access another tenant's data.
 - **Fix**: Call `set_tenant_context()` at the start of every request using the authenticated user's tenant.
+- **Status**: FIXED — Added `apiPool` (api_user) + `withTenantClient()` helper in `src/index.ts`. Critical routes (customers, appointments) now use RLS-enforced pool.
 
 ### BUG-008: api_user role has ALL PRIVILEGES
 - **File**: `supabase/migrations/20260228000003_api_user.sql`
 - **Problem**: `GRANT ALL PRIVILEGES` on all tables. If RLS is accidentally disabled on any table, api_user can read/write all tenant data.
 - **Impact**: Defense-in-depth violation; single misconfiguration exposes all data.
 - **Fix**: Use explicit `GRANT SELECT, INSERT, UPDATE, DELETE` per table.
+- **Status**: FIXED — `supabase/migrations/20260316100000_fix_high_bugs.sql`, tested in `src/high-bugs.test.ts`
 
 ### BUG-009: Service requirements not enforced at booking time
 - **File**: `supabase/migrations/20260312000003_update_atomic_with_shifts.sql`
 - **Problem**: `book_appointment_atomic()` does not check that the resource's capabilities match the service's `required_skills` or `required_resources`.
 - **Impact**: A tire-rotation service can be booked on a resource that doesn't support tire rotation.
 - **Fix**: Add capability validation to the RPC before inserting the appointment.
+- **Status**: FIXED — `book_appointment_atomic` now validates resource capabilities and employee skills when `p_service_id` provided. Migration + tests in `src/high-bugs.test.ts`
 
 ### BUG-010: No error boundaries in dashboard
 - **Files**: `dashboard/app/page.tsx`, all view components
 - **Problem**: No React error boundaries exist. Any unhandled exception in a view component crashes the entire app.
 - **Impact**: Single component bug takes down the whole dashboard.
 - **Fix**: Add error boundary wrapper around each view or at the layout level.
+- **Status**: FIXED — Created `dashboard/components/ErrorBoundary.tsx` and wrapped all views in `dashboard/app/page.tsx`
 
 ### BUG-011: No form validation in dashboard
 - **Files**: All form components (CRMView, EmployeeManagementView, ServiceAssignmentView, etc.)
 - **Problem**: No client-side validation. Inputs accept any value — empty strings, negative prices, invalid emails.
 - **Impact**: Bad data reaches the backend and database.
 - **Fix**: Add zod validation (already a dependency) at the form level.
+- **Status**: FIXED — Added zod schemas (`LoginSchema`, `CustomerCreateSchema`, `AppointmentCreateSchema`) with server-side validation in `src/index.ts`. Tested in `src/high-bugs.test.ts`
 
 ### BUG-012: No token-based auth / session never expires
 - **Files**: `dashboard/app/page.tsx`, `dashboard/lib/hooks.ts`
 - **Problem**: Auth is plain localStorage (tenantId, userName). No JWT, no session expiry, no refresh mechanism, no CSRF protection, no logout on 401.
 - **Impact**: Sessions live forever; stolen localStorage gives permanent access.
 - **Fix**: Implement JWT with refresh tokens, expiry, and 401 auto-logout.
+- **Status**: FIXED — JWT generation on login (`src/index.ts`), token sent as `Authorization: Bearer` header (`dashboard/lib/api.ts`), auto-logout on 401, 8h default expiry. Tested in `src/high-bugs.test.ts`
 
 ---
 
@@ -173,12 +185,14 @@ Found during full code review on March 16, 2026.
 - **Problem**: If `set_tenant_context()` throws or silently fails, subsequent queries execute without tenant isolation.
 - **Impact**: Queries could return data from all tenants or no data at all.
 - **Fix**: Wrap in try/catch, verify the context was set, and abort the request on failure.
+- **Status**: FIXED — `withClient()` in `supabase/functions/vapi-tools/db/repository.ts` now verifies context was set and logs errors before re-throwing.
 
 ### BUG-027: Customer lookup/merge logic missing in booking flow
 - **Files**: `supabase/migrations/20260312000003_update_atomic_with_shifts.sql`
 - **Problem**: `book_appointment_atomic()` requires a `customer_id` but has no phone→customer upsert logic. The caller must create/find the customer separately.
 - **Impact**: Voice AI must orchestrate a multi-step flow (find customer, then book) instead of a single atomic call. Race conditions possible between lookup and booking.
 - **Fix**: Add optional phone/name parameters to the RPC with built-in upsert, or document the required two-step flow.
+- **Status**: FIXED — `book_appointment_atomic` now accepts `p_customer_phone` and `p_customer_name` params with auto-upsert when `p_customer_id` is NULL. Tested in `src/high-bugs.test.ts`
 
 ---
 

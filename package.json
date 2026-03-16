@@ -16,8 +16,10 @@
   "dependencies": {
     "@fastify/cors": "^8.5.0",
     "@fastify/multipart": "^9.4.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",
     "fastify": "^4.29.1",
+    "jsonwebtoken": "^9.0.3",
     "next": "^16.1.6",
     "pdf-parse": "^2.4.5",
     "zod": "^4.3.6"
