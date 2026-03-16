@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import AppointmentView from '@/components/AppointmentView'
 import CRMView from '@/components/CRMView'
 import AIConfigView from '@/components/AIConfigView'
@@ -16,74 +16,36 @@ import KnowledgeBaseView from '@/components/KnowledgeBaseView'
 import ShiftManagementView from '@/components/ShiftManagementView'
 import AnalyticsView from '@/components/AnalyticsView'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { useSessionContext } from '@/lib/SessionContext'
 
 type Tab = 'appointments' | 'crm' | 'ai-tuning' | 'analytics' | 'settings' | 'all-businesses' | 'manage-resources' | 'service-catalog' | 'staff' | 'skill-matrix' | 'knowledge-base' | 'staff-shifts'
 
-const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'
-
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('appointments')
-  const [tenantId, setTenantId] = useState<string | null>(null)
-  const [managedTenantId, setManagedTenantId] = useState<string | null>(null)
-  const [managedTenantName, setManagedTenantName] = useState<string | null>(null)
-  const [userName, setUserName] = useState<string | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const {
+    tenantId,
+    userName,
+    isAdmin,
+    managedTenantId,
+    managedTenantName,
+    loading,
+    login,
+    logout,
+    selectManagedTenant,
+  } = useSessionContext()
 
-  useEffect(() => {
-    // Check for session in local storage
-    const storedTenantId = localStorage.getItem('tenantId')
-    const storedUserName = localStorage.getItem('userName')
-    
-    if (storedTenantId) {
-      setTenantId(storedTenantId)
-      setUserName(storedUserName)
-      const isSuper = storedTenantId === SUPER_ADMIN_TENANT_ID
-      setIsAdmin(isSuper)
-      
-      // If NOT a super admin, the managed tenant is always themselves
-      if (!isSuper) {
-        setManagedTenantId(storedTenantId)
-      }
-
-      if (isSuper) {
-        setActiveTab('all-businesses')
-      }
-    }
-    setLoading(false)
-  }, [])
+  const [activeTab, setActiveTab] = useState<Tab>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('tenantId') === '00000000-0000-0000-0000-000000000000'
+      ? 'all-businesses'
+      : 'appointments'
+  )
 
   const handleLoginSuccess = (data: { tenant_id: string; user_name: string }) => {
-    setTenantId(data.tenant_id)
-    setUserName(data.user_name)
-    const isSuper = data.tenant_id === SUPER_ADMIN_TENANT_ID
-    setIsAdmin(isSuper)
-    
-    if (!isSuper) {
-      setManagedTenantId(data.tenant_id)
-    }
-
-    if (isSuper) {
+    login(data)
+    if (data.tenant_id === '00000000-0000-0000-0000-000000000000') {
       setActiveTab('all-businesses')
     } else {
       setActiveTab('appointments')
     }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('tenantId')
-    localStorage.removeItem('userName')
-    localStorage.removeItem('authToken')
-    setTenantId(null)
-    setManagedTenantId(null)
-    setManagedTenantName(null)
-    setUserName(null)
-    setIsAdmin(false)
-  }
-
-  const handleSelectManagedTenant = (id: string, name: string) => {
-    setManagedTenantId(id)
-    setManagedTenantName(name)
   }
 
   if (loading) return null
@@ -97,19 +59,19 @@ export default function DashboardPage() {
   }
 
   return (
-    <OutlookLayout 
-      activeTab={activeTab} 
+    <OutlookLayout
+      activeTab={activeTab}
       setActiveTab={setActiveTab}
-      onLogout={handleLogout}
+      onLogout={logout}
       userName={userName}
       isAdmin={isAdmin}
       managedTenantName={managedTenantName}
       managedTenantId={managedTenantId}
-      onSelectTenant={handleSelectManagedTenant}
+      onSelectTenant={selectManagedTenant}
     >
       <ErrorBoundary>
         {activeTab === 'all-businesses' && (
-          <SuperAdminDashboard onSelectTenant={handleSelectManagedTenant} currentTenantId={managedTenantId} />
+          <SuperAdminDashboard onSelectTenant={selectManagedTenant} currentTenantId={managedTenantId} />
         )}
         {activeTab === 'appointments' && <AppointmentView overrideTenantId={managedTenantId} />}
         {activeTab === 'crm' && <CRMView overrideTenantId={managedTenantId} />}

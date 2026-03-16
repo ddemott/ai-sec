@@ -216,6 +216,29 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
+-- BUG-042: Add human-readable voice metadata to business_templates
+-- Allows identifying voices without knowing provider-specific IDs
+-- ============================================================
+ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS voice_provider TEXT;
+ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS voice_name TEXT;
+
+UPDATE business_templates SET voice_provider = 'cartesia', voice_name = 'Default Male'
+  WHERE business_type = 'mobile-tire' AND voice_provider IS NULL;
+UPDATE business_templates SET voice_provider = 'elevenlabs', voice_name = 'Rachel'
+  WHERE business_type = 'salon' AND voice_provider IS NULL;
+UPDATE business_templates SET voice_provider = 'elevenlabs', voice_name = 'Josh'
+  WHERE business_type = 'auto-shop' AND voice_provider IS NULL;
+UPDATE business_templates SET voice_provider = 'elevenlabs', voice_name = 'Antoni'
+  WHERE business_type = 'dentist' AND voice_provider IS NULL;
+
+-- ============================================================
+-- BUG-053: Add index on appointments.call_id for efficient lookups
+-- call_id is a loose correlation ID (Vapi call ID), not a FK,
+-- because appointments are created before transcripts exist.
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_appointments_call_id ON appointments(call_id) WHERE call_id IS NOT NULL;
+
+-- ============================================================
 -- BUG-052: Add CHECK constraint for JSONB metadata fields
 -- Ensures metadata is always a JSON object (not array/scalar)
 -- ============================================================

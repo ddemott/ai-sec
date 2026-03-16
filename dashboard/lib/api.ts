@@ -284,6 +284,12 @@ export const Api = {
     listFull: () => apiFetch<any[]>(`/templates/full`),
   },
 
+  // --- CALL SUMMARIES ---
+  callSummaries: {
+    list: (tenantId: string | null, customerId: string) =>
+      apiFetch<any[]>(`/call-summaries`, tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }),
+  },
+
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
     list: (tenantId: string | null) => 

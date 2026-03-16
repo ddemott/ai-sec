@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { Customer } from '@/lib/types'
 import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from '@/lib/mockData'
 import { 
@@ -123,13 +122,8 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
 
   async function fetchHistory(customerId: string) {
     try {
-      const { data, error } = await supabase
-        .from('call_summaries')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false })
-      
-      if (error || !data || data.length === 0) {
+      const data = await Api.callSummaries.list(tenantId, customerId)
+      if (!data || data.length === 0) {
         setSummaries(MOCK_SUMMARIES.filter(s => s.customer_id === customerId))
       } else {
         setSummaries(data)

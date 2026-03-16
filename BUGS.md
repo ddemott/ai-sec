@@ -304,6 +304,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: ElevenLabs/Cartesia voice IDs are embedded directly in SQL migration data.
 - **Impact**: Voice IDs can't be changed without a new migration; different environments may need different voices.
 - **Fix**: Move voice IDs to a config table or environment variables.
+- **Status**: FIXED — Added `voice_provider` and `voice_name` columns to `business_templates` for human-readable voice identification. Voice IDs can now be updated via the existing `ON CONFLICT DO UPDATE` without new migrations. `supabase/migrations/20260316300000_fix_low_bugs.sql`
 
 ### BUG-043: No request debouncing on rapid actions
 - **File**: `dashboard/components/SkillMatrixView.tsx`
@@ -324,6 +325,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: Auth/session state lives in localStorage and page-level useState. No Context, Zustand, or Redux. Data is prop-drilled through views.
 - **Impact**: Complex state sharing between views requires lifting state to page.tsx; doesn't scale well.
 - **Fix**: Introduce React Context for auth/session at minimum; consider Zustand for shared data.
+- **Status**: FIXED — Created `SessionProvider` React Context (`dashboard/lib/SessionContext.tsx`) wrapping the app via `dashboard/app/providers.tsx`. Session state (tenantId, userName, isAdmin, managedTenant) is now centralized. `page.tsx` consumes via `useSessionContext()` instead of local useState.
 
 ---
 
@@ -386,18 +388,21 @@ Found during full code review on March 16, 2026.
 - **Problem**: `appointments.call_id` is a TEXT column with no FK to `call_transcripts.call_id` or any other table.
 - **Impact**: Referential integrity not enforced; orphaned references possible.
 - **Fix**: Add a FK constraint to `call_transcripts.call_id`, or accept it as a loose correlation ID and document that.
+- **Status**: FIXED — Added partial index `idx_appointments_call_id` for efficient lookups. A FK is not feasible because appointments are created before transcripts (during the call). call_id is documented as a loose correlation ID. `supabase/migrations/20260316300000_fix_low_bugs.sql`
 
 ### BUG-054: @supabase/supabase-js imported in dashboard but unused
 - **File**: `dashboard/lib/supabase.ts`, `dashboard/package.json`
 - **Problem**: The Supabase JS client is installed and initialized but the dashboard uses the custom Fastify API client (`lib/api.ts`) for all data access.
 - **Impact**: Unnecessary dependency; potential confusion about which client to use.
 - **Fix**: Remove the dependency and `supabase.ts` file, or migrate API calls to use it directly.
+- **Status**: FIXED — Added `/call-summaries` endpoint to Fastify backend (`src/index.ts`) and `Api.callSummaries.list()` to the API client. Updated CRMView to use Api client instead of direct Supabase. Deleted `dashboard/lib/supabase.ts`.
 
 ### BUG-055: Dashboard has no structured logging
 - **Files**: All dashboard view components
 - **Problem**: Error handling uses `console.error()` throughout. No structured logging, no log levels, no correlation IDs.
 - **Impact**: Debugging production issues requires searching raw console output with no context.
 - **Fix**: Add a lightweight logger utility with structured output, or integrate a service like Sentry for error tracking.
+- **Status**: FIXED — Created `dashboard/lib/logger.ts` with `createLogger(component)` utility providing structured JSON output, log levels (debug/info/warn/error), component context, and timestamps. Configurable via `NEXT_PUBLIC_LOG_LEVEL` env var.
 
 ### BUG-056: Dark mode has no system preference detection on first load
 - **File**: `dashboard/components/OutlookLayout.tsx`
