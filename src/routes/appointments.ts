@@ -1,8 +1,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-
-const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -122,14 +121,15 @@ export function registerAppointmentRoutes(
       customer_name: string; customer_phone: string; customer_notes: string;
     };
 
-    const client = await pool.connect();
     try {
-      const res = await client.query(
-        'SELECT * FROM update_appointment_customer($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
-        [id, body.tenant_id, body.start_time, body.end_time, body.description,
-         body.location, body.resource_id, body.employee_id ? body.employee_id.toString() : null,
-         body.customer_name, body.customer_phone, body.customer_notes]
-      );
+      const res = await withTenantClient(body.tenant_id, async (client) => {
+        return client.query(
+          'SELECT * FROM update_appointment_customer($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+          [id, body.tenant_id, body.start_time, body.end_time, body.description,
+           body.location, body.resource_id, body.employee_id ? body.employee_id.toString() : null,
+           body.customer_name, body.customer_phone, body.customer_notes]
+        );
+      });
       const result = res.rows[0];
       if (result.success) {
         return reply.send({ success: true });
@@ -139,8 +139,6 @@ export function registerAppointmentRoutes(
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Internal server error' });
-    } finally {
-      client.release();
     }
   });
 }

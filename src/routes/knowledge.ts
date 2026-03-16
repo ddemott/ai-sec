@@ -1,28 +1,28 @@
 
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import pdfParse from 'pdf-parse';
 
 export function registerKnowledgeRoutes(
   app: any,
   pool: Pool,
-  getEmbedding: (text: string) => Promise<number[]>
+  getEmbedding: (text: string) => Promise<number[]>,
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/knowledge', async (req, reply) => {
     const tenantId = (req.query as any).tenant_id;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    const client = await pool.connect();
     try {
-      const res = await client.query(
-        'SELECT id, title, content, source, created_at FROM tenant_docs WHERE tenant_id = $1 ORDER BY created_at DESC',
-        [tenantId]
-      );
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          'SELECT id, title, content, source, created_at FROM tenant_docs WHERE tenant_id = $1 ORDER BY created_at DESC',
+          [tenantId]
+        );
+      });
       return reply.send(res.rows);
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch knowledge base' });
-    } finally {
-      client.release();
     }
   });
 
@@ -31,15 +31,14 @@ export function registerKnowledgeRoutes(
     const tenantId = (req.query as any).tenant_id;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    const client = await pool.connect();
     try {
-      await client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+      await withTenantClient(tenantId, async (client) => {
+        await client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+      });
       return reply.send({ success: true });
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to delete entry' });
-    } finally {
-      client.release();
     }
   });
 
@@ -68,8 +67,7 @@ export function registerKnowledgeRoutes(
 
       const chunks = text.split('\n\n').filter(c => c.trim().length > 20);
 
-      const client = await pool.connect();
-      try {
+      await withTenantClient(tenantId, async (client) => {
         for (const chunk of chunks) {
           const trimmedChunk = chunk.trim();
           const embedding = await getEmbedding(trimmedChunk);
@@ -78,10 +76,8 @@ export function registerKnowledgeRoutes(
             [tenantId, trimmedChunk, filename, JSON.stringify(embedding)]
           );
         }
-        return reply.send({ success: true, chunksIngested: chunks.length });
-      } finally {
-        client.release();
-      }
+      });
+      return reply.send({ success: true, chunksIngested: chunks.length });
     } catch (err: any) {
       app.log.error(err);
       return reply.status(500).send({ error: `Ingestion failed: ${err.message}` });

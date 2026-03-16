@@ -159,15 +159,15 @@ registerAuthRoutes(app, pool, generateToken);
 registerTenantRoutes(app, pool);
 registerAppointmentRoutes(app, pool, withTenantClient);
 registerCustomerRoutes(app, pool, withTenantClient);
-registerEmployeeRoutes(app, pool);
-registerShiftRoutes(app, pool);
-registerResourceRoutes(app, pool);
-registerServiceRoutes(app, pool);
-registerMappingRoutes(app, pool);
-registerSkillRoutes(app, pool);
-registerCalendarRoutes(app, pool);
-registerKnowledgeRoutes(app, pool, getEmbedding);
-registerAnalyticsRoutes(app, pool);
+registerEmployeeRoutes(app, pool, withTenantClient);
+registerShiftRoutes(app, pool, withTenantClient);
+registerResourceRoutes(app, pool, withTenantClient);
+registerServiceRoutes(app, pool, withTenantClient);
+registerMappingRoutes(app, pool, withTenantClient);
+registerSkillRoutes(app, pool, withTenantClient);
+registerCalendarRoutes(app, pool, withTenantClient);
+registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient);
+registerAnalyticsRoutes(app, pool, withTenantClient);
 
 // --- Start Server ---
 

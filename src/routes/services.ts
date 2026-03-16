@@ -1,74 +1,86 @@
 
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
-export function registerServiceRoutes(app: any, pool: Pool) {
+export function registerServiceRoutes(
+  app: any,
+  pool: Pool,
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+) {
   app.get('/services', async (req, reply) => {
     const tenantId = (req.query as any).tenant_id;
-    const client = await pool.connect();
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
     try {
-      const res = await client.query('SELECT * FROM services WHERE tenant_id = $1 ORDER BY name ASC', [tenantId]);
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query('SELECT * FROM services WHERE tenant_id = $1 ORDER BY name ASC', [tenantId]);
+      });
       return reply.send(res.rows);
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch services' });
-    } finally {
-      client.release();
     }
   });
 
   app.post('/services/create', async (req, reply) => {
     const body = req.body as { tenant_id: string; name: string; description?: string; duration_minutes: number; required_skills?: string[]; required_resources?: string[] };
-    const client = await pool.connect();
+
     try {
-      const res = await client.query(
-        'INSERT INTO services (tenant_id, name, description, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [body.tenant_id, body.name, body.description, body.duration_minutes, body.required_skills || [], body.required_resources || []]
-      );
+      const res = await withTenantClient(body.tenant_id, async (client) => {
+        return client.query(
+          'INSERT INTO services (tenant_id, name, description, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+          [body.tenant_id, body.name, body.description, body.duration_minutes, body.required_skills || [], body.required_resources || []]
+        );
+      });
       return reply.send({ success: true, service: res.rows[0] });
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to create service' });
-    } finally {
-      client.release();
     }
   });
 
   app.post('/services/:id/update', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { name?: string; description?: string; duration_minutes?: number; price?: number };
-    const client = await pool.connect();
+    const body = req.body as { tenant_id?: string; name?: string; description?: string; duration_minutes?: number; price?: number };
+    const tenantId = body.tenant_id || (req as any).auth?.tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
     try {
-      const res = await client.query(
-        'UPDATE services SET name = COALESCE($1, name), description = COALESCE($2, description), duration_minutes = COALESCE($3, duration_minutes), price = COALESCE($4, price), updated_at = NOW() WHERE id = $5 RETURNING *',
-        [body.name, body.description, body.duration_minutes, body.price, id]
-      );
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          'UPDATE services SET name = COALESCE($1, name), description = COALESCE($2, description), duration_minutes = COALESCE($3, duration_minutes), price = COALESCE($4, price), updated_at = NOW() WHERE id = $5 RETURNING *',
+          [body.name, body.description, body.duration_minutes, body.price, id]
+        );
+      });
       return reply.send({ success: true, service: res.rows[0] });
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to update service' });
-    } finally {
-      client.release();
     }
   });
 
   app.delete('/services/:id/delete', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const client = await pool.connect();
+    const tenantId = (req.query as any).tenant_id || (req as any).auth?.tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
     try {
-      const mappings = await client.query(
-        'SELECT (SELECT count(*) FROM service_resource WHERE service_id = $1) + (SELECT count(*) FROM service_employee WHERE service_id = $1) as count',
-        [id]
-      );
-      if (parseInt(mappings.rows[0].count) > 0) {
-        return reply.status(400).send({ error: 'Cannot delete: Service is still mapped to staff or resources. Unassign them first.' });
-      }
-      await client.query('DELETE FROM services WHERE id = $1', [id]);
+      await withTenantClient(tenantId, async (client) => {
+        const mappings = await client.query(
+          'SELECT (SELECT count(*) FROM service_resource WHERE service_id = $1) + (SELECT count(*) FROM service_employee WHERE service_id = $1) as count',
+          [id]
+        );
+        if (parseInt(mappings.rows[0].count) > 0) {
+          throw Object.assign(new Error('Cannot delete: Service is still mapped to staff or resources. Unassign them first.'), { statusCode: 400 });
+        }
+        await client.query('DELETE FROM services WHERE id = $1', [id]);
+      });
       return reply.send({ success: true });
-    } catch (err) {
+    } catch (err: any) {
+      if (err.statusCode === 400) {
+        return reply.status(400).send({ error: err.message });
+      }
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to delete service' });
-    } finally {
-      client.release();
     }
   });
 }

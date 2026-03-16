@@ -1,8 +1,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-
-const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 const CustomerCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -87,25 +86,27 @@ export function registerCustomerRoutes(
   app.put('/customers/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as any;
-    const client = await pool.connect();
+    const tenantId = body.tenant_id || (req as any).auth?.tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
     try {
-      await client.query(
-        `UPDATE customers SET
-           first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
-           address = $6, address_line2 = $7, city = $8, state = $9,
-           postal_code = $10, metadata = $11, timezone = $12
-         WHERE id = $13`,
-        [body.first_name || null, body.last_name || null, body.name || null,
-         body.phone, body.email, body.address, body.address_line2 || null,
-         body.city || null, body.state || null, body.postal_code || null,
-         body.metadata || {}, body.timezone || 'America/New_York', id]
-      );
+      await withTenantClient(tenantId, async (client) => {
+        await client.query(
+          `UPDATE customers SET
+             first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
+             address = $6, address_line2 = $7, city = $8, state = $9,
+             postal_code = $10, metadata = $11, timezone = $12
+           WHERE id = $13`,
+          [body.first_name || null, body.last_name || null, body.name || null,
+           body.phone, body.email, body.address, body.address_line2 || null,
+           body.city || null, body.state || null, body.postal_code || null,
+           body.metadata || {}, body.timezone || 'America/New_York', id]
+        );
+      });
       return reply.send({ success: true });
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to update customer' });
-    } finally {
-      client.release();
     }
   });
 
