@@ -46,7 +46,16 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 
 ## Phase 2: Database Migration
 
-### 2.1 Apply Migrations
+### 2.1 Run Pre-flight Check
+Before applying migrations, validate that your cloud database meets all prerequisites:
+
+```bash
+./scripts/preflight-cloud.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
+```
+
+This checks: connectivity, extensions (pgvector, pg_net), role creation, database state, PostgreSQL version, and migration file count. Fix any FAIL items before proceeding.
+
+### 2.2 Apply Migrations
 Use the existing `setup-db.sh` script, passing the production connection string:
 
 ```bash
@@ -55,7 +64,7 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 
 This applies all 38 migrations in order and seeds the database with the DynaTire demo tenant.
 
-### 2.2 Create the api_user Role
+### 2.3 Create the api_user Role
 The migrations create an `api_user` role with least-privilege grants. On Supabase, you may need to verify this role exists:
 
 ```sql
@@ -67,7 +76,7 @@ If the role wasn't created (some Supabase plans restrict `CREATE ROLE`), you hav
 1. **Recommended**: Use the Supabase service_role connection for the backend instead of a separate api_user pool
 2. **Alternative**: Create the role manually via the SQL Editor with the same grants from `20260228000003_api_user.sql`
 
-### 2.3 Verify the Schema
+### 2.4 Verify the Schema
 Spot-check that critical objects exist:
 ```sql
 -- Tables
