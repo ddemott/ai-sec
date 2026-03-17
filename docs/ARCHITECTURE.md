@@ -1,7 +1,7 @@
 # AI Secretary SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 13 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 14 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
@@ -35,13 +35,31 @@ The Dashboard provides business owners with transparency and control.
 - **Outlook-style Calendar**: Multi-resource schedule view showing all confirmed appointments.
 - **CRM Viewer**: Unified customer detail view with upcoming/past appointments (cancel flow), AI-generated call summaries with transcript data, and internal notes. Search bar filters by name, phone, or email.
 
+### 3.3 Navigation Architecture
+The dashboard uses a **5-section grouped navigation** pattern:
+- **Schedule** — Appointment calendar (direct view)
+- **Customers** — Unified CRM (direct view)
+- **My Team** — Composite view with sub-tabs: Employees, Shifts, Skill Matrix
+- **My Business** — Composite view with sub-tabs: Services, Resources, Knowledge Base
+- **AI & Insights** — Composite view with sub-tabs: AI Persona, Analytics
+
+Desktop: Icon sidebar (80px) with 5 main items + settings/logout in footer. Mobile: Bottom nav with all 5 sections. Sub-tabs render as a horizontal tab bar at the top of composite views.
+
+### 3.4 Vocabulary System
+UI labels adapt per business type via a 3-tier fallback:
+1. **Tenant override** (e.g., owner changed "Bay" to "Stall")
+2. **Template default** (e.g., auto-shop template says "Bay")
+3. **Hardcoded fallback** ("Resource")
+
+The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template, hardcoded)`. Dashboard components consume labels via `Api.vocabulary.get()`. 20 business types supported with per-type vocabulary.
+
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 13 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 14 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary).
 
 ### 4.1 Security
-- **RLS Enforcement**: All 13 tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
+- **RLS Enforcement**: All 14 tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
 - **Least Privilege**: The `api_user` role has explicit `SELECT, INSERT, UPDATE, DELETE` grants per table (not `ALL PRIVILEGES`).
 - **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
 - **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
@@ -49,7 +67,7 @@ The Fastify backend serves as the management API for the dashboard and administr
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 80 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, tools, scheduling, and index suites. 38 dashboard tests across CRM, appointments, settings, employee, and component suites.
+- **Coverage**: 100 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, tools, scheduling, and index suites. 38 dashboard tests across CRM, appointments, settings, employee, and component suites. 138 total.
 
 ---
 

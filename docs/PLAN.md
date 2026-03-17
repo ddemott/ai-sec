@@ -40,14 +40,14 @@
 Full code review identified 58 bugs across all severity levels. All Critical, High, Medium, and Low bugs resolved.
 
 - [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
-- [x] **RLS**: Standardized policies, all 13 tenant-scoped route modules enforce via `withTenantClient()`, least-privilege DB role. Only super-admin and auth routes use the admin pool.
+- [x] **RLS**: Standardized policies, all 14 tenant-scoped route modules enforce via `withTenantClient()`, least-privilege DB role. Only super-admin and auth routes use the admin pool.
 - [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID assignment_id validation.
 - [x] **Booking Engine**: DST-safe shift checks, auto end-time from service duration, customer upsert, service requirement enforcement.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, Promise.allSettled, timezone maps, debounce guards.
 - [x] **Data Integrity**: Name sync triggers, seed idempotency, metadata constraints, call_id indexing.
 - [x] **Edge Functions**: Single-pass Zod validation, set_tenant_context error handling.
 - [x] **Knowledge Base**: Paragraph-aware chunking with overlap, duplicate detection.
-- [x] **Test Coverage**: 80 backend + 38 dashboard tests, all passing.
+- [x] **Test Coverage**: 100 backend + 38 dashboard tests = 138 total, all passing.
 
 ## Phase 8: Production Go-Live (Current 🚀)
 - [x] **Agent Template**: Templatize `agent.json` with Mustache variables for tenant-specific deployment.
@@ -80,3 +80,12 @@ Full code review identified 58 bugs across all severity levels. All Critical, Hi
 - [x] **Enhanced Call Summaries**: `/call-summaries` JOINs `call_transcripts` for timestamps and transcript availability.
 - [x] **Employee Attributes**: Migration adds first_name, last_name, email, phone to employees table.
 - [x] **Shared JS Artifacts**: Compiled `shared/getEmbedding.js`, `shared/scheduling.js`, `dashboard/lib/constants.js` for deployment.
+
+## Phase 11: Navigation & Vocabulary System (Complete ✅)
+- [x] **Navigation Restructure**: 12 flat tabs consolidated to 5 grouped sections (Schedule, Customers, My Team, My Business, AI & Insights) with sub-tab navigation.
+- [x] **Composite Views**: MyTeamView, MyBusinessView, AIInsightsView wrapper components with horizontal sub-tabs.
+- [x] **Business Templates**: Expanded from 4 to 20 types with vocabulary labels and example services.
+- [x] **Vocabulary System**: resource_label, resource_plural, employee_label, employee_plural, booking_label on business_templates + nullable overrides on tenants. GET /vocabulary endpoint with 3-tier fallback.
+- [x] **Self-Service Registration**: POST /register public endpoint creates tenant + user + applies template defaults + returns JWT.
+- [x] **Onboarding Flag**: onboarding_completed boolean on tenants table for wizard detection.
+- [x] **Mobile Navigation**: Bottom nav updated to show all 5 primary sections.

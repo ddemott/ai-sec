@@ -65,7 +65,7 @@
 These are known issues from the March 2026 code review (see BUGS.md for details).
 
 ### Pre-Production (should fix before go-live)
-- [x] **Route Extraction**: Break `src/index.ts` monolith into 13 route modules (BUG-017).
+- [x] **Route Extraction**: Break `src/index.ts` monolith into 14 route modules including vocabulary (BUG-017).
 - [x] **ID Standardization**: Migrated services and employees from SERIAL to UUID (BUG-015).
 - [x] **Customer Timezone**: `check_availability_with_tz()` function respects customer timezone (BUG-031).
 - [x] **Orphan Transcript Linking**: `link_orphaned_transcripts()` SQL function matches via call_id (BUG-030).
@@ -87,4 +87,16 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 - [x] **API Client Methods**: `Api.customers.appointments()` and `Api.appointments.cancel()` added.
 - [x] **Employee Attributes**: Migration adds first_name, last_name, email, phone columns to employees table.
 - [x] **Shared JS Artifacts**: Compiled `shared/getEmbedding.js`, `shared/scheduling.js`, `dashboard/lib/constants.js` committed for deployment.
-- [x] **Test Coverage**: 80 backend tests + 38 dashboard tests, all passing.
+
+## 10. Navigation & Vocabulary System (Completed March 2026)
+- [x] **Navigation Restructure**: 12 flat tabs consolidated to 5 grouped sections (Schedule, Customers, My Team, My Business, AI & Insights) with sub-tab navigation.
+- [x] **Composite Views**: MyTeamView (Employees/Shifts/Skills), MyBusinessView (Services/Resources/Knowledge), AIInsightsView (AI Persona/Analytics).
+- [x] **Business Templates**: Expanded from 4 to 20 types with vocabulary labels and example services per type.
+- [x] **Vocabulary System**: resource_label, resource_plural, employee_label, employee_plural, booking_label on business_templates + nullable overrides on tenants.
+- [x] **GET /vocabulary Endpoint**: 3-tier fallback (tenant override > template default > hardcoded fallback).
+- [x] **POST /register Endpoint**: Public self-service tenant + user creation with Zod validation and JWT response.
+- [x] **Onboarding Flag**: onboarding_completed boolean on tenants table for wizard detection.
+- [x] **Mobile Navigation**: Bottom nav updated to show all 5 sections (was 4 of 12).
+- [x] **Api.vocabulary.get()**: Dashboard API client method for resolved vocabulary labels.
+- [x] **seed.sql Fix**: ON CONFLICT (tenant_id, email) for per-tenant email uniqueness.
+- [x] **Test Coverage**: 100 backend tests + 38 dashboard tests = 138 total, all passing.

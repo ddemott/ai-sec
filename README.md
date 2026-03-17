@@ -51,7 +51,7 @@ To use a custom database (e.g., in the cloud):
 ```
 
 ## 🧪 Testing & Coverage
-- **100+ tests passing** across backend and dashboard suites.
+- **138 tests passing** (100 backend + 38 dashboard) across all suites.
 - Test coverage spans: booking engine, RLS, auth, scheduling, name sync, timezone detection, form validation, UI components, and error boundaries.
 - Backend tests: `npx vitest run src/ --fileParallelism=false`
 - Dashboard tests: `cd dashboard && npx vitest run`

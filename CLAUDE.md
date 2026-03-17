@@ -5,18 +5,18 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (13 route modules under src/routes/) -> Postgres
+- **Backend API**: Node.js / Fastify (14 route modules under src/routes/) -> Postgres
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 13 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings)
+- `/src` - Fastify backend (slim index.ts entry, 14 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings, vocabulary)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 38 SQL migrations (schema, RLS, RPCs, bug fixes)
+- `/supabase/migrations` - 42 SQL migrations (schema, RLS, RPCs, bug fixes)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
@@ -52,11 +52,12 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Mixed ID types: services/employees use SERIAL, resources/users use UUID
 
 ## Code Conventions
+- Dashboard navigation: 5 grouped sections (Schedule, Customers, My Team, My Business, AI & Insights) with sub-tab navigation in composite views
 - Dashboard components follow List+Detail pane pattern (sidebar list, detail right)
 - UI primitives in `dashboard/components/ui/` (Button, Card, Input, Select, Modal, Badge)
 - API client centralized in `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 13 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 14 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
 
 ## Known Issues (as of March 2026)
 - Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`
@@ -68,8 +69,8 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - RLS standardized on `app.current_tenant_id` (BUG-006)
 - Dev bypass button removed (BUG-005)
 - handleEditFormChange fixed in CRMView (BUG-004)
-- Fastify monolith broken into 13 route modules with RLS enforcement (BUG-017)
+- Fastify monolith broken into 14 route modules with RLS enforcement (BUG-017)
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phase 8 (Go-Live). All 9 development phases complete (including security hardening and scale/polish). 80 backend tests + 38 dashboard tests passing. Remaining: cloud migration, Vapi server URL config, Telnyx phone assignment, n8n webhook plumbing, beta testing with DynaTire.
+Phase 8 (Go-Live). All 9 development phases complete (including security hardening and scale/polish). 100 backend tests + 38 dashboard tests = 138 total passing. Remaining: cloud migration, Vapi server URL config, Telnyx phone assignment, n8n webhook plumbing, beta testing with DynaTire.

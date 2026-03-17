@@ -96,8 +96,8 @@ Related features are scattered:
 - ShieldCheck icon for Employees doesn't convey "staff"
 - Settings icon (gear) used for both Services and Settings
 
-### 4. Mobile Navigation is Incomplete
-The bottom nav only shows 5 of 12 tabs: Schedule, Skills, Shifts, Knowledge, Exit. Users cannot access Customers, Employees, Analytics, AI settings, or Services from mobile at all.
+### 4. ~~Mobile Navigation is Incomplete~~ (RESOLVED)
+~~The bottom nav only shows 5 of 12 tabs.~~ Mobile bottom nav now shows all 5 primary sections: Schedule, Customers, My Team, My Business, AI.
 
 ### 5. No Visual Hierarchy
 Daily-use items (Calendar, Customers) have the same visual weight as setup-once items (Resources, Skills, Knowledge Base). There's no sense of primary vs secondary actions.
@@ -168,18 +168,23 @@ Page Flow: New Business Sign-Up → Onboarding → Dashboard
 
 | Capability | Status | Where | Type |
 |-----------|--------|-------|------|
-| `business_templates` table with 4 types | Exists | `20260228000006_business_templates.sql` | Coding |
+| `business_templates` table with 20 types + vocabulary | Exists | `20260228000006` + `20260317000000-0002` migrations | Coding |
 | Template auto-apply trigger | Exists | `apply_business_template_defaults()` in same migration | Coding |
 | Business type dropdown | Exists | `SuperAdminDashboard.tsx` (admin only) | UI/UX |
 | `Api.templates.list()` | Exists | `dashboard/lib/api.ts` | Coding |
 | `POST /tenants/create` | Exists | `src/routes/tenants.ts` (admin only) | Coding |
 | Public sign-up page | **Missing** | Needs new component + public route | Both |
-| Public registration API | **Missing** | Needs `POST /tenants/register` endpoint | Coding |
+| Public registration API (`POST /register`) | **Done** | `src/routes/auth.ts` | Coding |
 | Self-service business type picker | **Missing** | Needs card-grid UI component | UI/UX |
-| Vocabulary columns on templates | **Missing** | Needs migration + template updates | Coding |
-| Vocabulary context/hook in dashboard | **Missing** | Needs `useVocabulary` hook | Coding |
+| Vocabulary columns on templates | **Done** | `20260317000000_vocabulary_columns.sql` | Coding |
+| Vocabulary override columns on tenants | **Done** | `20260317000001_tenant_vocabulary_overrides.sql` | Coding |
+| GET /vocabulary endpoint (3-tier fallback) | **Done** | `src/routes/vocabulary.ts` | Coding |
+| `Api.vocabulary.get()` client method | **Done** | `dashboard/lib/api.ts` | Coding |
+| Vocabulary context/hook in dashboard | **Missing** | Needs `useVocabulary` React Context | Coding |
 | Onboarding wizard | **Missing** | Needs full implementation | Both |
-| 20 business type templates | **Missing** | Only 4 exist, need 16 more | Coding |
+| 20 business type templates | **Done** | `20260317000002_new_business_templates.sql` | Coding |
+| Example services per template | **Done** | `20260317000004_example_services.sql` | Coding |
+| `onboarding_completed` flag on tenants | **Done** | `20260317000003_onboarding_and_registration.sql` | Coding |
 
 ---
 
@@ -602,21 +607,23 @@ All work items across the entire design doc, categorized:
 
 | # | Item | Type | Status | Notes |
 |---|------|------|--------|-------|
-| 1 | Restructure sidebar from 12 → 5 grouped sections | UI/UX | Missing | `OutlookLayout.tsx` |
-| 2 | Update tab routing logic | Coding | Missing | `page.tsx` tab type changes |
-| 3 | MyTeamView composite (Employees + Shifts + Skills) | Both | Missing | New wrapper component with sub-tabs |
-| 4 | MyBusinessView composite (Services + Resources + Knowledge) | Both | Missing | New wrapper component with sub-tabs |
-| 5 | AIInsightsView composite (AI Persona + Analytics) | Both | Missing | New wrapper component with sub-tabs |
-| 6 | Reusable sub-tab bar component | UI/UX | Missing | Horizontal tab bar for composite views |
-| 7 | Mobile bottom nav (5 items matching sidebar) | UI/UX | Missing | Currently only shows 4 of 12 tabs |
-| 8 | Public sign-up page | Both | Missing | New component + public route |
-| 9 | Public registration API (`POST /tenants/register`) | Coding | Missing | New endpoint, creates tenant + user + JWT |
+| # | Item | Type | Status | Notes |
+|---|------|------|--------|-------|
+| 1 | Restructure sidebar from 12 → 5 grouped sections | UI/UX | **Done** | `OutlookLayout.tsx` |
+| 2 | Update tab routing logic | Coding | **Done** | `page.tsx` tab type changes |
+| 3 | MyTeamView composite (Employees + Shifts + Skills) | Both | **Done** | `MyTeamView.tsx` with sub-tabs |
+| 4 | MyBusinessView composite (Services + Resources + Knowledge) | Both | **Done** | `MyBusinessView.tsx` with sub-tabs |
+| 5 | AIInsightsView composite (AI Persona + Analytics) | Both | **Done** | `AIInsightsView.tsx` with sub-tabs |
+| 6 | Reusable sub-tab bar component | UI/UX | **Done** | Inline in each composite view (can extract later) |
+| 7 | Mobile bottom nav (5 items matching sidebar) | UI/UX | **Done** | All 5 sections accessible |
+| 8 | Public sign-up page | Both | Missing | Needs new component + public route |
+| 9 | Public registration API (`POST /register`) | Coding | **Done** | `src/routes/auth.ts` |
 | 10 | Self-service business type picker (card grid) | UI/UX | Missing | 20 business type cards with icons |
 | 11 | Onboarding wizard (8 steps) | Both | Missing | Full guided setup flow |
-| 12 | Wizard detection logic (show when no data) | Coding | Missing | Check services/resources/employees = 0 |
-| 13 | 20 business type templates | Coding | Partial | 4 exist, need 16 more INSERT statements |
-| 14 | Vocabulary columns on `business_templates` | Coding | Missing | Migration: resource_label, employee_label, etc. |
-| 15 | Vocabulary override columns on `tenants` | Coding | Missing | Migration: nullable overrides per tenant |
+| 12 | Wizard detection logic (show when no data) | Coding | **Done** | `onboarding_completed` flag on tenants |
+| 13 | 20 business type templates | Coding | **Done** | All 20 with vocabulary + example services |
+| 14 | Vocabulary columns on `business_templates` | Coding | **Done** | Migration applied |
+| 15 | Vocabulary override columns on `tenants` | Coding | **Done** | Migration applied |
 | 16 | `useVocabulary` hook + React Context | Coding | Missing | 3-tier fallback: tenant > template > hardcoded |
 | 17 | Replace all hardcoded labels with vocabulary | Both | Missing | Every "Resource"/"Employee" string in UI |
 | 18 | Settings page: "Customize Labels" section | Both | Missing | Owner overrides Bay → Stall, etc. |
@@ -624,10 +631,11 @@ All work items across the entire design doc, categorized:
 | 20 | Contextual navigation (CRM → Calendar links) | Both | Missing | Click appointment in CRM → opens in Calendar |
 | 21 | Breadcrumbs for sub-tab views | UI/UX | Missing | "My Team > Shifts" |
 | 22 | Empty states with helpful guidance | UI/UX | Missing | Per-view messages explaining what to do |
-| 23 | Pre-populated service suggestions per type | Coding | Missing | Template provides example services for wizard |
+| 23 | Pre-populated service suggestions per type | Coding | **Done** | `20260317000004_example_services.sql` |
 | 24 | "Setup Guide" link in Settings | UI/UX | Missing | Re-access onboarding wizard after completion |
 
 **Summary:**
-- **UI/UX only**: 7 items (1, 6, 7, 10, 19, 21, 22)
-- **Coding only**: 7 items (2, 9, 12, 13, 14, 15, 16)
-- **Both**: 10 items (3, 4, 5, 8, 11, 17, 18, 20, 23, 24)
+- **Done**: 14 of 24 items (1-7, 9, 12-15, 23)
+- **Remaining UI/UX**: 4 items (10, 19, 21, 22)
+- **Remaining Coding**: 1 item (16)
+- **Remaining Both**: 5 items (8, 11, 17, 18, 20, 24)
