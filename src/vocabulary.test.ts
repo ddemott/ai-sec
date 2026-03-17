@@ -175,6 +175,37 @@ describe("Business Vocabulary System", () => {
         });
     });
 
+    describe("vocabulary resolution query", () => {
+        it("should resolve vocabulary for a tenant with template but no overrides", async () => {
+            if (!dbAvailable) return;
+            // Create a salon tenant
+            const tRes = await client.query(
+                "INSERT INTO tenants (name, business_type) VALUES ('Test Salon', 'salon') RETURNING id"
+            );
+            const salonId = tRes.rows[0].id;
+
+            const res = await client.query(`
+                SELECT
+                    COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label,
+                    COALESCE(t.resource_plural, bt.resource_plural, 'Resources') AS resource_plural,
+                    COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label,
+                    COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural,
+                    COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
+                FROM tenants t
+                LEFT JOIN business_templates bt ON bt.business_type = t.business_type
+                WHERE t.id = $1
+            `, [salonId]);
+
+            expect(res.rows[0]).toEqual({
+                resource_label: 'Chair',
+                resource_plural: 'Chairs',
+                employee_label: 'Stylist',
+                employee_plural: 'Stylists',
+                booking_label: 'Appointment',
+            });
+        });
+    });
+
     describe("tenants vocabulary override columns", () => {
         it("should have vocabulary override columns on tenants", async () => {
             if (!dbAvailable) return;

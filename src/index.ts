@@ -19,6 +19,7 @@ import { registerSkillRoutes } from './routes/skills';
 import { registerCalendarRoutes } from './routes/calendar';
 import { registerKnowledgeRoutes } from './routes/knowledge';
 import { registerAnalyticsRoutes } from './routes/analytics';
+import { registerVocabularyRoutes } from './routes/vocabulary';
 import { createGetEmbedding } from '../shared/getEmbedding';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
@@ -168,6 +169,7 @@ registerSkillRoutes(app, pool, withTenantClient);
 registerCalendarRoutes(app, pool, withTenantClient);
 registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient);
 registerAnalyticsRoutes(app, pool, withTenantClient);
+registerVocabularyRoutes(app, pool, withTenantClient);
 
 // --- Start Server ---
 

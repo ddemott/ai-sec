@@ -296,6 +296,14 @@ export const Api = {
       apiFetch<any[]>(`/call-summaries`, tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }),
   },
 
+  // --- VOCABULARY ---
+  vocabulary: {
+    get: (tenantId: string | null) =>
+      apiFetch<{ resource_label: string; resource_plural: string; employee_label: string; employee_plural: string; booking_label: string }>(
+        `/vocabulary`, tenantId ? { tenant_id: tenantId } : undefined
+      ),
+  },
+
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
     list: (tenantId: string | null) => 
