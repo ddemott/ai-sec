@@ -181,14 +181,160 @@ Consider a landing page (instead of defaulting to Calendar) that shows:
 - Staff on shift right now
 - Quick links to common tasks
 
-### Onboarding Checklist
-For new tenants, show a setup wizard or checklist:
-1. Add your services (what do you offer?)
-2. Add your resources (bays, trucks, chairs)
-3. Add your employees and their shifts
-4. Upload your business policies (Knowledge Base)
-5. Configure your AI persona (voice, greeting, system prompt)
-6. You're ready — assign a phone number!
+### Onboarding Wizard (Does Not Exist — Needs to Be Built)
+
+**Current problem**: When a new business is created, the owner logs in and sees 12 empty tabs with no guidance. There is no wizard, no checklist, and no indication of where to start. They have to discover the correct setup order themselves.
+
+**What's needed**: A guided onboarding flow that walks a new business owner through setup step by step. This should appear automatically when a tenant has no services, resources, or employees configured.
+
+#### Proposed Wizard Flow
+
+```
+Step 1: Tell Us About Your Business
+┌─────────────────────────────────────────────────────────┐
+│  Welcome to AI Secretary!                                │
+│  Let's get your AI receptionist set up.                  │
+│                                                          │
+│  Business Name: [DynaTire                    ]           │
+│  Business Type: [Mobile Tire Shop         ▾  ]           │
+│                 (salon, auto shop, clinic, etc.)          │
+│                                                          │
+│  This helps us pre-configure your AI with the right      │
+│  vocabulary and greeting style.                          │
+│                                                          │
+│                              [Next →]                    │
+└─────────────────────────────────────────────────────────┘
+
+Step 2: What Services Do You Offer?
+┌─────────────────────────────────────────────────────────┐
+│  Add the services your customers can book.               │
+│                                                          │
+│  ┌─────────────────────────────────────────────┐        │
+│  │ Tire Rotation          30 min    $25         │  [x]  │
+│  │ Flat Tire Repair       45 min    $40         │  [x]  │
+│  │ Full Tire Install      90 min    $120        │  [x]  │
+│  └─────────────────────────────────────────────┘        │
+│  [+ Add another service]                                 │
+│                                                          │
+│  Tip: You can always edit these later under My Business. │
+│                                                          │
+│                     [← Back]  [Next →]                   │
+└─────────────────────────────────────────────────────────┘
+
+Step 3: Add Your Resources (What Gets Booked?)
+┌─────────────────────────────────────────────────────────┐
+│  Resources are the physical things customers book        │
+│  against — trucks, bays, chairs, rooms, etc.             │
+│                                                          │
+│  ┌─────────────────────────────────────────────┐        │
+│  │ Service Truck 1    Main mobile tire unit     │  [x]  │
+│  └─────────────────────────────────────────────┘        │
+│  [+ Add another resource]                                │
+│                                                          │
+│                     [← Back]  [Next →]                   │
+└─────────────────────────────────────────────────────────┘
+
+Step 4: Add Your Team
+┌─────────────────────────────────────────────────────────┐
+│  Add the employees who will be assigned to appointments. │
+│                                                          │
+│  ┌─────────────────────────────────────────────┐        │
+│  │ Mike    mike@dynatire.com    All services    │  [x]  │
+│  │ Steve   steve@dynatire.com   Rotation, Repair│  [x]  │
+│  └─────────────────────────────────────────────┘        │
+│  [+ Add another employee]                                │
+│                                                          │
+│  Tip: You'll set their working hours in the next step.   │
+│                                                          │
+│                     [← Back]  [Next →]                   │
+└─────────────────────────────────────────────────────────┘
+
+Step 5: Set Working Hours
+┌─────────────────────────────────────────────────────────┐
+│  When is your team available? Set shift hours per        │
+│  employee. The AI will only book during these times.     │
+│                                                          │
+│  Mike:                                                   │
+│    Mon-Fri  8:00 AM - 5:00 PM                           │
+│    Sat      9:00 AM - 1:00 PM                           │
+│                                                          │
+│  Steve:                                                  │
+│    Mon-Fri  8:00 AM - 5:00 PM                           │
+│                                                          │
+│  [Edit shifts]                                           │
+│                                                          │
+│                     [← Back]  [Next →]                   │
+└─────────────────────────────────────────────────────────┘
+
+Step 6: Teach the AI Your Policies (Optional)
+┌─────────────────────────────────────────────────────────┐
+│  Upload documents so the AI can answer questions about   │
+│  your policies, pricing, hours, and procedures.          │
+│                                                          │
+│  [📄 Upload PDF or Text File]                            │
+│                                                          │
+│  Examples of what to upload:                             │
+│  • Cancellation policy                                   │
+│  • Pricing sheet                                         │
+│  • Business hours and holiday schedule                   │
+│  • FAQ or common customer questions                      │
+│                                                          │
+│  Tip: You can skip this and add documents later.         │
+│                                                          │
+│                     [← Back]  [Next →]                   │
+└─────────────────────────────────────────────────────────┘
+
+Step 7: Configure Your AI Persona
+┌─────────────────────────────────────────────────────────┐
+│  How should your AI receptionist sound and behave?       │
+│                                                          │
+│  Voice:    [Professional Female ▾]                       │
+│  Greeting: "Thank you for calling DynaTire, how can I    │
+│             help you today?"                             │
+│                                                          │
+│  Personality notes (system prompt):                      │
+│  ┌─────────────────────────────────────────────┐        │
+│  │ You are a friendly, professional receptionist│        │
+│  │ for DynaTire. Be concise and helpful...     │        │
+│  └─────────────────────────────────────────────┘        │
+│                                                          │
+│  Tip: We've pre-filled this based on your business type. │
+│                                                          │
+│                     [← Back]  [Finish Setup →]           │
+└─────────────────────────────────────────────────────────┘
+
+Step 8: You're Ready!
+┌─────────────────────────────────────────────────────────┐
+│  🎉 Your AI receptionist is configured!                  │
+│                                                          │
+│  Here's what's set up:                                   │
+│  ✓ 3 services                                           │
+│  ✓ 1 resource                                           │
+│  ✓ 2 employees with shifts                              │
+│  ✓ AI persona configured                                │
+│                                                          │
+│  Next steps:                                             │
+│  • Assign a phone number (contact support)               │
+│  • Upload business policy documents                      │
+│  • Make a test call to try it out                        │
+│                                                          │
+│                    [Go to Dashboard →]                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Wizard Detection Logic
+The wizard should appear when ALL of the following are true for the logged-in tenant:
+- `services` count = 0
+- `resources` count = 0
+- `employees` count = 0
+
+Once the wizard is completed (or dismissed), it should not appear again. Store a flag like `onboarding_completed` on the tenant record or in `tenant_calendar_settings`/metadata.
+
+#### Wizard Should Also Be Accessible Later
+Add a "Setup Guide" or "Getting Started" link in Settings so owners can re-run the wizard if they want to start over or review their setup.
+
+#### Relationship to Navigation Restructure
+The wizard replaces the need for new users to discover the correct tab order themselves. After the wizard completes, they land on the Schedule (calendar) view — which is the daily-use home screen. The grouped navigation (My Team, My Business) then serves as the place to edit what they set up during onboarding.
 
 ### Contextual Navigation
 - Clicking a customer's appointment in the CRM should navigate to that appointment in the Calendar
