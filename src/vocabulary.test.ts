@@ -163,6 +163,17 @@ describe("Business Vocabulary System", () => {
             }
         });
 
+        it("should have example_services populated on all 20 templates", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type, example_services FROM business_templates WHERE business_type = ANY($1)",
+                [EXPECTED_TYPES]
+            );
+            for (const row of res.rows) {
+                expect(row.example_services.length).toBeGreaterThanOrEqual(3);
+            }
+        });
+
         it("should have system_prompt_template with business_name placeholder on all templates", async () => {
             if (!dbAvailable) return;
             const res = await client.query(
