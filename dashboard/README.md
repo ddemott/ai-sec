@@ -4,11 +4,13 @@
 This is the **management UI** for the AI Secretary SaaS. It lets owners and admins:
 
 - View and manage appointments across tenants/resources.
-- See customer profiles and notes.
+- See unified customer profiles with upcoming/past appointments, AI call summaries, and internal notes.
+- Cancel appointments directly from the CRM detail view.
+- Search customers by name, phone, or email.
 - Tweak AI persona settings (system prompt, voice, working hours).
+- Manage employee attributes (name, email, phone) and shift schedules.
 
-The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**, and talks directly to Supabase and the Edge Functions defined in the root project.
-In practice it calls the Fastify backend API (`src/index.ts`), which in turn reads and writes to the shared Postgres database (Supabase or local Docker), so that bookings created by the voice tools and the dashboard all hit the same source of truth.
+The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It calls the Fastify backend API (13 route modules under `src/routes/`), which enforces RLS via `withTenantClient()` and reads/writes to the shared Postgres database (Supabase or local Docker). Bookings created by the voice AI tools and the dashboard all hit the same source of truth.
 
 ---
 
@@ -17,8 +19,7 @@ In practice it calls the Fastify backend API (`src/index.ts`), which in turn rea
 - Node.js and npm.
 - A running Supabase project with this repo's migrations applied.
 - Environment variables configured in `.env.local`:
-	- `NEXT_PUBLIC_SUPABASE_URL`
-	- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+	- `NEXT_PUBLIC_API_BASE_URL` (defaults to `https://localhost:3000`)
 
 ---
 
@@ -36,8 +37,10 @@ Then open [http://localhost:3001](http://localhost:3001) to access the dashboard
 
 You should see:
 - A multi-tenant appointment view (list/calendar).
-- Customer details with notes.
-- Basic controls for editing appointments and notes.
+- Unified CRM with customer details, upcoming/past appointments, AI call history, and cancel flow.
+- Employee management with shift scheduling.
+- Knowledge base for RAG document management.
+- Analytics dashboard with call volume and revenue metrics.
 
 ---
 
@@ -47,7 +50,7 @@ The dashboard is intended to be deployed on **Vercel**:
 
 1. Push this repo to GitHub.
 2. In Vercel, create a new project from the `dashboard/` directory.
-3. Configure the same Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+3. Set `NEXT_PUBLIC_API_BASE_URL` to your deployed backend URL.
 4. Deploy.
 
 Once deployed, owners log in using the app's own `users`-table-backed login flow (via the backend `/login` endpoint); Supabase Auth can be wired in later if desired but is not required for the current MVP.

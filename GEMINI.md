@@ -1,11 +1,12 @@
 # AI Secretary SaaS – Project Context & Decisions
 
 ## Project Status
-- **Current Phase**: **Production-Ready Multi-Tenant SaaS** (RAG, Shifts, and Analytics integrated).
+- **Current Phase**: **Phase 8 (Go-Live)** — All development, security hardening, and polish phases complete.
 - **Source Control**: Pushed to [github.com/ddemott/ai-sec](https://github.com/ddemott/ai-sec) (Private).
-- **Ready for**: Scaling to multiple businesses with unique policies and staff schedules.
-- **Backend Strategy**: **Edge-First / Serverless** (Supabase Edge Functions + Postgres) with a local Fastify helper for ingestion and admin.
+- **Ready for**: Cloud migration and beta testing with DynaTire.
+- **Backend Strategy**: **Edge-First / Serverless** (Supabase Edge Functions + Postgres) with a **modularized Fastify backend** (13 route modules under `src/routes/` with `withTenantClient()` RLS enforcement) for management API.
 - **Dashboard Goal**: **Business Empowerment & Performance Monitoring** (Achieved).
+- **Quality**: 58 bugs from March 2026 code review resolved. 80 backend + 38 dashboard tests passing. JWT auth, RLS on all routes, least-privilege DB role.
 
 ## Key Architecture Decisions
 1. **Zero-Scale Infrastructure**: Supabase Edge Functions + Postgres.
@@ -21,6 +22,10 @@
 - **Analytics View**: Built a performance dashboard showing call volume, conversion rates, and estimated revenue.
 - **Skill & Capability Matrix**: Created a unified grid for matching staff expertise with physical resource capabilities.
 - **Calendar Sync Blueprint**: Added schema and n8n workflows for Google/Outlook integration.
+- **Unified CRM Detail View**: Customer detail pane now shows upcoming/past appointments, enhanced call summaries with transcript data, and inline cancel flow.
+- **New API Endpoints**: `GET /customers/:id/appointments`, `POST /appointments/:id/cancel`, enhanced `/call-summaries` with transcript JOINs.
+- **Employee Attributes**: Added first_name, last_name, email, phone columns to employees table.
+- **Shared Compiled JS**: `shared/getEmbedding.js`, `shared/scheduling.js`, `dashboard/lib/constants.js` committed for cross-runtime use.
 
 ## Next Steps (Live)
 1.  **Configure Base Vapi Agent**: In Vapi, set the Agent's **Server URL** to the deployed Supabase Edge Function (`/vapi-tools`).

@@ -33,7 +33,7 @@ The Dashboard provides business owners with transparency and control.
 - **Staff Working Hours**: Interface for managing employee shifts (Day of Week + Time Ranges) with create/edit support.
 - **Skill & Capability Matrix**: Unified grid for matching staff expertise with physical resource (bay/chair) capabilities. Debounce guard prevents duplicate requests.
 - **Outlook-style Calendar**: Multi-resource schedule view showing all confirmed appointments.
-- **CRM Viewer**: Deep-dive into customer history, including AI-generated call summaries and sentiment.
+- **CRM Viewer**: Unified customer detail view with upcoming/past appointments (cancel flow), AI-generated call summaries with transcript data, and internal notes. Search bar filters by name, phone, or email.
 
 ---
 
@@ -41,7 +41,7 @@ The Dashboard provides business owners with transparency and control.
 The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 13 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics).
 
 ### 4.1 Security
-- **RLS Enforcement**: All 11 tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
+- **RLS Enforcement**: All 13 tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
 - **Least Privilege**: The `api_user` role has explicit `SELECT, INSERT, UPDATE, DELETE` grants per table (not `ALL PRIVILEGES`).
 - **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
 - **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
@@ -49,7 +49,7 @@ The Fastify backend serves as the management API for the dashboard and administr
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 75+ tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, tools, scheduling, and index suites.
+- **Coverage**: 80 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, tools, scheduling, and index suites. 38 dashboard tests across CRM, appointments, settings, employee, and component suites.
 
 ---
 

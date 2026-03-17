@@ -50,7 +50,7 @@
 
 ## 7. Security & Quality Hardening (Completed March 2026)
 - [x] **JWT Auth**: Token-based authentication with 8h expiry and auto-logout on 401 (BUG-012).
-- [x] **RLS Enforcement**: All 11 tenant-scoped route modules use `withTenantClient()` with `api_user` role (BUG-007). Only super-admin and auth routes use the admin pool.
+- [x] **RLS Enforcement**: All 13 tenant-scoped route modules use `withTenantClient()` with `api_user` role (BUG-007). Only super-admin and auth routes use the admin pool.
 - [x] **Least-Privilege DB**: `api_user` downgraded from `ALL PRIVILEGES` to explicit grants (BUG-008).
 - [x] **Form Validation**: Zod schemas for login, customer, and appointment creation (BUG-011).
 - [x] **Error Boundaries**: React ErrorBoundary wraps all dashboard views (BUG-010).
@@ -77,3 +77,14 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 - [x] **Dead Code**: Removed BookingService, Provider pattern, InMemoryBookingStorage, MockLlmProvider, and `/chat` endpoint (BUG-018, BUG-019).
 - [x] **Audit Logging**: `audit_log` table with triggers on appointments, customers, resources (BUG-037).
 - [x] **Soft Deletes**: `is_deleted`/`deleted_at` columns on appointments, customers, resources, employees (BUG-038).
+
+## 9. CRM & Dashboard Enhancements (Completed March 2026)
+- [x] **Unified CRM Detail View**: Customer detail pane shows upcoming/past appointments with cancel capability, enhanced call summaries with transcript data, and internal notes.
+- [x] **Customer Appointment Endpoint**: `GET /customers/:id/appointments` returns appointments with resource/employee names.
+- [x] **Appointment Cancel Endpoint**: `POST /appointments/:id/cancel` soft-cancels by updating status (not deleting).
+- [x] **Enhanced Call Summaries**: `/call-summaries` JOINs `call_transcripts` for timestamps and transcript availability.
+- [x] **CRM Search**: Customer list search bar wired up (filters by name, phone, email).
+- [x] **API Client Methods**: `Api.customers.appointments()` and `Api.appointments.cancel()` added.
+- [x] **Employee Attributes**: Migration adds first_name, last_name, email, phone columns to employees table.
+- [x] **Shared JS Artifacts**: Compiled `shared/getEmbedding.js`, `shared/scheduling.js`, `dashboard/lib/constants.js` committed for deployment.
+- [x] **Test Coverage**: 80 backend tests + 38 dashboard tests, all passing.

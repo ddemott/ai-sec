@@ -40,14 +40,14 @@
 Full code review identified 58 bugs across all severity levels. All Critical, High, Medium, and Low bugs resolved.
 
 - [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
-- [x] **RLS**: Standardized policies, all 11 tenant-scoped route modules enforce via `withTenantClient()`, least-privilege DB role. Only super-admin and auth routes use the admin pool.
+- [x] **RLS**: Standardized policies, all 13 tenant-scoped route modules enforce via `withTenantClient()`, least-privilege DB role. Only super-admin and auth routes use the admin pool.
 - [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID assignment_id validation.
 - [x] **Booking Engine**: DST-safe shift checks, auto end-time from service duration, customer upsert, service requirement enforcement.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, Promise.allSettled, timezone maps, debounce guards.
 - [x] **Data Integrity**: Name sync triggers, seed idempotency, metadata constraints, call_id indexing.
 - [x] **Edge Functions**: Single-pass Zod validation, set_tenant_context error handling.
 - [x] **Knowledge Base**: Paragraph-aware chunking with overlap, duplicate detection.
-- [x] **Test Coverage**: 75 backend + 25 dashboard tests, all passing.
+- [x] **Test Coverage**: 80 backend + 38 dashboard tests, all passing.
 
 ## Phase 8: Production Go-Live (Current 🚀)
 - [x] **Agent Template**: Templatize `agent.json` with Mustache variables for tenant-specific deployment.
@@ -72,3 +72,11 @@ Full code review identified 58 bugs across all severity levels. All Critical, Hi
 - [x] **Accessibility**: ARIA labels (`role="dialog"`, `aria-modal`, `aria-invalid`, `aria-describedby`, `aria-busy`) across dashboard.
 - [x] **Customer Timezone**: `check_availability_with_tz()` respects customer timezone in availability checks.
 - [x] **Orphan Transcript Linking**: `link_orphaned_transcripts()` SQL function matches transcripts via call_id.
+
+## Phase 10: CRM & Dashboard Enhancements (Complete ✅)
+- [x] **Unified CRM Detail View**: Customer detail pane shows upcoming/past appointments with cancel capability, enhanced call summaries with transcript data, and customer search.
+- [x] **Customer Appointments API**: `GET /customers/:id/appointments` endpoint with resource/employee name JOINs.
+- [x] **Appointment Cancel API**: `POST /appointments/:id/cancel` soft-cancels (status update, not delete).
+- [x] **Enhanced Call Summaries**: `/call-summaries` JOINs `call_transcripts` for timestamps and transcript availability.
+- [x] **Employee Attributes**: Migration adds first_name, last_name, email, phone to employees table.
+- [x] **Shared JS Artifacts**: Compiled `shared/getEmbedding.js`, `shared/scheduling.js`, `dashboard/lib/constants.js` for deployment.

@@ -53,7 +53,7 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 ./scripts/setup-db.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
 ```
 
-This applies all 37 migrations in order and seeds the database with the DynaTire demo tenant.
+This applies all 38 migrations in order and seeds the database with the DynaTire demo tenant.
 
 ### 2.2 Create the api_user Role
 The migrations create an `api_user` role with least-privilege grants. On Supabase, you may need to verify this role exists:

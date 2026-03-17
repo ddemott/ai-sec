@@ -5,17 +5,19 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (src/index.ts) -> Postgres
+- **Backend API**: Node.js / Fastify (13 route modules under src/routes/) -> Postgres
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
-- **Auth**: bcrypt-based app-level login (no JWT yet)
+- **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (REST API, auth, CRUD endpoints)
+- `/src` - Fastify backend (slim index.ts entry, 13 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 33 SQL migrations (schema, RLS, RPCs)
+- `/supabase/migrations` - 38 SQL migrations (schema, RLS, RPCs, bug fixes)
+- `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
 - `/vapi` - Vapi agent config and tool definitions
@@ -28,7 +30,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - **Frontend**: Next.js 14, React 18, Tailwind CSS 3.4, Lucide icons, react-big-calendar
 - **Edge Functions**: Deno, Supabase Edge Functions, Pino logger
 - **Database**: PostgreSQL + pgvector (ankane/pgvector Docker image)
-- **Testing**: Vitest (dashboard), Jest (backend), Deno test (edge functions)
+- **Testing**: Vitest (backend + dashboard), Deno test (edge functions)
 - **Voice**: Vapi, Telnyx, Groq/Llama 3, Deepgram Nova-2, Cartesia TTS
 
 ## Development
@@ -54,16 +56,20 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - UI primitives in `dashboard/components/ui/` (Button, Card, Input, Select, Modal, Badge)
 - API client centralized in `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: monolithic index.ts (needs refactoring into route modules)
+- Fastify: slim index.ts registers 13 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
 
 ## Known Issues (as of March 2026)
-- Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch)
-- users.email is globally unique instead of per-tenant
-- RLS context variable inconsistency (app.current_tenant_id vs request.jwt.claim.tenant_id)
-- Dev bypass button in dashboard page.tsx (must remove before production)
-- Undefined variables: setDraftEvent in AppointmentView, handleEditFormChange in CRMView
-- Fastify index.ts is 800+ line monolith with no RLS enforcement
-- Scheduling logic duplicated between src/core/scheduling.ts and supabase/.../core/scheduling.ts
+- Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`
+- setDraftEvent undefined in AppointmentView (non-blocking)
+
+## Resolved Issues (March 2026 Code Review)
+- 58 bugs identified and resolved across Critical/High/Medium/Low severity
+- users.email scoped to per-tenant uniqueness (BUG-002)
+- RLS standardized on `app.current_tenant_id` (BUG-006)
+- Dev bypass button removed (BUG-005)
+- handleEditFormChange fixed in CRMView (BUG-004)
+- Fastify monolith broken into 13 route modules with RLS enforcement (BUG-017)
+- Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phase 8 (Go-Live). All 7 development phases complete. Remaining: cloud migration, Vapi server URL config, Telnyx phone assignment, n8n webhook plumbing, beta testing with DynaTire.
+Phase 8 (Go-Live). All 9 development phases complete (including security hardening and scale/polish). 80 backend tests + 38 dashboard tests passing. Remaining: cloud migration, Vapi server URL config, Telnyx phone assignment, n8n webhook plumbing, beta testing with DynaTire.

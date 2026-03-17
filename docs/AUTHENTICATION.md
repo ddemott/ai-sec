@@ -1,34 +1,44 @@
-# Authentication Logic Update
+# Authentication
 
-## Change Summary
-- The backend login endpoint in src/index.ts now uses bcrypt for password comparison.
-- Instead of calling the authenticate_user SQL function, the code fetches the user by email and compares the submitted password to the stored bcrypt hash.
+## Overview
+The backend uses JWT-based authentication with bcrypt password hashing.
 
-## Implementation Details
-- The login endpoint queries the users table for the given email.
-- If a user is found, bcrypt.compare is used to check the password.
-- On success, tenant_id, user_id, and user_name are returned.
-- On failure, a 401 Unauthorized error is returned.
+## Login Flow
+1. Client sends `POST /login` with `{ email, password }`.
+2. Backend queries `users` table for the email.
+3. `bcrypt.compare()` checks the submitted password against the stored hash.
+4. On success, a signed JWT is returned containing `tenant_id`, `user_id`, and `user_name`.
+5. Token is stored in `localStorage` on the client.
 
-## Security Note
-- Passwords are never checked in plain text.
-- Only bcrypt hashes are stored and compared.
+## Token Details
+- **Algorithm**: HS256 (via `jsonwebtoken` library)
+- **Expiry**: 8 hours (configurable via `JWT_EXPIRY` env var)
+- **Secret**: Set via `JWT_SECRET` env var (must be changed from default in production)
+- **Payload**: `{ tenant_id, user_id, user_name }`
 
-## Migration Note
-- The authenticate_user SQL function is no longer used for authentication.
-- Ensure all seeded users have bcrypt password hashes.
+## Request Authentication
+- All API requests include `Authorization: Bearer <token>` header.
+- The `getHeaders()` function in `dashboard/lib/api.ts` automatically attaches the token.
+- Backend verifies the token and extracts tenant context for RLS enforcement.
 
-## Example
-```js
-const bcrypt = await import('bcrypt');
-const match = await bcrypt.compare(password, user.password_hash);
-```
+## Auto-Logout
+- On HTTP 401 response, the client automatically:
+  - Clears `tenantId`, `userName`, and `authToken` from localStorage
+  - Redirects to the login page
+
+## Password Storage
+- Passwords are hashed with `bcrypt` before storage.
+- Only bcrypt hashes are stored in the `users.password_hash` column.
+- Seeded users (e.g., `dale@ai-sec.com`) have pre-computed bcrypt hashes.
 
 ## Related Files
-- src/index.ts (backend logic)
-- supabase/migrations/20260301000000_user_accounts.sql (schema)
-- seed.sql (user seeding)
+- `src/routes/auth.ts` — Login endpoint and JWT signing
+- `dashboard/lib/api.ts` — Token attachment and auto-logout
+- `dashboard/lib/hooks.ts` — `useSession()` hook for auth state
+- `dashboard/lib/SessionContext.tsx` — React Context for centralized auth state
+- `supabase/migrations/20260301000000_user_accounts.sql` — Users table schema
+- `supabase/seed.sql` — Seeded user credentials
 
-## Next Steps
-- Test login with bcrypt-hashed passwords.
-- Remove or update any documentation referencing the old SQL authentication function.
+## Security Notes
+- `JWT_SECRET` must be a strong random string in production (not the default `dev-jwt-secret-change-in-production`).
+- The `authenticate_user` SQL function is no longer used; authentication is handled entirely in the application layer.

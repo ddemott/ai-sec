@@ -16,14 +16,14 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## Main Components & Verification
 
-- **100+ Tests Passing**: All core logic verified via Vitest (backend + dashboard).
+- **118 Tests Passing**: 80 backend + 38 dashboard tests verified via Vitest.
 - **Postgres (Supabase)**: Single source of truth with Row-Level Security (RLS) for tenant isolation.
 - **Supabase Edge Function (`vapi-tools`)**:
   - `getCustomerContext` – CRM history lookup.
   - `checkAvailability` – Multi-resource overlap checks.
   - `bookAppointment` – Shift-aware atomic booking with auto end-time calculation.
   - `getCompanyPolicyAnswer` – Semantic search over business docs.
-- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes for administrative tasks, document ingestion, analytics, and CRUD operations.
+- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes (13 modules under `src/routes/`) for administrative tasks, document ingestion, analytics, customer appointments, appointment cancellation, and CRUD operations.
 - **Dashboard (Next.js)**:
   - **Knowledge Base**: PDF/Text upload for RAG training.
   - **Shift Manager**: Employee working hours and availability (create + edit).
