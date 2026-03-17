@@ -128,6 +128,53 @@ describe("Business Vocabulary System", () => {
         });
     });
 
+    describe("all 20 business type templates", () => {
+        const EXPECTED_TYPES = [
+            'mobile-tire', 'salon', 'auto-shop', 'dentist',
+            'vet-clinic', 'chiropractor', 'barbershop', 'nail-salon',
+            'spa', 'plumber', 'electrician', 'hvac',
+            'pest-control', 'cleaning', 'landscaping', 'personal-trainer',
+            'yoga-studio', 'tax-prep', 'tutoring', 'photography',
+        ];
+
+        it("should have all 20 business type templates", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type FROM business_templates ORDER BY business_type"
+            );
+            const types = res.rows.map(r => r.business_type);
+            for (const t of EXPECTED_TYPES) {
+                expect(types).toContain(t);
+            }
+            expect(types.length).toBeGreaterThanOrEqual(20);
+        });
+
+        it("should have non-empty vocabulary on all 20 templates", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type, resource_label, employee_label, booking_label FROM business_templates WHERE business_type = ANY($1)",
+                [EXPECTED_TYPES]
+            );
+            expect(res.rows.length).toBe(20);
+            for (const row of res.rows) {
+                expect(row.resource_label).toBeTruthy();
+                expect(row.employee_label).toBeTruthy();
+                expect(row.booking_label).toBeTruthy();
+            }
+        });
+
+        it("should have system_prompt_template with business_name placeholder on all templates", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type, system_prompt_template FROM business_templates WHERE business_type = ANY($1)",
+                [EXPECTED_TYPES]
+            );
+            for (const row of res.rows) {
+                expect(row.system_prompt_template).toContain('{{business_name}}');
+            }
+        });
+    });
+
     describe("tenants vocabulary override columns", () => {
         it("should have vocabulary override columns on tenants", async () => {
             if (!dbAvailable) return;
