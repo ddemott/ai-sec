@@ -131,8 +131,11 @@ export const Api = {
         phone: normalizePhone(data.phone)
       }),
     
-    delete: (id: string) => 
+    delete: (id: string) =>
       apiMutate<any>(`/customers/${id}`, 'DELETE'),
+
+    appointments: (customerId: string, tenantId: string | null) =>
+      apiFetch<any[]>(`/customers/${customerId}/appointments`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- APPOINTMENTS ---
@@ -154,8 +157,11 @@ export const Api = {
         customer_phone: normalizePhone(data.customer_phone)
       }),
     
-    delete: (id: string) => 
+    delete: (id: string) =>
       apiMutate<any>(`/appointments/${id}`, 'DELETE'),
+
+    cancel: (id: string, tenantId: string | null) =>
+      apiMutate<any>(`/appointments/${id}/cancel`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- RESOURCES ---
@@ -166,11 +172,11 @@ export const Api = {
     create: (tenantId: string | null, data: any) => 
       apiMutate<any>(`/resources/create`, 'POST', { tenant_id: tenantId, ...data }),
     
-    update: (id: string, data: any) => 
-      apiMutate<any>(`/resources/${id}/update`, 'POST', data),
-    
-    delete: (id: string) => 
-      apiMutate<any>(`/resources/${id}/delete`, 'DELETE'),
+    update: (id: string, data: any, tenantId?: string | null) =>
+      apiMutate<any>(`/resources/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
+
+    delete: (id: string, tenantId?: string | null) =>
+      apiMutate<any>(`/resources/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
   },
 
   // --- EMPLOYEES ---

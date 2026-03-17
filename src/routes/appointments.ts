@@ -113,6 +113,30 @@ export function registerAppointmentRoutes(
     }
   });
 
+  // POST /appointments/:id/cancel - soft cancel (status update, not delete)
+  app.post('/appointments/:id/cancel', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { tenant_id?: string };
+    const tenantId = body.tenant_id || (req as any).auth?.tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+    try {
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id",
+          [id, tenantId]
+        );
+      });
+      if (res.rows.length === 0) {
+        return reply.status(404).send({ success: false, error: 'Appointment not found' });
+      }
+      return reply.send({ success: true });
+    } catch (err) {
+      app.log.error(err);
+      return reply.status(500).send({ error: 'Failed to cancel appointment' });
+    }
+  });
+
   app.post('/appointments/:id/update', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as {

@@ -30,7 +30,7 @@ const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 // --- Server Setup ---
 
 const useHttps = process.env.NODE_ENV !== 'production';
-const certDir = path.resolve(__dirname, '..', 'certs');
+const certDir = path.resolve(__dirname, '..', '..', 'certs');
 const app = Fastify(
   (useHttps
     ? {
@@ -105,7 +105,7 @@ async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) =>
 // --- Auth ---
 
 function generateToken(payload: { tenant_id: string; user_id: string; email: string }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as any });
 }
 
 function verifyToken(token: string): { tenant_id: string; user_id: string; email: string } | null {

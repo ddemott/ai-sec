@@ -89,8 +89,8 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
 
   test('renders without crashing (handleEditFormChange is defined)', async () => {
     render(<CRMView />);
-    // CRMView header says "People"
-    expect(await screen.findByText(/People/i)).toBeInTheDocument();
+    // CRMView header says "Customers"
+    expect(await screen.findByText(/Customers/i)).toBeInTheDocument();
   });
 
   test('customer list shows loaded customers', async () => {

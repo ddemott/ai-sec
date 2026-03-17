@@ -15,14 +15,14 @@ export function registerResourceRoutes(
       if (isSuperAdmin) {
         const client = await pool.connect();
         try {
-          const res = await client.query('SELECT * FROM resources');
+          const res = await client.query('SELECT * FROM resources ORDER BY name');
           return reply.send(res.rows);
         } finally {
           client.release();
         }
       } else {
         const res = await withTenantClient(tenantId, async (client) => {
-          return client.query('SELECT * FROM resources WHERE tenant_id = $1', [tenantId]);
+          return client.query('SELECT * FROM resources WHERE tenant_id = $1 ORDER BY name', [tenantId]);
         });
         return reply.send(res.rows);
       }

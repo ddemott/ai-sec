@@ -54,8 +54,8 @@ else
 fi
 
 # 2. Start services concurrently
-setsid node dist/index.js > backend.log 2>&1 &
-echo "Backend server started on port 3000 (dist/index.js)"
+setsid node dist/src/index.js > backend.log 2>&1 &
+echo "Backend server started on port 3000 (dist/src/index.js)"
 (cd dashboard && setsid npm run dev > ../dashboard.log 2>&1 &)
 echo "Dashboard server started on port 3001 (dashboard/server.js)"
 

@@ -11,6 +11,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { Api } from '../lib/api'
+import { formatPhone } from '../lib/phone'
 import { useSession, useStaticData } from '../lib/hooks'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
@@ -21,6 +22,10 @@ import { Modal } from './ui/Modal'
 type Employee = {
   id: number
   name: string
+  first_name?: string
+  last_name?: string
+  email?: string
+  phone?: string
   is_active: boolean
   type?: string
 }
@@ -32,12 +37,12 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
 
   // Edit State
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
-  const [editForm, setEditForm] = useState({ name: '' })
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', is_active: true })
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // Add Employee State
-  const [newEmployeeName, setNewEmployeeName] = useState('')
+  const [newEmployee, setNewEmployee] = useState({ first_name: '', last_name: '' })
 
   useEffect(() => {
     if (tenantId) fetchMappings()
@@ -55,12 +60,15 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
 
   async function handleAddEmployee(e: React.FormEvent) {
     e.preventDefault()
-    if (!newEmployeeName.trim() || !tenantId) return
+    if (!newEmployee.first_name.trim() || !tenantId) return
     setSaving(true)
     try {
-      const res = await Api.employees.create(tenantId, { name: newEmployeeName.trim() })
+      const res = await Api.employees.create(tenantId, {
+        first_name: newEmployee.first_name.trim(),
+        last_name: newEmployee.last_name.trim()
+      })
       if (res.success) {
-        setNewEmployeeName('')
+        setNewEmployee({ first_name: '', last_name: '' })
         refresh()
       }
     } catch (err) {
@@ -71,10 +79,17 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
   }
 
   async function handleUpdateEmployee() {
-    if (!selectedEmployee || !editForm.name.trim()) return
+    if (!selectedEmployee || !editForm.first_name.trim()) return
     setSaving(true)
     try {
-      const res = await Api.employees.update(selectedEmployee.id as number, { name: editForm.name.trim() })
+      const res = await Api.employees.update(selectedEmployee.id as number, {
+        first_name: editForm.first_name.trim(),
+        last_name: editForm.last_name.trim(),
+        email: editForm.email.trim() || undefined,
+        phone: editForm.phone.trim() || undefined,
+        is_active: editForm.is_active,
+        tenant_id: tenantId
+      })
       if (res.success) {
         refresh()
         setIsEditModalOpen(false)
@@ -128,21 +143,27 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Staff & Services</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Define which team members provide which services.</p>
+            <h1 className="text-3xl font-bold">Employees</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Manage employees and assign them to services.</p>
           </div>
         </div>
 
-        <form onSubmit={handleAddEmployee} className="max-w-md flex gap-3">
-          <Input 
-            placeholder="Enter full name..."
-            value={newEmployeeName}
-            onChange={e => setNewEmployeeName(e.target.value)}
+        <form onSubmit={handleAddEmployee} className="max-w-lg flex gap-3">
+          <Input
+            placeholder="First name"
+            value={newEmployee.first_name}
+            onChange={e => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
             className="flex-1"
           />
-          <Button 
+          <Input
+            placeholder="Last name"
+            value={newEmployee.last_name}
+            onChange={e => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
+            className="flex-1"
+          />
+          <Button
             type="submit"
-            disabled={saving || !newEmployeeName.trim()}
+            disabled={saving || !newEmployee.first_name.trim()}
             icon={PlusCircle}
             loading={saving}
             className="whitespace-nowrap"
@@ -163,10 +184,16 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
         {(employees || []).filter(e => e.type !== 'user').map(emp => (
           <Card 
             key={emp.id} 
-            onClick={() => { 
-              setSelectedEmployee(emp); 
-              setEditForm({ name: emp.name });
-              setIsEditModalOpen(true); 
+            onClick={() => {
+              setSelectedEmployee(emp);
+              setEditForm({
+                first_name: emp.first_name || emp.name || '',
+                last_name: emp.last_name || '',
+                email: emp.email || '',
+                phone: emp.phone || '',
+                is_active: emp.is_active !== false,
+              });
+              setIsEditModalOpen(true);
             }}
             className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
           >
@@ -179,8 +206,14 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
               </Badge>
             </div>
             
-            <h3 className="text-xl font-bold mb-2">{emp.name}</h3>
-            
+            <h3 className="text-xl font-bold mb-1">{emp.name}</h3>
+            {(emp.phone || emp.email) && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 space-y-0.5">
+                {emp.phone && <div>{formatPhone(emp.phone)}</div>}
+                {emp.email && <div>{emp.email}</div>}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-1">
               {(mappings || []).filter(m => m.employee_id === emp.id).length > 0 ? (
                 (mappings || []).filter(m => m.employee_id === emp.id).map(m => {
@@ -214,11 +247,48 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
                 <Users className="w-3 h-3 mr-2" /> Basic Info
               </h4>
-              <Input 
-                label="Full Name"
-                value={editForm.name}
-                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="First Name"
+                  value={editForm.first_name}
+                  onChange={e => setEditForm({ ...editForm, first_name: e.target.value })}
+                />
+                <Input
+                  label="Last Name"
+                  value={editForm.last_name}
+                  onChange={e => setEditForm({ ...editForm, last_name: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Email"
+                  type="email"
+                  placeholder="employee@email.com"
+                  value={editForm.email}
+                  onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                />
+                <Input
+                  label="Phone"
+                  type="tel"
+                  value={formatPhone(editForm.phone)}
+                  onChange={e => {
+                    const digits = e.target.value.replace(/\D/g, '')
+                    setEditForm({ ...editForm, phone: digits })
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={editForm.is_active}
+                  onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
             </section>
 
             {/* Service Toggle Section */}

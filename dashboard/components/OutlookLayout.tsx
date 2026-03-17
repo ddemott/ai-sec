@@ -88,103 +88,114 @@ export function OutlookLayout({
     <div className="flex h-screen bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 overflow-hidden font-sans flex-col md:flex-row transition-colors duration-200">
       
       {/* 1. SIDEBAR (Desktop / iPad) */}
-      <aside aria-label="Main navigation" className="hidden md:flex w-16 flex-col items-center py-4 bg-[#f3f2f1] dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 transition-colors duration-200">
-        <div className="mb-8 p-2 bg-blue-600 rounded-md shadow-md">
+      <aside aria-label="Main navigation" className="hidden md:flex w-20 flex-col items-center py-4 bg-[#f3f2f1] dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 transition-colors duration-200">
+        <div className="mb-6 p-2 bg-blue-600 rounded-md shadow-md">
           <Calendar className="text-white w-6 h-6" />
         </div>
-        
-        <nav aria-label="Sidebar navigation" className="flex flex-col space-y-4 flex-1 text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar">
+
+        <nav aria-label="Sidebar navigation" className="flex flex-col space-y-1 flex-1 text-gray-900 dark:text-gray-100 overflow-y-auto no-scrollbar">
           {isAdmin && (
-            <button 
+            <button
               title="All Businesses"
               onClick={() => setActiveTab('all-businesses')}
-              className={`p-3 rounded-md transition-all ${activeTab === 'all-businesses' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+              className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'all-businesses' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
             >
-              <Globe className="w-6 h-6" />
+              <Globe className="w-5 h-5" />
+              <span className="text-[9px] mt-0.5 font-medium leading-tight">Admin</span>
             </button>
           )}
-          <button 
+          <button
             title="Appointments"
             onClick={() => setActiveTab('appointments')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'appointments' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'appointments' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
-            <Calendar className="w-6 h-6" />
+            <Calendar className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Calendar</span>
           </button>
-          
-          <button 
-            title="People (CRM)"
+
+          <button
+            title="Customers"
             onClick={() => setActiveTab('crm')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'crm' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'crm' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
-            <Users className="w-6 h-6" />
+            <Users className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Customers</span>
           </button>
 
-          <button 
-            title="Skill Matrix"
-            onClick={() => setActiveTab('skill-matrix')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'skill-matrix' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
-          >
-            <LayoutGrid className="w-6 h-6" />
-          </button>
-
-          <button 
-            title="Knowledge Base"
-            onClick={() => setActiveTab('knowledge-base')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'knowledge-base' ? 'bg-white dark:bg-[#333] shadow-sm text-orange-600 dark:text-orange-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
-          >
-            <BookOpen className="w-6 h-6" />
-          </button>
-
-          <button 
-            title="Staff Management"
+          <button
+            title="Employees"
             onClick={() => setActiveTab('staff')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'staff' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'staff' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
-            <ShieldCheck className="w-6 h-6" />
+            <ShieldCheck className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Employees</span>
           </button>
 
-          <button 
+          <button
             title="Staff Shifts"
             onClick={() => setActiveTab('staff-shifts')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'staff-shifts' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'staff-shifts' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
-            <Clock className="w-6 h-6" />
+            <Clock className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Shifts</span>
           </button>
 
-          <button 
+          <button
             title="Service Catalog"
             onClick={() => setActiveTab('service-catalog')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'service-catalog' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'service-catalog' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
-            <Settings className="w-6 h-6" />
+            <Settings className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Services</span>
           </button>
 
-          <button 
-            title="AI Tuning"
-            onClick={() => setActiveTab('ai-tuning')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'ai-tuning' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
-          >
-            <Bot className="w-6 h-6" />
-          </button>
-
-          <button 
-            title="Analytics"
-            onClick={() => setActiveTab('analytics')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'analytics' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
-          >
-            <BarChart3 className="w-6 h-6" />
-          </button>
-
-          <button 
+          <button
             title="Manage Resources"
             onClick={() => setActiveTab('manage-resources')}
-            className={`p-3 rounded-md transition-all ${activeTab === 'manage-resources' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'manage-resources' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
           >
-            <Wrench className="w-6 h-6" />
+            <Wrench className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Resources</span>
+          </button>
+
+          <button
+            title="Skill Matrix"
+            onClick={() => setActiveTab('skill-matrix')}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'skill-matrix' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <LayoutGrid className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Skills</span>
+          </button>
+
+          <button
+            title="Knowledge Base"
+            onClick={() => setActiveTab('knowledge-base')}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'knowledge-base' ? 'bg-white dark:bg-[#333] shadow-sm text-orange-600 dark:text-orange-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Knowledge</span>
+          </button>
+
+          <button
+            title="AI Tuning"
+            onClick={() => setActiveTab('ai-tuning')}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'ai-tuning' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <Bot className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">AI</span>
+          </button>
+
+          <button
+            title="Analytics"
+            onClick={() => setActiveTab('analytics')}
+            className={`flex flex-col items-center py-2 px-1 rounded-md transition-all ${activeTab === 'analytics' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="text-[9px] mt-0.5 font-medium leading-tight">Analytics</span>
           </button>
         </nav>
 
-        <div className="flex flex-col space-y-4 pb-4">
+        <div className="flex flex-col space-y-1 pb-4">
           <button 
             onClick={toggleDarkMode}
             title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}

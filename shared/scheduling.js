@@ -1,0 +1,80 @@
+"use strict";
+/**
+ * Shared scheduling logic.
+ * Used by both the Node backend (src/) and Deno Edge Functions (supabase/functions/).
+ *
+ * This is the canonical implementation of the assignment selection algorithm.
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.selectAssignments = selectAssignments;
+function overlaps(a, b) {
+    return a.from < b.to && b.from < a.to;
+}
+function hasAll(have, need) {
+    if (!need || need.length === 0)
+        return true;
+    const set = new Set(have);
+    return need.every((n) => set.has(n));
+}
+function isResourceFree(resourceId, window, existing) {
+    return !existing.some((appt) => {
+        if (appt.resourceId !== resourceId)
+            return false;
+        return overlaps(window, { from: appt.start, to: appt.end });
+    });
+}
+function isEmployeeOnShift(employeeId, window, shifts) {
+    const day = window.from.getUTCDay();
+    const startStr = window.from.toISOString().substring(11, 16);
+    const endStr = window.to.toISOString().substring(11, 16);
+    return shifts.some((s) => {
+        if (s.employee_id.toString() !== employeeId)
+            return false;
+        if (s.day_of_week !== day)
+            return false;
+        return s.start_time <= startStr && s.end_time >= endStr;
+    });
+}
+/**
+ * Compute valid (resource, employee?) assignments for a requested service and time window.
+ * Supports two modes:
+ * - Pre-computed: EmployeeCandidate has `onShift: boolean` (shift check done upstream)
+ * - Inline shifts: Pass `shifts` array and shift checking is done here
+ */
+function selectAssignments(args) {
+    const { requirements, window } = args;
+    const employees = args.employees ?? [];
+    const shifts = args.shifts ?? [];
+    const existing = args.existingAppointments ?? [];
+    const resourceMatches = args.resources.filter((r) => {
+        return (hasAll(r.capabilities, requirements.requiredResourceCapabilities) &&
+            isResourceFree(r.id, window, existing));
+    });
+    const needEmployee = !!(requirements.requiredEmployeeSkills && requirements.requiredEmployeeSkills.length > 0);
+    let options = [];
+    if (needEmployee) {
+        for (const r of resourceMatches) {
+            for (const e of employees) {
+                // Use pre-computed onShift if available, otherwise check inline
+                const onShift = e.onShift !== undefined
+                    ? e.onShift
+                    : (shifts.length > 0 ? isEmployeeOnShift(e.id, window, shifts) : true);
+                if (!onShift)
+                    continue;
+                if (!hasAll(e.skills, requirements.requiredEmployeeSkills))
+                    continue;
+                options.push({ resourceId: r.id, employeeId: e.id });
+            }
+        }
+    }
+    else {
+        options = resourceMatches.map((r) => ({ resourceId: r.id }));
+    }
+    if (requirements.preferredResourceId) {
+        const preferred = options.filter((o) => o.resourceId === requirements.preferredResourceId);
+        if (preferred.length > 0) {
+            return preferred;
+        }
+    }
+    return options;
+}

@@ -16,7 +16,7 @@ const CustomerCreateSchema = z.object({
   state: z.string().max(100).optional().nullable(),
   postal_code: z.string().max(20).optional().nullable(),
   timezone: z.string().max(50).optional().nullable(),
-  metadata: z.record(z.unknown()).optional().nullable(),
+  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 export function registerCustomerRoutes(
@@ -107,6 +107,33 @@ export function registerCustomerRoutes(
     } catch (err) {
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to update customer' });
+    }
+  });
+
+  // GET /customers/:id/appointments - all appointments for a specific customer
+  app.get('/customers/:id/appointments', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const tenantId = (req.query as any).tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+    try {
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          `SELECT a.id, a.start_time, a.end_time, a.status, a.description, a.location,
+                  r.name as resource_name,
+                  e.name as employee_name
+           FROM appointments a
+           LEFT JOIN resources r ON r.id = a.resource_id
+           LEFT JOIN employees e ON e.id = a.employee_id
+           WHERE a.customer_id = $1 AND a.tenant_id = $2
+           ORDER BY a.start_time DESC`,
+          [id, tenantId]
+        );
+      });
+      return reply.send(res.rows);
+    } catch (err) {
+      app.log.error(err);
+      return reply.status(500).send({ error: 'Failed to fetch customer appointments' });
     }
   });
 

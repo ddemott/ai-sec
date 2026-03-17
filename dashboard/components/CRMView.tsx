@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Customer } from '@/lib/types'
 import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from '@/lib/mockData'
 import { 
@@ -18,6 +18,9 @@ import {
   X,
   Trash2,
   UserPlus,
+  Calendar,
+  Clock,
+  XCircle,
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { US_STATES, US_TIMEZONES, detectTimezone } from '../lib/constants'
@@ -28,6 +31,7 @@ import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Card } from './ui/Card'
+import { Badge } from './ui/Badge'
 
 export default function CRMView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId);
@@ -36,7 +40,9 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
   const [summaries, setSummaries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
-  
+  const [customerAppointments, setCustomerAppointments] = useState<any[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+
   // States
   const [isEditing, setIsEditing] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -68,6 +74,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
   useEffect(() => {
     if (selectedCustomer) {
         fetchHistory(selectedCustomer.id)
+        fetchCustomerAppointments(selectedCustomer.id)
       const { first, last } = splitFullName(selectedCustomer.name || '')
       const derivedFirst = (selectedCustomer as any).first_name || first || ''
       const derivedLast = (selectedCustomer as any).last_name || last || ''
@@ -132,6 +139,47 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
       setSummaries(MOCK_SUMMARIES.filter(s => s.customer_id === customerId))
     }
   }
+
+  async function fetchCustomerAppointments(customerId: string) {
+    try {
+      const data = await Api.customers.appointments(customerId, tenantId)
+      setCustomerAppointments(data || [])
+    } catch (e) {
+      setCustomerAppointments([])
+    }
+  }
+
+  async function handleCancelAppointment(appointmentId: string) {
+    if (!confirm('Are you sure you want to cancel this appointment?')) return
+    try {
+      const res = await Api.appointments.cancel(appointmentId, tenantId)
+      if (res.success && selectedCustomer) {
+        fetchCustomerAppointments(selectedCustomer.id)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const upcomingAppointments = useMemo(() =>
+    customerAppointments.filter(a => a.status === 'scheduled' && new Date(a.start_time) > new Date()),
+    [customerAppointments]
+  )
+
+  const pastAppointments = useMemo(() =>
+    customerAppointments.filter(a => a.status !== 'scheduled' || new Date(a.start_time) <= new Date()),
+    [customerAppointments]
+  )
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers
+    const q = searchQuery.toLowerCase()
+    return customers.filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.phone || '').includes(q) ||
+      (c.email || '').toLowerCase().includes(q)
+    )
+  }, [customers, searchQuery])
 
   async function handleSave() {
     if (!selectedCustomer) return
@@ -234,7 +282,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
       <section className={`w-full md:w-80 flex flex-col bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}>
         <header className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] sticky top-0 z-10">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold">People</h2>
+            <h2 className="text-lg font-bold">Customers</h2>
             <div className="flex space-x-1">
                 <Button onClick={startNewCustomer} size="sm" className="p-1.5">
                     <UserPlus className="w-4 h-4" />
@@ -246,11 +294,11 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
           </div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500" />
-            <input type="text" placeholder="Search customers..." className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#222] border-none rounded-md text-sm outline-none dark:text-gray-200" />
+            <input type="text" placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#222] border-none rounded-md text-sm outline-none dark:text-gray-200" />
           </div>
         </header>
         <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-          {customers.map((c) => (
+          {filteredCustomers.map((c) => (
             <div 
               key={c.id}
               onClick={() => { setSelectedCustomer(c); setIsCreating(false); setShowDetailOnMobile(true); }}
@@ -403,25 +451,97 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
               </Card>
 
               {!isCreating && (
-                <div className="space-y-6">
+                <>
+                  {/* UPCOMING APPOINTMENTS */}
+                  <div className="space-y-4">
                     <h3 className="font-bold text-gray-900 dark:text-white flex items-center text-lg">
-                    <History className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
-                    AI Call History
+                      <Calendar className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
+                      Upcoming Appointments
+                    </h3>
+                    {upcomingAppointments.length > 0 ? (
+                      <div className="space-y-3">
+                        {upcomingAppointments.map((a) => (
+                          <div key={a.id} className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm flex justify-between items-start">
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">{a.description}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
+                              </p>
+                              {a.location && <p className="text-xs text-gray-400 dark:text-gray-500">{a.location}</p>}
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="primary">Scheduled</Badge>
+                              <Button variant="danger" size="sm" onClick={() => handleCancelAppointment(a.id)} aria-label="Cancel appointment">
+                                <XCircle className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 dark:text-gray-600 italic text-sm">No upcoming appointments.</p>
+                    )}
+                  </div>
+
+                  {/* APPOINTMENT HISTORY */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-gray-900 dark:text-white flex items-center text-lg">
+                      <History className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
+                      Appointment History
+                    </h3>
+                    {pastAppointments.length > 0 ? (
+                      <div className="space-y-3">
+                        {pastAppointments.map((a) => (
+                          <div key={a.id} className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm flex justify-between items-start">
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">{a.description}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
+                              </p>
+                            </div>
+                            <Badge variant={a.status === 'completed' ? 'success' : a.status === 'canceled' ? 'danger' : 'secondary'}>
+                              {a.status === 'completed' ? 'Completed' : a.status === 'canceled' ? 'Canceled' : a.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 dark:text-gray-600 italic text-sm">No past appointments.</p>
+                    )}
+                  </div>
+
+                  {/* AI CALL HISTORY */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-gray-900 dark:text-white flex items-center text-lg">
+                      <Phone className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
+                      AI Call History
                     </h3>
                     <div className="space-y-4">
-                    {summaries.length > 0 ? summaries.map((s) => (
+                      {summaries.length > 0 ? summaries.map((s) => (
                         <div key={s.id} className="p-5 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm">
-                        <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mb-2">
+                          <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mb-2">
                             <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">AI Summary</span>
-                            <span>{new Date(s.created_at).toLocaleDateString()}</span>
+                            <span>{new Date(s.call_timestamp || s.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">"{s.summary}"</p>
+                          {s.has_transcript && (
+                            <p className="text-xs text-green-600 dark:text-green-400 mt-2">Transcript available</p>
+                          )}
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">"{s.summary}"</p>
-                        </div>
-                    )) : (
+                      )) : (
                         <p className="text-gray-400 dark:text-gray-600 italic text-sm">No call history available.</p>
-                    )}
+                      )}
                     </div>
-                </div>
+                  </div>
+                </>
               )}
             </div>
           </>

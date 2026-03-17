@@ -20,7 +20,11 @@ export function registerAnalyticsRoutes(
     try {
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
-          'SELECT * FROM call_summaries WHERE tenant_id = $1 AND customer_id = $2 ORDER BY created_at DESC',
+          `SELECT cs.*, ct.created_at as call_timestamp, ct.raw_text IS NOT NULL as has_transcript
+           FROM call_summaries cs
+           LEFT JOIN call_transcripts ct ON ct.call_id = cs.call_id
+           WHERE cs.tenant_id = $1 AND cs.customer_id = $2
+           ORDER BY cs.created_at DESC`,
           [tenantId, customerId]
         );
       });

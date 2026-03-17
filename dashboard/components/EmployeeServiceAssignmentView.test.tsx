@@ -19,8 +19,8 @@ describe('EmployeeManagementView', () => {
 
   test('renders employee form and list', async () => {
     render(<EmployeeManagementView />);
-    expect(await screen.findByText(/Staff & Services/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Enter full name/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Employees/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/First name/i)).toBeInTheDocument();
   });
 });
 

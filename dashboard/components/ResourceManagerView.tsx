@@ -41,7 +41,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
   // Create/Edit State
   const [newResource, setNewResource] = useState({ name: '', description: '' });
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', description: '' });
+  const [editForm, setEditForm] = useState({ name: '', description: '', is_active: true });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -91,8 +91,9 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
     try {
       const res = await Api.resources.update(selectedResource.id, {
         name: editForm.name.trim(),
-        description: editForm.description.trim()
-      });
+        description: editForm.description.trim(),
+        is_active: editForm.is_active
+      }, tenantId);
       if (res.success) {
         refresh();
         setIsEditModalOpen(false);
@@ -110,7 +111,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
     if (!confirm('Are you sure you want to delete this resource?')) return;
     setError(null);
     try {
-      const res = await Api.resources.delete(id);
+      const res = await Api.resources.delete(id, tenantId);
       if (res.success) {
         refresh();
       } else {
@@ -203,7 +204,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
             key={res.id} 
             onClick={() => { 
               setSelectedResource(res); 
-              setEditForm({ name: res.name, description: res.description });
+              setEditForm({ name: res.name, description: res.description || '', is_active: res.is_active !== false });
               setIsEditModalOpen(true); 
             }}
             className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
@@ -261,11 +262,23 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
                 value={editForm.name}
                 onChange={e => setEditForm({ ...editForm, name: e.target.value })}
               />
-              <Input 
+              <Input
                 label="Description"
                 value={editForm.description}
                 onChange={e => setEditForm({ ...editForm, description: e.target.value })}
               />
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={editForm.is_active}
+                  onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
             </div>
           </section>
 
