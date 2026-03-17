@@ -105,6 +105,82 @@ Daily-use items (Calendar, Customers) have the same visual weight as setup-once 
 ### 6. No Onboarding Flow
 A new business owner who just signed up sees 12 tabs with no guidance on where to start or what order to set things up.
 
+### 7. No Self-Service Tenant Creation or Business Type Selection
+There is **no page flow for a new business to sign up and configure themselves**. The current state:
+
+- **What exists**: The super-admin can create tenants from the Admin panel (`SuperAdminDashboard.tsx`). When creating a tenant, the admin picks a `business_type` from a dropdown populated by the `business_templates` table. A Postgres trigger (`apply_business_template_defaults`) then auto-fills the AI system prompt, voice, greeting, and creates a default resource.
+- **What does NOT exist**:
+  - No self-service sign-up page for new businesses
+  - No way for a regular business owner to see or change their business type
+  - No public-facing registration flow (email → verify → pick business type → create tenant → onboard)
+  - The business type dropdown only appears in the super-admin "Create Business" form — regular users never see it
+  - The `business_templates` table has 4 types (mobile-tire, salon, auto-shop, dentist) but will need 20+ for production
+  - Business type selection doesn't connect to the onboarding wizard (which doesn't exist yet)
+  - The vocabulary system (Chair vs Bay vs Operatory) doesn't exist yet — business type is stored but never used to adapt UI labels
+
+**What needs to be built** (in order):
+
+```
+Page Flow: New Business Sign-Up → Onboarding → Dashboard
+
+1. SIGN-UP PAGE (public, no auth required)
+   ┌─────────────────────────────────────────────────────────┐
+   │  Start Your AI Receptionist                              │
+   │                                                          │
+   │  Business Name: [________________________]               │
+   │  Your Name:     [________________________]               │
+   │  Email:         [________________________]               │
+   │  Password:      [________________________]               │
+   │                                                          │
+   │  What kind of business do you run?                       │
+   │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
+   │  │ 🚗 Tire │ │ 💇 Salon│ │ 🔧 Auto │ │ 🦷 Dental│      │
+   │  │  Shop   │ │         │ │  Shop   │ │ Clinic  │      │
+   │  └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
+   │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
+   │  │ 🐾 Vet  │ │ 💆 Spa  │ │ 🔌 Elec │ │ 🪠 Plumb│      │
+   │  │ Clinic  │ │         │ │ trician │ │  ing    │      │
+   │  └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
+   │  ... (scrollable grid of 20 business types)              │
+   │                                                          │
+   │                         [Create My Account →]            │
+   └─────────────────────────────────────────────────────────┘
+
+   Backend: POST /tenants/register (public endpoint)
+   - Creates tenant with business_type
+   - Trigger applies template defaults (prompt, voice, resource)
+   - Creates user account with bcrypt hash
+   - Returns JWT token
+   - Redirects to onboarding wizard
+
+2. ONBOARDING WIZARD (authenticated, first login)
+   → Steps 1-8 as described in the Onboarding Wizard section above
+   → Vocabulary adapts immediately based on business_type chosen in sign-up
+   → "Add your Chairs" for salon, "Add your Bays" for auto shop, etc.
+
+3. DASHBOARD (authenticated, daily use)
+   → Lands on Schedule view after wizard completes
+   → All labels use business-specific vocabulary
+   → Navigation grouped into 5 sections as proposed
+```
+
+**What exists today vs what's needed:**
+
+| Capability | Status | Where |
+|-----------|--------|-------|
+| `business_templates` table with 4 types | Exists | `20260228000006_business_templates.sql` |
+| Template auto-apply trigger | Exists | `apply_business_template_defaults()` in same migration |
+| Business type dropdown | Exists | `SuperAdminDashboard.tsx` (admin only) |
+| `Api.templates.list()` | Exists | `dashboard/lib/api.ts` |
+| `POST /tenants/create` | Exists | `src/routes/tenants.ts` (admin only) |
+| Public sign-up page | **Missing** | Needs new component + public route |
+| Public registration API | **Missing** | Needs `POST /tenants/register` endpoint |
+| Self-service business type picker | **Missing** | Needs card-grid UI component |
+| Vocabulary columns on templates | **Missing** | Needs migration + template updates |
+| Vocabulary context/hook in dashboard | **Missing** | Needs `useVocabulary` hook |
+| Onboarding wizard | **Missing** | Needs full implementation |
+| 20 business type templates | **Missing** | Only 4 exist, need 16 more |
+
 ---
 
 ## Proposed Navigation Restructure
