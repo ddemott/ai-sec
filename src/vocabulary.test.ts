@@ -127,4 +127,110 @@ describe("Business Vocabulary System", () => {
             });
         });
     });
+
+    describe("tenants vocabulary override columns", () => {
+        it("should have vocabulary override columns on tenants", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(`
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'tenants'
+                AND column_name IN ('resource_label', 'resource_plural', 'employee_label', 'employee_plural', 'booking_label')
+                ORDER BY column_name
+            `);
+            expect(res.rows.map(r => r.column_name)).toEqual([
+                'booking_label',
+                'employee_label',
+                'employee_plural',
+                'resource_label',
+                'resource_plural',
+            ]);
+        });
+
+        it("should default tenant vocabulary overrides to NULL", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT resource_label, resource_plural, employee_label, employee_plural, booking_label FROM tenants WHERE id = $1",
+                [tenantId]
+            );
+            expect(res.rows[0].resource_label).toBeNull();
+            expect(res.rows[0].resource_plural).toBeNull();
+            expect(res.rows[0].employee_label).toBeNull();
+            expect(res.rows[0].employee_plural).toBeNull();
+            expect(res.rows[0].booking_label).toBeNull();
+        });
+
+        it("should allow tenant to override vocabulary", async () => {
+            if (!dbAvailable) return;
+            await client.query(
+                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE id = $1",
+                [tenantId]
+            );
+            const res = await client.query(
+                "SELECT resource_label, resource_plural FROM tenants WHERE id = $1",
+                [tenantId]
+            );
+            expect(res.rows[0].resource_label).toBe('Stall');
+            expect(res.rows[0].resource_plural).toBe('Stalls');
+        });
+
+        it("should resolve vocabulary with 3-tier fallback (tenant > template > hardcoded)", async () => {
+            if (!dbAvailable) return;
+
+            // Create a tenant with business_type = 'auto-shop' and partial override
+            const tRes = await client.query(
+                "INSERT INTO tenants (name, business_type, resource_label, resource_plural) VALUES ('Test Shop', 'auto-shop', 'Stall', 'Stalls') RETURNING id"
+            );
+            const shopId = tRes.rows[0].id;
+
+            // 3-tier COALESCE query
+            const res = await client.query(`
+                SELECT
+                    COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label,
+                    COALESCE(t.resource_plural, bt.resource_plural, 'Resources') AS resource_plural,
+                    COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label,
+                    COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural,
+                    COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
+                FROM tenants t
+                LEFT JOIN business_templates bt ON bt.business_type = t.business_type
+                WHERE t.id = $1
+            `, [shopId]);
+
+            // resource_label/plural come from tenant override (Stall/Stalls)
+            expect(res.rows[0].resource_label).toBe('Stall');
+            expect(res.rows[0].resource_plural).toBe('Stalls');
+            // employee_label/plural fall through to template default (Mechanic/Mechanics)
+            expect(res.rows[0].employee_label).toBe('Mechanic');
+            expect(res.rows[0].employee_plural).toBe('Mechanics');
+            // booking_label falls through to template default (Appointment)
+            expect(res.rows[0].booking_label).toBe('Appointment');
+        });
+
+        it("should fall back to hardcoded when no template exists", async () => {
+            if (!dbAvailable) return;
+
+            // Tenant with unknown business_type (no matching template)
+            const tRes = await client.query(
+                "INSERT INTO tenants (name, business_type) VALUES ('Mystery Biz', 'unknown-type') RETURNING id"
+            );
+            const bizId = tRes.rows[0].id;
+
+            const res = await client.query(`
+                SELECT
+                    COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label,
+                    COALESCE(t.resource_plural, bt.resource_plural, 'Resources') AS resource_plural,
+                    COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label,
+                    COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural,
+                    COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
+                FROM tenants t
+                LEFT JOIN business_templates bt ON bt.business_type = t.business_type
+                WHERE t.id = $1
+            `, [bizId]);
+
+            expect(res.rows[0].resource_label).toBe('Resource');
+            expect(res.rows[0].resource_plural).toBe('Resources');
+            expect(res.rows[0].employee_label).toBe('Employee');
+            expect(res.rows[0].employee_plural).toBe('Employees');
+            expect(res.rows[0].booking_label).toBe('Appointment');
+        });
+    });
 });
