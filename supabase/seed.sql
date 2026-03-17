@@ -82,7 +82,7 @@ BEGIN
     IF v_new_tenant_id IS NOT NULL THEN
         INSERT INTO users (tenant_id, email, password_hash, full_name)
         VALUES (v_new_tenant_id, 'owner@sportclips.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Salon Owner')
-        ON CONFLICT (email) DO NOTHING;
+        ON CONFLICT (tenant_id, email) DO NOTHING;
     END IF;
 END $$;
 
