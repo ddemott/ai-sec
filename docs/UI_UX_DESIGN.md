@@ -336,6 +336,77 @@ Add a "Setup Guide" or "Getting Started" link in Settings so owners can re-run t
 #### Relationship to Navigation Restructure
 The wizard replaces the need for new users to discover the correct tab order themselves. After the wizard completes, they land on the Schedule (calendar) view — which is the daily-use home screen. The grouped navigation (My Team, My Business) then serves as the place to edit what they set up during onboarding.
 
+### Business-Specific Vocabulary (Does Not Exist — Needs to Be Built)
+
+**Current problem**: The UI uses generic terms like "Resources", "Employees", and "Services" everywhere. A salon owner thinks in terms of "Chairs" and "Stylists", not "Resources" and "Employees". A dental clinic has "Operatories" and "Hygienists", not "Resources" and "Staff". The current labels feel like enterprise software, not a tool built for their business.
+
+**What's needed**: A vocabulary map per business type that adapts all UI labels, placeholders, empty states, and tooltips to match the language the business owner actually uses.
+
+#### Proposed Vocabulary Map
+
+```
+business_type  | resource_label | resource_plural | employee_label | employee_plural | booking_label  | example_services
+───────────────┼────────────────┼─────────────────┼────────────────┼─────────────────┼────────────────┼──────────────────
+mobile-tire    | Truck          | Trucks          | Technician     | Technicians     | Appointment    | Tire Rotation, Flat Repair, Install
+salon          | Chair          | Chairs          | Stylist        | Stylists        | Appointment    | Haircut, Coloring, Blowout
+auto-shop      | Bay            | Bays            | Mechanic       | Mechanics       | Appointment    | Oil Change, Brake Service, Inspection
+dentist        | Operatory      | Operatories     | Hygienist      | Hygienists      | Visit          | Cleaning, Exam, Crown, Filling
+vet-clinic     | Exam Room      | Exam Rooms      | Vet            | Vets            | Visit          | Checkup, Vaccination, Surgery
+chiropractor   | Adjustment Room| Rooms           | Doctor         | Doctors         | Visit          | Adjustment, Consultation, X-Ray
+barbershop     | Chair          | Chairs          | Barber         | Barbers         | Appointment    | Haircut, Shave, Beard Trim
+nail-salon     | Station        | Stations        | Nail Tech      | Nail Techs      | Appointment    | Manicure, Pedicure, Gel Nails
+spa            | Treatment Room | Treatment Rooms | Therapist      | Therapists      | Session        | Massage, Facial, Body Wrap
+plumber        | Van            | Vans            | Plumber        | Plumbers        | Service Call   | Leak Repair, Drain Cleaning, Install
+electrician    | Van            | Vans            | Electrician    | Electricians    | Service Call   | Wiring, Panel Upgrade, Inspection
+hvac           | Van            | Vans            | Technician     | Technicians     | Service Call   | AC Repair, Furnace Tune-up, Install
+pest-control   | Van            | Vans            | Technician     | Technicians     | Service Call   | Inspection, Treatment, Follow-up
+cleaning       | Team           | Teams           | Cleaner        | Cleaners        | Booking        | Deep Clean, Regular Clean, Move-out
+landscaping    | Crew           | Crews           | Crew Lead      | Crew Leads      | Job            | Mowing, Trim, Seasonal Cleanup
+personal-trainer| N/A           | N/A             | Trainer        | Trainers        | Session        | 1-on-1, Group Class, Assessment
+yoga-studio    | Studio         | Studios         | Instructor     | Instructors     | Class          | Vinyasa, Hot Yoga, Meditation
+tax-prep       | Office         | Offices         | Preparer       | Preparers       | Appointment    | Tax Filing, Consultation, Audit Help
+tutoring       | Room           | Rooms           | Tutor          | Tutors          | Session        | Math, Science, SAT Prep, Essay Review
+photography    | Studio         | Studios         | Photographer   | Photographers   | Session        | Headshots, Family Portrait, Event
+```
+
+#### Where Vocabulary Appears in the UI
+
+Every place the UI currently says a generic term should be replaced with the business-specific label:
+
+| Current (hardcoded) | Becomes (dynamic) | Example for salon |
+|---------------------|-------------------|-------------------|
+| "Resources" sidebar label | `resource_plural` | "Chairs" |
+| "Add Resource" button | "Add {resource_label}" | "Add Chair" |
+| "No resources yet" empty state | "No {resource_plural} yet" | "No chairs yet" |
+| "Employees" sidebar label | `employee_plural` | "Stylists" |
+| "Add Staff" button | "Add {employee_label}" | "Add Stylist" |
+| "Manage Resources" tab title | "Manage {resource_plural}" | "Manage Chairs" |
+| "Appointment" in calendar | `booking_label` | "Appointment" |
+| Resource column headers in calendar | `resource_label` names | "Chair 1", "Chair 2" |
+| Wizard step 3 title | "Add Your {resource_plural}" | "Add Your Chairs" |
+| Wizard step 4 title | "Add Your {employee_plural}" | "Add Your Stylists" |
+
+#### Implementation Approach
+
+1. **Extend `business_templates` table** with vocabulary columns:
+   ```sql
+   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS resource_label TEXT DEFAULT 'Resource';
+   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS resource_plural TEXT DEFAULT 'Resources';
+   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS employee_label TEXT DEFAULT 'Employee';
+   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS employee_plural TEXT DEFAULT 'Employees';
+   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS booking_label TEXT DEFAULT 'Appointment';
+   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS example_services TEXT[] DEFAULT '{}';
+   ```
+
+2. **Load vocabulary into dashboard context**: The `useStaticData` hook or a new `useVocabulary` hook fetches the tenant's `business_type`, looks up the template, and provides the labels.
+
+3. **Pass vocabulary to components**: Components receive labels as props or via context instead of hardcoding strings.
+
+4. **Fallback**: If no template exists for a business type, fall back to the generic labels ("Resource", "Employee", "Appointment").
+
+#### Relationship to Onboarding Wizard
+The wizard should use vocabulary from the moment the user picks their business type in Step 1. Once they select "salon", all subsequent steps say "Chair" instead of "Resource" and "Stylist" instead of "Employee". This makes the wizard feel purpose-built for their business, not generic.
+
 ### Contextual Navigation
 - Clicking a customer's appointment in the CRM should navigate to that appointment in the Calendar
 - Clicking an employee's name in the Calendar should link to their profile in My Team
