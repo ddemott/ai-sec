@@ -166,20 +166,20 @@ Page Flow: New Business Sign-Up → Onboarding → Dashboard
 
 **What exists today vs what's needed:**
 
-| Capability | Status | Where |
-|-----------|--------|-------|
-| `business_templates` table with 4 types | Exists | `20260228000006_business_templates.sql` |
-| Template auto-apply trigger | Exists | `apply_business_template_defaults()` in same migration |
-| Business type dropdown | Exists | `SuperAdminDashboard.tsx` (admin only) |
-| `Api.templates.list()` | Exists | `dashboard/lib/api.ts` |
-| `POST /tenants/create` | Exists | `src/routes/tenants.ts` (admin only) |
-| Public sign-up page | **Missing** | Needs new component + public route |
-| Public registration API | **Missing** | Needs `POST /tenants/register` endpoint |
-| Self-service business type picker | **Missing** | Needs card-grid UI component |
-| Vocabulary columns on templates | **Missing** | Needs migration + template updates |
-| Vocabulary context/hook in dashboard | **Missing** | Needs `useVocabulary` hook |
-| Onboarding wizard | **Missing** | Needs full implementation |
-| 20 business type templates | **Missing** | Only 4 exist, need 16 more |
+| Capability | Status | Where | Type |
+|-----------|--------|-------|------|
+| `business_templates` table with 4 types | Exists | `20260228000006_business_templates.sql` | Coding |
+| Template auto-apply trigger | Exists | `apply_business_template_defaults()` in same migration | Coding |
+| Business type dropdown | Exists | `SuperAdminDashboard.tsx` (admin only) | UI/UX |
+| `Api.templates.list()` | Exists | `dashboard/lib/api.ts` | Coding |
+| `POST /tenants/create` | Exists | `src/routes/tenants.ts` (admin only) | Coding |
+| Public sign-up page | **Missing** | Needs new component + public route | Both |
+| Public registration API | **Missing** | Needs `POST /tenants/register` endpoint | Coding |
+| Self-service business type picker | **Missing** | Needs card-grid UI component | UI/UX |
+| Vocabulary columns on templates | **Missing** | Needs migration + template updates | Coding |
+| Vocabulary context/hook in dashboard | **Missing** | Needs `useVocabulary` hook | Coding |
+| Onboarding wizard | **Missing** | Needs full implementation | Both |
+| 20 business type templates | **Missing** | Only 4 exist, need 16 more | Coding |
 
 ---
 
@@ -598,15 +598,36 @@ dashboard/
 
 ## Implementation Scope
 
-The main changes needed:
+All work items across the entire design doc, categorized:
 
-1. **`OutlookLayout.tsx`** — Restructure sidebar from 12 items to 5 grouped sections
-2. **`page.tsx`** — Update tab type and routing logic
-3. **New composite views** (or wrapper components):
-   - `MyTeamView.tsx` — tabs between Employees, Shifts, Skills
-   - `MyBusinessView.tsx` — tabs between Services, Resources, Knowledge
-   - `AIInsightsView.tsx` — tabs between AI Persona, Analytics
-4. **Mobile bottom nav** — Update to match the 5 primary sections
-5. **Sub-tab component** — Reusable horizontal tab bar for composite views
+| # | Item | Type | Status | Notes |
+|---|------|------|--------|-------|
+| 1 | Restructure sidebar from 12 → 5 grouped sections | UI/UX | Missing | `OutlookLayout.tsx` |
+| 2 | Update tab routing logic | Coding | Missing | `page.tsx` tab type changes |
+| 3 | MyTeamView composite (Employees + Shifts + Skills) | Both | Missing | New wrapper component with sub-tabs |
+| 4 | MyBusinessView composite (Services + Resources + Knowledge) | Both | Missing | New wrapper component with sub-tabs |
+| 5 | AIInsightsView composite (AI Persona + Analytics) | Both | Missing | New wrapper component with sub-tabs |
+| 6 | Reusable sub-tab bar component | UI/UX | Missing | Horizontal tab bar for composite views |
+| 7 | Mobile bottom nav (5 items matching sidebar) | UI/UX | Missing | Currently only shows 4 of 12 tabs |
+| 8 | Public sign-up page | Both | Missing | New component + public route |
+| 9 | Public registration API (`POST /tenants/register`) | Coding | Missing | New endpoint, creates tenant + user + JWT |
+| 10 | Self-service business type picker (card grid) | UI/UX | Missing | 20 business type cards with icons |
+| 11 | Onboarding wizard (8 steps) | Both | Missing | Full guided setup flow |
+| 12 | Wizard detection logic (show when no data) | Coding | Missing | Check services/resources/employees = 0 |
+| 13 | 20 business type templates | Coding | Partial | 4 exist, need 16 more INSERT statements |
+| 14 | Vocabulary columns on `business_templates` | Coding | Missing | Migration: resource_label, employee_label, etc. |
+| 15 | Vocabulary override columns on `tenants` | Coding | Missing | Migration: nullable overrides per tenant |
+| 16 | `useVocabulary` hook + React Context | Coding | Missing | 3-tier fallback: tenant > template > hardcoded |
+| 17 | Replace all hardcoded labels with vocabulary | Both | Missing | Every "Resource"/"Employee" string in UI |
+| 18 | Settings page: "Customize Labels" section | Both | Missing | Owner overrides Bay → Stall, etc. |
+| 19 | Dashboard home / quick actions landing page | UI/UX | Missing | Today's appointments, recent calls, staff on shift |
+| 20 | Contextual navigation (CRM → Calendar links) | Both | Missing | Click appointment in CRM → opens in Calendar |
+| 21 | Breadcrumbs for sub-tab views | UI/UX | Missing | "My Team > Shifts" |
+| 22 | Empty states with helpful guidance | UI/UX | Missing | Per-view messages explaining what to do |
+| 23 | Pre-populated service suggestions per type | Coding | Missing | Template provides example services for wizard |
+| 24 | "Setup Guide" link in Settings | UI/UX | Missing | Re-access onboarding wizard after completion |
 
-No backend changes required. No API changes. No database changes. Pure frontend restructure.
+**Summary:**
+- **UI/UX only**: 7 items (1, 6, 7, 10, 19, 21, 22)
+- **Coding only**: 7 items (2, 9, 12, 13, 14, 15, 16)
+- **Both**: 10 items (3, 4, 5, 8, 11, 17, 18, 20, 23, 24)
