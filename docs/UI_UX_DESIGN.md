@@ -464,7 +464,7 @@ Every place the UI currently says a generic term should be replaced with the bus
 
 #### Implementation Approach
 
-1. **Extend `business_templates` table** with vocabulary columns:
+1. **Extend `business_templates` table** with vocabulary columns (these are the defaults per business type):
    ```sql
    ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS resource_label TEXT DEFAULT 'Resource';
    ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS resource_plural TEXT DEFAULT 'Resources';
@@ -474,14 +474,60 @@ Every place the UI currently says a generic term should be replaced with the bus
    ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS example_services TEXT[] DEFAULT '{}';
    ```
 
-2. **Load vocabulary into dashboard context**: The `useStaticData` hook or a new `useVocabulary` hook fetches the tenant's `business_type`, looks up the template, and provides the labels.
+2. **Add vocabulary override columns to `tenants` table** (these let each business customize their own labels):
+   ```sql
+   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS resource_label TEXT;
+   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS resource_plural TEXT;
+   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS employee_label TEXT;
+   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS employee_plural TEXT;
+   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS booking_label TEXT;
+   ```
+   These columns are nullable — NULL means "use the template default."
 
-3. **Pass vocabulary to components**: Components receive labels as props or via context instead of hardcoding strings.
+3. **Vocabulary resolution order** (3-tier fallback):
+   ```
+   Priority 1: tenant override    →  "Stall"     (owner customized it in Settings)
+   Priority 2: template default   →  "Bay"       (default for auto-shop business type)
+   Priority 3: hardcoded fallback →  "Resource"  (no template found)
+   ```
 
-4. **Fallback**: If no template exists for a business type, fall back to the generic labels ("Resource", "Employee", "Appointment").
+   In SQL or API:
+   ```sql
+   COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label
+   ```
+
+4. **Load vocabulary into dashboard context**: A `useVocabulary` hook fetches the resolved labels (tenant override > template default > fallback) and provides them via React Context.
+
+5. **Pass vocabulary to components**: Components receive labels via context instead of hardcoding strings. Example:
+   ```tsx
+   const { resourceLabel, employeeLabel } = useVocabulary();
+   // Renders "Add Stall" instead of "Add Resource"
+   <Button>Add {resourceLabel}</Button>
+   ```
+
+6. **Settings page**: Add a "Customize Labels" section where the business owner can override any vocabulary term:
+   ```
+   ┌─────────────────────────────────────────────────────────┐
+   │  Customize Your Dashboard Labels                         │
+   │                                                          │
+   │  We call your bookable spaces:                           │
+   │  Singular: [Stall________]  (default: Bay)               │
+   │  Plural:   [Stalls_______]  (default: Bays)              │
+   │                                                          │
+   │  We call your team members:                              │
+   │  Singular: [Mechanic_____]  (default: Mechanic)          │
+   │  Plural:   [Mechanics____]  (default: Mechanics)         │
+   │                                                          │
+   │  We call your bookings:                                  │
+   │  Label:    [Work Order___]  (default: Appointment)       │
+   │                                                          │
+   │  [Reset to Defaults]              [Save Changes]         │
+   └─────────────────────────────────────────────────────────┘
+   ```
+   The placeholder text shows the template default so the owner knows what they're overriding.
 
 #### Relationship to Onboarding Wizard
-The wizard should use vocabulary from the moment the user picks their business type in Step 1. Once they select "salon", all subsequent steps say "Chair" instead of "Resource" and "Stylist" instead of "Employee". This makes the wizard feel purpose-built for their business, not generic.
+The wizard should use vocabulary from the moment the user picks their business type in Step 1. Once they select "salon", all subsequent steps say "Chair" instead of "Resource" and "Stylist" instead of "Employee". This makes the wizard feel purpose-built for their business, not generic. If the owner later wants to change "Chair" to "Station", they do it in Settings — the override takes effect everywhere immediately.
 
 ### Contextual Navigation
 - Clicking a customer's appointment in the CRM should navigate to that appointment in the Calendar
