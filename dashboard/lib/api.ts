@@ -353,5 +353,14 @@ export const Api = {
 
       return response.json();
     }
-  }
+  },
+
+  // --- BILLING ---
+  billing: {
+    checkout: (tenantId: string, plan: 'solo' | 'growth') =>
+      apiMutate<{ url: string }>(`/billing/checkout`, 'POST', { tenant_id: tenantId, plan }),
+
+    status: (tenantId: string) =>
+      apiFetch<{ subscription_status: string; subscription_plan: string | null }>(`/billing/status`, { tenant_id: tenantId }),
+  },
 };

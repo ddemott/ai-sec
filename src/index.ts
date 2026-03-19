@@ -20,6 +20,7 @@ import { registerCalendarRoutes } from './routes/calendar';
 import { registerKnowledgeRoutes } from './routes/knowledge';
 import { registerAnalyticsRoutes } from './routes/analytics';
 import { registerVocabularyRoutes } from './routes/vocabulary';
+import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 
@@ -119,7 +120,7 @@ function verifyToken(token: string): { tenant_id: string; user_id: string; email
   }
 }
 
-const PUBLIC_ROUTES = ['/health', '/login', '/'];
+const PUBLIC_ROUTES = ['/health', '/login', '/', '/billing/webhook'];
 app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS') return;
   const urlPath = request.url.split('?')[0];
@@ -138,6 +139,9 @@ app.addHook('onRequest', async (request, reply) => {
 
   (request as any).auth = decoded;
 });
+
+// --- Subscription Gate (after auth, before routes) ---
+app.addHook('onRequest', subscriptionGate(pool));
 
 // --- Health & Admin ---
 
@@ -172,6 +176,7 @@ registerCalendarRoutes(app, pool, withTenantClient);
 registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient, normalizeForEmbedding);
 registerAnalyticsRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
+registerBillingRoutes(app, pool);
 
 // --- Start Server ---
 

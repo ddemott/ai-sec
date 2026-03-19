@@ -1,0 +1,220 @@
+import type { Pool } from 'pg';
+import Stripe from 'stripe';
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_SOLO_PRICE_ID = process.env.STRIPE_SOLO_PRICE_ID || '';
+const STRIPE_GROWTH_PRICE_ID = process.env.STRIPE_GROWTH_PRICE_ID || '';
+
+const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+function getStripe(): Stripe | null {
+  if (!STRIPE_SECRET_KEY) return null;
+  return new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-02-24.acacia' as any });
+}
+
+export function registerBillingRoutes(app: any, pool: Pool) {
+  // POST /billing/checkout — create a Stripe Checkout session
+  app.post('/billing/checkout', async (req: any, reply: any) => {
+    const stripe = getStripe();
+    if (!stripe) {
+      return reply.status(503).send({ error: 'Billing not configured' });
+    }
+
+    const { tenant_id, plan } = req.body || {};
+    if (!tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
+    if (!plan || !['solo', 'growth'].includes(plan)) {
+      return reply.status(400).send({ error: 'plan must be "solo" or "growth"' });
+    }
+
+    const priceId = plan === 'solo' ? STRIPE_SOLO_PRICE_ID : STRIPE_GROWTH_PRICE_ID;
+    if (!priceId) {
+      return reply.status(503).send({ error: `Price ID not configured for ${plan} plan` });
+    }
+
+    try {
+      // Look up or create Stripe customer
+      const tenantRes = await pool.query(
+        'SELECT id, name, stripe_customer_id FROM tenants WHERE id = $1',
+        [tenant_id]
+      );
+      if (tenantRes.rows.length === 0) {
+        return reply.status(404).send({ error: 'Tenant not found' });
+      }
+
+      const tenant = tenantRes.rows[0];
+      let customerId = tenant.stripe_customer_id;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          metadata: { tenant_id },
+          name: tenant.name,
+        });
+        customerId = customer.id;
+        await pool.query(
+          'UPDATE tenants SET stripe_customer_id = $1 WHERE id = $2',
+          [customerId, tenant_id]
+        );
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=success`,
+        cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=cancel`,
+        metadata: { tenant_id, plan },
+      });
+
+      return reply.send({ url: session.url });
+    } catch (err: any) {
+      app.log.error(err);
+      return reply.status(500).send({ error: `Checkout failed: ${err.message}` });
+    }
+  });
+
+  // POST /billing/webhook — handle Stripe webhook events
+  app.post('/billing/webhook', async (req: any, reply: any) => {
+    const stripe = getStripe();
+    if (!stripe) {
+      return reply.status(503).send({ error: 'Billing not configured' });
+    }
+
+    const sig = req.headers['stripe-signature'];
+    if (!sig) {
+      return reply.status(400).send({ error: 'Missing stripe-signature header' });
+    }
+
+    let event: Stripe.Event;
+    try {
+      const rawBody = req.rawBody || req.body;
+      const bodyStr = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
+      event = stripe.webhooks.constructEvent(bodyStr, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err: any) {
+      app.log.error({ err: err.message }, 'Webhook signature verification failed');
+      return reply.status(400).send({ error: 'Invalid signature' });
+    }
+
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const tenantId = session.metadata?.tenant_id;
+          const plan = session.metadata?.plan;
+          if (tenantId && session.subscription) {
+            await pool.query(
+              `UPDATE tenants
+               SET stripe_subscription_id = $1, subscription_status = 'active', subscription_plan = $2
+               WHERE id = $3`,
+              [session.subscription, plan, tenantId]
+            );
+            app.log.info({ tenantId, plan }, 'Subscription activated');
+          }
+          break;
+        }
+
+        case 'invoice.payment_failed': {
+          const invoice = event.data.object as Stripe.Invoice;
+          const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
+          if (customerId) {
+            await pool.query(
+              `UPDATE tenants SET subscription_status = 'past_due' WHERE stripe_customer_id = $1`,
+              [customerId]
+            );
+            app.log.warn({ customerId }, 'Payment failed — subscription past_due');
+          }
+          break;
+        }
+
+        case 'customer.subscription.deleted': {
+          const subscription = event.data.object as Stripe.Subscription;
+          const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
+          if (customerId) {
+            await pool.query(
+              `UPDATE tenants
+               SET subscription_status = 'canceled', stripe_subscription_id = NULL, subscription_plan = NULL
+               WHERE stripe_customer_id = $1`,
+              [customerId]
+            );
+            app.log.info({ customerId }, 'Subscription canceled');
+          }
+          break;
+        }
+
+        default:
+          app.log.info({ type: event.type }, 'Unhandled webhook event');
+      }
+
+      return reply.send({ received: true });
+    } catch (err: any) {
+      app.log.error(err);
+      return reply.status(500).send({ error: 'Webhook processing failed' });
+    }
+  });
+
+  // GET /billing/status — check subscription status for a tenant
+  app.get('/billing/status', async (req: any, reply: any) => {
+    const tenantId = (req.query as any).tenant_id;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+    try {
+      const res = await pool.query(
+        'SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1',
+        [tenantId]
+      );
+      if (res.rows.length === 0) {
+        return reply.status(404).send({ error: 'Tenant not found' });
+      }
+      return reply.send(res.rows[0]);
+    } catch (err: any) {
+      app.log.error(err);
+      return reply.status(500).send({ error: 'Failed to check billing status' });
+    }
+  });
+}
+
+/**
+ * Subscription gate middleware.
+ * Returns 402 if the tenant's subscription is not active.
+ * Exempt: super-admin tenant, public routes, billing routes, auth routes.
+ */
+export function subscriptionGate(pool: Pool) {
+  const EXEMPT_PREFIXES = ['/health', '/login', '/billing', '/register'];
+
+  return async (request: any, reply: any) => {
+    if (request.method === 'OPTIONS') return;
+
+    const urlPath = request.url.split('?')[0];
+    if (EXEMPT_PREFIXES.some(p => urlPath.startsWith(p)) || urlPath === '/') return;
+
+    // Get tenant_id from auth token, query param, or body
+    const auth = (request as any).auth;
+    const tenantId =
+      auth?.tenant_id ||
+      (request.query as any)?.tenant_id ||
+      (request.body as any)?.tenant_id;
+
+    if (!tenantId) return; // No tenant context — let route handle auth
+    if (tenantId === SUPER_ADMIN_TENANT_ID) return; // Super-admin exempt
+
+    try {
+      const res = await pool.query(
+        'SELECT subscription_status FROM tenants WHERE id = $1',
+        [tenantId]
+      );
+      if (res.rows.length === 0) return; // Tenant not found — let route handle
+      const status = res.rows[0].subscription_status;
+
+      if (status !== 'active' && status !== 'inactive') {
+        // 'inactive' is the default for new tenants (grace period / free tier during beta)
+        // 'past_due' and 'canceled' are blocked
+        return reply.status(402).send({
+          error: 'Subscription required',
+          subscription_status: status,
+        });
+      }
+    } catch {
+      // Don't block on billing check errors — fail open
+    }
+  };
+}
