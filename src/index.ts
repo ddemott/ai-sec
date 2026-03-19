@@ -21,12 +21,14 @@ import { registerKnowledgeRoutes } from './routes/knowledge';
 import { registerAnalyticsRoutes } from './routes/analytics';
 import { registerVocabularyRoutes } from './routes/vocabulary';
 import { createGetEmbedding } from '../shared/getEmbedding';
+import { createNormalizer } from '../shared/normalizeForEmbedding';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
+const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
 
 // --- Server Setup ---
 
@@ -167,7 +169,7 @@ registerServiceRoutes(app, pool, withTenantClient);
 registerMappingRoutes(app, pool, withTenantClient);
 registerSkillRoutes(app, pool, withTenantClient);
 registerCalendarRoutes(app, pool, withTenantClient);
-registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient);
+registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient, normalizeForEmbedding);
 registerAnalyticsRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
 

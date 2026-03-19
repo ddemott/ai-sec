@@ -214,15 +214,20 @@ export class AISecretaryService {
    * Performs semantic search to answer business policy/FAQ questions.
    */
   async getCompanyPolicyAnswer(
-    tenantId: string, 
-    question: string, 
+    tenantId: string,
+    question: string,
     logger: Logger,
-    getEmbedding: (text: string) => Promise<number[]>
+    getEmbedding: (text: string) => Promise<number[]>,
+    normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
   ) {
     logger.info({ tenantId, question }, "Answering company policy question");
 
-    // 1. Generate embedding for the question
-    const embedding = await getEmbedding(question);
+    // 1. Normalize query to semantic core, then generate embedding (Phase 12E)
+    const normalizedQuestion = normalizeForEmbedding
+      ? await normalizeForEmbedding(question, { context: 'customer phone inquiry' })
+      : question;
+    logger.info({ normalizedQuestion }, "Normalized query for embedding");
+    const embedding = await getEmbedding(normalizedQuestion);
 
     // 2. Search knowledge base
     const matches = await this.repo.searchKnowledgeBase(tenantId, embedding, logger);

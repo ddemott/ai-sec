@@ -6,7 +6,8 @@ export function registerKnowledgeRoutes(
   app: any,
   pool: Pool,
   getEmbedding: (text: string) => Promise<number[]>,
-  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+  normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
 ) {
   app.get('/knowledge', async (req, reply) => {
     const tenantId = (req.query as any).tenant_id;
@@ -70,10 +71,14 @@ export function registerKnowledgeRoutes(
       await withTenantClient(tenantId, async (client) => {
         for (const chunk of chunks) {
           const trimmedChunk = chunk.trim();
-          const embedding = await getEmbedding(trimmedChunk);
+          // Normalize text to semantic core before embedding (Phase 12E)
+          const normalizedText = normalizeForEmbedding
+            ? await normalizeForEmbedding(trimmedChunk, { context: 'knowledge base document' })
+            : trimmedChunk;
+          const embedding = await getEmbedding(normalizedText);
           await client.query(
-            'INSERT INTO tenant_docs (tenant_id, content, source, embedding) VALUES ($1, $2, $3, $4::vector)',
-            [tenantId, trimmedChunk, filename, JSON.stringify(embedding)]
+            'INSERT INTO tenant_docs (tenant_id, content, normalized_text, source, embedding) VALUES ($1, $2, $3, $4, $5::vector)',
+            [tenantId, trimmedChunk, normalizedText, filename, JSON.stringify(embedding)]
           );
         }
       });

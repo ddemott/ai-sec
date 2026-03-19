@@ -5,13 +5,15 @@ import { DomainError } from "./core/errors.ts";
 import { createLogger } from "./core/logger.ts";
 import { Dispatcher } from "./core/dispatcher.ts";
 import { createGetEmbedding } from "../../../shared/getEmbedding.ts";
+import { createNormalizer } from "../../../shared/normalizeForEmbedding.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
+const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
 
 export const repo = new PostgresRepository();
 const service = new AISecretaryService(repo);
-const dispatcher = new Dispatcher(service, getEmbedding);
+const dispatcher = new Dispatcher(service, getEmbedding, normalizeForEmbedding);
 
 const VAPI_SECRET = Deno.env.get("VAPI_SERVER_URL_SECRET") || "unset";
 

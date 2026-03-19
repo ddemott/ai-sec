@@ -10,10 +10,16 @@ export class Dispatcher {
   private handlers: Map<string, MessageHandler> = new Map();
   private service: AISecretaryService;
   private getEmbedding: (text: string) => Promise<number[]>;
+  private normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>;
 
-  constructor(service: AISecretaryService, getEmbedding: (text: string) => Promise<number[]>) {
+  constructor(
+    service: AISecretaryService,
+    getEmbedding: (text: string) => Promise<number[]>,
+    normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
+  ) {
     this.service = service;
     this.getEmbedding = getEmbedding;
+    this.normalizeForEmbedding = normalizeForEmbedding;
     this.registerDefaults();
   }
 
@@ -111,7 +117,8 @@ export class Dispatcher {
           args.tenant_id,
           args.question,
           toolLogger,
-          this.getEmbedding
+          this.getEmbedding,
+          this.normalizeForEmbedding
         );
         break;
       default:
