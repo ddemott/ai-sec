@@ -304,6 +304,30 @@ export const Api = {
       ),
   },
 
+  // --- COVERAGE ---
+  coverage: {
+    check: (tenantId: string | null, startDate?: string, endDate?: string) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+      return apiFetch<Array<{
+        service_id: string;
+        service_name: string;
+        duration_minutes: number;
+        coverage_status: 'full' | 'partial' | 'uncovered' | 'no_staff' | 'no_resource';
+        total_open_hours: number;
+        covered_hours: number;
+        gap_hours: number;
+        has_qualified_staff: boolean;
+        has_capable_resource: boolean;
+        qualified_employee_count: number;
+        capable_resource_count: number;
+        gap_details: Array<{ date: string; day_name: string; gap_start: string; gap_end: string }>;
+      }>>(`/coverage`, params);
+    },
+  },
+
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
     list: (tenantId: string | null) => 

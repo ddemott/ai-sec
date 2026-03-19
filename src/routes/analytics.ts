@@ -10,6 +10,35 @@ export function registerAnalyticsRoutes(
     // Existing analytics logic (placeholder — was empty in original)
   });
 
+  // Coverage gap detection — returns per-service coverage status for a date range
+  app.get('/coverage', async (req, reply) => {
+    const tenantId = (req.query as any).tenant_id;
+    if (!tenantId) {
+      return reply.status(400).send({ error: 'tenant_id is required' });
+    }
+
+    const startDate = (req.query as any).start_date || new Date().toISOString().split('T')[0];
+    const endDate = (req.query as any).end_date || null;
+
+    try {
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          `SELECT service_id, service_name, duration_minutes, coverage_status,
+                  total_open_hours, covered_hours, gap_hours,
+                  has_qualified_staff, has_capable_resource,
+                  qualified_employee_count, capable_resource_count,
+                  gap_details
+           FROM check_coverage_gaps($1, $2::DATE, $3::DATE)`,
+          [tenantId, startDate, endDate]
+        );
+      });
+      return reply.send(res.rows);
+    } catch (err) {
+      app.log.error(err);
+      return reply.status(500).send({ error: 'Failed to check coverage gaps' });
+    }
+  });
+
   app.get('/call-summaries', async (req, reply) => {
     const tenantId = (req.query as any).tenant_id;
     const customerId = (req.query as any).customer_id;
