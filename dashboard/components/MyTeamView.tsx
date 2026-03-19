@@ -4,13 +4,15 @@ import React, { useState } from 'react'
 import EmployeeManagementView from './EmployeeManagementView'
 import ShiftManagementView from './ShiftManagementView'
 import SkillMatrixView from './SkillMatrixView'
+import SkillRelationshipMap from './skill-map/SkillRelationshipMap'
 
-type SubTab = 'employees' | 'shifts' | 'skills'
+type SubTab = 'employees' | 'shifts' | 'skills' | 'skill-map'
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'employees', label: 'Employees' },
   { id: 'shifts', label: 'Shifts' },
   { id: 'skills', label: 'Skill Matrix' },
+  { id: 'skill-map', label: 'Skill Map' },
 ]
 
 export default function MyTeamView({ overrideTenantId }: { overrideTenantId?: string | null }) {
@@ -37,6 +39,7 @@ export default function MyTeamView({ overrideTenantId }: { overrideTenantId?: st
         {activeSubTab === 'employees' && <EmployeeManagementView overrideTenantId={overrideTenantId} />}
         {activeSubTab === 'shifts' && <ShiftManagementView overrideTenantId={overrideTenantId} />}
         {activeSubTab === 'skills' && <SkillMatrixView overrideTenantId={overrideTenantId} />}
+        {activeSubTab === 'skill-map' && <SkillRelationshipMap overrideTenantId={overrideTenantId} />}
       </div>
     </div>
   )

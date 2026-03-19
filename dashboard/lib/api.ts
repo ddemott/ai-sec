@@ -140,8 +140,13 @@ export const Api = {
 
   // --- APPOINTMENTS ---
   appointments: {
-    list: (tenantId: string | null) => 
-      apiFetch<any[]>(`/appointments`, tenantId ? { tenant_id: tenantId } : undefined),
+    list: (tenantId: string | null, opts?: { startDate?: string; endDate?: string }) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (opts?.startDate) params.start_date = opts.startDate;
+      if (opts?.endDate) params.end_date = opts.endDate;
+      return apiFetch<any[]>(`/appointments`, Object.keys(params).length > 0 ? params : undefined);
+    },
     
     create: (tenantId: string | null, data: any) => 
       apiMutate<any>(`/appointments/create`, 'POST', { 

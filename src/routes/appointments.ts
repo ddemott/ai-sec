@@ -54,12 +54,39 @@ export function registerAppointmentRoutes(
     const tenantId = (req.query as any)['tenant_id'];
     const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
     const offset = parseInt((req.query as any)['offset']) || 0;
+    const startDate = (req.query as any)['start_date'] || null;
+    const endDate = (req.query as any)['end_date'] || null;
 
     if (!tenantId) {
       return reply.status(400).send({ error: 'tenant_id is required' });
     }
 
     const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
+
+    // Build WHERE clauses and params dynamically for date filtering
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIdx = 1;
+
+    if (!isSuperAdmin) {
+      conditions.push(`a.tenant_id = $${paramIdx}`);
+      params.push(tenantId);
+      paramIdx++;
+    }
+
+    if (startDate) {
+      conditions.push(`a.start_time >= $${paramIdx}`);
+      params.push(startDate);
+      paramIdx++;
+    }
+
+    if (endDate) {
+      conditions.push(`a.start_time < $${paramIdx}`);
+      params.push(endDate);
+      paramIdx++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const baseQuery = `
       SELECT
@@ -73,21 +100,23 @@ export function registerAppointmentRoutes(
        FROM appointments a
        LEFT JOIN customers c ON c.id = a.customer_id
        LEFT JOIN resources r ON r.id = a.resource_id
-       ${isSuperAdmin ? '' : 'WHERE a.tenant_id = $1'}
+       ${whereClause}
        ORDER BY a.start_time ASC`;
 
     try {
       if (isSuperAdmin) {
         const client = await pool.connect();
         try {
-          const res = await client.query(`${baseQuery} LIMIT $1 OFFSET $2`, [limit, offset]);
+          params.push(limit, offset);
+          const res = await client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
           return reply.send(res.rows);
         } finally {
           client.release();
         }
       } else {
+        params.push(limit, offset);
         const res = await withTenantClient(tenantId, async (client) => {
-          return client.query(`${baseQuery} LIMIT $2 OFFSET $3`, [tenantId, limit, offset]);
+          return client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
         });
         return reply.send(res.rows);
       }

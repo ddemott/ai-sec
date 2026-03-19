@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import AppointmentView from '@/components/AppointmentView'
+import SchedulerView from '@/components/SchedulerView'
 import CRMView from '@/components/CRMView'
 import MyTeamView from '@/components/MyTeamView'
 import MyBusinessView from '@/components/MyBusinessView'
@@ -68,7 +68,7 @@ export default function DashboardPage() {
         {activeTab === 'all-businesses' && (
           <SuperAdminDashboard onSelectTenant={selectManagedTenant} currentTenantId={managedTenantId} />
         )}
-        {activeTab === 'schedule' && <AppointmentView overrideTenantId={managedTenantId} />}
+        {activeTab === 'schedule' && <SchedulerView overrideTenantId={managedTenantId} />}
         {activeTab === 'customers' && <CRMView overrideTenantId={managedTenantId} />}
         {activeTab === 'my-team' && <MyTeamView overrideTenantId={managedTenantId} />}
         {activeTab === 'my-business' && <MyBusinessView overrideTenantId={managedTenantId} />}
