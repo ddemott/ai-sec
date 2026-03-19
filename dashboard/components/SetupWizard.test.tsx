@@ -438,3 +438,199 @@ describe('SetupWizard: Step 4 Shifts', () => {
     expect(offLabels.length).toBe(5)
   })
 })
+
+// --- Step 5: Assignments ---
+
+describe('SetupWizard: Step 5 Assignments', () => {
+  function goToStep5() {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByText('Next'))
+  }
+
+  test('shows assignment step heading', () => {
+    goToStep5()
+    expect(screen.getByText('Connect everything together')).toBeInTheDocument()
+  })
+
+  test('shows empty state when no services exist', async () => {
+    goToStep5()
+    await waitFor(() => {
+      expect(screen.getByText('No services yet. Go back to Step 1 to add services first.')).toBeInTheDocument()
+    })
+  })
+
+  test('shows service cards with employee and resource toggles', async () => {
+    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/services')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 1, name: 'Oil Change', duration_minutes: 30 },
+          ],
+        })
+      }
+      if (url.includes('/employees')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'e1', first_name: 'Mike', last_name: 'Smith', is_active: true },
+          ],
+        })
+      }
+      if (url.includes('/resources')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'r1', name: 'Bay 1', is_active: true },
+          ],
+        })
+      }
+      if (url.includes('/mappings/service-employee')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [{ service_id: 1, employee_id: 'e1' }],
+        })
+      }
+      if (url.includes('/mappings/service-resource')) {
+        return Promise.resolve({ ok: true, json: async () => [] })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Oil Change')).toBeInTheDocument())
+
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      // Service card with Oil Change
+      expect(screen.getByText('Oil Change')).toBeInTheDocument()
+      // Staff and Resources section headers
+      expect(screen.getByText('Staff')).toBeInTheDocument()
+      // Employee toggle
+      expect(screen.getByText(/Mike Smith/)).toBeInTheDocument()
+      // Resource toggle
+      expect(screen.getByText('Bay 1')).toBeInTheDocument()
+      // Description text
+      expect(screen.getByText(/choose which employees can perform it/)).toBeInTheDocument()
+    })
+  })
+})
+
+// --- Step 6: Review ---
+
+describe('SetupWizard: Step 6 Review', () => {
+  function goToStep6() {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+  }
+
+  test('shows review step heading', () => {
+    goToStep6()
+    expect(screen.getByText('Review your setup')).toBeInTheDocument()
+  })
+
+  test('shows summary counts', () => {
+    goToStep6()
+    // With empty data, all counts should be 0
+    const zeros = screen.getAllByText('0')
+    expect(zeros.length).toBe(3)
+  })
+
+  test('shows coverage badges from API data', async () => {
+    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/services')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 1, name: 'Oil Change' },
+            { id: 2, name: 'Brakes' },
+          ],
+        })
+      }
+      if (url.includes('/coverage')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { service_id: 1, service_name: 'Oil Change', coverage_status: 'full' },
+            { service_id: 2, service_name: 'Brakes', coverage_status: 'no_staff' },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Oil Change')).toBeInTheDocument())
+
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Full Coverage')).toBeInTheDocument()
+      expect(screen.getByText('No Staff')).toBeInTheDocument()
+    })
+  })
+
+  test('shows success message when all services fully covered', async () => {
+    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/services')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [{ id: 1, name: 'Oil Change' }],
+        })
+      }
+      if (url.includes('/coverage')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { service_id: 1, service_name: 'Oil Change', coverage_status: 'full' },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Oil Change')).toBeInTheDocument())
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText("You're ready to go! All services are fully covered.")).toBeInTheDocument()
+    })
+  })
+
+  test('shows warning message when coverage gaps exist', async () => {
+    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/services')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [{ id: 1, name: 'Brakes' }],
+        })
+      }
+      if (url.includes('/coverage')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { service_id: 1, service_name: 'Brakes', coverage_status: 'partial' },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Brakes')).toBeInTheDocument())
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Some services have coverage gaps/)).toBeInTheDocument()
+    })
+  })
+
+  test('shows "No services configured" when empty', async () => {
+    goToStep6()
+    await waitFor(() => {
+      expect(screen.getByText('No services configured yet.')).toBeInTheDocument()
+    })
+  })
+})

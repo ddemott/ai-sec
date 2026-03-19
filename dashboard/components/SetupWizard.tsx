@@ -17,6 +17,7 @@ import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { CoverageStatusBadge } from './ui/CoverageStatusBadge'
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -84,13 +85,49 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   const [shiftsLoading, setShiftsLoading] = useState(false)
   const [selectedShiftEmployee, setSelectedShiftEmployee] = useState<string | null>(null)
 
-  // Fetch shifts when entering step 4 or when employees change
+  // Step 5 — Assignments
+  const [serviceEmployeeMappings, setServiceEmployeeMappings] = useState<any[]>([])
+  const [serviceResourceMappings, setServiceResourceMappings] = useState<any[]>([])
+  const [mappingsLoading, setMappingsLoading] = useState(false)
+
+  // Step 6 — Coverage
+  const [coverageData, setCoverageData] = useState<any[]>([])
+  const [coverageLoading, setCoverageLoading] = useState(false)
+
+  // Fetch shifts when entering step 4
   useEffect(() => {
     if (step === 4 && tenantId) {
       setShiftsLoading(true)
       Api.shifts.list(tenantId).then((data: any[]) => {
         setShifts(Array.isArray(data) ? data : [])
       }).catch(() => setShifts([])).finally(() => setShiftsLoading(false))
+    }
+  }, [step, tenantId])
+
+  // Fetch mappings when entering step 5
+  useEffect(() => {
+    if (step === 5 && tenantId) {
+      setMappingsLoading(true)
+      Promise.all([
+        Api.mappings.listServiceEmployee(tenantId),
+        Api.mappings.listServiceResource(tenantId),
+      ]).then(([empMaps, resMaps]) => {
+        setServiceEmployeeMappings(Array.isArray(empMaps) ? empMaps : [])
+        setServiceResourceMappings(Array.isArray(resMaps) ? resMaps : [])
+      }).catch(() => {
+        setServiceEmployeeMappings([])
+        setServiceResourceMappings([])
+      }).finally(() => setMappingsLoading(false))
+    }
+  }, [step, tenantId])
+
+  // Fetch coverage when entering step 6
+  useEffect(() => {
+    if (step === 6 && tenantId) {
+      setCoverageLoading(true)
+      Api.coverage.check(tenantId).then((data: any[]) => {
+        setCoverageData(Array.isArray(data) ? data : [])
+      }).catch(() => setCoverageData([])).finally(() => setCoverageLoading(false))
     }
   }, [step, tenantId])
 
@@ -116,6 +153,9 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       setEditingEmployeeId(null)
       setShifts([])
       setSelectedShiftEmployee(null)
+      setServiceEmployeeMappings([])
+      setServiceResourceMappings([])
+      setCoverageData([])
       setError(null)
     }
   }, [isOpen])
@@ -373,6 +413,52 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     }
   }
 
+  // --- Assignment toggle ---
+
+  async function toggleEmployeeAssignment(serviceId: number, employeeId: string) {
+    if (!tenantId) return
+    const exists = serviceEmployeeMappings.some(
+      (m: any) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
+    )
+    setSaving(true)
+    setError(null)
+    try {
+      if (exists) {
+        await Api.mappings.unassignServiceEmployee(serviceId, employeeId, tenantId)
+      } else {
+        await Api.mappings.assignServiceEmployee(serviceId, employeeId, tenantId)
+      }
+      const updated = await Api.mappings.listServiceEmployee(tenantId)
+      setServiceEmployeeMappings(Array.isArray(updated) ? updated : [])
+    } catch (err: any) {
+      setError(err.message || 'Failed to update assignment')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggleResourceAssignment(serviceId: number, resourceId: string) {
+    if (!tenantId) return
+    const exists = serviceResourceMappings.some(
+      (m: any) => m.service_id === serviceId && m.resource_id === resourceId
+    )
+    setSaving(true)
+    setError(null)
+    try {
+      if (exists) {
+        await Api.mappings.unassignServiceResource(serviceId, resourceId, tenantId)
+      } else {
+        await Api.mappings.assignServiceResource(serviceId, resourceId, tenantId)
+      }
+      const updated = await Api.mappings.listServiceResource(tenantId)
+      setServiceResourceMappings(Array.isArray(updated) ? updated : [])
+    } catch (err: any) {
+      setError(err.message || 'Failed to update assignment')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!isOpen) return null
 
   const activeServices = services.filter((s: any) => !s.is_deleted)
@@ -496,8 +582,29 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
               onUpdateTime={updateShiftTime}
             />
           )}
-          {step === 5 && <PlaceholderStep label="Assignments" />}
-          {step === 6 && <PlaceholderStep label="Review" />}
+          {step === 5 && (
+            <Step5Assignments
+              services={activeServices}
+              resources={activeResources}
+              employees={activeEmployees}
+              serviceEmployeeMappings={serviceEmployeeMappings}
+              serviceResourceMappings={serviceResourceMappings}
+              loading={mappingsLoading}
+              saving={saving}
+              error={error}
+              onToggleEmployee={toggleEmployeeAssignment}
+              onToggleResource={toggleResourceAssignment}
+            />
+          )}
+          {step === 6 && (
+            <Step6Review
+              services={activeServices}
+              resources={activeResources}
+              employees={activeEmployees}
+              coverageData={coverageData}
+              loading={coverageLoading}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -1012,12 +1119,208 @@ function Step4Shifts({
   )
 }
 
-// --- Placeholder for steps 5-6 ---
+// --- Step 5: Assignments ---
 
-function PlaceholderStep({ label }: { label: string }) {
+interface Step5Props {
+  services: any[]
+  resources: any[]
+  employees: any[]
+  serviceEmployeeMappings: any[]
+  serviceResourceMappings: any[]
+  loading: boolean
+  saving: boolean
+  error: string | null
+  onToggleEmployee: (serviceId: number, employeeId: string) => void
+  onToggleResource: (serviceId: number, resourceId: string) => void
+}
+
+function Step5Assignments({
+  services, resources, employees,
+  serviceEmployeeMappings, serviceResourceMappings,
+  loading, saving, error,
+  onToggleEmployee, onToggleResource,
+}: Step5Props) {
+  function isEmployeeAssigned(serviceId: number, employeeId: string) {
+    return serviceEmployeeMappings.some(
+      (m: any) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
+    )
+  }
+
+  function isResourceAssigned(serviceId: number, resourceId: string) {
+    return serviceResourceMappings.some(
+      (m: any) => m.service_id === serviceId && m.resource_id === resourceId
+    )
+  }
+
+  if (services.length === 0) {
+    return (
+      <div>
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Connect everything together</h3>
+        </div>
+        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+          No services yet. Go back to Step 1 to add services first.
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-500">
-      <p className="text-sm">{label} — coming soon</p>
+    <div>
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Connect everything together</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          For each service, choose which employees can perform it and which resources it uses.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-400">Loading assignments...</p>
+      ) : (
+        <div className="space-y-4">
+          {services.map((svc: any) => (
+            <div key={svc.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222] p-4">
+              <div className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">{svc.name}</div>
+
+              {/* Employee assignments */}
+              {employees.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">Staff</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {employees.map((emp: any) => {
+                      const assigned = isEmployeeAssigned(svc.id, String(emp.id))
+                      return (
+                        <button
+                          key={emp.id}
+                          onClick={() => onToggleEmployee(svc.id, String(emp.id))}
+                          disabled={saving}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            assigned
+                              ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                          }`}
+                        >
+                          {emp.first_name || emp.name} {emp.last_name || ''}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Resource assignments */}
+              {resources.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">Resources</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {resources.map((res: any) => {
+                      const assigned = isResourceAssigned(svc.id, res.id)
+                      return (
+                        <button
+                          key={res.id}
+                          onClick={() => onToggleResource(svc.id, res.id)}
+                          disabled={saving}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            assigned
+                              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400'
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                          }`}
+                        >
+                          {res.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {error && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{error}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Step 6: Review ---
+
+interface Step6Props {
+  services: any[]
+  resources: any[]
+  employees: any[]
+  coverageData: any[]
+  loading: boolean
+}
+
+function Step6Review({ services, resources, employees, coverageData, loading }: Step6Props) {
+  const allCovered = coverageData.length > 0 && coverageData.every((c: any) => c.coverage_status === 'full')
+  const hasGaps = coverageData.some((c: any) => c.coverage_status !== 'full')
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Review your setup</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Here's a summary of your business configuration and coverage status.
+        </p>
+      </div>
+
+      {/* Summary counts */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
+          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{services.length}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Services</div>
+        </div>
+        <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
+          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{employees.length}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Employees</div>
+        </div>
+        <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
+          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{resources.length}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Resources</div>
+        </div>
+      </div>
+
+      {/* Coverage per service */}
+      {loading ? (
+        <p className="text-sm text-gray-400">Checking coverage...</p>
+      ) : coverageData.length > 0 ? (
+        <div className="space-y-2 mb-4">
+          <div className="text-xs font-bold text-gray-400 uppercase mb-2">Coverage by Service</div>
+          {coverageData.map((item: any) => (
+            <div
+              key={item.service_id}
+              className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
+            >
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.service_name}</span>
+              <CoverageStatusBadge status={item.coverage_status} />
+            </div>
+          ))}
+        </div>
+      ) : services.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+          No services configured yet.
+        </p>
+      ) : null}
+
+      {/* Status message */}
+      {coverageData.length > 0 && (
+        <div className={`rounded-xl p-4 mt-4 ${
+          allCovered
+            ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800'
+            : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800'
+        }`}>
+          <p className={`text-sm font-medium ${
+            allCovered
+              ? 'text-green-700 dark:text-green-400'
+              : 'text-amber-700 dark:text-amber-400'
+          }`}>
+            {allCovered
+              ? "You're ready to go! All services are fully covered."
+              : 'Some services have coverage gaps. Go back to fix assignments, shifts, or staffing.'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
