@@ -100,3 +100,144 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 - [x] **Api.vocabulary.get()**: Dashboard API client method for resolved vocabulary labels.
 - [x] **seed.sql Fix**: ON CONFLICT (tenant_id, email) for per-tenant email uniqueness.
 - [x] **Test Coverage**: 100 backend tests + 38 dashboard tests = 138 total, all passing.
+
+## 11. Scheduler, Assignments & Coverage Visibility (Phase 12 — Next)
+> Ship-blocking. The owner needs to see who's doing what, assign people to services, and know where the gaps are — without learning the dashboard tab by tab.
+
+### 11A. Repeatable Setup Wizard
+Not just onboarding — the primary configuration tool for non-technical owners. Re-enter anytime via "Setup Assistant" button.
+
+- [ ] **Wizard Shell Component**: Progress indicator, step navigation, back/forward, "Setup Assistant" re-entry button on dashboard sidebar.
+- [ ] **Step 1 — Services**: Service CRUD within wizard context. Pre-populated from template on first run.
+- [ ] **Step 2 — Resources**: Resource CRUD within wizard context. Vocabulary-aware labels.
+- [ ] **Step 3 — Employees**: Employee CRUD within wizard context.
+- [ ] **Step 4 — Shifts**: Shift editor per employee. Day toggles + time pickers. Shows total hours covered.
+- [ ] **Step 5 — Assignments**: Assign employees → services and services → resources. Live coverage badges update as assignments are made. Broken chain warnings inline.
+- [ ] **Step 6 — Review**: Coverage summary. Every service listed with Full/Partial/Uncovered/Inactive badge. Broken chains with "Fix now" links back to Step 5. "You're ready" or "Fix these first" message.
+- [ ] **Re-Entry Logic**: Wizard detects existing data and pre-fills. Owner can jump to any step. Changes save immediately.
+- [ ] **First-Run vs Return**: First run shows welcome copy and template defaults. Return visits show current state.
+
+### 11B. Scheduler Views
+Three views: "Who's doing what?" (swimlanes), "Are my bays full?" (resource columns), "What's next?" (list). Coverage gaps visible in all three.
+
+- [ ] **Staff Swimlane View (Default)**: Employee rows × hourly columns. Appointment blocks coloured by employee. Hatching for off-shift. Click empty slot → Quick Book. Click employee pill → Day Focus.
+- [ ] **Resource Columns View**: Bay/station columns with coverage bar at top. Red zones for gaps.
+- [ ] **Appointment List View**: Chronological list. Coverage gap warnings inline.
+- [ ] **View Switcher**: Tab bar above schedule.
+- [ ] **Date Navigation**: Previous/next day, week picker, "Today" button.
+- [ ] **Employee Day Focus Panel**: Click employee pill → full day timeline, booked/available/off-shift slots, utilisation bar + stats, skills at bottom.
+- [ ] **Quick Book Panel**: Single-screen walk-in booking. Customer search, service selector (filtered to skills), resource selector (filtered to available), time slot, notes, confirm. Under 30 seconds.
+
+### 11C. Skill Relationship Map
+Interactive 3-column mind map: "Who can do what, where?" Broken chains and gaps visible immediately.
+
+- [ ] **3-Column Layout**: Employees | Skills/Services | Resources. Click employee → skills light up. Click skill → resources light up.
+- [ ] **Connection Lines**: Animated SVG lines between columns.
+- [ ] **Broken Chain Detection**: Amber dashed lines when chain is incomplete. "Fix now" action opens Add Service dialog.
+- [ ] **Coverage Badges on Skills**: Full (green), Partial (amber), Uncovered (red), Inactive (grey).
+- [ ] **Reset Button**: Clear all selections.
+
+### 11D. Coverage Visibility (Baked In)
+Not a separate feature — coverage status is visible wherever the owner is already looking.
+
+- [ ] **`check_coverage_gaps()` Postgres Function**: Returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]` for a tenant and date range.
+- [ ] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight).
+- [ ] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns.
+- [ ] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
+- [ ] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range.
+
+### 11E. RAG Normalization Layer
+> Search quality. Raw conversational text produces inconsistent embeddings. A normalization step before embedding reduces text to its semantic core so vector search reliably matches across phrasings.
+
+Example: "I think Suzy is great and would prefer to work with her" → normalized to "Sally prefers Suzy". Four weeks later: "I like Suzy. Let's go with her" → "Sally likes Suzy" — close enough for cosine similarity to match.
+
+- [ ] **Normalization Function**: `shared/normalizeForEmbedding.ts` — takes raw text + context (customer name, etc.), returns normalized statement via LLM call.
+- [ ] **Integration with Ingestion**: Knowledge base ingestion normalizes before embedding each chunk.
+- [ ] **Integration with Call Summaries**: Post-call summarizer normalizes key details before embedding.
+- [ ] **Integration with Customer Notes**: Notes saved via dashboard normalized before embedding.
+- [ ] **Query Normalization**: Search queries normalized before embedding for lookup.
+- [ ] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
+- [ ] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
+
+### 11F. Stripe Lite (Two Plans)
+> You can't collect money without this. Minimal Stripe — two prices, one webhook, one gate. No plan picker UI, no trial logic, no call limits, no billing portal.
+
+| Plan | Price | Target |
+|---|---|---|
+| Solo | $29/mo | Solo operators, small shops (1–2 staff) |
+| Growth | $59/mo | Small teams (3–5 staff) |
+
+Both plans include all features. No feature gating between tiers at launch.
+
+- [ ] **Stripe Products**: Create Solo ($29/mo) and Growth ($59/mo) as recurring products in Stripe dashboard. Save Price IDs.
+- [ ] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
+- [ ] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL.
+- [ ] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
+- [ ] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402. Dashboard shows "Update your payment to continue." AI stops answering.
+- [ ] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant active and continue to setup wizard.
+- [ ] **Env Vars**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
+
+---
+
+## Backlog
+
+> Features that are valuable but not required for market launch. Preserved here so nothing is lost. Prioritize after Phase 12 is shipped and DynaTire is live.
+
+### Automated Phone Provisioning
+Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works for the first 10–20 customers. Automate when manual onboarding becomes the bottleneck.
+
+- [ ] **Telnyx Service**: `src/services/telnyx.ts` — search numbers by area code, purchase, configure SIP trunk.
+- [ ] **Vapi Agent Auto-Creation**: Create agent from `vapi/agent.template.json` with tenant config injected.
+- [ ] **Area Code Wizard Step**: Step 10 of onboarding — owner picks area code, selects from available numbers.
+- [ ] **Provisioning Route**: `POST /tenants/provision-phone` — atomic Telnyx + Vapi setup with rollback.
+- [ ] **Tenant Schema**: `phone_number`, `vapi_agent_id`, `telnyx_trunk_id`.
+- [ ] **Confirmation Screen**: "Call it right now" CTA.
+- [ ] **Area Code Fallback**: Suggest nearby area codes if none available.
+- [ ] **Env Vars**: `TELNYX_API_KEY`, `VAPI_API_KEY`.
+
+### Full Billing System (Stripe)
+Extends Stripe Lite (11F) with trial management, a third tier, plan switching, call limits, and self-service billing portal. Build when customer volume justifies complexity.
+
+| Plan | Price | Calls/mo | Staff | Resources |
+|---|---|---|---|---|
+| Professional | $99/mo | Unlimited | Unlimited | Unlimited |
+
+Platform cost: ~$12–36/mo per tenant. Call limits protect margin.
+
+- [ ] **Professional Tier**: $99/mo product in Stripe + `STRIPE_PRO_PRICE_ID`.
+- [ ] **Plan Picker UI**: In onboarding wizard, replace direct Checkout redirect.
+- [ ] **Stripe Elements**: Embedded card form in dashboard (instead of Checkout redirect).
+- [ ] **14-Day Trial**: `trial_ends_at` + reminder SMS/email 3 days before.
+- [ ] **Call Limit Enforcement**: Track monthly calls, graceful AI response at limit.
+- [ ] **Billing Portal**: Stripe Customer Portal for self-service plan changes.
+- [ ] **Plan Upgrade/Downgrade**: Flow in dashboard settings.
+- [ ] **Env Vars**: `STRIPE_PUBLISHABLE_KEY` for client-side Stripe Elements.
+
+### Business Intelligence & Employee ROI
+Retention feature — not needed for launch. Build when booking data is sufficient for meaningful recommendations.
+
+- [ ] **Employee Efficiency**: Utilisation %, revenue/hr, skills used vs idle, thresholds (>85% near capacity, 50–85% healthy, <50% underutilised).
+- [ ] **Service ROI**: Bookings/mo, revenue/hr, single-point-of-failure detection, ROI signals (Strong/Review/Poor/Remove).
+- [ ] **Recommendations Engine**: Ranked action items — broken chains, cross-training, pricing, capacity warnings.
+- [ ] **Materialized Views**: `employee_roi_metrics`, `service_roi_metrics` (refreshed nightly).
+- [ ] **API Endpoints**: `GET /analytics/employees`, `/services`, `/recommendations`.
+- [ ] **BI Dashboard**: 3 sub-tabs in AI & Insights, period selector, expandable rows, action buttons.
+
+### Personal Resources & Unified Booking Model
+Only needed when onboarding businesses with mobile techs or service writers at non-fixed stations.
+
+- [ ] **Schema**: `is_personal` boolean on `resources` table.
+- [ ] **Resource Manager UI**: Hide personal resources from bay/chair list.
+- [ ] **Employee Setup**: "Fixed station?" → No → auto-create personal resource.
+- [ ] **Skill Map**: Personal resources show clean green chain, "personal" label.
+- [ ] **Coverage Logic**: Personal resource availability = employee availability.
+- [ ] **Dashboard Alert**: "Sarah W. has no resource assigned — [Create Sarah's Desk]".
+
+### Advanced Coverage Alerts
+Visual coverage in Phase 12 covers the dashboard. These are the automated notification and AI behaviour extensions.
+
+- [ ] **Owner SMS Alerts**: Telnyx SMS for critical gaps, deduplicated within 24 hours.
+- [ ] **AI Behaviour Change**: Offer alternative times when booking into a gap.
+- [ ] **Missed Revenue Tracking**: "This week you missed $240 due to coverage gaps."
+- [ ] **Nightly Coverage Job**: Check next 7 days, surface new gaps.
+- [ ] **Dashboard Alert Banner**: Critical gap notification with action buttons (Reassign / Call customers / Dismiss).
