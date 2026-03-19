@@ -1,19 +1,19 @@
 # AI Secretary - Multi-Tenant Voice AI Reception SaaS
 
 ## Project Overview
-Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, clinics). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars.
+Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are explicitly excluded until a formal compliance program is in place.
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (14 route modules under src/routes/) -> Postgres
+- **Backend API**: Node.js / Fastify (15 route modules under src/routes/) -> Postgres
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 14 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings, vocabulary)
+- `/src` - Fastify backend (slim index.ts entry, 15 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, register, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings, vocabulary)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
 - `/supabase/migrations` - 42 SQL migrations (schema, RLS, RPCs, bug fixes)
@@ -46,7 +46,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Database Key Details
 - RLS on all tenant-scoped tables using `app.current_tenant_id` context variable
-- `book_appointment_atomic()` RPC: 3-layer constraint check (resource, employee, shift)
+- `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert)
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
 - Polymorphic assignment: `p_assignment_id` can be INTEGER (employee) or UUID (user)
 - Mixed ID types: services/employees use SERIAL, resources/users use UUID
@@ -57,7 +57,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - UI primitives in `dashboard/components/ui/` (Button, Card, Input, Select, Modal, Badge)
 - API client centralized in `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 14 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 15 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
 
 ## Known Issues (as of March 2026)
 - Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`
@@ -73,4 +73,30 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phase 8 (Go-Live). All 9 development phases complete (including security hardening and scale/polish). 100 backend tests + 38 dashboard tests = 138 total passing. Remaining: cloud migration, Vapi server URL config, Telnyx phone assignment, n8n webhook plumbing, beta testing with DynaTire.
+Phase 11 complete (Navigation & Vocabulary System). Phases 1–11 all complete, including security hardening (Phase 7.5), scale/polish (Phase 9), CRM enhancements (Phase 10), and navigation restructure + vocabulary system + self-service registration (Phase 11). 100 backend tests + 38 dashboard tests = 138 total passing.
+
+### Remaining (Phase 8 Go-Live tasks)
+- Cloud migration (local Docker → managed Supabase)
+- Secrets management (OPENAI_API_KEY, DATABASE_URL, VAPI_SERVER_URL_SECRET)
+- Vapi agent pointed to production Edge Function URL
+- Telnyx phone number assignment
+- Database webhooks for n8n triggers
+- Outlook calendar sync implementation
+- OAuth token refresh for calendar sync
+- Beta testing with DynaTire
+
+### Phase 12: Scheduler, Assignments & Coverage Visibility (Next)
+Ship-blocking — owner needs to see who's doing what, assign people to services, and know where the gaps are.
+- **12A — Repeatable Setup Wizard**: 6-step guided setup (Services → Resources → Employees → Shifts → Assignments → Review). Re-enter anytime via "Setup Assistant" button. Live coverage badges update as assignments are made. Coverage summary on final step shows what's ready and what's broken.
+- **12B — Scheduler Views**: Staff swimlanes (default, employee rows × hourly columns), resource columns (bay capacity + coverage bars), appointment list (chronological). Employee day focus panel, quick book panel for walk-ins.
+- **12C — Skill Relationship Map**: Interactive 3-column mind map (Employees → Skills → Resources). Animated SVG connection lines. Broken chains in amber with "Fix now" actions. Coverage badges on skills.
+- **12D — Coverage Visibility**: `check_coverage_gaps()` Postgres function, coverage bar component (red zones), coverage status badges (Full/Partial/Uncovered/Inactive), `GET /coverage` endpoint. Visible in scheduler, services list, skill map, and wizard — not a separate page.
+- **12E — RAG Normalization Layer**: LLM normalization step before embedding. Reduces conversational text to semantic core ("I think Suzy is great" → "Sally prefers Suzy") so vector search matches across phrasings. `shared/normalizeForEmbedding.ts`, `normalized_text` column on `tenant_docs` and `call_summaries`. Query normalization for consistent lookup.
+- **12F — Stripe Lite**: Two plans — Solo ($29/mo) and Growth ($59/mo). Stripe Checkout session for payment, webhook for status updates (`checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`), subscription gate middleware (402 if not active). No plan picker UI, no trial, no call limits, no billing portal. `POST /billing/checkout`, `POST /billing/webhook`. Env vars: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
+
+### Backlog (post-launch)
+- **Automated Phone Provisioning**: Telnyx + Vapi auto-setup during onboarding. Manual provisioning works for first 10–20 customers.
+- **Full Billing System**: Extends Stripe Lite with Professional tier ($99/mo), plan picker UI, Stripe Elements, 14-day trials, call limits, billing portal.
+- **Business Intelligence & ROI**: Employee utilisation, service ROI, recommendations engine. Retention feature — not needed for launch.
+- **Personal Resources**: `is_personal` flag on resources for mobile techs and service writers. Only needed for businesses without fixed stations.
+- **Advanced Coverage Alerts**: Owner SMS, AI alternative time suggestions, missed revenue tracking, nightly coverage jobs.
