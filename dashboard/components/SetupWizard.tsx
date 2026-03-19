@@ -38,6 +38,22 @@ interface ServiceForm {
 
 const EMPTY_SERVICE: ServiceForm = { name: '', description: '', duration_minutes: 30 }
 
+interface ResourceForm {
+  name: string
+  description: string
+}
+
+const EMPTY_RESOURCE: ResourceForm = { name: '', description: '' }
+
+interface EmployeeForm {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+}
+
+const EMPTY_EMPLOYEE: EmployeeForm = { first_name: '', last_name: '', email: '', phone: '' }
+
 interface SetupWizardProps {
   isOpen: boolean
   onClose: () => void
@@ -46,7 +62,7 @@ interface SetupWizardProps {
 
 export default function SetupWizard({ isOpen, onClose, overrideTenantId }: SetupWizardProps) {
   const { tenantId } = useSession(overrideTenantId)
-  const { services, loading, refresh } = useStaticData(tenantId)
+  const { services, resources, employees, loading, refresh } = useStaticData(tenantId)
   const [step, setStep] = useState<WizardStep>(1)
 
   // Step 1 — Services
@@ -54,6 +70,14 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   const [editingServiceId, setEditingServiceId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Step 2 — Resources
+  const [editingResource, setEditingResource] = useState<ResourceForm | null>(null)
+  const [editingResourceId, setEditingResourceId] = useState<string | null>(null)
+
+  // Step 3 — Employees
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeForm | null>(null)
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
 
   // Lock body scroll when open
   useEffect(() => {
@@ -71,6 +95,10 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       setStep(1)
       setEditingService(null)
       setEditingServiceId(null)
+      setEditingResource(null)
+      setEditingResourceId(null)
+      setEditingEmployee(null)
+      setEditingEmployeeId(null)
       setError(null)
     }
   }, [isOpen])
@@ -154,9 +182,137 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     }
   }
 
+  // --- Resource CRUD ---
+
+  function startAddResource() {
+    setEditingResource({ ...EMPTY_RESOURCE })
+    setEditingResourceId(null)
+    setError(null)
+  }
+
+  function startEditResource(res: any) {
+    setEditingResource({ name: res.name || '', description: res.description || '' })
+    setEditingResourceId(res.id)
+    setError(null)
+  }
+
+  function cancelEditResource() {
+    setEditingResource(null)
+    setEditingResourceId(null)
+    setError(null)
+  }
+
+  async function saveResource() {
+    if (!editingResource || !tenantId) return
+    if (!editingResource.name.trim()) {
+      setError('Resource name is required')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      if (editingResourceId) {
+        await Api.resources.update(editingResourceId, { name: editingResource.name.trim(), description: editingResource.description.trim() }, tenantId)
+      } else {
+        await Api.resources.create(tenantId, { name: editingResource.name.trim(), description: editingResource.description.trim() })
+      }
+      await refresh()
+      setEditingResource(null)
+      setEditingResourceId(null)
+    } catch (err: any) {
+      setError(err.message || 'Failed to save resource')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteResource(id: string) {
+    if (!tenantId) return
+    setSaving(true)
+    try {
+      await Api.resources.delete(id, tenantId)
+      await refresh()
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete resource')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // --- Employee CRUD ---
+
+  function startAddEmployee() {
+    setEditingEmployee({ ...EMPTY_EMPLOYEE })
+    setEditingEmployeeId(null)
+    setError(null)
+  }
+
+  function startEditEmployee(emp: any) {
+    setEditingEmployee({
+      first_name: emp.first_name || '',
+      last_name: emp.last_name || '',
+      email: emp.email || '',
+      phone: emp.phone || '',
+    })
+    setEditingEmployeeId(emp.id)
+    setError(null)
+  }
+
+  function cancelEditEmployee() {
+    setEditingEmployee(null)
+    setEditingEmployeeId(null)
+    setError(null)
+  }
+
+  async function saveEmployee() {
+    if (!editingEmployee || !tenantId) return
+    if (!editingEmployee.first_name.trim()) {
+      setError('First name is required')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const name = `${editingEmployee.first_name.trim()} ${editingEmployee.last_name.trim()}`.trim()
+      if (editingEmployeeId) {
+        await Api.employees.update(editingEmployeeId as any, {
+          tenant_id: tenantId, name, first_name: editingEmployee.first_name.trim(), last_name: editingEmployee.last_name.trim(),
+          email: editingEmployee.email.trim(), phone: editingEmployee.phone.trim(),
+        })
+      } else {
+        await Api.employees.create(tenantId, {
+          name, first_name: editingEmployee.first_name.trim(), last_name: editingEmployee.last_name.trim(),
+          email: editingEmployee.email.trim(), phone: editingEmployee.phone.trim(),
+        })
+      }
+      await refresh()
+      setEditingEmployee(null)
+      setEditingEmployeeId(null)
+    } catch (err: any) {
+      setError(err.message || 'Failed to save employee')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteEmployee(id: string | number) {
+    if (!tenantId) return
+    setSaving(true)
+    try {
+      await Api.employees.delete(id as any, tenantId)
+      await refresh()
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete employee')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!isOpen) return null
 
   const activeServices = services.filter((s: any) => !s.is_deleted)
+  const activeResources = resources.filter((r: any) => !r.is_deleted && r.is_active !== false)
+  const activeEmployees = employees.filter((e: any) => !e.is_deleted && e.is_active !== false)
 
   return (
     <div
@@ -230,8 +386,38 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
               onChange={setEditingService}
             />
           )}
-          {step === 2 && <PlaceholderStep label="Resources" />}
-          {step === 3 && <PlaceholderStep label="Employees" />}
+          {step === 2 && (
+            <Step2Resources
+              resources={activeResources}
+              loading={loading}
+              editingResource={editingResource}
+              editingResourceId={editingResourceId}
+              saving={saving}
+              error={error}
+              onAdd={startAddResource}
+              onEdit={startEditResource}
+              onDelete={deleteResource}
+              onSave={saveResource}
+              onCancel={cancelEditResource}
+              onChange={setEditingResource}
+            />
+          )}
+          {step === 3 && (
+            <Step3Employees
+              employees={activeEmployees}
+              loading={loading}
+              editingEmployee={editingEmployee}
+              editingEmployeeId={editingEmployeeId}
+              saving={saving}
+              error={error}
+              onAdd={startAddEmployee}
+              onEdit={startEditEmployee}
+              onDelete={deleteEmployee}
+              onSave={saveEmployee}
+              onCancel={cancelEditEmployee}
+              onChange={setEditingEmployee}
+            />
+          )}
           {step === 4 && <PlaceholderStep label="Shifts" />}
           {step === 5 && <PlaceholderStep label="Assignments" />}
           {step === 6 && <PlaceholderStep label="Review" />}
@@ -395,7 +581,234 @@ function Step1Services({
   )
 }
 
-// --- Placeholder for steps 2-6 ---
+// --- Step 2: Resources ---
+
+interface Step2Props {
+  resources: any[]
+  loading: boolean
+  editingResource: ResourceForm | null
+  editingResourceId: string | null
+  saving: boolean
+  error: string | null
+  onAdd: () => void
+  onEdit: (res: any) => void
+  onDelete: (id: string) => void
+  onSave: () => void
+  onCancel: () => void
+  onChange: (form: ResourceForm) => void
+}
+
+function Step2Resources({
+  resources, loading, editingResource, editingResourceId, saving, error,
+  onAdd, onEdit, onDelete, onSave, onCancel, onChange,
+}: Step2Props) {
+  return (
+    <div>
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Where does work happen?</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Add your bays, chairs, stations, or rooms — anywhere a service is performed.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-400">Loading...</p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {resources.map((res: any) => (
+            <div
+              key={res.id}
+              className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{res.name}</div>
+                {res.description && (
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate max-w-[300px]">
+                    {res.description}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-1 ml-2">
+                <button onClick={() => onEdit(res)} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => onDelete(res.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {resources.length === 0 && !editingResource && (
+            <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+              No resources yet. Add your first bay, chair, or station.
+            </p>
+          )}
+        </div>
+      )}
+
+      {editingResource ? (
+        <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-3">
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {editingResourceId ? 'Edit Resource' : 'New Resource'}
+          </div>
+          <Input
+            label="Resource Name"
+            value={editingResource.name}
+            onChange={e => onChange({ ...editingResource, name: e.target.value })}
+            placeholder="e.g. Bay 1, Chair A, Room 3"
+          />
+          <Input
+            label="Description (optional)"
+            value={editingResource.description}
+            onChange={e => onChange({ ...editingResource, description: e.target.value })}
+            placeholder="Brief description"
+          />
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
+              {saving ? 'Saving...' : editingResourceId ? 'Update' : 'Add Resource'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add a resource
+        </button>
+      )}
+    </div>
+  )
+}
+
+// --- Step 3: Employees ---
+
+interface Step3Props {
+  employees: any[]
+  loading: boolean
+  editingEmployee: EmployeeForm | null
+  editingEmployeeId: string | null
+  saving: boolean
+  error: string | null
+  onAdd: () => void
+  onEdit: (emp: any) => void
+  onDelete: (id: string | number) => void
+  onSave: () => void
+  onCancel: () => void
+  onChange: (form: EmployeeForm) => void
+}
+
+function Step3Employees({
+  employees, loading, editingEmployee, editingEmployeeId, saving, error,
+  onAdd, onEdit, onDelete, onSave, onCancel, onChange,
+}: Step3Props) {
+  return (
+    <div>
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Who works here?</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Add your staff members. You'll set their schedules and assign them to services next.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-400">Loading...</p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {employees.map((emp: any) => (
+            <div
+              key={emp.id}
+              className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                  {emp.first_name || emp.name} {emp.last_name || ''}
+                </div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  {emp.email && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{emp.email}</span>
+                  )}
+                  {emp.phone && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{emp.phone}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 ml-2">
+                <button onClick={() => onEdit(emp)} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => onDelete(emp.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {employees.length === 0 && !editingEmployee && (
+            <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+              No employees yet. Add your first team member.
+            </p>
+          )}
+        </div>
+      )}
+
+      {editingEmployee ? (
+        <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-3">
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {editingEmployeeId ? 'Edit Employee' : 'New Employee'}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="First Name"
+              value={editingEmployee.first_name}
+              onChange={e => onChange({ ...editingEmployee, first_name: e.target.value })}
+              placeholder="First name"
+            />
+            <Input
+              label="Last Name"
+              value={editingEmployee.last_name}
+              onChange={e => onChange({ ...editingEmployee, last_name: e.target.value })}
+              placeholder="Last name"
+            />
+          </div>
+          <Input
+            label="Email (optional)"
+            type="email"
+            value={editingEmployee.email}
+            onChange={e => onChange({ ...editingEmployee, email: e.target.value })}
+            placeholder="email@example.com"
+          />
+          <Input
+            label="Phone (optional)"
+            type="tel"
+            value={editingEmployee.phone}
+            onChange={e => onChange({ ...editingEmployee, phone: e.target.value })}
+            placeholder="+1 (555) 000-0000"
+          />
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
+              {saving ? 'Saving...' : editingEmployeeId ? 'Update' : 'Add Employee'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add an employee
+        </button>
+      )}
+    </div>
+  )
+}
+
+// --- Placeholder for steps 4-6 ---
 
 function PlaceholderStep({ label }: { label: string }) {
   return (

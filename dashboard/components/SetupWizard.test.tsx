@@ -56,7 +56,7 @@ describe('SetupWizard: Navigation', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Next'))
     expect(screen.getByText('Step 2 of 6')).toBeInTheDocument()
-    expect(screen.getByText('Resources — coming soon')).toBeInTheDocument()
+    expect(screen.getByText('Where does work happen?')).toBeInTheDocument()
   })
 
   test('shows Back button on step 2', () => {
@@ -198,5 +198,161 @@ describe('SetupWizard: Step 1 Services', () => {
     rerender(<SetupWizard isOpen={false} onClose={() => {}} />)
     rerender(<SetupWizard isOpen={true} onClose={() => {}} />)
     expect(screen.getByText('Step 1 of 6')).toBeInTheDocument()
+  })
+})
+
+// --- Step 2: Resources ---
+
+describe('SetupWizard: Step 2 Resources', () => {
+  function goToStep2() {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+  }
+
+  test('shows resource step heading', () => {
+    goToStep2()
+    expect(screen.getByText('Where does work happen?')).toBeInTheDocument()
+  })
+
+  test('shows empty state when no resources exist', async () => {
+    goToStep2()
+    await waitFor(() => {
+      expect(screen.getByText('No resources yet. Add your first bay, chair, or station.')).toBeInTheDocument()
+    })
+  })
+
+  test('shows "Add a resource" button', () => {
+    goToStep2()
+    expect(screen.getByText('Add a resource')).toBeInTheDocument()
+  })
+
+  test('clicking "Add a resource" shows the form', () => {
+    goToStep2()
+    fireEvent.click(screen.getByText('Add a resource'))
+    expect(screen.getByText('New Resource')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3')).toBeInTheDocument()
+  })
+
+  test('form Cancel button hides the form', () => {
+    goToStep2()
+    fireEvent.click(screen.getByText('Add a resource'))
+    expect(screen.getByText('New Resource')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(screen.queryByText('New Resource')).toBeNull()
+  })
+
+  test('shows validation error for empty resource name', async () => {
+    goToStep2()
+    fireEvent.click(screen.getByText('Add a resource'))
+    fireEvent.click(screen.getByText('Add Resource'))
+    await waitFor(() => {
+      expect(screen.getByText('Resource name is required')).toBeInTheDocument()
+    })
+  })
+
+  test('renders resources from API data', async () => {
+    ;(global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/resources')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'r1', name: 'Bay 1', description: 'Front bay', is_active: true },
+            { id: 'r2', name: 'Bay 2', description: '', is_active: true },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Bay 1')).toBeInTheDocument()
+      expect(screen.getByText('Bay 2')).toBeInTheDocument()
+    })
+  })
+})
+
+// --- Step 3: Employees ---
+
+describe('SetupWizard: Step 3 Employees', () => {
+  function goToStep3() {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+  }
+
+  test('shows employee step heading', () => {
+    goToStep3()
+    expect(screen.getByText('Who works here?')).toBeInTheDocument()
+  })
+
+  test('shows empty state when no employees exist', async () => {
+    goToStep3()
+    await waitFor(() => {
+      expect(screen.getByText('No employees yet. Add your first team member.')).toBeInTheDocument()
+    })
+  })
+
+  test('shows "Add an employee" button', () => {
+    goToStep3()
+    expect(screen.getByText('Add an employee')).toBeInTheDocument()
+  })
+
+  test('clicking "Add an employee" shows the form with first/last name fields', () => {
+    goToStep3()
+    fireEvent.click(screen.getByText('Add an employee'))
+    expect(screen.getByText('New Employee')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('First name')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Last name')).toBeInTheDocument()
+  })
+
+  test('form Cancel button hides the form', () => {
+    goToStep3()
+    fireEvent.click(screen.getByText('Add an employee'))
+    expect(screen.getByText('New Employee')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(screen.queryByText('New Employee')).toBeNull()
+  })
+
+  test('shows validation error for empty first name', async () => {
+    goToStep3()
+    fireEvent.click(screen.getByText('Add an employee'))
+    fireEvent.click(screen.getByText('Add Employee'))
+    await waitFor(() => {
+      expect(screen.getByText('First name is required')).toBeInTheDocument()
+    })
+  })
+
+  test('renders employees from API data', async () => {
+    ;(global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes('/employees')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'e1', first_name: 'Mike', last_name: 'Smith', email: 'mike@test.com', is_active: true },
+            { id: 'e2', first_name: 'Sarah', last_name: 'Jones', phone: '+15551234567', is_active: true },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Mike Smith')).toBeInTheDocument()
+      expect(screen.getByText('Sarah Jones')).toBeInTheDocument()
+    })
+  })
+
+  test('shows email and phone fields in the form', () => {
+    goToStep3()
+    fireEvent.click(screen.getByText('Add an employee'))
+    expect(screen.getByPlaceholderText('email@example.com')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('+1 (555) 000-0000')).toBeInTheDocument()
   })
 })
