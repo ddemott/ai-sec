@@ -79,6 +79,21 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   const [editingEmployee, setEditingEmployee] = useState<EmployeeForm | null>(null)
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
 
+  // Step 4 — Shifts
+  const [shifts, setShifts] = useState<any[]>([])
+  const [shiftsLoading, setShiftsLoading] = useState(false)
+  const [selectedShiftEmployee, setSelectedShiftEmployee] = useState<string | null>(null)
+
+  // Fetch shifts when entering step 4 or when employees change
+  useEffect(() => {
+    if (step === 4 && tenantId) {
+      setShiftsLoading(true)
+      Api.shifts.list(tenantId).then((data: any[]) => {
+        setShifts(Array.isArray(data) ? data : [])
+      }).catch(() => setShifts([])).finally(() => setShiftsLoading(false))
+    }
+  }, [step, tenantId])
+
   // Lock body scroll when open
   useEffect(() => {
     if (isOpen) {
@@ -99,6 +114,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       setEditingResourceId(null)
       setEditingEmployee(null)
       setEditingEmployeeId(null)
+      setShifts([])
+      setSelectedShiftEmployee(null)
       setError(null)
     }
   }, [isOpen])
@@ -308,6 +325,54 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     }
   }
 
+  // --- Shift CRUD ---
+
+  async function refreshShifts() {
+    if (!tenantId) return
+    const data = await Api.shifts.list(tenantId)
+    setShifts(Array.isArray(data) ? data : [])
+  }
+
+  async function toggleShift(employeeId: string, dayOfWeek: number, startTime: string, endTime: string) {
+    if (!tenantId) return
+    const existing = shifts.find(
+      (s: any) => String(s.employee_id) === String(employeeId) && s.day_of_week === dayOfWeek
+    )
+    setSaving(true)
+    setError(null)
+    try {
+      if (existing) {
+        await Api.shifts.delete(existing.id, tenantId)
+      } else {
+        await Api.shifts.create(tenantId, {
+          employee_id: employeeId,
+          day_of_week: dayOfWeek,
+          start_time: startTime,
+          end_time: endTime,
+        })
+      }
+      await refreshShifts()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update shift')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function updateShiftTime(shiftId: number, startTime: string, endTime: string) {
+    if (!tenantId) return
+    setSaving(true)
+    setError(null)
+    try {
+      await Api.shifts.update(shiftId, tenantId, { start_time: startTime, end_time: endTime })
+      await refreshShifts()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update shift time')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!isOpen) return null
 
   const activeServices = services.filter((s: any) => !s.is_deleted)
@@ -418,7 +483,19 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
               onChange={setEditingEmployee}
             />
           )}
-          {step === 4 && <PlaceholderStep label="Shifts" />}
+          {step === 4 && (
+            <Step4Shifts
+              employees={activeEmployees}
+              shifts={shifts}
+              loading={shiftsLoading}
+              saving={saving}
+              error={error}
+              selectedEmployeeId={selectedShiftEmployee}
+              onSelectEmployee={setSelectedShiftEmployee}
+              onToggleShift={toggleShift}
+              onUpdateTime={updateShiftTime}
+            />
+          )}
           {step === 5 && <PlaceholderStep label="Assignments" />}
           {step === 6 && <PlaceholderStep label="Review" />}
         </div>
@@ -808,7 +885,134 @@ function Step3Employees({
   )
 }
 
-// --- Placeholder for steps 4-6 ---
+// --- Step 4: Shifts ---
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+interface Step4Props {
+  employees: any[]
+  shifts: any[]
+  loading: boolean
+  saving: boolean
+  error: string | null
+  selectedEmployeeId: string | null
+  onSelectEmployee: (id: string | null) => void
+  onToggleShift: (employeeId: string, dayOfWeek: number, startTime: string, endTime: string) => void
+  onUpdateTime: (shiftId: number, startTime: string, endTime: string) => void
+}
+
+function Step4Shifts({
+  employees, shifts, loading, saving, error,
+  selectedEmployeeId, onSelectEmployee, onToggleShift, onUpdateTime,
+}: Step4Props) {
+  const selectedEmployee = employees.find((e: any) => String(e.id) === String(selectedEmployeeId))
+  const employeeShifts = shifts.filter((s: any) => String(s.employee_id) === String(selectedEmployeeId))
+
+  function getShiftForDay(dow: number) {
+    return employeeShifts.find((s: any) => s.day_of_week === dow)
+  }
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">When does everyone work?</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Select an employee, then toggle the days they work and set their hours.
+        </p>
+      </div>
+
+      {employees.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+          No employees yet. Go back to Step 3 to add team members first.
+        </p>
+      ) : (
+        <>
+          {/* Employee selector */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {employees.map((emp: any) => {
+              const empShiftCount = shifts.filter((s: any) => String(s.employee_id) === String(emp.id)).length
+              const isSelected = String(emp.id) === String(selectedEmployeeId)
+              return (
+                <button
+                  key={emp.id}
+                  onClick={() => onSelectEmployee(isSelected ? null : String(emp.id))}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    isSelected
+                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-2 ring-blue-400'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {emp.first_name || emp.name} {emp.last_name || ''}
+                  {empShiftCount > 0 && (
+                    <span className="ml-1.5 text-xs opacity-60">({empShiftCount}d)</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Shift grid for selected employee */}
+          {selectedEmployee && !loading ? (
+            <div className="space-y-2">
+              {DAY_NAMES.map((dayName, dow) => {
+                const shift = getShiftForDay(dow)
+                return (
+                  <div
+                    key={dow}
+                    className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
+                  >
+                    {/* Day toggle */}
+                    <button
+                      onClick={() => onToggleShift(String(selectedEmployee.id), dow, '08:00', '17:00')}
+                      disabled={saving}
+                      className={`w-12 text-sm font-medium rounded-md py-1 transition-colors ${
+                        shift
+                          ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                      }`}
+                    >
+                      {dayName}
+                    </button>
+
+                    {/* Time inputs */}
+                    {shift ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <input
+                          type="time"
+                          value={shift.start_time?.slice(0, 5) || '08:00'}
+                          onChange={e => onUpdateTime(shift.id, e.target.value, shift.end_time?.slice(0, 5) || '17:00')}
+                          className="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#333] text-gray-900 dark:text-gray-100 text-sm"
+                        />
+                        <span className="text-gray-400">to</span>
+                        <input
+                          type="time"
+                          value={shift.end_time?.slice(0, 5) || '17:00'}
+                          onChange={e => onUpdateTime(shift.id, shift.start_time?.slice(0, 5) || '08:00', e.target.value)}
+                          className="px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#333] text-gray-900 dark:text-gray-100 text-sm"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 dark:text-gray-500">Off</span>
+                    )}
+                  </div>
+                )
+              })}
+              {error && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{error}</p>}
+            </div>
+          ) : selectedEmployee && loading ? (
+            <p className="text-sm text-gray-400">Loading shifts...</p>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+              Select an employee above to set their schedule.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// --- Placeholder for steps 5-6 ---
 
 function PlaceholderStep({ label }: { label: string }) {
   return (

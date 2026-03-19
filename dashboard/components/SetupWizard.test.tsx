@@ -356,3 +356,85 @@ describe('SetupWizard: Step 3 Employees', () => {
     expect(screen.getByPlaceholderText('+1 (555) 000-0000')).toBeInTheDocument()
   })
 })
+
+// --- Step 4: Shifts ---
+
+describe('SetupWizard: Step 4 Shifts', () => {
+  test('shows shift step heading', () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    expect(screen.getByText('When does everyone work?')).toBeInTheDocument()
+  })
+
+  test('shows empty message when no employees exist', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    await waitFor(() => {
+      expect(screen.getByText('No employees yet. Go back to Step 3 to add team members first.')).toBeInTheDocument()
+    })
+  })
+
+  test('shows employee selector and schedule grid with data', async () => {
+    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/employees')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'e1', first_name: 'Mike', last_name: 'Smith', name: 'Mike Smith', is_active: true },
+            { id: 'e2', first_name: 'Sarah', last_name: 'Jones', name: 'Sarah Jones', is_active: true },
+          ],
+        })
+      }
+      if (url.includes('/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 1, employee_id: 'e1', day_of_week: 1, start_time: '08:00:00', end_time: '17:00:00', is_active: true },
+            { id: 2, employee_id: 'e1', day_of_week: 2, start_time: '09:00:00', end_time: '15:00:00', is_active: true },
+          ],
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+
+    // Wait for employees to load on step 1
+    await waitFor(() => expect(screen.getByText('Add a service')).toBeInTheDocument())
+
+    // Navigate to step 4
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+
+    // Employee selector should show both names
+    await waitFor(() => {
+      expect(screen.getByText(/Mike Smith/)).toBeInTheDocument()
+      expect(screen.getByText(/Sarah Jones/)).toBeInTheDocument()
+    })
+
+    // Prompt before selection
+    expect(screen.getByText('Select an employee above to set their schedule.')).toBeInTheDocument()
+
+    // Mike has 2 shifts — badge shows (2d)
+    expect(screen.getByText('(2d)')).toBeInTheDocument()
+
+    // Select Mike
+    fireEvent.click(screen.getAllByText(/Mike Smith/)[0])
+
+    // Should show 7 day rows
+    await waitFor(() => {
+      expect(screen.getByText('Sun')).toBeInTheDocument()
+      expect(screen.getByText('Mon')).toBeInTheDocument()
+      expect(screen.getByText('Sat')).toBeInTheDocument()
+    })
+
+    // Mike works Mon and Tue — other 5 days show "Off"
+    const offLabels = screen.getAllByText('Off')
+    expect(offLabels.length).toBe(5)
+  })
+})
