@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
 import { Input } from './ui/Input'
@@ -32,6 +33,7 @@ type Service = {
 
 export default function ServiceAssignmentView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
+  const vocab = useVocabulary()
   const { services, resources, employees, loading, error: staticError, refresh } = useStaticData(tenantId)
   
   const [resMappings, setResMappings] = useState<any[]>([])
@@ -216,12 +218,12 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
             <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Wrench className="w-3 h-3 mr-2 text-blue-500" />
-                <span className="text-gray-400">Places: </span>
+                <span className="text-gray-400">{vocab.resource_plural}: </span>
                 <span className="ml-1 text-gray-600 dark:text-gray-300">{resMappings.filter(m => m.service_id === service.id).length} assigned</span>
               </div>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Users className="w-3 h-3 mr-2 text-green-500" />
-                <span className="text-gray-400">Staff: </span>
+                <span className="text-gray-400">{vocab.employee_plural}: </span>
                 <span className="ml-1 text-gray-600 dark:text-gray-300">{empMappings.filter(m => m.service_id === service.id).length} authorized</span>
               </div>
             </div>
@@ -281,11 +283,11 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
           {/* MAPPINGS WITHIN EDIT */}
           <section className="space-y-4">
             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
-              <Wrench className="w-3 h-3 mr-2" /> Locations & Staff
+              <Wrench className="w-3 h-3 mr-2" /> {vocab.resource_plural} & {vocab.employee_plural}
             </h4>
             <div className="space-y-6">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Authorized Places</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Authorized {vocab.resource_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {resources.map(res => {
                     const isMapped = resMappings.some(m => m.service_id === selectedService?.id && m.resource_id === res.id)
@@ -302,7 +304,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Qualified Staff</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Qualified {vocab.employee_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {employees.filter(e => e.type !== 'user').map(emp => {
                     const isMapped = empMappings.some(m => m.service_id === selectedService?.id && m.employee_id === emp.id)
@@ -402,8 +404,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
           {wizardStep === 2 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-2xl font-bold mb-2">Location & Equipment</h2>
-                <p className="text-gray-500 dark:text-gray-400">Where can this service be performed?</p>
+                <h2 className="text-2xl font-bold mb-2">{vocab.resource_plural} & Equipment</h2>
+                <p className="text-gray-500 dark:text-gray-400">Which {vocab.resource_plural.toLowerCase()} can this service be performed at?</p>
               </header>
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                 {resources.map(res => (
@@ -420,7 +422,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
               <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl flex items-start">
                 <Info className="w-5 h-5 text-blue-500 mr-3 shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-                  Selecting specific resources ensures the AI only books this service in locations that have the necessary tools or space.
+                  Selecting specific {vocab.resource_plural.toLowerCase()} ensures the AI only books this service where the necessary tools or space are available.
                 </p>
               </div>
             </div>
@@ -429,8 +431,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
           {wizardStep === 3 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-2xl font-bold mb-2">Qualified Experts</h2>
-                <p className="text-gray-500 dark:text-gray-400">Who is trained to perform this service?</p>
+                <h2 className="text-2xl font-bold mb-2">Qualified {vocab.employee_plural}</h2>
+                <p className="text-gray-500 dark:text-gray-400">Which {vocab.employee_plural.toLowerCase()} are qualified to perform this service?</p>
               </header>
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                 {employees.filter(e => e.type !== 'user').map(emp => (
@@ -440,7 +442,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
                     className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.id.toString()) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                   >
                     <div className="font-bold">{emp.name}</div>
-                    <div className="text-xs text-gray-500 line-clamp-1">Expert in mapped services</div>
+                    <div className="text-xs text-gray-500 line-clamp-1">Qualified for mapped services</div>
                   </Card>
                 ))}
               </div>
@@ -449,7 +451,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
                   <CheckCircle2 className="w-4 h-4 mr-2" /> Ready to Finalize
                 </h4>
                 <p className="text-xs text-green-700 dark:text-green-500 leading-relaxed">
-                  You've selected {selectedEmployeeIds.length} expert(s) and {selectedResourceIds.length} location(s). 
+                  You've selected {selectedEmployeeIds.length} {vocab.employee_plural.toLowerCase()} and {selectedResourceIds.length} {vocab.resource_plural.toLowerCase()}. 
                   Click <strong>Create Service</strong> to update your catalog and sync the AI's scheduling logic.
                 </p>
               </div>

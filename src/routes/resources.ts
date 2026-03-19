@@ -53,7 +53,7 @@ export function registerResourceRoutes(
 
   app.post('/resources/:id/update', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { tenant_id?: string; name?: string; description?: string; is_active?: boolean };
+    const body = req.body as { tenant_id?: string; name?: string; description?: string; is_active?: boolean; capabilities?: string[] };
     const tenantId = body.tenant_id || (req as any).auth?.tenant_id;
     if (!tenantId) return reply.status(400).send({ success: false, error: 'tenant_id is required' });
 
@@ -64,6 +64,7 @@ export function registerResourceRoutes(
         if (body.name !== undefined) { fields.push('name'); values.push(body.name); }
         if (body.description !== undefined) { fields.push('description'); values.push(body.description || null); }
         if (body.is_active !== undefined) { fields.push('is_active'); values.push(body.is_active); }
+        if (body.capabilities !== undefined) { fields.push('capabilities'); values.push(body.capabilities); }
         if (fields.length === 0) {
           throw Object.assign(new Error('No updatable fields provided'), { statusCode: 400 });
         }

@@ -5,18 +5,20 @@ import EmployeeManagementView from './EmployeeManagementView'
 import ShiftManagementView from './ShiftManagementView'
 import SkillMatrixView from './SkillMatrixView'
 import SkillRelationshipMap from './skill-map/SkillRelationshipMap'
+import { useVocabulary } from '@/lib/VocabularyContext'
 
 type SubTab = 'employees' | 'shifts' | 'skills' | 'skill-map'
 
-const SUB_TABS: { id: SubTab; label: string }[] = [
-  { id: 'employees', label: 'Employees' },
-  { id: 'shifts', label: 'Shifts' },
-  { id: 'skills', label: 'Skill Matrix' },
-  { id: 'skill-map', label: 'Skill Map' },
-]
-
 export default function MyTeamView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('employees')
+  const vocab = useVocabulary()
+
+  const SUB_TABS: { id: SubTab; label: string }[] = [
+    { id: 'employees', label: vocab.employee_plural },
+    { id: 'shifts', label: 'Shifts' },
+    { id: 'skills', label: 'Skill Matrix' },
+    { id: 'skill-map', label: 'Skill Map' },
+  ]
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

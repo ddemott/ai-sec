@@ -5,7 +5,7 @@ export function registerTenantRoutes(app: any, pool: Pool) {
   app.get('/tenants', async (req, reply) => {
     const client = await pool.connect();
     try {
-      const res = await client.query('SELECT * FROM tenants ORDER BY created_at DESC');
+      const res = await client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC');
       app.log.info(`Found ${res.rows.length} tenants`);
       return reply.send(res.rows);
     } catch (err) {
@@ -125,6 +125,29 @@ export function registerTenantRoutes(app: any, pool: Pool) {
       await client.query('ROLLBACK');
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to create tenant' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // Save tenant sort order (admin drag-and-drop reordering)
+  app.post('/tenants/reorder', async (req, reply) => {
+    const { order } = req.body as { order: string[] }; // array of tenant IDs in desired order
+    if (!Array.isArray(order) || order.length === 0) {
+      return reply.status(400).send({ error: 'order must be a non-empty array of tenant IDs' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < order.length; i++) {
+        await client.query('UPDATE tenants SET sort_order = $1 WHERE id = $2', [i, order[i]]);
+      }
+      await client.query('COMMIT');
+      return reply.send({ success: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      app.log.error(err);
+      return reply.status(500).send({ error: 'Failed to save tenant order' });
     } finally {
       client.release();
     }

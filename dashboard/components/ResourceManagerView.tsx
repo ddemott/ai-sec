@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import { useSession, useStaticData } from '../lib/hooks';
+import { useVocabulary } from '@/lib/VocabularyContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
@@ -32,6 +33,7 @@ type Mapping = {
 
 export default function ResourceManagerView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId);
+  const vocab = useVocabulary();
   const { resources: staticResources, services, loading: staticLoading, refresh } = useStaticData(tenantId);
   const [resources, setResources] = useState<Resource[]>([]);
   const [mappings, setMappings] = useState<Mapping[]>([]);
@@ -147,7 +149,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
   if (loading && resources.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <Button variant="ghost" isLoading={true} size="lg">Loading resources...</Button>
+        <Button variant="ghost" isLoading={true} size="lg">{`Loading ${vocab.resource_plural.toLowerCase()}...`}</Button>
       </div>
     );
   }
@@ -160,7 +162,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
             <Wrench className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Resources & Services</h1>
+            <h1 className="text-3xl font-bold">{vocab.resource_plural} & Services</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Define which services can be performed at each location.</p>
           </div>
         </div>
@@ -168,7 +170,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
         <form onSubmit={handleCreate} className="max-w-md flex gap-3">
           <div className="flex-1 space-y-2">
             <Input 
-              placeholder="Resource Name (e.g. Bay 1)"
+              placeholder={`${vocab.resource_label} Name (e.g. Bay 1)`}
               value={newResource.name}
               onChange={e => setNewResource({ ...newResource, name: e.target.value })}
               required
@@ -186,7 +188,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
             disabled={!newResource.name.trim()}
             className="self-start py-3 whitespace-nowrap"
           >
-            Add Resource
+            {`Add ${vocab.resource_label}`}
           </Button>
         </form>
       </header>
@@ -242,7 +244,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
       <Modal
         isOpen={isEditModalOpen && !!selectedResource}
         onClose={() => setIsEditModalOpen(false)}
-        title={selectedResource?.name || 'Resource'}
+        title={selectedResource?.name || vocab.resource_label}
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
@@ -258,7 +260,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
             </h4>
             <div className="space-y-3">
               <Input 
-                label="Resource Name"
+                label={`${vocab.resource_label} Name`}
                 value={editForm.name}
                 onChange={e => setEditForm({ ...editForm, name: e.target.value })}
               />
@@ -314,7 +316,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
               <Info className="w-4 h-4 mr-2" /> Capacity Alignment
             </h4>
             <p className="text-xs leading-relaxed">
-              Toggling services here determines which appointments can be booked for this resource.
+              Toggling services here determines which appointments can be booked for this {vocab.resource_label.toLowerCase()}.
               The AI agent will only schedule a service if it's enabled for the specific location or piece of equipment.
             </p>
           </Card>
@@ -326,7 +328,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
                 className="text-red-600 dark:text-red-400 font-bold hover:bg-red-50 dark:hover:bg-red-900/10"
                 onClick={() => { selectedResource && handleDelete(selectedResource.id); setIsEditModalOpen(false); }}
             >
-              <Trash2 className="w-4 h-4 mr-2" /> Delete Resource
+              <Trash2 className="w-4 h-4 mr-2" /> {`Delete ${vocab.resource_label}`}
             </Button>
           </section>
         </div>

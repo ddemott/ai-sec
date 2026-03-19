@@ -13,12 +13,14 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 
 export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
   const { employees, resources, services, loading, refresh } = useStaticData(tenantId)
+  const vocab = useVocabulary()
   
   const [empMappings, setEmpMappings] = useState<any[]>([])
   const [resMappings, setResMappings] = useState<any[]>([])
@@ -127,7 +129,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input 
-              placeholder="Search staff or resources..."
+              placeholder={`Search ${vocab.employee_plural.toLowerCase()} or ${vocab.resource_plural.toLowerCase()}...`}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -181,7 +183,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
                     </div>
                     <div>
                       <div className="font-bold text-sm leading-none mb-1">{entity.name}</div>
-                      <div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">{entity.type === 'employee' ? 'Staff' : 'Capacity Unit'}</div>
+                      <div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">{entity.type === 'employee' ? vocab.employee_label : vocab.resource_label}</div>
                     </div>
                   </div>
                 </td>
@@ -214,10 +216,10 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
       <footer className="mt-6 flex items-center justify-between text-xs text-gray-400 font-medium shrink-0 px-2">
         <div className="flex items-center gap-4">
           <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-green-500 mr-2" /> Staff Member
+            <div className="w-3 h-3 rounded-full bg-green-500 mr-2" /> {vocab.employee_label}
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" /> Resource (Bay/Chair)
+            <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" /> {vocab.resource_label}
           </div>
         </div>
         <p>Tip: Toggling a cell instantly updates the AI's scheduling logic.</p>

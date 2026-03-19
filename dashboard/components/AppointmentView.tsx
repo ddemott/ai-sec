@@ -5,6 +5,7 @@ import { Appointment } from '../lib/types';
 import { MOCK_APPOINTMENTS } from '../lib/mockData';
 import { toLocalISO, toISOStringWithOffset, formatCustomerAddress, splitFullName } from '../lib/utils';
 import { useSession, useStaticData } from '../lib/hooks';
+import { useVocabulary } from '@/lib/VocabularyContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
@@ -52,6 +53,7 @@ const DnDCalendar = withDragAndDrop(BigCalendar)
 export default function AppointmentView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId);
   const { customers, resources, employees, refresh: refreshStaticData } = useStaticData(tenantId);
+  const vocab = useVocabulary();
 
   // Appointments state
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -59,7 +61,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
   const calendarEvents = useMemo(() => {
     return appointments.map((a: any) => ({
       id: a.id,
-      title: a.description || (a.customers?.name || 'Appointment'),
+      title: a.description || (a.customers?.name || vocab.booking_label),
       start: new Date(a.start_time),
       end: new Date(a.end_time),
       resource_id: a.resource_id,
@@ -112,6 +114,15 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
   const [saving, setSaving] = useState(false);
   // Calendar date state
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  // Zoom: step in minutes per slot (smaller = more zoomed in)
+  const ZOOM_LEVELS = [60, 30, 15, 10, 5];
+  const [zoomIndex, setZoomIndex] = useState(1); // default 30min
+  const calendarStep = ZOOM_LEVELS[zoomIndex];
+  const calendarTimeslots = 1;
+  // 24-hour day boundaries
+  const calendarMin = new Date(2000, 0, 1, 0, 0, 0);
+  const calendarMax = new Date(2000, 0, 1, 23, 59, 59);
+  const calendarScrollTo = new Date(2000, 0, 1, 7, 0, 0);
   // Editing state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   // Error state
@@ -366,17 +377,40 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
 
   return (
     <div className="flex flex-1 overflow-hidden relative text-gray-900 dark:text-gray-100 transition-colors duration-200 flex-col">
-      <section className="w-full border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] p-4 md:p-6">
-        <div className="mb-4 flex flex-wrap items-center gap-4">
-          <div className="w-full mt-2">
+      <section className="w-full border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] p-4 md:p-6 flex-1 overflow-auto flex flex-col">
+        <div className="flex-1 flex flex-col">
+          <div className="w-full flex-1 flex flex-col">
+            {(calendarView === 'week' || calendarView === 'day') && (
+              <div className="flex items-center gap-2 mb-2 justify-end">
+                <span className="text-xs text-gray-400 font-medium">Zoom:</span>
+                <button
+                  onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
+                  disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
+                  className="px-2 py-0.5 text-xs font-bold rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  title="Zoom in"
+                >+</button>
+                <span className="text-xs text-gray-500 font-mono w-12 text-center">{calendarStep}min</span>
+                <button
+                  onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
+                  disabled={zoomIndex <= 0}
+                  className="px-2 py-0.5 text-xs font-bold rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  title="Zoom out"
+                >−</button>
+              </div>
+            )}
             <DnDCalendar
               localizer={localizer}
               events={calendarEvents}
               startAccessor="start"
               endAccessor="end"
-              style={{ height: 500 }}
+              style={{ height: calendarView === 'month' ? 500 : 'calc(100vh - 200px)' }}
               view={calendarView}
               date={calendarDate}
+              min={calendarMin}
+              max={calendarMax}
+              step={calendarStep}
+              timeslots={calendarTimeslots}
+              scrollToTime={calendarScrollTo}
               resizable
               draggableAccessor={() => true}
               onView={(view: CalendarViewType) => setCalendarView(view)}
@@ -465,7 +499,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
         <section className={`w-full md:w-80 flex flex-col bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}>
           <header className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] sticky top-0 z-10">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">Appointments</h2>
+              <h2 className="text-lg font-bold">{`${vocab.booking_label}s`}</h2>
               <div className="flex space-x-1">
                   <Button onClick={startNewAppointment} size="sm" className="p-1.5">
                     <Plus className="w-4 h-4" />
@@ -528,7 +562,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                   <button onClick={() => { setShowDetailOnMobile(false); setIsCreating(false); }} className="md:hidden p-2 -ml-2 mr-2 text-blue-600 dark:text-blue-400"><ChevronLeft className="w-6 h-6" /></button>
                   <div>
                       <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                          {isCreating ? 'New Appointment' : (isEditing ? 'Edit Appointment' : selectedAppointment?.description)}
+                          {isCreating ? `New ${vocab.booking_label}` : (isEditing ? `Edit ${vocab.booking_label}` : selectedAppointment?.description)}
                       </h1>
                         {selectedAppointment?.status === 'canceled' && (
                           <Badge variant="danger">Canceled</Badge>
@@ -624,16 +658,16 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                                       )}
                                       <Input label="Phone Number" value={form.customer_phone} onChange={e => setForm({...form, customer_phone: e.target.value})} />
                                       <div className="grid grid-cols-2 gap-4">
-                                          <Select 
-                                              label="Service Unit"
-                                              value={form.resource_id} 
-                                              onChange={e => setForm({...form, resource_id: e.target.value})} 
+                                          <Select
+                                              label={vocab.resource_label}
+                                              value={form.resource_id}
+                                              onChange={e => setForm({...form, resource_id: e.target.value})}
                                               options={resources.map(r => ({ label: r.name, value: r.id }))}
                                           />
-                                          <Select 
-                                              label="Staff Assigned"
-                                              value={form.employee_id} 
-                                              onChange={e => setForm({...form, employee_id: e.target.value})} 
+                                          <Select
+                                              label={`${vocab.employee_label} Assigned`}
+                                              value={form.employee_id}
+                                              onChange={e => setForm({...form, employee_id: e.target.value})}
                                               options={[
                                                 { label: 'Unassigned', value: '' },
                                                 ...employees.map(e => ({ label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`, value: e.id.toString() }))
@@ -675,7 +709,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                                       data-testid="update-appointment-btn"
                                   >
                                       {!saving && <Save className="w-5 h-5 mr-2" />}
-                                      {isCreating ? 'Create Appointment' : 'Update Appointment'}
+                                      {isCreating ? `Create ${vocab.booking_label}` : `Update ${vocab.booking_label}`}
                                   </Button>
                               </div>
                           </div>
@@ -721,13 +755,13 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                                           </a>
                                       </div>
                                       <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                          <span className="text-gray-500 dark:text-gray-400 text-sm">Service Unit</span>
+                                          <span className="text-gray-500 dark:text-gray-400 text-sm">{vocab.resource_label}</span>
                                           <span className="font-bold text-gray-900 dark:text-white">{
                                             resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'
                                           }</span>
                                       </div>
                                       <div className="flex justify-between items-center">
-                                          <span className="text-gray-500 dark:text-gray-400 text-sm">Staff Assigned</span>
+                                          <span className="text-gray-500 dark:text-gray-400 text-sm">{`${vocab.employee_label} Assigned`}</span>
                                           <span className="font-bold text-gray-900 dark:text-white">
                                             {employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name || 'Unassigned'}
                                           </span>
@@ -772,7 +806,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic flex-col">
               <CalendarIcon className="w-12 h-12 mb-4 opacity-20" />
-              Select an appointment or click "+" to book one manually.
+              {`Select ${vocab.booking_label === 'Appointment' ? 'an' : 'a'} ${vocab.booking_label.toLowerCase()} or click "+" to book one manually.`}
             </div>
           )}
         </section>

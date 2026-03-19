@@ -65,14 +65,10 @@ export function registerServiceRoutes(
 
     try {
       await withTenantClient(tenantId, async (client) => {
-        const mappings = await client.query(
-          'SELECT (SELECT count(*) FROM service_resource WHERE service_id = $1) + (SELECT count(*) FROM service_employee WHERE service_id = $1) as count',
-          [id]
-        );
-        if (parseInt(mappings.rows[0].count) > 0) {
-          throw Object.assign(new Error('Cannot delete: Service is still mapped to staff or resources. Unassign them first.'), { statusCode: 400 });
-        }
-        await client.query('DELETE FROM services WHERE id = $1', [id]);
+        // Remove mappings first, then delete the service
+        await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
+        await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
+        await client.query('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
       });
       return reply.send({ success: true });
     } catch (err: any) {

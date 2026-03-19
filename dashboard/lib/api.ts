@@ -232,7 +232,7 @@ export const Api = {
       apiMutate<any>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
     delete: (id: number, tenantId: string | null) =>
-      apiMutate<any>(`/services/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
+      apiMutate<any>(`/services/${id}/delete?tenant_id=${tenantId}`, 'DELETE'),
   },
 
     // --- SHIFTS ---
@@ -288,6 +288,7 @@ export const Api = {
     updateConfig: (id: string, data: any) => apiMutate<any>(`/tenants/${id}/update-config`, 'POST', data),
     delete: (id: string) => apiMutate<any>(`/tenants/${id}`, 'DELETE'),
     create: (data: any) => apiMutate<any>(`/tenants/create`, 'POST', data),
+    reorder: (order: string[]) => apiMutate<any>(`/tenants/reorder`, 'POST', { order }),
   },
   
   templates: {

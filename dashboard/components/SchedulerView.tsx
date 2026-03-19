@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Users, Columns3, List, Calendar, RefreshCw, Plus } from 'lucide-react';
+import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { useSession, useStaticData } from '../lib/hooks';
 import { useSchedulerData } from './scheduler/useSchedulerData';
 import type { SchedulerAppointment } from './scheduler/useSchedulerData';
@@ -31,6 +31,11 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
 
   const [activeView, setActiveView] = useState<SchedulerViewTab>('staff');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Zoom: column width in px per hour
+  const ZOOM_LEVELS = [40, 60, 90, 120, 180];
+  const [zoomIndex, setZoomIndex] = useState(1); // default 60px
+  const hourWidth = ZOOM_LEVELS[zoomIndex];
 
   // QuickBook panel state
   const [quickBookOpen, setQuickBookOpen] = useState(false);
@@ -135,6 +140,26 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
         {/* Date nav + actions */}
         <div className="flex items-center gap-3">
           <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+          {(activeView === 'staff' || activeView === 'resources') && (
+            <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
+                disabled={zoomIndex <= 0}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                title="Zoom out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
+                disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                title="Zoom in"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           <Button variant="ghost" size="sm" onClick={handleRefresh} aria-label="Refresh">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
@@ -155,6 +180,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             onAppointmentClick={handleAppointmentClick}
             onSlotClick={handleSlotClick}
             onEmployeeClick={handleEmployeeClick}
+            hourWidth={hourWidth}
           />
         )}
         {activeView === 'resources' && (
@@ -164,6 +190,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             shiftsByEmployee={shiftsByEmployee}
             employees={employees}
             onAppointmentClick={handleAppointmentClick}
+            hourWidth={hourWidth}
           />
         )}
         {activeView === 'list' && (

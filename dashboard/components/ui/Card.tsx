@@ -18,7 +18,7 @@ export const Card: React.FC<CardProps> = ({
   onClick,
 }) => {
   const variants = {
-    default: 'bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100',
+    default: 'border text-inherit',
     success: 'bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900/40 text-green-900 dark:text-green-100',
     info: 'bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/40 text-blue-900 dark:text-blue-100',
     dark: 'bg-blue-900 dark:bg-blue-950 border-transparent text-white',
@@ -31,9 +31,16 @@ export const Card: React.FC<CardProps> = ({
     dark: 'text-blue-200 dark:text-blue-400',
   };
 
+  const defaultStyle = variant === 'default' ? {
+    backgroundColor: 'var(--surface)',
+    borderColor: 'var(--border)',
+    color: 'var(--text-primary)',
+  } : undefined
+
   return (
-    <div 
+    <div
       className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${className}`}
+      style={defaultStyle}
       onClick={onClick}
     >
       {title && (

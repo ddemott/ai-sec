@@ -1,6 +1,8 @@
 import { Client } from "pg";
 
-export const ROOT_DB_URL = process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5433/test_db";
+// Always use test_db for tests — never the main database.
+// DATABASE_URL from .env points to the production DB and must not be used here.
+export const ROOT_DB_URL = "postgres://postgres:postgres@localhost:5433/test_db";
 // Derived API URL: extract host/port/dbname from ROOT_DB_URL but use api_user
 const apiHostPortDb = ROOT_DB_URL.split('@')[1] || "localhost:5433/test_db";
 export const API_DB_URL = `postgres://api_user:api_password@${apiHostPortDb}`;

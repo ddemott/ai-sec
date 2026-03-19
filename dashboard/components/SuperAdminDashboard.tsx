@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { 
   Building2, 
   RefreshCw, 
@@ -63,6 +63,13 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   // Edit form state
     const [form, setForm] = useState<Tenant | null>(null)
   
+  // Drag-and-drop reorder state
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [originalOrder, setOriginalOrder] = useState<Tenant[]>([])
+  const [hasReordered, setHasReordered] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
+
   // Create Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newBusiness, setNewBusiness] = useState({
@@ -119,6 +126,52 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
     } finally {
       setLoading(false)
     }
+  }
+
+  // --- Drag-and-drop reorder ---
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+    if (!hasReordered) setOriginalOrder([...tenants])
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === index) return
+    setOverIndex(index)
+
+    const updated = [...tenants]
+    const [moved] = updated.splice(dragIndex, 1)
+    updated.splice(index, 0, moved)
+    setTenants(updated)
+    setDragIndex(index)
+    setHasReordered(true)
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null)
+    setOverIndex(null)
+  }
+
+  async function handleSaveOrder() {
+    setSavingOrder(true)
+    try {
+      const order = tenants.map(t => t.id)
+      const res = await Api.tenants.reorder(order)
+      if (res.success) {
+        setHasReordered(false)
+        setOriginalOrder([])
+      }
+    } catch {
+      setError('Failed to save order')
+    } finally {
+      setSavingOrder(false)
+    }
+  }
+
+  function handleDiscardOrder() {
+    setTenants(originalOrder)
+    setHasReordered(false)
+    setOriginalOrder([])
   }
 
   async function handleSave() {
@@ -286,24 +339,60 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
           </div>
         </header>
 
+        {/* Save/Discard reorder bar */}
+        {hasReordered && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800">
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Order changed</span>
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleDiscardOrder}
+                className="text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1 rounded transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleSaveOrder}
+                disabled={savingOrder}
+                className="text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                {savingOrder ? 'Saving...' : 'Save Order'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
-          {tenants.map((t) => (
-            <div 
+          {tenants.map((t, idx) => (
+            <div
               key={t.id}
+              draggable
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDragEnd={handleDragEnd}
               onClick={() => {
                 setSelectedTenant(t);
                 if (onSelectTenant) onSelectTenant(t.id, t.name);
               }}
               className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-center
-                ${selectedTenant?.id === t.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}`}
+                ${selectedTenant?.id === t.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}
+                ${dragIndex === idx ? 'opacity-50' : ''}`}
             >
-              <div>
-                <p className={`text-sm font-semibold ${selectedTenant?.id === t.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>{t.name}</p>
-                <div className="flex items-center mt-1">
-                    <Badge variant="secondary" className="mr-2">
-                        {t.business_type}
-                    </Badge>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[100px]">{t.id.slice(0,8)}</span>
+              <div className="flex items-center gap-3">
+                <div className="cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <circle cx="3" cy="2" r="1.5" /><circle cx="9" cy="2" r="1.5" />
+                    <circle cx="3" cy="6" r="1.5" /><circle cx="9" cy="6" r="1.5" />
+                    <circle cx="3" cy="10" r="1.5" /><circle cx="9" cy="10" r="1.5" />
+                  </svg>
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${selectedTenant?.id === t.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>{t.name}</p>
+                  <div className="flex items-center mt-1">
+                      <Badge variant="secondary" className="mr-2">
+                          {t.business_type}
+                      </Badge>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[100px]">{t.id.slice(0,8)}</span>
+                  </div>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />

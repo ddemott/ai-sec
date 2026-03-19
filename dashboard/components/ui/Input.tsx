@@ -15,7 +15,7 @@ export const Input: React.FC<InputProps> = ({
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={id} className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+        <label htmlFor={id} className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-secondary)' }}>
           {label}
         </label>
       )}
@@ -23,7 +23,12 @@ export const Input: React.FC<InputProps> = ({
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={error && id ? `${id}-error` : undefined}
-        className={`w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-sm font-bold text-gray-900 dark:text-gray-100 transition focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${error ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : ''} ${className}`}
+        className={`w-full p-2.5 border rounded-lg outline-none text-sm font-bold transition focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${error ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : ''} ${className}`}
+        style={{
+          backgroundColor: 'var(--input-bg)',
+          borderColor: error ? undefined : 'var(--border)',
+          color: 'var(--text-primary)',
+        }}
         {...props}
       />
       {error && (

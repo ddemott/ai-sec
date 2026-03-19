@@ -64,7 +64,7 @@ global.ResizeObserver = MockResizeObserver as any
 // ==========================================
 describe('useSkillMapData', () => {
   test('filters out user-type employees from employee nodes', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
     const empNames = result.current.employeeNodes.map(n => n.name)
     expect(empNames).toContain('Alice')
     expect(empNames).toContain('Bob')
@@ -73,7 +73,7 @@ describe('useSkillMapData', () => {
   })
 
   test('creates left-side connections from employee skills', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
     const leftConns = result.current.connections.filter(c => c.side === 'left')
     // Alice: oil-change + tire-rotation = 2, Bob: tire-rotation = 1 -> 3 total
     expect(leftConns).toHaveLength(3)
@@ -83,7 +83,7 @@ describe('useSkillMapData', () => {
   })
 
   test('creates right-side connections from resource capabilities', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
     const rightConns = result.current.connections.filter(c => c.side === 'right')
     // Bay 1: oil-change + tire-rotation = 2, Bay 2: oil-change = 1 -> 3 total
     expect(rightConns).toHaveLength(3)
@@ -91,25 +91,25 @@ describe('useSkillMapData', () => {
   })
 
   test('computes full coverage for skills with both employee and resource connections', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
     expect(result.current.coverageBySkill['skill-oil-change']).toBe('full')
     expect(result.current.coverageBySkill['skill-tire-rotation']).toBe('full')
   })
 
   test('computes uncovered for skills with no connections at all', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
     expect(result.current.coverageBySkill['skill-brake-service']).toBe('uncovered')
   })
 
   test('detects broken chains', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
     expect(result.current.brokenChains.some(b => b.skillName === 'brake-service')).toBe(true)
     // oil-change and tire-rotation are fully covered, not broken
     expect(result.current.brokenChains.some(b => b.skillName === 'oil-change')).toBe(false)
   })
 
   test('selection highlights connected nodes transitively through skills', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills))
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
 
     act(() => { result.current.selectNode('emp-1') })
 
@@ -129,7 +129,7 @@ describe('useSkillMapData', () => {
     const partialEmployees = [{ id: 1, name: 'Alice', type: 'employee', skills: ['welding'] }]
     const partialResources: any[] = []
     const partialSkills = [{ id: 1, name: 'welding' }]
-    const { result } = renderHook(() => useSkillMapData(partialEmployees, partialResources, partialSkills))
+    const { result } = renderHook(() => useSkillMapData(partialEmployees, partialResources, partialSkills, null))
     expect(result.current.coverageBySkill['skill-welding']).toBe('partial')
     expect(result.current.brokenChains.some(b => b.skillName === 'welding' && b.missingResources)).toBe(true)
   })
@@ -374,7 +374,7 @@ describe('SkillMapFixPanel', () => {
 describe('Orphaned skills', () => {
   test('creates synthetic node for skill in employee but not in master list', () => {
     const emps = [{ id: 1, name: 'Alice', type: 'employee', skills: ['mystery-skill'] }]
-    const { result } = renderHook(() => useSkillMapData(emps, [], []))
+    const { result } = renderHook(() => useSkillMapData(emps, [], [], null))
     const mysteryNode = result.current.skillNodes.find(s => s.name === 'mystery-skill')
     expect(mysteryNode).toBeDefined()
     expect(mysteryNode!.isSynthetic).toBe(true)

@@ -15,19 +15,22 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { CoverageStatusBadge } from './ui/CoverageStatusBadge'
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
 
-const STEP_LABELS: Record<WizardStep, string> = {
-  1: 'Services',
-  2: 'Resources',
-  3: 'Employees',
-  4: 'Shifts',
-  5: 'Assignments',
-  6: 'Review',
+function getStepLabels(vocab: { resource_plural: string; employee_plural: string }): Record<WizardStep, string> {
+  return {
+    1: 'Services',
+    2: vocab.resource_plural,
+    3: vocab.employee_plural,
+    4: 'Shifts',
+    5: 'Assignments',
+    6: 'Review',
+  }
 }
 
 interface ServiceForm {
@@ -64,6 +67,8 @@ interface SetupWizardProps {
 export default function SetupWizard({ isOpen, onClose, overrideTenantId }: SetupWizardProps) {
   const { tenantId } = useSession(overrideTenantId)
   const { services, resources, employees, loading, refresh } = useStaticData(tenantId)
+  const vocab = useVocabulary()
+  const STEP_LABELS = getStepLabels(vocab)
   const [step, setStep] = useState<WizardStep>(1)
 
   // Step 1 — Services
@@ -786,12 +791,13 @@ function Step2Resources({
   resources, loading, editingResource, editingResourceId, saving, error,
   onAdd, onEdit, onDelete, onSave, onCancel, onChange,
 }: Step2Props) {
+  const vocab = useVocabulary()
   return (
     <div>
       <div className="mb-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Where does work happen?</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Add your bays, chairs, stations, or rooms — anywhere a service is performed.
+          Add your {vocab.resource_plural.toLowerCase()} — anywhere a service is performed.
         </p>
       </div>
 
@@ -824,7 +830,7 @@ function Step2Resources({
           ))}
           {resources.length === 0 && !editingResource && (
             <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
-              No resources yet. Add your first bay, chair, or station.
+              No {vocab.resource_plural.toLowerCase()} yet. Add your first {vocab.resource_label.toLowerCase()}.
             </p>
           )}
         </div>
@@ -833,10 +839,10 @@ function Step2Resources({
       {editingResource ? (
         <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-3">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {editingResourceId ? 'Edit Resource' : 'New Resource'}
+            {editingResourceId ? `Edit ${vocab.resource_label}` : `New ${vocab.resource_label}`}
           </div>
           <Input
-            label="Resource Name"
+            label={`${vocab.resource_label} Name`}
             value={editingResource.name}
             onChange={e => onChange({ ...editingResource, name: e.target.value })}
             placeholder="e.g. Bay 1, Chair A, Room 3"
@@ -850,7 +856,7 @@ function Step2Resources({
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2 pt-1">
             <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
-              {saving ? 'Saving...' : editingResourceId ? 'Update' : 'Add Resource'}
+              {saving ? 'Saving...' : editingResourceId ? 'Update' : `Add ${vocab.resource_label}`}
             </Button>
             <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
           </div>
@@ -861,7 +867,7 @@ function Step2Resources({
           className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Add a resource
+          Add a {vocab.resource_label.toLowerCase()}
         </button>
       )}
     </div>
@@ -889,12 +895,13 @@ function Step3Employees({
   employees, loading, editingEmployee, editingEmployeeId, saving, error,
   onAdd, onEdit, onDelete, onSave, onCancel, onChange,
 }: Step3Props) {
+  const vocab = useVocabulary()
   return (
     <div>
       <div className="mb-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Who works here?</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Add your staff members. You'll set their schedules and assign them to services next.
+          Add your {vocab.employee_plural.toLowerCase()}. You&apos;ll set their schedules and assign them to services next.
         </p>
       </div>
 
@@ -932,7 +939,7 @@ function Step3Employees({
           ))}
           {employees.length === 0 && !editingEmployee && (
             <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
-              No employees yet. Add your first team member.
+              No {vocab.employee_plural.toLowerCase()} yet. Add your first team member.
             </p>
           )}
         </div>
@@ -941,7 +948,7 @@ function Step3Employees({
       {editingEmployee ? (
         <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-3">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {editingEmployeeId ? 'Edit Employee' : 'New Employee'}
+            {editingEmployeeId ? `Edit ${vocab.employee_label}` : `New ${vocab.employee_label}`}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input
@@ -974,7 +981,7 @@ function Step3Employees({
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2 pt-1">
             <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
-              {saving ? 'Saving...' : editingEmployeeId ? 'Update' : 'Add Employee'}
+              {saving ? 'Saving...' : editingEmployeeId ? 'Update' : `Add ${vocab.employee_label}`}
             </Button>
             <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
           </div>
@@ -985,7 +992,7 @@ function Step3Employees({
           className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Add an employee
+          Add an {vocab.employee_label.toLowerCase()}
         </button>
       )}
     </div>
@@ -1012,6 +1019,7 @@ function Step4Shifts({
   employees, shifts, loading, saving, error,
   selectedEmployeeId, onSelectEmployee, onToggleShift, onUpdateTime,
 }: Step4Props) {
+  const vocab = useVocabulary()
   const selectedEmployee = employees.find((e: any) => String(e.id) === String(selectedEmployeeId))
   const employeeShifts = shifts.filter((s: any) => String(s.employee_id) === String(selectedEmployeeId))
 
@@ -1024,13 +1032,13 @@ function Step4Shifts({
       <div className="mb-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">When does everyone work?</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Select an employee, then toggle the days they work and set their hours.
+          Select an {vocab.employee_label.toLowerCase()}, then toggle the days they work and set their hours.
         </p>
       </div>
 
       {employees.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
-          No employees yet. Go back to Step 3 to add team members first.
+          No {vocab.employee_plural.toLowerCase()} yet. Go back to Step 3 to add team members first.
         </p>
       ) : (
         <>
@@ -1110,7 +1118,7 @@ function Step4Shifts({
             <p className="text-sm text-gray-400">Loading shifts...</p>
           ) : (
             <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
-              Select an employee above to set their schedule.
+              Select an {vocab.employee_label.toLowerCase()} above to set their schedule.
             </p>
           )}
         </>
@@ -1140,6 +1148,7 @@ function Step5Assignments({
   loading, saving, error,
   onToggleEmployee, onToggleResource,
 }: Step5Props) {
+  const vocab = useVocabulary()
   function isEmployeeAssigned(serviceId: number, employeeId: string) {
     return serviceEmployeeMappings.some(
       (m: any) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
@@ -1170,7 +1179,7 @@ function Step5Assignments({
       <div className="mb-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Connect everything together</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          For each service, choose which employees can perform it and which resources it uses.
+          For each service, choose which {vocab.employee_plural.toLowerCase()} can perform it and which {vocab.resource_plural.toLowerCase()} it uses.
         </p>
       </div>
 
@@ -1185,7 +1194,7 @@ function Step5Assignments({
               {/* Employee assignments */}
               {employees.length > 0 && (
                 <div className="mb-3">
-                  <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">Staff</div>
+                  <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">{vocab.employee_plural}</div>
                   <div className="flex flex-wrap gap-1.5">
                     {employees.map((emp: any) => {
                       const assigned = isEmployeeAssigned(svc.id, String(emp.id))
@@ -1211,7 +1220,7 @@ function Step5Assignments({
               {/* Resource assignments */}
               {resources.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">Resources</div>
+                  <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">{vocab.resource_plural}</div>
                   <div className="flex flex-wrap gap-1.5">
                     {resources.map((res: any) => {
                       const assigned = isResourceAssigned(svc.id, res.id)
@@ -1253,6 +1262,7 @@ interface Step6Props {
 }
 
 function Step6Review({ services, resources, employees, coverageData, loading }: Step6Props) {
+  const vocab = useVocabulary()
   const allCovered = coverageData.length > 0 && coverageData.every((c: any) => c.coverage_status === 'full')
   const hasGaps = coverageData.some((c: any) => c.coverage_status !== 'full')
 
@@ -1273,11 +1283,11 @@ function Step6Review({ services, resources, employees, coverageData, loading }: 
         </div>
         <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{employees.length}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Employees</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{vocab.employee_plural}</div>
         </div>
         <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
           <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{resources.length}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Resources</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{vocab.resource_plural}</div>
         </div>
       </div>
 

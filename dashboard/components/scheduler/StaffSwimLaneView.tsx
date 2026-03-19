@@ -1,5 +1,5 @@
 import React from 'react';
-import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR } from './TimeGrid';
+import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH } from './TimeGrid';
 import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
 
@@ -10,6 +10,7 @@ interface StaffSwimLaneViewProps {
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
   onSlotClick?: (employeeId: string, hour: number) => void;
   onEmployeeClick?: (employee: any) => void;
+  hourWidth?: number;
 }
 
 function isOnShift(shifts: any[], hour: number): boolean {
@@ -32,71 +33,78 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   onAppointmentClick,
   onSlotClick,
   onEmployeeClick,
+  hourWidth = 60,
 }) => {
   const hourCount = SCHEDULER_END_HOUR - SCHEDULER_START_HOUR;
   const hours = Array.from({ length: hourCount }, (_, i) => SCHEDULER_START_HOUR + i);
+  const totalWidth = LABEL_WIDTH + hourCount * hourWidth;
+
+  function renderRow(empId: string, empName: string, empAppointments: SchedulerAppointment[], empShifts: any[], colorClass: string, isUnassigned: boolean, onClick?: () => void) {
+    return (
+      <div
+        className="flex border-b border-gray-100 dark:border-gray-800"
+        style={{ minWidth: totalWidth }}
+        data-testid={`swimlane-row-${empId}`}
+      >
+        {/* Employee label */}
+        <div
+          className={`p-2 border-r border-gray-200 dark:border-gray-800 flex items-center gap-2 shrink-0 ${!isUnassigned ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900' : ''} transition`}
+          style={{ width: LABEL_WIDTH }}
+          onClick={onClick}
+        >
+          <div className={`w-3 h-3 rounded-full ${colorClass}`} />
+          <span className={`text-sm font-bold truncate ${isUnassigned ? 'text-gray-500 dark:text-gray-400 italic' : 'text-gray-900 dark:text-gray-100'}`}>
+            {empName}
+          </span>
+        </div>
+
+        {/* Hour cells + appointment overlay */}
+        <div className="relative flex" style={{ width: hourCount * hourWidth }}>
+          {/* Hour cell backgrounds */}
+          {hours.map((hour) => {
+            const onShift = isUnassigned || isOnShift(empShifts, hour);
+            return (
+              <div
+                key={hour}
+                className={`border-r border-gray-100 dark:border-gray-800 last:border-r-0 min-h-[48px] shrink-0 ${
+                  onShift
+                    ? 'bg-white dark:bg-[#1a1a1a] cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/20'
+                    : 'off-shift-hatching'
+                }`}
+                style={{ width: hourWidth }}
+                onClick={() => onShift && !isUnassigned && onSlotClick?.(empId, hour)}
+                data-testid={`slot-${empId}-${hour}`}
+              />
+            );
+          })}
+
+          {/* Appointment blocks overlaid */}
+          {empAppointments.map((appt) => (
+            <AppointmentBlock
+              key={appt.id}
+              appointment={appt}
+              onClick={onAppointmentClick}
+              colorClass={colorClass}
+              hourWidth={hourWidth}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-x-auto" data-testid="staff-swimlane-view">
-      <TimeGrid />
+      <TimeGrid hourWidth={hourWidth} />
       {employees.map((emp, empIdx) => {
         const empId = String(emp.id);
         const empAppointments = appointmentsByEmployee.get(empId) || [];
         const empShifts = shiftsByEmployee.get(empId) || [];
         const colorClass = getEmployeeColor(empId, empIdx);
-
         return (
-          <div
-            key={empId}
-            className="grid border-b border-gray-100 dark:border-gray-800"
-            style={{ gridTemplateColumns: `180px repeat(${hourCount}, 1fr)` }}
-            data-testid={`swimlane-row-${empId}`}
-          >
-            {/* Employee label */}
-            <div
-              className="p-2 border-r border-gray-200 dark:border-gray-800 flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition"
-              onClick={() => onEmployeeClick?.(emp)}
-            >
-              <div className={`w-3 h-3 rounded-full ${colorClass}`} />
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
-                {emp.name}
-              </span>
-            </div>
-
-            {/* Hour cells */}
-            {hours.map((hour) => {
-              const onShift = isOnShift(empShifts, hour);
-              return (
-                <div
-                  key={hour}
-                  className={`relative border-r border-gray-100 dark:border-gray-800 last:border-r-0 min-h-[48px] ${
-                    onShift
-                      ? 'bg-white dark:bg-[#1a1a1a] cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/20'
-                      : 'off-shift-hatching'
-                  }`}
-                  onClick={() => onShift && onSlotClick?.(empId, hour)}
-                  data-testid={`slot-${empId}-${hour}`}
-                />
-              );
-            })}
-
-            {/* Appointment overlay - positioned absolutely over the hour cells */}
-            <div
-              className="relative col-start-2 -mt-[48px] min-h-[48px] pointer-events-none"
-              style={{ gridColumn: `2 / ${hourCount + 2}` }}
-            >
-              <div className="relative w-full h-full pointer-events-auto">
-                {empAppointments.map((appt) => (
-                  <AppointmentBlock
-                    key={appt.id}
-                    appointment={appt}
-                    onClick={onAppointmentClick}
-                    colorClass={colorClass}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+          <React.Fragment key={empId}>
+            {renderRow(empId, emp.name, empAppointments, empShifts, colorClass, false, () => onEmployeeClick?.(emp))}
+          </React.Fragment>
         );
       })}
 
@@ -104,31 +112,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
       {(() => {
         const unassigned = appointmentsByEmployee.get('unassigned') || [];
         if (unassigned.length === 0) return null;
-        return (
-          <div
-            className="grid border-b border-gray-100 dark:border-gray-800"
-            style={{ gridTemplateColumns: `180px repeat(${hourCount}, 1fr)` }}
-            data-testid="swimlane-row-unassigned"
-          >
-            <div className="p-2 border-r border-gray-200 dark:border-gray-800 flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-gray-400" />
-              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 italic">Unassigned</span>
-            </div>
-            {hours.map((hour) => (
-              <div key={hour} className="relative border-r border-gray-100 dark:border-gray-800 last:border-r-0 min-h-[48px] bg-white dark:bg-[#1a1a1a]" />
-            ))}
-            <div
-              className="relative col-start-2 -mt-[48px] min-h-[48px] pointer-events-none"
-              style={{ gridColumn: `2 / ${hourCount + 2}` }}
-            >
-              <div className="relative w-full h-full pointer-events-auto">
-                {unassigned.map((appt) => (
-                  <AppointmentBlock key={appt.id} appointment={appt} onClick={onAppointmentClick} />
-                ))}
-              </div>
-            </div>
-          </div>
-        );
+        return renderRow('unassigned', 'Unassigned', unassigned, [], 'bg-gray-400', true);
       })()}
 
       <style>{`

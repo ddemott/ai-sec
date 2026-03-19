@@ -32,26 +32,28 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div
-        className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200"
+        className="rounded-2xl shadow-xl border max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200"
+        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <h2 id="modal-title" className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h2>
+        <header className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+          <h2 id="modal-title" className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close dialog"
-            className="p-1 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 transition"
+            className="p-1 transition"
+            style={{ color: 'var(--text-secondary)' }}
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </header>
-        
+
         <div className="p-6">
           {children}
         </div>
 
         {footer && (
-          <footer className="px-6 py-4 bg-gray-50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-800 flex justify-end space-x-3">
+          <footer className="px-6 py-4 border-t flex justify-end space-x-3" style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}>
             {footer}
           </footer>
         )}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
@@ -33,6 +34,7 @@ const DAYS = [
 export default function ShiftManagementView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
   const { employees, loading: empsLoading } = useStaticData(tenantId)
+  const vocab = useVocabulary()
   
   const [shifts, setShifts] = useState<any[]>([])
   const [loadingShifts, setLoadingShifts] = useState(true)
@@ -68,7 +70,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
     
     try {
       const res = await Api.shifts.create(tenantId, {
-        employee_id: parseInt(selectedEmployeeId),
+        employee_id: selectedEmployeeId,
         ...newShift
       })
       if (res.success) {
@@ -140,7 +142,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
   [shifts, selectedEmployeeId])
 
   if (empsLoading && activeEmployees.length === 0) {
-    return <div className="p-8 text-gray-500 italic">Loading staff shifts...</div>
+    return <div className="p-8 text-gray-500 italic">Loading {vocab.employee_label.toLowerCase()} shifts...</div>
   }
 
   return (
@@ -151,14 +153,14 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Staff Working Hours</h1>
+            <h1 className="text-3xl font-bold">{vocab.employee_label} Working Hours</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Define when your team is available so the AI never overbooks.</p>
           </div>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1 w-full">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Select Employee</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Select {vocab.employee_label}</label>
             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
               {activeEmployees.map(emp => (
                 <button
@@ -169,7 +171,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
                   {emp.name}
                 </button>
               ))}
-              {activeEmployees.length === 0 && <p className="text-sm text-gray-400 italic">No staff members found. Add them in Staff Management first.</p>}
+              {activeEmployees.length === 0 && <p className="text-sm text-gray-400 italic">No {vocab.employee_plural.toLowerCase()} found. Add them in {vocab.employee_label} Management first.</p>}
             </div>
           </div>
           
@@ -190,7 +192,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
         {!selectedEmployeeId ? (
           <div className="h-full flex flex-col items-center justify-center bg-gray-50/50 dark:bg-black/20 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
             <Users className="w-12 h-12 text-gray-200 dark:text-gray-800 mb-4" />
-            <p className="text-gray-500 font-medium">Select an employee to manage their schedule</p>
+            <p className="text-gray-500 font-medium">Select an {vocab.employee_label.toLowerCase()} to manage their schedule</p>
           </div>
         ) : (
           <div className="space-y-4">

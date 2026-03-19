@@ -35,7 +35,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setUserName(storedUserName)
       const isSuper = storedTenantId === SUPER_ADMIN_TENANT_ID
       setIsAdmin(isSuper)
-      if (!isSuper) {
+      if (isSuper) {
+        const savedManagedId = localStorage.getItem('managedTenantId')
+        const savedManagedName = localStorage.getItem('managedTenantName')
+        if (savedManagedId && savedManagedName) {
+          setManagedTenantId(savedManagedId)
+          setManagedTenantName(savedManagedName)
+        }
+      } else {
         setManagedTenantId(storedTenantId)
       }
     }
@@ -56,6 +63,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('tenantId')
     localStorage.removeItem('userName')
     localStorage.removeItem('authToken')
+    localStorage.removeItem('managedTenantId')
+    localStorage.removeItem('managedTenantName')
     setTenantId(null)
     setManagedTenantId(null)
     setManagedTenantName(null)
@@ -66,6 +75,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const selectManagedTenant = useCallback((id: string, name: string) => {
     setManagedTenantId(id)
     setManagedTenantName(name)
+    localStorage.setItem('managedTenantId', id)
+    localStorage.setItem('managedTenantName', name)
   }, [])
 
   return (

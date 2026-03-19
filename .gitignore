@@ -36,3 +36,4 @@ output.txt
 # Deno
 .deno
 .deno_plugins
+dashboard/dist/

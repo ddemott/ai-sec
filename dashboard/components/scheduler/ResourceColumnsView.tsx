@@ -2,7 +2,7 @@ import React from 'react';
 import { CoverageBar } from '../ui/CoverageBar';
 import type { HourSlot } from '../ui/CoverageBar';
 import { AppointmentBlock } from './AppointmentBlock';
-import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, formatHourLabel } from './TimeGrid';
+import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH, formatHourLabel } from './TimeGrid';
 import type { SchedulerAppointment } from './useSchedulerData';
 
 interface ResourceColumnsViewProps {
@@ -11,6 +11,7 @@ interface ResourceColumnsViewProps {
   shiftsByEmployee: Map<string, any[]>;
   employees: any[];
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
+  hourWidth?: number;
 }
 
 function buildCoverageSlots(
@@ -38,6 +39,7 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
   resources,
   appointmentsByResource,
   onAppointmentClick,
+  hourWidth = 60,
 }) => {
   if (resources.length === 0) {
     return (
@@ -49,14 +51,22 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
 
   const hourCount = SCHEDULER_END_HOUR - SCHEDULER_START_HOUR;
   const hours = Array.from({ length: hourCount }, (_, i) => SCHEDULER_START_HOUR + i);
+  const totalWidth = LABEL_WIDTH + hourCount * hourWidth;
 
   return (
     <div className="overflow-x-auto" data-testid="resource-columns-view">
       {/* Hour axis header */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800">
-        <div className="w-48 flex-shrink-0 p-2 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase border-r border-gray-200 dark:border-gray-800" />
+      <div className="flex border-b border-gray-200 dark:border-gray-800" style={{ minWidth: totalWidth }}>
+        <div
+          className="p-2 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase border-r border-gray-200 dark:border-gray-800 shrink-0"
+          style={{ width: LABEL_WIDTH }}
+        />
         {hours.map((h) => (
-          <div key={h} className="flex-1 p-2 text-xs font-bold text-gray-400 dark:text-gray-500 text-center border-r border-gray-100 dark:border-gray-800 last:border-r-0">
+          <div
+            key={h}
+            className="p-2 text-xs font-bold text-gray-400 dark:text-gray-500 text-center border-r border-gray-100 dark:border-gray-800 last:border-r-0 shrink-0"
+            style={{ width: hourWidth }}
+          >
             {formatHourLabel(h)}
           </div>
         ))}
@@ -68,17 +78,18 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
         const coverageSlots = buildCoverageSlots(resId, resAppointments, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR);
 
         return (
-          <div key={resId} className="border-b border-gray-100 dark:border-gray-800" data-testid={`resource-column-${resId}`}>
-            {/* Resource header with coverage bar */}
+          <div key={resId} className="border-b border-gray-100 dark:border-gray-800" style={{ minWidth: totalWidth }} data-testid={`resource-column-${resId}`}>
             <div className="flex">
-              <div className="w-48 flex-shrink-0 p-3 border-r border-gray-200 dark:border-gray-800">
+              <div
+                className="p-3 border-r border-gray-200 dark:border-gray-800 shrink-0"
+                style={{ width: LABEL_WIDTH }}
+              >
                 <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{resource.name}</div>
                 <CoverageBar slots={coverageSlots} height={16} showHourLabels={false} className="mt-2" />
               </div>
-              {/* Appointment timeline */}
-              <div className="flex-1 relative min-h-[64px]">
+              <div className="relative min-h-[64px]" style={{ width: hourCount * hourWidth }}>
                 {resAppointments.map((appt) => (
-                  <AppointmentBlock key={appt.id} appointment={appt} onClick={onAppointmentClick} />
+                  <AppointmentBlock key={appt.id} appointment={appt} onClick={onAppointmentClick} hourWidth={hourWidth} />
                 ))}
               </div>
             </div>

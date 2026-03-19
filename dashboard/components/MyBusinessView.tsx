@@ -6,17 +6,19 @@ import ServiceAssignmentView from './ServiceAssignmentView'
 import ResourceManagerView from './ResourceManagerView'
 import KnowledgeBaseView from './KnowledgeBaseView'
 import SetupWizard from './SetupWizard'
+import { useVocabulary } from '@/lib/VocabularyContext'
 
 type SubTab = 'services' | 'resources' | 'knowledge'
 
-const SUB_TABS: { id: SubTab; label: string }[] = [
-  { id: 'services', label: 'Services' },
-  { id: 'resources', label: 'Resources' },
-  { id: 'knowledge', label: 'Knowledge Base' },
-]
-
 export default function MyBusinessView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('services')
+  const vocab = useVocabulary()
+
+  const SUB_TABS: { id: SubTab; label: string }[] = [
+    { id: 'services', label: 'Services' },
+    { id: 'resources', label: vocab.resource_plural },
+    { id: 'knowledge', label: 'Knowledge Base' },
+  ]
   const [wizardOpen, setWizardOpen] = useState(false)
 
   return (

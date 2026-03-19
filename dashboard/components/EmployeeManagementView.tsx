@@ -13,6 +13,7 @@ import {
 import { Api } from '../lib/api'
 import { formatPhone } from '../lib/phone'
 import { useSession, useStaticData } from '../lib/hooks'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -32,6 +33,7 @@ type Employee = {
 
 export default function EmployeeManagementView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
+  const vocab = useVocabulary()
   const { employees, services, loading, error, refresh } = useStaticData(tenantId)
   const [mappings, setMappings] = useState<any[]>([])
 
@@ -102,7 +104,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
   }
 
   async function handleDeleteEmployee(id: number) {
-    if (!confirm("Are you sure? This will remove the staff member permanently.")) return
+    if (!confirm(`Are you sure? This will remove the ${vocab.employee_label.toLowerCase()} permanently.`)) return
     try {
       const res = await Api.employees.delete(id, tenantId)
       if (res.success) {
@@ -112,7 +114,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
         alert(res.error || "Delete failed")
       }
     } catch (err) {
-      alert("Staff member is still connected to appointments or services.")
+      alert(`${vocab.employee_label} is still connected to appointments or services.`)
     }
   }
 
@@ -143,8 +145,8 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Employees</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Manage employees and assign them to services.</p>
+            <h1 className="text-3xl font-bold">{vocab.employee_plural}</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">{`Manage ${vocab.employee_plural.toLowerCase()} and assign them to services.`}</p>
           </div>
         </div>
 
@@ -168,7 +170,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
             loading={saving}
             className="whitespace-nowrap"
           >
-            Add Staff
+            {`Add ${vocab.employee_label}`}
           </Button>
         </form>
       </header>
@@ -326,7 +328,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
                 icon={Trash2}
                 onClick={() => handleDeleteEmployee(selectedEmployee.id)}
               >
-                Remove Staff Member
+                {`Remove ${vocab.employee_label}`}
               </Button>
             </section>
           </div>

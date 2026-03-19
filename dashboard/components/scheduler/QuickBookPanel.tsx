@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
 import { Api } from '../../lib/api';
+import { useVocabulary } from '@/lib/VocabularyContext';
 
 interface QuickBookPanelProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   services,
   onBooked,
 }) => {
+  const vocab = useVocabulary();
   const [customerId, setCustomerId] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [resourceId, setResourceId] = useState('');
@@ -181,7 +183,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
         {/* Resource */}
         <Select
-          label="Resource"
+          label={vocab.resource_label}
           value={resourceId}
           onChange={(e) => setResourceId(e.target.value)}
           options={resources.map((r: any) => ({ label: r.name, value: r.id }))}
@@ -190,7 +192,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
         {/* Employee */}
         <Select
-          label="Staff"
+          label={vocab.employee_label}
           value={employeeId}
           onChange={(e) => setEmployeeId(e.target.value)}
           options={[

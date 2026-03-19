@@ -12,6 +12,191 @@ body {
   }
 }
 
+/* ===== THEME SYSTEM — CSS Custom Properties ===== */
+
+:root,
+[data-theme="light"] {
+  --page-bg: #ffffff;
+  --surface: #f9fafb;
+  --surface-elevated: #ffffff;
+  --surface-selected: #ffffff;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-text: #ffffff;
+  --border: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --hover: #f3f4f6;
+  --input-bg: #f3f4f6;
+  --sidebar-bg: #f3f2f1;
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --warning: #ca8a04;
+  --warning-bg: #fefce8;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+}
+
+[data-theme="dark"] {
+  --page-bg: #111111;
+  --surface: #1a1a1a;
+  --surface-elevated: #222222;
+  --surface-selected: #333333;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-text: #ffffff;
+  --border: #2d2d2d;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --hover: #333333;
+  --input-bg: #222222;
+  --sidebar-bg: #1a1a1a;
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.1);
+  --warning: #eab308;
+  --warning-bg: rgba(234, 179, 8, 0.1);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="midnight"] {
+  --page-bg: #0B0E14;
+  --surface: #13171F;
+  --surface-elevated: #1A1F2B;
+  --surface-selected: #242B3D;
+  --primary: #5865F2;
+  --primary-hover: #6E7BF7;
+  --primary-text: #ffffff;
+  --border: #252B3B;
+  --text-primary: #E1E4EA;
+  --text-secondary: #8B92A5;
+  --hover: #1E2433;
+  --input-bg: #0F1219;
+  --sidebar-bg: #0E1118;
+  --success: #23A55A;
+  --success-bg: rgba(35, 165, 90, 0.1);
+  --warning: #F0B232;
+  --warning-bg: rgba(240, 178, 50, 0.1);
+  --danger: #F23F43;
+  --danger-bg: rgba(242, 63, 67, 0.1);
+}
+
+[data-theme="nord"] {
+  --page-bg: #2E3440;
+  --surface: #3B4252;
+  --surface-elevated: #434C5E;
+  --surface-selected: #4C566A;
+  --primary: #88C0D0;
+  --primary-hover: #8FBCBB;
+  --primary-text: #2E3440;
+  --border: #4C566A;
+  --text-primary: #ECEFF4;
+  --text-secondary: #D8DEE9;
+  --hover: #434C5E;
+  --input-bg: #2E3440;
+  --sidebar-bg: #292E39;
+  --success: #A3BE8C;
+  --success-bg: rgba(163, 190, 140, 0.1);
+  --warning: #EBCB8B;
+  --warning-bg: rgba(235, 203, 139, 0.1);
+  --danger: #BF616A;
+  --danger-bg: rgba(191, 97, 106, 0.1);
+}
+
+[data-theme="sunset"] {
+  --page-bg: #1A1412;
+  --surface: #231C18;
+  --surface-elevated: #2E2420;
+  --surface-selected: #3D322B;
+  --primary: #E8914F;
+  --primary-hover: #F0A265;
+  --primary-text: #1A1412;
+  --border: #3D322B;
+  --text-primary: #F0E6DC;
+  --text-secondary: #A89585;
+  --hover: #2E2420;
+  --input-bg: #16110F;
+  --sidebar-bg: #15100E;
+  --success: #6ABF69;
+  --success-bg: rgba(106, 191, 105, 0.1);
+  --warning: #E8C44F;
+  --warning-bg: rgba(232, 196, 79, 0.1);
+  --danger: #E05252;
+  --danger-bg: rgba(224, 82, 82, 0.1);
+}
+
+[data-theme="forest"] {
+  --page-bg: #0F1A14;
+  --surface: #152219;
+  --surface-elevated: #1C2E22;
+  --surface-selected: #2A3F30;
+  --primary: #4ADE80;
+  --primary-hover: #6AE99A;
+  --primary-text: #0F1A14;
+  --border: #2A3F30;
+  --text-primary: #E4F0E8;
+  --text-secondary: #8BAF95;
+  --hover: #1C2E22;
+  --input-bg: #0C1510;
+  --sidebar-bg: #0B1310;
+  --success: #4ADE80;
+  --success-bg: rgba(74, 222, 128, 0.1);
+  --warning: #FACC15;
+  --warning-bg: rgba(250, 204, 21, 0.1);
+  --danger: #EF4444;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="high-contrast"] {
+  --page-bg: #000000;
+  --surface: #0A0A0A;
+  --surface-elevated: #1A1A1A;
+  --surface-selected: #2A2A2A;
+  --primary: #FFD60A;
+  --primary-hover: #FFE34D;
+  --primary-text: #000000;
+  --border: #444444;
+  --text-primary: #FFFFFF;
+  --text-secondary: #CCCCCC;
+  --hover: #1A1A1A;
+  --input-bg: #0A0A0A;
+  --sidebar-bg: #050505;
+  --success: #00E676;
+  --success-bg: rgba(0, 230, 118, 0.15);
+  --warning: #FFD60A;
+  --warning-bg: rgba(255, 214, 10, 0.15);
+  --danger: #FF1744;
+  --danger-bg: rgba(255, 23, 68, 0.15);
+}
+
+[data-theme="solarized"] {
+  --page-bg: #002B36;
+  --surface: #073642;
+  --surface-elevated: #0A4050;
+  --surface-selected: #115E70;
+  --primary: #268BD2;
+  --primary-hover: #2AA198;
+  --primary-text: #ffffff;
+  --border: #114F5E;
+  --text-primary: #EEE8D5;
+  --text-secondary: #93A1A1;
+  --hover: #0A4050;
+  --input-bg: #002028;
+  --sidebar-bg: #00222D;
+  --success: #859900;
+  --success-bg: rgba(133, 153, 0, 0.1);
+  --warning: #B58900;
+  --warning-bg: rgba(181, 137, 0, 0.1);
+  --danger: #DC322F;
+  --danger-bg: rgba(220, 50, 47, 0.1);
+}
+
+/* Apply theme variables to base elements */
+[data-theme] {
+  background-color: var(--page-bg);
+  color: var(--text-primary);
+}
+
 /* Dark theme adjustments for react-big-calendar */
 .dark .rbc-calendar {
   background-color: #020617; /* near-black */

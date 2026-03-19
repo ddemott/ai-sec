@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import DashboardHome from '@/components/DashboardHome'
 import SchedulerView from '@/components/SchedulerView'
 import CRMView from '@/components/CRMView'
 import MyTeamView from '@/components/MyTeamView'
@@ -13,7 +14,7 @@ import { OutlookLayout } from '@/components/OutlookLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useSessionContext } from '@/lib/SessionContext'
 
-export type Tab = 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses'
+export type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses'
 
 export default function DashboardPage() {
   const {
@@ -31,7 +32,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>(() =>
     typeof window !== 'undefined' && localStorage.getItem('tenantId') === '00000000-0000-0000-0000-000000000000'
       ? 'all-businesses'
-      : 'schedule'
+      : 'dashboard'
   )
 
   const handleLoginSuccess = (data: { tenant_id: string; user_name: string }) => {
@@ -39,7 +40,7 @@ export default function DashboardPage() {
     if (data.tenant_id === '00000000-0000-0000-0000-000000000000') {
       setActiveTab('all-businesses')
     } else {
-      setActiveTab('schedule')
+      setActiveTab('dashboard')
     }
   }
 
@@ -68,6 +69,7 @@ export default function DashboardPage() {
         {activeTab === 'all-businesses' && (
           <SuperAdminDashboard onSelectTenant={selectManagedTenant} currentTenantId={managedTenantId} />
         )}
+        {activeTab === 'dashboard' && <DashboardHome overrideTenantId={managedTenantId} onNavigate={setActiveTab} />}
         {activeTab === 'schedule' && <SchedulerView overrideTenantId={managedTenantId} />}
         {activeTab === 'customers' && <CRMView overrideTenantId={managedTenantId} />}
         {activeTab === 'my-team' && <MyTeamView overrideTenantId={managedTenantId} />}

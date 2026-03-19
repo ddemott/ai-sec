@@ -6,6 +6,7 @@ interface AppointmentBlockProps {
   appointment: SchedulerAppointment;
   onClick?: (appointment: SchedulerAppointment) => void;
   colorClass?: string;
+  hourWidth?: number;
 }
 
 const employeeColors = [

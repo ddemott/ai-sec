@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -23,6 +24,7 @@ import { Badge } from './ui/Badge'
 export default function SettingsView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId, isSuperAdmin } = useSession(overrideTenantId)
   const { resources, loading: resourcesLoading, error: resourcesError, refresh: refreshResources } = useStaticData(tenantId)
+  const vocab = useVocabulary()
   
   const [templates, setTemplates] = useState<{business_type: string, display_name: string}[]>([])
   const [onboardingLoading, setOnboardingLoading] = useState(false)
@@ -246,8 +248,8 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
           <Card className="p-6 bg-gray-50 dark:bg-[#1a1a1a]">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-bold">Resources & Capacity Units</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Each unit (bay, chair, room, or vehicle) is a resource that can run its own appointments in parallel.</p>
+                <h2 className="text-lg font-bold">{vocab.resource_plural} & Capacity Units</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Each unit (bay, chair, room, or vehicle) is a {vocab.resource_label.toLowerCase()} that can run its own {vocab.booking_label.toLowerCase()}s in parallel.</p>
               </div>
             </div>
 
@@ -259,7 +261,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
 
             <form onSubmit={handleCreateResource} className="flex flex-col md:flex-row gap-3 mb-6">
               <Input
-                placeholder="Resource Name (e.g. Station 2)"
+                placeholder={`${vocab.resource_label} Name (e.g. Station 2)`}
                 value={newResource.name}
                 onChange={e => setNewResource(prev => ({ ...prev, name: e.target.value }))}
                 className="flex-1"
@@ -275,7 +277,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
                 disabled={!tenantId || !newResource.name.trim()}
                 icon={PlusCircle}
               >
-                Add Resource
+                Add {vocab.resource_label}
               </Button>
             </form>
 
@@ -285,9 +287,9 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
                 <span className="w-32 text-right">Status</span>
               </div>
               {resourcesLoading && resources.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading resources...</div>
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading {vocab.resource_plural.toLowerCase()}...</div>
               ) : resources.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No resources yet. Add your first bay or service unit above.</div>
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No {vocab.resource_plural.toLowerCase()} yet. Add your first {vocab.resource_label.toLowerCase()} above.</div>
               ) : (
                 resources.map(r => (
                   <div key={r.id} className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-sm">
