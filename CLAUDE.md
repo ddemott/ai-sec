@@ -5,18 +5,18 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (15 route modules under src/routes/) -> Postgres
+- **Backend API**: Node.js / Fastify (16 route modules under src/routes/) -> Postgres
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 15 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, register, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings, vocabulary)
+- `/src` - Fastify backend (slim index.ts entry, 16 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, register, customers, appointments, employees, resources, services, shifts, skills, calendar, knowledge, analytics, mappings, vocabulary, billing)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 42 SQL migrations (schema, RLS, RPCs, bug fixes)
+- `/supabase/migrations` - 48 SQL migrations (schema, RLS, RPCs, coverage, billing, bug fixes)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
@@ -57,7 +57,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - UI primitives in `dashboard/components/ui/` (Button, Card, Input, Select, Modal, Badge)
 - API client centralized in `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 15 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 16 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
 
 ## Known Issues (as of March 2026)
 - Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`

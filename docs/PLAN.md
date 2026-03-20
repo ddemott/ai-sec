@@ -84,7 +84,7 @@ Full code review identified 58 bugs across all severity levels. All resolved.
 - [x] **Onboarding Flag**: `onboarding_completed` boolean on tenants table.
 - [x] **Mobile Navigation**: Bottom nav updated to 5 sections.
 
-## Phase 12: Scheduler, Assignments & Coverage Visibility (Next 🚀)
+## Phase 12: Scheduler, Assignments & Coverage Visibility (Complete ✅)
 
 > **Ship-blocking.** The owner needs to see who's doing what, assign people to services, and know where the gaps are — without learning the dashboard tab by tab. A repeatable wizard is the entry point; the scheduler and skill map are where they live day-to-day.
 
@@ -101,37 +101,37 @@ Not just onboarding — this is the **primary configuration tool** for non-techn
 | 5. Assignments | Assign employees to services, services to resources | Shows coverage status per service as assignments are made |
 | 6. Review | Coverage summary: what's fully covered, what has gaps, what's broken | Full/Partial/Uncovered badges, broken chain warnings, "You're ready" or "Fix these first" |
 
-- [ ] **Wizard Shell Component**: Progress indicator, step navigation, back/forward, "Setup Assistant" re-entry button on dashboard sidebar.
-- [ ] **Step 1 — Services**: Service CRUD within wizard context. Pre-populated from template on first run.
-- [ ] **Step 2 — Resources**: Resource CRUD within wizard context. Vocabulary-aware labels.
-- [ ] **Step 3 — Employees**: Employee CRUD within wizard context.
-- [ ] **Step 4 — Shifts**: Shift editor per employee. Day toggles + time pickers. Shows total hours covered.
-- [ ] **Step 5 — Assignments**: Assign employees → services and services → resources. Live coverage badges update as assignments are made. Broken chain warnings inline.
-- [ ] **Step 6 — Review**: Coverage summary dashboard. Lists every service with Full/Partial/Uncovered/Inactive badge. Broken chains listed with "Fix now" links back to Step 5. "You're ready to go live" or "Fix these issues first" message.
-- [ ] **Re-Entry Logic**: Wizard detects existing data and pre-fills. Owner can jump to any step. Changes save immediately (not batched to the end).
-- [ ] **First-Run vs Return**: First run shows welcome copy and template defaults. Return visits show current state with "what changed" hints.
+- [x] **Wizard Shell Component**: Progress indicator, step navigation, back/forward, "Setup Assistant" re-entry button on dashboard sidebar.
+- [x] **Step 1 — Services**: Service CRUD within wizard context. Pre-populated from template on first run.
+- [x] **Step 2 — Resources**: Resource CRUD within wizard context. Vocabulary-aware labels.
+- [x] **Step 3 — Employees**: Employee CRUD within wizard context.
+- [x] **Step 4 — Shifts**: Shift editor per employee. Day toggles + time pickers. Shows total hours covered.
+- [x] **Step 5 — Assignments**: Assign employees → services and services → resources. Live coverage badges update as assignments are made. Broken chain warnings inline.
+- [x] **Step 6 — Review**: Coverage summary dashboard. Lists every service with Full/Partial/Uncovered/Inactive badge. Broken chains listed with "Fix now" links back to Step 5. "You're ready to go live" or "Fix these issues first" message.
+- [x] **Re-Entry Logic**: Wizard detects existing data and pre-fills. Owner can jump to any step. Changes save immediately (not batched to the end).
+- [x] **First-Run vs Return**: First run shows welcome copy and template defaults. Return visits show current state with "what changed" hints.
 
 ### 12B: Scheduler Views
 
 Three views answering three questions: "Who's doing what?" (swimlanes), "Are my bays full?" (resource columns), "What's next?" (list). Coverage gaps visible in all three.
 
-- [ ] **Staff Swimlane View (Default)**: Employee rows × hourly columns. Appointment blocks coloured by employee. Hatching for off-shift periods. Click empty slot → Quick Book. Click employee pill → Day Focus panel.
-- [ ] **Resource Columns View**: Bay/station columns. Appointment blocks within each resource. Coverage bar at top of each column — red zones for gaps. Best for capacity planning.
-- [ ] **Appointment List View**: Chronological list of all appointments. Coverage gap warnings appear inline between appointments. Fastest for front desk scanning.
-- [ ] **View Switcher**: Tab bar above schedule to toggle between the three views.
-- [ ] **Date Navigation**: Previous/next day, week picker, "Today" button.
-- [ ] **Employee Day Focus Panel**: Click any employee pill → slides in from right. Full day timeline (hourly rows), booked slots (coloured blocks, clickable), available slots (dashed green, click to quick-book), off-shift (hatching), utilisation bar + stats header, skills at bottom.
-- [ ] **Quick Book Panel**: Single-screen walk-in booking. Customer search (CRM lookup + "+ New"), service selector (filtered to employee's skills), resource selector (filtered to available + compatible), time slot (pre-selected, adjustable), notes, confirm button. Target: under 30 seconds.
+- [x] **Staff Swimlane View (Default)**: Employee rows × hourly columns. Appointment blocks coloured by employee. Hatching for off-shift periods. Click empty slot → Quick Book. Click employee pill → Day Focus panel.
+- [x] **Resource Columns View**: Bay/station columns. Appointment blocks within each resource. Coverage bar at top of each column — red zones for gaps. Best for capacity planning.
+- [x] **Appointment List View**: Chronological list of all appointments. Coverage gap warnings appear inline between appointments. Fastest for front desk scanning.
+- [x] **View Switcher**: Tab bar above schedule to toggle between the three views.
+- [x] **Date Navigation**: Previous/next day, week picker, "Today" button.
+- [x] **Employee Day Focus Panel**: Click any employee pill → slides in from right. Full day timeline (hourly rows), booked slots (coloured blocks, clickable), available slots (dashed green, click to quick-book), off-shift (hatching), utilisation bar + stats header, skills at bottom.
+- [x] **Quick Book Panel**: Single-screen walk-in booking. Customer search (CRM lookup + "+ New"), service selector (filtered to employee's skills), resource selector (filtered to available + compatible), time slot (pre-selected, adjustable), notes, confirm button. Target: under 30 seconds.
 
 ### 12C: Skill Relationship Map
 
 Interactive 3-column mind map that answers: "Who can do what, where?" Broken chains and coverage gaps are immediately visible.
 
-- [ ] **3-Column Layout**: Employees | Skills/Services | Resources. Click employee → their skills light up, others grey out. Click skill → compatible resources light up.
-- [ ] **Connection Lines**: Animated SVG lines between columns showing active relationships.
-- [ ] **Broken Chain Detection**: Amber dashed lines when employee has skill + resource exists but no matching service in catalog. "Fix now" action opens Add Service dialog pre-filled.
-- [ ] **Coverage Badges on Skills**: Full (green), Partial (amber), Uncovered (red), Inactive (grey) — shows at a glance which services need attention.
-- [ ] **Reset Button**: Clear all selections, return to default state.
+- [x] **3-Column Layout**: Employees | Skills/Services | Resources. Click employee → their skills light up, others grey out. Click skill → compatible resources light up.
+- [x] **Connection Lines**: Animated SVG lines between columns showing active relationships.
+- [x] **Broken Chain Detection**: Amber dashed lines when employee has skill + resource exists but no matching service in catalog. "Fix now" action opens Add Service dialog pre-filled.
+- [x] **Coverage Badges on Skills**: Full (green), Partial (amber), Uncovered (red), Inactive (grey) — shows at a glance which services need attention.
+- [x] **Reset Button**: Clear all selections, return to default state.
 
 ### 12D: Coverage Visibility (Baked In)
 
@@ -145,11 +145,11 @@ Not a separate feature — coverage status is visible wherever the owner is alre
 | Setup Wizard Step 5 | Live coverage badges update as assignments are made. |
 | Setup Wizard Step 6 | Full coverage summary with fix links. |
 
-- [ ] **`check_coverage_gaps()` Postgres Function**: `check_coverage_gaps(tenant_id, date_range)` returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]`.
-- [ ] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight check).
-- [ ] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns view.
-- [ ] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
-- [ ] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range. Powers the dashboard coverage indicators.
+- [x] **`check_coverage_gaps()` Postgres Function**: `check_coverage_gaps(tenant_id, date_range)` returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]`.
+- [x] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight check).
+- [x] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns view.
+- [x] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
+- [x] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range. Powers the dashboard coverage indicators.
 
 ### 12E: RAG Normalization Layer
 
@@ -185,13 +185,13 @@ The raw text is always preserved alongside the normalized version. Search querie
 - For complaints: "[Person] reports [issue]"
 - For requests: "[Person] requests [action]"
 
-- [ ] **Normalization Function**: `shared/normalizeForEmbedding.ts` — takes raw text + context (customer name, etc.), returns normalized statement via LLM call.
-- [ ] **Integration with Ingestion**: Knowledge base ingestion pipeline calls normalize before embedding each chunk.
-- [ ] **Integration with Call Summaries**: Post-call summarizer normalizes key details before embedding.
-- [ ] **Integration with Customer Notes**: Notes saved via dashboard are normalized before embedding.
-- [ ] **Query Normalization**: Search queries passed through the same normalization before embedding for lookup.
-- [ ] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
-- [ ] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
+- [x] **Normalization Function**: `shared/normalizeForEmbedding.ts` — takes raw text + context (customer name, etc.), returns normalized statement via LLM call.
+- [x] **Integration with Ingestion**: Knowledge base ingestion pipeline calls normalize before embedding each chunk.
+- [x] **Integration with Call Summaries**: Post-call summarizer normalizes key details before embedding.
+- [x] **Integration with Customer Notes**: Notes saved via dashboard are normalized before embedding.
+- [x] **Query Normalization**: Search queries passed through the same normalization before embedding for lookup.
+- [x] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
+- [x] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
 
 ### 12F: Stripe Lite (Two Plans)
 
@@ -211,13 +211,13 @@ Both plans include all features. No feature gating between tiers at launch. Prof
 3. If payment fails or subscription cancels → webhook fires → status updated → AI stops answering, dashboard shows "Update payment" prompt
 4. That's it. No card form in the dashboard. No plan switching UI. No trial. Stripe handles everything.
 
-- [ ] **Stripe Products**: Create Solo ($29/mo) and Growth ($59/mo) as recurring products in Stripe dashboard. Save Price IDs.
-- [ ] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
-- [ ] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL. Accepts `plan_id` parameter.
-- [ ] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
-- [ ] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402 and dashboard shows "Update your payment to continue" prompt. AI stops answering calls for that tenant.
-- [ ] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant as active and continue to setup wizard.
-- [ ] **Environment Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
+- [x] **Stripe Products**: Create Solo ($29/mo) and Growth ($59/mo) as recurring products in Stripe dashboard. Save Price IDs.
+- [x] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
+- [x] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL. Accepts `plan_id` parameter.
+- [x] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
+- [x] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402 and dashboard shows "Update your payment to continue" prompt. AI stops answering calls for that tenant.
+- [x] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant as active and continue to setup wizard.
+- [x] **Environment Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
 
 ---
 

@@ -1,7 +1,7 @@
 # AI Secretary SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 14 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 16 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
@@ -56,10 +56,10 @@ The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template,
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 14 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 16 modules under `src/routes/` (auth, tenants, register, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing).
 
 ### 4.1 Security
-- **RLS Enforcement**: All 14 tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
+- **RLS Enforcement**: All tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
 - **Least Privilege**: The `api_user` role has explicit `SELECT, INSERT, UPDATE, DELETE` grants per table (not `ALL PRIVILEGES`).
 - **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
 - **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
@@ -67,7 +67,7 @@ The Fastify backend serves as the management API for the dashboard and administr
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 100 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, tools, scheduling, and index suites. 38 dashboard tests across CRM, appointments, settings, employee, and component suites. 138 total.
+- **Coverage**: 203 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, and index suites. 174 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, and component suites. 377 total.
 
 ---
 

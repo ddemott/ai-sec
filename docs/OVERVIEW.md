@@ -16,23 +16,26 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## Main Components & Verification
 
-- **138 Tests Passing**: 100 backend + 38 dashboard tests verified via Vitest.
+- **377 Tests Passing**: 203 backend + 174 dashboard tests verified via Vitest.
 - **Postgres (Supabase)**: Single source of truth with Row-Level Security (RLS) for tenant isolation.
 - **Supabase Edge Function (`vapi-tools`)**:
   - `getCustomerContext` – CRM history lookup.
   - `checkAvailability` – Multi-resource overlap checks.
   - `bookAppointment` – Shift-aware atomic booking with auto end-time calculation.
-  - `getCompanyPolicyAnswer` – Semantic search over business docs.
-- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes (14 modules under `src/routes/`) for administrative tasks, document ingestion, analytics, customer appointments, appointment cancellation, vocabulary resolution, self-service registration, and CRUD operations.
+  - `getCompanyPolicyAnswer` – Semantic search over business docs with RAG normalization.
+- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes (16 modules under `src/routes/`) including billing, coverage, vocabulary, registration, and all CRUD operations.
 - **Dashboard (Next.js)**:
-  - **Knowledge Base**: PDF/Text upload for RAG training.
-  - **Shift Manager**: Employee working hours and availability (create + edit).
-  - **Skill Matrix**: Grid for matching staff expertise to resource capabilities.
-  - **ROI Analytics**: Business performance monitoring.
-  - **SessionContext**: Centralized auth state via React Context.
+  - **Dashboard Home**: At-a-glance stats, coverage alerts, today's appointments, quick actions.
+  - **Scheduler**: Staff swimlanes, resource columns, appointment list, quick book, employee day focus.
+  - **Skill Relationship Map**: Interactive 3-column mind map (employees → skills → resources) with click-to-connect.
+  - **Setup Wizard**: 6-step repeatable guided setup with live coverage feedback.
+  - **Coverage Visibility**: Status badges and coverage bars throughout the UI.
+  - **Vocabulary System**: Business-type-aware labels (Truck/Technician for tire shops, Chair/Stylist for salons).
+  - **Theme System**: 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized).
+  - **Stripe Lite**: Checkout integration for Solo ($29/mo) and Growth ($59/mo) plans.
 - **Async Layer (n8n)**:
   - Post-call summarization and sentiment analysis.
-  - Calendar Sync (Google/Outlook).
+  - Calendar Sync (Google; Outlook planned).
 
 ## Runtime Surfaces
 

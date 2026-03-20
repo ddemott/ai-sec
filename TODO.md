@@ -101,63 +101,63 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 - [x] **seed.sql Fix**: ON CONFLICT (tenant_id, email) for per-tenant email uniqueness.
 - [x] **Test Coverage**: 100 backend tests + 38 dashboard tests = 138 total, all passing.
 
-## 11. Scheduler, Assignments & Coverage Visibility (Phase 12 — Next)
+## 11. Scheduler, Assignments & Coverage Visibility (Phase 12 — Complete)
 > Ship-blocking. The owner needs to see who's doing what, assign people to services, and know where the gaps are — without learning the dashboard tab by tab.
 
 ### 11A. Repeatable Setup Wizard
 Not just onboarding — the primary configuration tool for non-technical owners. Re-enter anytime via "Setup Assistant" button.
 
-- [ ] **Wizard Shell Component**: Progress indicator, step navigation, back/forward, "Setup Assistant" re-entry button on dashboard sidebar.
-- [ ] **Step 1 — Services**: Service CRUD within wizard context. Pre-populated from template on first run.
-- [ ] **Step 2 — Resources**: Resource CRUD within wizard context. Vocabulary-aware labels.
-- [ ] **Step 3 — Employees**: Employee CRUD within wizard context.
-- [ ] **Step 4 — Shifts**: Shift editor per employee. Day toggles + time pickers. Shows total hours covered.
-- [ ] **Step 5 — Assignments**: Assign employees → services and services → resources. Live coverage badges update as assignments are made. Broken chain warnings inline.
-- [ ] **Step 6 — Review**: Coverage summary. Every service listed with Full/Partial/Uncovered/Inactive badge. Broken chains with "Fix now" links back to Step 5. "You're ready" or "Fix these first" message.
-- [ ] **Re-Entry Logic**: Wizard detects existing data and pre-fills. Owner can jump to any step. Changes save immediately.
-- [ ] **First-Run vs Return**: First run shows welcome copy and template defaults. Return visits show current state.
+- [x] **Wizard Shell Component**: Progress indicator, step navigation, back/forward, "Setup Assistant" re-entry button on dashboard sidebar.
+- [x] **Step 1 — Services**: Service CRUD within wizard context. Pre-populated from template on first run.
+- [x] **Step 2 — Resources**: Resource CRUD within wizard context. Vocabulary-aware labels.
+- [x] **Step 3 — Employees**: Employee CRUD within wizard context.
+- [x] **Step 4 — Shifts**: Shift editor per employee. Day toggles + time pickers. Shows total hours covered.
+- [x] **Step 5 — Assignments**: Assign employees → services and services → resources. Live coverage badges update as assignments are made. Broken chain warnings inline.
+- [x] **Step 6 — Review**: Coverage summary. Every service listed with Full/Partial/Uncovered/Inactive badge. Broken chains with "Fix now" links back to Step 5. "You're ready" or "Fix these first" message.
+- [x] **Re-Entry Logic**: Wizard detects existing data and pre-fills. Owner can jump to any step. Changes save immediately.
+- [x] **First-Run vs Return**: First run shows welcome copy and template defaults. Return visits show current state.
 
 ### 11B. Scheduler Views
 Three views: "Who's doing what?" (swimlanes), "Are my bays full?" (resource columns), "What's next?" (list). Coverage gaps visible in all three.
 
-- [ ] **Staff Swimlane View (Default)**: Employee rows × hourly columns. Appointment blocks coloured by employee. Hatching for off-shift. Click empty slot → Quick Book. Click employee pill → Day Focus.
-- [ ] **Resource Columns View**: Bay/station columns with coverage bar at top. Red zones for gaps.
-- [ ] **Appointment List View**: Chronological list. Coverage gap warnings inline.
-- [ ] **View Switcher**: Tab bar above schedule.
-- [ ] **Date Navigation**: Previous/next day, week picker, "Today" button.
-- [ ] **Employee Day Focus Panel**: Click employee pill → full day timeline, booked/available/off-shift slots, utilisation bar + stats, skills at bottom.
-- [ ] **Quick Book Panel**: Single-screen walk-in booking. Customer search, service selector (filtered to skills), resource selector (filtered to available), time slot, notes, confirm. Under 30 seconds.
+- [x] **Staff Swimlane View (Default)**: Employee rows × hourly columns. Appointment blocks coloured by employee. Hatching for off-shift. Click empty slot → Quick Book. Click employee pill → Day Focus.
+- [x] **Resource Columns View**: Bay/station columns with coverage bar at top. Red zones for gaps.
+- [x] **Appointment List View**: Chronological list. Coverage gap warnings inline.
+- [x] **View Switcher**: Tab bar above schedule.
+- [x] **Date Navigation**: Previous/next day, week picker, "Today" button.
+- [x] **Employee Day Focus Panel**: Click employee pill → full day timeline, booked/available/off-shift slots, utilisation bar + stats, skills at bottom.
+- [x] **Quick Book Panel**: Single-screen walk-in booking. Customer search, service selector (filtered to skills), resource selector (filtered to available), time slot, notes, confirm. Under 30 seconds.
 
 ### 11C. Skill Relationship Map
 Interactive 3-column mind map: "Who can do what, where?" Broken chains and gaps visible immediately.
 
-- [ ] **3-Column Layout**: Employees | Skills/Services | Resources. Click employee → skills light up. Click skill → resources light up.
-- [ ] **Connection Lines**: Animated SVG lines between columns.
-- [ ] **Broken Chain Detection**: Amber dashed lines when chain is incomplete. "Fix now" action opens Add Service dialog.
-- [ ] **Coverage Badges on Skills**: Full (green), Partial (amber), Uncovered (red), Inactive (grey).
-- [ ] **Reset Button**: Clear all selections.
+- [x] **3-Column Layout**: Employees | Skills/Services | Resources. Click employee → skills light up. Click skill → resources light up.
+- [x] **Connection Lines**: Animated SVG lines between columns.
+- [x] **Broken Chain Detection**: Amber dashed lines when chain is incomplete. "Fix now" action opens Add Service dialog.
+- [x] **Coverage Badges on Skills**: Full (green), Partial (amber), Uncovered (red), Inactive (grey).
+- [x] **Reset Button**: Clear all selections.
 
 ### 11D. Coverage Visibility (Baked In)
 Not a separate feature — coverage status is visible wherever the owner is already looking.
 
-- [ ] **`check_coverage_gaps()` Postgres Function**: Returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]` for a tenant and date range.
-- [ ] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight).
-- [ ] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns.
-- [ ] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
-- [ ] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range.
+- [x] **`check_coverage_gaps()` Postgres Function**: Returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]` for a tenant and date range.
+- [x] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight).
+- [x] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns.
+- [x] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
+- [x] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range.
 
 ### 11E. RAG Normalization Layer
 > Search quality. Raw conversational text produces inconsistent embeddings. A normalization step before embedding reduces text to its semantic core so vector search reliably matches across phrasings.
 
 Example: "I think Suzy is great and would prefer to work with her" → normalized to "Sally prefers Suzy". Four weeks later: "I like Suzy. Let's go with her" → "Sally likes Suzy" — close enough for cosine similarity to match.
 
-- [ ] **Normalization Function**: `shared/normalizeForEmbedding.ts` — takes raw text + context (customer name, etc.), returns normalized statement via LLM call.
-- [ ] **Integration with Ingestion**: Knowledge base ingestion normalizes before embedding each chunk.
-- [ ] **Integration with Call Summaries**: Post-call summarizer normalizes key details before embedding.
-- [ ] **Integration with Customer Notes**: Notes saved via dashboard normalized before embedding.
-- [ ] **Query Normalization**: Search queries normalized before embedding for lookup.
-- [ ] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
-- [ ] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
+- [x] **Normalization Function**: `shared/normalizeForEmbedding.ts` — takes raw text + context (customer name, etc.), returns normalized statement via LLM call.
+- [x] **Integration with Ingestion**: Knowledge base ingestion normalizes before embedding each chunk.
+- [x] **Integration with Call Summaries**: Post-call summarizer normalizes key details before embedding.
+- [x] **Integration with Customer Notes**: Notes saved via dashboard normalized before embedding.
+- [x] **Query Normalization**: Search queries normalized before embedding for lookup.
+- [x] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
+- [x] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
 
 ### 11F. Stripe Lite (Two Plans)
 > You can't collect money without this. Minimal Stripe — two prices, one webhook, one gate. No plan picker UI, no trial logic, no call limits, no billing portal.
