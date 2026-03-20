@@ -10,43 +10,48 @@ interface SkillMapFixPanelProps {
   employees: any[]
   resources: any[]
   tenantId: string | null
+  empMappings?: any[]
+  resMappings?: any[]
   onFixed: () => void
   onClose: () => void
 }
 
-export default function SkillMapFixPanel({ chain, employees, resources, tenantId, onFixed, onClose }: SkillMapFixPanelProps) {
+export default function SkillMapFixPanel({ chain, employees, resources, tenantId, empMappings = [], resMappings = [], onFixed, onClose }: SkillMapFixPanelProps) {
   const [saving, setSaving] = useState(false)
 
-  // Employees who DON'T already have this skill
+  // Extract the service ID from the skill node ID (format: "skill-{serviceId}")
+  const serviceId = chain.skillId.replace('skill-', '')
+
+  // Employees NOT already assigned to this service
   const eligibleEmployees = (employees || [])
     .filter(e => e.type !== 'user')
-    .filter(e => !(Array.isArray(e.skills) && e.skills.includes(chain.skillName)))
+    .filter(e => !empMappings.some(m => String(m.service_id) === serviceId && String(m.employee_id) === String(e.id)))
 
-  // Resources who DON'T already have this capability
+  // Resources NOT already assigned to this service
   const eligibleResources = (resources || [])
-    .filter(r => !(Array.isArray(r.capabilities) && r.capabilities.includes(chain.skillName)))
+    .filter(r => !resMappings.some(m => String(m.service_id) === serviceId && String(m.resource_id) === String(r.id)))
 
-  async function assignToEmployee(emp: any) {
+  async function assignEmployee(emp: any) {
+    if (!tenantId) return
     setSaving(true)
     try {
-      const updatedSkills = [...(Array.isArray(emp.skills) ? emp.skills : []), chain.skillName]
-      await Api.employees.update(emp.id, { skills: updatedSkills })
+      await Api.mappings.assignServiceEmployee(serviceId as any, emp.id, tenantId)
       onFixed()
     } catch (err) {
-      console.error('Failed to assign skill to employee', err)
+      console.error('Failed to assign employee to service', err)
     } finally {
       setSaving(false)
     }
   }
 
-  async function assignToResource(res: any) {
+  async function assignResource(res: any) {
+    if (!tenantId) return
     setSaving(true)
     try {
-      const updatedCaps = [...(Array.isArray(res.capabilities) ? res.capabilities : []), chain.skillName]
-      await Api.resources.update(res.id, { capabilities: updatedCaps }, tenantId)
+      await Api.mappings.assignServiceResource(serviceId as any, res.id, tenantId)
       onFixed()
     } catch (err) {
-      console.error('Failed to assign capability to resource', err)
+      console.error('Failed to assign resource to service', err)
     } finally {
       setSaving(false)
     }
@@ -66,7 +71,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
 
       {chain.missingEmployees && eligibleEmployees.length > 0 && (
         <div className="mb-2">
-          <p className="text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wider">Add staff:</p>
+          <p className="text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wider">Assign staff:</p>
           <div className="flex flex-wrap gap-1">
             {eligibleEmployees.map(emp => (
               <Button
@@ -74,7 +79,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
                 size="sm"
                 variant="secondary"
                 disabled={saving}
-                onClick={() => assignToEmployee(emp)}
+                onClick={() => assignEmployee(emp)}
                 className="text-[10px] py-0.5 px-2"
               >
                 + {emp.name}
@@ -86,7 +91,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
 
       {chain.missingResources && eligibleResources.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wider">Add resource:</p>
+          <p className="text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wider">Assign resource:</p>
           <div className="flex flex-wrap gap-1">
             {eligibleResources.map(res => (
               <Button
@@ -94,7 +99,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
                 size="sm"
                 variant="secondary"
                 disabled={saving}
-                onClick={() => assignToResource(res)}
+                onClick={() => assignResource(res)}
                 className="text-[10px] py-0.5 px-2"
               >
                 + {res.name}

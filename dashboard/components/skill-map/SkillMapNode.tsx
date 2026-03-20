@@ -77,11 +77,6 @@ export default function SkillMapNode({
           {node.type === 'skill' && node.coverage && (
             <CoverageStatusBadge status={coverageToBadgeStatus(node.coverage)} />
           )}
-          {node.isSynthetic && (
-            <span className="text-[9px] text-amber-500 font-medium flex items-center gap-0.5">
-              <AlertTriangle className="w-2.5 h-2.5" /> Not in master list
-            </span>
-          )}
         </div>
       </div>
       {!isLinking && onLinkStart && (

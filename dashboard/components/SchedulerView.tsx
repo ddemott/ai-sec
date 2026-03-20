@@ -10,6 +10,7 @@ import { AppointmentListView } from './scheduler/AppointmentListView';
 import { QuickBookPanel } from './scheduler/QuickBookPanel';
 import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
 import { Button } from './ui/Button';
+import { Api } from '../lib/api';
 import AppointmentView from './AppointmentView';
 
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
@@ -67,6 +68,29 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     setQuickBookPrefill({ employeeId, hour, date: selectedDate });
     setQuickBookOpen(true);
   }, [selectedDate]);
+
+  const handleSlotDrag = useCallback((employeeId: string, startHour: number, endHour: number) => {
+    setQuickBookPrefill({ employeeId, hour: startHour, endHour, date: selectedDate });
+    setQuickBookOpen(true);
+  }, [selectedDate]);
+
+  const handleShiftDrag = useCallback(async (employeeId: string, startHour: number, endHour: number) => {
+    if (!tenantId) return;
+    const dayOfWeek = selectedDate.getDay(); // 0=Sun..6=Sat
+    const startTime = `${String(startHour).padStart(2, '0')}:00`;
+    const endTime = `${String(endHour).padStart(2, '0')}:00`;
+    try {
+      await Api.shifts.create(tenantId, {
+        employee_id: employeeId,
+        day_of_week: dayOfWeek,
+        start_time: startTime,
+        end_time: endTime,
+      });
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to create shift:', err);
+    }
+  }, [tenantId, selectedDate, handleRefresh]);
 
   const handleEmployeeClick = useCallback((employee: any) => {
     setFocusEmployee(employee);
@@ -179,6 +203,8 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             shiftsByEmployee={shiftsByEmployee}
             onAppointmentClick={handleAppointmentClick}
             onSlotClick={handleSlotClick}
+            onSlotDrag={handleSlotDrag}
+            onShiftDrag={handleShiftDrag}
             onEmployeeClick={handleEmployeeClick}
             hourWidth={hourWidth}
           />

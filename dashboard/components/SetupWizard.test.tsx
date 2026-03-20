@@ -353,7 +353,7 @@ describe('SetupWizard: Step 3 Employees', () => {
     goToStep3()
     fireEvent.click(screen.getByText('Add an employee'))
     expect(screen.getByPlaceholderText('email@example.com')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('+1 (555) 000-0000')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('+1 (555) 555-5555')).toBeInTheDocument()
   })
 })
 

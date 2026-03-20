@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
 import { Api } from '../../lib/api';
+import { formatPhone } from '../../lib/phone';
 import { useVocabulary } from '@/lib/VocabularyContext';
 
 interface QuickBookPanelProps {
@@ -14,6 +15,7 @@ interface QuickBookPanelProps {
     employeeId?: string;
     resourceId?: string;
     hour?: number;
+    endHour?: number;
     date?: Date;
   };
   customers: any[];
@@ -64,7 +66,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
       if (prefill.date && prefill.hour != null) {
         setStartTime(toLocalISOFromParts(prefill.date, prefill.hour));
-        setEndTime(toLocalISOFromParts(prefill.date, prefill.hour + 1));
+        setEndTime(toLocalISOFromParts(prefill.date, prefill.endHour ?? prefill.hour + 1));
       }
     }
   }, [isOpen, prefill]);
@@ -164,7 +166,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           >
             <option value="">Select customer...</option>
             {filteredCustomers.map((c: any) => (
-              <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
+              <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${formatPhone(c.phone)})` : ''}</option>
             ))}
           </select>
         </div>

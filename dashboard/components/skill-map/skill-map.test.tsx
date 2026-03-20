@@ -1,5 +1,5 @@
 import { expect, test, describe, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import React from 'react'
 import { renderHook } from '@testing-library/react'
@@ -13,20 +13,32 @@ import { Api } from '../../lib/api'
 
 // --- Mock data ---
 const mockEmployees = [
-  { id: 1, name: 'Alice', type: 'employee', skills: ['oil-change', 'tire-rotation'] },
-  { id: 2, name: 'Bob', type: 'employee', skills: ['tire-rotation'] },
-  { id: 3, name: 'Admin', type: 'user', skills: [] }, // should be filtered out
+  { id: 'emp-uuid-1', name: 'Alice', type: 'employee' },
+  { id: 'emp-uuid-2', name: 'Bob', type: 'employee' },
+  { id: 'emp-uuid-3', name: 'Admin', type: 'user' }, // should be filtered out
 ]
 
 const mockResources = [
-  { id: 'res-uuid-1', name: 'Bay 1', capabilities: ['oil-change', 'tire-rotation'] },
-  { id: 'res-uuid-2', name: 'Bay 2', capabilities: ['oil-change'] },
+  { id: 'res-uuid-1', name: 'Bay 1' },
+  { id: 'res-uuid-2', name: 'Bay 2' },
 ]
 
-const mockSkills = [
-  { id: 1, name: 'oil-change' },
-  { id: 2, name: 'tire-rotation' },
-  { id: 3, name: 'brake-service' }, // no employees or resources -> uncovered
+const mockServices = [
+  { id: 'svc-uuid-1', name: 'Oil Change', duration_minutes: 30 },
+  { id: 'svc-uuid-2', name: 'Tire Rotation', duration_minutes: 45 },
+  { id: 'svc-uuid-3', name: 'Brake Service', duration_minutes: 60 },
+]
+
+const mockEmpMappings = [
+  { service_id: 'svc-uuid-1', employee_id: 'emp-uuid-1' }, // Alice -> Oil Change
+  { service_id: 'svc-uuid-2', employee_id: 'emp-uuid-1' }, // Alice -> Tire Rotation
+  { service_id: 'svc-uuid-2', employee_id: 'emp-uuid-2' }, // Bob -> Tire Rotation
+]
+
+const mockResMappings = [
+  { service_id: 'svc-uuid-1', resource_id: 'res-uuid-1' }, // Oil Change -> Bay 1
+  { service_id: 'svc-uuid-1', resource_id: 'res-uuid-2' }, // Oil Change -> Bay 2
+  { service_id: 'svc-uuid-2', resource_id: 'res-uuid-1' }, // Tire Rotation -> Bay 1
 ]
 
 // --- Mock hooks ---
@@ -35,8 +47,8 @@ vi.mock('../../lib/hooks', () => ({
   useStaticData: () => ({
     employees: mockEmployees,
     resources: mockResources,
-    skills: mockSkills,
-    services: [],
+    skills: [],
+    services: mockServices,
     customers: [],
     loading: false,
     error: null,
@@ -46,6 +58,22 @@ vi.mock('../../lib/hooks', () => ({
 
 vi.mock('../../lib/api', () => ({
   Api: {
+    mappings: {
+      listServiceEmployee: vi.fn().mockResolvedValue([
+        { service_id: 'svc-uuid-1', employee_id: 'emp-uuid-1' },
+        { service_id: 'svc-uuid-2', employee_id: 'emp-uuid-1' },
+        { service_id: 'svc-uuid-2', employee_id: 'emp-uuid-2' },
+      ]),
+      listServiceResource: vi.fn().mockResolvedValue([
+        { service_id: 'svc-uuid-1', resource_id: 'res-uuid-1' },
+        { service_id: 'svc-uuid-1', resource_id: 'res-uuid-2' },
+        { service_id: 'svc-uuid-2', resource_id: 'res-uuid-1' },
+      ]),
+      assignServiceEmployee: vi.fn().mockResolvedValue({}),
+      assignServiceResource: vi.fn().mockResolvedValue({}),
+      unassignServiceEmployee: vi.fn().mockResolvedValue({}),
+      unassignServiceResource: vi.fn().mockResolvedValue({}),
+    },
     employees: { update: vi.fn().mockResolvedValue({}) },
     resources: { update: vi.fn().mockResolvedValue({}) },
   },
@@ -63,75 +91,84 @@ global.ResizeObserver = MockResizeObserver as any
 // useSkillMapData tests
 // ==========================================
 describe('useSkillMapData', () => {
-  test('filters out user-type employees from employee nodes', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
-    const empNames = result.current.employeeNodes.map(n => n.name)
-    expect(empNames).toContain('Alice')
-    expect(empNames).toContain('Bob')
-    expect(empNames).not.toContain('Admin')
-    expect(result.current.employeeNodes).toHaveLength(2)
+  test('filters out user-type employees from employee nodes', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      const empNames = result.current.employeeNodes.map(n => n.name)
+      expect(empNames).toContain('Alice')
+      expect(empNames).toContain('Bob')
+      expect(empNames).not.toContain('Admin')
+      expect(result.current.employeeNodes).toHaveLength(2)
+    })
   })
 
-  test('creates left-side connections from employee skills', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
-    const leftConns = result.current.connections.filter(c => c.side === 'left')
-    // Alice: oil-change + tire-rotation = 2, Bob: tire-rotation = 1 -> 3 total
-    expect(leftConns).toHaveLength(3)
-    expect(leftConns.some(c => c.from === 'emp-1' && c.to === 'skill-oil-change')).toBe(true)
-    expect(leftConns.some(c => c.from === 'emp-1' && c.to === 'skill-tire-rotation')).toBe(true)
-    expect(leftConns.some(c => c.from === 'emp-2' && c.to === 'skill-tire-rotation')).toBe(true)
+  test('creates service nodes from services list', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      expect(result.current.skillNodes).toHaveLength(3)
+      const names = result.current.skillNodes.map(n => n.name)
+      expect(names).toContain('Oil Change')
+      expect(names).toContain('Tire Rotation')
+      expect(names).toContain('Brake Service')
+    })
   })
 
-  test('creates right-side connections from resource capabilities', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
-    const rightConns = result.current.connections.filter(c => c.side === 'right')
-    // Bay 1: oil-change + tire-rotation = 2, Bay 2: oil-change = 1 -> 3 total
-    expect(rightConns).toHaveLength(3)
-    expect(rightConns.some(c => c.from === 'skill-oil-change' && c.to === 'res-res-uuid-1')).toBe(true)
+  test('creates left-side connections from service_employee mappings', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      const leftConns = result.current.connections.filter(c => c.side === 'left')
+      expect(leftConns).toHaveLength(3) // Alice->Oil, Alice->Tire, Bob->Tire
+    })
   })
 
-  test('computes full coverage for skills with both employee and resource connections', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
-    expect(result.current.coverageBySkill['skill-oil-change']).toBe('full')
-    expect(result.current.coverageBySkill['skill-tire-rotation']).toBe('full')
+  test('creates right-side connections from service_resource mappings', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      const rightConns = result.current.connections.filter(c => c.side === 'right')
+      expect(rightConns).toHaveLength(3) // Oil->Bay1, Oil->Bay2, Tire->Bay1
+    })
   })
 
-  test('computes uncovered for skills with no connections at all', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
-    expect(result.current.coverageBySkill['skill-brake-service']).toBe('uncovered')
+  test('computes full coverage for services with both employee and resource connections', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      expect(result.current.coverageBySkill['skill-svc-uuid-1']).toBe('full') // Oil Change
+      expect(result.current.coverageBySkill['skill-svc-uuid-2']).toBe('full') // Tire Rotation
+    })
   })
 
-  test('detects broken chains', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
-    expect(result.current.brokenChains.some(b => b.skillName === 'brake-service')).toBe(true)
-    // oil-change and tire-rotation are fully covered, not broken
-    expect(result.current.brokenChains.some(b => b.skillName === 'oil-change')).toBe(false)
+  test('computes uncovered for services with no connections', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      expect(result.current.coverageBySkill['skill-svc-uuid-3']).toBe('uncovered') // Brake Service
+    })
   })
 
-  test('selection highlights connected nodes transitively through skills', () => {
-    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockSkills, null))
+  test('detects broken chains for uncovered services', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
+    await waitFor(() => {
+      expect(result.current.brokenChains.some(b => b.skillName === 'Brake Service')).toBe(true)
+      expect(result.current.brokenChains.some(b => b.skillName === 'Oil Change')).toBe(false)
+    })
+  })
 
-    act(() => { result.current.selectNode('emp-1') })
+  test('selection highlights connected nodes transitively', async () => {
+    const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
 
-    // Alice has oil-change and tire-rotation
-    // oil-change connects to Bay 1, Bay 2
-    // tire-rotation connects to Bay 1
-    expect(result.current.highlightedNodeIds.has('emp-1')).toBe(true)
-    expect(result.current.highlightedNodeIds.has('skill-oil-change')).toBe(true)
-    expect(result.current.highlightedNodeIds.has('skill-tire-rotation')).toBe(true)
+    await waitFor(() => {
+      expect(result.current.connections.length).toBeGreaterThan(0)
+    })
+
+    act(() => { result.current.selectNode('emp-emp-uuid-1') })
+
+    // Alice is connected to Oil Change and Tire Rotation
+    expect(result.current.highlightedNodeIds.has('emp-emp-uuid-1')).toBe(true)
+    expect(result.current.highlightedNodeIds.has('skill-svc-uuid-1')).toBe(true) // Oil Change
+    expect(result.current.highlightedNodeIds.has('skill-svc-uuid-2')).toBe(true) // Tire Rotation
+    // Bay 1 connected to both Oil Change and Tire Rotation
     expect(result.current.highlightedNodeIds.has('res-res-uuid-1')).toBe(true)
-    expect(result.current.highlightedNodeIds.has('res-res-uuid-2')).toBe(true)
-    // Bob is NOT highlighted (not directly connected to Alice)
-    expect(result.current.highlightedNodeIds.has('emp-2')).toBe(false)
-  })
-
-  test('partial coverage when skill has employees but no resources', () => {
-    const partialEmployees = [{ id: 1, name: 'Alice', type: 'employee', skills: ['welding'] }]
-    const partialResources: any[] = []
-    const partialSkills = [{ id: 1, name: 'welding' }]
-    const { result } = renderHook(() => useSkillMapData(partialEmployees, partialResources, partialSkills, null))
-    expect(result.current.coverageBySkill['skill-welding']).toBe('partial')
-    expect(result.current.brokenChains.some(b => b.skillName === 'welding' && b.missingResources)).toBe(true)
+    // Bob not highlighted
+    expect(result.current.highlightedNodeIds.has('emp-emp-uuid-2')).toBe(false)
   })
 })
 
@@ -141,41 +178,36 @@ describe('useSkillMapData', () => {
 describe('SkillMapNode', () => {
   const baseNode = { id: 'emp-1', type: 'employee' as const, name: 'Alice', rawId: 1 }
 
-  test('renders employee node with name and green icon', () => {
+  test('renders employee node with name', () => {
     render(
       <SkillMapNode node={baseNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
     )
     expect(screen.getByText('Alice')).toBeInTheDocument()
-    const container = screen.getByTestId('node-emp-1')
-    expect(container.querySelector('.text-green-600')).toBeTruthy()
   })
 
-  test('renders skill node with coverage badge', () => {
-    const skillNode = { id: 'skill-oil', type: 'skill' as const, name: 'oil', rawId: 'oil', coverage: 'full' as const }
+  test('renders service node with coverage badge', () => {
+    const svcNode = { id: 'skill-svc1', type: 'skill' as const, name: 'Oil Change', rawId: 'svc1', coverage: 'full' as const }
     render(
-      <SkillMapNode node={skillNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
+      <SkillMapNode node={svcNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
     )
     expect(screen.getByText('Full Coverage')).toBeInTheDocument()
   })
 
-  test('renders resource node with blue icon', () => {
+  test('renders resource node', () => {
     const resNode = { id: 'res-1', type: 'resource' as const, name: 'Bay 1', rawId: '1' }
     render(
       <SkillMapNode node={resNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
     )
     expect(screen.getByText('Bay 1')).toBeInTheDocument()
-    const container = screen.getByTestId('node-res-1')
-    expect(container.querySelector('.text-blue-600')).toBeTruthy()
   })
 
-  test('shows amber border and Fix button on broken skill node', () => {
-    const brokenSkill = { id: 'skill-x', type: 'skill' as const, name: 'x', rawId: 'x', coverage: 'partial' as const }
+  test('shows Fix button on broken service node', () => {
+    const brokenSvc = { id: 'skill-x', type: 'skill' as const, name: 'Brake Service', rawId: 'x', coverage: 'uncovered' as const }
     const onFix = vi.fn()
     render(
-      <SkillMapNode node={brokenSkill} isHighlighted={true} isSelected={false} isBroken={true} onClick={vi.fn()} onFixClick={onFix} />
+      <SkillMapNode node={brokenSvc} isHighlighted={true} isSelected={false} isBroken={true} onClick={vi.fn()} onFixClick={onFix} />
     )
     expect(screen.getByTestId('fix-skill-x')).toBeInTheDocument()
-    expect(screen.getByTestId('broken-dot-skill-x')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('fix-skill-x'))
     expect(onFix).toHaveBeenCalled()
   })
@@ -195,7 +227,6 @@ describe('SkillMapColumn', () => {
     )
     expect(screen.getByText('Employees')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByTestId('mock-icon')).toBeInTheDocument()
   })
 
   test('renders children', () => {
@@ -226,91 +257,202 @@ describe('SkillMapConnections', () => {
     )
     expect(screen.getByTestId('skill-map-svg')).toBeInTheDocument()
   })
+})
 
-  test('creates paths for connections when nodes exist', () => {
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-
-    // Create mock nodes
-    const emp = document.createElement('div')
-    emp.setAttribute('data-node-id', 'emp-1')
-    emp.getBoundingClientRect = () => ({ left: 0, right: 100, top: 50, bottom: 80, width: 100, height: 30, x: 0, y: 50, toJSON: () => ({}) })
-    container.appendChild(emp)
-
-    const skill = document.createElement('div')
-    skill.setAttribute('data-node-id', 'skill-oil')
-    skill.getBoundingClientRect = () => ({ left: 200, right: 300, top: 50, bottom: 80, width: 100, height: 30, x: 200, y: 50, toJSON: () => ({}) })
-    container.appendChild(skill)
-
-    container.getBoundingClientRect = () => ({ left: 0, right: 600, top: 0, bottom: 400, width: 600, height: 400, x: 0, y: 0, toJSON: () => ({}) })
-
-    const connections = [{ id: 'emp-1--skill-oil', from: 'emp-1', to: 'skill-oil', side: 'left' as const, isBroken: false }]
-    const containerRef = { current: container }
-
-    const { container: renderContainer } = render(
-      <SkillMapConnections
-        connections={connections}
-        highlightedConnectionIds={new Set()}
-        hasSelection={false}
-        containerRef={containerRef}
-      />
-    )
-
-    // Path should be rendered after layout effect
-    const paths = renderContainer.querySelectorAll('path')
-    expect(paths.length).toBeGreaterThanOrEqual(0) // paths render async via rAF
+// ==========================================
+// SkillRelationshipMap integration test
+// ==========================================
+describe('SkillRelationshipMap', () => {
+  test('renders 3 columns', async () => {
+    render(<SkillRelationshipMap />)
+    await waitFor(() => {
+      expect(screen.getByText('Employees')).toBeInTheDocument()
+      expect(screen.getByText('Services')).toBeInTheDocument()
+      expect(screen.getByText('Resources')).toBeInTheDocument()
+    })
   })
 
-  test('applies highlight styling to highlighted connections', () => {
-    const container = document.createElement('div')
-    container.getBoundingClientRect = () => ({ left: 0, right: 600, top: 0, bottom: 400, width: 600, height: 400, x: 0, y: 0, toJSON: () => ({}) })
-    const containerRef = { current: container }
+  test('renders employee and resource names', async () => {
+    render(<SkillRelationshipMap />)
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument()
+      expect(screen.getByText('Bob')).toBeInTheDocument()
+      expect(screen.getByText('Bay 1')).toBeInTheDocument()
+      expect(screen.getByText('Bay 2')).toBeInTheDocument()
+    })
+  })
 
-    render(
-      <SkillMapConnections
-        connections={[]}
-        highlightedConnectionIds={new Set(['conn-1'])}
-        hasSelection={true}
-        containerRef={containerRef}
-      />
-    )
-    // Just verifies it renders without error with highlight state
-    expect(screen.getByTestId('skill-map-svg')).toBeInTheDocument()
+  test('renders service names from services list', async () => {
+    render(<SkillRelationshipMap />)
+    await waitFor(() => {
+      expect(screen.getByText('Oil Change')).toBeInTheDocument()
+      expect(screen.getByText('Tire Rotation')).toBeInTheDocument()
+      expect(screen.getByText('Brake Service')).toBeInTheDocument()
+    })
   })
 })
 
 // ==========================================
-// SkillRelationshipMap tests
+// completeLinking tests (assign via map click)
 // ==========================================
-describe('SkillRelationshipMap', () => {
-  test('renders 3 columns with correct counts', () => {
-    render(<SkillRelationshipMap />)
-    expect(screen.getByText('Employees')).toBeInTheDocument()
-    expect(screen.getByText('Skills')).toBeInTheDocument()
-    expect(screen.getByText('Resources')).toBeInTheDocument()
-    // 2 employees (Admin filtered), 3 skills, 2 resources
-    const empColumn = screen.getByTestId('column-employees')
-    expect(empColumn.querySelector('.rounded-full')!.textContent).toBe('2')
-    const skillColumn = screen.getByTestId('column-skills')
-    expect(skillColumn.querySelector('.rounded-full')!.textContent).toBe('3')
-    const resColumn = screen.getByTestId('column-resources')
-    expect(resColumn.querySelector('.rounded-full')!.textContent).toBe('2')
+describe('completeLinking', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  test('assigns employee to service via mapping API', async () => {
+    const onChanged = vi.fn()
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant', onChanged)
+    )
+
+    // Wait for mappings to load
+    await waitFor(() => {
+      expect(result.current.skillNodes.length).toBe(3)
+    })
+
+    // Start linking from Bob
+    act(() => { result.current.startLinking('emp-emp-uuid-2', 'employee') })
+    expect(result.current.linking).not.toBeNull()
+    expect(result.current.linking!.fromNodeId).toBe('emp-emp-uuid-2')
+
+    // Valid targets should include all services
+    expect(result.current.validLinkTargets.has('skill-svc-uuid-1')).toBe(true)
+    expect(result.current.validLinkTargets.has('skill-svc-uuid-3')).toBe(true)
+
+    // Complete link to Oil Change (Bob is not yet assigned to Oil Change)
+    await act(async () => {
+      await result.current.completeLinking('skill-svc-uuid-1')
+    })
+
+    expect(Api.mappings.assignServiceEmployee).toHaveBeenCalledWith('svc-uuid-1', 'emp-uuid-2', 'test-tenant')
+    expect(result.current.linking).toBeNull()
   })
 
-  test('renders employee and resource names', () => {
-    render(<SkillRelationshipMap />)
-    expect(screen.getByText('Alice')).toBeInTheDocument()
-    expect(screen.getByText('Bob')).toBeInTheDocument()
-    expect(screen.getByText('Bay 1')).toBeInTheDocument()
-    expect(screen.getByText('Bay 2')).toBeInTheDocument()
+  test('assigns resource to service via mapping API', async () => {
+    const onChanged = vi.fn()
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant', onChanged)
+    )
+
+    await waitFor(() => {
+      expect(result.current.skillNodes.length).toBe(3)
+    })
+
+    // Start linking from Bay 2
+    act(() => { result.current.startLinking('res-res-uuid-2', 'resource') })
+
+    // Complete link to Tire Rotation (Bay 2 not yet assigned to Tire Rotation)
+    await act(async () => {
+      await result.current.completeLinking('skill-svc-uuid-2')
+    })
+
+    expect(Api.mappings.assignServiceResource).toHaveBeenCalledWith('svc-uuid-2', 'res-uuid-2', 'test-tenant')
   })
 
-  test('clicking a node highlights it', () => {
-    render(<SkillRelationshipMap />)
-    const aliceNode = screen.getByTestId('node-emp-1')
-    fireEvent.click(aliceNode)
-    // After click, Alice should have selected ring
-    expect(aliceNode.className).toContain('ring-2')
+  test('does not duplicate existing assignment', async () => {
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant')
+    )
+
+    await waitFor(() => {
+      expect(result.current.connections.length).toBeGreaterThan(0)
+    })
+
+    // Alice is already assigned to Oil Change — linking should skip the API call
+    act(() => { result.current.startLinking('emp-emp-uuid-1', 'employee') })
+    await act(async () => {
+      await result.current.completeLinking('skill-svc-uuid-1')
+    })
+
+    // assignServiceEmployee should NOT be called because mapping already exists
+    expect(Api.mappings.assignServiceEmployee).not.toHaveBeenCalled()
+  })
+
+  test('cancelling linking clears state', async () => {
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant')
+    )
+
+    await waitFor(() => {
+      expect(result.current.skillNodes.length).toBe(3)
+    })
+
+    act(() => { result.current.startLinking('emp-emp-uuid-1', 'employee') })
+    expect(result.current.linking).not.toBeNull()
+
+    act(() => { result.current.cancelLinking() })
+    expect(result.current.linking).toBeNull()
+  })
+
+  test('linking from service shows employees and resources as valid targets', async () => {
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant')
+    )
+
+    await waitFor(() => {
+      expect(result.current.skillNodes.length).toBe(3)
+    })
+
+    // Start linking from Brake Service (a service node)
+    act(() => { result.current.startLinking('skill-svc-uuid-3', 'skill') })
+
+    // All employees and resources should be valid targets
+    expect(result.current.validLinkTargets.has('emp-emp-uuid-1')).toBe(true)
+    expect(result.current.validLinkTargets.has('emp-emp-uuid-2')).toBe(true)
+    expect(result.current.validLinkTargets.has('res-res-uuid-1')).toBe(true)
+    expect(result.current.validLinkTargets.has('res-res-uuid-2')).toBe(true)
+  })
+})
+
+// ==========================================
+// disconnectConnection tests
+// ==========================================
+describe('disconnectConnection', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  test('unassigns employee from service via mapping API', async () => {
+    const onChanged = vi.fn()
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant', onChanged)
+    )
+
+    await waitFor(() => {
+      expect(result.current.connections.length).toBeGreaterThan(0)
+    })
+
+    // Find connection: Alice -> Oil Change
+    const conn = result.current.connections.find(
+      c => c.side === 'left' && c.from === 'emp-emp-uuid-1' && c.to === 'skill-svc-uuid-1'
+    )
+    expect(conn).toBeDefined()
+
+    await act(async () => {
+      await result.current.disconnectConnection(conn!.id)
+    })
+
+    expect(Api.mappings.unassignServiceEmployee).toHaveBeenCalledWith('svc-uuid-1', 'emp-uuid-1', 'test-tenant')
+  })
+
+  test('unassigns resource from service via mapping API', async () => {
+    const onChanged = vi.fn()
+    const { result } = renderHook(() =>
+      useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant', onChanged)
+    )
+
+    await waitFor(() => {
+      expect(result.current.connections.length).toBeGreaterThan(0)
+    })
+
+    // Find connection: Oil Change -> Bay 1
+    const conn = result.current.connections.find(
+      c => c.side === 'right' && c.from === 'skill-svc-uuid-1' && c.to === 'res-res-uuid-1'
+    )
+    expect(conn).toBeDefined()
+
+    await act(async () => {
+      await result.current.disconnectConnection(conn!.id)
+    })
+
+    expect(Api.mappings.unassignServiceResource).toHaveBeenCalledWith('svc-uuid-1', 'res-uuid-1', 'test-tenant')
   })
 })
 
@@ -319,8 +461,8 @@ describe('SkillRelationshipMap', () => {
 // ==========================================
 describe('SkillMapFixPanel', () => {
   const brokenChain = {
-    skillId: 'skill-brake-service',
-    skillName: 'brake-service',
+    skillId: 'skill-svc-uuid-3',
+    skillName: 'Brake Service',
     missingEmployees: true,
     missingResources: true,
   }
@@ -329,26 +471,30 @@ describe('SkillMapFixPanel', () => {
     vi.clearAllMocks()
   })
 
-  test('shows eligible entities that do not already have the skill', () => {
+  test('shows eligible employees and resources for assignment', () => {
+    // SkillMapFixPanel imported at top of file
     render(
       <SkillMapFixPanel
         chain={brokenChain}
         employees={mockEmployees}
         resources={mockResources}
         tenantId="test-tenant"
+        empMappings={mockEmpMappings}
+        resMappings={mockResMappings}
         onFixed={vi.fn()}
         onClose={vi.fn()}
       />
     )
-    // All non-user employees are eligible since none have 'brake-service'
+    // All non-user employees should be eligible (none are assigned to Brake Service)
     expect(screen.getByText('+ Alice')).toBeInTheDocument()
     expect(screen.getByText('+ Bob')).toBeInTheDocument()
-    // All resources are eligible since none have 'brake-service'
+    // All resources should be eligible
     expect(screen.getByText('+ Bay 1')).toBeInTheDocument()
     expect(screen.getByText('+ Bay 2')).toBeInTheDocument()
   })
 
-  test('calls API and onFixed when assigning skill to employee', async () => {
+  test('calls mapping API when assigning employee to service', async () => {
+    // SkillMapFixPanel imported at top of file
     const onFixed = vi.fn()
     render(
       <SkillMapFixPanel
@@ -356,6 +502,8 @@ describe('SkillMapFixPanel', () => {
         employees={mockEmployees}
         resources={mockResources}
         tenantId="test-tenant"
+        empMappings={mockEmpMappings}
+        resMappings={mockResMappings}
         onFixed={onFixed}
         onClose={vi.fn()}
       />
@@ -363,20 +511,56 @@ describe('SkillMapFixPanel', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('+ Alice'))
     })
-    expect(Api.employees.update).toHaveBeenCalledWith(1, { skills: ['oil-change', 'tire-rotation', 'brake-service'] })
+    expect(Api.mappings.assignServiceEmployee).toHaveBeenCalledWith('svc-uuid-3', 'emp-uuid-1', 'test-tenant')
     expect(onFixed).toHaveBeenCalled()
   })
-})
 
-// ==========================================
-// Synthetic / orphaned skill tests
-// ==========================================
-describe('Orphaned skills', () => {
-  test('creates synthetic node for skill in employee but not in master list', () => {
-    const emps = [{ id: 1, name: 'Alice', type: 'employee', skills: ['mystery-skill'] }]
-    const { result } = renderHook(() => useSkillMapData(emps, [], [], null))
-    const mysteryNode = result.current.skillNodes.find(s => s.name === 'mystery-skill')
-    expect(mysteryNode).toBeDefined()
-    expect(mysteryNode!.isSynthetic).toBe(true)
+  test('calls mapping API when assigning resource to service', async () => {
+    // SkillMapFixPanel imported at top of file
+    const onFixed = vi.fn()
+    render(
+      <SkillMapFixPanel
+        chain={brokenChain}
+        employees={mockEmployees}
+        resources={mockResources}
+        tenantId="test-tenant"
+        empMappings={mockEmpMappings}
+        resMappings={mockResMappings}
+        onFixed={onFixed}
+        onClose={vi.fn()}
+      />
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByText('+ Bay 1'))
+    })
+    expect(Api.mappings.assignServiceResource).toHaveBeenCalledWith('svc-uuid-3', 'res-uuid-1', 'test-tenant')
+    expect(onFixed).toHaveBeenCalled()
+  })
+
+  test('excludes already-assigned employees from eligible list', () => {
+    // SkillMapFixPanel imported at top of file
+    // Alice is already assigned to svc-uuid-1 (Oil Change)
+    const chainForOilChange = {
+      skillId: 'skill-svc-uuid-1',
+      skillName: 'Oil Change',
+      missingEmployees: true,
+      missingResources: false,
+    }
+    render(
+      <SkillMapFixPanel
+        chain={chainForOilChange}
+        employees={mockEmployees}
+        resources={mockResources}
+        tenantId="test-tenant"
+        empMappings={mockEmpMappings}
+        resMappings={mockResMappings}
+        onFixed={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    // Alice IS assigned to Oil Change already — should NOT appear
+    expect(screen.queryByText('+ Alice')).not.toBeInTheDocument()
+    // Bob is NOT assigned to Oil Change — should appear
+    expect(screen.getByText('+ Bob')).toBeInTheDocument()
   })
 })

@@ -4,6 +4,24 @@ import { expect, test, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import SuperAdminDashboard from './components/SuperAdminDashboard'
 
+// Mock SessionContext so SuperAdminDashboard can call useSessionContext
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: '00000000-0000-0000-0000-000000000000',
+    userName: 'Admin',
+    isAdmin: true,
+    managedTenantId: null,
+    managedTenantName: null,
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  SessionProvider: ({ children }: any) => children,
+}))
+
 // Helper to build a fetch mock that returns tenants, templates, then a success for create/delete
 function buildFetchMock() {
   const tenants = [
@@ -143,8 +161,6 @@ test('SuperAdminDashboard: can delete a business', async () => {
   const fetchMock = buildFetchMock()
   vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
 
-  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
-
   render(<SuperAdminDashboard />)
 
   // Wait for tenant to load and select it
@@ -155,13 +171,21 @@ test('SuperAdminDashboard: can delete a business', async () => {
   const [deleteButton] = await screen.findAllByTitle(/Delete Business/i)
   fireEvent.click(deleteButton)
 
+  // Type-to-confirm modal should appear
+  await screen.findByText(/This action is permanent/i)
+
+  // Type the tenant name to enable the delete button
+  const confirmInput = screen.getByPlaceholderText(/DynaTire PoC/i)
+  fireEvent.change(confirmInput, { target: { value: 'DynaTire PoC' } })
+
+  // Click "Permanently Delete"
+  const confirmButton = screen.getByRole('button', { name: /Permanently Delete/i })
+  fireEvent.click(confirmButton)
+
   await waitFor(() => {
-    expect(confirmSpy).toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/tenants/tenant-1'),
       expect.objectContaining({ method: 'DELETE' })
     )
   })
-
-  confirmSpy.mockRestore()
 })

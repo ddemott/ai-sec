@@ -29,6 +29,7 @@ import { splitFullName } from '../lib/utils'
 import { useSession } from '../lib/hooks'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { PhoneInput } from './ui/PhoneInput'
 import { Select } from './ui/Select'
 import { Card } from './ui/Card'
 import { Badge } from './ui/Badge'
@@ -413,7 +414,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input label="First Name" value={editForm.first_name} onChange={(e) => handleEditFormChange('first_name', e.target.value)} placeholder="First Name" />
                         <Input label="Last Name" value={editForm.last_name} onChange={(e) => handleEditFormChange('last_name', e.target.value)} placeholder="Last Name" />
-                        <Input label="Phone Number" value={editForm.phone} onChange={(e) => handleEditFormChange('phone', e.target.value)} placeholder="+1-555-010-9999" />
+                        <PhoneInput label="Phone Number" value={editForm.phone} onChange={(val) => handleEditFormChange('phone', val)} />
                       </div>
                       <Input label="Email" type="email" value={editForm.email} onChange={(e) => handleEditFormChange('email', e.target.value)} placeholder="customer@email.com" />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

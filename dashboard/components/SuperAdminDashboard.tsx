@@ -24,6 +24,7 @@ import { formatPhone, normalizePhone } from '../lib/phone'
 import { US_TIMEZONES } from '../lib/constants'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { PhoneInput } from './ui/PhoneInput'
 import { Select } from './ui/Select'
 import { Card } from './ui/Card'
 import { Badge } from './ui/Badge'
@@ -526,11 +527,10 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                             </div>
                         )}
                         {isEditing ? (
-                            <Input 
+                            <PhoneInput
                                 label="Owner Notification Phone"
-                                value={form.owner_phone || ''} 
-                                onChange={e => setForm({...form, owner_phone: e.target.value})}
-                                placeholder="+1-555-010-9999"
+                                value={form.owner_phone || ''}
+                                onChange={(val) => setForm({...form, owner_phone: val})}
                             />
                         ) : (
                             <div className="space-y-1">
@@ -541,11 +541,10 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                             </div>
                         )}
                         {isEditing ? (
-                            <Input 
+                            <PhoneInput
                                 label="Vapi Inbound Phone"
-                                value={form.inbound_phone || ''} 
-                                onChange={e => setForm({...form, inbound_phone: e.target.value})}
-                                placeholder="+1-555-000-0000"
+                                value={form.inbound_phone || ''}
+                                onChange={(val) => setForm({...form, inbound_phone: val})}
                             />
                         ) : (
                             <div className="space-y-1">

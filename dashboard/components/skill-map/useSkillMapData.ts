@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { Api } from '../../lib/api'
 
 export type NodeType = 'employee' | 'skill' | 'resource'
@@ -9,10 +9,7 @@ export interface SkillMapNode {
   type: NodeType
   name: string
   rawId: number | string
-  skills?: string[]
-  capabilities?: string[]
   coverage?: CoverageLevel
-  isSynthetic?: boolean
 }
 
 export interface Connection {
@@ -38,13 +35,38 @@ export type LinkingState = {
 export function useSkillMapData(
   employees: any[],
   resources: any[],
-  skills: any[],
+  services: any[],
   tenantId: string | null,
   onDataChanged?: () => void
 ) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [linking, setLinking] = useState<LinkingState>(null)
   const [saving, setSaving] = useState(false)
+  const [empMappings, setEmpMappings] = useState<any[]>([])
+  const [resMappings, setResMappings] = useState<any[]>([])
+  const [mappingsLoaded, setMappingsLoaded] = useState(false)
+
+  // Fetch mappings from service_employee and service_resource tables
+  const fetchMappings = useCallback(async () => {
+    if (!tenantId) return
+    try {
+      const [em, rm] = await Promise.all([
+        Api.mappings.listServiceEmployee(tenantId),
+        Api.mappings.listServiceResource(tenantId),
+      ])
+      setEmpMappings(Array.isArray(em) ? em : [])
+      setResMappings(Array.isArray(rm) ? rm : [])
+      setMappingsLoaded(true)
+    } catch {
+      setEmpMappings([])
+      setResMappings([])
+      setMappingsLoaded(true)
+    }
+  }, [tenantId])
+
+  useEffect(() => {
+    fetchMappings()
+  }, [fetchMappings])
 
   const { employeeNodes, skillNodes, resourceNodes, connections, coverageBySkill, brokenChains } = useMemo(() => {
     // Build employee nodes (filter out user-type)
@@ -55,7 +77,6 @@ export function useSkillMapData(
         type: 'employee' as NodeType,
         name: e.name,
         rawId: e.id,
-        skills: Array.isArray(e.skills) ? e.skills : [],
       }))
 
     // Build resource nodes
@@ -64,87 +85,79 @@ export function useSkillMapData(
       type: 'resource' as NodeType,
       name: r.name,
       rawId: r.id,
-      capabilities: Array.isArray(r.capabilities) ? r.capabilities : [],
     }))
 
-    // Collect all skill names from master list + employee skills + resource capabilities
-    const masterSkillNames = new Set((skills || []).map((s: any) => s.name))
-    const allSkillNames = new Set(masterSkillNames)
-
-    for (const e of empNodes) {
-      for (const s of e.skills || []) allSkillNames.add(s)
-    }
-    for (const r of resNodes) {
-      for (const c of r.capabilities || []) allSkillNames.add(c)
-    }
-
-    // Build skill nodes
-    const skNodes: SkillMapNode[] = Array.from(allSkillNames).sort().map(name => ({
-      id: `skill-${name}`,
+    // Build service nodes (middle column — these ARE the "skills" in the map)
+    const svcNodes: SkillMapNode[] = (services || []).map(s => ({
+      id: `skill-${s.id}`,
       type: 'skill' as NodeType,
-      name,
-      rawId: name,
-      isSynthetic: !masterSkillNames.has(name),
+      name: s.name,
+      rawId: s.id,
     }))
 
-    // Build connections
+    // Build connections from mapping tables
     const conns: Connection[] = []
 
-    // Left side: employee -> skill
-    for (const emp of empNodes) {
-      for (const skillName of emp.skills || []) {
+    // Left side: employee -> service (from service_employee table)
+    for (const mapping of empMappings) {
+      const empId = `emp-${mapping.employee_id}`
+      const svcId = `skill-${mapping.service_id}`
+      // Only add if both nodes exist
+      if (empNodes.some(e => e.id === empId) && svcNodes.some(s => s.id === svcId)) {
         conns.push({
-          id: `${emp.id}--skill-${skillName}`,
-          from: emp.id,
-          to: `skill-${skillName}`,
+          id: `${empId}--${svcId}`,
+          from: empId,
+          to: svcId,
           side: 'left',
           isBroken: false,
         })
       }
     }
 
-    // Right side: skill -> resource
-    for (const res of resNodes) {
-      for (const cap of res.capabilities || []) {
+    // Right side: service -> resource (from service_resource table)
+    for (const mapping of resMappings) {
+      const svcId = `skill-${mapping.service_id}`
+      const resId = `res-${mapping.resource_id}`
+      if (svcNodes.some(s => s.id === svcId) && resNodes.some(r => r.id === resId)) {
         conns.push({
-          id: `skill-${cap}--${res.id}`,
-          from: `skill-${cap}`,
-          to: res.id,
+          id: `${svcId}--${resId}`,
+          from: svcId,
+          to: resId,
           side: 'right',
           isBroken: false,
         })
       }
     }
 
-    // Compute coverage per skill
+    // Compute coverage per service
     const coverage: Record<string, CoverageLevel> = {}
     const broken: BrokenChain[] = []
 
-    for (const sk of skNodes) {
-      const hasEmployees = conns.some(c => c.side === 'left' && c.to === sk.id)
-      const hasResources = conns.some(c => c.side === 'right' && c.from === sk.id)
+    for (const svc of svcNodes) {
+      const hasEmployees = conns.some(c => c.side === 'left' && c.to === svc.id)
+      const hasResources = conns.some(c => c.side === 'right' && c.from === svc.id)
 
       if (hasEmployees && hasResources) {
-        coverage[sk.id] = 'full'
+        coverage[svc.id] = 'full'
       } else if (hasEmployees || hasResources) {
-        coverage[sk.id] = 'partial'
+        coverage[svc.id] = 'partial'
         broken.push({
-          skillId: sk.id,
-          skillName: sk.name,
+          skillId: svc.id,
+          skillName: svc.name,
           missingEmployees: !hasEmployees,
           missingResources: !hasResources,
         })
       } else {
-        coverage[sk.id] = 'uncovered'
+        coverage[svc.id] = 'uncovered'
         broken.push({
-          skillId: sk.id,
-          skillName: sk.name,
+          skillId: svc.id,
+          skillName: svc.name,
           missingEmployees: true,
           missingResources: true,
         })
       }
 
-      sk.coverage = coverage[sk.id]
+      svc.coverage = coverage[svc.id]
     }
 
     // Mark broken connections
@@ -161,13 +174,13 @@ export function useSkillMapData(
 
     return {
       employeeNodes: empNodes,
-      skillNodes: skNodes,
+      skillNodes: svcNodes,
       resourceNodes: resNodes,
       connections: conns,
       coverageBySkill: coverage,
       brokenChains: broken,
     }
-  }, [employees, resources, skills])
+  }, [employees, resources, services, empMappings, resMappings])
 
   // Compute highlighted node IDs based on selection
   const highlightedNodeIds = useMemo(() => {
@@ -230,13 +243,13 @@ export function useSkillMapData(
     const targets = new Set<string>()
 
     if (linking.fromType === 'employee') {
-      // Employee can link to skills
+      // Employee can link to services
       for (const sk of skillNodes) targets.add(sk.id)
     } else if (linking.fromType === 'resource') {
-      // Resource can link to skills
+      // Resource can link to services
       for (const sk of skillNodes) targets.add(sk.id)
     } else if (linking.fromType === 'skill') {
-      // Skill can link to employees or resources
+      // Service can link to employees or resources
       for (const emp of employeeNodes) targets.add(emp.id)
       for (const res of resourceNodes) targets.add(res.id)
     }
@@ -256,9 +269,8 @@ export function useSkillMapData(
   const completeLinking = useCallback(async (targetNodeId: string) => {
     if (!linking || !tenantId || saving) return
 
-    // Determine what connection to make
     let employeeNode: SkillMapNode | undefined
-    let skillNode: SkillMapNode | undefined
+    let serviceNode: SkillMapNode | undefined
     let resourceNode: SkillMapNode | undefined
 
     const fromNode = [...employeeNodes, ...skillNodes, ...resourceNodes].find(n => n.id === linking.fromNodeId)
@@ -266,37 +278,39 @@ export function useSkillMapData(
 
     if (!fromNode || !toNode) return
 
-    // Sort out which is which
     for (const n of [fromNode, toNode]) {
       if (n.type === 'employee') employeeNode = n
-      if (n.type === 'skill') skillNode = n
+      if (n.type === 'skill') serviceNode = n
       if (n.type === 'resource') resourceNode = n
     }
 
-    if (!skillNode) return // Must involve a skill
+    if (!serviceNode) return // Must involve a service
 
     setSaving(true)
     try {
-      if (employeeNode && skillNode) {
-        // Add skill to employee
-        const emp = employees.find((e: any) => `emp-${e.id}` === employeeNode!.id)
-        if (!emp) return
-        const currentSkills: string[] = Array.isArray(emp.skills) ? emp.skills : []
-        if (currentSkills.includes(skillNode.name)) return // Already connected
-        await Api.employees.update(emp.id, {
-          tenant_id: tenantId,
-          skills: [...currentSkills, skillNode.name],
-        })
-      } else if (resourceNode && skillNode) {
-        // Add capability to resource
-        const res = resources.find((r: any) => `res-${r.id}` === resourceNode!.id)
-        if (!res) return
-        const currentCaps: string[] = Array.isArray(res.capabilities) ? res.capabilities : []
-        if (currentCaps.includes(skillNode.name)) return // Already connected
-        await Api.resources.update(res.id, {
-          capabilities: [...currentCaps, skillNode.name],
-        }, tenantId)
+      if (employeeNode && serviceNode) {
+        // Assign employee to service via mapping table
+        const serviceId = serviceNode.rawId
+        const employeeId = employeeNode.rawId
+        // Check if already connected
+        const alreadyMapped = empMappings.some(
+          m => String(m.service_id) === String(serviceId) && String(m.employee_id) === String(employeeId)
+        )
+        if (!alreadyMapped) {
+          await Api.mappings.assignServiceEmployee(serviceId as number, employeeId, tenantId)
+        }
+      } else if (resourceNode && serviceNode) {
+        // Assign resource to service via mapping table
+        const serviceId = serviceNode.rawId
+        const resourceId = resourceNode.rawId
+        const alreadyMapped = resMappings.some(
+          m => String(m.service_id) === String(serviceId) && String(m.resource_id) === String(resourceId)
+        )
+        if (!alreadyMapped) {
+          await Api.mappings.assignServiceResource(serviceId as number, resourceId as string, tenantId)
+        }
       }
+      await fetchMappings()
       onDataChanged?.()
     } catch (err) {
       console.error('Failed to create connection:', err)
@@ -304,7 +318,7 @@ export function useSkillMapData(
       setSaving(false)
       setLinking(null)
     }
-  }, [linking, tenantId, saving, employees, resources, employeeNodes, skillNodes, resourceNodes, onDataChanged])
+  }, [linking, tenantId, saving, employeeNodes, skillNodes, resourceNodes, empMappings, resMappings, fetchMappings, onDataChanged])
 
   // --- Disconnect ---
 
@@ -317,36 +331,28 @@ export function useSkillMapData(
     setSaving(true)
     try {
       if (conn.side === 'left') {
-        // Employee -> Skill: remove skill from employee's skills array
+        // Employee -> Service: unassign via mapping table
+        const serviceNode = skillNodes.find(s => s.id === conn.to)
         const empNode = employeeNodes.find(e => e.id === conn.from)
-        if (!empNode) return
-        const emp = employees.find((e: any) => `emp-${e.id}` === empNode.id)
-        if (!emp) return
-        const skillName = conn.to.replace('skill-', '')
-        const newSkills = (emp.skills || []).filter((s: string) => s !== skillName)
-        await Api.employees.update(emp.id, {
-          tenant_id: tenantId,
-          skills: newSkills,
-        })
+        if (serviceNode && empNode) {
+          await Api.mappings.unassignServiceEmployee(serviceNode.rawId as number, empNode.rawId, tenantId)
+        }
       } else {
-        // Skill -> Resource: remove capability from resource's capabilities array
+        // Service -> Resource: unassign via mapping table
+        const serviceNode = skillNodes.find(s => s.id === conn.from)
         const resNode = resourceNodes.find(r => r.id === conn.to)
-        if (!resNode) return
-        const res = resources.find((r: any) => `res-${r.id}` === resNode.id)
-        if (!res) return
-        const capName = conn.from.replace('skill-', '')
-        const newCaps = (res.capabilities || []).filter((c: string) => c !== capName)
-        await Api.resources.update(res.id, {
-          capabilities: newCaps,
-        }, tenantId)
+        if (serviceNode && resNode) {
+          await Api.mappings.unassignServiceResource(serviceNode.rawId as number, resNode.rawId as string, tenantId)
+        }
       }
+      await fetchMappings()
       onDataChanged?.()
     } catch (err) {
       console.error('Failed to disconnect:', err)
     } finally {
       setSaving(false)
     }
-  }, [tenantId, saving, connections, employeeNodes, resourceNodes, employees, resources, onDataChanged])
+  }, [tenantId, saving, connections, employeeNodes, skillNodes, resourceNodes, fetchMappings, onDataChanged])
 
   return {
     employeeNodes,
@@ -359,14 +365,14 @@ export function useSkillMapData(
     highlightedNodeIds,
     highlightedConnectionIds,
     selectNode,
-    // Linking
     linking,
     validLinkTargets,
     startLinking,
     cancelLinking,
     completeLinking,
-    // Disconnect
     disconnectConnection,
     saving,
+    empMappings,
+    resMappings,
   }
 }

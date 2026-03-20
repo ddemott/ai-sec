@@ -13,7 +13,7 @@ import type { BrokenChain } from './useSkillMapData'
 
 export default function SkillRelationshipMap({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
-  const { employees, resources, skills, loading, refresh } = useStaticData(tenantId)
+  const { employees, resources, services, loading, refresh } = useStaticData(tenantId)
   const vocab = useVocabulary()
   const {
     employeeNodes,
@@ -32,7 +32,9 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
     completeLinking,
     disconnectConnection,
     saving,
-  } = useSkillMapData(employees, resources, skills, tenantId, refresh)
+    empMappings,
+    resMappings,
+  } = useSkillMapData(employees, resources, services, tenantId, refresh)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [fixingChain, setFixingChain] = useState<BrokenChain | null>(null)
@@ -112,6 +114,8 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
             employees={employees}
             resources={resources}
             tenantId={tenantId}
+            empMappings={empMappings}
+            resMappings={resMappings}
             onFixed={handleFixed}
             onClose={() => setFixingChain(null)}
           />
@@ -144,7 +148,7 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
           </SkillMapColumn>
 
           <SkillMapColumn
-            title="Skills"
+            title="Services"
             icon={BookOpen}
             iconColor="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
             count={skillNodes.length}

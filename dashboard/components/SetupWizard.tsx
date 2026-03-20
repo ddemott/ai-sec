@@ -14,10 +14,12 @@ import {
   Wand2,
 } from 'lucide-react'
 import { Api } from '../lib/api'
+import { formatPhone } from '../lib/phone'
 import { useSession, useStaticData } from '../lib/hooks'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { PhoneInput } from './ui/PhoneInput'
 import { CoverageStatusBadge } from './ui/CoverageStatusBadge'
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
@@ -923,7 +925,7 @@ function Step3Employees({
                     <span className="text-xs text-gray-400 dark:text-gray-500">{emp.email}</span>
                   )}
                   {emp.phone && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{emp.phone}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatPhone(emp.phone)}</span>
                   )}
                 </div>
               </div>
@@ -971,12 +973,10 @@ function Step3Employees({
             onChange={e => onChange({ ...editingEmployee, email: e.target.value })}
             placeholder="email@example.com"
           />
-          <Input
+          <PhoneInput
             label="Phone (optional)"
-            type="tel"
             value={editingEmployee.phone}
-            onChange={e => onChange({ ...editingEmployee, phone: e.target.value })}
-            placeholder="+1 (555) 000-0000"
+            onChange={(val) => onChange({ ...editingEmployee, phone: val })}
           />
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2 pt-1">

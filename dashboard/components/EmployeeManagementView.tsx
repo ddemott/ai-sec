@@ -17,6 +17,7 @@ import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { PhoneInput } from './ui/PhoneInput'
 import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
 
@@ -269,14 +270,10 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
                   value={editForm.email}
                   onChange={e => setEditForm({ ...editForm, email: e.target.value })}
                 />
-                <Input
+                <PhoneInput
                   label="Phone"
-                  type="tel"
-                  value={formatPhone(editForm.phone)}
-                  onChange={e => {
-                    const digits = e.target.value.replace(/\D/g, '')
-                    setEditForm({ ...editForm, phone: digits })
-                  }}
+                  value={editForm.phone}
+                  onChange={(val) => setEditForm({ ...editForm, phone: val })}
                 />
               </div>
               <div className="flex items-center justify-between pt-2">

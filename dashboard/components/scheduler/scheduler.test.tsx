@@ -222,7 +222,7 @@ describe('StaffSwimLaneView', () => {
     expect(onEmployeeClick).toHaveBeenCalledWith(employees[0]);
   });
 
-  test('calls onSlotClick when an on-shift slot is clicked', () => {
+  test('calls onSlotClick when an on-shift slot is clicked (mousedown + mouseup)', () => {
     const apptMap = new Map<string, SchedulerAppointment[]>();
     apptMap.set('1', []);
     apptMap.set('2', []);
@@ -240,8 +240,70 @@ describe('StaffSwimLaneView', () => {
         onSlotClick={onSlotClick}
       />
     );
-    fireEvent.click(screen.getByTestId('slot-1-10'));
+    const slot = screen.getByTestId('slot-1-10');
+    fireEvent.mouseDown(slot);
+    fireEvent.mouseUp(slot);
     expect(onSlotClick).toHaveBeenCalledWith('1', 10);
+  });
+
+  test('calls onSlotDrag when dragging across multiple hours', () => {
+    const apptMap = new Map<string, SchedulerAppointment[]>();
+    apptMap.set('1', []);
+    apptMap.set('2', []);
+    apptMap.set('unassigned', []);
+    const shiftMap = new Map<string, any[]>();
+    shiftMap.set('1', [{ start_time: '09:00', end_time: '17:00', day_of_week: 4 }]);
+    shiftMap.set('2', []);
+    const onSlotDrag = vi.fn();
+    const onSlotClick = vi.fn();
+
+    render(
+      <StaffSwimLaneView
+        employees={employees}
+        appointmentsByEmployee={apptMap}
+        shiftsByEmployee={shiftMap}
+        onSlotClick={onSlotClick}
+        onSlotDrag={onSlotDrag}
+      />
+    );
+    // Drag from 10am to 12pm
+    fireEvent.mouseDown(screen.getByTestId('slot-1-10'));
+    fireEvent.mouseEnter(screen.getByTestId('slot-1-11'));
+    fireEvent.mouseEnter(screen.getByTestId('slot-1-12'));
+    fireEvent.mouseUp(screen.getByTestId('slot-1-12'));
+    expect(onSlotDrag).toHaveBeenCalledWith('1', 10, 13); // 10am to 1pm (end exclusive)
+    expect(onSlotClick).not.toHaveBeenCalled();
+  });
+
+  test('calls onShiftDrag when dragging on off-shift (hatched) cells', () => {
+    const apptMap = new Map<string, SchedulerAppointment[]>();
+    apptMap.set('1', []);
+    apptMap.set('2', []);
+    apptMap.set('unassigned', []);
+    const shiftMap = new Map<string, any[]>();
+    // Employee 1 has shift 12-17, so hours 8-11 are OFF shift
+    shiftMap.set('1', [{ start_time: '12:00', end_time: '17:00', day_of_week: 4 }]);
+    shiftMap.set('2', []);
+    const onShiftDrag = vi.fn();
+    const onSlotDrag = vi.fn();
+
+    render(
+      <StaffSwimLaneView
+        employees={employees}
+        appointmentsByEmployee={apptMap}
+        shiftsByEmployee={shiftMap}
+        onSlotDrag={onSlotDrag}
+        onShiftDrag={onShiftDrag}
+      />
+    );
+    // Drag on off-shift hours 8am-11am
+    fireEvent.mouseDown(screen.getByTestId('slot-1-8'));
+    fireEvent.mouseEnter(screen.getByTestId('slot-1-9'));
+    fireEvent.mouseEnter(screen.getByTestId('slot-1-10'));
+    fireEvent.mouseEnter(screen.getByTestId('slot-1-11'));
+    fireEvent.mouseUp(screen.getByTestId('slot-1-11'));
+    expect(onShiftDrag).toHaveBeenCalledWith('1', 8, 12); // 8am to 12pm
+    expect(onSlotDrag).not.toHaveBeenCalled();
   });
 });
 
