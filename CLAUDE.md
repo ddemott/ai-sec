@@ -73,7 +73,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phase 11 complete (Navigation & Vocabulary System). Phases 1–11 all complete, including security hardening (Phase 7.5), scale/polish (Phase 9), CRM enhancements (Phase 10), and navigation restructure + vocabulary system + self-service registration (Phase 11). 100 backend tests + 38 dashboard tests = 138 total passing.
+Phase 12 complete (Scheduler, Assignments & Coverage Visibility). Phases 1–12 all complete, including security hardening (Phase 7.5), scale/polish (Phase 9), CRM enhancements (Phase 10), navigation restructure + vocabulary system (Phase 11), and scheduler views + skill map + coverage + RAG normalization + Stripe Lite (Phase 12). 203 backend tests + 174 dashboard tests = 377 total passing.
 
 ### Remaining (Phase 8 Go-Live tasks)
 - Cloud migration (local Docker → managed Supabase)
@@ -85,14 +85,19 @@ Phase 11 complete (Navigation & Vocabulary System). Phases 1–11 all complete, 
 - OAuth token refresh for calendar sync
 - Beta testing with DynaTire
 
-### Phase 12: Scheduler, Assignments & Coverage Visibility (Next)
-Ship-blocking — owner needs to see who's doing what, assign people to services, and know where the gaps are.
-- **12A — Repeatable Setup Wizard**: 6-step guided setup (Services → Resources → Employees → Shifts → Assignments → Review). Re-enter anytime via "Setup Assistant" button. Live coverage badges update as assignments are made. Coverage summary on final step shows what's ready and what's broken.
-- **12B — Scheduler Views**: Staff swimlanes (default, employee rows × hourly columns), resource columns (bay capacity + coverage bars), appointment list (chronological). Employee day focus panel, quick book panel for walk-ins.
-- **12C — Skill Relationship Map**: Interactive 3-column mind map (Employees → Skills → Resources). Animated SVG connection lines. Broken chains in amber with "Fix now" actions. Coverage badges on skills.
-- **12D — Coverage Visibility**: `check_coverage_gaps()` Postgres function, coverage bar component (red zones), coverage status badges (Full/Partial/Uncovered/Inactive), `GET /coverage` endpoint. Visible in scheduler, services list, skill map, and wizard — not a separate page.
-- **12E — RAG Normalization Layer**: LLM normalization step before embedding. Reduces conversational text to semantic core ("I think Suzy is great" → "Sally prefers Suzy") so vector search matches across phrasings. `shared/normalizeForEmbedding.ts`, `normalized_text` column on `tenant_docs` and `call_summaries`. Query normalization for consistent lookup.
-- **12F — Stripe Lite**: Two plans — Solo ($29/mo) and Growth ($59/mo). Stripe Checkout session for payment, webhook for status updates (`checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`), subscription gate middleware (402 if not active). No plan picker UI, no trial, no call limits, no billing portal. `POST /billing/checkout`, `POST /billing/webhook`. Env vars: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
+### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
+- **12A — Repeatable Setup Wizard**: 6-step guided setup, live coverage badges, coverage summary on final step.
+- **12B — Scheduler Views**: Staff swimlanes (24hr, zoom), resource columns, appointment list, calendar sub-view. Quick Book panel, Employee Day Focus panel.
+- **12C — Skill Relationship Map**: Interactive 3-column mind map with click-to-connect/disconnect. BookOpen icon for skills, Cog for resources.
+- **12D — Coverage Visibility**: `check_coverage_gaps()` RPC, coverage bars, status badges, `GET /coverage` endpoint.
+- **12E — RAG Normalization Layer**: `shared/normalizeForEmbedding.ts` (gpt-4o-mini), `normalized_text` column, query normalization in edge functions.
+- **12F — Stripe Lite**: Solo ($29/mo) + Growth ($59/mo), Stripe Checkout, webhook (3 events), subscription gate middleware (402).
+
+### Additional Features (shipped with Phase 12)
+- **Theme System**: 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized). ThemeProvider + CSS custom properties + palette picker in sidebar.
+- **Admin Tenant Reorder**: Drag-and-drop ordering with save/discard. `sort_order` column, `POST /tenants/reorder`.
+- **Delete Confirmation**: Type-to-confirm modal for tenant deletion.
+- **Tenant List Sync**: `tenantsVersion` counter in SessionContext keeps dropdown in sync with admin panel.
 
 ### Backlog (post-launch)
 - **Automated Phone Provisioning**: Telnyx + Vapi auto-setup during onboarding. Manual provisioning works for first 10–20 customers.
