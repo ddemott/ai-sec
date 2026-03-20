@@ -11,9 +11,11 @@ interface SessionState {
   managedTenantId: string | null
   managedTenantName: string | null
   loading: boolean
+  tenantsVersion: number
   login: (data: { tenant_id: string; user_name: string }) => void
   logout: () => void
   selectManagedTenant: (id: string, name: string) => void
+  notifyTenantsChanged: () => void
 }
 
 const SessionContext = createContext<SessionState | null>(null)
@@ -25,6 +27,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [managedTenantId, setManagedTenantId] = useState<string | null>(null)
   const [managedTenantName, setManagedTenantName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tenantsVersion, setTenantsVersion] = useState(0)
 
   useEffect(() => {
     const storedTenantId = localStorage.getItem('tenantId')
@@ -79,6 +82,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('managedTenantName', name)
   }, [])
 
+  const notifyTenantsChanged = useCallback(() => {
+    setTenantsVersion(v => v + 1)
+  }, [])
+
   return (
     <SessionContext.Provider value={{
       tenantId,
@@ -87,9 +94,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       managedTenantId,
       managedTenantName,
       loading,
+      tenantsVersion,
       login,
       logout,
       selectManagedTenant,
+      notifyTenantsChanged,
     }}>
       {children}
     </SessionContext.Provider>

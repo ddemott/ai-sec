@@ -60,22 +60,8 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
     }
   }
 
-  if (loading && skillNodes.length === 0) {
+  if (loading && employeeNodes.length === 0 && skillNodes.length === 0 && resourceNodes.length === 0) {
     return <div className="p-8 text-gray-500 italic">Loading skill map...</div>
-  }
-
-  if (skillNodes.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-xl inline-block mb-4">
-            <GitBranch className="w-8 h-8 text-purple-500" />
-          </div>
-          <h2 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-1">No skills defined</h2>
-          <p className="text-sm text-gray-400">Create skills in the Skill Matrix tab to see relationships here.</p>
-        </div>
-      </div>
-    )
   }
 
   const brokenSet = new Set(brokenChains.map(b => b.skillId))

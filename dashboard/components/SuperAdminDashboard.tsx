@@ -19,6 +19,7 @@ import {
   Mic
 } from 'lucide-react'
 import { Api } from '../lib/api'
+import { useSessionContext } from '@/lib/SessionContext'
 import { formatPhone, normalizePhone } from '../lib/phone'
 import { US_TIMEZONES } from '../lib/constants'
 import { Button } from './ui/Button'
@@ -51,6 +52,7 @@ interface SuperAdminProps {
 }
 
 export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }: SuperAdminProps) {
+    const { notifyTenantsChanged } = useSessionContext()
     const [tenants, setTenants] = useState<Tenant[]>([])
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null)
     const [templates, setTemplates] = useState<Template[]>([])
@@ -69,6 +71,11 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   const [originalOrder, setOriginalOrder] = useState<Tenant[]>([])
   const [hasReordered, setHasReordered] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)
+
+  // Delete confirmation state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   // Create Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -160,6 +167,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
       if (res.success) {
         setHasReordered(false)
         setOriginalOrder([])
+        notifyTenantsChanged()
       }
     } catch {
       setError('Failed to save order')
@@ -206,20 +214,30 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
     }
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!selectedTenant) return
-    if (!confirm(`Permanently delete ${selectedTenant.name}? This will remove all their data.`)) return
-    
+    setDeleteConfirmText('')
+    setIsDeleteModalOpen(true)
+  }
+
+  async function confirmDelete() {
+    if (!selectedTenant) return
+    setDeleting(true)
     try {
       const res = await Api.tenants.delete(selectedTenant.id)
-        if (res.success) {
-            setSelectedTenant(null)
-            fetchData()
-        } else {
-            setError(res.error || 'Failed to delete business')
-        }
+      if (res.success) {
+        setSelectedTenant(null)
+        setIsDeleteModalOpen(false)
+        setDeleteConfirmText('')
+        fetchData()
+        notifyTenantsChanged()
+      } else {
+        setError(res.error || 'Failed to delete business')
+      }
     } catch {
-      console.error('Failed to delete tenant')
+      setError('Failed to delete business')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -239,6 +257,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                 owner_pass: ''
             })
             fetchData()
+            notifyTenantsChanged()
         } else {
             setError(res.error || 'Failed to create new business')
         }
@@ -625,6 +644,47 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
           <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic">Select a business to manage its global attributes</div>
         )}
       </section>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => { setIsDeleteModalOpen(false); setDeleteConfirmText(''); }}
+        title="Delete Business"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => { setIsDeleteModalOpen(false); setDeleteConfirmText(''); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmDelete}
+              disabled={deleteConfirmText !== selectedTenant?.name || deleting}
+            >
+              {deleting ? 'Deleting...' : 'Permanently Delete'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="text-sm text-red-700 dark:text-red-300">
+              <p className="font-bold mb-1">This action is permanent and cannot be undone.</p>
+              <p>Deleting <strong>{selectedTenant?.name}</strong> will permanently remove all associated data including customers, appointments, employees, resources, call history, and knowledge base documents.</p>
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+              Type <strong>{selectedTenant?.name}</strong> to confirm:
+            </label>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={selectedTenant?.name || ''}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

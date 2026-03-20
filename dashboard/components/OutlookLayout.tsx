@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useTheme, THEMES, ThemeId } from '@/lib/ThemeContext'
+import { useSessionContext } from '@/lib/SessionContext'
 
 type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses';
 
@@ -61,13 +62,15 @@ export function OutlookLayout({
   const tenantBtnRef = useRef<HTMLButtonElement>(null)
   const themeBtnRef = useRef<HTMLButtonElement>(null)
 
+  const { tenantsVersion } = useSessionContext()
+
   useEffect(() => {
     if (isAdmin) {
       Api.tenants.list().then(data => {
         setAllTenants(Array.isArray(data) ? data : [])
       })
     }
-  }, [isAdmin])
+  }, [isAdmin, tenantsVersion])
 
   return (
     <>
@@ -229,7 +232,7 @@ export function OutlookLayout({
               backgroundColor: 'var(--surface-elevated)',
               borderColor: 'var(--border)',
               color: 'var(--text-primary)',
-              top: themeBtnRef.current ? themeBtnRef.current.getBoundingClientRect().top : 100,
+              bottom: 8,
               left: themeBtnRef.current ? themeBtnRef.current.getBoundingClientRect().right + 8 : 100,
             }}
           >
