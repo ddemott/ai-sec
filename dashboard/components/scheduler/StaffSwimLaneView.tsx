@@ -54,6 +54,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   const totalWidth = LABEL_WIDTH + hourCount * hourWidth;
 
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [completedDrag, setCompletedDrag] = useState<DragState | null>(null);
   const [selectedLane, setSelectedLane] = useState<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const didDrag = useRef(false);
@@ -64,6 +65,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     dragRef.current = state;
     didDrag.current = false;
     setDrag(state);
+    setCompletedDrag(null);
     setSelectedLane(employeeId);
   }, []);
 
@@ -83,13 +85,15 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     const minH = Math.min(startHour, currentHour);
     const maxH = Math.max(startHour, currentHour) + 1; // +1 because end is exclusive
 
+    // Keep the selection bar visible after release
+    const finalState: DragState = { employeeId, startHour: minH, currentHour: maxH - 1, mode };
+    setCompletedDrag(finalState);
+
     if (mode === 'shift') {
-      // Creating a shift
       if (onShiftDrag) {
         onShiftDrag(employeeId, minH, maxH);
       }
     } else {
-      // Creating an appointment
       if (didDrag.current && onSlotDrag) {
         onSlotDrag(employeeId, minH, maxH);
       } else if (onSlotClick) {
@@ -102,6 +106,10 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     setDrag(null);
   }, [onSlotClick, onSlotDrag, onShiftDrag]);
 
+  const clearCompletedDrag = useCallback(() => {
+    setCompletedDrag(null);
+  }, []);
+
   const handleMouseLeaveView = useCallback(() => {
     if (dragRef.current) {
       dragRef.current = null;
@@ -111,10 +119,19 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   }, []);
 
   function getDragRange(empId: string): { start: number; end: number; mode: 'appointment' | 'shift' } | null {
-    if (!drag || drag.employeeId !== empId) return null;
-    const minH = Math.min(drag.startHour, drag.currentHour);
-    const maxH = Math.max(drag.startHour, drag.currentHour);
-    return { start: minH, end: maxH, mode: drag.mode };
+    // Active drag takes priority
+    if (drag && drag.employeeId === empId) {
+      const minH = Math.min(drag.startHour, drag.currentHour);
+      const maxH = Math.max(drag.startHour, drag.currentHour);
+      return { start: minH, end: maxH, mode: drag.mode };
+    }
+    // Show completed drag selection until next interaction
+    if (completedDrag && completedDrag.employeeId === empId) {
+      const minH = Math.min(completedDrag.startHour, completedDrag.currentHour);
+      const maxH = Math.max(completedDrag.startHour, completedDrag.currentHour);
+      return { start: minH, end: maxH, mode: completedDrag.mode };
+    }
+    return null;
   }
 
   function renderRow(
@@ -149,6 +166,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
           style={{ width: LABEL_WIDTH }}
           onClick={() => {
             setSelectedLane(prev => prev === empId ? null : empId);
+            clearCompletedDrag();
             onClick?.();
           }}
         >
