@@ -221,6 +221,31 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
             );
           })}
 
+          {/* Shift range indicators — shows where each shift block is */}
+          {!isUnassigned && empShifts.map((shift, idx) => {
+            const startParts = shift.start_time?.split(':') || ['0'];
+            const endParts = shift.end_time?.split(':') || ['0'];
+            const shiftStart = parseInt(startParts[0], 10);
+            const shiftEnd = parseInt(endParts[0], 10);
+            if (shiftEnd <= SCHEDULER_START_HOUR || shiftStart >= SCHEDULER_END_HOUR) return null;
+            const clampedStart = Math.max(shiftStart, SCHEDULER_START_HOUR);
+            const clampedEnd = Math.min(shiftEnd, SCHEDULER_END_HOUR);
+            return (
+              <div
+                key={`shift-bar-${idx}`}
+                className="absolute top-0.5 bottom-0.5 rounded bg-green-100/60 dark:bg-green-900/20 border border-green-300/50 dark:border-green-700/30 pointer-events-none z-[1]"
+                style={{
+                  left: (clampedStart - SCHEDULER_START_HOUR) * hourWidth,
+                  width: (clampedEnd - clampedStart) * hourWidth,
+                }}
+              >
+                <span className="absolute left-1 top-0.5 text-[9px] font-medium text-green-600/70 dark:text-green-400/50">
+                  {formatHour(clampedStart)}–{formatHour(clampedEnd)}
+                </span>
+              </div>
+            );
+          })}
+
           {/* Drag selection overlay bar */}
           {dragRange && (
             <div
