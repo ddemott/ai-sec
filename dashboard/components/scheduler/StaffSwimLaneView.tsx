@@ -3,19 +3,22 @@ import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH } from 
 import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
 
+interface SwimLaneShift { start_time?: string; end_time?: string }
+interface SwimLaneEmployee { id: string | number; name: string }
+
 interface StaffSwimLaneViewProps {
-  employees: any[];
+  employees: SwimLaneEmployee[];
   appointmentsByEmployee: Map<string, SchedulerAppointment[]>;
-  shiftsByEmployee: Map<string, any[]>;
+  shiftsByEmployee: Map<string, SwimLaneShift[]>;
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
   onSlotClick?: (employeeId: string, hour: number) => void;
   onSlotDrag?: (employeeId: string, startHour: number, endHour: number) => void;
   onShiftDrag?: (employeeId: string, startHour: number, endHour: number) => void;
-  onEmployeeClick?: (employee: any) => void;
+  onEmployeeClick?: (employee: SwimLaneEmployee) => void;
   hourWidth?: number;
 }
 
-function isOnShift(shifts: any[], hour: number): boolean {
+function isOnShift(shifts: SwimLaneShift[], hour: number): boolean {
   if (!shifts || shifts.length === 0) return false;
   for (const shift of shifts) {
     const startParts = shift.start_time?.split(':');
@@ -118,7 +121,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     empId: string,
     empName: string,
     empAppointments: SchedulerAppointment[],
-    empShifts: any[],
+    empShifts: SwimLaneShift[],
     colorClass: string,
     isUnassigned: boolean,
     onClick?: () => void

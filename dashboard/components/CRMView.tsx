@@ -38,10 +38,10 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
   const { tenantId } = useSession(overrideTenantId);
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [summaries, setSummaries] = useState<any[]>([])
+  const [summaries, setSummaries] = useState<{ id: string; customer_id: string; summary: string; call_timestamp?: string; created_at?: string; has_transcript?: boolean }[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
-  const [customerAppointments, setCustomerAppointments] = useState<any[]>([])
+  const [customerAppointments, setCustomerAppointments] = useState<{ id: string; start_time: string; end_time: string; status: string; description: string; resource_name?: string; employee_name?: string; location?: string }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
 
   // States
@@ -70,6 +70,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
     if (tenantId) {
       fetchCustomers()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   useEffect(() => {
@@ -77,24 +78,25 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
         fetchHistory(selectedCustomer.id)
         fetchCustomerAppointments(selectedCustomer.id)
       const { first, last } = splitFullName(selectedCustomer.name || '')
-      const derivedFirst = (selectedCustomer as any).first_name || first || ''
-      const derivedLast = (selectedCustomer as any).last_name || last || ''
+      const derivedFirst = selectedCustomer.first_name || first || ''
+      const derivedLast = selectedCustomer.last_name || last || ''
         setEditForm({
         first_name: derivedFirst,
         last_name: derivedLast,
             phone: formatPhone(selectedCustomer.phone) || '',
             email: selectedCustomer.email || '',
             address: selectedCustomer.address || '',
-        address_line2: (selectedCustomer as any).address_line2 || '',
-        city: (selectedCustomer as any).city || '',
-        state: (selectedCustomer as any).state || '',
-        postal_code: (selectedCustomer as any).postal_code || '',
-        timezone: (selectedCustomer as any).timezone || 'America/New_York',
+        address_line2: selectedCustomer.address_line2 || '',
+        city: selectedCustomer.city || '',
+        state: selectedCustomer.state || '',
+        postal_code: selectedCustomer.postal_code || '',
+        timezone: selectedCustomer.timezone || 'America/New_York',
             notes: selectedCustomer.metadata?.notes || ''
         })
         setIsEditing(false)
         setIsCreating(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCustomer])
 
   // Auto-detect timezone
@@ -121,7 +123,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
         setCustomers(data)
         if (!selectedCustomer) setSelectedCustomer(data[0])
       }
-    } catch (e) {
+    } catch {
       setCustomers(MOCK_CUSTOMERS)
       if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0])
     }
@@ -136,7 +138,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
       } else {
         setSummaries(data)
       }
-    } catch (e) {
+    } catch {
       setSummaries(MOCK_SUMMARIES.filter(s => s.customer_id === customerId))
     }
   }
@@ -145,7 +147,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
     try {
       const data = await Api.customers.appointments(customerId, tenantId)
       setCustomerAppointments(data || [])
-    } catch (e) {
+    } catch {
       setCustomerAppointments([])
     }
   }
@@ -384,11 +386,11 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                               {selectedCustomer
                                 ? [
                                     selectedCustomer.address,
-                                    (selectedCustomer as any).address_line2,
-                                    (selectedCustomer as any).city,
+                                    selectedCustomer.address_line2,
+                                    selectedCustomer.city,
                                     [
-                                      (selectedCustomer as any).state,
-                                      (selectedCustomer as any).postal_code
+                                      selectedCustomer.state,
+                                      selectedCustomer.postal_code
                                     ].filter(Boolean).join(' ')
                                   ]
                                   .filter(Boolean)
@@ -399,7 +401,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                         <div className="flex items-start">
                             <RefreshCw className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
                             <span className="dark:text-gray-300">
-                              Timezone: {US_TIMEZONES.find(t => t.value === (selectedCustomer as any).timezone)?.label || (selectedCustomer as any).timezone || 'Not set'}
+                              Timezone: {US_TIMEZONES.find(t => t.value === selectedCustomer.timezone)?.label || selectedCustomer.timezone || 'Not set'}
                             </span>
                         </div>
                         <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
@@ -532,7 +534,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                             <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">AI Summary</span>
                             <span>{new Date(s.call_timestamp || s.created_at).toLocaleDateString()}</span>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">"{s.summary}"</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">&quot;{s.summary}&quot;</p>
                           {s.has_transcript && (
                             <p className="text-xs text-green-600 dark:text-green-400 mt-2">Transcript available</p>
                           )}
@@ -549,7 +551,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic text-center px-4 flex-col">
             <Users className="w-12 h-12 mb-4 opacity-20" />
-            Select a customer or click the "+" button to add one.
+            Select a customer or click the &quot;+&quot; button to add one.
           </div>
         )}
       </section>

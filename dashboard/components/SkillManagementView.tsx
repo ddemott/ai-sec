@@ -6,9 +6,7 @@ import {
   Plus, 
   Trash2, 
   Tag, 
-  AlertCircle,
-  CheckCircle2,
-  Loader2
+  AlertCircle
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
@@ -38,8 +36,8 @@ export default function SkillManagementView() {
       } else {
         setError(res.error || "Failed to create skill")
       }
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }
@@ -51,7 +49,7 @@ export default function SkillManagementView() {
     try {
       await Api.skills.delete(id, tenantId)
       refresh()
-    } catch (err) {
+    } catch {
       alert("Delete failed")
     }
   }

@@ -62,7 +62,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
     try {
       const mData = await Api.mappings.listServiceResource(tid);
       setMappings(Array.isArray(mData) ? mData : []);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch resource mappings');
     }
   }
@@ -141,7 +141,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
       } else {
         setError(res.error || 'Failed to update service mapping');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to update service mapping');
     }
   }
@@ -317,7 +317,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
             </h4>
             <p className="text-xs leading-relaxed">
               Toggling services here determines which appointments can be booked for this {vocab.resource_label.toLowerCase()}.
-              The AI agent will only schedule a service if it's enabled for the specific location or piece of equipment.
+              The AI agent will only schedule a service if it&apos;s enabled for the specific location or piece of equipment.
             </p>
           </Card>
 
@@ -326,7 +326,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
                 variant="ghost" 
                 size="sm" 
                 className="text-red-600 dark:text-red-400 font-bold hover:bg-red-50 dark:hover:bg-red-900/10"
-                onClick={() => { selectedResource && handleDelete(selectedResource.id); setIsEditModalOpen(false); }}
+                onClick={() => { if (selectedResource) handleDelete(selectedResource.id); setIsEditModalOpen(false); }}
             >
               <Trash2 className="w-4 h-4 mr-2" /> {`Delete ${vocab.resource_label}`}
             </Button>

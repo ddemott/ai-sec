@@ -18,7 +18,6 @@ import { Input } from './ui/Input'
 
 export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
-  const [tenant, setTenant] = useState<Tenant | null>(null)
   const [config, setConfig] = useState<Tenant | null>(null)
   const [templates, setTemplates] = useState<BusinessTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +30,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
       fetchConfig()
       fetchTemplates()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchConfig() {
@@ -38,12 +38,12 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
     try {
       const data = await Api.tenants.getConfig(tenantId)
       if (!data) {
-        setConfig(MOCK_TENANT as any)
+        setConfig(MOCK_TENANT as Tenant)
       } else {
         setConfig(data)
       }
-    } catch (e) {
-      setConfig(MOCK_TENANT as any)
+    } catch {
+      setConfig(MOCK_TENANT as Tenant)
     }
     setLoading(false)
     setDirty(false)
@@ -145,14 +145,14 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center dark:text-gray-200">
               <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
-              System Instructions (The "Brain")
+              System Instructions (The &quot;Brain&quot;)
             </h2>
             <span className="text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-[#222] px-2 py-1 rounded">Advanced</span>
           </div>
           <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 p-4 rounded-xl flex items-start">
             <Info className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
-              This prompt defines your AI's personality. Tell it what to say, what to avoid, and how to handle specific situations. The AI will follow these rules on every call.
+              This prompt defines your AI&apos;s personality. Tell it what to say, what to avoid, and how to handle specific situations. The AI will follow these rules on every call.
             </p>
           </div>
           <textarea 

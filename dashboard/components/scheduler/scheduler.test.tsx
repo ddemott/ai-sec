@@ -1,10 +1,10 @@
 import React from 'react';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import { SchedulerDateNav } from './SchedulerDateNav';
-import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, formatHourLabel } from './TimeGrid';
+import { TimeGrid, formatHourLabel } from './TimeGrid';
 import { AppointmentBlock, getEmployeeColor, getTimeSpan } from './AppointmentBlock';
 import { StaffSwimLaneView } from './StaffSwimLaneView';
 import { ResourceColumnsView } from './ResourceColumnsView';
@@ -167,7 +167,7 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, any[]>();
+    const shiftMap = new Map<string, { start_time: string; end_time: string; day_of_week: number }[]>();
     shiftMap.set('1', []);
     shiftMap.set('2', []);
 
@@ -189,7 +189,7 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', [makeAppointment({ employee_id: null })]);
-    const shiftMap = new Map<string, any[]>();
+    const shiftMap = new Map<string, { start_time: string; end_time: string; day_of_week: number }[]>();
 
     render(
       <StaffSwimLaneView
@@ -207,7 +207,7 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, any[]>();
+    const shiftMap = new Map<string, { start_time: string; end_time: string; day_of_week: number }[]>();
     const onEmployeeClick = vi.fn();
 
     render(
@@ -227,7 +227,7 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, any[]>();
+    const shiftMap = new Map<string, { start_time: string; end_time: string; day_of_week: number }[]>();
     shiftMap.set('1', [{ start_time: '09:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);
     const onSlotClick = vi.fn();
@@ -251,7 +251,7 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, any[]>();
+    const shiftMap = new Map<string, { start_time: string; end_time: string; day_of_week: number }[]>();
     shiftMap.set('1', [{ start_time: '09:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);
     const onSlotDrag = vi.fn();
@@ -280,7 +280,7 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, any[]>();
+    const shiftMap = new Map<string, { start_time: string; end_time: string; day_of_week: number }[]>();
     // Employee 1 has shift 12-17, so hours 8-11 are OFF shift
     shiftMap.set('1', [{ start_time: '12:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);

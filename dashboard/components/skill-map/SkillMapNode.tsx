@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users, BookOpen, Cog, AlertTriangle, Link } from 'lucide-react'
+import { Users, BookOpen, Cog, Link } from 'lucide-react'
 import { CoverageStatusBadge } from '../ui/CoverageStatusBadge'
 import type { SkillMapNode as NodeData, CoverageLevel } from './useSkillMapData'
 

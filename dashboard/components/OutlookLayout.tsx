@@ -9,8 +9,6 @@ import {
   LogOut,
   User,
   Globe,
-  Sun,
-  Moon,
   Wrench,
   ShieldCheck,
   ChevronRight,
@@ -18,7 +16,7 @@ import {
   Palette
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useTheme, THEMES, ThemeId } from '@/lib/ThemeContext'
+import { useTheme, THEMES } from '@/lib/ThemeContext'
 import { useSessionContext } from '@/lib/SessionContext'
 
 type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses';
@@ -56,7 +54,7 @@ export function OutlookLayout({
   onSelectTenant
 }: LayoutProps) {
   const { theme, setTheme, themeInfo } = useTheme()
-  const [allTenants, setAllTenants] = useState<any[]>([])
+  const [allTenants, setAllTenants] = useState<{ id: string; name: string; business_type: string }[]>([])
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const tenantBtnRef = useRef<HTMLButtonElement>(null)
@@ -211,7 +209,7 @@ export function OutlookLayout({
               {allTenants.map(t => (
                 <button
                   key={t.id}
-                  onClick={() => { onSelectTenant && onSelectTenant(t.id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('schedule'); }}
+                  onClick={() => { if (onSelectTenant) onSelectTenant(t.id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('schedule'); }}
                   className={`w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex flex-col transition-colors border-b border-gray-50 dark:border-gray-800/50 ${managedTenantId === t.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                 >
                   <span className="text-sm font-bold">{t.name}</span>

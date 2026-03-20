@@ -5,13 +5,16 @@ import { Api } from '../../lib/api'
 import { Button } from '../ui/Button'
 import type { BrokenChain } from './useSkillMapData'
 
+interface FixPanelEntity { id: string | number; name: string; type?: string }
+interface ServiceMapping { service_id: string | number; employee_id?: string | number; resource_id?: string | number }
+
 interface SkillMapFixPanelProps {
   chain: BrokenChain
-  employees: any[]
-  resources: any[]
+  employees: FixPanelEntity[]
+  resources: FixPanelEntity[]
   tenantId: string | null
-  empMappings?: any[]
-  resMappings?: any[]
+  empMappings?: ServiceMapping[]
+  resMappings?: ServiceMapping[]
   onFixed: () => void
   onClose: () => void
 }
@@ -31,11 +34,11 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
   const eligibleResources = (resources || [])
     .filter(r => !resMappings.some(m => String(m.service_id) === serviceId && String(m.resource_id) === String(r.id)))
 
-  async function assignEmployee(emp: any) {
+  async function assignEmployee(emp: FixPanelEntity) {
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.mappings.assignServiceEmployee(serviceId as any, emp.id, tenantId)
+      await Api.mappings.assignServiceEmployee(serviceId as unknown as number, emp.id, tenantId)
       onFixed()
     } catch (err) {
       console.error('Failed to assign employee to service', err)
@@ -44,11 +47,11 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
     }
   }
 
-  async function assignResource(res: any) {
+  async function assignResource(res: FixPanelEntity) {
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.mappings.assignServiceResource(serviceId as any, res.id, tenantId)
+      await Api.mappings.assignServiceResource(serviceId as unknown as number, res.id, tenantId)
       onFixed()
     } catch (err) {
       console.error('Failed to assign resource to service', err)

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   ChevronRight,
   ChevronLeft,
@@ -10,7 +10,6 @@ import {
   Pencil,
   Trash2,
   Clock,
-  DollarSign,
   Wand2,
 } from 'lucide-react'
 import { Api } from '../lib/api'
@@ -60,6 +59,58 @@ interface EmployeeForm {
 
 const EMPTY_EMPLOYEE: EmployeeForm = { first_name: '', last_name: '', email: '', phone: '' }
 
+interface WizardShift {
+  id: number
+  employee_id: string | number
+  day_of_week: number
+  start_time: string
+  end_time: string
+}
+
+interface WizardMapping {
+  service_id: number
+  employee_id?: string | number
+  resource_id?: string
+}
+
+interface CoverageItem {
+  service_id: number
+  service_name: string
+  coverage_status: string
+  has_employees: boolean
+  has_resources: boolean
+  has_shifts: boolean
+}
+
+interface WizardService {
+  id: number
+  name: string
+  description?: string
+  duration_minutes: number
+  price?: number
+  is_deleted?: boolean
+}
+
+interface WizardResource {
+  id: string
+  name: string
+  description?: string
+  is_deleted?: boolean
+  is_active?: boolean
+}
+
+interface WizardEmployee {
+  id: string | number
+  name: string
+  first_name?: string
+  last_name?: string
+  email?: string
+  phone?: string
+  type?: string
+  is_deleted?: boolean
+  is_active?: boolean
+}
+
 interface SetupWizardProps {
   isOpen: boolean
   onClose: () => void
@@ -88,24 +139,24 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
 
   // Step 4 — Shifts
-  const [shifts, setShifts] = useState<any[]>([])
+  const [shifts, setShifts] = useState<WizardShift[]>([])
   const [shiftsLoading, setShiftsLoading] = useState(false)
   const [selectedShiftEmployee, setSelectedShiftEmployee] = useState<string | null>(null)
 
   // Step 5 — Assignments
-  const [serviceEmployeeMappings, setServiceEmployeeMappings] = useState<any[]>([])
-  const [serviceResourceMappings, setServiceResourceMappings] = useState<any[]>([])
+  const [serviceEmployeeMappings, setServiceEmployeeMappings] = useState<WizardMapping[]>([])
+  const [serviceResourceMappings, setServiceResourceMappings] = useState<WizardMapping[]>([])
   const [mappingsLoading, setMappingsLoading] = useState(false)
 
   // Step 6 — Coverage
-  const [coverageData, setCoverageData] = useState<any[]>([])
+  const [coverageData, setCoverageData] = useState<CoverageItem[]>([])
   const [coverageLoading, setCoverageLoading] = useState(false)
 
   // Fetch shifts when entering step 4
   useEffect(() => {
     if (step === 4 && tenantId) {
       setShiftsLoading(true)
-      Api.shifts.list(tenantId).then((data: any[]) => {
+      Api.shifts.list(tenantId).then((data: WizardShift[]) => {
         setShifts(Array.isArray(data) ? data : [])
       }).catch(() => setShifts([])).finally(() => setShiftsLoading(false))
     }
@@ -132,7 +183,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   useEffect(() => {
     if (step === 6 && tenantId) {
       setCoverageLoading(true)
-      Api.coverage.check(tenantId).then((data: any[]) => {
+      Api.coverage.check(tenantId).then((data: CoverageItem[]) => {
         setCoverageData(Array.isArray(data) ? data : [])
       }).catch(() => setCoverageData([])).finally(() => setCoverageLoading(false))
     }
@@ -179,7 +230,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     setError(null)
   }
 
-  function startEditService(svc: any) {
+  function startEditService(svc: WizardService) {
     setEditingService({
       name: svc.name || '',
       description: svc.description || '',
@@ -226,8 +277,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       await refresh()
       setEditingService(null)
       setEditingServiceId(null)
-    } catch (err: any) {
-      setError(err.message || 'Failed to save service')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to save service')
     } finally {
       setSaving(false)
     }
@@ -239,8 +290,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     try {
       await Api.services.delete(id, tenantId)
       await refresh()
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete service')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to delete service')
     } finally {
       setSaving(false)
     }
@@ -254,7 +305,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     setError(null)
   }
 
-  function startEditResource(res: any) {
+  function startEditResource(res: WizardResource) {
     setEditingResource({ name: res.name || '', description: res.description || '' })
     setEditingResourceId(res.id)
     setError(null)
@@ -283,8 +334,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       await refresh()
       setEditingResource(null)
       setEditingResourceId(null)
-    } catch (err: any) {
-      setError(err.message || 'Failed to save resource')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to save resource')
     } finally {
       setSaving(false)
     }
@@ -296,8 +347,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     try {
       await Api.resources.delete(id, tenantId)
       await refresh()
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete resource')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to delete resource')
     } finally {
       setSaving(false)
     }
@@ -311,7 +362,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     setError(null)
   }
 
-  function startEditEmployee(emp: any) {
+  function startEditEmployee(emp: WizardEmployee) {
     setEditingEmployee({
       first_name: emp.first_name || '',
       last_name: emp.last_name || '',
@@ -339,7 +390,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     try {
       const name = `${editingEmployee.first_name.trim()} ${editingEmployee.last_name.trim()}`.trim()
       if (editingEmployeeId) {
-        await Api.employees.update(editingEmployeeId as any, {
+        await Api.employees.update(editingEmployeeId as number, {
           tenant_id: tenantId, name, first_name: editingEmployee.first_name.trim(), last_name: editingEmployee.last_name.trim(),
           email: editingEmployee.email.trim(), phone: editingEmployee.phone.trim(),
         })
@@ -352,8 +403,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       await refresh()
       setEditingEmployee(null)
       setEditingEmployeeId(null)
-    } catch (err: any) {
-      setError(err.message || 'Failed to save employee')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to save employee')
     } finally {
       setSaving(false)
     }
@@ -363,10 +414,10 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.employees.delete(id as any, tenantId)
+      await Api.employees.delete(id as number, tenantId)
       await refresh()
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete employee')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to delete employee')
     } finally {
       setSaving(false)
     }
@@ -383,7 +434,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   async function toggleShift(employeeId: string, dayOfWeek: number, startTime: string, endTime: string) {
     if (!tenantId) return
     const existing = shifts.find(
-      (s: any) => String(s.employee_id) === String(employeeId) && s.day_of_week === dayOfWeek
+      (s: WizardShift) => String(s.employee_id) === String(employeeId) && s.day_of_week === dayOfWeek
     )
     setSaving(true)
     setError(null)
@@ -399,8 +450,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
         })
       }
       await refreshShifts()
-    } catch (err: any) {
-      setError(err.message || 'Failed to update shift')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to update shift')
     } finally {
       setSaving(false)
     }
@@ -413,8 +464,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     try {
       await Api.shifts.update(shiftId, tenantId, { start_time: startTime, end_time: endTime })
       await refreshShifts()
-    } catch (err: any) {
-      setError(err.message || 'Failed to update shift time')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to update shift time')
     } finally {
       setSaving(false)
     }
@@ -425,7 +476,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   async function toggleEmployeeAssignment(serviceId: number, employeeId: string) {
     if (!tenantId) return
     const exists = serviceEmployeeMappings.some(
-      (m: any) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
+      (m: WizardMapping) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
     )
     setSaving(true)
     setError(null)
@@ -437,8 +488,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       }
       const updated = await Api.mappings.listServiceEmployee(tenantId)
       setServiceEmployeeMappings(Array.isArray(updated) ? updated : [])
-    } catch (err: any) {
-      setError(err.message || 'Failed to update assignment')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to update assignment')
     } finally {
       setSaving(false)
     }
@@ -447,7 +498,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
   async function toggleResourceAssignment(serviceId: number, resourceId: string) {
     if (!tenantId) return
     const exists = serviceResourceMappings.some(
-      (m: any) => m.service_id === serviceId && m.resource_id === resourceId
+      (m: WizardMapping) => m.service_id === serviceId && m.resource_id === resourceId
     )
     setSaving(true)
     setError(null)
@@ -459,8 +510,8 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       }
       const updated = await Api.mappings.listServiceResource(tenantId)
       setServiceResourceMappings(Array.isArray(updated) ? updated : [])
-    } catch (err: any) {
-      setError(err.message || 'Failed to update assignment')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || 'Failed to update assignment')
     } finally {
       setSaving(false)
     }
@@ -468,9 +519,9 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
 
   if (!isOpen) return null
 
-  const activeServices = services.filter((s: any) => !s.is_deleted)
-  const activeResources = resources.filter((r: any) => !r.is_deleted && r.is_active !== false)
-  const activeEmployees = employees.filter((e: any) => !e.is_deleted && e.is_active !== false)
+  const activeServices = services.filter((s: WizardService) => !s.is_deleted)
+  const activeResources = resources.filter((r: WizardResource) => !r.is_deleted && r.is_active !== false)
+  const activeEmployees = employees.filter((e: WizardEmployee) => !e.is_deleted && e.is_active !== false)
 
   return (
     <div
@@ -647,14 +698,14 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
 // --- Step 1: Services ---
 
 interface Step1Props {
-  services: any[]
+  services: WizardService[]
   loading: boolean
   editingService: ServiceForm | null
   editingServiceId: number | null
   saving: boolean
   error: string | null
   onAdd: () => void
-  onEdit: (svc: any) => void
+  onEdit: (svc: WizardService) => void
   onDelete: (id: number) => void
   onSave: () => void
   onCancel: () => void
@@ -670,7 +721,7 @@ function Step1Services({
       <div className="mb-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">What services do you offer?</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Add each service your business provides. You'll assign staff and resources to them in later steps.
+          Add each service your business provides. You&apos;ll assign staff and resources to them in later steps.
         </p>
       </div>
 
@@ -679,7 +730,7 @@ function Step1Services({
         <p className="text-sm text-gray-400">Loading...</p>
       ) : (
         <div className="space-y-2 mb-4">
-          {services.map((svc: any) => (
+          {services.map((svc: WizardService) => (
             <div
               key={svc.id}
               className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
@@ -775,14 +826,14 @@ function Step1Services({
 // --- Step 2: Resources ---
 
 interface Step2Props {
-  resources: any[]
+  resources: WizardResource[]
   loading: boolean
   editingResource: ResourceForm | null
   editingResourceId: string | null
   saving: boolean
   error: string | null
   onAdd: () => void
-  onEdit: (res: any) => void
+  onEdit: (res: WizardResource) => void
   onDelete: (id: string) => void
   onSave: () => void
   onCancel: () => void
@@ -807,7 +858,7 @@ function Step2Resources({
         <p className="text-sm text-gray-400">Loading...</p>
       ) : (
         <div className="space-y-2 mb-4">
-          {resources.map((res: any) => (
+          {resources.map((res: WizardResource) => (
             <div
               key={res.id}
               className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
@@ -879,14 +930,14 @@ function Step2Resources({
 // --- Step 3: Employees ---
 
 interface Step3Props {
-  employees: any[]
+  employees: WizardEmployee[]
   loading: boolean
   editingEmployee: EmployeeForm | null
   editingEmployeeId: string | null
   saving: boolean
   error: string | null
   onAdd: () => void
-  onEdit: (emp: any) => void
+  onEdit: (emp: WizardEmployee) => void
   onDelete: (id: string | number) => void
   onSave: () => void
   onCancel: () => void
@@ -911,7 +962,7 @@ function Step3Employees({
         <p className="text-sm text-gray-400">Loading...</p>
       ) : (
         <div className="space-y-2 mb-4">
-          {employees.map((emp: any) => (
+          {employees.map((emp: WizardEmployee) => (
             <div
               key={emp.id}
               className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
@@ -1004,8 +1055,8 @@ function Step3Employees({
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 interface Step4Props {
-  employees: any[]
-  shifts: any[]
+  employees: WizardEmployee[]
+  shifts: WizardShift[]
   loading: boolean
   saving: boolean
   error: string | null
@@ -1020,11 +1071,11 @@ function Step4Shifts({
   selectedEmployeeId, onSelectEmployee, onToggleShift, onUpdateTime,
 }: Step4Props) {
   const vocab = useVocabulary()
-  const selectedEmployee = employees.find((e: any) => String(e.id) === String(selectedEmployeeId))
-  const employeeShifts = shifts.filter((s: any) => String(s.employee_id) === String(selectedEmployeeId))
+  const selectedEmployee = employees.find((e: WizardEmployee) => String(e.id) === String(selectedEmployeeId))
+  const employeeShifts = shifts.filter((s: WizardShift) => String(s.employee_id) === String(selectedEmployeeId))
 
   function getShiftForDay(dow: number) {
-    return employeeShifts.find((s: any) => s.day_of_week === dow)
+    return employeeShifts.find((s: WizardShift) => s.day_of_week === dow)
   }
 
   return (
@@ -1044,8 +1095,8 @@ function Step4Shifts({
         <>
           {/* Employee selector */}
           <div className="flex flex-wrap gap-2 mb-4">
-            {employees.map((emp: any) => {
-              const empShiftCount = shifts.filter((s: any) => String(s.employee_id) === String(emp.id)).length
+            {employees.map((emp: WizardEmployee) => {
+              const empShiftCount = shifts.filter((s: WizardShift) => String(s.employee_id) === String(emp.id)).length
               const isSelected = String(emp.id) === String(selectedEmployeeId)
               return (
                 <button
@@ -1130,11 +1181,11 @@ function Step4Shifts({
 // --- Step 5: Assignments ---
 
 interface Step5Props {
-  services: any[]
-  resources: any[]
-  employees: any[]
-  serviceEmployeeMappings: any[]
-  serviceResourceMappings: any[]
+  services: WizardService[]
+  resources: WizardResource[]
+  employees: WizardEmployee[]
+  serviceEmployeeMappings: WizardMapping[]
+  serviceResourceMappings: WizardMapping[]
   loading: boolean
   saving: boolean
   error: string | null
@@ -1151,13 +1202,13 @@ function Step5Assignments({
   const vocab = useVocabulary()
   function isEmployeeAssigned(serviceId: number, employeeId: string) {
     return serviceEmployeeMappings.some(
-      (m: any) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
+      (m: WizardMapping) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
     )
   }
 
   function isResourceAssigned(serviceId: number, resourceId: string) {
     return serviceResourceMappings.some(
-      (m: any) => m.service_id === serviceId && m.resource_id === resourceId
+      (m: WizardMapping) => m.service_id === serviceId && m.resource_id === resourceId
     )
   }
 
@@ -1187,7 +1238,7 @@ function Step5Assignments({
         <p className="text-sm text-gray-400">Loading assignments...</p>
       ) : (
         <div className="space-y-4">
-          {services.map((svc: any) => (
+          {services.map((svc: WizardService) => (
             <div key={svc.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222] p-4">
               <div className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">{svc.name}</div>
 
@@ -1196,7 +1247,7 @@ function Step5Assignments({
                 <div className="mb-3">
                   <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">{vocab.employee_plural}</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {employees.map((emp: any) => {
+                    {employees.map((emp: WizardEmployee) => {
                       const assigned = isEmployeeAssigned(svc.id, String(emp.id))
                       return (
                         <button
@@ -1222,7 +1273,7 @@ function Step5Assignments({
                 <div>
                   <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">{vocab.resource_plural}</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {resources.map((res: any) => {
+                    {resources.map((res: WizardResource) => {
                       const assigned = isResourceAssigned(svc.id, res.id)
                       return (
                         <button
@@ -1254,24 +1305,23 @@ function Step5Assignments({
 // --- Step 6: Review ---
 
 interface Step6Props {
-  services: any[]
-  resources: any[]
-  employees: any[]
-  coverageData: any[]
+  services: WizardService[]
+  resources: WizardResource[]
+  employees: WizardEmployee[]
+  coverageData: CoverageItem[]
   loading: boolean
 }
 
 function Step6Review({ services, resources, employees, coverageData, loading }: Step6Props) {
   const vocab = useVocabulary()
-  const allCovered = coverageData.length > 0 && coverageData.every((c: any) => c.coverage_status === 'full')
-  const hasGaps = coverageData.some((c: any) => c.coverage_status !== 'full')
+  const allCovered = coverageData.length > 0 && coverageData.every((c: CoverageItem) => c.coverage_status === 'full')
 
   return (
     <div>
       <div className="mb-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Review your setup</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Here's a summary of your business configuration and coverage status.
+          Here&apos;s a summary of your business configuration and coverage status.
         </p>
       </div>
 
@@ -1297,7 +1347,7 @@ function Step6Review({ services, resources, employees, coverageData, loading }: 
       ) : coverageData.length > 0 ? (
         <div className="space-y-2 mb-4">
           <div className="text-xs font-bold text-gray-400 uppercase mb-2">Coverage by Service</div>
-          {coverageData.map((item: any) => (
+          {coverageData.map((item: CoverageItem) => (
             <div
               key={item.service_id}
               className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"

@@ -6,11 +6,8 @@ import {
   Plus,
   Trash2,
   Users,
-  Calendar as CalendarIcon,
   Copy,
-  Check,
   AlertCircle,
-  Loader2,
   Edit2
 } from 'lucide-react'
 import { Api } from '../lib/api'
@@ -18,8 +15,15 @@ import { useSession, useStaticData } from '../lib/hooks'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
-import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
+
+interface ShiftRecord {
+  id: number;
+  employee_id: string | number;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
 
 const DAYS = [
   { id: 0, name: 'Sunday' },
@@ -36,12 +40,12 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
   const { employees, loading: empsLoading } = useStaticData(tenantId)
   const vocab = useVocabulary()
   
-  const [shifts, setShifts] = useState<any[]>([])
-  const [loadingShifts, setLoadingShifts] = useState(true)
+  const [shifts, setShifts] = useState<ShiftRecord[]>([])
+  const [, setLoadingShifts] = useState(true)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
   
   const [isAddModalOpen, setIsWizardOpen] = useState(false)
-  const [editingShift, setEditingShift] = useState<any>(null)
+  const [editingShift, setEditingShift] = useState<ShiftRecord | null>(null)
   const [newShift, setNewShift] = useState({
     day_of_week: 1,
     start_time: '09:00',
@@ -50,6 +54,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
 
   useEffect(() => {
     fetchShifts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchShifts() {
@@ -77,12 +82,12 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
         setShifts([...shifts, res.shift])
         setIsWizardOpen(false)
       }
-    } catch (err) {
+    } catch {
       alert("Failed to create shift")
     }
   }
 
-  function startEditShift(shift: any) {
+  function startEditShift(shift: ShiftRecord) {
     setEditingShift(shift)
     setNewShift({
       day_of_week: shift.day_of_week,
@@ -101,7 +106,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
         setIsWizardOpen(false)
         setEditingShift(null)
       }
-    } catch (err) {
+    } catch {
       alert("Failed to update shift")
     }
   }
@@ -110,12 +115,12 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
     try {
       await Api.shifts.delete(id, tenantId)
       setShifts(shifts.filter(s => s.id !== id))
-    } catch (err) {
+    } catch {
       alert("Failed to delete shift")
     }
   }
 
-  async function copyToAllDays(baseShift: any) {
+  async function copyToAllDays(baseShift: ShiftRecord) {
     try {
       const promises = DAYS
         .filter(d => d.id !== baseShift.day_of_week)
@@ -128,7 +133,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
       
       await Promise.all(promises)
       fetchShifts()
-    } catch (err) {
+    } catch {
       alert("Failed to copy shifts")
     }
   }

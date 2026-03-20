@@ -1,29 +1,26 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { 
-  ShieldCheck, 
-  Users, 
-  Wrench, 
-  PlusCircle, 
+import React, { useState, useMemo, useEffect, useRef } from 'react'
+import {
+  ShieldCheck,
+  Users,
+  Wrench,
   Check,
   X,
   Search,
-  Settings
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession, useStaticData } from '../lib/hooks'
 import { useVocabulary } from '@/lib/VocabularyContext'
-import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 
 export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
-  const { employees, resources, services, loading, refresh } = useStaticData(tenantId)
+  const { employees, resources, services, loading } = useStaticData(tenantId)
   const vocab = useVocabulary()
   
-  const [empMappings, setEmpMappings] = useState<any[]>([])
-  const [resMappings, setResMappings] = useState<any[]>([])
+  const [empMappings, setEmpMappings] = useState<{ employee_id: number | string; service_id: number }[]>([])
+  const [resMappings, setResMappings] = useState<{ resource_id: string; service_id: number }[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'employee' | 'resource'>('all')
   const [saving, setSaving] = useState(false)
@@ -32,6 +29,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
     if (tenantId) {
       fetchMappings()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchMappings() {
@@ -42,7 +40,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
       ])
       setEmpMappings(Array.isArray(eMap) ? eMap : [])
       setResMappings(Array.isArray(rMap) ? rMap : [])
-    } catch (err) {
+    } catch {
       console.error("Failed to fetch mappings")
       setEmpMappings([])
       setResMappings([])
@@ -73,7 +71,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
   // Debounce guard to prevent rapid duplicate requests (BUG-043)
   const pendingToggle = useRef<string | null>(null)
 
-  async function toggleMapping(entityType: 'employee' | 'resource', entityId: any, serviceId: number) {
+  async function toggleMapping(entityType: 'employee' | 'resource', entityId: string | number, serviceId: number) {
     const key = `${entityType}-${entityId}-${serviceId}`
     if (pendingToggle.current === key) return
     pendingToggle.current = key
@@ -100,7 +98,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
           setResMappings([...resMappings, { resource_id: entityId, service_id: serviceId }])
         }
       }
-    } catch (err) {
+    } catch {
       alert("Mapping failed")
     } finally {
       setSaving(false)
@@ -222,7 +220,7 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
             <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" /> {vocab.resource_label}
           </div>
         </div>
-        <p>Tip: Toggling a cell instantly updates the AI's scheduling logic.</p>
+        <p>Tip: Toggling a cell instantly updates the AI&apos;s scheduling logic.</p>
       </footer>
     </div>
   )

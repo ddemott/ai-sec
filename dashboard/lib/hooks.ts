@@ -49,11 +49,11 @@ export function useSession(overrideTenantId?: string | null) {
  * Hook to fetch and manage static data for a tenant
  */
 export function useStaticData(tenantId: string | null) {
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [resources, setResources] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [services, setServices] = useState<any[]>([]);
-  const [skills, setSkills] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Record<string, unknown>[]>([]);
+  const [resources, setResources] = useState<Record<string, unknown>[]>([]);
+  const [employees, setEmployees] = useState<Record<string, unknown>[]>([]);
+  const [services, setServices] = useState<Record<string, unknown>[]>([]);
+  const [skills, setSkills] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

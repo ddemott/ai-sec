@@ -32,19 +32,23 @@ export type LinkingState = {
   fromType: NodeType
 } | null
 
+interface SkillMapEntity { id: string | number; name: string; type?: string }
+interface ServiceEntity { id: string | number; name: string }
+interface ServiceMappingRecord { service_id: string | number; employee_id?: string | number; resource_id?: string | number }
+
 export function useSkillMapData(
-  employees: any[],
-  resources: any[],
-  services: any[],
+  employees: SkillMapEntity[],
+  resources: SkillMapEntity[],
+  services: ServiceEntity[],
   tenantId: string | null,
   onDataChanged?: () => void
 ) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [linking, setLinking] = useState<LinkingState>(null)
   const [saving, setSaving] = useState(false)
-  const [empMappings, setEmpMappings] = useState<any[]>([])
-  const [resMappings, setResMappings] = useState<any[]>([])
-  const [mappingsLoaded, setMappingsLoaded] = useState(false)
+  const [empMappings, setEmpMappings] = useState<ServiceMappingRecord[]>([])
+  const [resMappings, setResMappings] = useState<ServiceMappingRecord[]>([])
+  const [, setMappingsLoaded] = useState(false)
 
   // Fetch mappings from service_employee and service_resource tables
   const fetchMappings = useCallback(async () => {

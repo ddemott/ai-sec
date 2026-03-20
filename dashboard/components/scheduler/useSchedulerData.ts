@@ -12,7 +12,7 @@ export interface SchedulerAppointment {
   description: string;
   status: string;
   location?: string;
-  customers?: { name: string; first_name?: string; last_name?: string; phone?: string; metadata?: any };
+  customers?: { name: string; first_name?: string; last_name?: string; phone?: string; metadata?: Record<string, unknown> };
   resources?: { name: string };
 }
 
@@ -27,9 +27,13 @@ function getDayOfWeek(date: Date): number {
   return date.getDay(); // 0=Sun,1=Mon,...6=Sat
 }
 
-export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: any[], resources: any[]) {
+interface SchedulerEmployee { id: string | number; name: string }
+interface SchedulerResource { id: string | number; name: string }
+interface SchedulerShift { employee_id?: string | number; user_id?: string | number; day_of_week: number; start_time?: string; end_time?: string }
+
+export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);
-  const [shifts, setShifts] = useState<any[]>([]);
+  const [shifts, setShifts] = useState<SchedulerShift[]>([]);
   const [loading, setLoading] = useState(false);
 
   const dateStr = toDateString(selectedDate);
@@ -61,7 +65,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     }
 
     setLoading(false);
-  }, [tenantId, dateStr]);
+  }, [tenantId, dateStr, selectedDate]);
 
   useEffect(() => {
     fetchData();
@@ -108,7 +112,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
   }, [appointments, resources]);
 
   const shiftsByEmployee = useMemo(() => {
-    const map = new Map<string, any[]>();
+    const map = new Map<string, SchedulerShift[]>();
     for (const emp of employees) {
       map.set(String(emp.id), []);
     }

@@ -50,7 +50,7 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
     refresh()
   }
 
-  function handleNodeClick(nodeId: string, nodeType: 'employee' | 'skill' | 'resource') {
+  function handleNodeClick(nodeId: string) {
     if (linking) {
       if (nodeId === linking.fromNodeId) {
         cancelLinking()
@@ -141,7 +141,7 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
                 isLinking={!!linking}
                 isLinkSource={linking?.fromNodeId === node.id}
                 isLinkTarget={!!linking && validLinkTargets.has(node.id)}
-                onClick={() => handleNodeClick(node.id, 'employee')}
+                onClick={() => handleNodeClick(node.id)}
                 onLinkStart={() => startLinking(node.id, 'employee')}
               />
             ))}
@@ -166,7 +166,7 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
                   isLinking={!!linking}
                   isLinkSource={linking?.fromNodeId === node.id}
                   isLinkTarget={!!linking && validLinkTargets.has(node.id)}
-                  onClick={() => handleNodeClick(node.id, 'skill')}
+                  onClick={() => handleNodeClick(node.id)}
                   onLinkStart={() => startLinking(node.id, 'skill')}
                   onFixClick={isBroken && chain ? () => handleFixClick(chain) : undefined}
                 />
@@ -190,7 +190,7 @@ export default function SkillRelationshipMap({ overrideTenantId }: { overrideTen
                 isLinking={!!linking}
                 isLinkSource={linking?.fromNodeId === node.id}
                 isLinkTarget={!!linking && validLinkTargets.has(node.id)}
-                onClick={() => handleNodeClick(node.id, 'resource')}
+                onClick={() => handleNodeClick(node.id)}
                 onLinkStart={() => startLinking(node.id, 'resource')}
               />
             ))}

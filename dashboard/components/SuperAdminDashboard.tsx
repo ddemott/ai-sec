@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState } from 'react'
 import { 
   Building2, 
   RefreshCw, 
@@ -68,7 +68,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   
   // Drag-and-drop reorder state
   const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [, setOverIndex] = useState<number | null>(null)
   const [originalOrder, setOriginalOrder] = useState<Tenant[]>([])
   const [hasReordered, setHasReordered] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)

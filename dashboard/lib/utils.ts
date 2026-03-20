@@ -27,7 +27,7 @@ export function toISOStringWithOffset(value: string): string {
 /**
  * Formats a customer's address parts into a single string
  */
-export function formatCustomerAddress(customer: any | undefined): string {
+export function formatCustomerAddress(customer: { address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string } | undefined): string {
   if (!customer) return ''
   return [
     customer.address,

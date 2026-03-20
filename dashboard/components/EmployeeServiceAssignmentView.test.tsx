@@ -11,7 +11,7 @@ describe('EmployeeManagementView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => []
     });
@@ -30,7 +30,7 @@ describe('ServiceAssignmentView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => []
     });

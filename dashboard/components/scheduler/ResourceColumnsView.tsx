@@ -6,10 +6,10 @@ import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH, formatHourLabel 
 import type { SchedulerAppointment } from './useSchedulerData';
 
 interface ResourceColumnsViewProps {
-  resources: any[];
+  resources: { id: string | number; name: string }[];
   appointmentsByResource: Map<string, SchedulerAppointment[]>;
-  shiftsByEmployee: Map<string, any[]>;
-  employees: any[];
+  shiftsByEmployee: Map<string, { start_time?: string; end_time?: string }[]>;
+  employees: { id: string | number; name: string }[];
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
   hourWidth?: number;
 }

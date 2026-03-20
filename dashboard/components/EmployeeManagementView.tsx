@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { 
   Users, 
-  PlusCircle, 
-  Shield, 
+  PlusCircle,
   CheckCircle2,
   AlertCircle,
   Tag,
@@ -36,7 +35,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
   const { tenantId } = useSession(overrideTenantId)
   const vocab = useVocabulary()
   const { employees, services, loading, error, refresh } = useStaticData(tenantId)
-  const [mappings, setMappings] = useState<any[]>([])
+  const [mappings, setMappings] = useState<{ service_id: number; employee_id: number }[]>([])
 
   // Edit State
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
@@ -49,13 +48,14 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
 
   useEffect(() => {
     if (tenantId) fetchMappings()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchMappings() {
     try {
       const data = await Api.mappings.listServiceEmployee(tenantId)
       setMappings(Array.isArray(data) ? data : [])
-    } catch (err) {
+    } catch {
       console.error("Failed to fetch mappings")
       setMappings([])
     }
@@ -97,7 +97,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
         refresh()
         setIsEditModalOpen(false)
       }
-    } catch (err) {
+    } catch {
       console.error("Update failed")
     } finally {
       setSaving(false)
@@ -114,7 +114,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
       } else {
         alert(res.error || "Delete failed")
       }
-    } catch (err) {
+    } catch {
       alert(`${vocab.employee_label} is still connected to appointments or services.`)
     }
   }
@@ -129,7 +129,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
         await Api.mappings.assignServiceEmployee(serviceId, employeeId, tenantId)
         setMappings([...mappings, { service_id: serviceId, employee_id: employeeId }])
       }
-    } catch (err) {
+    } catch {
       alert("Failed to update services")
     }
   }

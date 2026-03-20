@@ -8,7 +8,7 @@ import SetupWizard from './SetupWizard'
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
-  ;(global.fetch as any) = vi.fn().mockResolvedValue({
+  ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockResolvedValue({
     ok: true,
     json: async () => [],
   })
@@ -164,7 +164,7 @@ describe('SetupWizard: Step 1 Services', () => {
   })
 
   test('renders services from API data', async () => {
-    ;(global.fetch as any).mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
           ok: true,
@@ -251,7 +251,7 @@ describe('SetupWizard: Step 2 Resources', () => {
   })
 
   test('renders resources from API data', async () => {
-    ;(global.fetch as any).mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url.includes('/resources')) {
         return Promise.resolve({
           ok: true,
@@ -326,7 +326,7 @@ describe('SetupWizard: Step 3 Employees', () => {
   })
 
   test('renders employees from API data', async () => {
-    ;(global.fetch as any).mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url.includes('/employees')) {
         return Promise.resolve({
           ok: true,
@@ -379,7 +379,7 @@ describe('SetupWizard: Step 4 Shifts', () => {
   })
 
   test('shows employee selector and schedule grid with data', async () => {
-    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/employees')) {
         return Promise.resolve({
           ok: true,
@@ -460,7 +460,7 @@ describe('SetupWizard: Step 5 Assignments', () => {
   })
 
   test('shows service cards with employee and resource toggles', async () => {
-    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
           ok: true,
@@ -539,7 +539,7 @@ describe('SetupWizard: Step 6 Review', () => {
   })
 
   test('shows coverage badges from API data', async () => {
-    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
           ok: true,
@@ -573,7 +573,7 @@ describe('SetupWizard: Step 6 Review', () => {
   })
 
   test('shows success message when all services fully covered', async () => {
-    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
           ok: true,
@@ -601,7 +601,7 @@ describe('SetupWizard: Step 6 Review', () => {
   })
 
   test('shows warning message when coverage gaps exist', async () => {
-    ;(global.fetch as any) = vi.fn().mockImplementation((url: string) => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
           ok: true,

@@ -11,7 +11,6 @@ import {
   Info,
   Trash2,
   Tag,
-  Clock,
   AlertCircle
 } from 'lucide-react'
 import { Api } from '../lib/api'
@@ -36,8 +35,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
   const vocab = useVocabulary()
   const { services, resources, employees, loading, error: staticError, refresh } = useStaticData(tenantId)
   
-  const [resMappings, setResMappings] = useState<any[]>([])
-  const [empMappings, setEmpMappings] = useState<any[]>([])
+  const [resMappings, setResMappings] = useState<{ service_id: number; resource_id: string }[]>([])
+  const [empMappings, setEmpMappings] = useState<{ service_id: number; employee_id: number }[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
 
   // Wizard State (Creation)
@@ -59,6 +58,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
 
   useEffect(() => {
     if (tenantId) fetchMappings()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchMappings() {
@@ -69,7 +69,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
       ])
       setResMappings(rMap)
       setEmpMappings(eMap)
-    } catch (err) {
+    } catch {
       console.error("Failed to fetch mappings")
     }
   }
@@ -98,8 +98,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
       setSelectedEmployeeIds([])
       refresh()
       fetchMappings()
-    } catch (err: any) {
-      setActionError(err.message)
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -115,8 +115,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
       } else {
         setActionError(res.error || "Update failed")
       }
-    } catch (err: any) {
-      setActionError(err.message)
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }
@@ -133,8 +133,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
       } else {
         setActionError(res.error || "Delete failed")
       }
-    } catch (err: any) {
-      setActionError(err.message)
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -148,7 +148,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
         await Api.mappings.assignServiceResource(serviceId, resourceId, tenantId)
         setResMappings([...resMappings, { service_id: serviceId, resource_id: resourceId }])
       }
-    } catch (err) { alert("Mapping update failed") }
+    } catch { alert("Mapping update failed") }
   }
 
   async function toggleEmployeeMapping(serviceId: number, employeeId: number) {
@@ -161,7 +161,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
         await Api.mappings.assignServiceEmployee(serviceId, employeeId, tenantId)
         setEmpMappings([...empMappings, { service_id: serviceId, employee_id: employeeId }])
       }
-    } catch (err) { alert("Mapping update failed") }
+    } catch { alert("Mapping update failed") }
   }
 
   if (loading && services.length === 0) {
@@ -451,8 +451,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
                   <CheckCircle2 className="w-4 h-4 mr-2" /> Ready to Finalize
                 </h4>
                 <p className="text-xs text-green-700 dark:text-green-500 leading-relaxed">
-                  You've selected {selectedEmployeeIds.length} {vocab.employee_plural.toLowerCase()} and {selectedResourceIds.length} {vocab.resource_plural.toLowerCase()}. 
-                  Click <strong>Create Service</strong> to update your catalog and sync the AI's scheduling logic.
+                  You&apos;ve selected {selectedEmployeeIds.length} {vocab.employee_plural.toLowerCase()} and {selectedResourceIds.length} {vocab.resource_plural.toLowerCase()}.
+                  Click <strong>Create Service</strong> to update your catalog and sync the AI&apos;s scheduling logic.
                 </p>
               </div>
             </div>

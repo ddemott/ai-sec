@@ -48,7 +48,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
   }>({});
 
   // Employee focus panel state
-  const [focusEmployee, setFocusEmployee] = useState<any | null>(null);
+  const [focusEmployee, setFocusEmployee] = useState<{ id: string | number; name: string } | null>(null);
 
   const {
     appointments,
@@ -92,14 +92,16 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     }
   }, [tenantId, selectedDate, handleRefresh]);
 
-  const handleEmployeeClick = useCallback((employee: any) => {
+  const handleEmployeeClick = useCallback((employee: { id: string | number; name: string }) => {
     setFocusEmployee(employee);
   }, []);
 
-  const handleAppointmentClick = useCallback((_appt: SchedulerAppointment) => {
-    // For now, clicking an appointment in scheduler views is a no-op
-    // The Calendar tab handles full appointment editing
-  }, []);
+  const handleAppointmentClick = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (_appt: SchedulerAppointment) => {
+      // For now, clicking an appointment in scheduler views is a no-op
+      // The Calendar tab handles full appointment editing
+    }, []);
 
   const handleQuickBooked = useCallback(() => {
     refreshScheduler();

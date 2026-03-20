@@ -3,10 +3,13 @@ import { Clock, AlertTriangle, User, Wrench } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
 
+interface SchedulerEmployee { id: string | number; name: string }
+interface SchedulerResource { id: string | number; name: string }
+
 interface AppointmentListViewProps {
   appointments: SchedulerAppointment[];
-  employees: any[];
-  resources: any[];
+  employees: SchedulerEmployee[];
+  resources: SchedulerResource[];
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
 }
 
@@ -40,11 +43,11 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
 
   const findEmployee = (id: string | null) => {
     if (!id) return null;
-    return employees.find((e: any) => String(e.id) === String(id));
+    return employees.find((e) => String(e.id) === String(id));
   };
 
   const findResource = (id: string) => {
-    return resources.find((r: any) => String(r.id) === String(id));
+    return resources.find((r) => String(r.id) === String(id));
   };
 
   return (

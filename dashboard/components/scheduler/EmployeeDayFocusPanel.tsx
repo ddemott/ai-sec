@@ -4,12 +4,14 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
 
+interface FocusShift { start_time?: string; end_time?: string }
+
 interface EmployeeDayFocusPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  employee: any | null;
+  employee: { id: string | number; name: string } | null;
   appointments: SchedulerAppointment[];
-  shifts: any[];
+  shifts: FocusShift[];
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
 }
 

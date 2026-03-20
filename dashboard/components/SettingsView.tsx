@@ -33,7 +33,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
   const [newResource, setNewResource] = useState({ name: '', description: '' })
 
   // Calendar State
-  const [calendarSettings, setCalendarSettings] = useState<any>(null)
+  const [calendarSettings, setCalendarSettings] = useState<{ provider: string; external_calendar_id: string } | null>(null)
   const [calLoading, setCalLoading] = useState(false)
 
   // Form State for onboarding
@@ -52,13 +52,14 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
     } else if (tenantId) {
       fetchCalendarSettings()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuperAdmin, tenantId])
 
   async function fetchCalendarSettings() {
     try {
       const data = await Api.calendar.getSettings(tenantId)
       setCalendarSettings(data)
-    } catch (e) {
+    } catch {
       console.error("Failed to fetch calendar settings")
     }
   }
@@ -75,7 +76,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
       if (res.success) {
         setCalendarSettings(res.settings)
       }
-    } catch (e) {
+    } catch {
       console.error("Connection failed")
     } finally {
       setCalLoading(false)
@@ -89,7 +90,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
       if (res.success) {
         setCalendarSettings(null)
       }
-    } catch (e) {
+    } catch {
       console.error("Disconnect failed")
     } finally {
       setCalLoading(false)
@@ -101,7 +102,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
       const data = await Api.templates.list()
       setTemplates(data)
       if (data.length > 0) setForm(f => ({ ...f, business_type: data[0].business_type }))
-    } catch (e) {
+    } catch {
       console.error("Failed to fetch templates")
     }
   }
@@ -155,7 +156,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
       } else {
         setOnboardingError(res.error || 'Failed to create business')
       }
-    } catch (err) {
+    } catch {
       setOnboardingError('Connection error to backend')
     } finally {
       setOnboardingLoading(false)

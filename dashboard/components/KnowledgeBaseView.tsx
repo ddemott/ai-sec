@@ -21,7 +21,7 @@ import { Badge } from './ui/Badge'
 
 export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
-  const [docs, setDocs] = useState<any[]>([])
+  const [docs, setDocs] = useState<{ id: string; content: string; source?: string; created_at: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -31,6 +31,7 @@ export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenant
 
   useEffect(() => {
     fetchDocs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchDocs() {
@@ -60,8 +61,8 @@ export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenant
       } else {
         setMessage({ type: 'error', text: res.error || "Upload failed" })
       }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || "An error occurred during upload" })
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : "An error occurred during upload" })
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -74,7 +75,7 @@ export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenant
     try {
       await Api.knowledge.delete(id, tenantId)
       setDocs(docs.filter(d => d.id !== id))
-    } catch (err) {
+    } catch {
       alert("Failed to delete")
     }
   }
@@ -203,7 +204,7 @@ export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenant
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>
             <strong>Pro Tip:</strong> For best results, use documents with clear headings and natural language. 
-            The AI uses "Semantic Search" to find the most relevant chunk, so detailed explanations are better than short bullet points.
+            The AI uses &quot;Semantic Search&quot; to find the most relevant chunk, so detailed explanations are better than short bullet points.
           </span>
         </p>
       </footer>

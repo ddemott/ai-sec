@@ -3,14 +3,21 @@ export interface Appointment {
   tenant_id: string;
   resource_id: string;
   customer_id: string;
+  employee_id?: string | number | null;
   start_time: string;
   end_time: string;
   status: 'scheduled' | 'completed' | 'canceled';
   description: string;
-  location?: string; // New field
+  location?: string;
   customers?: {
     name: string;
+    first_name?: string;
+    last_name?: string;
     phone: string;
+    metadata?: Record<string, unknown>;
+  };
+  resources?: {
+    name: string;
   };
   // Structured name fields
   first_name?: string;
@@ -34,7 +41,7 @@ export interface Customer {
   state?: string;
   postal_code?: string;
   timezone?: string;
-  metadata: any;
+  metadata: Record<string, unknown>;
 }
 
 export interface Tenant {

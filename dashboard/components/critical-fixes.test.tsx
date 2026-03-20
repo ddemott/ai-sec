@@ -27,7 +27,7 @@ describe('BUG-003: AppointmentView draftEvent state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorageMock.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => []
     });
@@ -65,7 +65,7 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorageMock.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ([
         {
@@ -229,7 +229,7 @@ describe('BUG-012: LoginView stores JWT token', () => {
   });
 
   test('successful login stores authToken in localStorage', async () => {
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         success: true,

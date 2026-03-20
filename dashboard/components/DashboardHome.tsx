@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Calendar, Users, Clock, AlertTriangle, Wrench, ChevronRight, Wand2, ArrowRight } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession } from '../lib/hooks'
-import { useVocabulary } from '@/lib/VocabularyContext'
+import { useVocabulary, type Vocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
@@ -19,16 +19,23 @@ export default function DashboardHome({ overrideTenantId, onNavigate }: Dashboar
   const { tenantId, userName } = useSession(overrideTenantId)
   const vocab = useVocabulary()
 
-  const [appointments, setAppointments] = useState<any[]>([])
-  const [employees, setEmployees] = useState<any[]>([])
-  const [services, setServices] = useState<any[]>([])
-  const [resources, setResources] = useState<any[]>([])
-  const [coverage, setCoverage] = useState<any[]>([])
+  interface DashboardAppointment { id: string; start_time: string; status: string; description?: string; customer_name?: string }
+  interface DashboardEmployee { id: string; name: string; type: string; is_active: boolean }
+  interface DashboardService { id: string | number; name: string }
+  interface DashboardResource { id: string; name: string }
+  interface CoverageItem { service_id: string | number; service_name: string; coverage_status: string; covered_hours?: number; total_open_hours?: number }
+
+  const [appointments, setAppointments] = useState<DashboardAppointment[]>([])
+  const [employees, setEmployees] = useState<DashboardEmployee[]>([])
+  const [services, setServices] = useState<DashboardService[]>([])
+  const [resources, setResources] = useState<DashboardResource[]>([])
+  const [coverage, setCoverage] = useState<CoverageItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!tenantId) return
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function loadData() {
@@ -46,7 +53,7 @@ export default function DashboardHome({ overrideTenantId, onNavigate }: Dashboar
       ])
 
       setAppointments(Array.isArray(appts) ? appts : [])
-      setEmployees(Array.isArray(emps) ? emps.filter((e: any) => e.type === 'employee' && e.is_active) : [])
+      setEmployees(Array.isArray(emps) ? emps.filter((e: DashboardEmployee) => e.type === 'employee' && e.is_active) : [])
       setServices(Array.isArray(svcs) ? svcs : [])
       setResources(Array.isArray(res) ? res : [])
       setCoverage(Array.isArray(cov) ? cov : [])
@@ -56,12 +63,12 @@ export default function DashboardHome({ overrideTenantId, onNavigate }: Dashboar
     setLoading(false)
   }
 
-  const todayAppointments = appointments.filter((a: any) => a.status === 'scheduled')
-  const coverageIssues = coverage.filter((c: any) => c.coverage_status !== 'full')
-  const noStaff = coverage.filter((c: any) => c.coverage_status === 'no_staff')
-  const noResource = coverage.filter((c: any) => c.coverage_status === 'no_resource')
-  const partial = coverage.filter((c: any) => c.coverage_status === 'partial')
-  const uncovered = coverage.filter((c: any) => c.coverage_status === 'uncovered')
+  const todayAppointments = appointments.filter((a) => a.status === 'scheduled')
+  const coverageIssues = coverage.filter((c) => c.coverage_status !== 'full')
+  const noStaff = coverage.filter((c) => c.coverage_status === 'no_staff')
+  const noResource = coverage.filter((c) => c.coverage_status === 'no_resource')
+  const partial = coverage.filter((c) => c.coverage_status === 'partial')
+  const uncovered = coverage.filter((c) => c.coverage_status === 'uncovered')
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -154,16 +161,16 @@ export default function DashboardHome({ overrideTenantId, onNavigate }: Dashboar
             Coverage Attention Needed
           </h2>
           <div className="space-y-2">
-            {noStaff.map((c: any) => (
+            {noStaff.map((c) => (
               <CoverageRow key={c.service_id} service={c.service_name} status="no_staff" vocab={vocab} />
             ))}
-            {noResource.map((c: any) => (
+            {noResource.map((c) => (
               <CoverageRow key={c.service_id} service={c.service_name} status="no_resource" vocab={vocab} />
             ))}
-            {uncovered.map((c: any) => (
+            {uncovered.map((c) => (
               <CoverageRow key={c.service_id} service={c.service_name} status="uncovered" vocab={vocab} />
             ))}
-            {partial.map((c: any) => (
+            {partial.map((c) => (
               <CoverageRow
                 key={c.service_id}
                 service={c.service_name}
@@ -181,7 +188,7 @@ export default function DashboardHome({ overrideTenantId, onNavigate }: Dashboar
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-500" />
-            Today's {vocab.booking_label}s
+            Today&apos;s {vocab.booking_label}s
           </h2>
           <button
             onClick={() => onNavigate?.('schedule')}
@@ -196,7 +203,7 @@ export default function DashboardHome({ overrideTenantId, onNavigate }: Dashboar
           </p>
         ) : (
           <div className="space-y-2">
-            {todayAppointments.slice(0, 8).map((appt: any) => (
+            {todayAppointments.slice(0, 8).map((appt) => (
               <div
                 key={appt.id}
                 className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800"
@@ -279,7 +286,7 @@ function CoverageRow({ service, status, detail, vocab }: {
   service: string
   status: string
   detail?: string
-  vocab: any
+  vocab: Vocabulary
 }) {
   const statusConfig: Record<string, { label: string; color: string }> = {
     no_staff: { label: `No ${vocab.employee_plural.toLowerCase()} assigned`, color: 'danger' },
@@ -295,7 +302,7 @@ function CoverageRow({ service, status, detail, vocab }: {
       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{service}</span>
       <div className="flex items-center gap-2">
         {detail && <span className="text-xs text-gray-500">{detail}</span>}
-        <Badge variant={cfg.color as any}>{cfg.label}</Badge>
+        <Badge variant={cfg.color as 'danger' | 'warning' | 'secondary'}>{cfg.label}</Badge>
       </div>
     </div>
   )

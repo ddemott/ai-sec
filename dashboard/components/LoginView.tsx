@@ -36,7 +36,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       } else {
         setError(data.error || 'Login failed. Please try again.')
       }
-    } catch (err) {
+    } catch {
       setError('Connection error. Is the backend server running?')
     } finally {
       setLoading(false)
@@ -117,7 +117,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
           <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
             <p className="text-xs text-gray-400 italic">
-              "Providing human-like AI reception for modern businesses."
+              &quot;Providing human-like AI reception for modern businesses.&quot;
             </p>
           </div>
         </div>

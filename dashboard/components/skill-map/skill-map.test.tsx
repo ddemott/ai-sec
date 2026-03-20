@@ -85,7 +85,7 @@ class MockResizeObserver {
   unobserve() {}
   disconnect() {}
 }
-global.ResizeObserver = MockResizeObserver as any
+global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
 
 // ==========================================
 // useSkillMapData tests

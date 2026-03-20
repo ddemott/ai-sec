@@ -50,16 +50,35 @@ const localizer = dateFnsLocalizer({
 
 const DnDCalendar = withDragAndDrop(BigCalendar)
 
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  resource_id: string;
+  employee_id?: string | number | null;
+  customers?: Appointment['customers'];
+  resources?: Appointment['resources'];
+  status: string;
+  location?: string;
+}
+
+interface DnDEventArgs {
+  event: CalendarEvent;
+  start: Date;
+  end: Date;
+}
+
 export default function AppointmentView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId);
-  const { customers, resources, employees, refresh: refreshStaticData } = useStaticData(tenantId);
+  const { customers, resources, employees } = useStaticData(tenantId);
   const vocab = useVocabulary();
 
   // Appointments state
-  const [appointments, setAppointments] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   // Calendar events for react-big-calendar
   const calendarEvents = useMemo(() => {
-    return appointments.map((a: any) => ({
+    return appointments.map((a: Appointment) => ({
       id: a.id,
       title: a.description || (a.customers?.name || vocab.booking_label),
       start: new Date(a.start_time),
@@ -71,7 +90,8 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
       status: a.status,
       location: a.location,
     }));
-  }, [appointments]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointments, vocab.booking_label]);
     // Loading state
     const [loading, setLoading] = useState<boolean>(false);
     // Mock data state
@@ -81,9 +101,9 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
     // Creation/editing state
     const [isCreating, setIsCreating] = useState<boolean>(false);
     // Appointment selection state
-    const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+    const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     // Draft event state for calendar block
-    const [draftEvent, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
+    const [, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
     // Form state
     const [form, setForm] = useState({
       customer_id: '',
@@ -99,7 +119,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
       customer_notes: ''
     });
     // Utility function for base times
-    function getServiceBaseTimes(appointment: any): { start: Date; end: Date } {
+    function getServiceBaseTimes(appointment: Appointment): { start: Date; end: Date } {
       return {
         start: appointment.start_time ? new Date(appointment.start_time) : new Date(),
         end: appointment.end_time ? new Date(appointment.end_time) : new Date(),
@@ -130,23 +150,24 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
   // Confirm modal state
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
 
-  const findCustomerById = (id: string) => customers.find(c => c.id === id) as any
+  const findCustomerById = (id: string) => customers.find(c => c.id === id)
 
   useEffect(() => {
     fetchAppointments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   useEffect(() => {
     if (selectedAppointment) {
       setIsEditing(false)
       setIsCreating(false)
-      const customer: any = selectedAppointment.customers || {}
-      const customerMetadata = customer.metadata || {}
+      const customer = selectedAppointment.customers || {} as NonNullable<Appointment['customers']>
+      const customerMetadata = (customer.metadata || {}) as Record<string, string>
       const { first, last } = splitFullName(customer.name || '')
       const derivedFirst = customer.first_name || first || ''
       const derivedLast = customer.last_name || last || ''
 
-      const baseTimes = getServiceBaseTimes(selectedAppointment as any)
+      const baseTimes = getServiceBaseTimes(selectedAppointment as Appointment)
 
       setForm({
         customer_id: selectedAppointment.customer_id,
@@ -191,12 +212,12 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
           setSelectedAppointment(null)
         }
       } else if (selectId) {
-        const newlyCreated = data.find((a: any) => a.id === selectId)
+        const newlyCreated = data.find((a: Appointment) => a.id === selectId)
         if (newlyCreated) setSelectedAppointment(newlyCreated)
       } else if (!selectedAppointment) {
         setSelectedAppointment(data[0])
       } else {
-        const updated = data.find((a: any) => a.id === selectedAppointment.id)
+        const updated = data.find((a: Appointment) => a.id === selectedAppointment.id)
         if (updated) setSelectedAppointment(updated)
       }
     } catch {
@@ -368,7 +389,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
       setAppointments(prev =>
         prev.map(a => (a.id === originalAppointment.id ? originalAppointment : a))
       )
-      setSelectedAppointment(originalAppointment as any)
+      setSelectedAppointment(originalAppointment as Appointment)
     }
     setError("")
     setIsEditing(false)
@@ -415,21 +436,21 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
               draggableAccessor={() => true}
               onView={(view: CalendarViewType) => setCalendarView(view)}
               onNavigate={(date: Date) => setCalendarDate(date)}
-              onSelectEvent={(event: any) => {
-                setSelectedAppointment(appointments.find(a => a.id === event.id))
+              onSelectEvent={(event: CalendarEvent) => {
+                setSelectedAppointment(appointments.find(a => a.id === event.id) || null)
                 setShowDetailOnMobile(true)
                 setIsCreating(false)
                 setCalendarDate(new Date(event.start))
               }}
-              onEventDrop={({ event, start, end }: any) => {
+              onEventDrop={({ event, start, end }: DnDEventArgs) => {
                 const apt = appointments.find(a => a.id === event.id)
                 if (!apt) return
-                setOriginalAppointment(apt as any)
+                setOriginalAppointment(apt as Appointment)
                 const startIso = (start as Date).toISOString()
                 const endIso = (end as Date).toISOString()
                 
                 setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, start_time: startIso, end_time: endIso } : a))
-                setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as any)
+                setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
                 setIsEditing(true)
                 setIsCreating(false)
                 setShowDetailOnMobile(true)
@@ -440,15 +461,15 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                 }))
                 setShowConfirmModal(true)
               }}
-              onEventResize={({ event, start, end }: any) => {
+              onEventResize={({ event, start, end }: DnDEventArgs) => {
                 const apt = appointments.find(a => a.id === event.id)
                 if (!apt) return
-                setOriginalAppointment(apt as any)
+                setOriginalAppointment(apt as Appointment)
                 const startIso = (start as Date).toISOString()
                 const endIso = (end as Date).toISOString()
                 
                 setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, start_time: startIso, end_time: endIso } : a))
-                setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as any)
+                setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
                 setIsEditing(true)
                 setIsCreating(false)
                 setShowDetailOnMobile(true)
@@ -459,7 +480,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                 }))
                 setShowConfirmModal(true)
               }}
-              eventPropGetter={(event: any) => {
+              eventPropGetter={(event: CalendarEvent) => {
                 const isSelected = selectedAppointment && event.id === selectedAppointment.id;
                 let color = '#3b82f6';
                 if (!event.resource_id) {
@@ -542,7 +563,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {(() => {
-                      const { start } = getServiceBaseTimes(apt as any)
+                      const { start } = getServiceBaseTimes(apt as Appointment)
                       return `${format(start, 'MMM d')} at ${format(start, 'p')}`
                     })()}
                   </p>
@@ -727,7 +748,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                                               </p>
                                               <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">
                                                   {(() => {
-                                                    const { start, end } = getServiceBaseTimes(selectedAppointment as any)
+                                                    const { start, end } = getServiceBaseTimes(selectedAppointment as Appointment)
                                                     return `${format(start, 'PPPP')} from ${format(start, 'p')} to ${format(end, 'p')}`
                                                   })()}
                                               </p>
@@ -766,13 +787,13 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                                             {employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name || 'Unassigned'}
                                           </span>
                                       </div>
-                                      {(selectedAppointment?.customers as any)?.metadata?.notes && (
+                                      {selectedAppointment?.customers?.metadata?.notes && (
                                           <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800">
                                               <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 flex items-center">
                                                   <StickyNote className="w-3 h-3 mr-1" /> Customer Notes
                                               </p>
                                               <p className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed">
-                                                  {(selectedAppointment!.customers as any).metadata.notes}
+                                                  {String(selectedAppointment!.customers?.metadata?.notes || '')}
                                               </p>
                                           </div>
                                       )}

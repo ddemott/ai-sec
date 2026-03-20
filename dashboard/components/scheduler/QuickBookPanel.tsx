@@ -7,6 +7,11 @@ import { Api } from '../../lib/api';
 import { formatPhone } from '../../lib/phone';
 import { useVocabulary } from '@/lib/VocabularyContext';
 
+interface QuickBookCustomer { id: string; name?: string; phone?: string }
+interface QuickBookEmployee { id: string | number; name: string }
+interface QuickBookResource { id: string; name: string }
+interface QuickBookService { id: string | number; name: string; duration_minutes?: number }
+
 interface QuickBookPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -18,10 +23,10 @@ interface QuickBookPanelProps {
     endHour?: number;
     date?: Date;
   };
-  customers: any[];
-  employees: any[];
-  resources: any[];
-  services: any[];
+  customers: QuickBookCustomer[];
+  employees: QuickBookEmployee[];
+  resources: QuickBookResource[];
+  services: QuickBookService[];
   onBooked: () => void;
 }
 
@@ -69,12 +74,13 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
         setEndTime(toLocalISOFromParts(prefill.date, prefill.endHour ?? prefill.hour + 1));
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, prefill]);
 
   // Update description and end time when service changes
   useEffect(() => {
     if (serviceId) {
-      const svc = services.find((s: any) => String(s.id) === serviceId);
+      const svc = services.find((s) => String(s.id) === serviceId);
       if (svc && svc.duration_minutes && startTime) {
         const start = new Date(startTime);
         const end = new Date(start.getTime() + svc.duration_minutes * 60000);
@@ -92,7 +98,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
     setSaving(true);
     setError('');
 
-    const svc = services.find((s: any) => String(s.id) === serviceId);
+    const svc = services.find((s) => String(s.id) === serviceId);
     const description = svc?.name || 'Walk-in';
 
     try {
@@ -120,7 +126,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   if (!isOpen) return null;
 
   const filteredCustomers = searchTerm
-    ? customers.filter((c: any) =>
+    ? customers.filter((c) =>
         c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.phone?.includes(searchTerm)
       )
@@ -165,7 +171,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
             data-testid="quick-book-customer"
           >
             <option value="">Select customer...</option>
-            {filteredCustomers.map((c: any) => (
+            {filteredCustomers.map((c) => (
               <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${formatPhone(c.phone)})` : ''}</option>
             ))}
           </select>
@@ -178,7 +184,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           onChange={(e) => setServiceId(e.target.value)}
           options={[
             { label: 'Walk-in (no service)', value: '' },
-            ...services.map((s: any) => ({ label: `${s.name} (${s.duration_minutes}min)`, value: String(s.id) })),
+            ...services.map((s) => ({ label: `${s.name} (${s.duration_minutes}min)`, value: String(s.id) })),
           ]}
           data-testid="quick-book-service"
         />
@@ -188,7 +194,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           label={vocab.resource_label}
           value={resourceId}
           onChange={(e) => setResourceId(e.target.value)}
-          options={resources.map((r: any) => ({ label: r.name, value: r.id }))}
+          options={resources.map((r) => ({ label: r.name, value: r.id }))}
           data-testid="quick-book-resource"
         />
 
@@ -199,7 +205,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           onChange={(e) => setEmployeeId(e.target.value)}
           options={[
             { label: 'Unassigned', value: '' },
-            ...employees.map((e: any) => ({ label: e.name, value: String(e.id) })),
+            ...employees.map((e) => ({ label: e.name, value: String(e.id) })),
           ]}
           data-testid="quick-book-employee"
         />

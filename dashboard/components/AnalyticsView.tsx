@@ -9,20 +9,35 @@ import {
   CalendarCheck, 
   DollarSign,
   ArrowUpRight,
-  ArrowDownRight,
   Loader2
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession } from '../lib/hooks'
 import { Card } from './ui/Card'
 
+interface ActivityItem {
+  id: string;
+  customer_name?: string;
+  summary?: string;
+  created_at: string;
+}
+
+interface AnalyticsStats {
+  calls?: { total: number };
+  appointments?: { total: number };
+  revenue?: { estimate: number };
+  customers?: { new_30d: number };
+  recent_activity?: ActivityItem[];
+}
+
 export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<AnalyticsStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   async function fetchStats() {
@@ -60,7 +75,7 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
           </div>
           <h1 className="text-3xl font-bold">Business Analytics</h1>
         </div>
-        <p className="text-gray-500 dark:text-gray-400 text-sm ml-12">Monitor your AI Secretary's performance and booking conversion.</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm ml-12">Monitor your AI Secretary&apos;s performance and booking conversion.</p>
       </header>
 
       {/* KPI GRID */}
@@ -175,7 +190,7 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
           <h3 className="text-lg font-bold mb-6">Recent Activity</h3>
           <div className="flex-1 space-y-6 overflow-auto pr-2 custom-scrollbar">
             {stats?.recent_activity?.length > 0 ? (
-              stats.recent_activity.map((item: any, i: number) => (
+              stats.recent_activity.map((item: ActivityItem, i: number) => (
                 <div key={item.id} className="flex gap-4 group">
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-xs font-bold border-2 border-white dark:border-[#1a1a1a] z-10 relative text-blue-600 dark:text-blue-400">
@@ -186,7 +201,7 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
                   <div>
                     <div className="text-sm font-bold">{item.customer_name || 'Unknown Caller'}</div>
                     <div className="text-xs text-gray-500 line-clamp-2 mb-1 leading-relaxed italic">
-                      "{item.summary || 'Call summary processing...'}"
+                      &quot;{item.summary || 'Call summary processing...'}&quot;
                     </div>
                     <div className="text-[10px] text-blue-500 font-bold uppercase">
                       {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
