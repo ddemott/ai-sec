@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { useSession, useStaticData } from '../lib/hooks';
 import { useSchedulerData } from './scheduler/useSchedulerData';
@@ -35,7 +35,12 @@ const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType 
 
 export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) {
   const { tenantId } = useSession(overrideTenantId);
-  const { customers, resources, employees, services, refresh: refreshStaticData } = useStaticData(tenantId);
+  const { customers, resources, employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
+  // Only show actual employees in the scheduler, not user accounts (owners/admins)
+  const employees = useMemo(() =>
+    allStaff.filter(e => (e as Record<string, unknown>).type !== 'user'),
+    [allStaff]
+  );
 
   const [activeView, setActiveView] = useState<SchedulerViewTab>('staff');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
