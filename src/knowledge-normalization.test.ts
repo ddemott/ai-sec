@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 /**
@@ -15,6 +15,9 @@ describe("Knowledge ingestion normalization pipeline", () => {
   beforeAll(async () => {
     try {
       client = await getRootClient();
+      await clearDB(client);
+      const setup = await setupBasicTenant(client);
+      tenantId = setup.tenantId;
     } catch (err) {
       dbAvailable = false;
       console.warn("[knowledge-normalization.test] Skipping DB tests - connection failed", err);
@@ -29,9 +32,12 @@ describe("Knowledge ingestion normalization pipeline", () => {
 
   beforeEach(async () => {
     if (!dbAvailable) return;
-    await clearDB(client);
-    const setup = await setupBasicTenant(client);
-    tenantId = setup.tenantId;
+    await beginTestTransaction(client);
+  });
+
+  afterEach(async () => {
+    if (!dbAvailable) return;
+    await rollbackTestTransaction(client);
   });
 
   it("stores both content and normalized_text when normalizer transforms text", async () => {

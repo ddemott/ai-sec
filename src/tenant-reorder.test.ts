@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 describe("Tenant reorder (drag-and-drop)", () => {
@@ -9,6 +9,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
   beforeAll(async () => {
     try {
       client = await getRootClient();
+      await clearDB(client);
     } catch (err) {
       dbAvailable = false;
       console.warn("[tenant-reorder.test] Skipping DB tests - connection failed", err);
@@ -23,7 +24,12 @@ describe("Tenant reorder (drag-and-drop)", () => {
 
   beforeEach(async () => {
     if (!dbAvailable) return;
-    await clearDB(client);
+    await beginTestTransaction(client);
+  });
+
+  afterEach(async () => {
+    if (!dbAvailable) return;
+    await rollbackTestTransaction(client);
   });
 
   it("tenants table has sort_order column defaulting to 0", async () => {
@@ -80,10 +86,9 @@ describe("Tenant reorder (drag-and-drop)", () => {
     if (!dbAvailable) return;
 
     // All default sort_order = 0, so order by created_at DESC
-    await client.query("INSERT INTO tenants (name, business_type) VALUES ('Oldest', 'test')");
-    // Small delay to ensure different timestamps
-    await client.query("SELECT pg_sleep(0.01)");
-    await client.query("INSERT INTO tenants (name, business_type) VALUES ('Newest', 'test')");
+    // Use explicit timestamps since NOW() is stable within a transaction
+    await client.query("INSERT INTO tenants (name, business_type, created_at) VALUES ('Oldest', 'test', '2026-01-01T00:00:00Z')");
+    await client.query("INSERT INTO tenants (name, business_type, created_at) VALUES ('Newest', 'test', '2026-01-02T00:00:00Z')");
 
     const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC, created_at DESC");
     expect(res.rows[0].name).toBe('Newest');

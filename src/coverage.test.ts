@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 describe("Coverage Gap Detection", () => {
@@ -11,6 +11,10 @@ describe("Coverage Gap Detection", () => {
     beforeAll(async () => {
         try {
             client = await getRootClient();
+            await clearDB(client);
+            const setup = await setupBasicTenant(client);
+            tenantId = setup.tenantId;
+            resourceId = setup.resourceId;
         } catch (err) {
             dbAvailable = false;
             console.warn("[coverage.test] Skipping DB tests - connection failed", err);
@@ -25,10 +29,12 @@ describe("Coverage Gap Detection", () => {
 
     beforeEach(async () => {
         if (!dbAvailable) return;
-        await clearDB(client);
-        const setup = await setupBasicTenant(client);
-        tenantId = setup.tenantId;
-        resourceId = setup.resourceId;
+        await beginTestTransaction(client);
+    });
+
+    afterEach(async () => {
+        if (!dbAvailable) return;
+        await rollbackTestTransaction(client);
     });
 
     // Helper: seed an employee with shifts and service assignment

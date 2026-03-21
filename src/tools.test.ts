@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createResource } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, setupBasicTenant, createResource, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 import { z } from "zod";
 
@@ -13,6 +13,11 @@ describe("AI Tools: Modular Integration", () => {
     beforeAll(async () => {
         try {
             client = await getRootClient();
+            await clearDB(client);
+            const setup = await setupBasicTenant(client);
+            tenantId = setup.tenantId;
+            resourceId = setup.resourceId;
+            customerId = setup.customerId;
         } catch (err) {
             dbAvailable = false;
             console.warn("[tools.test] Skipping DB-backed tests - connection failed", err);
@@ -27,11 +32,12 @@ describe("AI Tools: Modular Integration", () => {
 
     beforeEach(async () => {
         if (!dbAvailable) return;
-        await clearDB(client);
-        const setup = await setupBasicTenant(client);
-        tenantId = setup.tenantId;
-        resourceId = setup.resourceId;
-        customerId = setup.customerId;
+        await beginTestTransaction(client);
+    });
+
+    afterEach(async () => {
+        if (!dbAvailable) return;
+        await rollbackTestTransaction(client);
     });
 
     it("Validation: should fail with malformed UUID in tenant_id", () => {

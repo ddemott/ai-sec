@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 describe("TDD: Schema and Atomic Booking (Refactored)", () => {
@@ -12,6 +12,11 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
     beforeAll(async () => {
         try {
             client = await getRootClient();
+            await clearDB(client);
+            const setup = await setupBasicTenant(client);
+            tenantId = setup.tenantId;
+            resourceId = setup.resourceId;
+            customerId = setup.customerId;
         } catch (err) {
             dbAvailable = false;
             // eslint-disable-next-line no-console
@@ -27,11 +32,12 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
 
     beforeEach(async () => {
         if (!dbAvailable) return;
-        await clearDB(client);
-        const setup = await setupBasicTenant(client);
-        tenantId = setup.tenantId;
-        resourceId = setup.resourceId;
-        customerId = setup.customerId;
+        await beginTestTransaction(client);
+    });
+
+    afterEach(async () => {
+        if (!dbAvailable) return;
+        await rollbackTestTransaction(client);
     });
 
     it("should successfully book a valid slot", async () => {

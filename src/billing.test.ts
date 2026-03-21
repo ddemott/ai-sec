@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
@@ -12,6 +12,9 @@ describe("Stripe Lite — Billing", () => {
   beforeAll(async () => {
     try {
       client = await getRootClient();
+      await clearDB(client);
+      const setup = await setupBasicTenant(client);
+      tenantId = setup.tenantId;
     } catch (err) {
       dbAvailable = false;
       console.warn("[billing.test] Skipping DB tests - connection failed", err);
@@ -26,9 +29,12 @@ describe("Stripe Lite — Billing", () => {
 
   beforeEach(async () => {
     if (!dbAvailable) return;
-    await clearDB(client);
-    const setup = await setupBasicTenant(client);
-    tenantId = setup.tenantId;
+    await beginTestTransaction(client);
+  });
+
+  afterEach(async () => {
+    if (!dbAvailable) return;
+    await rollbackTestTransaction(client);
   });
 
   // --- Schema Tests ---

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createCustomerFull } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { getRootClient, clearDB, setupBasicTenant, createCustomerFull, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 describe("Customer Management", () => {
@@ -10,6 +10,9 @@ describe("Customer Management", () => {
     beforeAll(async () => {
         try {
             client = await getRootClient();
+            await clearDB(client);
+            const setup = await setupBasicTenant(client);
+            tenantId = setup.tenantId;
         } catch (err) {
             dbAvailable = false;
             // eslint-disable-next-line no-console
@@ -25,9 +28,12 @@ describe("Customer Management", () => {
 
     beforeEach(async () => {
         if (!dbAvailable) return;
-        await clearDB(client);
-        const setup = await setupBasicTenant(client);
-        tenantId = setup.tenantId;
+        await beginTestTransaction(client);
+    });
+
+    afterEach(async () => {
+        if (!dbAvailable) return;
+        await rollbackTestTransaction(client);
     });
 
     it("should create a customer with all fields including timezone", async () => {

@@ -35,6 +35,21 @@ export async function setupBasicTenant(client: Client) {
     return { tenantId, resourceId, customerId };
 }
 
+// ── Transaction-based test isolation ──────────────────────────────────
+// Use savepoints instead of TRUNCATE for fast test isolation.
+// beforeAll: clearDB + setupBasicTenant (once per file)
+// beforeEach: SAVEPOINT (instant)
+// afterEach: ROLLBACK TO SAVEPOINT (instant — undoes test changes)
+
+export async function beginTestTransaction(client: Client) {
+    await client.query("BEGIN");
+    await client.query("SAVEPOINT test_start");
+}
+
+export async function rollbackTestTransaction(client: Client) {
+    await client.query("ROLLBACK");
+}
+
 // ── Data creation helpers ─────────────────────────────────────────────
 
 export async function createTenant(client: Client, name: string, businessType: string, timezone?: string): Promise<string> {
