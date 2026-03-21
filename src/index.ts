@@ -96,17 +96,22 @@ const apiPool = isLocal ? new Pool({
 });
 
 async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await apiPool.connect();
+  // Validate tenant exists using admin pool (api_user is blocked by RLS before context is set)
+  const adminClient = await pool.connect();
   try {
-    // Validate tenant exists before setting context
-    const tenantCheck = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+    const tenantCheck = await adminClient.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
     if (tenantCheck.rows.length === 0) {
-      // Use reply-level error that Fastify routes can detect
       const err = new Error(`Tenant ${tenantId} not found`);
       (err as unknown as { statusCode: number }).statusCode = 404;
       (err as unknown as { code: string }).code = 'TENANT_NOT_FOUND';
       throw err;
     }
+  } finally {
+    adminClient.release();
+  }
+
+  const client = await apiPool.connect();
+  try {
     await client.query('SELECT set_tenant_context($1::UUID)', [tenantId]);
     return await fn(client);
   } finally {
