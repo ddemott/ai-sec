@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB } from "./test-utils";
+import { getRootClient, clearDB, createTenant, createUser, hashPassword } from "./test-utils";
 import { Client } from "pg";
+import bcrypt from "bcrypt";
 
-describe("Auth Routes - Database Level", () => {
+describe("Auth - Database Level", () => {
     let client: Client;
     let dbAvailable = true;
 
@@ -11,7 +12,7 @@ describe("Auth Routes - Database Level", () => {
             client = await getRootClient();
         } catch (err) {
             dbAvailable = false;
-            console.warn("[auth-routes.test] Skipping DB tests - connection failed", err);
+            console.warn("[auth.test] Skipping DB tests - connection failed", err);
         }
     });
 
@@ -26,20 +27,16 @@ describe("Auth Routes - Database Level", () => {
         await clearDB(client);
     });
 
-    // ── Login ────────────────────────────────────────────────────────────
+    // ── Section 1: Login ──────────────────────────────────────────────────
 
     describe("Login", () => {
         it("should verify correct password with bcrypt.compare", async () => {
             if (!dbAvailable) return;
 
-            const bcrypt = await import("bcrypt");
             const password = "securePass123";
-            const hash = await bcrypt.hash(password, 10);
+            const hash = await hashPassword(password);
 
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('LoginTest', 'salon') RETURNING id"
-            );
-            const tenantId = tenantRes.rows[0].id;
+            const tenantId = await createTenant(client, "LoginTest", "salon");
 
             await client.query(
                 "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
@@ -60,13 +57,9 @@ describe("Auth Routes - Database Level", () => {
         it("should reject wrong password with bcrypt.compare", async () => {
             if (!dbAvailable) return;
 
-            const bcrypt = await import("bcrypt");
-            const hash = await bcrypt.hash("correctPassword", 10);
+            const hash = await hashPassword("correctPassword");
 
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('LoginTest2', 'salon') RETURNING id"
-            );
-            const tenantId = tenantRes.rows[0].id;
+            const tenantId = await createTenant(client, "LoginTest2", "salon");
 
             await client.query(
                 "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
@@ -88,15 +81,13 @@ describe("Auth Routes - Database Level", () => {
         });
     });
 
-    // ── Registration ─────────────────────────────────────────────────────
+    // ── Section 2: Registration ───────────────────────────────────────────
 
     describe("Registration", () => {
         it("should create tenant and user in a transaction", async () => {
             if (!dbAvailable) return;
 
-            const bcrypt = await import("bcrypt");
-            const password = "newUser123";
-            const hash = await bcrypt.hash(password, 10);
+            const hash = await hashPassword("newUser123");
 
             await client.query("BEGIN");
 
@@ -124,6 +115,48 @@ describe("Auth Routes - Database Level", () => {
             expect(userCheck.rows).toHaveLength(1);
         });
 
+        it("should create a tenant and user in a single transaction (with template verification)", async () => {
+            if (!dbAvailable) return;
+
+            // Simulate what POST /tenants/register does
+            await client.query('BEGIN');
+
+            const tenantRes = await client.query(
+                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
+                ['Test Salon', 'salon']
+            );
+            const tenantId = tenantRes.rows[0].id;
+
+            const hash = await hashPassword('testpass123');
+
+            const userRes = await client.query(
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING id, tenant_id, email, full_name",
+                [tenantId, 'owner@testsalon.com', hash, 'Salon Owner']
+            );
+
+            await client.query('COMMIT');
+
+            expect(userRes.rows[0].tenant_id).toBe(tenantId);
+            expect(userRes.rows[0].email).toBe('owner@testsalon.com');
+            expect(userRes.rows[0].full_name).toBe('Salon Owner');
+
+            // Verify template defaults were applied via trigger
+            const tenantCheck = await client.query(
+                "SELECT system_prompt, voice_id, first_message FROM tenants WHERE id = $1",
+                [tenantId]
+            );
+            expect(tenantCheck.rows[0].system_prompt).toContain('receptionist');
+            expect(tenantCheck.rows[0].voice_id).toBeTruthy();
+            expect(tenantCheck.rows[0].first_message).toBeTruthy();
+
+            // Verify default resource was created via trigger
+            const resourceCheck = await client.query(
+                "SELECT name FROM resources WHERE tenant_id = $1",
+                [tenantId]
+            );
+            expect(resourceCheck.rows[0].name).toBe('Styling Station 1');
+        });
+
         it("should apply template defaults (system_prompt populated) for known business_type", async () => {
             if (!dbAvailable) return;
 
@@ -142,11 +175,7 @@ describe("Auth Routes - Database Level", () => {
         it("should create default resource for known business_type", async () => {
             if (!dbAvailable) return;
 
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
-                ["Resource Test", "salon"]
-            );
-            const tenantId = tenantRes.rows[0].id;
+            const tenantId = await createTenant(client, "Resource Test", "salon");
 
             const resources = await client.query(
                 "SELECT * FROM resources WHERE tenant_id = $1",
@@ -156,17 +185,16 @@ describe("Auth Routes - Database Level", () => {
             expect(resources.rows).toHaveLength(1);
             expect(resources.rows[0].name).toBe("Styling Station 1");
         });
+    });
 
+    // ── Section 3: Email Uniqueness ───────────────────────────────────────
+
+    describe("Email Uniqueness", () => {
         it("should reject duplicate email within same tenant (per-tenant unique constraint)", async () => {
             if (!dbAvailable) return;
 
-            const bcrypt = await import("bcrypt");
-            const hash = await bcrypt.hash("pass123", 10);
-
-            const t1Res = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('Biz1', 'salon') RETURNING id"
-            );
-            const tenantId = t1Res.rows[0].id;
+            const hash = await hashPassword("pass123");
+            const tenantId = await createTenant(client, "Biz1", "salon");
 
             await client.query(
                 "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
@@ -182,20 +210,55 @@ describe("Auth Routes - Database Level", () => {
             ).rejects.toThrow();
         });
 
+        it("should reject duplicate email within same tenant (unique constraint message)", async () => {
+            if (!dbAvailable) return;
+
+            const tenantId = await createTenant(client, "Dup Test", "salon");
+            const hash = await hashPassword("pass");
+
+            await client.query(
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'dupe@test.com', $2, 'User 1')",
+                [tenantId, hash]
+            );
+
+            await expect(
+                client.query(
+                    "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'dupe@test.com', $2, 'User 2')",
+                    [tenantId, hash]
+                )
+            ).rejects.toThrow(/unique/i);
+        });
+
+        it("should allow same email across different tenants", async () => {
+            if (!dbAvailable) return;
+
+            const t1Id = await createTenant(client, "T1", "salon");
+            const t2Id = await createTenant(client, "T2", "auto-shop");
+
+            const hash = await hashPassword("pass");
+
+            await client.query(
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 1')",
+                [t1Id, hash]
+            );
+
+            const res = await client.query(
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 2') RETURNING id",
+                [t2Id, hash]
+            );
+
+            expect(res.rows[0].id).toBeTruthy();
+        });
+
         it("should detect duplicate email across tenants via application-level check", async () => {
             if (!dbAvailable) return;
 
-            // The registration route checks globally: SELECT id FROM users WHERE email = $1
-            // even though DB constraint is per-tenant. This is the app-level guard.
-            const bcrypt = await import("bcrypt");
-            const hash = await bcrypt.hash("pass123", 10);
+            const hash = await hashPassword("pass123");
+            const t1Id = await createTenant(client, "Biz1", "salon");
 
-            const t1Res = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('Biz1', 'salon') RETURNING id"
-            );
             await client.query(
                 "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [t1Res.rows[0].id, "crosscheck@test.com", hash, "First User"]
+                [t1Id, "crosscheck@test.com", hash, "First User"]
             );
 
             // Application-level check used by /register
@@ -206,15 +269,12 @@ describe("Auth Routes - Database Level", () => {
         it("should detect existing email before registration (application-level check)", async () => {
             if (!dbAvailable) return;
 
-            const bcrypt = await import("bcrypt");
-            const hash = await bcrypt.hash("pass123", 10);
+            const hash = await hashPassword("pass123");
+            const t1Id = await createTenant(client, "ExistingBiz", "salon");
 
-            const t1Res = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('ExistingBiz', 'salon') RETURNING id"
-            );
             await client.query(
                 "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [t1Res.rows[0].id, "exists@test.com", hash, "Existing User"]
+                [t1Id, "exists@test.com", hash, "Existing User"]
             );
 
             // Simulate the registration check query
@@ -231,7 +291,11 @@ describe("Auth Routes - Database Level", () => {
             );
             expect(newUser.rows).toHaveLength(0);
         });
+    });
 
+    // ── Section 4: Onboarding ─────────────────────────────────────────────
+
+    describe("Onboarding", () => {
         it("should default onboarding_completed to false", async () => {
             if (!dbAvailable) return;
 
@@ -243,6 +307,19 @@ describe("Auth Routes - Database Level", () => {
             expect(tenantRes.rows[0].onboarding_completed).toBe(false);
         });
 
+        it("should set onboarding_completed to false by default (plumber)", async () => {
+            if (!dbAvailable) return;
+
+            const res = await client.query(
+                "INSERT INTO tenants (name, business_type) VALUES ('New Biz', 'plumber') RETURNING onboarding_completed"
+            );
+            expect(res.rows[0].onboarding_completed).toBe(false);
+        });
+    });
+
+    // ── Section 5: Transaction Rollback ───────────────────────────────────
+
+    describe("Transaction Rollback", () => {
         it("should rollback both tenant and user if user creation fails", async () => {
             if (!dbAvailable) return;
 

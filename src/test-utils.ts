@@ -1,4 +1,5 @@
 import { Client } from "pg";
+import bcrypt from "bcrypt";
 
 // Always use test_db for tests — never the main database.
 // DATABASE_URL from .env points to the production DB and must not be used here.
@@ -30,6 +31,104 @@ export async function setupBasicTenant(client: Client) {
     const resourceId = rRes.rows[0].id;
     const cRes = await client.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550001111', 'Alice') RETURNING id;", [tenantId]);
     const customerId = cRes.rows[0].id;
-    
+
     return { tenantId, resourceId, customerId };
+}
+
+// ── Data creation helpers ─────────────────────────────────────────────
+
+export async function createTenant(client: Client, name: string, businessType: string, timezone?: string): Promise<string> {
+    if (timezone) {
+        const res = await client.query(
+            "INSERT INTO tenants (name, business_type, timezone) VALUES ($1, $2, $3) RETURNING id",
+            [name, businessType, timezone]
+        );
+        return res.rows[0].id;
+    }
+    const res = await client.query(
+        "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
+        [name, businessType]
+    );
+    return res.rows[0].id;
+}
+
+export async function createResource(client: Client, tenantId: string, name: string, description?: string): Promise<string> {
+    const res = await client.query(
+        "INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING id",
+        [tenantId, name, description || null]
+    );
+    return res.rows[0].id;
+}
+
+export async function createEmployee(client: Client, tenantId: string, name: string, skills?: string[]): Promise<string> {
+    const res = await client.query(
+        "INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING id",
+        [tenantId, name, skills || []]
+    );
+    return res.rows[0].id;
+}
+
+export async function createShift(client: Client, tenantId: string, employeeId: string, dayOfWeek: number, startTime: string, endTime: string): Promise<string> {
+    const res = await client.query(
+        "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        [tenantId, employeeId, dayOfWeek, startTime, endTime]
+    );
+    return res.rows[0].id;
+}
+
+export async function createService(client: Client, tenantId: string, name: string, durationMinutes: number, price?: number): Promise<string> {
+    const res = await client.query(
+        "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, $2, $3, $4) RETURNING id",
+        [tenantId, name, durationMinutes, price || null]
+    );
+    return res.rows[0].id;
+}
+
+export async function createCustomerFull(client: Client, tenantId: string, phone: string, name: string, email?: string): Promise<string> {
+    const res = await client.query(
+        "INSERT INTO customers (tenant_id, phone, name, email) VALUES ($1, $2, $3, $4) RETURNING id",
+        [tenantId, phone, name, email || null]
+    );
+    return res.rows[0].id;
+}
+
+export async function createAppointment(
+    client: Client, tenantId: string, resourceId: string, customerId: string,
+    startTime: string, endTime: string, description: string, status?: string, employeeId?: string
+): Promise<string> {
+    const res = await client.query(
+        `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status, employee_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [tenantId, resourceId, customerId, startTime, endTime, description, status || 'scheduled', employeeId || null]
+    );
+    return res.rows[0].id;
+}
+
+export async function hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, 10);
+}
+
+export async function createUser(client: Client, tenantId: string, email: string, password: string, fullName: string): Promise<string> {
+    const hash = await hashPassword(password);
+    const res = await client.query(
+        "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING id",
+        [tenantId, email, hash, fullName]
+    );
+    return res.rows[0].id;
+}
+
+// ── Service mapping helpers ───────────────────────────────────────────
+
+export async function assignEmployeeToService(client: Client, tenantId: string, serviceId: string, employeeId: string): Promise<void> {
+    await client.query(
+        "INSERT INTO service_employee (tenant_id, service_id, employee_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        [tenantId, serviceId, employeeId]
+    );
+}
+
+export async function assignResourceToService(client: Client, tenantId: string, serviceId: string, resourceId: string): Promise<void> {
+    await client.query(
+        "INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        [tenantId, serviceId, resourceId]
+    );
 }

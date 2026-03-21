@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, createShift, assignEmployeeToService, assignResourceToService } from "./test-utils";
 import { Client } from "pg";
 
 describe("CRUD Routes - Database Level", () => {
@@ -112,19 +112,10 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             // Create a second tenant
-            const t2Res = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('OtherBiz', 'salon') RETURNING id"
-            );
-            const tenant2Id = t2Res.rows[0].id;
+            const tenant2Id = await createTenant(client, "OtherBiz", "salon");
 
-            await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Tenant1 Emp')",
-                [tenantId]
-            );
-            await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Tenant2 Emp')",
-                [tenant2Id]
-            );
+            await createEmployee(client, tenantId, "Tenant1 Emp");
+            await createEmployee(client, tenant2Id, "Tenant2 Emp");
 
             const res1 = await client.query(
                 "SELECT * FROM employees WHERE tenant_id = $1",
@@ -323,22 +314,9 @@ describe("CRUD Routes - Database Level", () => {
         it("should prevent delete when service has mappings (application-level check)", async () => {
             if (!dbAvailable) return;
 
-            const svcRes = await client.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, 'Mapped Svc', 30) RETURNING id",
-                [tenantId]
-            );
-            const svcId = svcRes.rows[0].id;
-
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Worker') RETURNING id",
-                [tenantId]
-            );
-            const empId = empRes.rows[0].id;
-
-            await client.query(
-                "INSERT INTO service_employee (service_id, employee_id, tenant_id) VALUES ($1, $2, $3)",
-                [svcId, empId, tenantId]
-            );
+            const svcId = await createService(client, tenantId, "Mapped Svc", 30);
+            const empId = await createEmployee(client, tenantId, "Worker");
+            await assignEmployeeToService(client, tenantId, svcId, empId);
 
             // Application-level check mimicking the route logic
             const mappings = await client.query(
@@ -352,15 +330,11 @@ describe("CRUD Routes - Database Level", () => {
     // ── Shifts ───────────────────────────────────────────────────────────
 
     describe("Shifts", () => {
-        let employeeId: number;
+        let employeeId: string;
 
         beforeEach(async () => {
             if (!dbAvailable) return;
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Shift Worker') RETURNING id",
-                [tenantId]
-            );
-            employeeId = empRes.rows[0].id;
+            employeeId = await createEmployee(client, tenantId, "Shift Worker");
         });
 
         it("should create employee shift", async () => {
@@ -458,22 +432,13 @@ describe("CRUD Routes - Database Level", () => {
     // ── Service Mappings ─────────────────────────────────────────────────
 
     describe("Service Mappings", () => {
-        let employeeId: number;
-        let serviceId: number;
+        let employeeId: string;
+        let serviceId: string;
 
         beforeEach(async () => {
             if (!dbAvailable) return;
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Mapper') RETURNING id",
-                [tenantId]
-            );
-            employeeId = empRes.rows[0].id;
-
-            const svcRes = await client.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, 'Mapped Service', 30) RETURNING id",
-                [tenantId]
-            );
-            serviceId = svcRes.rows[0].id;
+            employeeId = await createEmployee(client, tenantId, "Mapper");
+            serviceId = await createService(client, tenantId, "Mapped Service", 30);
         });
 
         it("should assign employee to service", async () => {
@@ -573,11 +538,7 @@ describe("CRUD Routes - Database Level", () => {
         it("should list service-employee mappings for a tenant", async () => {
             if (!dbAvailable) return;
 
-            const emp2Res = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Second') RETURNING id",
-                [tenantId]
-            );
-            const emp2Id = emp2Res.rows[0].id;
+            const emp2Id = await createEmployee(client, tenantId, "Second");
 
             await client.query(
                 "INSERT INTO service_employee (service_id, employee_id, tenant_id) VALUES ($1, $2, $3)",
@@ -598,11 +559,7 @@ describe("CRUD Routes - Database Level", () => {
         it("should list service-resource mappings for a tenant", async () => {
             if (!dbAvailable) return;
 
-            const res2 = await client.query(
-                "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Bay 2') RETURNING id",
-                [tenantId]
-            );
-            const resource2Id = res2.rows[0].id;
+            const resource2Id = await createResource(client, tenantId, "Bay 2");
 
             await client.query(
                 "INSERT INTO service_resource (service_id, resource_id, tenant_id) VALUES ($1, $2, $3)",
@@ -702,10 +659,7 @@ describe("CRUD Routes - Database Level", () => {
         it("should allow same skill name for different tenants", async () => {
             if (!dbAvailable) return;
 
-            const t2Res = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('OtherShop', 'salon') RETURNING id"
-            );
-            const tenant2Id = t2Res.rows[0].id;
+            const tenant2Id = await createTenant(client, "OtherShop", "salon");
 
             await client.query(
                 "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'shared-name')",
@@ -727,6 +681,81 @@ describe("CRUD Routes - Database Level", () => {
 
             expect(res1.rows).toHaveLength(1);
             expect(res2.rows).toHaveLength(1);
+        });
+    });
+
+    // ── UUID Shifts (moved from coverage-gaps.test.ts) ────────────────
+
+    describe("UUID Shifts", () => {
+        let employeeId: string;
+
+        beforeEach(async () => {
+            if (!dbAvailable) return;
+            employeeId = await createEmployee(client, tenantId, "Shift Worker UUID");
+        });
+
+        it("should create a shift with a valid UUID id", async () => {
+            if (!dbAvailable) return;
+            const shiftId = await createShift(client, tenantId, employeeId, 1, "08:00", "17:00");
+            expect(shiftId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+            expect(shiftId.length).toBe(36);
+        });
+
+        it("should delete a shift by UUID id", async () => {
+            if (!dbAvailable) return;
+            const shiftId = await createShift(client, tenantId, employeeId, 2, "09:00", "18:00");
+
+            await client.query("DELETE FROM employee_shifts WHERE id = $1", [shiftId]);
+
+            const res = await client.query("SELECT * FROM employee_shifts WHERE id = $1", [shiftId]);
+            expect(res.rows.length).toBe(0);
+        });
+
+        it("should update a shift by UUID id", async () => {
+            if (!dbAvailable) return;
+            const shiftId = await createShift(client, tenantId, employeeId, 3, "08:00", "12:00");
+
+            await client.query(
+                "UPDATE employee_shifts SET start_time = '07:00', end_time = '15:00' WHERE id = $1",
+                [shiftId]
+            );
+
+            const res = await client.query("SELECT start_time, end_time FROM employee_shifts WHERE id = $1", [shiftId]);
+            expect(res.rows[0].start_time).toBe("07:00:00");
+            expect(res.rows[0].end_time).toBe("15:00:00");
+        });
+    });
+
+    // ── UUID Skills (moved from coverage-gaps.test.ts) ────────────────
+
+    describe("UUID Skills", () => {
+        it("should create a skill with a valid UUID id", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                `INSERT INTO tenant_skills (tenant_id, name, description)
+                 VALUES ($1, 'Tire Balancing', 'Balance and align tires')
+                 RETURNING id`,
+                [tenantId]
+            );
+            const skillId = res.rows[0].id;
+            expect(skillId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+            expect(skillId.length).toBe(36);
+        });
+
+        it("should delete a skill by UUID id", async () => {
+            if (!dbAvailable) return;
+            const ins = await client.query(
+                `INSERT INTO tenant_skills (tenant_id, name, description)
+                 VALUES ($1, 'Oil Change UUID', 'Standard oil change')
+                 RETURNING id`,
+                [tenantId]
+            );
+            const skillId = ins.rows[0].id;
+
+            await client.query("DELETE FROM tenant_skills WHERE id = $1", [skillId]);
+
+            const res = await client.query("SELECT * FROM tenant_skills WHERE id = $1", [skillId]);
+            expect(res.rows.length).toBe(0);
         });
     });
 });

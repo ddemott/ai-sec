@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { getRootClient, getApiClient, clearDB } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { getRootClient, getApiClient, clearDB, createTenant, createResource, createCustomerFull } from "./test-utils";
 import { Client } from "pg";
 
 describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => {
@@ -25,17 +25,18 @@ describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => 
         }
     });
 
-    it("should prevent Tenant A from seeing Tenant B's data", async () => {
+    beforeEach(async () => {
         if (!dbAvailable) return;
         await clearDB(root);
+    });
 
-        // Setup
-        const tARes = await root.query("INSERT INTO tenants (name, business_type) VALUES ('A', 't') RETURNING id;");
-        const tenantA = tARes.rows[0].id;
-        const tBRes = await root.query("INSERT INTO tenants (name, business_type) VALUES ('B', 't') RETURNING id;");
-        const tenantB = tBRes.rows[0].id;
+    it("should prevent Tenant A from seeing Tenant B's data", async () => {
+        if (!dbAvailable) return;
 
-        await root.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'B-Truck') RETURNING id;", [tenantB]);
+        const tenantA = await createTenant(root, "A", "t");
+        const tenantB = await createTenant(root, "B", "t");
+
+        await createResource(root, tenantB, "B-Truck");
 
         // Verify A sees nothing
         await api.query(`SELECT set_tenant_context($1::UUID)`, [tenantA]);
@@ -51,10 +52,10 @@ describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => 
 
     it("should prevent cross-tenant updates", async () => {
         if (!dbAvailable) return;
-        await clearDB(root);
-        const tenantA = (await root.query("INSERT INTO tenants (name, business_type) VALUES ('A', 't') RETURNING id")).rows[0].id;
-        const tenantB = (await root.query("INSERT INTO tenants (name, business_type) VALUES ('B', 't') RETURNING id")).rows[0].id;
-        const customerB = (await root.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '123', 'Bob') RETURNING id", [tenantB])).rows[0].id;
+
+        const tenantA = await createTenant(root, "A", "t");
+        const tenantB = await createTenant(root, "B", "t");
+        const customerB = await createCustomerFull(root, tenantB, "123", "Bob");
 
         // Try update as A
         await api.query(`SELECT set_tenant_context($1::UUID)`, [tenantA]);

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createEmployee, createCustomerFull } from "./test-utils";
 import { Client } from "pg";
 
 describe("CRM Unified: Customer Appointments Endpoint", () => {
@@ -37,11 +37,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
         if (!dbAvailable) return;
 
         // Create an employee
-        const empRes = await client.query(
-            "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Mike Tech') RETURNING id",
-            [tenantId]
-        );
-        const employeeId = empRes.rows[0].id;
+        const employeeId = await createEmployee(client, tenantId, "Mike Tech");
 
         // Create two appointments for this customer
         await client.query(
@@ -102,11 +98,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
         if (!dbAvailable) return;
 
         // Create a second customer
-        const c2Res = await client.query(
-            "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15559990000', 'Other Customer') RETURNING id",
-            [tenantId]
-        );
-        const otherCustomerId = c2Res.rows[0].id;
+        const otherCustomerId = await createCustomerFull(client, tenantId, "+15559990000", "Other Customer");
 
         // Create appointment for the other customer
         await client.query(

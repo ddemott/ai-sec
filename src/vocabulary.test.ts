@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant } from "./test-utils";
 import { Client } from "pg";
 
 describe("Business Vocabulary System", () => {
@@ -209,10 +209,7 @@ describe("Business Vocabulary System", () => {
         it("should resolve vocabulary for a tenant with template but no overrides", async () => {
             if (!dbAvailable) return;
             // Create a salon tenant
-            const tRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('Test Salon', 'salon') RETURNING id"
-            );
-            const salonId = tRes.rows[0].id;
+            const salonId = await createTenant(client, "Test Salon", "salon");
 
             const res = await client.query(`
                 SELECT
@@ -285,10 +282,11 @@ describe("Business Vocabulary System", () => {
             if (!dbAvailable) return;
 
             // Create a tenant with business_type = 'auto-shop' and partial override
-            const tRes = await client.query(
-                "INSERT INTO tenants (name, business_type, resource_label, resource_plural) VALUES ('Test Shop', 'auto-shop', 'Stall', 'Stalls') RETURNING id"
+            const shopId = await createTenant(client, "Test Shop", "auto-shop");
+            await client.query(
+                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE id = $1",
+                [shopId]
             );
-            const shopId = tRes.rows[0].id;
 
             // 3-tier COALESCE query
             const res = await client.query(`
@@ -317,10 +315,7 @@ describe("Business Vocabulary System", () => {
             if (!dbAvailable) return;
 
             // Tenant with unknown business_type (no matching template)
-            const tRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('Mystery Biz', 'unknown-type') RETURNING id"
-            );
-            const bizId = tRes.rows[0].id;
+            const bizId = await createTenant(client, "Mystery Biz", "unknown-type");
 
             const res = await client.query(`
                 SELECT
@@ -339,6 +334,73 @@ describe("Business Vocabulary System", () => {
             expect(res.rows[0].employee_label).toBe('Employee');
             expect(res.rows[0].employee_plural).toBe('Employees');
             expect(res.rows[0].booking_label).toBe('Appointment');
+        });
+    });
+
+    // ── Template Categories (moved from coverage-gaps.test.ts) ────────
+
+    describe("Template Categories", () => {
+        it("should have a non-empty category on all templates", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type, category FROM business_templates WHERE category IS NULL OR category = ''"
+            );
+            expect(res.rows.length).toBe(0);
+        });
+
+        it("should have at least 5 distinct categories", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT DISTINCT category FROM business_templates"
+            );
+            expect(res.rows.length).toBeGreaterThanOrEqual(5);
+        });
+
+        it("should include Auto & Vehicle, Beauty & Personal Care, and Home Services categories", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT DISTINCT category FROM business_templates ORDER BY category"
+            );
+            const categories = res.rows.map((r: { category: string }) => r.category);
+            expect(categories).toContain("Auto & Vehicle");
+            expect(categories).toContain("Beauty & Personal Care");
+            expect(categories).toContain("Home Services");
+        });
+
+        it("should have sort_order set (not null) for all templates", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type, sort_order FROM business_templates WHERE sort_order IS NULL"
+            );
+            expect(res.rows.length).toBe(0);
+        });
+    });
+
+    // ── HIPAA Template Exclusion (moved from coverage-gaps.test.ts) ───
+
+    describe("HIPAA Template Exclusion", () => {
+        it("should NOT have a dentist template", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type FROM business_templates WHERE business_type = 'dentist'"
+            );
+            expect(res.rows.length).toBe(0);
+        });
+
+        it("should NOT have a chiropractor template", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type FROM business_templates WHERE business_type = 'chiropractor'"
+            );
+            expect(res.rows.length).toBe(0);
+        });
+
+        it("should NOT have a vet-clinic template", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type FROM business_templates WHERE business_type = 'vet-clinic'"
+            );
+            expect(res.rows.length).toBe(0);
         });
     });
 });

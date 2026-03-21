@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
 import { Client } from "pg";
 
 describe("TDD: Schema and Atomic Booking (Refactored)", () => {
     let client: Client;
+    let tenantId: string;
+    let resourceId: string;
+    let customerId: string;
     let dbAvailable = true;
 
     beforeAll(async () => {
@@ -22,10 +25,17 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         }
     });
 
-    it("should successfully book a valid slot", async () => {
+    beforeEach(async () => {
         if (!dbAvailable) return;
         await clearDB(client);
-        const { tenantId, resourceId, customerId } = await setupBasicTenant(client);
+        const setup = await setupBasicTenant(client);
+        tenantId = setup.tenantId;
+        resourceId = setup.resourceId;
+        customerId = setup.customerId;
+    });
+
+    it("should successfully book a valid slot", async () => {
+        if (!dbAvailable) return;
 
         const startTime = new Date("2026-03-01T10:00:00Z");
         const endTime = new Date("2026-03-01T11:00:00Z");
@@ -38,9 +48,6 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         expect(result.rows[0].success).toBe(true);
         expect(result.rows[0].appointment_id).not.toBeNull();
 
-        // Assert that the stored appointment window fully covers the requested window.
-        // In newer deployments, start_time/end_time should match exactly; in older
-        // buffered deployments they may expand the window, but must never shrink it.
         const row = await client.query(
             "SELECT start_time, end_time FROM appointments WHERE id = $1",
             [result.rows[0].appointment_id]
@@ -52,8 +59,6 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
 
     it("should fail to book an overlapping slot", async () => {
         if (!dbAvailable) return;
-        await clearDB(client);
-        const { tenantId, resourceId, customerId } = await setupBasicTenant(client);
 
         // Book initial
             await client.query(

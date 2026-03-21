@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createCustomerFull } from "./test-utils";
 import { Client } from "pg";
 
 describe("Customer Management", () => {
@@ -10,8 +10,6 @@ describe("Customer Management", () => {
     beforeAll(async () => {
         try {
             client = await getRootClient();
-            const setup = await setupBasicTenant(client);
-            tenantId = setup.tenantId;
         } catch (err) {
             dbAvailable = false;
             // eslint-disable-next-line no-console
@@ -58,11 +56,7 @@ describe("Customer Management", () => {
 
     it("should update a customer's timezone and address", async () => {
         if (!dbAvailable) return;
-        const insertRes = await client.query(
-            "INSERT INTO customers (tenant_id, name, phone) VALUES ($1, 'Old Name', '+15551112222') RETURNING id",
-            [tenantId]
-        );
-        const customerId = insertRes.rows[0].id;
+        const customerId = await createCustomerFull(client, tenantId, "+15551112222", "Old Name");
 
         await client.query(
             "UPDATE customers SET timezone = $1, city = $2 WHERE id = $3",

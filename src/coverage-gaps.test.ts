@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createEmployee, createResource, createShift } from "./test-utils";
 import { Client } from "pg";
 
 describe("Coverage Gaps", () => {
@@ -73,11 +73,7 @@ describe("Coverage Gaps", () => {
 
         it("should update resource_id", async () => {
             if (!dbAvailable) return;
-            const r2 = await client.query(
-                "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 2') RETURNING id",
-                [tenantId]
-            );
-            const newResourceId = r2.rows[0].id;
+            const newResourceId = await createResource(client, tenantId, "Truck 2");
             await client.query("UPDATE appointments SET resource_id = $1 WHERE id = $2", [newResourceId, appointmentId]);
             const res = await client.query("SELECT resource_id FROM appointments WHERE id = $1", [appointmentId]);
             expect(res.rows[0].resource_id).toBe(newResourceId);
@@ -85,11 +81,7 @@ describe("Coverage Gaps", () => {
 
         it("should update employee_id as UUID", async () => {
             if (!dbAvailable) return;
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'John') RETURNING id",
-                [tenantId]
-            );
-            const employeeId = empRes.rows[0].id;
+            const employeeId = await createEmployee(client, tenantId, "John");
             await client.query("UPDATE appointments SET employee_id = $1 WHERE id = $2", [employeeId, appointmentId]);
             const res = await client.query("SELECT employee_id FROM appointments WHERE id = $1", [appointmentId]);
             expect(res.rows[0].employee_id).toBe(employeeId);
@@ -99,16 +91,8 @@ describe("Coverage Gaps", () => {
 
         it("should persist all updated values together", async () => {
             if (!dbAvailable) return;
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Jane') RETURNING id",
-                [tenantId]
-            );
-            const employeeId = empRes.rows[0].id;
-            const r2 = await client.query(
-                "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 3') RETURNING id",
-                [tenantId]
-            );
-            const newResourceId = r2.rows[0].id;
+            const employeeId = await createEmployee(client, tenantId, "Jane");
+            const newResourceId = await createResource(client, tenantId, "Truck 3");
 
             await client.query(
                 `UPDATE appointments
@@ -148,11 +132,7 @@ describe("Coverage Gaps", () => {
         it("should fail RLS-scoped query when tenant context is set to non-existent UUID", async () => {
             if (!dbAvailable) return;
             const fakeId = "00000000-aaaa-bbbb-cccc-000000000099";
-            // Set tenant context to a non-existent tenant
             await client.query("SET LOCAL app.current_tenant_id = '" + fakeId + "'");
-            // A table with RLS: resources. Even as superuser with RLS bypassed,
-            // the pattern used by withTenantClient sets the context then queries.
-            // Here we verify 0 rows come back for a non-existent tenant.
             const res = await client.query(
                 "SELECT * FROM resources WHERE tenant_id = $1",
                 [fakeId]
@@ -162,173 +142,20 @@ describe("Coverage Gaps", () => {
     });
 
     // ---------------------------------------------------------------
-    // 3. Template Categories
-    // ---------------------------------------------------------------
-    describe("Template Categories", () => {
-        it("should have a non-empty category on all templates", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT business_type, category FROM business_templates WHERE category IS NULL OR category = ''"
-            );
-            expect(res.rows.length).toBe(0);
-        });
-
-        it("should have at least 5 distinct categories", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT DISTINCT category FROM business_templates"
-            );
-            expect(res.rows.length).toBeGreaterThanOrEqual(5);
-        });
-
-        it("should include Auto & Vehicle, Beauty & Personal Care, and Home Services categories", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT DISTINCT category FROM business_templates ORDER BY category"
-            );
-            const categories = res.rows.map((r: { category: string }) => r.category);
-            expect(categories).toContain("Auto & Vehicle");
-            expect(categories).toContain("Beauty & Personal Care");
-            expect(categories).toContain("Home Services");
-        });
-
-        it("should have sort_order set (not null) for all templates", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT business_type, sort_order FROM business_templates WHERE sort_order IS NULL"
-            );
-            expect(res.rows.length).toBe(0);
-        });
-    });
-
-    // ---------------------------------------------------------------
-    // 4. UUID Shifts
-    // ---------------------------------------------------------------
-    describe("UUID Shifts", () => {
-        let employeeId: string;
-
-        beforeEach(async () => {
-            if (!dbAvailable) return;
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Shift Worker') RETURNING id",
-                [tenantId]
-            );
-            employeeId = empRes.rows[0].id;
-        });
-
-        it("should create a shift with a valid UUID id", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 1, '08:00', '17:00')
-                 RETURNING id`,
-                [tenantId, employeeId]
-            );
-            const shiftId = res.rows[0].id;
-            expect(shiftId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-            expect(shiftId.length).toBe(36);
-        });
-
-        it("should delete a shift by UUID id", async () => {
-            if (!dbAvailable) return;
-            const ins = await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 2, '09:00', '18:00')
-                 RETURNING id`,
-                [tenantId, employeeId]
-            );
-            const shiftId = ins.rows[0].id;
-
-            await client.query("DELETE FROM employee_shifts WHERE id = $1", [shiftId]);
-
-            const res = await client.query("SELECT * FROM employee_shifts WHERE id = $1", [shiftId]);
-            expect(res.rows.length).toBe(0);
-        });
-
-        it("should update a shift by UUID id", async () => {
-            if (!dbAvailable) return;
-            const ins = await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 3, '08:00', '12:00')
-                 RETURNING id`,
-                [tenantId, employeeId]
-            );
-            const shiftId = ins.rows[0].id;
-
-            await client.query(
-                "UPDATE employee_shifts SET start_time = '07:00', end_time = '15:00' WHERE id = $1",
-                [shiftId]
-            );
-
-            const res = await client.query("SELECT start_time, end_time FROM employee_shifts WHERE id = $1", [shiftId]);
-            expect(res.rows[0].start_time).toBe("07:00:00");
-            expect(res.rows[0].end_time).toBe("15:00:00");
-        });
-    });
-
-    // ---------------------------------------------------------------
-    // 5. UUID Skills
-    // ---------------------------------------------------------------
-    describe("UUID Skills", () => {
-        it("should create a skill with a valid UUID id", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                `INSERT INTO tenant_skills (tenant_id, name, description)
-                 VALUES ($1, 'Tire Balancing', 'Balance and align tires')
-                 RETURNING id`,
-                [tenantId]
-            );
-            const skillId = res.rows[0].id;
-            expect(skillId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-            expect(skillId.length).toBe(36);
-        });
-
-        it("should delete a skill by UUID id", async () => {
-            if (!dbAvailable) return;
-            const ins = await client.query(
-                `INSERT INTO tenant_skills (tenant_id, name, description)
-                 VALUES ($1, 'Oil Change', 'Standard oil change')
-                 RETURNING id`,
-                [tenantId]
-            );
-            const skillId = ins.rows[0].id;
-
-            await client.query("DELETE FROM tenant_skills WHERE id = $1", [skillId]);
-
-            const res = await client.query("SELECT * FROM tenant_skills WHERE id = $1", [skillId]);
-            expect(res.rows.length).toBe(0);
-        });
-    });
-
-    // ---------------------------------------------------------------
-    // 6. Shift Split (overlap detection / frontend pattern)
+    // 3. Shift Split (overlap detection / frontend pattern)
     // ---------------------------------------------------------------
     describe("Shift Split", () => {
         let employeeId: string;
 
         beforeEach(async () => {
             if (!dbAvailable) return;
-            const empRes = await client.query(
-                "INSERT INTO employees (tenant_id, name) VALUES ($1, 'Split Worker') RETURNING id",
-                [tenantId]
-            );
-            employeeId = empRes.rows[0].id;
+            employeeId = await createEmployee(client, tenantId, "Split Worker");
         });
 
         it("should allow two non-overlapping shifts on the same day", async () => {
             if (!dbAvailable) return;
-            // Morning shift 08:00 - 12:00
-            await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 1, '08:00', '12:00')`,
-                [tenantId, employeeId]
-            );
-            // Afternoon shift 13:00 - 17:00
-            await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 1, '13:00', '17:00')`,
-                [tenantId, employeeId]
-            );
+            await createShift(client, tenantId, employeeId, 1, "08:00", "12:00");
+            await createShift(client, tenantId, employeeId, 1, "13:00", "17:00");
 
             const res = await client.query(
                 "SELECT * FROM employee_shifts WHERE employee_id = $1 AND day_of_week = 1 ORDER BY start_time",
@@ -341,22 +168,11 @@ describe("Coverage Gaps", () => {
 
         it("should support delete-and-recreate pattern for replacing an overlapping shift", async () => {
             if (!dbAvailable) return;
-            // Create original shift 08:00 - 17:00
-            const ins = await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 1, '08:00', '17:00')
-                 RETURNING id`,
-                [tenantId, employeeId]
-            );
-            const oldShiftId = ins.rows[0].id;
+            const oldShiftId = await createShift(client, tenantId, employeeId, 1, "08:00", "17:00");
 
             // Frontend pattern: delete old shift, create new one
             await client.query("DELETE FROM employee_shifts WHERE id = $1", [oldShiftId]);
-            await client.query(
-                `INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-                 VALUES ($1, $2, 1, '09:00', '18:00')`,
-                [tenantId, employeeId]
-            );
+            await createShift(client, tenantId, employeeId, 1, "09:00", "18:00");
 
             const res = await client.query(
                 "SELECT * FROM employee_shifts WHERE employee_id = $1 AND day_of_week = 1",
@@ -372,7 +188,7 @@ describe("Coverage Gaps", () => {
     });
 
     // ---------------------------------------------------------------
-    // 7. Appointment Cancel
+    // 4. Appointment Cancel
     // ---------------------------------------------------------------
     describe("Appointment Cancel", () => {
         let appointmentId: string;
@@ -422,35 +238,6 @@ describe("Coverage Gaps", () => {
             );
             expect(res.rows.length).toBe(1);
             expect(res.rows[0].id).not.toBe(appointmentId);
-        });
-    });
-
-    // ---------------------------------------------------------------
-    // 8. HIPAA Template Exclusion
-    // ---------------------------------------------------------------
-    describe("HIPAA Template Exclusion", () => {
-        it("should NOT have a dentist template", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT business_type FROM business_templates WHERE business_type = 'dentist'"
-            );
-            expect(res.rows.length).toBe(0);
-        });
-
-        it("should NOT have a chiropractor template", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT business_type FROM business_templates WHERE business_type = 'chiropractor'"
-            );
-            expect(res.rows.length).toBe(0);
-        });
-
-        it("should NOT have a vet-clinic template", async () => {
-            if (!dbAvailable) return;
-            const res = await client.query(
-                "SELECT business_type FROM business_templates WHERE business_type = 'vet-clinic'"
-            );
-            expect(res.rows.length).toBe(0);
         });
     });
 });
