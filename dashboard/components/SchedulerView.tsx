@@ -76,6 +76,9 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
 
   const handleShiftDrag = useCallback(async (employeeId: string, startHour: number, endHour: number) => {
     if (!tenantId) return;
+    // Only create shifts for actual employees, not user accounts
+    const emp = employees.find(e => String(e.id) === employeeId);
+    if (emp && (emp as Record<string, unknown>).type === 'user') return;
     const dayOfWeek = selectedDate.getDay(); // 0=Sun..6=Sat
     const startTime = `${String(startHour).padStart(2, '0')}:00`;
     const endTime = `${String(endHour).padStart(2, '0')}:00`;
