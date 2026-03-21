@@ -90,10 +90,14 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     const startTime = `${String(startHour).padStart(2, '0')}:00`;
     const endTime = `${String(endHour).padStart(2, '0')}:00`;
     try {
-      // Delete existing shifts for this employee on this day (replace, don't stack)
+      // Only delete shifts that overlap with the new one (allows split shifts like 8-12 + 1-5)
       const existingShifts = shiftsByEmployee.get(String(employeeId)) || [];
       for (const existing of existingShifts) {
-        if (existing.id) {
+        if (!existing.id || !existing.start_time || !existing.end_time) continue;
+        const exStart = parseInt(existing.start_time.split(':')[0], 10);
+        const exEnd = parseInt(existing.end_time.split(':')[0], 10);
+        // Overlaps if new shift starts before existing ends AND new shift ends after existing starts
+        if (startHour < exEnd && endHour > exStart) {
           await Api.shifts.delete(existing.id, tenantId);
         }
       }
