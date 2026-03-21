@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Client } from "pg";
 import { z } from "zod";
 
-const DB_URL = process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5433/postgres";
+// Always use test_db — never the main database
+const DB_URL = "postgres://postgres:postgres@localhost:5433/test_db";
 const client = new Client({ connectionString: DB_URL });
 
 let dbAvailable = true;
