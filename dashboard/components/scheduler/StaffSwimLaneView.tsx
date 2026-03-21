@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH } from './TimeGrid';
 import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
@@ -42,14 +42,6 @@ function findShiftAtHour(shifts: SwimLaneShift[], hour: number): SwimLaneShift |
   return null;
 }
 
-// Is the mouse near the left or right edge of a shift at this hour?
-function getEdge(shift: SwimLaneShift, hour: number): 'left' | 'right' | null {
-  const { start, end } = parseShiftHours(shift);
-  if (hour === start) return 'left';
-  if (hour === end - 1) return 'right';
-  return null;
-}
-
 type DragMode = 'create' | 'resize-left' | 'resize-right' | 'book';
 
 interface DragState {
@@ -57,9 +49,9 @@ interface DragState {
   mode: DragMode;
   startHour: number;
   currentHour: number;
-  shiftId?: number;        // for resize
-  originalStart?: number;  // for resize
-  originalEnd?: number;    // for resize
+  shiftId?: number;
+  originalStart?: number;
+  originalEnd?: number;
 }
 
 export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
@@ -83,77 +75,66 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   const [selectedLane, setSelectedLane] = useState<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const didDrag = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleMouseDown = useCallback((employeeId: string, hour: number, empShifts: SwimLaneShift[]) => {
-    const existingShift = findShiftAtHour(empShifts, hour);
+  // Convert pixel X position to hour number
+  const xToHour = useCallback((clientX: number): number => {
+    if (!containerRef.current) return SCHEDULER_START_HOUR;
+    const rect = containerRef.current.getBoundingClientRect();
+    const scrollLeft = containerRef.current.scrollLeft;
+    const x = clientX - rect.left + scrollLeft - LABEL_WIDTH;
+    const hour = Math.floor(x / hourWidth) + SCHEDULER_START_HOUR;
+    return Math.max(SCHEDULER_START_HOUR, Math.min(hour, SCHEDULER_END_HOUR - 1));
+  }, [hourWidth]);
 
-    let mode: DragMode;
-    let shiftId: number | undefined;
-    let originalStart: number | undefined;
-    let originalEnd: number | undefined;
+  // Global mousemove during drag — works even when mouse is over shift bars/handles
+  useEffect(() => {
+    if (!drag) return;
 
-    if (existingShift) {
-      const edge = getEdge(existingShift, hour);
-      const { start, end } = parseShiftHours(existingShift);
-      if (edge === 'left') {
-        mode = 'resize-left';
-        shiftId = existingShift.id;
-        originalStart = start;
-        originalEnd = end;
-      } else if (edge === 'right') {
-        mode = 'resize-right';
-        shiftId = existingShift.id;
-        originalStart = start;
-        originalEnd = end;
-      } else {
-        // Middle of shift → book appointment on this shift
-        mode = 'book';
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current) return;
+      const hour = xToHour(e.clientX);
+      if (hour !== dragRef.current.currentHour) {
+        didDrag.current = true;
+        const updated = { ...dragRef.current, currentHour: hour };
+        dragRef.current = updated;
+        setDrag(updated);
       }
-    } else {
-      // Empty space → create new shift
-      mode = 'create';
-    }
+    };
 
-    const state: DragState = { employeeId, mode, startHour: hour, currentHour: hour, shiftId, originalStart, originalEnd };
-    dragRef.current = state;
-    didDrag.current = false;
-    setDrag(state);
-    setSelectedLane(employeeId);
-  }, []);
+    const handleGlobalMouseUp = () => {
+      if (!dragRef.current) return;
+      finishDrag();
+    };
 
-  const handleMouseEnter = useCallback((employeeId: string, hour: number) => {
-    if (!dragRef.current || dragRef.current.employeeId !== employeeId) return;
-    if (hour !== dragRef.current.currentHour) {
-      didDrag.current = true;
-      const updated = { ...dragRef.current, currentHour: hour };
-      dragRef.current = updated;
-      setDrag(updated);
-    }
-  }, []);
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag, xToHour]);
 
-  const handleMouseUp = useCallback(() => {
+  const finishDrag = useCallback(() => {
     if (!dragRef.current) return;
     const d = dragRef.current;
     const minH = Math.min(d.startHour, d.currentHour);
     const maxH = Math.max(d.startHour, d.currentHour) + 1;
 
     if (d.mode === 'create') {
-      // Create new shift
       if (onShiftDrag) onShiftDrag(d.employeeId, minH, maxH);
     } else if (d.mode === 'resize-left' && d.shiftId != null && d.originalEnd != null) {
-      // Resize left edge — new start is currentHour, end stays
       const newStart = Math.min(d.currentHour, d.originalEnd - 1);
-      if (onShiftResize && (newStart !== d.originalStart)) {
+      if (onShiftResize && newStart !== d.originalStart) {
         onShiftResize(d.shiftId, newStart, d.originalEnd);
       }
     } else if (d.mode === 'resize-right' && d.shiftId != null && d.originalStart != null) {
-      // Resize right edge — start stays, new end is currentHour + 1
       const newEnd = Math.max(d.currentHour + 1, d.originalStart + 1);
-      if (onShiftResize && (newEnd !== d.originalEnd)) {
+      if (onShiftResize && newEnd !== d.originalEnd) {
         onShiftResize(d.shiftId, d.originalStart, newEnd);
       }
     } else if (d.mode === 'book') {
-      // Book appointment on shift
       if (didDrag.current && onSlotDrag) {
         onSlotDrag(d.employeeId, minH, maxH);
       } else if (onSlotClick) {
@@ -166,48 +147,47 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     setDrag(null);
   }, [onSlotClick, onSlotDrag, onShiftDrag, onShiftResize]);
 
-  const handleMouseLeaveView = useCallback(() => {
-    if (dragRef.current) {
-      dragRef.current = null;
-      didDrag.current = false;
-      setDrag(null);
+  const startDrag = useCallback((employeeId: string, hour: number, empShifts: SwimLaneShift[], mode?: DragMode, shift?: SwimLaneShift) => {
+    let dragMode: DragMode = mode || 'create';
+    let shiftId: number | undefined;
+    let originalStart: number | undefined;
+    let originalEnd: number | undefined;
+
+    if (shift && (dragMode === 'resize-left' || dragMode === 'resize-right')) {
+      const { start, end } = parseShiftHours(shift);
+      shiftId = shift.id;
+      originalStart = start;
+      originalEnd = end;
+    } else if (!mode) {
+      // Auto-detect: empty space = create, inside shift = book
+      const existingShift = findShiftAtHour(empShifts, hour);
+      if (existingShift) {
+        dragMode = 'book';
+      } else {
+        dragMode = 'create';
+      }
     }
+
+    const state: DragState = { employeeId, mode: dragMode, startHour: hour, currentHour: hour, shiftId, originalStart, originalEnd };
+    dragRef.current = state;
+    didDrag.current = false;
+    setDrag(state);
+    setSelectedLane(employeeId);
   }, []);
 
-  // Compute visual shift range during resize drag
+  // Compute visual shift during resize
   function getVisualShift(empId: string, shift: SwimLaneShift): { start: number; end: number } {
     const { start, end } = parseShiftHours(shift);
-    if (!drag || drag.employeeId !== empId || drag.shiftId !== shift.id) {
-      return { start, end };
-    }
-    // Adjust based on drag mode
-    if (drag.mode === 'resize-left') {
-      return { start: Math.min(drag.currentHour, end - 1), end };
-    }
-    if (drag.mode === 'resize-right') {
-      return { start, end: Math.max(drag.currentHour + 1, start + 1) };
-    }
+    if (!drag || drag.employeeId !== empId || drag.shiftId !== shift.id) return { start, end };
+    if (drag.mode === 'resize-left') return { start: Math.min(drag.currentHour, end - 1), end };
+    if (drag.mode === 'resize-right') return { start, end: Math.max(drag.currentHour + 1, start + 1) };
     return { start, end };
   }
 
-  // Get drag overlay for new shift creation
-  function getCreateDragRange(empId: string): { start: number; end: number } | null {
+  // Create drag overlay
+  function getCreateRange(empId: string): { start: number; end: number } | null {
     if (!drag || drag.employeeId !== empId || drag.mode !== 'create') return null;
-    const minH = Math.min(drag.startHour, drag.currentHour);
-    const maxH = Math.max(drag.startHour, drag.currentHour);
-    return { start: minH, end: maxH };
-  }
-
-  // Get cursor based on position
-  function getCursor(empShifts: SwimLaneShift[], hour: number, isUnassigned: boolean): string {
-    if (isUnassigned) return 'default';
-    const shift = findShiftAtHour(empShifts, hour);
-    if (shift) {
-      const edge = getEdge(shift, hour);
-      if (edge) return 'col-resize';
-      return 'crosshair'; // Book appointment
-    }
-    return 'cell'; // Create shift
+    return { start: Math.min(drag.startHour, drag.currentHour), end: Math.max(drag.startHour, drag.currentHour) };
   }
 
   function renderRow(
@@ -220,7 +200,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     onClick?: () => void
   ) {
     const isSelected = selectedLane === empId;
-    const createRange = getCreateDragRange(empId);
+    const createRange = getCreateRange(empId);
 
     return (
       <div
@@ -255,13 +235,12 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
           </span>
         </div>
 
-        {/* Hour cells + overlays */}
+        {/* Hour cells */}
         <div className="relative flex" style={{ width: hourCount * hourWidth }}>
-          {/* Hour cell backgrounds */}
           {hours.map((hour) => {
             const onShift = isUnassigned || isOnShift(empShifts, hour);
             const isCreateDrag = createRange && hour >= createRange.start && hour <= createRange.end;
-            const cursor = getCursor(empShifts, hour, isUnassigned);
+            const isDragging = drag?.employeeId === empId;
 
             return (
               <div
@@ -270,62 +249,65 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                   isCreateDrag
                     ? 'bg-green-200/60 dark:bg-green-700/30'
                     : onShift
-                    ? 'bg-white dark:bg-[#1a1a1a] hover:bg-blue-50/50 dark:hover:bg-blue-950/10'
+                    ? 'bg-white dark:bg-[#1a1a1a]'
                     : 'off-shift-hatching'
-                }`}
-                style={{ width: hourWidth, cursor }}
+                } ${!isUnassigned && !isDragging ? (onShift ? 'hover:bg-blue-50/50 dark:hover:bg-blue-950/10 cursor-crosshair' : 'cursor-cell') : ''}`}
+                style={{ width: hourWidth }}
                 onMouseDown={(e) => {
                   if (!isUnassigned) {
                     e.preventDefault();
-                    handleMouseDown(empId, hour, empShifts);
+                    startDrag(empId, hour, empShifts);
                   }
-                }}
-                onMouseEnter={() => {
-                  if (!isUnassigned) handleMouseEnter(empId, hour);
-                }}
-                onMouseUp={() => {
-                  if (!isUnassigned) handleMouseUp();
                 }}
                 data-testid={`slot-${empId}-${hour}`}
               />
             );
           })}
 
-          {/* Shift blocks (Outlook-style solid bars with resize handles) */}
+          {/* Shift blocks */}
           {!isUnassigned && empShifts.map((shift, idx) => {
             const vis = getVisualShift(empId, shift);
             if (vis.end <= SCHEDULER_START_HOUR || vis.start >= SCHEDULER_END_HOUR) return null;
-            const clampedStart = Math.max(vis.start, SCHEDULER_START_HOUR);
-            const clampedEnd = Math.min(vis.end, SCHEDULER_END_HOUR);
+            const cs = Math.max(vis.start, SCHEDULER_START_HOUR);
+            const ce = Math.min(vis.end, SCHEDULER_END_HOUR);
             const isResizing = drag?.shiftId === shift.id;
 
             return (
               <div
-                key={`shift-bar-${idx}`}
-                className={`absolute top-0.5 bottom-0.5 rounded border z-[1] group/shift transition-colors ${
+                key={`shift-${idx}`}
+                className={`absolute top-0.5 bottom-0.5 rounded border z-[2] group/shift transition-colors ${
                   isResizing
                     ? 'bg-green-300/80 dark:bg-green-700/50 border-green-500 dark:border-green-400 shadow-md'
                     : 'bg-green-100/70 dark:bg-green-900/30 border-green-300/60 dark:border-green-700/40 hover:bg-green-200/80 dark:hover:bg-green-800/40 hover:border-green-400 dark:hover:border-green-500'
                 }`}
                 style={{
-                  left: (clampedStart - SCHEDULER_START_HOUR) * hourWidth,
-                  width: (clampedEnd - clampedStart) * hourWidth,
+                  left: (cs - SCHEDULER_START_HOUR) * hourWidth,
+                  width: (ce - cs) * hourWidth,
+                  pointerEvents: isResizing ? 'none' : 'auto',
+                }}
+                onMouseDown={(e) => {
+                  // Click inside shift = book appointment
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const hour = xToHour(e.clientX);
+                  startDrag(empId, hour, empShifts, 'book');
                 }}
               >
                 {/* Time label */}
-                <span className={`absolute left-2 top-1 text-[10px] font-semibold ${
+                <span className={`absolute left-2 top-1 text-[10px] font-semibold pointer-events-none ${
                   isResizing ? 'text-green-800 dark:text-green-200' : 'text-green-700/80 dark:text-green-400/60'
                 }`}>
-                  {formatHour(clampedStart)} – {formatHour(clampedEnd)}
+                  {formatHour(cs)} – {formatHour(ce)}
                 </span>
 
                 {/* Delete button */}
                 {onShiftDelete && !isResizing && (
                   <button
-                    className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5"
+                    className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Delete shift ${formatHour(clampedStart)} – ${formatHour(clampedEnd)}?`)) {
+                      e.preventDefault();
+                      if (confirm(`Delete shift ${formatHour(cs)} – ${formatHour(ce)}?`)) {
                         onShiftDelete(shift.id);
                       }
                     }}
@@ -334,48 +316,34 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                   </button>
                 )}
 
-                {/* Left resize handle — wide grab zone, visual indicator on hover */}
+                {/* Left resize handle */}
                 <div
-                  className="absolute -left-1 top-0 bottom-0 w-4 cursor-col-resize z-20 group/lhandle"
+                  className="absolute -left-2 top-0 bottom-0 w-5 cursor-col-resize z-10 group/lh"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    const { start, end } = parseShiftHours(shift);
-                    const state: DragState = {
-                      employeeId: empId, mode: 'resize-left', startHour: start, currentHour: start,
-                      shiftId: shift.id, originalStart: start, originalEnd: end,
-                    };
-                    dragRef.current = state;
-                    didDrag.current = false;
-                    setDrag(state);
+                    startDrag(empId, vis.start, empShifts, 'resize-left', shift);
                   }}
                 >
-                  <div className="absolute left-1 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/lhandle:bg-green-500/60 transition-colors" />
+                  <div className="absolute left-2 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/lh:bg-green-500/70 transition-colors" />
                 </div>
 
-                {/* Right resize handle — wide grab zone, visual indicator on hover */}
+                {/* Right resize handle */}
                 <div
-                  className="absolute -right-1 top-0 bottom-0 w-4 cursor-col-resize z-20 group/rhandle"
+                  className="absolute -right-2 top-0 bottom-0 w-5 cursor-col-resize z-10 group/rh"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    const { start, end } = parseShiftHours(shift);
-                    const state: DragState = {
-                      employeeId: empId, mode: 'resize-right', startHour: end - 1, currentHour: end - 1,
-                      shiftId: shift.id, originalStart: start, originalEnd: end,
-                    };
-                    dragRef.current = state;
-                    didDrag.current = false;
-                    setDrag(state);
+                    startDrag(empId, vis.end - 1, empShifts, 'resize-right', shift);
                   }}
                 >
-                  <div className="absolute right-1 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/rhandle:bg-green-500/60 transition-colors" />
+                  <div className="absolute right-2 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/rh:bg-green-500/70 transition-colors" />
                 </div>
               </div>
             );
           })}
 
-          {/* New shift creation overlay (only during create drag) */}
+          {/* New shift creation overlay */}
           {createRange && (
             <div
               className="absolute top-1 bottom-1 rounded-lg border-2 border-dashed border-green-500 bg-green-400/20 dark:bg-green-500/20 pointer-events-none z-10 flex items-center justify-center"
@@ -390,7 +358,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
             </div>
           )}
 
-          {/* Appointment blocks overlaid on top */}
+          {/* Appointment blocks */}
           {empAppointments.map((appt) => (
             <AppointmentBlock
               key={appt.id}
@@ -407,10 +375,9 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className="overflow-x-auto"
       data-testid="staff-swimlane-view"
-      onMouseLeave={handleMouseLeaveView}
-      onMouseUp={handleMouseUp}
     >
       <TimeGrid hourWidth={hourWidth} />
       {employees.map((emp, empIdx) => {
