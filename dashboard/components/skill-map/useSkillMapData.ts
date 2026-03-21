@@ -335,34 +335,31 @@ export function useSkillMapData(
   const disconnectConnection = useCallback(async (connectionId: string) => {
     if (!tenantId || saving) return
 
-    const conn = connections.find(c => c.id === connectionId)
-    if (!conn) return
+    // Parse the connection ID directly: "emp-{empId}--skill-{svcId}" or "skill-{svcId}--res-{resId}"
+    const parts = connectionId.split('--')
+    if (parts.length !== 2) return
+
+    const [fromId, toId] = parts
+    const isLeft = fromId.startsWith('emp-')
 
     setSaving(true)
     try {
-      if (conn.side === 'left') {
-        // Employee -> Service: unassign via mapping table
-        const serviceNode = skillNodes.find(s => s.id === conn.to)
-        const empNode = employeeNodes.find(e => e.id === conn.from)
-        if (serviceNode && empNode) {
-          await Api.mappings.unassignServiceEmployee(serviceNode.rawId as unknown as number, empNode.rawId, tenantId)
-        }
+      if (isLeft) {
+        const empRawId = fromId.replace('emp-', '')
+        const svcRawId = toId.replace('skill-', '')
+        await Api.mappings.unassignServiceEmployee(svcRawId as unknown as number, empRawId, tenantId)
       } else {
-        // Service -> Resource: unassign via mapping table
-        const serviceNode = skillNodes.find(s => s.id === conn.from)
-        const resNode = resourceNodes.find(r => r.id === conn.to)
-        if (serviceNode && resNode) {
-          await Api.mappings.unassignServiceResource(serviceNode.rawId as unknown as number, resNode.rawId as string, tenantId)
-        }
+        const svcRawId = fromId.replace('skill-', '')
+        const resRawId = toId.replace('res-', '')
+        await Api.mappings.unassignServiceResource(svcRawId as unknown as number, resRawId, tenantId)
       }
       await fetchMappings()
-      onDataChanged?.()
     } catch (err) {
       console.error('Failed to disconnect:', err)
     } finally {
       setSaving(false)
     }
-  }, [tenantId, saving, connections, employeeNodes, skillNodes, resourceNodes, fetchMappings, onDataChanged])
+  }, [tenantId, saving, fetchMappings])
 
   return {
     employeeNodes,
