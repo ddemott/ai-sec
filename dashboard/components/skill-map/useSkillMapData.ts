@@ -99,17 +99,20 @@ export function useSkillMapData(
       rawId: s.id,
     }))
 
-    // Build connections from mapping tables
+    // Build connections from mapping tables (deduplicated by connection id)
     const conns: Connection[] = []
+    const seenIds = new Set<string>()
 
     // Left side: employee -> service (from service_employee table)
     for (const mapping of empMappings) {
       const empId = `emp-${mapping.employee_id}`
       const svcId = `skill-${mapping.service_id}`
-      // Only add if both nodes exist
+      const connId = `${empId}--${svcId}`
+      if (seenIds.has(connId)) continue
       if (empNodes.some(e => e.id === empId) && svcNodes.some(s => s.id === svcId)) {
+        seenIds.add(connId)
         conns.push({
-          id: `${empId}--${svcId}`,
+          id: connId,
           from: empId,
           to: svcId,
           side: 'left',
@@ -122,9 +125,12 @@ export function useSkillMapData(
     for (const mapping of resMappings) {
       const svcId = `skill-${mapping.service_id}`
       const resId = `res-${mapping.resource_id}`
+      const connId = `${svcId}--${resId}`
+      if (seenIds.has(connId)) continue
       if (svcNodes.some(s => s.id === svcId) && resNodes.some(r => r.id === resId)) {
+        seenIds.add(connId)
         conns.push({
-          id: `${svcId}--${resId}`,
+          id: connId,
           from: svcId,
           to: resId,
           side: 'right',
@@ -339,14 +345,14 @@ export function useSkillMapData(
         const serviceNode = skillNodes.find(s => s.id === conn.to)
         const empNode = employeeNodes.find(e => e.id === conn.from)
         if (serviceNode && empNode) {
-          await Api.mappings.unassignServiceEmployee(serviceNode.rawId as number, empNode.rawId, tenantId)
+          await Api.mappings.unassignServiceEmployee(serviceNode.rawId as unknown as number, empNode.rawId, tenantId)
         }
       } else {
         // Service -> Resource: unassign via mapping table
         const serviceNode = skillNodes.find(s => s.id === conn.from)
         const resNode = resourceNodes.find(r => r.id === conn.to)
         if (serviceNode && resNode) {
-          await Api.mappings.unassignServiceResource(serviceNode.rawId as number, resNode.rawId as string, tenantId)
+          await Api.mappings.unassignServiceResource(serviceNode.rawId as unknown as number, resNode.rawId as string, tenantId)
         }
       }
       await fetchMappings()
