@@ -56,7 +56,7 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
 
   const response = await fetch(url, { headers: getHeaders() });
 
-  // BUG-012: Auto-logout on expired/invalid token
+  // Auto-logout on expired/invalid token
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tenantId');
@@ -65,6 +65,22 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
       window.location.href = '/';
     }
     throw new Error('Session expired. Please log in again.');
+  }
+
+  // Auto-logout if tenant no longer exists
+  if (response.status === 404) {
+    try {
+      const body = await response.clone().json();
+      if (body.code === 'TENANT_NOT_FOUND' && typeof window !== 'undefined') {
+        localStorage.removeItem('tenantId');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('authToken');
+        window.location.href = '/';
+        throw new Error('Your business account was not found. Please log in again.');
+      }
+    } catch {
+      // Not a JSON response or not tenant error — fall through
+    }
   }
 
   if (!response.ok) {
@@ -90,7 +106,7 @@ async function apiMutate<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // BUG-012: Auto-logout on expired/invalid token
+  // Auto-logout on expired/invalid token
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tenantId');
@@ -99,6 +115,18 @@ async function apiMutate<T>(
       window.location.href = '/';
     }
     return { success: false, error: 'Session expired. Please log in again.' } as { success: boolean; error?: string } & T;
+  }
+
+  // Auto-logout if tenant no longer exists
+  if (response.status === 404) {
+    const data = await response.clone().json().catch(() => null);
+    if (data?.code === 'TENANT_NOT_FOUND' && typeof window !== 'undefined') {
+      localStorage.removeItem('tenantId');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('authToken');
+      window.location.href = '/';
+      return { success: false, error: 'Your business account was not found.' } as { success: boolean; error?: string } & T;
+    }
   }
 
   const data = await response.json();
