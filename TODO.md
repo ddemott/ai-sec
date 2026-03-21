@@ -244,3 +244,196 @@ Visual coverage in Phase 12 covers the dashboard. These are the automated notifi
 
 ### Skill Map Drag-and-Drop Reorder
 - [ ] **Drag-and-drop reordering** of employees, services, and resources within the Skill Relationship Map columns. Requires `sort_order` column on employees, services, and resources tables + drag library (dnd-kit or react-beautiful-dnd). Polish feature — map works without it.
+
+---
+
+### Platform Adapter Architecture (Analysis Required)
+
+> **Status: Under consideration.** This is a large architectural change that requires serious analysis before implementation. The goal is to make the platform agnostic and extensible — able to swap databases, sync with external CRMs, integrate with multiple calendar providers, and support add-on plugins without touching core business logic. Preserved here with full detail for future planning.
+
+#### Problem Statement
+The application is currently tightly coupled to specific providers. Every route file contains raw PostgreSQL-specific SQL. Calendar sync is Google-only. There's no external CRM integration. Embedding generation is hardcoded to OpenAI. If any of these need to change at scale, it requires rewriting core code.
+
+#### Current Coupling Map
+
+| Layer | Currently Coupled To | Specific Dependencies |
+|-------|---------------------|----------------------|
+| Data Access | PostgreSQL | Raw SQL in 15 route files, pgvector for RAG, RLS for multi-tenancy, PL/pgSQL functions (`book_appointment_atomic`, `check_coverage_gaps`), `jsonb`, `AT TIME ZONE`, `gen_random_uuid()`, 50+ migrations |
+| Voice AI | Vapi | Edge function expects Vapi webhook format, Vapi tool definitions in `vapi/tools.json` |
+| Telephony | Telnyx | SIP trunk config, planned phone provisioning API |
+| Embeddings | OpenAI | `text-embedding-3-small` in `shared/getEmbedding.ts` |
+| LLM | OpenAI/Groq | GPT-4o-mini for normalization, Groq/Llama 3 for voice conversation |
+| Calendar Sync | Google Calendar | n8n workflow, `tenant_calendar_settings` table |
+| Payments | Stripe | Direct Stripe API in `src/routes/billing.ts` |
+| SMS | Telnyx | Planned for owner notifications |
+| Auth | bcrypt + JWT | Hardcoded in `src/routes/auth.ts`, no OAuth/SSO |
+| CRM | Built-in only | No external CRM sync capability |
+
+#### Proposed Architecture: Plugin/Integration Registry
+
+```
+Business Logic (routes, services)
+       │
+       ▼
+ ┌─────────────┐
+ │  Interface   │  ← TypeScript contracts (IDataStore, ICalendarSync, ICrmSync, etc.)
+ │  (Contract)  │
+ └──────┬──────┘
+        │
+ ┌──────┴──────┐
+ │  Adapter    │  ← Swappable implementations per provider
+ │  Registry   │
+ └─────────────┘
+        │
+   ┌────┼────────────────────────────────────┐
+   │    │    Database Adapters               │
+   │    ├── PostgresAdapter (current)        │
+   │    ├── MySQLAdapter (future)            │
+   │    ├── MSSQLAdapter (future)            │
+   │    └── OracleAdapter (future)           │
+   │                                         │
+   │         Calendar Adapters               │
+   │    ├── GoogleCalendarAdapter            │
+   │    ├── OutlookCalendarAdapter           │
+   │    └── iCalAdapter (future)             │
+   │                                         │
+   │         CRM Adapters                    │
+   │    ├── InternalCrmAdapter (current)     │
+   │    ├── SalesforceAdapter (future)       │
+   │    ├── HubSpotAdapter (future)          │
+   │    └── ZohoCrmAdapter (future)          │
+   │                                         │
+   │         Embedding Adapters              │
+   │    ├── OpenAIEmbeddingAdapter (current) │
+   │    ├── CohereAdapter (future)           │
+   │    └── LocalModelAdapter (future)       │
+   │                                         │
+   │         Payment Adapters                │
+   │    ├── StripeAdapter (current)          │
+   │    └── SquareAdapter (future)           │
+   │                                         │
+   │         SMS/Notification Adapters       │
+   │    ├── TelnyxSmsAdapter (current)       │
+   │    ├── TwilioAdapter (future)           │
+   │    └── SendGridEmailAdapter (future)    │
+   └─────────────────────────────────────────┘
+```
+
+#### Proposed Interface Contracts
+
+```typescript
+// Integration base
+interface Integration {
+  id: string;
+  name: string;
+  type: 'calendar' | 'crm' | 'sms' | 'embedding' | 'payment' | 'database';
+  configure(tenantId: string, config: Record<string, string>): Promise<void>;
+  isConfigured(tenantId: string): Promise<boolean>;
+}
+
+// Calendar sync adapter
+interface ICalendarSync extends Integration {
+  type: 'calendar';
+  syncAppointment(tenantId: string, appointment: Appointment): Promise<string>; // returns external event ID
+  deleteEvent(tenantId: string, externalId: string): Promise<void>;
+  getFreeBusy(tenantId: string, start: Date, end: Date): Promise<BusySlot[]>;
+}
+
+// CRM sync adapter
+interface ICrmSync extends Integration {
+  type: 'crm';
+  syncCustomer(tenantId: string, customer: Customer): Promise<string>; // returns external contact ID
+  importContacts(tenantId: string): Promise<Customer[]>;
+  syncCallSummary(tenantId: string, summary: CallSummary): Promise<void>;
+}
+
+// Data access adapter (the big one)
+interface IDataStore {
+  // Tenant operations
+  getTenant(id: string): Promise<Tenant | null>;
+  createTenant(data: CreateTenantInput): Promise<Tenant>;
+
+  // Customer operations
+  listCustomers(tenantId: string, opts: PaginationOpts): Promise<Customer[]>;
+  createCustomer(tenantId: string, data: CreateCustomerInput): Promise<Customer>;
+  updateCustomer(id: string, tenantId: string, data: UpdateCustomerInput): Promise<void>;
+  deleteCustomer(id: string, tenantId: string): Promise<void>;
+
+  // Appointment operations
+  listAppointments(tenantId: string, dateRange: DateRange): Promise<Appointment[]>;
+  bookAppointment(tenantId: string, data: BookAppointmentInput): Promise<BookingResult>;
+  updateAppointment(id: string, tenantId: string, data: UpdateAppointmentInput): Promise<void>;
+  cancelAppointment(id: string, tenantId: string): Promise<void>;
+
+  // ... etc for all entity types
+}
+
+// Embedding adapter
+interface IEmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+  dimensions: number; // e.g., 1536 for OpenAI
+}
+```
+
+#### Database Abstraction: Challenges & Trade-offs
+
+This is the hardest piece. Current Postgres-specific features that would need abstraction:
+
+| Feature | Postgres-specific | ANSI SQL equivalent | Difficulty |
+|---------|------------------|--------------------|----|
+| pgvector (RAG embeddings) | `vector(1536)`, `<=>` cosine distance | None — requires a vector DB adapter (Pinecone, Weaviate) | Very High |
+| Row Level Security | `CREATE POLICY ... USING (tenant_id = ...)` | Application-level WHERE clause filtering | Medium |
+| `jsonb` columns | `metadata jsonb`, `jsonb_set()`, `->` operator | JSON string column + application-level parsing | Medium |
+| PL/pgSQL functions | `book_appointment_atomic()`, `check_coverage_gaps()` | Rewrite as application-level service functions | High |
+| `gen_random_uuid()` | Postgres built-in | `UUID()` (MySQL), `NEWID()` (MSSQL), `SYS_GUID()` (Oracle) | Low |
+| `AT TIME ZONE` | Postgres timezone conversion | Database-specific equivalents exist | Low |
+| `COALESCE` | ANSI SQL standard | Works everywhere | None |
+| `ON CONFLICT DO NOTHING/UPDATE` | Postgres upsert | `INSERT IGNORE` (MySQL), `MERGE` (MSSQL/Oracle) | Medium |
+| `RETURNING *` | Postgres-specific | Not available in MySQL — requires separate SELECT | Medium |
+| Triggers | `CREATE TRIGGER` | Syntax varies by DB | Medium |
+| `pg_net` (HTTP from DB) | Postgres extension | Not available — move to application layer | Medium |
+
+**Recommendation**: If a database switch is ever needed, the most practical path is:
+1. Extract all SQL into a Data Access Layer (repository pattern) — one file per entity
+2. Keep Postgres as the primary adapter
+3. Build a second adapter only when a specific customer/scale requirement demands it
+4. For RAG, use a dedicated vector DB (Pinecone/Weaviate) alongside the relational DB rather than trying to make pgvector work everywhere
+
+#### Database Schema: Integration Registry
+
+When ready to implement, this table would store per-tenant integration configs:
+
+```sql
+CREATE TABLE tenant_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  integration_type TEXT NOT NULL, -- 'calendar', 'crm', 'sms', 'embedding'
+  provider TEXT NOT NULL, -- 'google', 'outlook', 'salesforce', 'hubspot'
+  config JSONB NOT NULL DEFAULT '{}', -- encrypted API keys, OAuth tokens, etc.
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (tenant_id, integration_type, provider)
+);
+```
+
+#### Priority Order (when ready to implement)
+
+| Priority | Adapter | Reason | Effort |
+|----------|---------|--------|--------|
+| 1 | Calendar Sync (Google + Outlook) | Already planned, natural adapter point, high customer demand | 1-2 weeks |
+| 2 | CRM Sync (HubSpot, Salesforce) | Doesn't exist yet, build as adapter from day one | 2-3 weeks |
+| 3 | Embedding Provider (OpenAI → Cohere/local) | Small change, `shared/getEmbedding.ts` already isolated | 1-2 days |
+| 4 | SMS/Notifications (Telnyx → Twilio) | Small change, not yet built | 1 week |
+| 5 | Payment Provider (Stripe → Square) | Stripe is dominant, low priority to switch | 1-2 weeks |
+| 6 | Data Access Layer (PostgreSQL abstraction) | Massive effort, only when scale demands it | 4-8 weeks |
+| 7 | Voice AI Provider (Vapi → alternatives) | Vapi works well, very niche market | 2-4 weeks |
+
+#### What NOT to abstract
+
+- **Auth** — bcrypt+JWT is standard. Add OAuth/SSO as a feature, not an adapter.
+- **Frontend framework** — Next.js/React. No reason to abstract.
+- **Edge Functions runtime** — Deno/Supabase. Tied to deployment, not business logic.
+
+#### Next Step When Ready
+Start with Priority 1 (Calendar Sync adapter). Build the `ICalendarSync` interface, implement `GoogleCalendarAdapter` and `OutlookCalendarAdapter`, create `tenant_integrations` table, and add a Settings UI for configuring integrations per tenant. This proves the pattern without touching the database layer.
