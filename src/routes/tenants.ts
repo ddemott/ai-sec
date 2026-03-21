@@ -163,7 +163,7 @@ export function registerTenantRoutes(app: any, pool: Pool) {
   app.get('/templates', async (req, reply) => {
     const client = await pool.connect();
     try {
-      const res = await client.query('SELECT business_type, display_name FROM business_templates');
+      const res = await client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY sort_order, display_name');
       return reply.send(res.rows);
     } catch (err) {
       if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
@@ -176,11 +176,70 @@ export function registerTenantRoutes(app: any, pool: Pool) {
   app.get('/templates/full', async (req, reply) => {
     const client = await pool.connect();
     try {
-      const res = await client.query('SELECT * FROM business_templates');
+      const res = await client.query('SELECT * FROM business_templates ORDER BY sort_order, display_name');
       return reply.send(res.rows);
     } catch (err) {
       if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       return reply.status(500).send({ error: 'Failed to fetch full templates' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // POST /templates/create — Admin adds a new business type
+  app.post('/templates/create', async (req, reply) => {
+    const body = req.body as {
+      business_type: string; display_name: string; category: string;
+      system_prompt_template?: string; first_message?: string; voice_id?: string;
+      default_resource_name?: string; default_resource_description?: string;
+      resource_label?: string; resource_plural?: string;
+      employee_label?: string; employee_plural?: string;
+      booking_label?: string; example_services?: string[];
+    };
+    if (!body.business_type || !body.display_name || !body.category) {
+      return reply.status(400).send({ success: false, error: 'business_type, display_name, and category are required' });
+    }
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        INSERT INTO business_templates (
+          business_type, display_name, category,
+          system_prompt_template, first_message, voice_id,
+          default_resource_name, default_resource_description,
+          resource_label, resource_plural, employee_label, employee_plural,
+          booking_label, example_services
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        ON CONFLICT (business_type) DO UPDATE SET
+          display_name = EXCLUDED.display_name, category = EXCLUDED.category,
+          system_prompt_template = COALESCE(EXCLUDED.system_prompt_template, business_templates.system_prompt_template),
+          first_message = COALESCE(EXCLUDED.first_message, business_templates.first_message),
+          voice_id = COALESCE(EXCLUDED.voice_id, business_templates.voice_id),
+          default_resource_name = COALESCE(EXCLUDED.default_resource_name, business_templates.default_resource_name),
+          default_resource_description = COALESCE(EXCLUDED.default_resource_description, business_templates.default_resource_description),
+          resource_label = COALESCE(EXCLUDED.resource_label, business_templates.resource_label),
+          resource_plural = COALESCE(EXCLUDED.resource_plural, business_templates.resource_plural),
+          employee_label = COALESCE(EXCLUDED.employee_label, business_templates.employee_label),
+          employee_plural = COALESCE(EXCLUDED.employee_plural, business_templates.employee_plural),
+          booking_label = COALESCE(EXCLUDED.booking_label, business_templates.booking_label),
+          example_services = COALESCE(EXCLUDED.example_services, business_templates.example_services)
+        RETURNING *
+      `, [
+        body.business_type, body.display_name, body.category,
+        body.system_prompt_template || `You are a professional receptionist for {{business_name}}.`,
+        body.first_message || `Thanks for calling! How can we help you today?`,
+        body.voice_id || null,
+        body.default_resource_name || 'Station 1',
+        body.default_resource_description || null,
+        body.resource_label || 'Resource', body.resource_plural || 'Resources',
+        body.employee_label || 'Employee', body.employee_plural || 'Employees',
+        body.booking_label || 'Appointment',
+        body.example_services || '{}'
+      ]);
+      return reply.send({ success: true, template: res.rows[0] });
+    } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
+      app.log.error(err);
+      return reply.status(500).send({ success: false, error: 'Failed to create template' });
     } finally {
       client.release();
     }

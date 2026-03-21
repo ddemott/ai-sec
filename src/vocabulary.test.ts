@@ -128,16 +128,19 @@ describe("Business Vocabulary System", () => {
         });
     });
 
-    describe("all 20 business type templates", () => {
+    describe("all business type templates", () => {
         const EXPECTED_TYPES = [
             'mobile-tire', 'salon', 'auto-shop',
             'barbershop', 'nail-salon',
+            'car-detailing', 'body-shop', 'oil-change', 'car-wash',
+            'med-spa', 'lash-studio', 'garage-door', 'locksmith',
+            'real-estate', 'insurance', 'bakery', 'catering',
             'spa', 'plumber', 'electrician', 'hvac',
             'pest-control', 'cleaning', 'landscaping', 'personal-trainer',
             'yoga-studio', 'tax-prep', 'tutoring', 'photography',
         ];
 
-        it("should have all 20 business type templates", async () => {
+        it("should have all expected business type templates", async () => {
             if (!dbAvailable) return;
             const res = await client.query(
                 "SELECT business_type FROM business_templates ORDER BY business_type"
@@ -146,16 +149,16 @@ describe("Business Vocabulary System", () => {
             for (const t of EXPECTED_TYPES) {
                 expect(types).toContain(t);
             }
-            expect(types.length).toBeGreaterThanOrEqual(17);
+            expect(types.length).toBeGreaterThanOrEqual(29);
         });
 
-        it("should have non-empty vocabulary on all 20 templates", async () => {
+        it("should have non-empty vocabulary on all templates", async () => {
             if (!dbAvailable) return;
             const res = await client.query(
                 "SELECT business_type, resource_label, employee_label, booking_label FROM business_templates WHERE business_type = ANY($1)",
                 [EXPECTED_TYPES]
             );
-            expect(res.rows.length).toBe(17);
+            expect(res.rows.length).toBeGreaterThanOrEqual(17);
             for (const row of res.rows) {
                 expect(row.resource_label).toBeTruthy();
                 expect(row.employee_label).toBeTruthy();
@@ -172,6 +175,22 @@ describe("Business Vocabulary System", () => {
             for (const row of res.rows) {
                 expect(row.example_services.length).toBeGreaterThanOrEqual(3);
             }
+        });
+
+        it("should have a category assigned to every template", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT business_type, category FROM business_templates WHERE category IS NULL OR category = ''"
+            );
+            expect(res.rows.length).toBe(0);
+        });
+
+        it("should have at least 5 categories", async () => {
+            if (!dbAvailable) return;
+            const res = await client.query(
+                "SELECT DISTINCT category FROM business_templates"
+            );
+            expect(res.rows.length).toBeGreaterThanOrEqual(5);
         });
 
         it("should have system_prompt_template with business_name placeholder on all templates", async () => {
