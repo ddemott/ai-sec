@@ -180,19 +180,54 @@ export function registerAppointmentRoutes(
 
     try {
       const res = await withTenantClient(body.tenant_id, async (client) => {
-        return client.query(
-          'SELECT * FROM update_appointment_customer($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
-          [id, body.tenant_id, body.start_time, body.end_time, body.description,
-           body.location, body.resource_id, body.employee_id ? body.employee_id.toString() : null,
-           body.customer_name, body.customer_phone, body.customer_notes]
+        // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
+        // on the overloaded update_appointment_customer functions
+        const fields: string[] = [];
+        const values: unknown[] = [];
+        let idx = 1;
+
+        if (body.start_time) { fields.push(`start_time = $${idx}`); values.push(body.start_time); idx++; }
+        if (body.end_time) { fields.push(`end_time = $${idx}`); values.push(body.end_time); idx++; }
+        if (body.description !== undefined) { fields.push(`description = $${idx}`); values.push(body.description); idx++; }
+        if (body.location !== undefined) { fields.push(`location = $${idx}`); values.push(body.location || null); idx++; }
+        if (body.resource_id) { fields.push(`resource_id = $${idx}`); values.push(body.resource_id); idx++; }
+        if (body.employee_id !== undefined) {
+          fields.push(`employee_id = $${idx}`);
+          values.push(body.employee_id ? body.employee_id.toString() : null);
+          idx++;
+        }
+
+        if (fields.length === 0) {
+          return { rows: [{ success: true }] };
+        }
+
+        values.push(id); // WHERE id = $N
+        values.push(body.tenant_id); // AND tenant_id = $N+1
+        await client.query(
+          `UPDATE appointments SET ${fields.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
+          values
         );
+
+        // Update customer info if provided
+        if (body.customer_name || body.customer_phone || body.customer_notes) {
+          const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1', [id]);
+          if (appt.rows[0]?.customer_id) {
+            const custFields: string[] = [];
+            const custValues: unknown[] = [];
+            let ci = 1;
+            if (body.customer_name) { custFields.push(`name = $${ci}`); custValues.push(body.customer_name); ci++; }
+            if (body.customer_phone) { custFields.push(`phone = $${ci}`); custValues.push(body.customer_phone); ci++; }
+            if (body.customer_notes !== undefined) { custFields.push(`metadata = jsonb_set(COALESCE(metadata, '{}'), '{notes}', $${ci}::jsonb)`); custValues.push(JSON.stringify(body.customer_notes)); ci++; }
+            if (custFields.length > 0) {
+              custValues.push(appt.rows[0].customer_id);
+              await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE id = $${ci}`, custValues);
+            }
+          }
+        }
+
+        return { rows: [{ success: true }] };
       });
-      const result = res.rows[0];
-      if (result.success) {
-        return reply.send({ success: true });
-      } else {
-        return reply.status(400).send({ success: false, error: result.error_message });
-      }
+      return reply.send({ success: true });
     } catch (err) {
       if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
