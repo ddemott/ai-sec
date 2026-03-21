@@ -275,7 +275,7 @@ export const Api = {
       apiMutate<Record<string, unknown>>(`/shifts/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
     delete: (id: number, tenantId: string | null) =>
-      apiMutate<Record<string, unknown>>(`/shifts/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
+      apiMutate<Record<string, unknown>>(`/shifts/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
     },
 
     // --- CALENDAR SYNC ---
