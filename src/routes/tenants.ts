@@ -1,38 +1,31 @@
 
 import type { Pool } from 'pg';
+import { withHandler, logEvent, type AppRequest } from '../middleware';
 
 export function registerTenantRoutes(app: any, pool: Pool) {
-  app.get('/tenants', async (req, reply) => {
+  app.get('/tenants', withHandler(async (req: AppRequest, reply) => {
     const client = await pool.connect();
     try {
       const res = await client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC');
-      app.log.info(`Found ${res.rows.length} tenants`);
       return reply.send(res.rows);
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to fetch tenants' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to fetch tenants'));
 
-  app.delete('/tenants/:id', async (req, reply) => {
+  app.delete('/tenants/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const client = await pool.connect();
     try {
       await client.query('DELETE FROM tenants WHERE id = $1', [id]);
+      logEvent(req, 'tenant_deleted', { tenantId: id });
       return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to delete tenant' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to delete tenant'));
 
-  app.post('/tenants/:id/update-attributes', async (req, reply) => {
+  app.post('/tenants/:id/update-attributes', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as any;
     const client = await pool.connect();
@@ -45,17 +38,14 @@ export function registerTenantRoutes(app: any, pool: Pool) {
         [body.name, body.business_type, body.timezone, body.voice_id,
          body.system_prompt, body.first_message, body.owner_phone, body.inbound_phone, id]
       );
+      logEvent(req, 'tenant_attributes_updated', { tenantId: id });
       return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to update tenant' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to update tenant'));
 
-  app.get('/tenants/:id/config', async (req, reply) => {
+  app.get('/tenants/:id/config', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const client = await pool.connect();
     try {
@@ -65,15 +55,12 @@ export function registerTenantRoutes(app: any, pool: Pool) {
       );
       if (res.rows.length === 0) return reply.status(404).send({ error: 'Tenant not found' });
       return reply.send(res.rows[0]);
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      return reply.status(500).send({ error: 'Failed to fetch tenant config' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to fetch tenant config'));
 
-  app.post('/tenants/:id/update-config', async (req, reply) => {
+  app.post('/tenants/:id/update-config', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as any;
     const client = await pool.connect();
@@ -82,16 +69,14 @@ export function registerTenantRoutes(app: any, pool: Pool) {
         'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE id = $5',
         [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
       );
+      logEvent(req, 'tenant_config_updated', { tenantId: id });
       return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      return reply.status(500).send({ error: 'Failed to update tenant config' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to update tenant config'));
 
-  app.post('/tenants/create', async (req, reply) => {
+  app.post('/tenants/create', withHandler(async (req: AppRequest, reply) => {
     const body = req.body as {
       tenant_name: string;
       business_type: string;
@@ -125,19 +110,18 @@ export function registerTenantRoutes(app: any, pool: Pool) {
       );
 
       await client.query('COMMIT');
+      logEvent(req, 'tenant_created', { tenantId, name: body.tenant_name });
       return reply.send({ success: true, tenant_id: tenantId });
     } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       await client.query('ROLLBACK');
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to create tenant' });
+      throw err;
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to create tenant'));
 
   // Save tenant sort order (admin drag-and-drop reordering)
-  app.post('/tenants/reorder', async (req, reply) => {
+  app.post('/tenants/reorder', withHandler(async (req: AppRequest, reply) => {
     const { order } = req.body as { order: string[] }; // array of tenant IDs in desired order
     if (!Array.isArray(order) || order.length === 0) {
       return reply.status(400).send({ error: 'order must be a non-empty array of tenant IDs' });
@@ -149,45 +133,38 @@ export function registerTenantRoutes(app: any, pool: Pool) {
         await client.query('UPDATE tenants SET sort_order = $1 WHERE id = $2', [i, order[i]]);
       }
       await client.query('COMMIT');
+      logEvent(req, 'tenants_reordered', { count: order.length });
       return reply.send({ success: true });
     } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       await client.query('ROLLBACK');
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to save tenant order' });
+      throw err;
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to save tenant order'));
 
-  app.get('/templates', async (req, reply) => {
+  app.get('/templates', withHandler(async (req: AppRequest, reply) => {
     const client = await pool.connect();
     try {
       const res = await client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY sort_order, display_name');
       return reply.send(res.rows);
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      return reply.status(500).send({ error: 'Failed to fetch templates' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to fetch templates'));
 
-  app.get('/templates/full', async (req, reply) => {
+  app.get('/templates/full', withHandler(async (req: AppRequest, reply) => {
     const client = await pool.connect();
     try {
       const res = await client.query('SELECT * FROM business_templates ORDER BY sort_order, display_name');
       return reply.send(res.rows);
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      return reply.status(500).send({ error: 'Failed to fetch full templates' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to fetch full templates'));
 
   // POST /templates/create — Admin adds a new business type
-  app.post('/templates/create', async (req, reply) => {
+  app.post('/templates/create', withHandler(async (req: AppRequest, reply) => {
     const body = req.body as {
       business_type: string; display_name: string; category: string;
       system_prompt_template?: string; first_message?: string; voice_id?: string;
@@ -235,13 +212,10 @@ export function registerTenantRoutes(app: any, pool: Pool) {
         body.booking_label || 'Appointment',
         body.example_services || '{}'
       ]);
+      logEvent(req, 'template_created', { businessType: body.business_type });
       return reply.send({ success: true, template: res.rows[0] });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ success: false, error: 'Failed to create template' });
     } finally {
       client.release();
     }
-  });
+  }, 'Failed to create template'));
 }

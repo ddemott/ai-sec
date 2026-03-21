@@ -1,5 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { withHandler, type AppRequest } from '../middleware';
 
 export function registerVocabularyRoutes(
   app: any,
@@ -7,34 +8,28 @@ export function registerVocabularyRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   // GET /vocabulary?tenant_id=X - Resolved vocabulary labels (3-tier fallback)
-  app.get('/vocabulary', async (req, reply) => {
-    const tenantId = (req.query as any).tenant_id;
+  app.get('/vocabulary', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = req.tenantId;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query(`
-          SELECT
-            COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label,
-            COALESCE(t.resource_plural, bt.resource_plural, 'Resources') AS resource_plural,
-            COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label,
-            COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural,
-            COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
-          FROM tenants t
-          LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-          WHERE t.id = $1
-        `, [tenantId]);
-      });
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(`
+        SELECT
+          COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label,
+          COALESCE(t.resource_plural, bt.resource_plural, 'Resources') AS resource_plural,
+          COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label,
+          COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural,
+          COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
+        FROM tenants t
+        LEFT JOIN business_templates bt ON bt.business_type = t.business_type
+        WHERE t.id = $1
+      `, [tenantId]);
+    });
 
-      if (res.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found' });
-      }
-
-      return reply.send(res.rows[0]);
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to fetch vocabulary' });
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ error: 'Tenant not found' });
     }
-  });
+
+    return reply.send(res.rows[0]);
+  }, 'Failed to fetch vocabulary'));
 }

@@ -1,6 +1,7 @@
 
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { type AppRequest } from '../middleware';
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -20,7 +21,7 @@ export function registerAuthRoutes(
   pool: Pool,
   generateToken: (payload: { tenant_id: string; user_id: string; email: string }) => string
 ) {
-  app.post('/login', async (req, reply) => {
+  app.post('/login', async (req: AppRequest, reply) => {
     const parsed = LoginSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid email or password format' });
@@ -52,8 +53,7 @@ export function registerAuthRoutes(
         return reply.status(401).send({ success: false, error: 'Invalid email or password' });
       }
     } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
+      req.log.error(err);
       return reply.status(500).send({ error: 'Internal server error' });
     } finally {
       client.release();
@@ -61,7 +61,7 @@ export function registerAuthRoutes(
   });
 
   // POST /register - Public self-service tenant + user creation
-  app.post('/register', async (req, reply) => {
+  app.post('/register', async (req: AppRequest, reply) => {
     const parsed = RegisterSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
@@ -110,9 +110,8 @@ export function registerAuthRoutes(
         token,
       });
     } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       await client.query('ROLLBACK');
-      app.log.error(err);
+      req.log.error(err);
       return reply.status(500).send({ error: 'Registration failed' });
     } finally {
       client.release();

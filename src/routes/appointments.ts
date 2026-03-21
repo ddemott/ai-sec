@@ -2,6 +2,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
+import { withHandler, logEvent, type AppRequest } from '../middleware';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -19,40 +20,32 @@ export function registerAppointmentRoutes(
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
-  app.post('/appointments/create', async (req, reply) => {
+  app.post('/appointments/create', withHandler(async (req: AppRequest, reply) => {
     const parsed = AppointmentCreateSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
     const body = parsed.data;
 
-    try {
-      const res = await withTenantClient(body.tenant_id, async (client) => {
-        return client.query(
-          'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-          [body.tenant_id, body.resource_id, body.customer_id, body.start_time, body.end_time,
-           body.description, 'manual-entry', body.location || null,
-           body.employee_id ? body.employee_id.toString() : null]
-        );
-      });
-      const result = res.rows[0];
-      if (result.success) {
-        return reply.send({ success: true, appointment_id: result.appointment_id });
-      } else {
-        return reply.status(400).send({ success: false, error: result.error_message });
-      }
-    } catch (err: any) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      if (err.code === '22P02') {
-        return reply.status(400).send({ success: false, error: 'Invalid identifier or time format', detail: err.detail });
-      }
-      return reply.status(500).send({ error: 'Internal server error' });
+    const res = await withTenantClient(body.tenant_id, async (client) => {
+      return client.query(
+        'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+        [body.tenant_id, body.resource_id, body.customer_id, body.start_time, body.end_time,
+         body.description, 'manual-entry', body.location || null,
+         body.employee_id ? body.employee_id.toString() : null]
+      );
+    });
+    const result = res.rows[0];
+    if (result.success) {
+      logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
+      return reply.send({ success: true, appointment_id: result.appointment_id });
+    } else {
+      return reply.status(400).send({ success: false, error: result.error_message });
     }
-  });
+  }, 'Failed to create appointment'));
 
-  app.get('/appointments', async (req, reply) => {
-    const tenantId = (req.query as any)['tenant_id'];
+  app.get('/appointments', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = req.tenantId;
     const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
     const offset = parseInt((req.query as any)['offset']) || 0;
     const startDate = (req.query as any)['start_date'] || null;
@@ -104,73 +97,59 @@ export function registerAppointmentRoutes(
        ${whereClause}
        ORDER BY a.start_time ASC`;
 
-    try {
-      if (isSuperAdmin) {
-        const client = await pool.connect();
-        try {
-          params.push(limit, offset);
-          const res = await client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
-          return reply.send(res.rows);
-        } finally {
-          client.release();
-        }
-      } else {
+    if (isSuperAdmin) {
+      const client = await pool.connect();
+      try {
         params.push(limit, offset);
-        const res = await withTenantClient(tenantId, async (client) => {
-          return client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
-        });
+        const res = await client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
         return reply.send(res.rows);
+      } finally {
+        client.release();
       }
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to fetch appointments' });
     }
-  });
 
-  app.delete('/appointments/:id', async (req, reply) => {
+    params.push(limit, offset);
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
+    });
+    return reply.send(res.rows);
+  }, 'Failed to fetch appointments'));
+
+  app.delete('/appointments/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = (req.query as any).tenant_id || (req as any).auth?.tenant_id;
+    const tenantId = req.tenantId;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      await withTenantClient(tenantId, async (client) => {
-        await client.query('DELETE FROM appointments WHERE id = $1', [id]);
-      });
-      return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to delete appointment' });
-    }
-  });
+    await withTenantClient(tenantId, async (client) => {
+      await client.query('DELETE FROM appointments WHERE id = $1', [id]);
+    });
+
+    logEvent(req, 'appointment_deleted', { appointmentId: id });
+    return reply.send({ success: true });
+  }, 'Failed to delete appointment'));
 
   // POST /appointments/:id/cancel - soft cancel (status update, not delete)
-  app.post('/appointments/:id/cancel', async (req, reply) => {
+  app.post('/appointments/:id/cancel', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { tenant_id?: string };
-    const tenantId = body.tenant_id || (req as any).auth?.tenant_id;
+    const tenantId = req.tenantId || body.tenant_id;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query(
-          "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id",
-          [id, tenantId]
-        );
-      });
-      if (res.rows.length === 0) {
-        return reply.status(404).send({ success: false, error: 'Appointment not found' });
-      }
-      return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to cancel appointment' });
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
+        "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id",
+        [id, tenantId]
+      );
+    });
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ success: false, error: 'Appointment not found' });
     }
-  });
 
-  app.post('/appointments/:id/update', async (req, reply) => {
+    logEvent(req, 'appointment_canceled', { appointmentId: id });
+    return reply.send({ success: true });
+  }, 'Failed to cancel appointment'));
+
+  app.post('/appointments/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as {
       tenant_id: string; start_time: string; end_time: string; description: string;
@@ -178,60 +157,56 @@ export function registerAppointmentRoutes(
       customer_name: string; customer_phone: string; customer_notes: string;
     };
 
-    try {
-      const res = await withTenantClient(body.tenant_id, async (client) => {
-        // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
-        // on the overloaded update_appointment_customer functions
-        const fields: string[] = [];
-        const values: unknown[] = [];
-        let idx = 1;
+    const res = await withTenantClient(body.tenant_id, async (client) => {
+      // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
+      // on the overloaded update_appointment_customer functions
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
 
-        if (body.start_time) { fields.push(`start_time = $${idx}`); values.push(body.start_time); idx++; }
-        if (body.end_time) { fields.push(`end_time = $${idx}`); values.push(body.end_time); idx++; }
-        if (body.description !== undefined) { fields.push(`description = $${idx}`); values.push(body.description); idx++; }
-        if (body.location !== undefined) { fields.push(`location = $${idx}`); values.push(body.location || null); idx++; }
-        if (body.resource_id) { fields.push(`resource_id = $${idx}`); values.push(body.resource_id); idx++; }
-        if (body.employee_id !== undefined) {
-          fields.push(`employee_id = $${idx}`);
-          values.push(body.employee_id ? body.employee_id.toString() : null);
-          idx++;
-        }
+      if (body.start_time) { fields.push(`start_time = $${idx}`); values.push(body.start_time); idx++; }
+      if (body.end_time) { fields.push(`end_time = $${idx}`); values.push(body.end_time); idx++; }
+      if (body.description !== undefined) { fields.push(`description = $${idx}`); values.push(body.description); idx++; }
+      if (body.location !== undefined) { fields.push(`location = $${idx}`); values.push(body.location || null); idx++; }
+      if (body.resource_id) { fields.push(`resource_id = $${idx}`); values.push(body.resource_id); idx++; }
+      if (body.employee_id !== undefined) {
+        fields.push(`employee_id = $${idx}`);
+        values.push(body.employee_id ? body.employee_id.toString() : null);
+        idx++;
+      }
 
-        if (fields.length === 0) {
-          return { rows: [{ success: true }] };
-        }
+      if (fields.length === 0) {
+        return { rows: [{ success: true }] };
+      }
 
-        values.push(id); // WHERE id = $N
-        values.push(body.tenant_id); // AND tenant_id = $N+1
-        await client.query(
-          `UPDATE appointments SET ${fields.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
-          values
-        );
+      values.push(id); // WHERE id = $N
+      values.push(body.tenant_id); // AND tenant_id = $N+1
+      await client.query(
+        `UPDATE appointments SET ${fields.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
+        values
+      );
 
-        // Update customer info if provided
-        if (body.customer_name || body.customer_phone || body.customer_notes) {
-          const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1', [id]);
-          if (appt.rows[0]?.customer_id) {
-            const custFields: string[] = [];
-            const custValues: unknown[] = [];
-            let ci = 1;
-            if (body.customer_name) { custFields.push(`name = $${ci}`); custValues.push(body.customer_name); ci++; }
-            if (body.customer_phone) { custFields.push(`phone = $${ci}`); custValues.push(body.customer_phone); ci++; }
-            if (body.customer_notes !== undefined) { custFields.push(`metadata = jsonb_set(COALESCE(metadata, '{}'), '{notes}', $${ci}::jsonb)`); custValues.push(JSON.stringify(body.customer_notes)); ci++; }
-            if (custFields.length > 0) {
-              custValues.push(appt.rows[0].customer_id);
-              await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE id = $${ci}`, custValues);
-            }
+      // Update customer info if provided
+      if (body.customer_name || body.customer_phone || body.customer_notes) {
+        const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1', [id]);
+        if (appt.rows[0]?.customer_id) {
+          const custFields: string[] = [];
+          const custValues: unknown[] = [];
+          let ci = 1;
+          if (body.customer_name) { custFields.push(`name = $${ci}`); custValues.push(body.customer_name); ci++; }
+          if (body.customer_phone) { custFields.push(`phone = $${ci}`); custValues.push(body.customer_phone); ci++; }
+          if (body.customer_notes !== undefined) { custFields.push(`metadata = jsonb_set(COALESCE(metadata, '{}'), '{notes}', $${ci}::jsonb)`); custValues.push(JSON.stringify(body.customer_notes)); ci++; }
+          if (custFields.length > 0) {
+            custValues.push(appt.rows[0].customer_id);
+            await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE id = $${ci}`, custValues);
           }
         }
+      }
 
-        return { rows: [{ success: true }] };
-      });
-      return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+      return { rows: [{ success: true }] };
+    });
+
+    logEvent(req, 'appointment_updated', { appointmentId: id });
+    return reply.send({ success: true });
+  }, 'Failed to update appointment'));
 }

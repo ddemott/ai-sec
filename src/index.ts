@@ -23,6 +23,7 @@ import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
+import { tenantMiddleware } from './middleware';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
@@ -153,6 +154,9 @@ app.addHook('onRequest', async (request, reply) => {
 
   (request as any).auth = decoded;
 });
+
+// --- Tenant Context Middleware (extracts tenant_id, enriches logger) ---
+tenantMiddleware(app as any);
 
 // --- Subscription Gate (after auth, before routes) ---
 app.addHook('onRequest', subscriptionGate(pool));

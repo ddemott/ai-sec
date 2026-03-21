@@ -1,68 +1,55 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { withHandler, logEvent, type AppRequest } from '../middleware';
 
 export function registerCalendarRoutes(
   app: any,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
-  app.post('/calendar/sync', async (req, reply) => {
+  app.post('/calendar/sync', withHandler(async (req: AppRequest, reply) => {
     const body = req.body as any;
     return reply.status(202).send({ status: 'accepted', source: body?.provider || 'unknown' });
-  });
+  }, 'Failed to sync calendar'));
 
-  app.get('/calendar/settings', async (req, reply) => {
-    const tenantId = (req.query as any).tenant_id;
+  app.get('/calendar/settings', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = req.tenantId;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query('SELECT * FROM tenant_calendar_settings WHERE tenant_id = $1', [tenantId]);
-      });
-      return reply.send(res.rows[0] || null);
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to fetch calendar settings' });
-    }
-  });
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query('SELECT * FROM tenant_calendar_settings WHERE tenant_id = $1', [tenantId]);
+    });
+    return reply.send(res.rows[0] || null);
+  }, 'Failed to fetch calendar settings'));
 
-  app.post('/calendar/settings', async (req, reply) => {
+  app.post('/calendar/settings', withHandler(async (req: AppRequest, reply) => {
     const body = req.body as any;
     if (!body.tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      const res = await withTenantClient(body.tenant_id, async (client) => {
-        return client.query(
-          `INSERT INTO tenant_calendar_settings (tenant_id, provider, external_calendar_id, is_active)
-           VALUES ($1, $2, $3, true)
-           ON CONFLICT (tenant_id)
-           DO UPDATE SET provider = $2, external_calendar_id = $3, is_active = true, updated_at = NOW()
-           RETURNING *`,
-          [body.tenant_id, body.provider, body.external_calendar_id]
-        );
-      });
-      return reply.send({ success: true, settings: res.rows[0] });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to update calendar settings' });
-    }
-  });
+    const res = await withTenantClient(body.tenant_id, async (client) => {
+      return client.query(
+        `INSERT INTO tenant_calendar_settings (tenant_id, provider, external_calendar_id, is_active)
+         VALUES ($1, $2, $3, true)
+         ON CONFLICT (tenant_id)
+         DO UPDATE SET provider = $2, external_calendar_id = $3, is_active = true, updated_at = NOW()
+         RETURNING *`,
+        [body.tenant_id, body.provider, body.external_calendar_id]
+      );
+    });
 
-  app.post('/calendar/settings/disconnect', async (req, reply) => {
+    logEvent(req, 'calendar_settings_updated', { provider: body.provider });
+    return reply.send({ success: true, settings: res.rows[0] });
+  }, 'Failed to update calendar settings'));
+
+  app.post('/calendar/settings/disconnect', withHandler(async (req: AppRequest, reply) => {
     const { tenant_id } = req.body as any;
     if (!tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      await withTenantClient(tenant_id, async (client) => {
-        await client.query('DELETE FROM tenant_calendar_settings WHERE tenant_id = $1', [tenant_id]);
-      });
-      return reply.send({ success: true });
-    } catch (err) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to disconnect calendar' });
-    }
-  });
+    await withTenantClient(tenant_id, async (client) => {
+      await client.query('DELETE FROM tenant_calendar_settings WHERE tenant_id = $1', [tenant_id]);
+    });
+
+    logEvent(req, 'calendar_disconnected', {});
+    return reply.send({ success: true });
+  }, 'Failed to disconnect calendar'));
 }

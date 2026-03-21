@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import Stripe from 'stripe';
+import { withHandler, logEvent, type AppRequest } from '../middleware';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -15,13 +16,13 @@ function getStripe(): Stripe | null {
 
 export function registerBillingRoutes(app: any, pool: Pool) {
   // POST /billing/checkout — create a Stripe Checkout session
-  app.post('/billing/checkout', async (req: any, reply: any) => {
+  app.post('/billing/checkout', withHandler(async (req: AppRequest, reply) => {
     const stripe = getStripe();
     if (!stripe) {
       return reply.status(503).send({ error: 'Billing not configured' });
     }
 
-    const { tenant_id, plan } = req.body || {};
+    const { tenant_id, plan } = (req.body as any) || {};
     if (!tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
     if (!plan || !['solo', 'growth'].includes(plan)) {
       return reply.status(400).send({ error: 'plan must be "solo" or "growth"' });
@@ -32,50 +33,46 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       return reply.status(503).send({ error: `Price ID not configured for ${plan} plan` });
     }
 
-    try {
-      // Look up or create Stripe customer
-      const tenantRes = await pool.query(
-        'SELECT id, name, stripe_customer_id FROM tenants WHERE id = $1',
-        [tenant_id]
-      );
-      if (tenantRes.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found' });
-      }
-
-      const tenant = tenantRes.rows[0];
-      let customerId = tenant.stripe_customer_id;
-
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          metadata: { tenant_id },
-          name: tenant.name,
-        });
-        customerId = customer.id;
-        await pool.query(
-          'UPDATE tenants SET stripe_customer_id = $1 WHERE id = $2',
-          [customerId, tenant_id]
-        );
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        mode: 'subscription',
-        line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=success`,
-        cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=cancel`,
-        metadata: { tenant_id, plan },
-      });
-
-      return reply.send({ url: session.url });
-    } catch (err: any) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: `Checkout failed: ${err.message}` });
+    // Look up or create Stripe customer
+    const tenantRes = await pool.query(
+      'SELECT id, name, stripe_customer_id FROM tenants WHERE id = $1',
+      [tenant_id]
+    );
+    if (tenantRes.rows.length === 0) {
+      return reply.status(404).send({ error: 'Tenant not found' });
     }
-  });
+
+    const tenant = tenantRes.rows[0];
+    let customerId = tenant.stripe_customer_id;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        metadata: { tenant_id },
+        name: tenant.name,
+      });
+      customerId = customer.id;
+      await pool.query(
+        'UPDATE tenants SET stripe_customer_id = $1 WHERE id = $2',
+        [customerId, tenant_id]
+      );
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=success`,
+      cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=cancel`,
+      metadata: { tenant_id, plan },
+    });
+
+    logEvent(req, 'checkout_session_created', { tenantId: tenant_id, plan });
+    return reply.send({ url: session.url });
+  }, 'Checkout failed'));
 
   // POST /billing/webhook — handle Stripe webhook events
-  app.post('/billing/webhook', async (req: any, reply: any) => {
+  // Keep custom error handling for signature verification
+  app.post('/billing/webhook', async (req: AppRequest, reply) => {
     const stripe = getStripe();
     if (!stripe) {
       return reply.status(503).send({ error: 'Billing not configured' });
@@ -88,12 +85,11 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
     let event: Stripe.Event;
     try {
-      const rawBody = req.rawBody || req.body;
+      const rawBody = (req as any).rawBody || req.body;
       const bodyStr = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
-      event = stripe.webhooks.constructEvent(bodyStr, sig, STRIPE_WEBHOOK_SECRET);
+      event = stripe.webhooks.constructEvent(bodyStr, sig as string, STRIPE_WEBHOOK_SECRET);
     } catch (err: any) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error({ err: err.message }, 'Webhook signature verification failed');
+      req.log.error({ err: err.message }, 'Webhook signature verification failed');
       return reply.status(400).send({ error: 'Invalid signature' });
     }
 
@@ -110,7 +106,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
                WHERE id = $3`,
               [session.subscription, plan, tenantId]
             );
-            app.log.info({ tenantId, plan }, 'Subscription activated');
+            logEvent(req, 'subscription_activated', { tenantId, plan });
           }
           break;
         }
@@ -123,7 +119,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
               `UPDATE tenants SET subscription_status = 'past_due' WHERE stripe_customer_id = $1`,
               [customerId]
             );
-            app.log.warn({ customerId }, 'Payment failed — subscription past_due');
+            req.log.warn({ customerId }, 'Payment failed — subscription past_due');
           }
           break;
         }
@@ -138,43 +134,36 @@ export function registerBillingRoutes(app: any, pool: Pool) {
                WHERE stripe_customer_id = $1`,
               [customerId]
             );
-            app.log.info({ customerId }, 'Subscription canceled');
+            logEvent(req, 'subscription_canceled', { customerId });
           }
           break;
         }
 
         default:
-          app.log.info({ type: event.type }, 'Unhandled webhook event');
+          req.log.info({ type: event.type }, 'Unhandled webhook event');
       }
 
       return reply.send({ received: true });
     } catch (err: any) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
+      req.log.error(err);
       return reply.status(500).send({ error: 'Webhook processing failed' });
     }
   });
 
   // GET /billing/status — check subscription status for a tenant
-  app.get('/billing/status', async (req: any, reply: any) => {
-    const tenantId = (req.query as any).tenant_id;
+  app.get('/billing/status', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = req.tenantId;
     if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
-    try {
-      const res = await pool.query(
-        'SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1',
-        [tenantId]
-      );
-      if (res.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found' });
-      }
-      return reply.send(res.rows[0]);
-    } catch (err: any) {
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
-      app.log.error(err);
-      return reply.status(500).send({ error: 'Failed to check billing status' });
+    const res = await pool.query(
+      'SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ error: 'Tenant not found' });
     }
-  });
+    return reply.send(res.rows[0]);
+  }, 'Failed to check billing status'));
 }
 
 /**

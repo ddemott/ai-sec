@@ -1,0 +1,152 @@
+/**
+ * Shared middleware, error handling, and logging patterns.
+ *
+ * Design Patterns Used:
+ * - Decorator: withHandler wraps route handlers with consistent error handling
+ * - Chain of Responsibility: tenant middleware runs before every route
+ * - Strategy: error handler dispatches based on error type
+ * - Facade: request context (req.tenantId, req.log) hides extraction complexity
+ */
+
+import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
+
+// ── Types ────────────────────────────────────────────────────────────
+
+/** Extended request with tenant context and structured logger */
+export interface AppRequest extends FastifyRequest {
+  tenantId?: string;
+  auth?: { tenant_id: string; user_id: string; email: string };
+}
+
+/** Known error codes the system can produce */
+export type AppErrorCode = 'TENANT_NOT_FOUND' | 'VALIDATION' | 'NOT_FOUND' | 'FORBIDDEN';
+
+/** Structured application error with code and status */
+export class AppError extends Error {
+  statusCode: number;
+  code: AppErrorCode;
+
+  constructor(message: string, code: AppErrorCode, statusCode: number) {
+    super(message);
+    this.name = 'AppError';
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
+// ── Route Handler Wrapper (Decorator Pattern) ────────────────────────
+
+type RouteHandler = (req: AppRequest, reply: FastifyReply) => Promise<unknown>;
+
+/**
+ * Wraps a route handler with:
+ * - Structured error handling (no more try/catch in every route)
+ * - Automatic TENANT_NOT_FOUND propagation to global handler
+ * - Contextual logging (tenant + user + route)
+ * - Consistent 500 error response format
+ *
+ * Usage:
+ *   app.get('/customers', withHandler(async (req, reply) => {
+ *     const data = await fetchCustomers(req.tenantId);
+ *     return reply.send(data);
+ *   }, 'Failed to fetch customers'));
+ */
+export function withHandler(handler: RouteHandler, errorMessage: string): RouteHandler {
+  return async (req: AppRequest, reply: FastifyReply) => {
+    try {
+      return await handler(req, reply);
+    } catch (err: unknown) {
+      // TENANT_NOT_FOUND: propagate to global handler for 404 + auto-logout
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') {
+        throw err;
+      }
+
+      // AppError: use its status code
+      if (err instanceof AppError) {
+        return reply.status(err.statusCode).send({
+          success: false,
+          error: err.message,
+          code: err.code,
+        });
+      }
+
+      // Known status code on error object (e.g., validation errors)
+      if (err instanceof Error && (err as unknown as { statusCode?: number }).statusCode) {
+        const status = (err as unknown as { statusCode: number }).statusCode;
+        return reply.status(status).send({ success: false, error: err.message });
+      }
+
+      // Unknown error: log and return 500
+      req.log.error({
+        err,
+        tenantId: req.tenantId,
+        route: req.url,
+        method: req.method,
+      }, errorMessage);
+
+      return reply.status(500).send({ success: false, error: errorMessage });
+    }
+  };
+}
+
+// ── Tenant ID Middleware (Chain of Responsibility) ────────────────────
+
+/** Routes that don't require a tenant_id */
+const TENANT_EXEMPT_ROUTES = [
+  '/health', '/login', '/register', '/',
+  '/billing/webhook',
+  '/tenants', '/templates', '/templates/full', '/templates/create',
+];
+
+function isTenantExempt(url: string): boolean {
+  const path = url.split('?')[0];
+  return TENANT_EXEMPT_ROUTES.some(r => path === r || path.startsWith('/tenants/'));
+}
+
+/**
+ * Extracts tenant_id from query params, request body, or JWT auth context.
+ * Attaches as req.tenantId for consistent access in route handlers.
+ * Creates a child logger with tenant context for structured logging.
+ *
+ * Priority: query param > body > JWT auth token
+ */
+export function tenantMiddleware(app: FastifyInstance) {
+  app.addHook('preHandler', async (request: AppRequest, reply) => {
+    if (request.method === 'OPTIONS') return;
+    if (isTenantExempt(request.url)) return;
+
+    const tenantId =
+      (request.query as Record<string, string>)?.tenant_id ||
+      (request.body as Record<string, string>)?.tenant_id ||
+      request.auth?.tenant_id;
+
+    if (tenantId) {
+      request.tenantId = tenantId;
+
+      // Enrich the request logger with tenant + user context
+      // Every log from this request now includes tenantId and userId
+      request.log = request.log.child({
+        tenantId,
+        userId: request.auth?.user_id,
+      });
+    }
+  });
+}
+
+// ── Structured Event Logging Helpers ─────────────────────────────────
+
+/**
+ * Log a business event with structured data.
+ * Use these instead of raw req.log.info() for consistency.
+ *
+ * Example:
+ *   logEvent(req, 'appointment_booked', { appointmentId, customerId });
+ *   logEvent(req, 'shift_created', { employeeId, dayOfWeek });
+ */
+export function logEvent(req: AppRequest, event: string, data?: Record<string, unknown>) {
+  req.log.info({ event, ...data }, event);
+}
+
+export function logWarning(req: AppRequest, event: string, data?: Record<string, unknown>) {
+  req.log.warn({ event, ...data }, event);
+}
