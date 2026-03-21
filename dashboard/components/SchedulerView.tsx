@@ -92,6 +92,16 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     }
   }, [tenantId, selectedDate, handleRefresh]);
 
+  const handleShiftDelete = useCallback(async (shiftId: number) => {
+    if (!tenantId) return;
+    try {
+      await Api.shifts.delete(shiftId, tenantId);
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to delete shift:', err);
+    }
+  }, [tenantId, handleRefresh]);
+
   const handleEmployeeClick = useCallback((employee: { id: string | number; name: string }) => {
     setFocusEmployee(employee);
   }, []);
@@ -207,6 +217,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             onSlotClick={handleSlotClick}
             onSlotDrag={handleSlotDrag}
             onShiftDrag={handleShiftDrag}
+            onShiftDelete={handleShiftDelete}
             onEmployeeClick={handleEmployeeClick}
             hourWidth={hourWidth}
           />

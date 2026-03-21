@@ -29,7 +29,7 @@ function getDayOfWeek(date: Date): number {
 
 interface SchedulerEmployee { id: string | number; name: string }
 interface SchedulerResource { id: string | number; name: string }
-interface SchedulerShift { employee_id?: string | number; user_id?: string | number; day_of_week: number; start_time?: string; end_time?: string }
+interface SchedulerShift { id: number; employee_id?: string | number; user_id?: string | number; day_of_week: number; start_time?: string; end_time?: string }
 
 export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);

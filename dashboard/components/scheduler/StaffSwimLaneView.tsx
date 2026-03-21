@@ -3,7 +3,7 @@ import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH } from 
 import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
 
-interface SwimLaneShift { start_time?: string; end_time?: string }
+interface SwimLaneShift { id: number; start_time?: string; end_time?: string }
 interface SwimLaneEmployee { id: string | number; name: string }
 
 interface StaffSwimLaneViewProps {
@@ -14,6 +14,7 @@ interface StaffSwimLaneViewProps {
   onSlotClick?: (employeeId: string, hour: number) => void;
   onSlotDrag?: (employeeId: string, startHour: number, endHour: number) => void;
   onShiftDrag?: (employeeId: string, startHour: number, endHour: number) => void;
+  onShiftDelete?: (shiftId: number) => void;
   onEmployeeClick?: (employee: SwimLaneEmployee) => void;
   hourWidth?: number;
 }
@@ -46,6 +47,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   onSlotClick,
   onSlotDrag,
   onShiftDrag,
+  onShiftDelete,
   onEmployeeClick,
   hourWidth = 60,
 }) => {
@@ -233,7 +235,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
             return (
               <div
                 key={`shift-bar-${idx}`}
-                className="absolute top-0.5 bottom-0.5 rounded bg-green-100/60 dark:bg-green-900/20 border border-green-300/50 dark:border-green-700/30 pointer-events-none z-[1]"
+                className="absolute top-0.5 bottom-0.5 rounded bg-green-100/60 dark:bg-green-900/20 border border-green-300/50 dark:border-green-700/30 z-[1] group/shift cursor-pointer hover:bg-green-200/80 dark:hover:bg-green-800/30 hover:border-green-400 dark:hover:border-green-600 transition-colors"
                 style={{
                   left: (clampedStart - SCHEDULER_START_HOUR) * hourWidth,
                   width: (clampedEnd - clampedStart) * hourWidth,
@@ -242,6 +244,19 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                 <span className="absolute left-1 top-0.5 text-[9px] font-medium text-green-600/70 dark:text-green-400/50">
                   {formatHour(clampedStart)}–{formatHour(clampedEnd)}
                 </span>
+                {onShiftDelete && (
+                  <button
+                    className="absolute right-1 top-0.5 text-[9px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/80 dark:bg-black/40 rounded px-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete this shift (${formatHour(clampedStart)}–${formatHour(clampedEnd)})?`)) {
+                        onShiftDelete(shift.id);
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             );
           })}
