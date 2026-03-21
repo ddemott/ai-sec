@@ -124,7 +124,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     }
   }, [tenantId, selectedDate, handleRefresh, employees, shiftsByEmployee]);
 
-  const handleShiftResize = useCallback(async (shiftId: number, startHour: number, endHour: number) => {
+  const handleShiftResize = useCallback(async (shiftId: string, startHour: number, endHour: number) => {
     if (!tenantId) return;
     const startTime = `${String(startHour).padStart(2, '0')}:00`;
     const endTime = `${String(endHour).padStart(2, '0')}:00`;
@@ -138,7 +138,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     }
   }, [tenantId, handleRefresh]);
 
-  const handleShiftDelete = useCallback(async (shiftId: number) => {
+  const handleShiftDelete = useCallback(async (shiftId: string) => {
     if (!tenantId) return;
     try {
       await Api.shifts.delete(shiftId, tenantId);

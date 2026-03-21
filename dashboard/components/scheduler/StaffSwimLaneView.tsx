@@ -3,7 +3,7 @@ import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH } from 
 import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
 
-interface SwimLaneShift { id: number; start_time?: string; end_time?: string }
+interface SwimLaneShift { id: string; start_time?: string; end_time?: string }
 interface SwimLaneEmployee { id: string | number; name: string }
 
 interface StaffSwimLaneViewProps {
@@ -14,8 +14,8 @@ interface StaffSwimLaneViewProps {
   onSlotClick?: (employeeId: string, hour: number) => void;
   onSlotDrag?: (employeeId: string, startHour: number, endHour: number) => void;
   onShiftDrag?: (employeeId: string, startHour: number, endHour: number) => void;
-  onShiftDelete?: (shiftId: number) => void;
-  onShiftResize?: (shiftId: number, startHour: number, endHour: number) => void;
+  onShiftDelete?: (shiftId: string) => void;
+  onShiftResize?: (shiftId: string, startHour: number, endHour: number) => void;
   onEmployeeClick?: (employee: SwimLaneEmployee) => void;
   hourWidth?: number;
 }
