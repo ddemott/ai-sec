@@ -112,6 +112,20 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     }
   }, [tenantId, selectedDate, handleRefresh, employees, shiftsByEmployee]);
 
+  const handleShiftResize = useCallback(async (shiftId: number, startHour: number, endHour: number) => {
+    if (!tenantId) return;
+    const startTime = `${String(startHour).padStart(2, '0')}:00`;
+    const endTime = `${String(endHour).padStart(2, '0')}:00`;
+    try {
+      await Api.shifts.update(shiftId, tenantId, { start_time: startTime, end_time: endTime });
+      handleRefresh();
+      showToast(`Shift resized: ${formatHourLabel(startHour)}–${formatHourLabel(endHour)}`);
+    } catch (err) {
+      console.error('Failed to resize shift:', err);
+      showToast('Failed to resize shift', 'error');
+    }
+  }, [tenantId, handleRefresh]);
+
   const handleShiftDelete = useCallback(async (shiftId: number) => {
     if (!tenantId) return;
     try {
@@ -240,6 +254,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             onSlotDrag={handleSlotDrag}
             onShiftDrag={handleShiftDrag}
             onShiftDelete={handleShiftDelete}
+            onShiftResize={handleShiftResize}
             onEmployeeClick={handleEmployeeClick}
             hourWidth={hourWidth}
           />
