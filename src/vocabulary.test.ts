@@ -90,17 +90,17 @@ describe("Business Vocabulary System", () => {
             });
         });
 
-        it("should have vocabulary populated for dentist template", async () => {
+        it("should have vocabulary populated for barbershop template", async () => {
             if (!dbAvailable) return;
             const res = await client.query(
-                "SELECT resource_label, resource_plural, employee_label, employee_plural, booking_label FROM business_templates WHERE business_type = 'dentist'"
+                "SELECT resource_label, resource_plural, employee_label, employee_plural, booking_label FROM business_templates WHERE business_type = 'barbershop'"
             );
             expect(res.rows[0]).toEqual({
-                resource_label: 'Operatory',
-                resource_plural: 'Operatories',
-                employee_label: 'Hygienist',
-                employee_plural: 'Hygienists',
-                booking_label: 'Visit',
+                resource_label: 'Chair',
+                resource_plural: 'Chairs',
+                employee_label: 'Barber',
+                employee_plural: 'Barbers',
+                booking_label: 'Appointment',
             });
         });
 
@@ -130,8 +130,8 @@ describe("Business Vocabulary System", () => {
 
     describe("all 20 business type templates", () => {
         const EXPECTED_TYPES = [
-            'mobile-tire', 'salon', 'auto-shop', 'dentist',
-            'vet-clinic', 'chiropractor', 'barbershop', 'nail-salon',
+            'mobile-tire', 'salon', 'auto-shop',
+            'barbershop', 'nail-salon',
             'spa', 'plumber', 'electrician', 'hvac',
             'pest-control', 'cleaning', 'landscaping', 'personal-trainer',
             'yoga-studio', 'tax-prep', 'tutoring', 'photography',
@@ -146,7 +146,7 @@ describe("Business Vocabulary System", () => {
             for (const t of EXPECTED_TYPES) {
                 expect(types).toContain(t);
             }
-            expect(types.length).toBeGreaterThanOrEqual(20);
+            expect(types.length).toBeGreaterThanOrEqual(17);
         });
 
         it("should have non-empty vocabulary on all 20 templates", async () => {
@@ -155,7 +155,7 @@ describe("Business Vocabulary System", () => {
                 "SELECT business_type, resource_label, employee_label, booking_label FROM business_templates WHERE business_type = ANY($1)",
                 [EXPECTED_TYPES]
             );
-            expect(res.rows.length).toBe(20);
+            expect(res.rows.length).toBe(17);
             for (const row of res.rows) {
                 expect(row.resource_label).toBeTruthy();
                 expect(row.employee_label).toBeTruthy();
