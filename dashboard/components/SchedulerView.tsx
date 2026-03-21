@@ -85,7 +85,10 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     if (!tenantId) return;
     // Only create shifts for actual employees, not user accounts
     const emp = employees.find(e => String(e.id) === employeeId);
-    if (emp && (emp as Record<string, unknown>).type === 'user') return;
+    if (emp && (emp as Record<string, unknown>).type === 'user') {
+      showToast('Shifts can only be created for employees, not user accounts', 'warning');
+      return;
+    }
     const dayOfWeek = selectedDate.getDay(); // 0=Sun..6=Sat
     const startTime = `${String(startHour).padStart(2, '0')}:00`;
     const endTime = `${String(endHour).padStart(2, '0')}:00`;
