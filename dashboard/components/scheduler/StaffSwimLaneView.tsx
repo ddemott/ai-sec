@@ -334,9 +334,9 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                   </button>
                 )}
 
-                {/* Left resize handle */}
+                {/* Left resize handle — wide grab zone, visual indicator on hover */}
                 <div
-                  className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-green-500/30 rounded-l z-10"
+                  className="absolute -left-1 top-0 bottom-0 w-4 cursor-col-resize z-20 group/lhandle"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -349,11 +349,13 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                     didDrag.current = false;
                     setDrag(state);
                   }}
-                />
+                >
+                  <div className="absolute left-1 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/lhandle:bg-green-500/60 transition-colors" />
+                </div>
 
-                {/* Right resize handle */}
+                {/* Right resize handle — wide grab zone, visual indicator on hover */}
                 <div
-                  className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-green-500/30 rounded-r z-10"
+                  className="absolute -right-1 top-0 bottom-0 w-4 cursor-col-resize z-20 group/rhandle"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -366,7 +368,9 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                     didDrag.current = false;
                     setDrag(state);
                   }}
-                />
+                >
+                  <div className="absolute right-1 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/rhandle:bg-green-500/60 transition-colors" />
+                </div>
               </div>
             );
           })}
