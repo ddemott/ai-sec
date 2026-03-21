@@ -241,3 +241,6 @@ Visual coverage in Phase 12 covers the dashboard. These are the automated notifi
 - [ ] **Missed Revenue Tracking**: "This week you missed $240 due to coverage gaps."
 - [ ] **Nightly Coverage Job**: Check next 7 days, surface new gaps.
 - [ ] **Dashboard Alert Banner**: Critical gap notification with action buttons (Reassign / Call customers / Dismiss).
+
+### Skill Map Drag-and-Drop Reorder
+- [ ] **Drag-and-drop reordering** of employees, services, and resources within the Skill Relationship Map columns. Requires `sort_order` column on employees, services, and resources tables + drag library (dnd-kit or react-beautiful-dnd). Polish feature — map works without it.
