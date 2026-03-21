@@ -53,7 +53,8 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     ]);
 
     if (apptRes.status === 'fulfilled' && Array.isArray(apptRes.value)) {
-      setAppointments(apptRes.value);
+      // Hide canceled appointments from the calendar — they show in CRM history only
+      setAppointments(apptRes.value.filter((a: SchedulerAppointment) => a.status !== 'canceled'));
     } else {
       setAppointments([]);
     }

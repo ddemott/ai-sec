@@ -202,7 +202,8 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
         throw new Error('Unexpected response shape from /appointments')
       }
 
-      setAppointments(data)
+      // Hide canceled appointments from the calendar view
+      setAppointments(data.filter((a: Appointment) => a.status !== 'canceled'))
       setUsingMockData(false)
 
       if (data.length === 0) {
