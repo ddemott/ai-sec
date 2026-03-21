@@ -42,6 +42,7 @@ export function registerAppointmentRoutes(
         return reply.status(400).send({ success: false, error: result.error_message });
       }
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       if (err.code === '22P02') {
         return reply.status(400).send({ success: false, error: 'Invalid identifier or time format', detail: err.detail });
@@ -121,6 +122,7 @@ export function registerAppointmentRoutes(
         return reply.send(res.rows);
       }
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch appointments' });
     }
@@ -137,6 +139,7 @@ export function registerAppointmentRoutes(
       });
       return reply.send({ success: true });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to delete appointment' });
     }
@@ -161,6 +164,7 @@ export function registerAppointmentRoutes(
       }
       return reply.send({ success: true });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to cancel appointment' });
     }
@@ -190,6 +194,7 @@ export function registerAppointmentRoutes(
         return reply.status(400).send({ success: false, error: result.error_message });
       }
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Internal server error' });
     }

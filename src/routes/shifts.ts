@@ -16,6 +16,7 @@ export function registerShiftRoutes(
       });
       return reply.send(res.rows);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch shifts' });
     }
@@ -33,6 +34,7 @@ export function registerShiftRoutes(
       });
       return reply.send({ success: true, shift: res.rows[0] });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to create shift' });
     }
@@ -57,6 +59,7 @@ export function registerShiftRoutes(
       }
       return reply.send({ success: true, shift: res.rows[0] });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to update shift' });
     }
@@ -73,6 +76,7 @@ export function registerShiftRoutes(
       });
       return reply.send({ success: true });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to delete shift' });
     }

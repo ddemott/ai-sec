@@ -16,6 +16,7 @@ export function registerSkillRoutes(
       });
       return reply.send(res.rows);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch master skills' });
     }
@@ -33,6 +34,7 @@ export function registerSkillRoutes(
       });
       return reply.send({ success: true, skill: res.rows[0] });
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       if (err.code === '23505') return reply.status(400).send({ error: 'Skill already exists' });
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to create skill' });
@@ -50,6 +52,7 @@ export function registerSkillRoutes(
       });
       return reply.send({ success: true });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to delete skill' });
     }

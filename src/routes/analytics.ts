@@ -34,6 +34,7 @@ export function registerAnalyticsRoutes(
       });
       return reply.send(res.rows);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to check coverage gaps' });
     }
@@ -59,6 +60,7 @@ export function registerAnalyticsRoutes(
       });
       return reply.send(res.rows);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch call summaries' });
     }

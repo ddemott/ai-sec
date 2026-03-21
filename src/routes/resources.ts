@@ -27,6 +27,7 @@ export function registerResourceRoutes(
         return reply.send(res.rows);
       }
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       return reply.status(500).send({ error: 'Failed to fetch resources' });
     }
   });
@@ -46,6 +47,7 @@ export function registerResourceRoutes(
       });
       return reply.send({ success: true, resource: res.rows[0] });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ success: false, error: 'Failed to create resource' });
     }
@@ -74,6 +76,7 @@ export function registerResourceRoutes(
       });
       return reply.send({ success: true });
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       if (err.statusCode === 400) {
         return reply.status(400).send({ success: false, error: err.message });
       }

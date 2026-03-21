@@ -52,6 +52,7 @@ export function registerAuthRoutes(
         return reply.status(401).send({ success: false, error: 'Invalid email or password' });
       }
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Internal server error' });
     } finally {
@@ -109,6 +110,7 @@ export function registerAuthRoutes(
         token,
       });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       await client.query('ROLLBACK');
       app.log.error(err);
       return reply.status(500).send({ error: 'Registration failed' });

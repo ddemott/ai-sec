@@ -68,6 +68,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
       return reply.send({ url: session.url });
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: `Checkout failed: ${err.message}` });
     }
@@ -91,6 +92,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       const bodyStr = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
       event = stripe.webhooks.constructEvent(bodyStr, sig, STRIPE_WEBHOOK_SECRET);
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error({ err: err.message }, 'Webhook signature verification failed');
       return reply.status(400).send({ error: 'Invalid signature' });
     }
@@ -147,6 +149,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
       return reply.send({ received: true });
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Webhook processing failed' });
     }
@@ -167,6 +170,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       }
       return reply.send(res.rows[0]);
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to check billing status' });
     }

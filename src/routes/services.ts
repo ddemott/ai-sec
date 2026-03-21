@@ -16,6 +16,7 @@ export function registerServiceRoutes(
       });
       return reply.send(res.rows);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch services' });
     }
@@ -33,6 +34,7 @@ export function registerServiceRoutes(
       });
       return reply.send({ success: true, service: res.rows[0] });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to create service' });
     }
@@ -53,6 +55,7 @@ export function registerServiceRoutes(
       });
       return reply.send({ success: true, service: res.rows[0] });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to update service' });
     }
@@ -72,6 +75,7 @@ export function registerServiceRoutes(
       });
       return reply.send({ success: true });
     } catch (err: any) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       if (err.statusCode === 400) {
         return reply.status(400).send({ error: err.message });
       }

@@ -95,21 +95,17 @@ const apiPool = isLocal ? new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-class TenantNotFoundError extends Error {
-  statusCode = 404;
-  constructor(tenantId: string) {
-    super(`Tenant ${tenantId} not found`);
-    this.name = 'TenantNotFoundError';
-  }
-}
-
 async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await apiPool.connect();
   try {
     // Validate tenant exists before setting context
     const tenantCheck = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
     if (tenantCheck.rows.length === 0) {
-      throw new TenantNotFoundError(tenantId);
+      // Use reply-level error that Fastify routes can detect
+      const err = new Error(`Tenant ${tenantId} not found`);
+      (err as unknown as { statusCode: number }).statusCode = 404;
+      (err as unknown as { code: string }).code = 'TENANT_NOT_FOUND';
+      throw err;
     }
     await client.query('SELECT set_tenant_context($1::UUID)', [tenantId]);
     return await fn(client);
@@ -156,13 +152,15 @@ app.addHook('onRequest', async (request, reply) => {
 // --- Subscription Gate (after auth, before routes) ---
 app.addHook('onRequest', subscriptionGate(pool));
 
-// --- Global Error Handler (catches TenantNotFoundError, etc.) ---
-app.setErrorHandler(async (error: any, request: any, reply: any) => {
-  if (error.name === 'TenantNotFoundError') {
+// --- Global Error Handler ---
+app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }, _request: unknown, reply: { status: (code: number) => { send: (body: Record<string, unknown>) => void } }) => {
+  const statusCode = error.statusCode || 500;
+  const code = error.code;
+  if (code === 'TENANT_NOT_FOUND') {
     return reply.status(404).send({ error: error.message, code: 'TENANT_NOT_FOUND' });
   }
   app.log.error(error);
-  return reply.status(error.statusCode || 500).send({ error: error.message || 'Internal server error' });
+  return reply.status(statusCode).send({ error: error.message || 'Internal server error' });
 });
 
 // --- Health & Admin ---

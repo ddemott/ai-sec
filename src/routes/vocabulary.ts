@@ -32,6 +32,7 @@ export function registerVocabularyRoutes(
 
       return reply.send(res.rows[0]);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch vocabulary' });
     }

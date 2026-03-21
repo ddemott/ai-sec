@@ -51,6 +51,7 @@ export function registerCustomerRoutes(
         return reply.send(res.rows);
       }
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch customers' });
     }
@@ -77,7 +78,9 @@ export function registerCustomerRoutes(
         );
       });
       return reply.send({ success: true, customer: res.rows[0] });
-    } catch (err) {
+    } catch (err: unknown) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to create customer' });
     }
@@ -105,6 +108,7 @@ export function registerCustomerRoutes(
       });
       return reply.send({ success: true });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to update customer' });
     }
@@ -132,6 +136,7 @@ export function registerCustomerRoutes(
       });
       return reply.send(res.rows);
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to fetch customer appointments' });
     }
@@ -148,6 +153,7 @@ export function registerCustomerRoutes(
       });
       return reply.send({ success: true });
     } catch (err) {
+      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') throw err;
       app.log.error(err);
       return reply.status(500).send({ error: 'Failed to delete customer' });
     }
