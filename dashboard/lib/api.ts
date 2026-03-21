@@ -220,10 +220,10 @@ export const Api = {
     create: (tenantId: string | null, data: Record<string, unknown>) => 
       apiMutate<Record<string, unknown>>(`/employees/create`, 'POST', { tenant_id: tenantId, ...data }),
     
-    update: (id: number, data: Record<string, unknown>) => 
+    update: (id: string | number, data: Record<string, unknown>) =>
       apiMutate<Record<string, unknown>>(`/employees/${id}/update`, 'POST', data),
     
-    delete: (id: number, tenantId: string | null) => 
+    delete: (id: string | number, tenantId: string | null) =>
       apiMutate<Record<string, unknown>>(`/employees/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
   },
 
@@ -232,16 +232,16 @@ export const Api = {
     listServiceResource: (tenantId: string | null) => 
       apiFetch<Record<string, unknown>[]>(`/mappings/service-resource`, tenantId ? { tenant_id: tenantId } : undefined),
     
-    assignServiceResource: (serviceId: number, resourceId: string, tenantId: string | null) => 
+    assignServiceResource: (serviceId: string | number, resourceId: string, tenantId: string | null) => 
       apiMutate<Record<string, unknown>>(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', { tenant_id: tenantId }),
     
-    unassignServiceResource: (serviceId: number, resourceId: string, tenantId: string | null) => 
+    unassignServiceResource: (serviceId: string | number, resourceId: string, tenantId: string | null) => 
       apiMutate<Record<string, unknown>>(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', { tenant_id: tenantId }),
 
-    assignServiceEmployee: (serviceId: number, employeeId: string | number, tenantId: string | null) => 
+    assignServiceEmployee: (serviceId: string | number, employeeId: string | number, tenantId: string | null) => 
       apiMutate<Record<string, unknown>>(`/services/${serviceId}/employees/${employeeId}/assign`, 'POST', { tenant_id: tenantId }),
     
-    unassignServiceEmployee: (serviceId: number, employeeId: string | number, tenantId: string | null) => 
+    unassignServiceEmployee: (serviceId: string | number, employeeId: string | number, tenantId: string | null) => 
       apiMutate<Record<string, unknown>>(`/services/${serviceId}/employees/${employeeId}/unassign`, 'POST', { tenant_id: tenantId }),
 
     listServiceEmployee: (tenantId: string | null) => 
@@ -256,10 +256,10 @@ export const Api = {
     create: (tenantId: string | null, data: Record<string, unknown>) =>
       apiMutate<Record<string, unknown>>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-    update: (id: number, tenantId: string | null, data: Record<string, unknown>) =>
+    update: (id: string | number, tenantId: string | null, data: Record<string, unknown>) =>
       apiMutate<Record<string, unknown>>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
-    delete: (id: number, tenantId: string | null) =>
+    delete: (id: string | number, tenantId: string | null) =>
       apiMutate<Record<string, unknown>>(`/services/${id}/delete?tenant_id=${tenantId}`, 'DELETE'),
   },
 
