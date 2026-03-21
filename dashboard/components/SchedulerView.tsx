@@ -11,7 +11,14 @@ import { QuickBookPanel } from './scheduler/QuickBookPanel';
 import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
 import { Button } from './ui/Button';
 import { Api } from '../lib/api';
+import { showToast } from './ui/Toast';
 import AppointmentView from './AppointmentView';
+
+function formatHourLabel(hour: number): string {
+  const h = hour % 12 || 12;
+  const ampm = hour < 12 ? 'AM' : 'PM';
+  return `${h}${ampm}`;
+}
 
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
 
@@ -83,6 +90,14 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     const startTime = `${String(startHour).padStart(2, '0')}:00`;
     const endTime = `${String(endHour).padStart(2, '0')}:00`;
     try {
+      // Delete existing shifts for this employee on this day (replace, don't stack)
+      const existingShifts = shiftsByEmployee.get(String(employeeId)) || [];
+      for (const existing of existingShifts) {
+        if (existing.id) {
+          await Api.shifts.delete(existing.id, tenantId);
+        }
+      }
+      // Create the new shift
       await Api.shifts.create(tenantId, {
         employee_id: employeeId,
         day_of_week: dayOfWeek,
@@ -90,18 +105,22 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
         end_time: endTime,
       });
       handleRefresh();
+      showToast(`Shift saved: ${formatHourLabel(startHour)}–${formatHourLabel(endHour)}`);
     } catch (err) {
       console.error('Failed to create shift:', err);
+      showToast('Failed to save shift', 'error');
     }
-  }, [tenantId, selectedDate, handleRefresh]);
+  }, [tenantId, selectedDate, handleRefresh, employees, shiftsByEmployee]);
 
   const handleShiftDelete = useCallback(async (shiftId: number) => {
     if (!tenantId) return;
     try {
       await Api.shifts.delete(shiftId, tenantId);
       handleRefresh();
+      showToast('Shift deleted');
     } catch (err) {
       console.error('Failed to delete shift:', err);
+      showToast('Failed to delete shift', 'error');
     }
   }, [tenantId, handleRefresh]);
 
