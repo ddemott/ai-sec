@@ -120,8 +120,8 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
             setCustomers([])
         }
       } else {
-        setCustomers(data as Customer[])
-        if (!selectedCustomer) setSelectedCustomer((data as Customer[])[0])
+        setCustomers(data as unknown as Customer[])
+        if (!selectedCustomer) setSelectedCustomer((data as unknown as Customer[])[0])
       }
     } catch {
       setCustomers(MOCK_CUSTOMERS)
