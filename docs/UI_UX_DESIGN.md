@@ -30,34 +30,28 @@ These users care about: "Who's calling?", "What's booked?", "Who's working today
 - `dashboard/components/OutlookLayout.tsx` — Shell with sidebar nav + content area
 - `dashboard/app/layout.tsx` — Root layout with SessionProvider
 
-### Current Navigation Structure (12 top-level tabs)
+### Current Navigation Structure (Front Desk / Back Office)
 
 ```
-Desktop Sidebar (80px wide, icon + 9px label):
-┌──────────┐
-│ [logo]   │
-│          │
-│ Admin*   │  (* super-admin only)
-│ Calendar │
-│ Customers│
-│ Employees│
-│ Shifts   │
-│ Services │
-│ Resources│
-│ Skills   │
-│ Knowledge│
-│ AI       │
-│ Analytics│
-│          │
-│ [theme]  │
-│ [user]   │
-│ [settings│
-│ [logout] │
-└──────────┘
+Desktop: Two primary tabs at top level
+┌──────────────────────────────────────────┐
+│ [Front Desk]  [Back Office]              │
+├──────────────────────────────────────────┤
+│                                          │
+│ Front Desk: Schedule, Customers,         │
+│             Staffing Map                 │
+│                                          │
+│ Back Office: My Team, My Business,       │
+│              AI & Insights               │
+│                                          │
+│ Admin* (* super-admin only)              │
+│ [theme] [settings] [logout]              │
+└──────────────────────────────────────────┘
 
-Mobile Bottom Nav (5 items only):
-[ Schedule | Skills | Shifts | Knowledge | Exit ]
+Mobile Bottom Nav: Primary sections
 ```
+
+**Note**: The navigation was restructured from the original 12 flat tabs to 5 grouped sections, and then further simplified to the current Front Desk / Back Office two-tab layout. The Staffing Map (Service Coverage View) is now implemented under Front Desk.
 
 ### Current Views (12 components)
 
@@ -188,11 +182,11 @@ Page Flow: New Business Sign-Up → Onboarding → Dashboard
 
 ---
 
-## Proposed Navigation Restructure
+## Navigation Restructure (Implemented)
 
 ### Principle: Group by User Intent
 
-Reduce from 12 top-level items to **5 primary sections** with sub-navigation where needed.
+> **Status**: Navigation has been restructured. The current implementation uses a **Front Desk / Back Office two-tab layout** rather than the 5-section sidebar originally proposed below. The original proposal is preserved for historical context.
 
 ```
 Proposed Sidebar:

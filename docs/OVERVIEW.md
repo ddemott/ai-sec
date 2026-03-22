@@ -16,20 +16,21 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## Main Components & Verification
 
-- **377 Tests Passing**: 203 backend + 174 dashboard tests verified via Vitest.
+- **598 Tests Passing**: 229 backend + 369 dashboard tests verified via Vitest.
 - **Postgres (Supabase)**: Single source of truth with Row-Level Security (RLS) for tenant isolation.
 - **Supabase Edge Function (`vapi-tools`)**:
   - `getCustomerContext` – CRM history lookup.
   - `checkAvailability` – Multi-resource overlap checks.
   - `bookAppointment` – Shift-aware atomic booking with auto end-time calculation.
   - `getCompanyPolicyAnswer` – Semantic search over business docs with RAG normalization.
-- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes (16 modules under `src/routes/`) including billing, coverage, vocabulary, registration, and all CRUD operations.
+- **Fastify Backend (Management API)**: JWT-authenticated, RLS-enforced routes (15 modules under `src/routes/`) including billing, coverage, vocabulary, registration, and all CRUD operations.
 - **Dashboard (Next.js)**:
   - **Dashboard Home**: At-a-glance stats, coverage alerts, today's appointments, quick actions.
   - **Scheduler**: Staff swimlanes, resource columns, appointment list, quick book, employee day focus.
   - **Skill Relationship Map**: Interactive 3-column mind map (employees → skills → resources) with click-to-connect.
   - **Setup Wizard**: 6-step repeatable guided setup with live coverage feedback.
   - **Coverage Visibility**: Status badges and coverage bars throughout the UI.
+  - **Service Staffing Map**: GET /coverage/staffing endpoint with ServiceCoverageView showing staff-to-service coverage.
   - **Vocabulary System**: Business-type-aware labels (Truck/Technician for tire shops, Chair/Stylist for salons).
   - **Theme System**: 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized).
   - **Stripe Lite**: Checkout integration for Solo ($29/mo) and Growth ($59/mo) plans.

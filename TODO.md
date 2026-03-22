@@ -50,7 +50,7 @@
 
 ## 7. Security & Quality Hardening (Completed March 2026)
 - [x] **JWT Auth**: Token-based authentication with 8h expiry and auto-logout on 401 (BUG-012).
-- [x] **RLS Enforcement**: All 13 tenant-scoped route modules use `withTenantClient()` with `api_user` role (BUG-007). Only super-admin and auth routes use the admin pool.
+- [x] **RLS Enforcement**: All 15 tenant-scoped route modules use `withTenantClient()` with `api_user` role (BUG-007). Only super-admin and auth routes use the admin pool.
 - [x] **Least-Privilege DB**: `api_user` downgraded from `ALL PRIVILEGES` to explicit grants (BUG-008).
 - [x] **Form Validation**: Zod schemas for login, customer, and appointment creation (BUG-011).
 - [x] **Error Boundaries**: React ErrorBoundary wraps all dashboard views (BUG-010).
@@ -65,7 +65,7 @@
 These are known issues from the March 2026 code review (see BUGS.md for details).
 
 ### Pre-Production (should fix before go-live)
-- [x] **Route Extraction**: Break `src/index.ts` monolith into 14 route modules including vocabulary (BUG-017).
+- [x] **Route Extraction**: Break `src/index.ts` monolith into 15 route modules including vocabulary and billing (BUG-017).
 - [x] **ID Standardization**: Migrated services and employees from SERIAL to UUID (BUG-015).
 - [x] **Customer Timezone**: `check_availability_with_tz()` function respects customer timezone (BUG-031).
 - [x] **Orphan Transcript Linking**: `link_orphaned_transcripts()` SQL function matches via call_id (BUG-030).
@@ -99,7 +99,7 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 - [x] **Mobile Navigation**: Bottom nav updated to show all 5 sections (was 4 of 12).
 - [x] **Api.vocabulary.get()**: Dashboard API client method for resolved vocabulary labels.
 - [x] **seed.sql Fix**: ON CONFLICT (tenant_id, email) for per-tenant email uniqueness.
-- [x] **Test Coverage**: 100 backend tests + 38 dashboard tests = 138 total, all passing.
+- [x] **Test Coverage**: 229 backend tests + 369 dashboard tests = 598 total, all passing.
 
 ## 11. Scheduler, Assignments & Coverage Visibility (Phase 12 — Complete)
 > Ship-blocking. The owner needs to see who's doing what, assign people to services, and know where the gaps are — without learning the dashboard tab by tab.

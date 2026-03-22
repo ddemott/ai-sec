@@ -44,12 +44,12 @@ Full code review identified 58 bugs across all severity levels. All resolved.
 - [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID validation.
 - [x] **Booking Engine**: DST-safe shift checks, auto end-time, customer upsert, service enforcement.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, debounce guards.
-- [x] **Test Coverage**: 100 backend + 38 dashboard = 138 total, all passing.
+- [x] **Test Coverage**: 229 backend + 369 dashboard = 598 total, all passing.
 
 ## Phase 8: Production Go-Live (Current 🚀)
 - [x] **Agent Template**: Templatize `agent.json` with Mustache variables.
 - [x] **n8n Plumbing**: `notify_n8n_on_appointment` uses `pg_net` for real HTTP calls.
-- [x] **Route Extraction**: 15 focused route modules under `src/routes/`.
+- [x] **Route Extraction**: 15 focused route modules under `src/routes/` with shared middleware layer (withHandler, tenantMiddleware, AppError, logEvent/logWarning in src/middleware.ts).
 - [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
 - [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`.
 - [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL.
@@ -150,6 +150,7 @@ Not a separate feature — coverage status is visible wherever the owner is alre
 - [x] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns view.
 - [x] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
 - [x] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range. Powers the dashboard coverage indicators.
+- [x] **Service Staffing Map**: `GET /coverage/staffing` endpoint with `ServiceCoverageView` showing staff-to-service coverage at a glance.
 
 ### 12E: RAG Normalization Layer
 

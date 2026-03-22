@@ -1,7 +1,7 @@
 # AI Secretary SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 16 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 15 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
@@ -25,7 +25,7 @@ The Dashboard provides business owners with transparency and control.
 - **State Management**: `SessionProvider` React Context for auth/session; `useStaticData` hook for shared tenant data.
 - **Auth**: JWT-based authentication (8h expiry) via `/login` endpoint. Auto-logout on 401. Tokens stored in localStorage and sent as `Authorization: Bearer` headers.
 - **Error Handling**: React `ErrorBoundary` wraps all views. Structured JSON logging via `createLogger()` utility.
-- **Testing**: Vitest + React Testing Library (jsdom environment). 25+ tests across smoke, appointment, CRM, settings, and component suites.
+- **Testing**: Vitest + React Testing Library (jsdom environment). 369 tests across smoke, appointment, CRM, settings, employee, setup wizard, skill map, scheduler, and component suites.
 
 ### 3.2 Key Views & Features
 - **Business Analytics**: High-level metrics for call volume, booking conversion, and estimated revenue generated.
@@ -36,14 +36,11 @@ The Dashboard provides business owners with transparency and control.
 - **CRM Viewer**: Unified customer detail view with upcoming/past appointments (cancel flow), AI-generated call summaries with transcript data, and internal notes. Search bar filters by name, phone, or email.
 
 ### 3.3 Navigation Architecture
-The dashboard uses a **5-section grouped navigation** pattern:
-- **Schedule** — Appointment calendar (direct view)
-- **Customers** — Unified CRM (direct view)
-- **My Team** — Composite view with sub-tabs: Employees, Shifts, Skill Matrix
-- **My Business** — Composite view with sub-tabs: Services, Resources, Knowledge Base
-- **AI & Insights** — Composite view with sub-tabs: AI Persona, Analytics
+The dashboard uses a **Front Desk / Back Office two-tab layout**:
+- **Front Desk** — Daily operations: Schedule, Customers, Staffing Map
+- **Back Office** — Configuration and setup: My Team, My Business, AI & Insights
 
-Desktop: Icon sidebar (80px) with 5 main items + settings/logout in footer. Mobile: Bottom nav with all 5 sections. Sub-tabs render as a horizontal tab bar at the top of composite views.
+Desktop: Two primary tabs at top level with sub-views within each. Mobile: Bottom nav with primary sections. Sub-tabs render as a horizontal tab bar at the top of composite views.
 
 ### 3.4 Vocabulary System
 UI labels adapt per business type via a 3-tier fallback:
@@ -56,7 +53,14 @@ The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template,
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 16 modules under `src/routes/` (auth, tenants, register, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 15 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing).
+
+### 4.0 Middleware Layer
+Shared middleware lives in `src/middleware.ts`:
+- **`withHandler`**: Decorator that wraps route handlers with structured error handling, request logging, and consistent JSON responses.
+- **`tenantMiddleware`**: Validates tenant context, checks tenant existence via `withTenantClient`, and triggers auto-logout on `TENANT_NOT_FOUND`.
+- **`AppError`**: Typed error class with HTTP status codes for consistent error responses.
+- **`logEvent` / `logWarning`**: Structured logging utilities for audit trail and debugging.
 
 ### 4.1 Security
 - **RLS Enforcement**: All tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
@@ -67,7 +71,7 @@ The Fastify backend serves as the management API for the dashboard and administr
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 203 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, and index suites. 174 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, and component suites. 377 total.
+- **Coverage**: 229 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, and index suites. 369 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, and component suites. 598 total.
 
 ---
 

@@ -4,9 +4,9 @@
 - **Current Phase**: **Phase 8 (Go-Live)** — All development, security hardening, and polish phases complete.
 - **Source Control**: Pushed to [github.com/ddemott/ai-sec](https://github.com/ddemott/ai-sec) (Private).
 - **Ready for**: Cloud migration and beta testing with DynaTire.
-- **Backend Strategy**: **Edge-First / Serverless** (Supabase Edge Functions + Postgres) with a **modularized Fastify backend** (14 route modules under `src/routes/` with `withTenantClient()` RLS enforcement) for management API.
+- **Backend Strategy**: **Edge-First / Serverless** (Supabase Edge Functions + Postgres) with a **modularized Fastify backend** (15 route modules under `src/routes/` with `withTenantClient()` RLS enforcement) for management API.
 - **Dashboard Goal**: **Business Empowerment & Performance Monitoring** (Achieved).
-- **Quality**: 58 bugs from March 2026 code review resolved. 100 backend + 38 dashboard tests = 138 total passing. JWT auth, RLS on all routes, least-privilege DB role.
+- **Quality**: 58 bugs from March 2026 code review resolved. 229 backend + 369 dashboard tests = 598 total passing. JWT auth, RLS on all routes, least-privilege DB role.
 
 ## Key Architecture Decisions
 1. **Zero-Scale Infrastructure**: Supabase Edge Functions + Postgres.
