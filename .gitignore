@@ -37,3 +37,6 @@ output.txt
 .deno
 .deno_plugins
 dashboard/dist/
+
+# Production secrets
+.env.production
