@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Secretary — Your Business Never Sleeps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & BASE ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: #080808;
+  color: #e8e8e8;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ─── CSS VARIABLES ─── */
+:root {
+  --blue: #2563eb;
+  --blue-lt: #3b82f6;
+  --blue-dim: rgba(37, 99, 235, 0.12);
+  --blue-glow: rgba(59, 130, 246, 0.3);
+  --amber: #f59e0b;
+  --green: #22c55e;
+  --green-dim: rgba(34, 197, 94, 0.1);
+  --red: #ef4444;
+  --bg: #080808;
+  --bg2: #0f0f0f;
+  --bg3: #141414;
+  --bg4: #1a1a1a;
+  --border: rgba(255,255,255,0.07);
+  --border-md: rgba(255,255,255,0.11);
+  --text: #e8e8e8;
+  --text-muted: #666;
+  --text-dim: #444;
+  --ff-display: 'Bebas Neue', sans-serif;
+  --ff-body: 'DM Sans', sans-serif;
+  --ff-mono: 'JetBrains Mono', monospace;
+}
+
+/* ─── GRID BACKGROUND ─── */
+.grid-bg {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 0%, transparent 100%);
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: 64px;
+  display: flex; align-items: center; padding: 0 48px;
+  background: rgba(8,8,8,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--ff-display); font-size: 22px; letter-spacing: 1px;
+  color: var(--text); text-decoration: none;
+}
+.nav-logo-icon {
+  width: 34px; height: 34px; background: var(--blue);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+}
+.nav-logo-icon svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; }
+.nav-links {
+  display: flex; gap: 32px; margin-left: auto; margin-right: 40px;
+  list-style: none;
+}
+.nav-links a {
+  color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 400;
+  transition: color 0.2s; letter-spacing: 0.2px;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-cta {
+  display: flex; align-items: center; gap: 10px;
+}
+.btn-ghost {
+  padding: 8px 18px; border: 1px solid var(--border-md);
+  background: transparent; color: var(--text-muted);
+  border-radius: 8px; font-family: var(--ff-body); font-size: 14px;
+  cursor: pointer; transition: all 0.2s; text-decoration: none;
+}
+.btn-ghost:hover { border-color: rgba(255,255,255,0.22); color: var(--text); }
+.btn-primary {
+  padding: 9px 20px; background: var(--blue);
+  border: none; border-radius: 8px; color: #fff;
+  font-family: var(--ff-body); font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary:hover { background: var(--blue-lt); transform: translateY(-1px); }
+
+/* ─── HERO ─── */
+.hero {
+  min-height: 100vh; display: flex; align-items: center;
+  padding: 120px 48px 80px; position: relative; z-index: 1;
+}
+.hero-inner {
+  max-width: 1200px; margin: 0 auto; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
+}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--blue-dim); border: 1px solid rgba(59,130,246,0.25);
+  border-radius: 20px; padding: 5px 14px;
+  font-size: 11px; font-weight: 600; color: var(--blue-lt);
+  letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 24px;
+}
+.hero-eyebrow-dot {
+  width: 6px; height: 6px; background: var(--blue-lt);
+  border-radius: 50%; animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+.hero-h1 {
+  font-family: var(--ff-display);
+  font-size: clamp(64px, 7vw, 100px);
+  line-height: 0.95;
+  letter-spacing: 1px;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.hero-h1 .accent {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.25);
+}
+.hero-h1 .blue { color: var(--blue-lt); }
+.hero-sub {
+  font-size: 18px; font-weight: 300; color: #999;
+  line-height: 1.65; margin-bottom: 40px; max-width: 460px;
+  letter-spacing: 0.1px;
+}
+.hero-sub strong { color: var(--text); font-weight: 500; }
+.hero-actions { display: flex; align-items: center; gap: 16px; margin-bottom: 48px; }
+.btn-hero {
+  padding: 14px 28px; background: var(--blue);
+  border: none; border-radius: 10px; color: #fff;
+  font-family: var(--ff-body); font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px;
+  box-shadow: 0 0 40px rgba(37,99,235,0.35);
+}
+.btn-hero:hover {
+  background: var(--blue-lt); transform: translateY(-2px);
+  box-shadow: 0 0 60px rgba(59,130,246,0.45);
+}
+.btn-hero svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.hero-link {
+  color: var(--text-muted); font-size: 14px; text-decoration: none;
+  display: flex; align-items: center; gap: 6px; transition: color 0.2s;
+}
+.hero-link:hover { color: var(--text); }
+.hero-link svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hero-stats {
+  display: flex; gap: 32px;
+  border-top: 1px solid var(--border); padding-top: 32px;
+}
+.hero-stat {}
+.hero-stat-n {
+  font-family: var(--ff-display); font-size: 36px; color: #fff; letter-spacing: 0.5px; line-height: 1;
+}
+.hero-stat-n span { color: var(--blue-lt); }
+.hero-stat-l { font-size: 12px; color: var(--text-muted); margin-top: 4px; letter-spacing: 0.2px; }
+
+/* ─── PHONE MOCK ─── */
+.hero-visual { display: flex; justify-content: center; align-items: center; }
+.phone-frame {
+  width: 320px; height: 640px;
+  background: var(--bg3);
+  border-radius: 44px;
+  border: 1.5px solid var(--border-md);
+  position: relative; overflow: hidden;
+  box-shadow:
+    0 0 0 6px rgba(255,255,255,0.03),
+    0 40px 120px rgba(0,0,0,0.8),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+/* Subtle blue glow behind phone */
+.phone-frame::before {
+  content: '';
+  position: absolute; inset: -60px;
+  background: radial-gradient(ellipse 60% 80% at 50% 50%, rgba(37,99,235,0.15) 0%, transparent 70%);
+  z-index: -1; pointer-events: none;
+}
+.phone-notch {
+  width: 100px; height: 28px; background: var(--bg);
+  border-radius: 0 0 18px 18px; margin: 0 auto;
+  position: relative; z-index: 2;
+}
+.phone-screen {
+  padding: 0 20px 20px; height: calc(100% - 28px);
+  display: flex; flex-direction: column;
+}
+
+/* Call Header */
+.call-header {
+  background: linear-gradient(180deg, rgba(37,99,235,0.18) 0%, transparent 100%);
+  margin: 0 -20px; padding: 18px 20px 20px;
+  text-align: center; border-bottom: 1px solid var(--border);
+}
+.call-biz { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 1.5px; text-transform: uppercase; }
+.call-name { font-size: 18px; font-weight: 500; color: #fff; margin: 4px 0 2px; }
+.call-status {
+  font-size: 11px; color: var(--green); font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.call-status-dot { width: 5px; height: 5px; background: var(--green); border-radius: 50%; }
+.call-timer { font-family: var(--ff-mono); font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* Waveform */
+.waveform {
+  display: flex; align-items: center; justify-content: center;
+  gap: 3px; padding: 16px 0 12px;
+}
+.wave-bar {
+  width: 3px; border-radius: 2px; background: var(--blue-lt);
+  animation: wave 1.2s ease-in-out infinite;
+  opacity: 0.7;
+}
+.wave-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+.wave-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+.wave-bar:nth-child(3) { height: 22px; animation-delay: 0.2s; }
+.wave-bar:nth-child(4) { height: 28px; animation-delay: 0.3s; }
+.wave-bar:nth-child(5) { height: 34px; animation-delay: 0.15s; }
+.wave-bar:nth-child(6) { height: 26px; animation-delay: 0.25s; }
+.wave-bar:nth-child(7) { height: 18px; animation-delay: 0.35s; }
+.wave-bar:nth-child(8) { height: 10px; animation-delay: 0.05s; }
+.wave-bar:nth-child(9) { height: 22px; animation-delay: 0.2s; }
+.wave-bar:nth-child(10) { height: 30px; animation-delay: 0.3s; }
+.wave-bar:nth-child(11) { height: 24px; animation-delay: 0.1s; }
+.wave-bar:nth-child(12) { height: 14px; animation-delay: 0.4s; }
+.wave-bar:nth-child(13) { height: 8px; animation-delay: 0s; }
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 0.85; }
+}
+
+/* Transcript bubbles */
+.transcript { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 4px 0 10px; }
+.bubble {
+  padding: 9px 12px; border-radius: 12px; font-size: 12px; line-height: 1.5;
+  animation: fadeUp 0.4s ease both;
+}
+.bubble-ai {
+  background: var(--blue-dim); border: 1px solid rgba(59,130,246,0.18);
+  color: #cce0ff; border-radius: 12px 12px 12px 4px; align-self: flex-start; max-width: 90%;
+}
+.bubble-ai .from { font-size: 9px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--blue-lt); margin-bottom: 4px; }
+.bubble-user {
+  background: var(--bg4); border: 1px solid var(--border);
+  color: #bbb; border-radius: 12px 12px 4px 12px; align-self: flex-end; max-width: 90%;
+}
+.bubble-user .from { font-size: 9px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.bubble:nth-child(1) { animation-delay: 0.2s; }
+.bubble:nth-child(2) { animation-delay: 0.7s; }
+.bubble:nth-child(3) { animation-delay: 1.2s; }
+.bubble:nth-child(4) { animation-delay: 1.7s; }
+
+/* Booking confirmation pill */
+.booking-confirm {
+  background: var(--green-dim); border: 1px solid rgba(34,197,94,0.22);
+  border-radius: 10px; padding: 10px 12px; margin-top: 4px;
+  display: flex; align-items: center; gap: 10px;
+}
+.booking-confirm-icon {
+  width: 28px; height: 28px; background: rgba(34,197,94,0.2);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.booking-confirm-icon svg { width: 14px; height: 14px; stroke: var(--green); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.booking-confirm-txt { }
+.booking-confirm-title { font-size: 11px; font-weight: 600; color: var(--green); }
+.booking-confirm-sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+/* ─── LOGO BAR ─── */
+.logo-bar {
+  position: relative; z-index: 1;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  padding: 28px 48px;
+}
+.logo-bar-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: flex; align-items: center; gap: 48px;
+}
+.logo-bar-label {
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  letter-spacing: 1.5px; text-transform: uppercase; white-space: nowrap;
+}
+.logo-bar-items {
+  display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
+}
+.logo-bar-item {
+  font-family: var(--ff-display); font-size: 18px; letter-spacing: 1px;
+  color: var(--text-dim); white-space: nowrap; transition: color 0.2s;
+}
+.logo-bar-item:hover { color: var(--text-muted); }
+
+/* ─── HOW IT WORKS ─── */
+.section { padding: 100px 48px; position: relative; z-index: 1; }
+.section-inner { max-width: 1200px; margin: 0 auto; }
+.section-eyebrow {
+  font-size: 11px; font-weight: 600; color: var(--blue-lt);
+  letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px;
+}
+.section-h2 {
+  font-family: var(--ff-display);
+  font-size: clamp(44px, 5vw, 68px);
+  line-height: 0.95; letter-spacing: 0.5px; color: #fff;
+  margin-bottom: 16px;
+}
+.section-sub {
+  font-size: 17px; font-weight: 300; color: #888;
+  max-width: 520px; line-height: 1.65; margin-bottom: 64px;
+}
+
+/* Steps */
+.steps {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 2px; background: var(--border);
+  border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+}
+.step {
+  background: var(--bg2); padding: 40px 36px;
+  position: relative; transition: background 0.2s;
+}
+.step:hover { background: var(--bg3); }
+.step-num {
+  font-family: var(--ff-display); font-size: 72px; line-height: 1;
+  color: rgba(255,255,255,0.04); position: absolute; top: 20px; right: 24px;
+  pointer-events: none; letter-spacing: -2px;
+}
+.step-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: var(--blue-dim); border: 1px solid rgba(59,130,246,0.2);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 24px;
+}
+.step-icon svg { width: 20px; height: 20px; stroke: var(--blue-lt); fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.step-h { font-family: var(--ff-display); font-size: 26px; letter-spacing: 0.3px; color: #fff; margin-bottom: 12px; }
+.step-p { font-size: 14px; font-weight: 300; color: #888; line-height: 1.65; }
+.step-connector {
+  position: absolute; right: -1px; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 40px; background: var(--blue);
+  display: none;
+}
+
+/* ─── FEATURES ─── */
+.features-bg { background: var(--bg2); }
+.features-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+.feat-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 14px; padding: 32px;
+  transition: all 0.25s; cursor: default; position: relative; overflow: hidden;
+}
+.feat-card::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, var(--blue-dim) 0%, transparent 60%);
+  opacity: 0; transition: opacity 0.3s;
+}
+.feat-card:hover { border-color: rgba(59,130,246,0.25); transform: translateY(-2px); }
+.feat-card:hover::before { opacity: 1; }
+.feat-card.wide { grid-column: 1 / -1; }
+.feat-icon {
+  width: 40px; height: 40px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px; position: relative; z-index: 1;
+}
+.feat-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.feat-icon.blue { background: var(--blue-dim); color: var(--blue-lt); border: 1px solid rgba(59,130,246,0.2); }
+.feat-icon.green { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+.feat-icon.amber { background: rgba(245,158,11,0.1); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+.feat-icon.red { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+.feat-h {
+  font-family: var(--ff-display); font-size: 24px; letter-spacing: 0.3px;
+  color: #fff; margin-bottom: 10px; position: relative; z-index: 1;
+}
+.feat-p { font-size: 14px; font-weight: 300; color: #777; line-height: 1.7; position: relative; z-index: 1; }
+.feat-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+  margin-top: 16px; position: relative; z-index: 1;
+}
+.feat-tag.blue { background: var(--blue-dim); color: var(--blue-lt); }
+.feat-tag.green { background: rgba(34,197,94,0.1); color: var(--green); }
+
+/* Coverage row inside wide feature card */
+.coverage-row {
+  display: flex; gap: 12px; margin-top: 20px; position: relative; z-index: 1;
+  flex-wrap: wrap;
+}
+.cov-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500;
+  border: 1px solid;
+}
+.cov-badge.full { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2); color: var(--green); }
+.cov-badge.partial { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); color: var(--amber); }
+.cov-badge.none { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); color: var(--red); }
+.cov-dot { width: 7px; height: 7px; border-radius: 50%; }
+.cov-dot.full { background: var(--green); }
+.cov-dot.partial { background: var(--amber); }
+.cov-dot.none { background: var(--red); }
+
+/* ─── PRICING ─── */
+.pricing-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 16px; margin-top: 0;
+}
+.price-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 16px; padding: 36px 32px;
+  position: relative; transition: all 0.2s;
+}
+.price-card:hover { border-color: var(--border-md); transform: translateY(-2px); }
+.price-card.featured {
+  border-color: rgba(59,130,246,0.4);
+  background: linear-gradient(180deg, rgba(37,99,235,0.08) 0%, var(--bg3) 100%);
+}
+.price-card.featured::before {
+  content: 'MOST POPULAR';
+  position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+  background: var(--blue); color: #fff;
+  font-family: var(--ff-display); font-size: 11px; letter-spacing: 1.5px;
+  padding: 4px 16px; border-radius: 0 0 8px 8px;
+}
+.price-name {
+  font-family: var(--ff-display); font-size: 20px; letter-spacing: 0.5px;
+  color: var(--text-muted); margin-bottom: 16px;
+}
+.price-amount {
+  display: flex; align-items: baseline; gap: 4px;
+  margin-bottom: 6px;
+}
+.price-dollar { font-size: 22px; font-weight: 400; color: #888; margin-top: 4px; }
+.price-num {
+  font-family: var(--ff-display); font-size: 60px; line-height: 1;
+  color: #fff; letter-spacing: -1px;
+}
+.price-period { font-size: 14px; color: var(--text-muted); }
+.price-desc { font-size: 13px; color: #666; margin-bottom: 28px; min-height: 36px; line-height: 1.55; }
+.price-divider { border: none; border-top: 1px solid var(--border); margin-bottom: 24px; }
+.price-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+.price-features li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; color: #999; line-height: 1.4;
+}
+.price-features li .check {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.25);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.price-features li .check svg { width: 9px; height: 9px; stroke: var(--green); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.price-btn {
+  width: 100%; padding: 12px; border-radius: 10px;
+  font-family: var(--ff-body); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; text-align: center;
+  display: block; text-decoration: none;
+}
+.price-btn.outline {
+  background: transparent; border: 1px solid var(--border-md); color: var(--text-muted);
+}
+.price-btn.outline:hover { border-color: rgba(255,255,255,0.22); color: var(--text); }
+.price-btn.filled {
+  background: var(--blue); border: 1px solid transparent; color: #fff;
+  box-shadow: 0 0 30px rgba(37,99,235,0.3);
+}
+.price-btn.filled:hover { background: var(--blue-lt); box-shadow: 0 0 50px rgba(59,130,246,0.4); }
+.trial-note {
+  text-align: center; font-size: 13px; color: var(--text-muted);
+  margin-top: 24px;
+}
+.trial-note span { color: var(--text); font-weight: 500; }
+
+/* ─── SUPPORTED BUSINESSES ─── */
+.biz-grid {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.biz-chip {
+  padding: 7px 14px; border: 1px solid var(--border);
+  border-radius: 24px; font-size: 13px; color: var(--text-muted);
+  background: var(--bg3); transition: all 0.2s; cursor: default;
+}
+.biz-chip:hover { border-color: var(--border-md); color: var(--text); }
+
+
+/* ─── CTA BAND ─── */
+.cta-band {
+  position: relative; z-index: 1;
+  padding: 100px 48px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  background: radial-gradient(ellipse 60% 80% at 50% 100%, rgba(37,99,235,0.1) 0%, transparent 70%);
+}
+.cta-band-h {
+  font-family: var(--ff-display);
+  font-size: clamp(52px, 6vw, 88px);
+  line-height: 0.95; letter-spacing: 0.5px; color: #fff;
+  margin-bottom: 20px;
+}
+.cta-band-sub {
+  font-size: 17px; font-weight: 300; color: #888;
+  margin-bottom: 44px; max-width: 460px; margin-left: auto; margin-right: auto;
+  line-height: 1.65;
+}
+.cta-band-actions { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.cta-number {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--bg4); border: 1px solid var(--border-md);
+  border-radius: 10px; padding: 14px 24px;
+  font-family: var(--ff-mono); font-size: 16px; color: var(--text);
+}
+.cta-number-label { font-family: var(--ff-body); font-size: 11px; color: var(--text-muted); font-family: var(--ff-mono); }
+
+/* ─── FOOTER ─── */
+footer {
+  position: relative; z-index: 1;
+  border-top: 1px solid var(--border);
+  padding: 36px 48px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.footer-logo { font-family: var(--ff-display); font-size: 18px; letter-spacing: 0.5px; color: var(--text-muted); }
+.footer-copy { font-size: 12px; color: var(--text-dim); }
+.footer-links { display: flex; gap: 24px; }
+.footer-links a { font-size: 12px; color: var(--text-dim); text-decoration: none; transition: color 0.2s; }
+.footer-links a:hover { color: var(--text-muted); }
+
+/* ─── DIVIDER LINE ─── */
+.section-divider {
+  height: 1px; background: var(--border);
+  max-width: 1200px; margin: 0 auto;
+}
+
+/* ─── ANIMATIONS ─── */
+.reveal {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 900px) {
+  nav { padding: 0 24px; }
+  .nav-links { display: none; }
+  .hero { padding: 100px 24px 60px; }
+  .hero-inner { grid-template-columns: 1fr; gap: 60px; }
+  .phone-frame { width: 280px; height: 540px; }
+  .section { padding: 72px 24px; }
+  .steps { grid-template-columns: 1fr; }
+  .features-grid { grid-template-columns: 1fr; }
+  .feat-card.wide { grid-column: 1; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .cta-band { padding: 72px 24px; }
+  footer { flex-direction: column; gap: 16px; text-align: center; padding: 24px; }
+  .logo-bar { padding: 24px; }
+  .logo-bar-inner { flex-direction: column; gap: 16px; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="nav-logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+    </div>
+    AI SECRETARY
+  </a>
+  <ul class="nav-links">
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#businesses">Industries</a></li>
+  </ul>
+  <div class="nav-cta">
+    <a href="#" class="btn-ghost">Sign in</a>
+    <a href="#" class="btn-primary">
+      Start free trial
+    </a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-content">
+      <div class="hero-eyebrow reveal">
+        <div class="hero-eyebrow-dot"></div>
+        AI-Powered Business Reception
+      </div>
+
+      <h1 class="hero-h1 reveal reveal-delay-1">
+        YOUR<br>
+        PHONE<br>
+        <span class="blue">NEVER</span><br>
+        <span class="accent">SLEEPS</span>
+      </h1>
+
+      <p class="hero-sub reveal reveal-delay-2">
+        A <strong>human-sounding AI secretary</strong> answers every call, books appointments intelligently, and knows your business inside out. From day one, without hiring anyone.
+      </p>
+
+      <div class="hero-actions reveal reveal-delay-2">
+        <a href="#" class="btn-hero">
+          Start free — 14 days
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="#how" class="hero-link">
+          See how it works
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 15l5-3-5-3v6z" fill="currentColor" stroke="none"/></svg>
+        </a>
+      </div>
+
+      <div class="hero-stats reveal reveal-delay-3">
+        <div class="hero-stat">
+          <div class="hero-stat-n">20<span>+</span></div>
+          <div class="hero-stat-l">business types</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-n"><span>$</span>129</div>
+          <div class="hero-stat-l">starts at / month</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-n">7<span>-layer</span></div>
+          <div class="hero-stat-l">booking validation</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone Mock -->
+    <div class="hero-visual reveal reveal-delay-2">
+      <div class="phone-frame">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="call-header">
+            <div class="call-biz">Luxe Hair Studio</div>
+            <div class="call-name">Sandra K. · identified by caller ID</div>
+            <div class="call-status">
+              <div class="call-status-dot"></div>
+              AI Secretary active
+            </div>
+            <div class="call-timer" id="callTimer">03:41</div>
+          </div>
+
+          <div class="waveform">
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+
+          <div class="transcript" id="transcript" style="overflow-y:auto;scrollbar-width:none;">
+
+            <!-- Caller ID lookup tag — fires before AI speaks -->
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;margin:2px 0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+              <span style="font-size:9px;color:#22c55e;font-weight:600;letter-spacing:0.5px;">Caller ID matched · Sandra K. · 14 visits · last in 8 weeks ago</span>
+            </div>
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              Luxe Hair Studio, hi Sandra!
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Hi! Can I get in with Jess for a balayage?
+            </div>
+            <!-- CRM lookup fires silently -->
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);border-radius:6px;margin:2px 0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              <span style="font-size:9px;color:#a78bfa;font-weight:600;letter-spacing:0.5px;">CRM · stylist: Jess · last: balayage · no blow-dry on file · no scalp massage on file</span>
+            </div>
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              Of course! And no blow-dry after — still the same?
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Yes, exactly.
+            </div>
+            <!-- Upsell check — promotion relevant to balayage -->
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;margin:2px 0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <span style="font-size:9px;color:#22c55e;font-weight:600;letter-spacing:0.5px;">Promotion matched · Olaplex gloss treatment · 20% off this month · pairs with balayage</span>
+            </div>
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              We also have 20% off our Olaplex gloss treatment this month — it seals the colour after a balayage and keeps it fresher longer. Jess usually recommends it. Want to add it on?
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Oh go on then, yes. What day were you thinking?
+            </div>
+            <!-- Upsell accepted -->
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;margin:2px 0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span style="font-size:9px;color:#22c55e;font-weight:600;letter-spacing:0.5px;">Upsell accepted · Olaplex gloss added · 20% discount applied · 2.5hr slot needed</span>
+            </div>
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              Lovely — added. That makes it about 2.5 hours total. What day works for you?
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Saturday the 15th if possible.
+            </div>
+            <!-- Skill + availability check -->
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:6px;margin:2px 0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <span style="font-size:9px;color:#3b82f6;font-weight:600;letter-spacing:0.5px;">Availability · Balayage cert · Jess ✓ · Sat 15th 10am · 2.5hr slot open ✓</span>
+            </div>
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              Jess has 10am on the 15th free. Two hours for the balayage, no blow-dry. Want me to go ahead?
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Yes please. Oh — and no scalp massage either, if that's okay. I should have mentioned it before.
+            </div>
+            <!-- New preference captured -->
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:6px;margin:2px 0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span style="font-size:9px;color:#f59e0b;font-weight:600;letter-spacing:0.5px;">Preference saved · no scalp massage · Jess notified</span>
+            </div>
+            <!-- Order read back before confirming -->
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              So that's Saturday the 15th at 10am, balayage and Olaplex gloss with Jess, no blow-dry, no scalp massage. Shall I confirm that?
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Perfect, yes.
+            </div>
+            <div class="bubble bubble-ai">
+              <div class="from">AI Secretary</div>
+              You're booked in — balayage and Olaplex gloss with Jess on the 15th, no blow-dry, no scalp massage. Text confirmation coming now and a reminder Saturday morning.
+            </div>
+            <div class="bubble bubble-user">
+              <div class="from">Sandra</div>
+              Brilliant. No fuss at all. See you the 15th!
+            </div>
+
+          </div>
+
+          <!-- Multi-line confirm -->
+          <div class="booking-confirm" style="flex-direction:column;gap:8px;align-items:flex-start;">
+            <div style="display:flex;align-items:center;gap:10px;width:100%;">
+              <div class="booking-confirm-icon">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="booking-confirm-txt">
+                <div class="booking-confirm-title">Appointment Confirmed</div>
+                <div class="booking-confirm-sub">Sat 15th · 10:00am · Jess · Balayage + Olaplex Gloss · 2.5hr</div>
+              </div>
+            </div>
+            <div style="width:100%;display:flex;gap:6px;flex-wrap:wrap;padding-top:4px;border-top:1px solid rgba(34,197,94,0.15);">
+              <span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(167,139,250,0.12);color:#a78bfa;font-weight:600;">CRM updated</span>
+              <span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.12);color:#3b82f6;font-weight:600;">Stylist matched</span>
+              <span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(34,197,94,0.12);color:#22c55e;font-weight:600;">Chair reserved</span>
+              <span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.12);color:#f59e0b;font-weight:600;">SMS sent</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGO BAR -->
+<div class="logo-bar">
+  <div class="logo-bar-inner">
+    <span class="logo-bar-label">Built for</span>
+    <div class="logo-bar-items">
+      <span class="logo-bar-item">Auto Shops</span>
+      <span class="logo-bar-item">Tire Services</span>
+      <span class="logo-bar-item">Hair Salons</span>
+      <span class="logo-bar-item">Barbershops</span>
+      <span class="logo-bar-item">Gyms</span>
+      <span class="logo-bar-item">Plumbers</span>
+      <span class="logo-bar-item">HVAC</span>
+      <span class="logo-bar-item">Real Estate</span>
+      <span class="logo-bar-item">Restaurants</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- MISSED CALL COST SECTION -->
+<section class="section" style="padding-top:80px;padding-bottom:80px;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+  <div class="section-inner">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;">
+      <div>
+        <div class="section-eyebrow reveal">The problem you already have</div>
+        <h2 class="section-h2 reveal reveal-delay-1" style="margin-bottom:24px;">YOUR PHONE<br>IS COSTING<br>YOU A FORTUNE.</h2>
+        <p style="font-size:17px;font-weight:300;color:#888;line-height:1.7;margin-bottom:32px;max-width:460px;" class="reveal reveal-delay-2">
+          You didn't miss that call because you didn't care. You missed it because you were doing the job. But the customer didn't wait — they called your competitor instead. And they're never coming back.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:16px;" class="reveal reveal-delay-2">
+          <div style="display:flex;align-items:flex-start;gap:14px;">
+            <div style="width:8px;height:8px;background:var(--red);border-radius:50%;margin-top:7px;flex-shrink:0;"></div>
+            <p style="font-size:15px;color:#999;line-height:1.6;"><strong style="color:#e8e8e8;">85% of callers who don't get an answer never call back.</strong> They go straight to the next business on Google.</p>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;">
+            <div style="width:8px;height:8px;background:var(--red);border-radius:50%;margin-top:7px;flex-shrink:0;"></div>
+            <p style="font-size:15px;color:#999;line-height:1.6;"><strong style="color:#e8e8e8;">Home service businesses miss 62% of inbound calls</strong> on average — during the job, at lunch, after hours.</p>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;">
+            <div style="width:8px;height:8px;background:var(--red);border-radius:50%;margin-top:7px;flex-shrink:0;"></div>
+            <p style="font-size:15px;color:#999;line-height:1.6;"><strong style="color:#e8e8e8;">Each missed call in auto services costs $300–$1,200.</strong> That's not a phone problem. That's a revenue problem.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal reveal-delay-1">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:48px 40px;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--red),var(--amber));"></div>
+          <div style="font-family:var(--ff-display);font-size:13px;letter-spacing:2px;color:var(--text-muted);margin-bottom:12px;">AVERAGE ANNUAL LOSS</div>
+          <div style="font-family:var(--ff-display);font-size:88px;line-height:0.9;color:#fff;letter-spacing:-2px;margin-bottom:8px;">$126K</div>
+          <div style="font-size:15px;color:#888;margin-bottom:40px;font-weight:300;">Lost every year by a typical small business<br>from missed calls alone.</div>
+          <div style="height:1px;background:var(--border);margin-bottom:32px;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+            <div>
+              <div style="font-family:var(--ff-display);font-size:42px;color:var(--amber);letter-spacing:-1px;">$279</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5;">AI Secretary<br>Growth plan / month</div>
+            </div>
+            <div>
+              <div style="font-family:var(--ff-display);font-size:42px;color:var(--green);letter-spacing:-1px;">45×</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5;">Return on investment<br>in year one</div>
+            </div>
+          </div>
+          <div style="margin-top:24px;padding:14px 16px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);border-radius:10px;">
+            <div style="font-size:13px;color:var(--green);font-weight:500;margin-bottom:4px;">The math is simple.</div>
+            <div style="font-size:12px;color:#888;line-height:1.6;">$279/mo × 12 = $3,348/year.<br>One captured job per week pays for the whole year.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIFFERENTIATOR SECTION -->
+<section class="section" style="padding-top:100px;padding-bottom:100px;">
+  <div class="section-inner">
+    <div style="text-align:center;margin-bottom:64px;">
+      <div class="section-eyebrow reveal" style="justify-content:center;display:flex;">Not just another AI answering service</div>
+      <h2 class="section-h2 reveal reveal-delay-1" style="text-align:center;">THERE IS NOTHING<br>ELSE LIKE THIS.</h2>
+      <p style="font-size:17px;font-weight:300;color:#888;line-height:1.65;max-width:560px;margin:16px auto 0;text-align:center;" class="reveal reveal-delay-2">
+        Every competitor answers calls and maybe takes a message. That's where they stop. Here's where we start.
+      </p>
+    </div>
+
+    <!-- Comparison strip -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:48px;" class="reveal reveal-delay-1">
+      <div style="display:grid;grid-template-columns:1fr 1px 1fr;">
+        <!-- Them -->
+        <div style="padding:40px 48px;">
+          <div style="font-family:var(--ff-display);font-size:16px;letter-spacing:1px;color:var(--text-muted);margin-bottom:28px;">EVERY OTHER SERVICE</div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#666;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#444" stroke-width="1"/><path d="M5 8h6" stroke="#444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Answers your call
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#666;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#444" stroke-width="1"/><path d="M5 8h6" stroke="#444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Takes a basic message
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#666;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#444" stroke-width="1"/><path d="M5 8h6" stroke="#444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Maybe books a time slot
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#555;font-style:italic;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 5l6 6M11 5l-6 6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Doesn't know who's qualified
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#555;font-style:italic;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 5l6 6M11 5l-6 6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Doesn't know what's available
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#555;font-style:italic;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 5l6 6M11 5l-6 6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Doesn't warn you about gaps
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#555;font-style:italic;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 5l6 6M11 5l-6 6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Doesn't know your customers
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#555;font-style:italic;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 5l6 6M11 5l-6 6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Charges per call on top of your monthly fee
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#555;font-style:italic;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 5l6 6M11 5l-6 6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Charges a setup fee to get started
+            </div>
+          </div>
+        </div>
+        <!-- Divider -->
+        <div style="background:var(--border);"></div>
+        <!-- Us -->
+        <div style="padding:40px 48px;background:rgba(37,99,235,0.04);">
+          <div style="font-family:var(--ff-display);font-size:16px;letter-spacing:1px;color:var(--blue-lt);margin-bottom:28px;">AI SECRETARY</div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Answers every call, 24/7
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Books confirmed appointments — not just messages
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Validates staff skills before confirming
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Checks bay / station availability atomically
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Warns you before coverage gaps cause missed bookings
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Builds a full CRM profile from every single call
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              No per-call fees — ever
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px;color:#ccc;">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1"/><path d="M5 8l2 2 4-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              No setup fee — live in 10 minutes
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unique capability callouts -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" class="reveal reveal-delay-2">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:28px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--blue);"></div>
+        <div style="font-family:var(--ff-display);font-size:13px;letter-spacing:1.5px;color:var(--blue-lt);margin-bottom:12px;">UNIQUE TO US</div>
+        <div style="font-family:var(--ff-display);font-size:22px;color:#fff;margin-bottom:10px;">7-Layer Booking Validation</div>
+        <p style="font-size:13px;color:#777;line-height:1.65;">Before confirming any appointment, we check: resource availability, staff qualification, resource capability, shift hours, service coverage, end time, and customer record — all at once, atomically. No competitor does this.</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:28px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--amber);"></div>
+        <div style="font-family:var(--ff-display);font-size:13px;letter-spacing:1.5px;color:var(--amber);margin-bottom:12px;">UNIQUE TO US</div>
+        <div style="font-family:var(--ff-display);font-size:22px;color:#fff;margin-bottom:10px;">Coverage Intelligence</div>
+        <p style="font-size:13px;color:#777;line-height:1.65;">We monitor every service, every open hour. The moment a gap appears — no qualified staff for Tuesday afternoon — you see it in your dashboard before a customer calls and gets declined. Proactive, not reactive.</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:28px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--green);"></div>
+        <div style="font-family:var(--ff-display);font-size:13px;letter-spacing:1.5px;color:var(--green);margin-bottom:12px;">UNIQUE TO US</div>
+        <div style="font-family:var(--ff-display);font-size:22px;color:#fff;margin-bottom:10px;">Business Intelligence</div>
+        <p style="font-size:13px;color:#777;line-height:1.65;">Not just data — decisions. We tell you which employee generates the most revenue per hour, which service is underpriced, and which time slot is your biggest leak. The kind of insight that used to cost a business consultant.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="section-inner">
+    <div class="section-eyebrow reveal">How it works</div>
+    <h2 class="section-h2 reveal reveal-delay-1">
+      LIVE IN UNDER<br>10 MINUTES
+    </h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Pick your business type. Answer a few questions. Get a real phone number. Your AI secretary is live before your next coffee gets cold.
+    </p>
+
+    <div class="steps reveal reveal-delay-2">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <div class="step-h">Pick your template</div>
+        <p class="step-p">Choose from 20 business types. Auto shop, salon, gym, plumber — each has the right vocabulary, services, and defaults pre-loaded. No setup from scratch.</p>
+      </div>
+
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <div class="step-h">Add your team</div>
+        <p class="step-p">Enter staff, their skills, working hours, and which bays or stations they use. The AI validates every booking against all three — no double-books, no gaps.</p>
+      </div>
+
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-icon">
+          <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+        </div>
+        <div class="step-h">Your number goes live</div>
+        <p class="step-p">Pick an area code. We provision a real phone number and a trained AI voice agent automatically. Call it immediately to hear your secretary — no waiting, no manual setup.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section features-bg" id="features">
+  <div class="section-inner">
+    <div class="section-eyebrow reveal">What it does</div>
+    <h2 class="section-h2 reveal reveal-delay-1">
+      A FULL FRONT<br>DESK IN YOUR POCKET
+    </h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Not just an answering machine. A complete reception system that books, remembers, warns, and reports.
+    </p>
+
+    <div class="features-grid">
+      <!-- Feature 1 -->
+      <div class="feat-card reveal">
+        <div class="feat-icon blue">
+          <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+        </div>
+        <div class="feat-h">Voice AI Reception</div>
+        <p class="feat-p">Human-sounding, low-latency. Answers every call with your business's greeting, handles FAQs from your own documents, and books appointments — all while you're elbow-deep in a tire swap.</p>
+        <div class="feat-tag blue">Always on · Never on hold</div>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="feat-card reveal reveal-delay-1">
+        <div class="feat-icon green">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="feat-h">Intelligent Booking</div>
+        <p class="feat-p">7-layer validation every time: staff qualification, resource availability, shift hours, service coverage, and more — checked atomically before any confirmation is given. No booking errors. Ever.</p>
+        <div class="feat-tag green">Employee + Skill + Resource</div>
+      </div>
+
+      <!-- Feature 3 — Wide: Coverage Intelligence -->
+      <div class="feat-card wide reveal reveal-delay-1">
+        <div class="feat-icon amber">
+          <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="feat-h">Coverage Intelligence</div>
+        <p class="feat-p">The AI warns you about gaps before they become missed bookings. Every service you offer must be covered every open hour — or you'll know about it in your dashboard, not when a customer calls and gets declined.</p>
+        <div class="coverage-row">
+          <div class="cov-badge full"><div class="cov-dot full"></div>Tire Rotation · Full coverage</div>
+          <div class="cov-badge partial"><div class="cov-dot partial"></div>Brake Service · Partial — Tue PM gap</div>
+          <div class="cov-badge none"><div class="cov-dot none"></div>Alignment · No staff assigned</div>
+        </div>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="feat-card reveal">
+        <div class="feat-icon blue">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <div class="feat-h">Built-In CRM</div>
+        <p class="feat-p">Every caller gets a profile — automatically. Full appointment history, call summaries, notes, and preferences. Zero manual entry. Search any customer by name, phone, or email.</p>
+      </div>
+
+      <!-- Feature 5 -->
+      <div class="feat-card reveal reveal-delay-1">
+        <div class="feat-icon red">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div class="feat-h">Business Intelligence</div>
+        <p class="feat-p">Employee utilisation, service ROI, revenue per hour — all tracked. Not raw data: actual recommendations. "Train Luis in detailing — you're leaving $320/month on the table."</p>
+      </div>
+
+      <!-- Feature 6 — No hallucinations, wide card -->
+      <div class="feat-card wide reveal reveal-delay-1">
+        <div class="feat-icon green">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="feat-h">No hallucinations. Ever.</div>
+        <p class="feat-p">Every AI answering service guesses when it doesn't know. Ours doesn't. Pricing, availability, and scheduling come directly from your live database — not from AI memory. Policies come from documents you uploaded in your own words. The AI never fills a gap with something plausible but wrong.</p>
+        <div class="coverage-row">
+          <div class="cov-badge full">
+            <div class="cov-dot full"></div>
+            Pricing &amp; services — live database query
+          </div>
+          <div class="cov-badge full">
+            <div class="cov-dot full"></div>
+            Availability — live database query
+          </div>
+          <div class="cov-badge full">
+            <div class="cov-dot full"></div>
+            Policies — your uploaded documents, verbatim
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+  <div class="section-inner">
+    <div class="section-eyebrow reveal">Simple pricing</div>
+    <h2 class="section-h2 reveal reveal-delay-1">
+      PAY FOR WHAT<br>YOU NEED
+    </h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Phone number included on every plan. 14-day free trial. No credit card required. No setup fee. No per-call charges. Ever.
+    </p>
+
+    <div class="pricing-grid">
+      <!-- Solo -->
+      <div class="price-card reveal">
+        <div class="price-name">Solo</div>
+        <div class="price-amount">
+          <span class="price-dollar">$</span>
+          <span class="price-num">129</span>
+          <span class="price-period">/mo</span>
+        </div>
+        <p class="price-desc">The solo operator's secret weapon. Captures every call, books every job — for less than one missed appointment.</p>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>150 AI-handled calls/month</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>1 staff member</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>1 resource / station</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Phone number included</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>SMS confirmations</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Customer CRM</li>
+        </ul>
+        <a href="#" class="price-btn outline">Start free trial</a>
+      </div>
+
+      <!-- Growth -->
+      <div class="price-card featured reveal reveal-delay-1">
+        <div class="price-name">Growth</div>
+        <div class="price-amount">
+          <span class="price-dollar">$</span>
+          <span class="price-num">279</span>
+          <span class="price-period">/mo</span>
+        </div>
+        <p class="price-desc">Your full front desk. Staff matching, coverage intelligence, calendar sync, and knowledge base — all included.</p>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>500 AI-handled calls/month</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Up to 5 staff members</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Up to 3 resources / stations</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Solo</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Coverage intelligence alerts</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Google Calendar sync</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Knowledge base (PDF/text)</li>
+        </ul>
+        <a href="#" class="price-btn filled">Start free trial</a>
+      </div>
+
+      <!-- Professional -->
+      <div class="price-card reveal reveal-delay-2">
+        <div class="price-name">Professional</div>
+        <div class="price-amount">
+          <span class="price-dollar">$</span>
+          <span class="price-num">549</span>
+          <span class="price-period">/mo</span>
+        </div>
+        <p class="price-desc">Unlimited everything, plus Business Intelligence that tells you exactly where your money is and where it's leaking.</p>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Unlimited calls</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Unlimited staff</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Unlimited resources</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Growth</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Business Intelligence ROI</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom AI vocabulary</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Priority support</li>
+        </ul>
+        <a href="#" class="price-btn outline">Start free trial</a>
+      </div>
+    </div>
+
+      <!-- Enterprise -->
+      <div class="price-card reveal reveal-delay-2" style="border-color:rgba(245,158,11,0.3);background:linear-gradient(180deg,rgba(245,158,11,0.06) 0%,var(--bg3) 100%)">
+        <div class="price-name" style="color:var(--amber)">Enterprise</div>
+        <div class="price-amount">
+          <span class="price-dollar">$</span>
+          <span class="price-num" style="color:var(--amber)">1,200</span>
+          <span class="price-period">+/mo</span>
+        </div>
+        <p class="price-desc">Multi-location, franchise, or agency. White-label ready. Custom AI persona. Dedicated support.</p>
+        <hr class="price-divider">
+        <ul class="price-features">
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Professional</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Multiple locations / tenants</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>White-label dashboard</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom AI voice &amp; persona</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Dedicated account support</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom integrations &amp; SLA</li>
+        </ul>
+        <a href="#" class="price-btn outline" style="border-color:rgba(245,158,11,0.3);color:var(--amber)">Talk to us</a>
+      </div>
+
+    <p class="trial-note reveal">
+      All plans include a <span>14-day free trial</span>. No credit card required. No setup fee. No per-call charges. Cancel anytime.
+    </p>
+  </div>
+</section>
+
+<!-- SUPPORTED BUSINESSES -->
+<section class="section" id="businesses" style="padding-top:0;">
+  <div class="section-inner">
+    <div class="section-eyebrow reveal">Industries</div>
+    <h2 class="section-h2 reveal reveal-delay-1">
+      BUILT FOR YOUR<br>KIND OF BUSINESS
+    </h2>
+    <p class="section-sub reveal reveal-delay-2">
+      20 templates across 6 categories. Each uses the right words, the right defaults, and the right booking logic for your trade.
+    </p>
+
+    <div class="biz-grid reveal reveal-delay-2">
+      <div class="biz-chip">Mobile Tire Service</div>
+      <div class="biz-chip">Tire Shop</div>
+      <div class="biz-chip">Auto Repair</div>
+      <div class="biz-chip">Oil & Lube</div>
+      <div class="biz-chip">Body Shop</div>
+      <div class="biz-chip">Detailing Studio</div>
+      <div class="biz-chip">Hair Salon</div>
+      <div class="biz-chip">Barbershop</div>
+      <div class="biz-chip">Nail Salon</div>
+      <div class="biz-chip">Spa & Massage</div>
+      <div class="biz-chip">Gym & Fitness</div>
+      <div class="biz-chip">Personal Training</div>
+      <div class="biz-chip">Yoga Studio</div>
+      <div class="biz-chip">Plumbing</div>
+      <div class="biz-chip">HVAC</div>
+      <div class="biz-chip">Electrician</div>
+      <div class="biz-chip">Landscaping</div>
+      <div class="biz-chip">Photography</div>
+      <div class="biz-chip">Real Estate</div>
+      <div class="biz-chip">Restaurant</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- CTA BAND -->
+<section class="cta-band">
+  <h2 class="cta-band-h reveal">
+    YOUR NEXT CALL<br>IS ABOUT TO<br>
+    <span style="color:var(--blue-lt)">GET ANSWERED.</span>
+  </h2>
+  <p class="cta-band-sub reveal reveal-delay-1">
+    Sign up in two minutes. Finish the wizard. Call your new number and hear your AI secretary pick up. It's that fast.
+  </p>
+  <div class="cta-band-actions reveal reveal-delay-2">
+    <a href="#" class="btn-hero">
+      Get started — it's free
+      <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+    <div class="cta-number">
+      <span class="cta-number-label">Try it live →</span>
+      <span style="color:var(--blue-lt)">(630) 555-0142</span>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">AI SECRETARY</div>
+  <div class="footer-links">
+    <a href="#">Privacy</a>
+    <a href="#">Terms</a>
+    <a href="#">Contact</a>
+    <a href="#">Docs</a>
+  </div>
+  <div class="footer-copy">© 2026 AI Secretary. All rights reserved.</div>
+</footer>
+
+<script>
+// Scroll-triggered reveals
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => {
+  observer.observe(el);
+});
+
+// Animate call timer
+let seconds = 221;
+const timer = document.getElementById('callTimer');
+if (timer) {
+  setInterval(() => {
+    seconds++;
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    timer.textContent = `${m}:${s}`;
+  }, 1000);
+}
+</script>
+</body>
+</html>

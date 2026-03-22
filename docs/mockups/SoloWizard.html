@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Secretary — Let's get you set up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080808;--sf:#111;--bg3:#141414;--bg4:#1a1a1a;--bg5:#1f1f1f;
+  --bd:rgba(255,255,255,0.07);--bdm:rgba(255,255,255,0.11);--bdh:rgba(255,255,255,0.18);
+  --tx:#e8e8e8;--ts:#777;--td:#333;
+  --blue:#2563eb;--blu:#3b82f6;--blue-d:rgba(37,99,235,0.12);
+  --grn:#22c55e;--grn-d:rgba(34,197,94,0.1);
+  --amb:#f59e0b;--amb-d:rgba(245,158,11,0.1);
+  --red:#ef4444;--red-d:rgba(239,68,68,0.1);
+  --fd:'Bebas Neue',sans-serif;
+  --fb:'DM Sans',sans-serif;
+  --fm:'JetBrains Mono',monospace;
+}
+body{background:var(--bg);color:var(--tx);font-family:var(--fb);font-size:14px;line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(255,255,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.018) 1px,transparent 1px);
+  background-size:80px 80px;mask-image:radial-gradient(ellipse 80% 40% at 50% 0%,black,transparent);}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;height:56px;display:flex;align-items:center;padding:0 32px;gap:12px;
+  background:rgba(8,8,8,0.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--bd);}
+.nav-logo{display:flex;align-items:center;gap:8px;text-decoration:none;font-family:var(--fd);font-size:18px;letter-spacing:1px;color:var(--tx);}
+.nav-icon{width:26px;height:26px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;}
+.nav-icon svg{width:13px;height:13px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;}
+.nav-save{margin-left:auto;font-size:11px;color:var(--grn);display:flex;align-items:center;gap:5px;opacity:0;transition:opacity 0.3s;}
+.nav-save.show{opacity:1;}
+.save-dot{width:5px;height:5px;background:var(--grn);border-radius:50%;}
+
+/* PAGE */
+.page{min-height:100vh;padding-top:56px;display:grid;grid-template-columns:1fr 360px;}
+.left{padding:52px 56px 80px;position:relative;z-index:1;}
+.right{background:var(--sf);border-left:1px solid var(--bd);padding:52px 36px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;display:flex;flex-direction:column;}
+
+/* PROGRESS */
+.progress{display:flex;align-items:center;gap:0;margin-bottom:52px;}
+.prog-step{display:flex;align-items:center;position:relative;}
+.prog-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-family:var(--fm);font-size:11px;font-weight:500;border:1px solid var(--bd);
+  background:var(--bg3);color:var(--ts);transition:all 0.3s;flex-shrink:0;}
+.prog-dot.done{background:var(--blue-d);border-color:rgba(59,130,246,0.35);color:var(--blu);}
+.prog-dot.active{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 16px rgba(37,99,235,0.4);}
+.prog-line{height:1px;width:48px;background:var(--bd);transition:background 0.4s;flex-shrink:0;}
+.prog-line.done{background:rgba(59,130,246,0.35);}
+.prog-label{position:absolute;top:38px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--ts);white-space:nowrap;letter-spacing:0.3px;}
+.prog-step.active-step .prog-label{color:#888;}
+
+/* STEP HEADER */
+.step-eyebrow{font-size:11px;font-weight:600;color:var(--blu);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
+.step-h{font-family:var(--fd);font-size:clamp(40px,4.5vw,64px);line-height:0.92;letter-spacing:0.5px;color:#fff;margin-bottom:14px;}
+.step-h .accent{color:var(--blu);}
+.step-sub{font-size:15px;font-weight:300;color:#777;line-height:1.7;max-width:520px;margin-bottom:36px;}
+.step-sub strong{color:#aaa;font-weight:500;}
+
+/* PANEL SWITCHING */
+.step-panel{display:none;}
+.step-panel.active{display:block;}
+
+/* SERVICE LIST */
+.svc-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px;}
+.svc-item{background:var(--bg3);border:1px solid var(--bd);border-radius:11px;padding:14px 16px;
+  display:flex;align-items:center;gap:14px;transition:all 0.15s;cursor:default;}
+.svc-item:hover{border-color:var(--bdm);}
+.svc-item.checked{border-color:rgba(59,130,246,0.35);background:var(--blue-d);}
+.svc-check{width:22px;height:22px;border-radius:6px;border:1px solid var(--bdm);background:var(--bg4);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;cursor:pointer;}
+.svc-item.checked .svc-check{background:var(--blue);border-color:var(--blue);}
+.svc-check svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 0.15s;}
+.svc-item.checked .svc-check svg{opacity:1;}
+.svc-body{flex:1;}
+.svc-name{font-size:14px;font-weight:500;color:var(--tx);}
+.svc-meta{font-size:12px;color:var(--ts);margin-top:2px;}
+.svc-fields{display:flex;gap:8px;margin-left:auto;flex-shrink:0;}
+.svc-input{background:var(--bg4);border:1px solid var(--bdm);border-radius:7px;padding:6px 10px;
+  font-family:var(--fb);font-size:12px;color:var(--tx);outline:none;transition:all 0.15s;width:72px;text-align:center;}
+.svc-input:focus{border-color:rgba(59,130,246,0.4);}
+.svc-input[type=text]:placeholder-shown{border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.05);}
+.svc-input[type=text]:not(:placeholder-shown){border-color:rgba(34,197,94,0.3);}
+.svc-input-label{font-size:10px;color:var(--td);text-align:center;margin-top:2px;font-family:var(--fb);}
+.svc-field-wrap{display:flex;flex-direction:column;}
+.svc-item.unchecked .svc-fields{opacity:0.35;pointer-events:none;}
+
+/* ADD SERVICE */
+.btn-add{display:flex;align-items:center;gap:8px;padding:12px 18px;background:transparent;
+  border:1px dashed var(--bdm);border-radius:10px;color:var(--ts);font-family:var(--fb);
+  font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s;width:100%;margin-bottom:24px;}
+.btn-add:hover{border-color:rgba(59,130,246,0.4);color:var(--blu);background:var(--blue-d);}
+.btn-add svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;}
+.inline-form{background:var(--bg4);border:1px solid rgba(59,130,246,0.2);border-radius:11px;
+  padding:16px;margin-bottom:8px;animation:fadeIn 0.2s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.form-row{display:grid;gap:10px;margin-bottom:12px;}
+.form-row-3{grid-template-columns:1fr 1fr 1fr;}
+.field-label{font-size:10px;font-weight:600;color:#888;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;}
+.field input,.field select{width:100%;background:var(--bg3);border:1px solid var(--bdm);border-radius:7px;
+  padding:8px 11px;font-family:var(--fb);font-size:13px;color:var(--tx);outline:none;transition:all 0.15s;}
+.field input::placeholder{color:var(--td);}
+.field input:focus,.field select:focus{border-color:rgba(59,130,246,0.45);}
+.field select{appearance:none;}
+.form-btns{display:flex;gap:8px;justify-content:flex-end;}
+.btn-save{padding:7px 16px;background:var(--blue);border:none;border-radius:7px;color:#fff;
+  font-family:var(--fb);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;}
+.btn-save:hover{background:var(--blu);}
+.btn-cancel-sm{padding:7px 12px;background:transparent;border:1px solid var(--bd);border-radius:7px;
+  color:var(--ts);font-family:var(--fb);font-size:13px;cursor:pointer;transition:all 0.15s;}
+.btn-cancel-sm:hover{color:var(--tx);}
+
+/* AVAILABILITY */
+.avail-intro{background:var(--bg3);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin-bottom:24px;display:flex;align-items:flex-start;gap:12px;}
+.avail-intro-icon{width:36px;height:36px;border-radius:9px;background:var(--blue-d);border:1px solid rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.avail-intro-icon svg{width:17px;height:17px;stroke:var(--blu);fill:none;stroke-width:1.75;stroke-linecap:round;}
+.avail-intro-text{font-size:13px;color:#888;line-height:1.65;}
+.avail-intro-text strong{color:#bbb;font-weight:500;}
+
+.day-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:28px;}
+.day-card{background:var(--bg3);border:1px solid var(--bd);border-radius:10px;padding:12px 8px;
+  text-align:center;cursor:pointer;transition:all 0.2s;user-select:none;}
+.day-card:hover{border-color:var(--bdm);}
+.day-card.on{background:var(--blue-d);border-color:rgba(59,130,246,0.4);}
+.day-card.off{opacity:0.4;}
+.day-name{font-size:11px;font-weight:600;color:var(--ts);letter-spacing:0.5px;margin-bottom:6px;}
+.day-card.on .day-name{color:var(--blu);}
+.day-check{width:18px;height:18px;border-radius:50%;border:1px solid var(--bdm);margin:0 auto;
+  display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.day-card.on .day-check{background:var(--blue);border-color:var(--blue);}
+.day-check svg{width:9px;height:9px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 0.15s;}
+.day-card.on .day-check svg{opacity:1;}
+
+.time-section{margin-bottom:28px;}
+.time-section-label{font-family:var(--fd);font-size:16px;letter-spacing:0.3px;color:#fff;margin-bottom:14px;}
+.time-row{display:flex;align-items:center;gap:14px;}
+.time-block{display:flex;flex-direction:column;gap:4px;}
+.time-label-sm{font-size:10px;font-weight:600;color:#888;letter-spacing:0.5px;text-transform:uppercase;}
+.time-pick{background:var(--bg3);border:1px solid var(--bdm);border-radius:9px;padding:10px 14px;
+  font-family:var(--fm);font-size:14px;color:var(--tx);outline:none;transition:all 0.15s;width:110px;}
+.time-pick:focus{border-color:rgba(59,130,246,0.45);}
+.time-arrow{color:var(--td);font-size:16px;margin-top:18px;}
+.time-summary{font-size:12px;color:var(--ts);margin-left:auto;margin-top:18px;font-style:italic;}
+.time-summary span{color:#888;}
+
+.buffer-section{background:var(--bg3);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin-bottom:28px;}
+.buffer-label{font-size:13px;font-weight:500;color:var(--tx);margin-bottom:4px;}
+.buffer-sub{font-size:12px;color:var(--ts);margin-bottom:14px;line-height:1.5;}
+.buffer-options{display:flex;gap:8px;flex-wrap:wrap;}
+.buffer-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--bd);background:transparent;
+  font-family:var(--fb);font-size:12px;font-weight:500;color:var(--ts);cursor:pointer;transition:all 0.15s;}
+.buffer-btn:hover{border-color:var(--bdm);color:var(--tx);}
+.buffer-btn.on{background:var(--blue-d);border-color:rgba(59,130,246,0.4);color:var(--blu);}
+
+/* NAV BUTTONS */
+.step-nav{display:flex;align-items:center;justify-content:space-between;margin-top:44px;padding-top:24px;border-top:1px solid var(--bd);}
+.btn-prev{display:flex;align-items:center;gap:7px;padding:10px 18px;background:transparent;
+  border:1px solid var(--bd);border-radius:9px;color:var(--ts);font-family:var(--fb);
+  font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;}
+.btn-prev:hover{color:var(--tx);border-color:var(--bdm);}
+.btn-prev svg,.btn-next svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.btn-next{display:flex;align-items:center;gap:7px;padding:11px 24px;background:var(--blue);border:none;
+  border-radius:9px;color:#fff;font-family:var(--fb);font-size:14px;font-weight:600;cursor:pointer;
+  transition:all 0.2s;box-shadow:0 0 24px rgba(37,99,235,0.25);}
+.btn-next:hover{background:var(--blu);transform:translateY(-1px);box-shadow:0 0 36px rgba(59,130,246,0.35);}
+.btn-launch{display:flex;align-items:center;gap:9px;padding:13px 28px;background:var(--grn);border:none;
+  border-radius:9px;color:#fff;font-family:var(--fb);font-size:14px;font-weight:600;cursor:pointer;
+  transition:all 0.2s;box-shadow:0 0 28px rgba(34,197,94,0.2);}
+.btn-launch:hover{background:#16a34a;transform:translateY(-1px);box-shadow:0 0 40px rgba(34,197,94,0.35);}
+.btn-launch svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+
+/* RIGHT PANEL */
+.right-title{font-family:var(--fd);font-size:14px;letter-spacing:0.8px;color:var(--ts);margin-bottom:24px;text-transform:uppercase;}
+.summary-box{background:var(--bg3);border:1px solid var(--bd);border-radius:11px;padding:16px;margin-bottom:12px;}
+.sum-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);}
+.sum-row:last-child{border-bottom:none;}
+.sum-key{font-size:11px;color:var(--ts);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;}
+.sum-val{font-size:12px;color:var(--tx);font-weight:500;text-align:right;}
+.sum-val.blue{color:var(--blu);}
+.sum-val.green{color:var(--grn);}
+.sum-val.muted{color:var(--td);}
+
+.svc-summary{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+.svc-sum-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 8px;border-radius:6px;background:var(--bg4);}
+.svc-sum-name{color:#aaa;}
+.svc-sum-price{color:var(--grn);font-family:var(--fm);font-size:11px;}
+
+.avail-preview{margin-top:16px;}
+.avail-preview-title{font-size:10px;font-weight:600;color:var(--td);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.day-pills{display:flex;gap:4px;flex-wrap:wrap;}
+.day-pill{font-size:10px;font-weight:600;padding:3px 8px;border-radius:5px;font-family:var(--fm);}
+.day-pill.on{background:var(--blue-d);color:var(--blu);border:1px solid rgba(59,130,246,0.2);}
+.day-pill.off{background:var(--bg4);color:var(--td);border:1px solid var(--bd);}
+.time-pill{font-size:11px;color:#888;margin-top:8px;font-family:var(--fm);}
+.time-pill span{color:var(--tx);}
+.svc-delete{width:28px;height:28px;border-radius:7px;border:1px solid var(--bd);background:transparent;
+  color:var(--td);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-left:6px;transition:all 0.15s;}
+.svc-delete:hover{background:var(--red-d);border-color:rgba(239,68,68,0.3);color:var(--red);}
+.svc-delete svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;}
+.svc-desc-btn{width:22px;height:22px;border-radius:5px;border:1px solid var(--bd);background:transparent;
+  color:var(--td);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-left:4px;transition:all 0.15s;position:relative;}
+.svc-desc-btn:hover{border-color:rgba(59,130,246,0.35);color:var(--blu);}
+.svc-desc-btn svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+.svc-desc-btn.has-desc{border-color:rgba(59,130,246,0.25);color:var(--blu);background:var(--blue-d);}
+.tooltip{position:absolute;bottom:calc(100% + 8px);right:0;width:280px;
+  background:var(--bg5);border:1px solid var(--bdm);border-radius:10px;
+  padding:0;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,0.7);
+  opacity:0;pointer-events:none;transition:opacity 0.15s,transform 0.15s;
+  transform:translateY(4px);}
+.tooltip.show{opacity:1;pointer-events:all;transform:translateY(0);}
+.tooltip-head{padding:10px 12px 8px;border-bottom:1px solid var(--bd);}
+.tooltip-svc-name{font-size:12px;font-weight:600;color:var(--tx);margin-bottom:2px;}
+.tooltip-label{font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--td);}
+.tooltip-body{padding:10px 12px;}
+.tooltip-input{width:100%;background:var(--bg3);border:1px solid var(--bdm);border-radius:7px;
+  padding:7px 10px;font-family:var(--fb);font-size:12px;color:var(--tx);outline:none;
+  resize:none;transition:border-color 0.15s;line-height:1.5;}
+.tooltip-input:focus{border-color:rgba(59,130,246,0.45);}
+.tooltip-input::placeholder{color:var(--td);}
+.tooltip-hint{font-size:10px;color:var(--td);margin-top:6px;line-height:1.5;}
+.tooltip-arrow{position:absolute;bottom:-5px;right:12px;width:8px;height:8px;
+  background:var(--bg5);border-right:1px solid var(--bdm);border-bottom:1px solid var(--bdm);
+  transform:rotate(45deg);}
+
+.go-live-card{background:var(--grn-d);border:1px solid rgba(34,197,94,0.2);border-radius:11px;padding:16px;margin-top:auto;}
+.go-live-icon{width:32px;height:32px;border-radius:50%;background:rgba(34,197,94,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+.go-live-icon svg{width:15px;height:15px;stroke:var(--grn);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+.go-live-title{font-size:13px;font-weight:600;color:var(--grn);margin-bottom:4px;}
+.go-live-sub{font-size:11px;color:#666;line-height:1.6;}
+
+/* LIVE SCREEN */
+.live-screen{text-align:center;padding:40px 0;}
+.live-number{font-family:var(--fm);font-size:32px;font-weight:500;color:var(--blu);
+  background:var(--blue-d);border:1px solid rgba(59,130,246,0.3);border-radius:14px;
+  padding:20px 32px;display:inline-block;margin:28px 0;letter-spacing:2px;
+  box-shadow:0 0 40px rgba(37,99,235,0.2);}
+.live-cta{font-size:15px;color:#888;font-weight:300;margin-bottom:32px;}
+.live-checklist{display:flex;flex-direction:column;gap:10px;max-width:400px;margin:0 auto 32px;text-align:left;}
+.live-check-item{display:flex;align-items:center;gap:10px;font-size:13px;color:#888;}
+.live-check-dot{width:18px;height:18px;border-radius:50%;background:var(--grn-d);border:1px solid rgba(34,197,94,0.25);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.live-check-dot svg{width:9px;height:9px;stroke:var(--grn);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:#1e1e1e;border-radius:3px;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes wave{0%,100%{transform:scaleY(0.4);opacity:0.4}50%{transform:scaleY(1);opacity:0.85}}
+
+@media(max-width:800px){
+  .page{grid-template-columns:1fr;}
+  .right{display:none;}
+  .left{padding:40px 24px 60px;}
+  .day-grid{grid-template-columns:repeat(4,1fr);}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg></div>
+    AI SECRETARY
+  </a>
+  <div class="nav-save" id="saveInd"><div class="save-dot"></div>Saved automatically</div>
+</nav>
+
+<div class="page">
+  <div class="left">
+
+    <!-- PROGRESS -->
+    <div class="progress" id="progressBar">
+      <div class="prog-step active-step">
+        <div class="prog-dot active" id="pd1">1<span class="prog-label">Services</span></div>
+      </div>
+      <div class="prog-line" id="pl1"></div>
+      <div class="prog-step">
+        <div class="prog-dot" id="pd2">2<span class="prog-label">Availability</span></div>
+      </div>
+      <div class="prog-line" id="pl2"></div>
+      <div class="prog-step">
+        <div class="prog-dot" id="pd3">3<span class="prog-label">You're live!</span></div>
+      </div>
+    </div>
+
+    <!-- STEP 1: SERVICES -->
+    <div class="step-panel active" id="step1">
+      <div class="step-eyebrow">Step 1 of 2</div>
+      <h1 class="step-h">WHAT DO<br>YOU <span class="accent">OFFER?</span></h1>
+      <p class="step-sub">Pre-loaded from your business type. <strong>Uncheck anything you don't offer.</strong> Set your own duration and price for each — we don't assume what you charge.</p>
+
+      <div class="svc-list" id="svcList">
+        <!-- Services rendered by buildServiceItem() -->
+      </div>
+
+      <div id="addForm" style="display:none;" class="inline-form">
+        <div class="form-row form-row-3">
+          <div class="field"><div class="field-label">Service name</div><input type="text" placeholder="e.g. TPMS Reset"></div>
+          <div class="field"><div class="field-label">Duration</div>
+            <select><option>15 min</option><option>30 min</option><option selected>45 min</option><option>60 min</option><option>90 min</option></select>
+          </div>
+          <div class="field"><div class="field-label">Your price</div><input type="text" placeholder="$0"></div>
+        </div>
+        <div class="form-btns">
+          <button class="btn-cancel-sm" onclick="document.getElementById('addForm').style.display='none'">Cancel</button>
+          <button class="btn-save" onclick="addService()">Add service</button>
+        </div>
+      </div>
+
+      <button class="btn-add" onclick="document.getElementById('addForm').style.display=document.getElementById('addForm').style.display==='none'?'block':'none'">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add a service
+      </button>
+
+      <div class="step-nav">
+        <div></div>
+        <button class="btn-next" onclick="validateAndNext()">Set my availability <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+      </div>
+    </div>
+
+    <!-- STEP 2: AVAILABILITY -->
+    <div class="step-panel" id="step2">
+      <div class="step-eyebrow">Step 2 of 2</div>
+      <h1 class="step-h">WHEN ARE<br>YOU <span class="accent">FREE?</span></h1>
+      <p class="step-sub">The AI will only offer slots when <strong>you're available</strong>. Set your days and hours — evenings, weekends, whenever works for you.</p>
+
+      <div class="avail-intro">
+        <div class="avail-intro-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="avail-intro-text">These are your <strong>available hours</strong> — not a work schedule. If you have a day job and do this on the side, just pick your off-hours. The AI won't offer appointments outside this window.</div>
+      </div>
+
+      <div class="day-grid" id="dayGrid">
+        <div class="day-card off" onclick="toggleDay(this,'Mon')" data-day="Mon">
+          <div class="day-name">MON</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+        <div class="day-card off" onclick="toggleDay(this,'Tue')" data-day="Tue">
+          <div class="day-name">TUE</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+        <div class="day-card off" onclick="toggleDay(this,'Wed')" data-day="Wed">
+          <div class="day-name">WED</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+        <div class="day-card off" onclick="toggleDay(this,'Thu')" data-day="Thu">
+          <div class="day-name">THU</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+        <div class="day-card off" onclick="toggleDay(this,'Fri')" data-day="Fri">
+          <div class="day-name">FRI</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+        <div class="day-card on" onclick="toggleDay(this,'Sat')" data-day="Sat">
+          <div class="day-name">SAT</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+        <div class="day-card on" onclick="toggleDay(this,'Sun')" data-day="Sun">
+          <div class="day-name">SUN</div>
+          <div class="day-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
+        </div>
+      </div>
+
+      <div class="time-section">
+        <div class="time-section-label">Available hours</div>
+        <div class="time-row">
+          <div class="time-block">
+            <div class="time-label-sm">From</div>
+            <input type="time" class="time-pick" value="08:00" id="startTime" onchange="updateTimeSummary()">
+          </div>
+          <div class="time-arrow">→</div>
+          <div class="time-block">
+            <div class="time-label-sm">Until</div>
+            <input type="time" class="time-pick" value="18:00" id="endTime" onchange="updateTimeSummary()">
+          </div>
+          <div class="time-summary" id="timeSummary"><span>8:00 AM – 6:00 PM</span> · 10 hrs/day</div>
+        </div>
+      </div>
+
+      <div class="buffer-section">
+        <div class="buffer-label">Travel buffer between jobs</div>
+        <div class="buffer-sub">Since you travel to customers, leave time between appointments so you're not rushing. The AI will automatically block this time after each booking.</div>
+        <div class="buffer-options">
+          <button class="buffer-btn" onclick="selectBuffer(this)">None</button>
+          <button class="buffer-btn" onclick="selectBuffer(this)">15 min</button>
+          <button class="buffer-btn on" onclick="selectBuffer(this)">30 min</button>
+          <button class="buffer-btn" onclick="selectBuffer(this)">45 min</button>
+          <button class="buffer-btn" onclick="selectBuffer(this)">60 min</button>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn-prev" onclick="goTo(1)"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Services</button>
+        <button class="btn-launch" onclick="goLive()">
+          <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          I'm ready — go live!
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 3: LIVE -->
+    <div class="step-panel" id="step3">
+      <div class="live-screen">
+        <div class="step-eyebrow" style="text-align:center;">You're live</div>
+        <h1 class="step-h" style="text-align:center;">YOUR AI<br>SECRETARY<br><span style="color:var(--grn)">IS READY.</span></h1>
+        <p class="live-cta">Call your number right now to hear it answer.</p>
+        <div class="live-number">(630) 555-0142</div>
+        <div class="live-checklist">
+          <div class="live-check-item"><div class="live-check-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Phone number provisioned and active</div>
+          <div class="live-check-item"><div class="live-check-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Services loaded — AI knows what you offer and your prices</div>
+          <div class="live-check-item"><div class="live-check-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Availability set — no bookings outside your hours</div>
+          <div class="live-check-item"><div class="live-check-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>30-min travel buffer between every job</div>
+          <div class="live-check-item"><div class="live-check-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>SMS confirmations to every customer</div>
+          <div class="live-check-item"><div class="live-check-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>14-day free trial — no charge until <span id="trialEnd" style="color:var(--tx);font-weight:500;"></span></div>
+        </div>
+        <a href="#" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border-radius:9px;color:#fff;text-decoration:none;font-weight:600;font-size:14px;box-shadow:0 0 28px rgba(37,99,235,0.25);">
+          Go to my dashboard
+          <svg style="width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL — Live Phone Preview -->
+  <div class="right" style="padding:28px 24px;background:#0a0a0a;align-items:center;justify-content:flex-start;">
+    <div style="font-size:10px;font-weight:600;color:var(--td);letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;text-align:center;width:100%;">Live preview</div>
+
+    <!-- Phone frame -->
+    <div id="phoneFrame" style="width:100%;max-width:260px;margin:0 auto;background:#141414;border-radius:32px;border:1.5px solid rgba(255,255,255,0.1);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.06);">
+      <!-- Notch -->
+      <div style="width:80px;height:22px;background:#0a0a0a;border-radius:0 0 14px 14px;margin:0 auto;"></div>
+      <!-- Screen -->
+      <div style="padding:0 16px 20px;">
+        <!-- Call header -->
+        <div style="text-align:center;padding:14px 0 12px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:12px;">
+          <div style="font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#555;margin-bottom:4px;" id="prevBizName">DynaTire Mobile Services</div>
+          <div style="font-size:15px;font-weight:500;color:#e8e8e8;margin-bottom:3px;">Incoming caller</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#22c55e;font-weight:500;">
+            <div style="width:5px;height:5px;background:#22c55e;border-radius:50%;animation:blink 2s ease-in-out infinite;"></div>
+            AI Secretary active
+          </div>
+        </div>
+
+        <!-- Waveform -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:2px;padding:8px 0 10px;">
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0s;height:6px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.1s;height:12px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.2s;height:18px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.15s;height:22px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.25s;height:16px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.3s;height:10px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.05s;height:18px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.2s;height:24px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.1s;height:14px;"></div>
+          <div style="width:2px;border-radius:1px;background:#2563eb;animation:wave 1.2s ease-in-out infinite;animation-delay:0.3s;height:8px;"></div>
+        </div>
+
+        <!-- AI greeting bubble -->
+        <div style="background:rgba(37,99,235,0.12);border:1px solid rgba(59,130,246,0.2);border-radius:10px 10px 10px 3px;padding:9px 11px;margin-bottom:8px;">
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#3b82f6;margin-bottom:4px;">AI Secretary</div>
+          <div style="font-size:11px;color:#cce0ff;line-height:1.5;" id="prevGreeting">Thanks for calling DynaTire Mobile Services! How can I help you today?</div>
+        </div>
+
+        <!-- Caller bubble -->
+        <div style="background:#1f1f1f;border:1px solid rgba(255,255,255,0.07);border-radius:10px 10px 3px 10px;padding:9px 11px;margin-bottom:8px;margin-left:16px;">
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#555;margin-bottom:4px;">Caller</div>
+          <div style="font-size:11px;color:#aaa;line-height:1.5;" id="prevCallerQ">Hi, how much is a tire rotation and do you have anything available this weekend?</div>
+        </div>
+
+        <!-- AI response bubble -->
+        <div style="background:rgba(37,99,235,0.12);border:1px solid rgba(59,130,246,0.2);border-radius:10px 10px 10px 3px;padding:9px 11px;margin-bottom:10px;">
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#3b82f6;margin-bottom:4px;">AI Secretary</div>
+          <div style="font-size:11px;color:#cce0ff;line-height:1.5;" id="prevAIReply">Sure! A tire rotation is <span id="prevPrice" style="font-weight:600;color:#22c55e;">—</span> and takes about <span id="prevDur" style="font-weight:600;">45 minutes</span>. I have availability this weekend — shall I book you in?</div>
+        </div>
+
+        <!-- Booking confirm pill -->
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:rgba(34,197,94,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:600;color:#22c55e;">Ready to book</div>
+            <div style="font-size:9px;color:#555;margin-top:1px;" id="prevAvailNote">Set your availability to complete</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 availability preview (hidden until step 2) -->
+    <div id="availPreview" style="display:none;width:100%;max-width:260px;margin:12px auto 0;">
+      <div style="font-size:10px;font-weight:600;color:var(--td);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Your availability</div>
+      <div class="day-pills" id="dayPills"></div>
+      <div class="time-pill" id="timePill" style="margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let activeDays = ['Sat','Sun'];
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function goTo(n) {
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('step'+n).classList.add('active');
+  [1,2,3].forEach(i => {
+    const d = document.getElementById('pd'+i);
+    const l = document.getElementById('pl'+i);
+    d.classList.remove('active','done');
+    if(i < n) { d.classList.add('done'); d.innerHTML = '✓<span class="prog-label">' + ['Services','Availability','You\'re live!'][i-1] + '</span>'; }
+    else if(i === n) { d.classList.add('active'); d.innerHTML = i + '<span class="prog-label">' + ['Services','Availability','You\'re live!'][i-1] + '</span>'; }
+    else { d.innerHTML = i + '<span class="prog-label">' + ['Services','Availability','You\'re live!'][i-1] + '</span>'; }
+    if(l) l.classList.toggle('done', i < n);
+  });
+  window.scrollTo(0,0);
+}
+
+function toggleSvc(item) {
+  const isChecked = item.classList.contains('checked');
+  item.classList.toggle('checked', !isChecked);
+  item.classList.toggle('unchecked', isChecked);
+  updateSummary();
+  flash();
+}
+
+function toggleDay(card, day) {
+  card.classList.toggle('on');
+  card.classList.toggle('off');
+  if(card.classList.contains('on')) { activeDays.push(day); }
+  else { activeDays = activeDays.filter(d => d !== day); }
+  updateDayPills();
+  flash();
+}
+
+function selectBuffer(btn) {
+  document.querySelectorAll('.buffer-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  flash();
+}
+
+function updateTimeSummary() {
+  const start = document.getElementById('startTime').value;
+  const end = document.getElementById('endTime').value;
+  const [sh,sm] = start.split(':').map(Number);
+  const [eh,em] = end.split(':').map(Number);
+  const hrs = ((eh*60+em) - (sh*60+sm)) / 60;
+  const fmt = t => { const [h,m] = t.split(':'); const hr = parseInt(h); return (hr > 12 ? hr-12 : hr) + ':' + m + (hr >= 12 ? ' PM' : ' AM'); };
+  document.getElementById('timeSummary').innerHTML = '<span>' + fmt(start) + ' – ' + fmt(end) + '</span> · ' + Math.round(hrs) + ' hrs/day';
+  document.getElementById('timePill').innerHTML = '<span>' + fmt(start) + ' – ' + fmt(end) + '</span> · ' + Math.round(hrs) + ' hrs';
+  flash();
+}
+
+function updateDayPills() {
+  const container = document.getElementById('dayPills');
+  if (container) container.innerHTML = DAYS.map(d => `<div class="day-pill ${activeDays.includes(d)?'on':'off'}">${d}</div>`).join('');
+  const ap = document.getElementById('availPreview');
+  if (ap) ap.style.display = activeDays.length > 0 ? 'block' : 'none';
+  // Update phone preview avail note
+  const note = document.getElementById('prevAvailNote');
+  if (note) {
+    if (activeDays.length > 0) {
+      const start = document.getElementById('startTime')?.value || '08:00';
+      const end = document.getElementById('endTime')?.value || '18:00';
+      const fmt = t => { const [h,m] = t.split(':'); const hr = parseInt(h); return (hr>12?hr-12:hr)+':'+(m)+(hr>=12?' PM':' AM'); };
+      note.textContent = activeDays.slice(0,3).join(', ') + (activeDays.length>3?'...':'') + ' · ' + fmt(start) + '–' + fmt(end);
+      note.style.color = '#22c55e';
+    } else {
+      note.textContent = 'Set your availability to complete';
+      note.style.color = '#555';
+    }
+  }
+}
+
+function updateSummary() {
+  const items = document.querySelectorAll('#svcList .svc-item.checked');
+
+  // Update phone preview — use first service with a price for the demo
+  const firstPriced = Array.from(items).find(i => i.querySelector('input[type=text]')?.value?.trim());
+  const firstName = firstPriced ? firstPriced.querySelector('.svc-name').textContent : (items[0] ? items[0].querySelector('.svc-name').textContent : 'tire rotation');
+  const firstPrice = firstPriced ? firstPriced.querySelector('input[type=text]').value.trim() : null;
+  const firstDurEl = firstPriced ? firstPriced.querySelector('select') : (items[0] ? items[0].querySelector('select') : null);
+  const firstDur = firstDurEl ? firstDurEl.value : '45 min';
+
+  const priceEl = document.getElementById('prevPrice');
+  if (priceEl) priceEl.textContent = firstPrice || '—';
+
+  const durEl = document.getElementById('prevDur');
+  if (durEl) durEl.textContent = firstDur;
+
+  // Update caller question to use actual service name
+  const callerQ = document.getElementById('prevCallerQ');
+  if (callerQ) callerQ.textContent = 'Hi, how much is a ' + firstName.toLowerCase() + ' and do you have anything available this weekend?';
+}
+
+function addService() {
+  const nameEl = document.querySelector('#addForm input[type=text]');
+  const durEl  = document.querySelector('#addForm select');
+  const priceEl= document.querySelectorAll('#addForm input[type=text]')[1];
+  const name  = nameEl ? nameEl.value.trim() : '';
+  const dur   = durEl  ? durEl.value : '45 min';
+  const price = priceEl? priceEl.value.trim() : '';
+  if (!name) { nameEl && (nameEl.style.borderColor='var(--red)'); return; }
+  const list = document.getElementById('svcList');
+  list.appendChild(buildServiceItem(name, '', dur, price, true));
+  // Clear form
+  document.querySelectorAll('#addForm input').forEach(i => i.value='');
+  document.getElementById('addForm').style.display = 'none';
+  updateSummary(); flash();
+}
+
+function buildServiceItem(name, meta, dur, price, checked) {
+  const durations = ['15 min','30 min','45 min','60 min','90 min','120 min'];
+  const opts = durations.map(d => `<option${d===dur?' selected':''}>${d}</option>`).join('');
+  const div = document.createElement('div');
+  div.className = 'svc-item ' + (checked ? 'checked' : 'unchecked');
+  const descId = 'tt-' + Math.random().toString(36).substr(2,6);
+  div.innerHTML = `
+    <div class="svc-check" onclick="event.stopPropagation();toggleSvc(this.parentElement)">
+      <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg>
+    </div>
+    <div class="svc-body" onclick="toggleSvc(this.parentElement)" style="cursor:pointer;">
+      <div class="svc-name">${name}</div>
+      ${meta ? `<div class="svc-meta">${meta}</div>` : ''}
+    </div>
+    <div class="svc-fields">
+      <div class="svc-field-wrap">
+        <select class="svc-input" onclick="event.stopPropagation()" onchange="updateSummary()">${opts}</select>
+        <div class="svc-input-label">Duration</div>
+      </div>
+      <div class="svc-field-wrap">
+        <input class="svc-input" type="text" value="${price}" placeholder="Your price"
+          onclick="event.stopPropagation()" onchange="updateSummary();updatePriceLabel(this)">
+        <div class="svc-input-label price-label" style="color:${price?'var(--grn)':'var(--amb)'};">
+          ${price ? '✓ Set' : '↑ Set price'}
+        </div>
+      </div>
+    </div>
+
+    <button class="svc-desc-btn" id="btn-${descId}" onclick="event.stopPropagation();toggleTooltip('${descId}')" title="Add description for AI">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div class="tooltip" id="${descId}">
+        <div class="tooltip-head">
+          <div class="tooltip-svc-name">${name}</div>
+          <div class="tooltip-label">Description for AI</div>
+        </div>
+        <div class="tooltip-body">
+          <textarea class="tooltip-input" rows="3"
+            placeholder="e.g. We come to your location and rotate all four tires to even out wear. Takes about 45 minutes on your driveway."
+            onclick="event.stopPropagation()"
+            onchange="updateTooltipState('${descId}')"
+            oninput="updateTooltipState('${descId}')"></textarea>
+          <div class="tooltip-hint">The AI reads this when customers ask what the service includes. Leave blank and the AI uses its general knowledge.</div>
+        </div>
+        <div class="tooltip-arrow"></div>
+      </div>
+    </button>
+    <button class="svc-delete" onclick="event.stopPropagation();deleteSvc(this)" title="Remove this service">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </button>`;
+  return div;
+}
+
+function updatePriceLabel(input) {
+  const label = input.closest('.svc-field-wrap').querySelector('.price-label');
+  if (!label) return;
+  if (input.value.trim()) {
+    label.textContent = '✓ Set';
+    label.style.color = 'var(--grn)';
+  } else {
+    label.textContent = '↑ Set price';
+    label.style.color = 'var(--amb)';
+  }
+}
+
+function deleteSvc(btn) {
+  const item = btn.closest('.svc-item');
+  item.style.transition = 'opacity 0.2s, transform 0.2s';
+  item.style.opacity = '0';
+  item.style.transform = 'translateX(16px)';
+  setTimeout(() => { item.remove(); updateSummary(); }, 220);
+  flash();
+}
+
+function goLive() {
+  goTo(3);
+  // Set trial end date
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  const fmt = d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+  const el = document.getElementById('trialEnd');
+  if(el) el.textContent = fmt;
+}
+
+function validateAndNext() {
+  // Check for any checked services with no price set
+  const unpricedItems = Array.from(document.querySelectorAll('#svcList .svc-item.checked'))
+    .filter(item => {
+      const input = item.querySelector('input[type=text]');
+      return !input?.value?.trim();
+    });
+  if (unpricedItems.length > 0) {
+    // Highlight unprice fields
+    unpricedItems.forEach(item => {
+      const input = item.querySelector('input[type=text]');
+      if (input) {
+        input.style.borderColor = 'var(--red)';
+        input.style.background = 'rgba(239,68,68,0.08)';
+        input.focus();
+        setTimeout(() => {
+          input.style.borderColor = '';
+          input.style.background = '';
+        }, 3000);
+      }
+    });
+    // Show inline warning
+    let warn = document.getElementById('priceWarn');
+    if (!warn) {
+      warn = document.createElement('div');
+      warn.id = 'priceWarn';
+      warn.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:13px;color:#c84a4a;margin-bottom:16px;';
+      warn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Set a price for each service you're offering — even $0 if it's free.`;
+      const nav = document.querySelector('#step1 .step-nav');
+      nav.parentNode.insertBefore(warn, nav);
+    }
+    warn.style.display = 'flex';
+    setTimeout(() => { if(warn) warn.style.display = 'none'; }, 4000);
+    return;
+  }
+  goTo(2);
+}
+
+let activeTooltip = null;
+
+function toggleTooltip(id) {
+  const tt = document.getElementById(id);
+  const btn = document.getElementById('btn-' + id);
+  if (!tt) return;
+  const isShow = tt.classList.contains('show');
+  // Close any open tooltip
+  if (activeTooltip && activeTooltip !== id) {
+    const prev = document.getElementById(activeTooltip);
+    if (prev) prev.classList.remove('show');
+  }
+  tt.classList.toggle('show', !isShow);
+  activeTooltip = !isShow ? id : null;
+}
+
+function updateTooltipState(id) {
+  const tt = document.getElementById(id);
+  const btn = document.getElementById('btn-' + id);
+  if (!tt || !btn) return;
+  const textarea = tt.querySelector('textarea');
+  const hasDesc = textarea && textarea.value.trim().length > 0;
+  btn.classList.toggle('has-desc', hasDesc);
+  flash();
+}
+
+// Close tooltips when clicking outside
+document.addEventListener('click', () => {
+  if (activeTooltip) {
+    const tt = document.getElementById(activeTooltip);
+    if (tt) tt.classList.remove('show');
+    activeTooltip = null;
+  }
+});
+
+function flash() {
+  const ind = document.getElementById('saveInd');
+  ind.classList.add('show');
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => ind.classList.remove('show'), 2000);
+}
+
+// Init service list
+const SERVICES = [
+  {name:'Tire Rotation',      meta:'',                           dur:'45 min', price:'', checked:true},
+  {name:'Flat Repair',        meta:'On-site repair',             dur:'30 min', price:'', checked:true},
+  {name:'Seasonal Tire Swap', meta:'Summer / winter changeover', dur:'60 min', price:'', checked:true},
+  {name:'Wheel Balancing',    meta:'',                           dur:'30 min', price:'', checked:true},
+  {name:'New Tire Mounting',  meta:'Mount & balance new tires',  dur:'60 min', price:'', checked:true},
+  {name:'Tire Disposal',      meta:'Fee per tire',               dur:'0 min',  price:'', checked:true},
+];
+const svcList = document.getElementById('svcList');
+SERVICES.forEach(s => svcList.appendChild(buildServiceItem(s.name, s.meta, s.dur, s.price, s.checked)));
+updateSummary();
+
+// Init
+updateDayPills();
+updateTimeSummary();
+const trialEl = document.getElementById('trialRight');
+if(trialEl) {
+  const d = new Date(); d.setDate(d.getDate()+14);
+  trialEl.textContent = d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+</script>
+</body>
+</html>
