@@ -3,18 +3,23 @@
 import React, { useEffect, useState } from 'react'
 import { MOCK_TENANT } from '@/lib/mockData'
 import { Tenant, BusinessTemplate } from '@/lib/types'
-import { 
-  Settings, 
-  MessageSquare, 
-  Mic, 
+import {
+  Settings,
+  MessageSquare,
+  Mic,
   Info,
-  LayoutTemplate
+  LayoutTemplate,
+  X,
+  Eye,
+  Check,
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useSession } from '../lib/hooks'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { Modal } from './ui/Modal'
+import { showToast } from './ui/Toast'
 
 export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const { tenantId } = useSession(overrideTenantId)
@@ -24,6 +29,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [previewTemplate, setPreviewTemplate] = useState<BusinessTemplate | null>(null)
 
   useEffect(() => {
     if (tenantId) {
@@ -61,7 +67,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
   async function handleSave() {
     if (!config) return
     setSaving(true)
-    
+
     try {
       const res = await Api.tenants.updateConfig(config.id, {
         system_prompt: config.system_prompt,
@@ -72,27 +78,42 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
       setSuccess(res.success)
       if (res.success) {
         setDirty(false)
+        showToast('AI persona saved')
         setTimeout(() => setSuccess(false), 3000)
       }
     } catch (e) {
       console.error('Failed to save config', e)
+      showToast('Failed to save', 'error')
     }
     setSaving(false)
   }
 
   function applyTemplate(template: BusinessTemplate) {
     if (!config) return
-    if (confirm(`Apply ${template.display_name} defaults? This will overwrite your current settings.`)) {
-        setConfig({
-            ...config,
-            business_type: template.business_type,
-            system_prompt: template.system_prompt_template,
-            voice_id: template.voice_id,
-            first_message: template.first_message
-        })
-        setDirty(true)
-    }
+    setConfig({
+      ...config,
+      business_type: template.business_type,
+      system_prompt: template.system_prompt_template,
+      voice_id: template.voice_id,
+      first_message: template.first_message
+    })
+    setDirty(true)
+    setPreviewTemplate(null)
+    showToast(`Applied "${template.display_name}" template — save to keep changes`)
   }
+
+  // Group templates by category
+  const templatesByCategory = templates.reduce((acc, t) => {
+    const cat = (t as Record<string, unknown>).category as string || 'Other'
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(t)
+    return acc
+  }, {} as Record<string, BusinessTemplate[]>)
+
+  const sortedCategories = Object.entries(templatesByCategory).sort(
+    (a, b) => ((templates.find(t => (t as Record<string, unknown>).category === a[0]) as Record<string, unknown>)?.sort_order as number || 99)
+      - ((templates.find(t => (t as Record<string, unknown>).category === b[0]) as Record<string, unknown>)?.sort_order as number || 99)
+  )
 
   if (loading) return <div className="p-8 text-gray-500 italic">Loading AI configuration...</div>
 
@@ -108,36 +129,60 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
             <p className="text-sm text-gray-500 dark:text-gray-400">Customize how your AI Secretary talks and behaves</p>
           </div>
         </div>
-        <Button 
+        <Button
           onClick={handleSave}
           loading={saving}
           variant={success ? 'success' : dirty ? 'warning' : 'primary'}
           className={`px-6 py-2.5 transition-shadow ${dirty ? 'ring-2 ring-yellow-400 shadow-lg' : ''}`}
           disabled={!dirty || saving}
         >
-          {success ? "Saved!" : dirty ? "Save Changes*" : "Save Changes"}
+          {success ? 'Saved!' : dirty ? 'Save Changes*' : 'Save Changes'}
         </Button>
       </header>
 
       <div className="p-4 md:p-8 space-y-8 max-w-4xl">
-        
-        {/* Template Selection Section */}
+
+        {/* Template Browsing Section */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold flex items-center dark:text-gray-200">
             <LayoutTemplate className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
-            Business Type Template
+            Business Type Templates
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {templates.map(t => (
-                <button
-                    key={t.business_type}
-                    onClick={() => applyTemplate(t)}
-                    className={`p-3 border rounded-xl text-sm font-medium transition ${config?.business_type === t.business_type ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-700 dark:text-blue-300' : 'bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 hover:border-blue-300 text-gray-700 dark:text-gray-300'}`}
-                >
-                    {t.display_name}
-                </button>
-            ))}
-          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Browse templates to see what each business type provides. Click any to preview before applying.
+          </p>
+
+          {sortedCategories.map(([category, categoryTemplates]) => (
+            <div key={category} className="space-y-2">
+              <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{category}</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {categoryTemplates.map(t => {
+                  const isActive = config?.business_type === t.business_type
+                  return (
+                    <button
+                      key={t.business_type}
+                      onClick={() => setPreviewTemplate(t)}
+                      className={`p-3 border rounded-xl text-sm font-medium transition text-left group ${
+                        isActive
+                          ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-700 dark:text-blue-300'
+                          : 'bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-600 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{t.display_name}</span>
+                        <Eye className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                      </div>
+                      {isActive && (
+                        <span className="text-[10px] text-blue-500 dark:text-blue-400 flex items-center gap-1 mt-1">
+                          <Check className="w-3 h-3" /> Current
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </section>
 
         {/* System Prompt Section */}
@@ -155,7 +200,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
               This prompt defines your AI&apos;s personality. Tell it what to say, what to avoid, and how to handle specific situations. The AI will follow these rules on every call.
             </p>
           </div>
-          <textarea 
+          <textarea
             rows={10}
             value={config?.system_prompt || ''}
             onChange={(e) => {
@@ -173,7 +218,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
             <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
             First Message (Greeting)
           </h2>
-          <Input 
+          <Input
             value={config?.first_message || ''}
             onChange={(e) => {
               setConfig(prev => prev ? {...prev, first_message: e.target.value} : null);
@@ -196,14 +241,14 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
               { id: 'pNInz6ovDWjNkhCspfAY', name: 'Josh - US Male', desc: 'Deep, Trustworthy' },
               { id: 'ErXwSzhRj4IW3zYCt9a2', name: 'Antoni - US Male', desc: 'Casual, Conversational' }
             ].map(voice => (
-                <Card 
-                  key={voice.id}
-                  onClick={() => {
-                    setConfig(prev => prev ? {...prev, voice_id: voice.id} : null);
-                    setDirty(true);
-                  }}
-                  className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'border-blue-500 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}
-                >
+              <Card
+                key={voice.id}
+                onClick={() => {
+                  setConfig(prev => prev ? {...prev, voice_id: voice.id} : null);
+                  setDirty(true);
+                }}
+                className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'border-blue-500 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}
+              >
                 <div>
                   <p className="font-bold">{voice.name}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{voice.desc}</p>
@@ -226,8 +271,80 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
             </Button>
           </Card>
         </section>
-
       </div>
+
+      {/* Template Preview Modal */}
+      {previewTemplate && (
+        <Modal isOpen={true} onClose={() => setPreviewTemplate(null)} title="">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold">{previewTemplate.display_name}</h2>
+                <p className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider">
+                  {(previewTemplate as Record<string, unknown>).category as string || 'Business Template'}
+                </p>
+              </div>
+              <button onClick={() => setPreviewTemplate(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Vocabulary Preview */}
+            <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 space-y-1">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Dashboard Labels</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                <div><span className="text-gray-400">Resources called:</span> <span className="font-medium">{(previewTemplate as Record<string, unknown>).resource_plural as string || 'Resources'}</span></div>
+                <div><span className="text-gray-400">Staff called:</span> <span className="font-medium">{(previewTemplate as Record<string, unknown>).employee_plural as string || 'Employees'}</span></div>
+                <div><span className="text-gray-400">Bookings called:</span> <span className="font-medium">{(previewTemplate as Record<string, unknown>).booking_label as string || 'Appointments'}</span></div>
+                <div><span className="text-gray-400">Default resource:</span> <span className="font-medium">{previewTemplate.default_resource_name || 'Station 1'}</span></div>
+              </div>
+            </div>
+
+            {/* System Prompt Preview */}
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">AI System Prompt</p>
+              <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 text-sm font-mono leading-relaxed max-h-40 overflow-y-auto">
+                {previewTemplate.system_prompt_template}
+              </div>
+            </div>
+
+            {/* First Message Preview */}
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Greeting Message</p>
+              <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 text-sm italic">
+                &quot;{previewTemplate.first_message}&quot;
+              </div>
+            </div>
+
+            {/* Example Services */}
+            {(previewTemplate as Record<string, unknown>).example_services && Array.isArray((previewTemplate as Record<string, unknown>).example_services) && ((previewTemplate as Record<string, unknown>).example_services as string[]).length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Suggested Services</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {((previewTemplate as Record<string, unknown>).example_services as string[]).map((svc, i) => (
+                    <span key={i} className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-full">{svc}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Apply Button */}
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs text-gray-400">
+                {config?.business_type === previewTemplate.business_type
+                  ? 'This is your current template.'
+                  : 'This will update your AI persona settings. You can still edit them after applying.'}
+              </p>
+              <Button
+                onClick={() => applyTemplate(previewTemplate)}
+                disabled={config?.business_type === previewTemplate.business_type}
+              >
+                {config?.business_type === previewTemplate.business_type ? 'Already Applied' : 'Apply to My Business'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
