@@ -242,8 +242,12 @@ Visual coverage in Phase 12 covers the dashboard. These are the automated notifi
 - [ ] **Nightly Coverage Job**: Check next 7 days, surface new gaps.
 - [ ] **Dashboard Alert Banner**: Critical gap notification with action buttons (Reassign / Call customers / Dismiss).
 
-### Skill Map Drag-and-Drop Reorder
-- [ ] **Drag-and-drop reordering** of employees, services, and resources within the Skill Relationship Map columns. Requires `sort_order` column on employees, services, and resources tables + drag library (dnd-kit or react-beautiful-dnd). Polish feature — map works without it.
+### Drag-and-Drop Reordering (Services, Employees, Resources)
+- [ ] **Service list reordering**: Manager can drag services into their preferred order (e.g., workflow order: Diagnostics first, A/C last). Requires `sort_order` column on `services` table. Applies to: Service Catalog, Skill Matrix, Staffing Map, Skill Relationship Map.
+- [ ] **Employee list reordering**: Same pattern for employee display order across all views.
+- [ ] **Resource list reordering**: Same pattern for resources.
+- [ ] **Skill Map column reordering**: Drag-and-drop within Skill Relationship Map columns.
+- [ ] Requires drag library (dnd-kit or react-beautiful-dnd). `sort_order` INTEGER column on employees, services, and resources tables. Polish feature — everything works without it, just can't customize display order.
 
 ---
 
