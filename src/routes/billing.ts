@@ -6,6 +6,7 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_SOLO_PRICE_ID = process.env.STRIPE_SOLO_PRICE_ID || '';
 const STRIPE_GROWTH_PRICE_ID = process.env.STRIPE_GROWTH_PRICE_ID || '';
+const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID || '';
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -24,11 +25,16 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
     const { tenant_id, plan } = (req.body as any) || {};
     if (!tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
-    if (!plan || !['solo', 'growth'].includes(plan)) {
-      return reply.status(400).send({ error: 'plan must be "solo" or "growth"' });
+    if (!plan || !['solo', 'growth', 'professional'].includes(plan)) {
+      return reply.status(400).send({ error: 'plan must be "solo", "growth", or "professional"' });
     }
 
-    const priceId = plan === 'solo' ? STRIPE_SOLO_PRICE_ID : STRIPE_GROWTH_PRICE_ID;
+    const priceMap: Record<string, string> = {
+      solo: STRIPE_SOLO_PRICE_ID,
+      growth: STRIPE_GROWTH_PRICE_ID,
+      professional: STRIPE_PRO_PRICE_ID,
+    };
+    const priceId = priceMap[plan];
     if (!priceId) {
       return reply.status(503).send({ error: `Price ID not configured for ${plan} plan` });
     }

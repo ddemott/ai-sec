@@ -48,6 +48,10 @@ const GetPolicyAnswerSchema = z.object({
   question: z.string().min(1)
 });
 
+const GetServiceCatalogSchema = z.object({
+  tenant_id: z.string().uuid()
+});
+
 export async function handler(req: Request): Promise<Response> {
   const { method, headers } = req;
   const requestId = crypto.randomUUID();
@@ -89,6 +93,7 @@ export async function handler(req: Request): Promise<Response> {
       if (name === "check_availability") CheckAvailabilitySchema.parse(args);
       if (name === "book_appointment") BookAppointmentSchema.parse(args);
       if (name === "get_company_policy_answer") GetPolicyAnswerSchema.parse(args);
+      if (name === "get_service_catalog") GetServiceCatalogSchema.parse(args);
 
       // Store parsed args back so dispatcher doesn't re-parse
       toolCall.function.parsedArgs = args;

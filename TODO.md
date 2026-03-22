@@ -164,12 +164,14 @@ Example: "I think Suzy is great and would prefer to work with her" → normalize
 
 | Plan | Price | Target |
 |---|---|---|
-| Solo | $29/mo | Solo operators, small shops (1–2 staff) |
-| Growth | $59/mo | Small teams (3–5 staff) |
+| Solo | $129/mo | Solo operators (1 staff, 1 resource, 150 calls/mo) |
+| Growth | $279/mo | Small teams (5 staff, 3 resources, 500 calls/mo) |
+| Professional | $449/mo | Unlimited + BI |
+| Enterprise | $1,200+/mo | Multi-location, white label (not yet defined) |
 
 Both plans include all features. No feature gating between tiers at launch.
 
-- [ ] **Stripe Products**: Create Solo ($29/mo) and Growth ($59/mo) as recurring products in Stripe dashboard. Save Price IDs.
+- [ ] **Stripe Products**: Create Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) as recurring products in Stripe dashboard. Save Price IDs.
 - [ ] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
 - [ ] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL.
 - [ ] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
@@ -200,11 +202,11 @@ Extends Stripe Lite (11F) with trial management, a third tier, plan switching, c
 
 | Plan | Price | Calls/mo | Staff | Resources |
 |---|---|---|---|---|
-| Professional | $99/mo | Unlimited | Unlimited | Unlimited |
+| Professional | $449/mo | Unlimited | Unlimited | Unlimited |
 
 Platform cost: ~$12–36/mo per tenant. Call limits protect margin.
 
-- [ ] **Professional Tier**: $99/mo product in Stripe + `STRIPE_PRO_PRICE_ID`.
+- [ ] **Professional Tier**: $449/mo product in Stripe + `STRIPE_PRO_PRICE_ID`.
 - [ ] **Plan Picker UI**: In onboarding wizard, replace direct Checkout redirect.
 - [ ] **Stripe Elements**: Embedded card form in dashboard (instead of Checkout redirect).
 - [ ] **14-Day Trial**: `trial_ends_at` + reminder SMS/email 3 days before.

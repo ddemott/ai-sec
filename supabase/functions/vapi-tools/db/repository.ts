@@ -367,6 +367,20 @@ export class PostgresRepository implements IRepository {
     });
   }
 
+  async getServiceCatalog(tenantId: string, logger: Logger) {
+    logger.info({ tenantId }, "Fetching service catalog from database");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{
+        id: number; name: string; subtitle: string; description: string;
+        duration_minutes: number; price: number | null;
+      }>(
+        "SELECT id, name, subtitle, description, duration_minutes, price FROM services WHERE tenant_id = $1 ORDER BY name ASC",
+        [tenantId]
+      );
+      return res.rows;
+    });
+  }
+
   async searchKnowledgeBase(
     tenantId: string,
     queryEmbedding: number[],

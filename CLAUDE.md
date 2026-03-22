@@ -93,7 +93,7 @@ Phase 12 complete (Scheduler, Assignments & Coverage Visibility). Phases 1–12 
 - **12C — Skill Relationship Map**: Interactive 3-column mind map with click-to-connect/disconnect. BookOpen icon for skills, Cog for resources.
 - **12D — Coverage Visibility**: `check_coverage_gaps()` RPC, coverage bars, status badges, `GET /coverage` endpoint.
 - **12E — RAG Normalization Layer**: `shared/normalizeForEmbedding.ts` (gpt-4o-mini), `normalized_text` column, query normalization in edge functions.
-- **12F — Stripe Lite**: Solo ($29/mo) + Growth ($59/mo), Stripe Checkout, webhook (3 events), subscription gate middleware (402).
+- **12F — Stripe Lite**: Solo ($129/mo) + Growth ($279/mo), Stripe Checkout, webhook (3 events), subscription gate middleware (402).
 
 ### Additional Features (shipped with Phase 12)
 - **Theme System**: 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized). ThemeProvider + CSS custom properties + palette picker in sidebar.
@@ -103,7 +103,7 @@ Phase 12 complete (Scheduler, Assignments & Coverage Visibility). Phases 1–12 
 
 ### Backlog (post-launch)
 - **Automated Phone Provisioning**: Telnyx + Vapi auto-setup during onboarding. Manual provisioning works for first 10–20 customers.
-- **Full Billing System**: Extends Stripe Lite with Professional tier ($99/mo), plan picker UI, Stripe Elements, 14-day trials, call limits, billing portal.
+- **Full Billing System**: Extends Stripe Lite with Professional tier ($449/mo), plan picker UI, Stripe Elements, 14-day trials, call limits, billing portal.
 - **Business Intelligence & ROI**: Employee utilisation, service ROI, recommendations engine. Retention feature — not needed for launch.
 - **Personal Resources**: `is_personal` flag on resources for mobile techs and service writers. Only needed for businesses without fixed stations.
 - **Advanced Coverage Alerts**: Owner SMS, AI alternative time suggestions, missed revenue tracking, nightly coverage jobs.

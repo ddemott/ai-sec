@@ -121,6 +121,9 @@ export class Dispatcher {
           this.normalizeForEmbedding
         );
         break;
+      case "get_service_catalog":
+        response = await this.service.getServiceCatalog(args.tenant_id, toolLogger);
+        break;
       default:
         return new Response(JSON.stringify({ error: `Unknown tool: ${name}` }), { status: 400 });
     }

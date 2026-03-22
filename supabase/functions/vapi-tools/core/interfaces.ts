@@ -52,6 +52,14 @@ export interface IRepository {
   getServiceResources(serviceId: number, logger: Logger): Promise<string[]>;
 
   /**
+   * Returns the service catalog for a tenant (Layer 1: database facts, no RAG).
+   */
+  getServiceCatalog(
+    tenantId: string,
+    logger: Logger
+  ): Promise<Array<{ id: number; name: string; subtitle: string; description: string; duration_minutes: number; price: number | null }>>;
+
+  /**
    * Performs semantic vector search on tenant knowledge docs.
    */
   searchKnowledgeBase(

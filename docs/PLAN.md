@@ -201,10 +201,12 @@ The raw text is always preserved alongside the normalized version. Search querie
 **Launch pricing:**
 | Plan | Price | Target |
 |---|---|---|
-| Solo | $29/mo | Solo operators, small shops (1–2 staff) |
-| Growth | $59/mo | Small teams (3–5 staff) |
+| Solo | $129/mo | Solo operators (1 staff, 1 resource, 150 calls/mo) |
+| Growth | $279/mo | Small teams (5 staff, 3 resources, 500 calls/mo) |
+| Professional | $449/mo | Unlimited + BI |
+| Enterprise | $1,200+/mo | Multi-location, white label (not yet defined) |
 
-Both plans include all features. No feature gating between tiers at launch. Professional tier ($99/mo, unlimited) deferred to backlog.
+All plans include all features. No feature gating between tiers at launch.
 
 **How it works:**
 1. Owner signs up → you create a Stripe Checkout session for the right price
@@ -212,13 +214,13 @@ Both plans include all features. No feature gating between tiers at launch. Prof
 3. If payment fails or subscription cancels → webhook fires → status updated → AI stops answering, dashboard shows "Update payment" prompt
 4. That's it. No card form in the dashboard. No plan switching UI. No trial. Stripe handles everything.
 
-- [x] **Stripe Products**: Create Solo ($29/mo) and Growth ($59/mo) as recurring products in Stripe dashboard. Save Price IDs.
+- [x] **Stripe Products**: Create Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) as recurring products in Stripe dashboard. Save Price IDs.
 - [x] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
 - [x] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL. Accepts `plan_id` parameter.
 - [x] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
 - [x] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402 and dashboard shows "Update your payment to continue" prompt. AI stops answering calls for that tenant.
 - [x] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant as active and continue to setup wizard.
-- [x] **Environment Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
+- [x] **Environment Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
 
 ---
 
@@ -244,11 +246,11 @@ Extends Stripe Lite (12F) with trial management, a third pricing tier, plan swit
 **Additional tier:**
 | Plan | Price | Calls/mo | Staff | Resources |
 |---|---|---|---|---|
-| Professional | $99/mo | Unlimited | Unlimited | Unlimited |
+| Professional | $449/mo | Unlimited | Unlimited | Unlimited |
 
 **Platform Cost Model:** ~$12–36/mo per tenant (Telnyx ~$5–15, Vapi ~$5–15, OpenAI ~$2–5, Supabase ~$0.50–1). Call limits protect margin.
 
-- [ ] Professional tier ($99/mo) product in Stripe + `STRIPE_PRO_PRICE_ID`.
+- [ ] Professional tier ($449/mo) product in Stripe + `STRIPE_PRO_PRICE_ID`.
 - [ ] Plan picker UI in onboarding wizard (replace direct Checkout redirect).
 - [ ] Stripe Elements card form embedded in dashboard (instead of Checkout redirect).
 - [ ] 14-day free trial: `trial_ends_at` on tenants, reminder SMS/email 3 days before expiry.
@@ -289,14 +291,4 @@ The visual coverage indicators in Phase 12D cover the dashboard experience. Thes
 
 ## HIPAA Exclusion Policy
 
-The following verticals are explicitly excluded from onboarding until a formal HIPAA compliance program is in place with legal counsel:
-
-- Medical Clinics
-- Dental Offices
-- Chiropractic practices
-- Optometry
-- Veterinary (gray area — pending legal review)
-
-**Reason**: HIPAA requires a Business Associate Agreement (BAA), specific data handling and encryption standards, audit trail requirements, breach notification procedures, and significant legal liability. The fine exposure far outweighs the revenue opportunity at this stage.
-
-**In the UI**: These business types appear greyed out in the sign-up flow with "Coming soon — compliance in progress." They are removed from active onboarding entirely. No medical business should be able to complete registration.
+Medical verticals (medical clinics, dental offices, chiropractic, optometry, veterinary) are permanently excluded from the platform. These business types do not appear anywhere in the UI — no tiles, no placeholders, no mention. HIPAA compliance requires a BAA, specialized data handling, audit trails, and breach notification procedures. The liability exposure far outweighs the revenue opportunity. If this changes in the future, it will require a formal legal program before any code changes.

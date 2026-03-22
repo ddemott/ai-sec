@@ -245,4 +245,26 @@ export class AISecretaryService {
 
     return { result: context };
   }
+
+  /**
+   * Layer 1: Database facts — returns the service catalog for a tenant.
+   * No RAG, no hallucination possible. The AI reads these details to callers.
+   */
+  async getServiceCatalog(tenantId: string, logger: Logger) {
+    logger.info({ tenantId }, "Fetching service catalog");
+    const services = await this.repo.getServiceCatalog(tenantId, logger);
+    if (services.length === 0) {
+      return { result: "This business has not configured their service catalog yet." };
+    }
+    const formatted = services.map(s => {
+      const parts = [s.name];
+      if (s.subtitle) parts.push(`— ${s.subtitle}`);
+      if (s.description) parts.push(s.description);
+      parts.push(`Duration: ${s.duration_minutes} minutes`);
+      if (s.price && Number(s.price) > 0) parts.push(`Price: $${Number(s.price).toFixed(2)}`);
+      return parts.join(". ");
+    }).join("\n");
+    logger.info({ serviceCount: services.length }, "Service catalog returned");
+    return { result: formatted };
+  }
 }

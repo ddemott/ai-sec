@@ -177,7 +177,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
         </header>
         <div className="space-y-8">
           <Card className="p-8 text-center bg-gray-50 dark:bg-[#1a1a1a]">
-            <p className="text-gray-400 dark:text-gray-500 italic">User profile settings coming soon...</p>
+            <p className="text-gray-400 dark:text-gray-500 italic">User profile settings will appear here.</p>
           </Card>
 
           {/* CALENDAR SYNC SECTION */}

@@ -33,7 +33,7 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
   - **Service Staffing Map**: GET /coverage/staffing endpoint with ServiceCoverageView showing staff-to-service coverage.
   - **Vocabulary System**: Business-type-aware labels (Truck/Technician for tire shops, Chair/Stylist for salons).
   - **Theme System**: 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized).
-  - **Stripe Lite**: Checkout integration for Solo ($29/mo) and Growth ($59/mo) plans.
+  - **Stripe Lite**: Checkout integration for Solo ($129/mo) and Growth ($279/mo) plans.
 - **Async Layer (n8n)**:
   - Post-call summarization and sentiment analysis.
   - Calendar Sync (Google; Outlook planned).
