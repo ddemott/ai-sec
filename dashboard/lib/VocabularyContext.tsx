@@ -23,17 +23,20 @@ const DEFAULTS: Vocabulary = {
 const VocabularyContext = createContext<Vocabulary>(DEFAULTS)
 
 export function VocabularyProvider({ children }: { children: ReactNode }) {
-  const { managedTenantId } = useSessionContext()
+  const { tenantId, managedTenantId } = useSessionContext()
   const [vocab, setVocab] = useState<Vocabulary>(DEFAULTS)
 
+  // Use managedTenantId for super-admin, tenantId for regular users
+  const effectiveTenantId = managedTenantId || tenantId
+
   useEffect(() => {
-    if (!managedTenantId) {
+    if (!effectiveTenantId) {
       setVocab(DEFAULTS)
       return
     }
 
     let cancelled = false
-    Api.vocabulary.get(managedTenantId).then((data) => {
+    Api.vocabulary.get(effectiveTenantId).then((data) => {
       if (!cancelled && data) {
         setVocab({
           resource_label: data.resource_label || DEFAULTS.resource_label,
@@ -49,7 +52,7 @@ export function VocabularyProvider({ children }: { children: ReactNode }) {
     })
 
     return () => { cancelled = true }
-  }, [managedTenantId])
+  }, [effectiveTenantId])
 
   return (
     <VocabularyContext.Provider value={vocab}>
