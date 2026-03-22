@@ -36,7 +36,7 @@
 - [x] **ROI Analytics**: Dashboard showing call conversion and estimated revenue.
 - [x] **Calendar Sync**: Schema and n8n blueprint for Google/Outlook integration.
 
-## Phase 7.5: Security & Quality Hardening (Complete ✅)
+## Phase 8: Security & Quality Hardening (Complete ✅)
 Full code review identified 58 bugs across all severity levels. All resolved.
 
 - [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
@@ -46,19 +46,6 @@ Full code review identified 58 bugs across all severity levels. All resolved.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, debounce guards.
 - [x] **Test Coverage**: 244 backend + 368 dashboard = 612 total, all passing.
 
-## Phase 8: Production Go-Live (Current 🚀)
-- [x] **Agent Template**: Templatize `agent.json` with Mustache variables.
-- [x] **n8n Plumbing**: `notify_n8n_on_appointment` uses `pg_net` for real HTTP calls.
-- [x] **Route Extraction**: 15 focused route modules under `src/routes/` with shared middleware layer (withHandler, tenantMiddleware, AppError, logEvent/logWarning in src/middleware.ts).
-- [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
-- [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`.
-- [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL.
-- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx.
-- [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n.
-- [ ] **Outlook Sync**: Implement empty Outlook calendar sync branch.
-- [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook sync.
-- [ ] **Beta Testing**: Real-world call tests with DynaTire.
-
 ## Phase 9: Scale & Polish (Complete ✅)
 - [x] **ID Standardization**: Migrated to UUID throughout.
 - [x] **Code Consolidation**: `shared/scheduling.ts` and `shared/getEmbedding.ts`.
@@ -67,6 +54,9 @@ Full code review identified 58 bugs across all severity levels. All resolved.
 - [x] **Soft Deletes**: `is_deleted`/`deleted_at` with partial indexes.
 - [x] **Accessibility**: ARIA labels across dashboard.
 - [x] **Customer Timezone**: `check_availability_with_tz()` respects customer timezone.
+- [x] **Agent Template**: Templatize `agent.json` with Mustache variables.
+- [x] **n8n Plumbing**: `notify_n8n_on_appointment` uses `pg_net` for real HTTP calls.
+- [x] **Route Extraction**: 15 focused route modules under `src/routes/` with shared middleware layer (withHandler, tenantMiddleware, AppError, logEvent/logWarning in src/middleware.ts).
 
 ## Phase 10: CRM & Dashboard Enhancements (Complete ✅)
 - [x] **Unified CRM Detail View**: Appointments, call summaries, transcripts, notes, search.
@@ -77,7 +67,7 @@ Full code review identified 58 bugs across all severity levels. All resolved.
 ## Phase 11: Navigation & Vocabulary System (Complete ✅)
 - [x] **Navigation Restructure**: 12 flat tabs → 5 grouped sections with sub-tabs.
 - [x] **Composite Views**: MyTeamView, MyBusinessView, AIInsightsView wrappers.
-- [x] **Business Templates**: 20 types across 6 categories with vocabulary + example services.
+- [x] **Business Templates**: 29 business types across 6 categories (8 planned) with vocabulary + example services.
 - [x] **Vocabulary System**: 3-tier fallback (tenant override → template default → hardcoded).
 - [x] **GET /vocabulary**: Resolves labels via COALESCE chain.
 - [x] **Self-Service Registration**: POST /register creates tenant + user + JWT.
@@ -145,7 +135,7 @@ Not a separate feature — coverage status is visible wherever the owner is alre
 | Setup Wizard Step 5 | Live coverage badges update as assignments are made. |
 | Setup Wizard Step 6 | Full coverage summary with fix links. |
 
-- [x] **`check_coverage_gaps()` Postgres Function**: `check_coverage_gaps(tenant_id, date_range)` returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]`.
+- [x] **`check_coverage_gaps()` Postgres Function**: Returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]` for a tenant and date range.
 - [x] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight check).
 - [x] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns view.
 - [x] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
@@ -222,11 +212,23 @@ All plans include all features. No feature gating between tiers at launch.
 - [x] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant as active and continue to setup wizard.
 - [x] **Environment Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
 
+## Phase 13: UI/UX Polish & Production Readiness (Current 🚀)
+- [ ] **UI/UX Flow Improvements**: Ongoing — finding issues through hands-on testing.
+- [ ] **Vocabulary Wiring**: Frontend still hardcodes "Resources"/"Employees" — wire to vocabulary system.
+- [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
+- [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`.
+- [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL.
+- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx.
+- [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n.
+- [ ] **Outlook Sync**: Implement empty Outlook calendar sync branch.
+- [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook sync.
+- [ ] **Beta Testing**: Real-world call tests with DynaTire.
+
 ---
 
 ## Backlog
 
-> Features that are valuable but not required for market launch. Prioritize after Phase 12 is shipped and DynaTire is live. Ideas are preserved here so nothing is lost.
+> Features that are valuable but not required for market launch. Prioritize after Phase 13 is shipped and DynaTire is live. Ideas are preserved here so nothing is lost.
 
 ### Automated Phone Provisioning
 Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works for the first 10–20 customers. Automate when manual onboarding becomes the bottleneck.
@@ -281,7 +283,7 @@ Only needed when onboarding businesses with mobile techs or service writers who 
 - [ ] Dashboard alert: "Sarah W. has no resource assigned — [Create Sarah's Desk]".
 
 ### Advanced Coverage Alerts
-The visual coverage indicators in Phase 12D cover the dashboard experience. These are the automated notification and AI behaviour extensions — build when owners ask for them.
+The visual coverage indicators in Phase 12 (12D) cover the dashboard experience. These are the automated notification and AI behaviour extensions — build when owners ask for them.
 
 - [ ] Owner SMS alerts for critical gaps (Telnyx SMS, deduplicated within 24 hours).
 - [ ] AI behaviour change: offer alternative times when booking into a gap.

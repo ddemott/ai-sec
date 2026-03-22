@@ -48,7 +48,7 @@ UI labels adapt per business type via a 3-tier fallback:
 2. **Template default** (e.g., auto-shop template says "Bay")
 3. **Hardcoded fallback** ("Resource")
 
-The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template, hardcoded)`. Dashboard components consume labels via `Api.vocabulary.get()`. 20 business types supported with per-type vocabulary.
+The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template, hardcoded)`. Dashboard components consume labels via `Api.vocabulary.get()`. 29 business types across 6 categories (8 planned) supported with per-type vocabulary.
 
 ---
 

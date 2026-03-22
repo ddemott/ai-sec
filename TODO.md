@@ -101,7 +101,7 @@ These are known issues from the March 2026 code review (see BUGS.md for details)
 - [x] **seed.sql Fix**: ON CONFLICT (tenant_id, email) for per-tenant email uniqueness.
 - [x] **Test Coverage**: 244 backend tests + 368 dashboard tests = 612 total, all passing.
 
-## 11. Scheduler, Assignments & Coverage Visibility (Phase 12 — Complete)
+## 11. Scheduler, Assignments & Coverage Visibility (Phase 12 — Complete ✅)
 > Ship-blocking. The owner needs to see who's doing what, assign people to services, and know where the gaps are — without learning the dashboard tab by tab.
 
 ### 11A. Repeatable Setup Wizard
@@ -159,8 +159,8 @@ Example: "I think Suzy is great and would prefer to work with her" → normalize
 - [x] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
 - [x] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
 
-### 11F. Stripe Lite (Two Plans)
-> You can't collect money without this. Minimal Stripe — two prices, one webhook, one gate. No plan picker UI, no trial logic, no call limits, no billing portal.
+### 11F. Stripe Lite (Phase 12F — Complete ✅)
+> Minimal Stripe — two prices, one webhook, one gate. No plan picker UI, no trial logic, no call limits, no billing portal.
 
 | Plan | Price | Target |
 |---|---|---|
@@ -169,21 +169,21 @@ Example: "I think Suzy is great and would prefer to work with her" → normalize
 | Professional | $449/mo | Unlimited + BI |
 | Enterprise | $1,200+/mo | Multi-location, white label (not yet defined) |
 
-Both plans include all features. No feature gating between tiers at launch.
+All plans include all features. No feature gating between tiers at launch.
 
-- [ ] **Stripe Products**: Create Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) as recurring products in Stripe dashboard. Save Price IDs.
-- [ ] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
-- [ ] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL.
-- [ ] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
-- [ ] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402. Dashboard shows "Update your payment to continue." AI stops answering.
-- [ ] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant active and continue to setup wizard.
-- [ ] **Env Vars**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`.
+- [x] **Stripe Products**: Create Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) as recurring products in Stripe dashboard. Save Price IDs.
+- [x] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
+- [x] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL. Accepts `plan_id` parameter.
+- [x] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
+- [x] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402. Dashboard shows "Update your payment to continue." AI stops answering.
+- [x] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant active and continue to setup wizard.
+- [x] **Env Vars**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
 
 ---
 
 ## Backlog
 
-> Features that are valuable but not required for market launch. Preserved here so nothing is lost. Prioritize after Phase 12 is shipped and DynaTire is live.
+> Features that are valuable but not required for market launch. Preserved here so nothing is lost. Prioritize after Phase 13 is shipped and DynaTire is live.
 
 ### Automated Phone Provisioning
 Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works for the first 10–20 customers. Automate when manual onboarding becomes the bottleneck.
@@ -198,7 +198,7 @@ Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works 
 - [ ] **Env Vars**: `TELNYX_API_KEY`, `VAPI_API_KEY`.
 
 ### Full Billing System (Stripe)
-Extends Stripe Lite (11F) with trial management, a third tier, plan switching, call limits, and self-service billing portal. Build when customer volume justifies complexity.
+Extends Stripe Lite (12F) with trial management, plan switching, call limits, and self-service billing portal. Build when customer volume justifies complexity.
 
 | Plan | Price | Calls/mo | Staff | Resources |
 |---|---|---|---|---|
@@ -236,7 +236,7 @@ Only needed when onboarding businesses with mobile techs or service writers at n
 - [ ] **Dashboard Alert**: "Sarah W. has no resource assigned — [Create Sarah's Desk]".
 
 ### Advanced Coverage Alerts
-Visual coverage in Phase 12 covers the dashboard. These are the automated notification and AI behaviour extensions.
+Visual coverage in Phase 12 (12D) covers the dashboard. These are the automated notification and AI behaviour extensions.
 
 - [ ] **Owner SMS Alerts**: Telnyx SMS for critical gaps, deduplicated within 24 hours.
 - [ ] **AI Behaviour Change**: Offer alternative times when booking into a gap.

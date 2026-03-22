@@ -1,7 +1,7 @@
 # AI Secretary - Multi-Tenant Voice AI Reception SaaS
 
 ## Project Overview
-Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are explicitly excluded until a formal compliance program is in place.
+Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded — they do not appear anywhere in the UI.
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
@@ -49,8 +49,8 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - RLS on all tenant-scoped tables using `app.current_tenant_id` context variable
 - `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert)
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
-- Polymorphic assignment: `p_assignment_id` can be INTEGER (employee) or UUID (user)
-- Mixed ID types: services/employees use SERIAL, resources/users use UUID
+- Polymorphic assignment: `p_assignment_id` is UUID
+- All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)
 
 ## Code Conventions
 - Dashboard navigation: Front Desk / Back Office two-tab layout with sub-views in each tab
@@ -63,7 +63,6 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Known Issues (as of March 2026)
 - Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`
-- setDraftEvent undefined in AppointmentView (non-blocking)
 
 ## Resolved Issues (March 2026 Code Review)
 - 58 bugs identified and resolved across Critical/High/Medium/Low severity
@@ -75,9 +74,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phase 12 complete (Scheduler, Assignments & Coverage Visibility). Phases 1–12 all complete, including security hardening (Phase 7.5), scale/polish (Phase 9), CRM enhancements (Phase 10), navigation restructure + vocabulary system (Phase 11), and scheduler views + skill map + coverage + RAG normalization + Stripe Lite (Phase 12). 244 backend tests + 368 dashboard tests = 612 total passing.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 244 backend tests + 368 dashboard tests = 612 total passing.
 
-### Remaining (Phase 8 Go-Live tasks)
+### Remaining (Phase 13)
+- UI/UX flow improvements (ongoing — finding issues through hands-on testing)
+- Vocabulary wiring (frontend still hardcodes "Resources"/"Employees")
 - Cloud migration (local Docker → managed Supabase)
 - Secrets management (OPENAI_API_KEY, DATABASE_URL, VAPI_SERVER_URL_SECRET)
 - Vapi agent pointed to production Edge Function URL

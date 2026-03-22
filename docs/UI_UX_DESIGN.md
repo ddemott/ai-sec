@@ -1,7 +1,7 @@
 # AI Secretary Dashboard — UI/UX Design Brief
 
 ## Purpose
-This document captures the current state of the dashboard UI, its problems, and proposed improvements. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, clinics) who are not technical users.
+This document captures the current state of the dashboard UI, its problems, and proposed improvements. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, spas, trades, fitness) who are not technical users.
 
 ---
 
@@ -108,7 +108,7 @@ There is **no page flow for a new business to sign up and configure themselves**
   - No way for a regular business owner to see or change their business type
   - No public-facing registration flow (email → verify → pick business type → create tenant → onboard)
   - The business type dropdown only appears in the super-admin "Create Business" form — regular users never see it
-  - The `business_templates` table has 4 types (mobile-tire, salon, auto-shop, dentist) but will need 20+ for production
+  - The `business_templates` table has 29 types across 6 categories (8 planned)
   - Business type selection doesn't connect to the onboarding wizard (which doesn't exist yet)
   - The vocabulary system (Chair vs Bay vs Operatory) doesn't exist yet — business type is stored but never used to adapt UI labels
 
@@ -128,14 +128,17 @@ Page Flow: New Business Sign-Up → Onboarding → Dashboard
    │                                                          │
    │  What kind of business do you run?                       │
    │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
-   │  │ 🚗 Tire │ │ 💇 Salon│ │ 🔧 Auto │ │ 🦷 Dental│      │
-   │  │  Shop   │ │         │ │  Shop   │ │ Clinic  │      │
+   │  │ 🚗 Tire │ │ 💇 Salon│ │ 🔧 Auto │ │ 💆 Spa  │      │
+   │  │  Shop   │ │         │ │  Shop   │ │         │      │
    │  └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
    │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
-   │  │ 🐾 Vet  │ │ 💆 Spa  │ │ 🔌 Elec │ │ 🪠 Plumb│      │
-   │  │ Clinic  │ │         │ │ trician │ │  ing    │      │
+   │  │ 💪 Gym  │ │ 🔌 Elec │ │ 🪠 Plumb│ │ ✂ Barber│      │
+   │  │         │ │ trician │ │  ing    │ │  shop   │      │
    │  └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
-   │  ... (scrollable grid of 20 business types)              │
+   │  ... (scrollable grid of 29 business types)              │
+   │                                                          │
+   │  Medical verticals (dental, chiropractic, veterinary,    │
+   │  optometry) are permanently excluded and do not appear.  │
    │                                                          │
    │                         [Create My Account →]            │
    └─────────────────────────────────────────────────────────┘
@@ -413,7 +416,7 @@ The wizard replaces the need for new users to discover the correct tab order the
 
 ### Business-Specific Vocabulary (Does Not Exist — Needs to Be Built)
 
-**Current problem**: The UI uses generic terms like "Resources", "Employees", and "Services" everywhere. A salon owner thinks in terms of "Chairs" and "Stylists", not "Resources" and "Employees". A dental clinic has "Operatories" and "Hygienists", not "Resources" and "Staff". The current labels feel like enterprise software, not a tool built for their business.
+**Current problem**: The UI uses generic terms like "Resources", "Employees", and "Services" everywhere. A salon owner thinks in terms of "Chairs" and "Stylists", not "Resources" and "Employees". An auto shop has "Bays" and "Mechanics", not "Resources" and "Staff". The current labels feel like enterprise software, not a tool built for their business.
 
 **What's needed**: A vocabulary map per business type that adapts all UI labels, placeholders, empty states, and tooltips to match the language the business owner actually uses.
 
@@ -425,9 +428,6 @@ business_type  | resource_label | resource_plural | employee_label | employee_pl
 mobile-tire    | Truck          | Trucks          | Technician     | Technicians     | Appointment    | Tire Rotation, Flat Repair, Install
 salon          | Chair          | Chairs          | Stylist        | Stylists        | Appointment    | Haircut, Coloring, Blowout
 auto-shop      | Bay            | Bays            | Mechanic       | Mechanics       | Appointment    | Oil Change, Brake Service, Inspection
-dentist        | Operatory      | Operatories     | Hygienist      | Hygienists      | Visit          | Cleaning, Exam, Crown, Filling
-vet-clinic     | Exam Room      | Exam Rooms      | Vet            | Vets            | Visit          | Checkup, Vaccination, Surgery
-chiropractor   | Adjustment Room| Rooms           | Doctor         | Doctors         | Visit          | Adjustment, Consultation, X-Ray
 barbershop     | Chair          | Chairs          | Barber         | Barbers         | Appointment    | Haircut, Shave, Beard Trim
 nail-salon     | Station        | Stations        | Nail Tech      | Nail Techs      | Appointment    | Manicure, Pedicure, Gel Nails
 spa            | Treatment Room | Treatment Rooms | Therapist      | Therapists      | Session        | Massage, Facial, Body Wrap
@@ -615,7 +615,7 @@ All work items across the entire design doc, categorized:
 | 10 | Self-service business type picker (card grid) | UI/UX | Missing | 20 business type cards with icons |
 | 11 | Onboarding wizard (8 steps) | Both | Missing | Full guided setup flow |
 | 12 | Wizard detection logic (show when no data) | Coding | **Done** | `onboarding_completed` flag on tenants |
-| 13 | 20 business type templates | Coding | **Done** | All 20 with vocabulary + example services |
+| 13 | 29 business type templates | Coding | **Done** | All 29 with vocabulary + example services |
 | 14 | Vocabulary columns on `business_templates` | Coding | **Done** | Migration applied |
 | 15 | Vocabulary override columns on `tenants` | Coding | **Done** | Migration applied |
 | 16 | `useVocabulary` hook + React Context | Coding | Missing | 3-tier fallback: tenant > template > hardcoded |
