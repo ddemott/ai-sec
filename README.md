@@ -70,7 +70,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 - `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
 - `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
 - `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` — 54 SQL migrations
+- `/supabase/migrations` — 55 SQL migrations
 - `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
 - `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
 - `/docs` — Architecture, plans, decisions, deployment guide, mockups
@@ -98,7 +98,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**612 tests passing** (244 backend + 368 dashboard) in ~20 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**624 tests passing** (256 backend + 368 dashboard) in ~20 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend

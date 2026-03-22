@@ -17,7 +17,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 54 SQL migrations (schema, RLS, RPCs, coverage, billing, bug fixes)
+- `/supabase/migrations` - 55 SQL migrations (schema, RLS, RPCs, coverage, billing, bug fixes)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
@@ -74,7 +74,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 244 backend tests + 368 dashboard tests = 612 total passing.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 256 backend tests + 368 dashboard tests = 624 total passing.
 
 ### Remaining (Phase 13)
 - UI/UX flow improvements (ongoing — finding issues through hands-on testing)
