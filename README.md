@@ -1,6 +1,6 @@
 # AI Secretary SaaS
 
-A multi-tenant AI reception platform for modern businesses. Provides high-fidelity AI-driven call handling, appointment booking, and CRM integration.
+A multi-tenant AI reception platform for service businesses. An AI receptionist answers inbound calls, books appointments, answers policy questions via RAG, and syncs with the owner's dashboard — 24/7, no missed calls.
 
 ## 🚀 Quick Start (Local Development)
 
@@ -28,32 +28,78 @@ npm start
 - **Email:** `dale@ai-sec.com`
 - **Password:** `password`
 
+### 5. Load Demo Data (optional)
+Reset the database with 3 realistic businesses:
+```bash
+./scripts/reset-and-seed.sh
+```
+
+| Email | Business | Password |
+|-------|----------|----------|
+| `dale@ai-sec.com` | Super Admin | `password` |
+| `admin@dynatire.com` | DynaTire (tire shop) | `password` |
+| `bella@bellashair.com` | Bella's Hair Studio (salon) | `password` |
+| `owner@quickfixauto.com` | QuickFix Auto Repair | `password` |
+
 ## 🛠 Project Structure
-- `/src`: Fastify backend (Multi-tenant management API).
-- `/dashboard`: Next.js frontend (Admin & Owner portal).
-- `/supabase`: SQL migrations, seed data, and Edge Functions for Vapi.
-- `/scripts`: Automation for setup, starting, and restarting the stack.
+- `/src` — Fastify backend (15 route modules under `src/routes/`, middleware layer)
+- `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
+- `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
+- `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
+- `/supabase/migrations` — 54 SQL migrations
+- `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
+- `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
+- `/docs` — Architecture, plans, decisions, deployment guide, mockups
 
 ## 🛠 Infrastructure
-- **Database Persistence**: Local data is stored in a persistent Docker volume (`ai-sec-db-data`). Data survives container restarts and computer reboots.
-- **Test Isolation**: Development data is protected from automated tests through a dedicated `test_db` environment. Tests will not wipe your main development data.
+- **Database**: PostgreSQL + pgvector (Docker, port 5433). All IDs are UUID.
+- **Multi-tenancy**: Row Level Security on all tables. `withTenantClient()` enforces RLS.
+- **Auth**: JWT (8h expiry), bcrypt password hashing, auto-logout on stale sessions.
+- **Test Isolation**: Dedicated `test_db` with savepoint-based isolation.
 - **Ports**: Backend (3000), Dashboard (3001), Postgres (5433).
 
 ## 🐘 Database Management
-To re-apply schema and seed data at any time:
 ```bash
+# Re-apply migrations + seed
 ./scripts/setup-db.sh
+
+# Cloud deployment (with preflight check)
+./scripts/preflight-cloud.sh "postgres://user:pass@host:5432/dbname"
+./scripts/setup-db.sh "postgres://user:pass@host:5432/dbname"
 ```
 
-To use a custom database (e.g., in the cloud):
+## 🧪 Testing
+- **612 tests passing** (244 backend + 368 dashboard) in ~20 seconds.
+- Savepoint-based isolation — each test rolls back, no TRUNCATE overhead.
+- 12 shared test helpers in `src/test-utils.ts` for DRY setup.
 ```bash
-./scripts/setup-db.sh postgresql://user:pass@host:5432/dbname
+# Backend
+npm test
+
+# Dashboard
+cd dashboard && npx vitest run
+
+# Edge Functions
+deno task test --no-check
 ```
 
-## 🧪 Testing & Coverage
-- **598 tests passing** (229 backend + 369 dashboard) across all suites.
-- Test coverage spans: booking engine, RLS, auth, scheduling, name sync, timezone detection, form validation, UI components, and error boundaries.
-- Backend tests: `npx vitest run src/ --fileParallelism=false`
-- Dashboard tests: `cd dashboard && npx vitest run`
-- Edge logic: `deno task test --no-check` (Requires Deno)
-- Test-driven development ensures operational reliability.
+## 🚀 Production Deployment
+```bash
+# 1. Copy and fill in environment variables
+cp .env.production.example .env.production
+
+# 2. Run the full deployment
+./scripts/deploy-production.sh .env.production
+```
+
+See `docs/DEPLOYMENT.md` for detailed step-by-step guide.
+
+## 📊 Key Features
+- **29 business types** across 6 categories with per-type vocabulary
+- **Outlook-style scheduler** — drag to create/resize/move shifts
+- **Service Staffing Map** — per-service, per-hour employee availability heatmap
+- **Unified CRM** — customer detail with appointments, call history, notes
+- **Skill Relationship Map** — interactive 3-column employee → service → resource view
+- **Two-layer knowledge** — database facts (zero hallucination) + RAG for policies
+- **Contextual feedback** — in-app feedback button on every page
+- **Theme system** — 8 themes with CSS custom properties
