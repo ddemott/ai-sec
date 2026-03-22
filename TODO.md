@@ -244,6 +244,12 @@ Visual coverage in Phase 12 covers the dashboard. These are the automated notifi
 - [ ] **Nightly Coverage Job**: Check next 7 days, surface new gaps.
 - [ ] **Dashboard Alert Banner**: Critical gap notification with action buttons (Reassign / Call customers / Dismiss).
 
+### Multi-Business Phone Routing
+- [ ] **One number, multiple businesses**: Caller dials one number, AI asks what they're calling about, routes to the right context (different services, knowledge base, persona). Use case: owner runs both a consulting firm and a SaaS company from one line.
+- [ ] **Option A (simple)**: Two separate tenants, two numbers, two Vapi agents. Works today, no code changes.
+- [ ] **Option B (elegant)**: Single tenant with "divisions" — each division has its own service catalog, knowledge base, and AI persona. Requires new routing layer in Vapi agent and multi-division data model.
+- [ ] **Decision**: Not yet made. Revisit when deployment is live and real routing needs emerge.
+
 ### Drag-and-Drop Reordering (Services, Employees, Resources)
 - [ ] **Service list reordering**: Manager can drag services into their preferred order (e.g., workflow order: Diagnostics first, A/C last). Requires `sort_order` column on `services` table. Applies to: Service Catalog, Skill Matrix, Staffing Map, Skill Relationship Map.
 - [ ] **Employee list reordering**: Same pattern for employee display order across all views.
