@@ -1,237 +1,109 @@
-# AI Secretary SaaS – Project Plan
+# AI Secretary — Project Roadmap
 
-## Phase 1: Foundation & TDD Setup (Complete ✅)
-- [x] **SQL Schema with Tests**: `tenants`, `resources`, `customers`, `appointments`.
-- [x] **Atomic Booking**: Postgres RPC handles race conditions.
-- [x] **TDD Integration**: Automated local DB setup via `scripts/setup-db.sh`.
+## Completed Phases
 
-## Phase 2: AI Tool Provider & Context (Complete ✅)
-- [x] **AI Tools (Edge)**: `get_customer_context`, `check_availability`, `book_appointment`.
-- [x] **Architecture Refactor**: Modular (Hexagonal) architecture.
-- [x] **Hardening**: Zod validation and detailed error logging.
+### Phase 1: Foundation & TDD Setup
+- SQL schema for tenants, resources, customers, appointments with atomic booking RPC
+- TDD integration with automated local DB setup
 
-## Phase 3: Voice AI & Integration (Complete ✅)
-- [x] **Vapi Agent Blueprint**: `vapi/agent.json` and `vapi/tools.json`.
-- [x] **Connectivity Guide**: `vapi/TELNYX_SETUP.md`.
-- [x] **Latency Optimization**: Implemented Warm-up Pings.
+### Phase 2: AI Tool Provider & Context
+- Edge Function tools: `get_customer_context`, `check_availability`, `book_appointment`
+- Modular (hexagonal) architecture with Zod validation and structured error logging
 
-## Phase 4: Async Logic & Background Workers (Complete ✅)
-- [x] **n8n Workflow Blueprint**: `docs/N8N_WORKFLOWS.md`.
-- [x] **Summarization**: Post-call summarizer via OpenAI and Supabase.
-- [x] **Audit Schema**: `call_transcripts` and Postgres-to-n8n triggers.
+### Phase 3: Voice AI & Integration
+- Vapi agent blueprint (`agent.json`, `tools.json`), Telnyx connectivity guide, warm-up pings for latency
 
-## Phase 5: Dashboard & Management UI (Complete ✅)
-- [x] **Appointment Management**: Outlook-Style UI with full calendar features.
-- [x] **CRM & Notes**: Searchable customer profiles with AI history.
-- [x] **AI Persona Tuning**: Live updates for System Prompt and Voice ID.
+### Phase 4: Async Logic & Background Workers
+- n8n workflow blueprints for post-call summarization and calendar sync
+- `call_transcripts` audit schema with Postgres-to-n8n triggers
 
-## Phase 6: Knowledge Base & RAG (Complete ✅)
-- [x] **Semantic Schema**: `tenant_docs` table with `pgvector` support.
-- [x] **Ingestion Engine**: Deno script and Dashboard UI for PDF uploads.
-- [x] **Policy Q&A**: `get_company_policy_answer` tool for grounding AI in business docs.
+### Phase 5: Dashboard & Management UI
+- Outlook-style appointment calendar, searchable CRM with AI history, AI persona tuning
 
-## Phase 7: Advanced Scheduling & ROI (Complete ✅)
-- [x] **Skill Matrix**: Grid for matching staff expertise to resource capabilities.
-- [x] **Shift Management**: Full UI and DB enforcement for employee working hours.
-- [x] **ROI Analytics**: Dashboard showing call conversion and estimated revenue.
-- [x] **Calendar Sync**: Schema and n8n blueprint for Google/Outlook integration.
+### Phase 6: Knowledge Base & RAG
+- `tenant_docs` table with pgvector, ingestion engine (Deno script + dashboard PDF upload)
+- `get_company_policy_answer` tool for grounding AI in business docs
 
-## Phase 8: Security & Quality Hardening (Complete ✅)
-Full code review identified 58 bugs across all severity levels. All resolved.
+### Phase 7: Advanced Scheduling & ROI
+- Skill matrix, shift management (UI + DB enforcement), ROI analytics dashboard, calendar sync schema
 
-- [x] **Auth**: JWT tokens with expiry, auto-logout on 401, dev bypass removed.
-- [x] **RLS**: Standardized policies, all route modules enforce via `withTenantClient()`.
-- [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID validation.
-- [x] **Booking Engine**: DST-safe shift checks, auto end-time, customer upsert, service enforcement.
-- [x] **Dashboard**: Error boundaries, SessionContext, structured logging, debounce guards.
-- [x] **Test Coverage**: 244 backend + 368 dashboard = 612 total, all passing.
+### Phase 8: Security & Quality Hardening
+- Full code review resolved 58 bugs across all severity levels
+- JWT auth with expiry and auto-logout, standardized RLS via `withTenantClient()`, Zod validation at all API boundaries
+- DST-safe shift checks, error boundaries, SessionContext, structured logging
+- 612 tests passing (244 backend + 368 dashboard)
 
-## Phase 9: Scale & Polish (Complete ✅)
-- [x] **ID Standardization**: Migrated to UUID throughout.
-- [x] **Code Consolidation**: `shared/scheduling.ts` and `shared/getEmbedding.ts`.
-- [x] **Dead Code Cleanup**: Removed BookingService, Provider pattern, MockLlmProvider.
-- [x] **Audit Logging**: `audit_log` table with before/after snapshots.
-- [x] **Soft Deletes**: `is_deleted`/`deleted_at` with partial indexes.
-- [x] **Accessibility**: ARIA labels across dashboard.
-- [x] **Customer Timezone**: `check_availability_with_tz()` respects customer timezone.
-- [x] **Agent Template**: Templatize `agent.json` with Mustache variables.
-- [x] **n8n Plumbing**: `notify_n8n_on_appointment` uses `pg_net` for real HTTP calls.
-- [x] **Route Extraction**: 15 focused route modules under `src/routes/` with shared middleware layer (withHandler, tenantMiddleware, AppError, logEvent/logWarning in src/middleware.ts).
+### Phase 9: Scale & Polish
+- UUID standardization throughout, shared `scheduling.ts` and `getEmbedding.ts`
+- Dead code cleanup, audit logging with before/after snapshots, soft deletes with partial indexes
+- ARIA accessibility labels, customer timezone support, agent template with Mustache variables
+- Route extraction: 15 focused modules under `src/routes/` with shared middleware layer
 
-## Phase 10: CRM & Dashboard Enhancements (Complete ✅)
-- [x] **Unified CRM Detail View**: Appointments, call summaries, transcripts, notes, search.
-- [x] **Customer Appointments API**: `GET /customers/:id/appointments` with JOINs.
-- [x] **Appointment Cancel API**: `POST /appointments/:id/cancel` soft-cancels.
-- [x] **Employee Attributes**: first_name, last_name, email, phone on employees table.
+### Phase 10: CRM & Dashboard Enhancements
+- Unified CRM detail view with appointments, call summaries, transcripts, notes, and search
+- Customer appointments API, appointment cancel API, employee attributes (first/last name, email, phone)
 
-## Phase 11: Navigation & Vocabulary System (Complete ✅)
-- [x] **Navigation Restructure**: 12 flat tabs → 5 grouped sections with sub-tabs.
-- [x] **Composite Views**: MyTeamView, MyBusinessView, AIInsightsView wrappers.
-- [x] **Business Templates**: 29 business types across 6 categories (8 planned) with vocabulary + example services.
-- [x] **Vocabulary System**: 3-tier fallback (tenant override → template default → hardcoded).
-- [x] **GET /vocabulary**: Resolves labels via COALESCE chain.
-- [x] **Self-Service Registration**: POST /register creates tenant + user + JWT.
-- [x] **Onboarding Flag**: `onboarding_completed` boolean on tenants table.
-- [x] **Mobile Navigation**: Bottom nav updated to 5 sections.
+### Phase 11: Navigation & Vocabulary System
+- 12 flat tabs consolidated to 5 grouped sections with sub-tabs
+- 29 business types across 6 categories with 3-tier vocabulary fallback system
+- Self-service registration (`POST /register`), onboarding flag, mobile bottom nav
 
-## Phase 12: Scheduler, Assignments & Coverage Visibility (Complete ✅)
+### Phase 12: Scheduler, Assignments & Coverage Visibility
+- **Setup Wizard**: 6-step repeatable guided setup (Services, Resources, Employees, Shifts, Assignments, Review) with live coverage feedback, re-entry logic, first-run vs return modes
+- **Scheduler**: Staff swimlane view, resource columns view, appointment list view, date navigation, employee day focus panel, quick book panel (under 30 seconds)
+- **Skill Relationship Map**: Interactive 3-column layout (Employees | Skills | Resources) with animated SVG connection lines, broken chain detection, coverage badges
+- **Coverage Visibility**: `check_coverage_gaps()` Postgres function, coverage triggers, reusable coverage bar and badge components, `GET /coverage` and `GET /coverage/staffing` endpoints
+- **RAG Normalization**: `shared/normalizeForEmbedding.ts` normalizes text before embedding into pgvector; integrated with ingestion, call summaries, customer notes, and query lookup; raw text preserved alongside normalized
+- **Stripe Lite**: Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) plans with Stripe Checkout, webhook handler, subscription gate middleware, onboarding integration
 
-> **Ship-blocking.** The owner needs to see who's doing what, assign people to services, and know where the gaps are — without learning the dashboard tab by tab. A repeatable wizard is the entry point; the scheduler and skill map are where they live day-to-day.
+---
 
-### 12A: Repeatable Setup Wizard
+## Phase 13: UI/UX Polish & Production Readiness (Current)
 
-Not just onboarding — this is the **primary configuration tool** for non-technical owners. Re-enter anytime from the dashboard via a "Setup Assistant" button. Each step validates and shows live coverage status so the owner sees the impact of their changes in real time.
-
-| Step | What it does | Coverage feedback |
-|---|---|---|
-| 1. Services | Add/edit service catalog (name, duration, price) | — |
-| 2. Resources | Add bays/chairs/stations (vocabulary-aware) | — |
-| 3. Employees | Add staff members | — |
-| 4. Shifts | Set working hours per employee (day toggles + time pickers) | Shows hours covered per day |
-| 5. Assignments | Assign employees to services, services to resources | Shows coverage status per service as assignments are made |
-| 6. Review | Coverage summary: what's fully covered, what has gaps, what's broken | Full/Partial/Uncovered badges, broken chain warnings, "You're ready" or "Fix these first" |
-
-- [x] **Wizard Shell Component**: Progress indicator, step navigation, back/forward, "Setup Assistant" re-entry button on dashboard sidebar.
-- [x] **Step 1 — Services**: Service CRUD within wizard context. Pre-populated from template on first run.
-- [x] **Step 2 — Resources**: Resource CRUD within wizard context. Vocabulary-aware labels.
-- [x] **Step 3 — Employees**: Employee CRUD within wizard context.
-- [x] **Step 4 — Shifts**: Shift editor per employee. Day toggles + time pickers. Shows total hours covered.
-- [x] **Step 5 — Assignments**: Assign employees → services and services → resources. Live coverage badges update as assignments are made. Broken chain warnings inline.
-- [x] **Step 6 — Review**: Coverage summary dashboard. Lists every service with Full/Partial/Uncovered/Inactive badge. Broken chains listed with "Fix now" links back to Step 5. "You're ready to go live" or "Fix these issues first" message.
-- [x] **Re-Entry Logic**: Wizard detects existing data and pre-fills. Owner can jump to any step. Changes save immediately (not batched to the end).
-- [x] **First-Run vs Return**: First run shows welcome copy and template defaults. Return visits show current state with "what changed" hints.
-
-### 12B: Scheduler Views
-
-Three views answering three questions: "Who's doing what?" (swimlanes), "Are my bays full?" (resource columns), "What's next?" (list). Coverage gaps visible in all three.
-
-- [x] **Staff Swimlane View (Default)**: Employee rows × hourly columns. Appointment blocks coloured by employee. Hatching for off-shift periods. Click empty slot → Quick Book. Click employee pill → Day Focus panel.
-- [x] **Resource Columns View**: Bay/station columns. Appointment blocks within each resource. Coverage bar at top of each column — red zones for gaps. Best for capacity planning.
-- [x] **Appointment List View**: Chronological list of all appointments. Coverage gap warnings appear inline between appointments. Fastest for front desk scanning.
-- [x] **View Switcher**: Tab bar above schedule to toggle between the three views.
-- [x] **Date Navigation**: Previous/next day, week picker, "Today" button.
-- [x] **Employee Day Focus Panel**: Click any employee pill → slides in from right. Full day timeline (hourly rows), booked slots (coloured blocks, clickable), available slots (dashed green, click to quick-book), off-shift (hatching), utilisation bar + stats header, skills at bottom.
-- [x] **Quick Book Panel**: Single-screen walk-in booking. Customer search (CRM lookup + "+ New"), service selector (filtered to employee's skills), resource selector (filtered to available + compatible), time slot (pre-selected, adjustable), notes, confirm button. Target: under 30 seconds.
-
-### 12C: Skill Relationship Map
-
-Interactive 3-column mind map that answers: "Who can do what, where?" Broken chains and coverage gaps are immediately visible.
-
-- [x] **3-Column Layout**: Employees | Skills/Services | Resources. Click employee → their skills light up, others grey out. Click skill → compatible resources light up.
-- [x] **Connection Lines**: Animated SVG lines between columns showing active relationships.
-- [x] **Broken Chain Detection**: Amber dashed lines when employee has skill + resource exists but no matching service in catalog. "Fix now" action opens Add Service dialog pre-filled.
-- [x] **Coverage Badges on Skills**: Full (green), Partial (amber), Uncovered (red), Inactive (grey) — shows at a glance which services need attention.
-- [x] **Reset Button**: Clear all selections, return to default state.
-
-### 12D: Coverage Visibility (Baked In)
-
-Not a separate feature — coverage status is visible wherever the owner is already looking. No separate alerts page, no SMS notifications, no revenue estimates. Just visual indicators.
-
-| Where | What shows |
-|---|---|
-| Scheduler (all views) | Coverage bar with red zones for gaps. Click gap → which services are uncovered. |
-| Services list | Coverage status badge per service (Full/Partial/Uncovered/Inactive). |
-| Skill Relationship Map | Coverage badges on skill nodes. Broken chains in amber. |
-| Setup Wizard Step 5 | Live coverage badges update as assignments are made. |
-| Setup Wizard Step 6 | Full coverage summary with fix links. |
-
-- [x] **`check_coverage_gaps()` Postgres Function**: Returns `covered_hours[]`, `gap_hours[]`, `uncovered_services[]` for a tenant and date range.
-- [x] **Coverage Triggers**: Fire on shift INSERT/UPDATE/DELETE, skill_matrix INSERT/DELETE, and at booking time (pre-flight check).
-- [x] **Coverage Bar Component**: Reusable colour-coded bar. Red zones = gaps. Used in scheduler resource columns view.
-- [x] **Coverage Status Badge Component**: Reusable badge (Full/Partial/Uncovered/Inactive). Used in services list, skill map, and wizard.
-- [x] **`GET /coverage` Endpoint**: Returns coverage status for all services for a given date range. Powers the dashboard coverage indicators.
-- [x] **Service Staffing Map**: `GET /coverage/staffing` endpoint with `ServiceCoverageView` showing staff-to-service coverage at a glance.
-
-### 12E: RAG Normalization Layer
-
-> **Search quality.** Raw conversational text produces inconsistent embeddings. "I think Suzy is great and would prefer to work with her" and "I like Suzy — let's go with her" should match. A normalization step before embedding reduces the text to its semantic core so that vector search reliably finds related content across different phrasings.
-
-Before any text is embedded into pgvector, it passes through an LLM normalization step that extracts the core factual statement. This applies to customer notes, call summary details, and any free-text stored for RAG retrieval.
-
-**How it works:**
-```
-Raw input:  "I think Suzy is great and would prefer to work with her"
-    ↓ LLM normalization (system prompt: extract core fact, strip filler)
-Normalized: "Sally prefers Suzy"
-    ↓ embed normalized text
-Vector:     [0.12, -0.34, ...]  → stored in pgvector
-
-4 weeks later:
-Raw input:  "I like Suzy. Let's go with her"
-    ↓ LLM normalization
-Normalized: "Sally likes Suzy"
-    ↓ embed → cosine similarity search
-Match:      "Sally prefers Suzy" (high similarity)
-```
-
-The raw text is always preserved alongside the normalized version. Search queries are also normalized before embedding so the query vector matches the stored vectors.
-
-**Normalization rules** (system prompt for the LLM):
-- Extract the core factual statement — strip filler, hedging, and conversational noise
-- Include the subject (who) and object (who/what) explicitly — don't use pronouns
-- Use present tense, active voice
-- Keep it to one sentence
-- Preserve names, dates, and specific details
-- For preferences: "[Person] prefers [thing]"
-- For complaints: "[Person] reports [issue]"
-- For requests: "[Person] requests [action]"
-
-- [x] **Normalization Function**: `shared/normalizeForEmbedding.ts` — takes raw text + context (customer name, etc.), returns normalized statement via LLM call.
-- [x] **Integration with Ingestion**: Knowledge base ingestion pipeline calls normalize before embedding each chunk.
-- [x] **Integration with Call Summaries**: Post-call summarizer normalizes key details before embedding.
-- [x] **Integration with Customer Notes**: Notes saved via dashboard are normalized before embedding.
-- [x] **Query Normalization**: Search queries passed through the same normalization before embedding for lookup.
-- [x] **Raw Text Preservation**: Both `raw_text` and `normalized_text` stored. Raw for display, normalized for search.
-- [x] **Schema Update**: Add `normalized_text` column to `tenant_docs` and `call_summaries` tables.
-
-### 12F: Stripe Lite (Two Plans)
-
-> **You can't collect money without this.** Minimal Stripe integration — two prices created in the Stripe dashboard, one webhook to track payment status, one gate to enforce it. No plan picker UI, no trial logic, no call limits, no billing portal.
-
-**Launch pricing:**
-| Plan | Price | Target |
-|---|---|---|
-| Solo | $129/mo | Solo operators (1 staff, 1 resource, 150 calls/mo) |
-| Growth | $279/mo | Small teams (5 staff, 3 resources, 500 calls/mo) |
-| Professional | $449/mo | Unlimited + BI |
-| Enterprise | $1,200+/mo | Multi-location, white label (not yet defined) |
-
-All plans include all features. No feature gating between tiers at launch.
-
-**How it works:**
-1. Owner signs up → you create a Stripe Checkout session for the right price
-2. Stripe redirects back on success → webhook fires → `subscription_status` set to `active`
-3. If payment fails or subscription cancels → webhook fires → status updated → AI stops answering, dashboard shows "Update payment" prompt
-4. That's it. No card form in the dashboard. No plan switching UI. No trial. Stripe handles everything.
-
-- [x] **Stripe Products**: Create Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) as recurring products in Stripe dashboard. Save Price IDs.
-- [x] **Tenant Schema Migration**: Add `stripe_customer_id`, `stripe_subscription_id`, `subscription_status` (active/past_due/canceled/unpaid), `plan_id` (solo/growth) to tenants table.
-- [x] **Checkout Route**: `POST /billing/checkout` — creates Stripe Checkout session for the tenant's plan, returns redirect URL. Accepts `plan_id` parameter.
-- [x] **Webhook Route**: `POST /billing/webhook` — handles `checkout.session.completed` (set active), `invoice.payment_failed` (set past_due), `customer.subscription.deleted` (set canceled). Verifies webhook signature.
-- [x] **Subscription Gate Middleware**: Check `subscription_status` on authenticated requests. If not `active`, return 402 and dashboard shows "Update your payment to continue" prompt. AI stops answering calls for that tenant.
-- [x] **Onboarding Integration**: After registration, redirect to Stripe Checkout. On success redirect, mark tenant as active and continue to setup wizard.
-- [x] **Environment Variables**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
-
-## Phase 13: UI/UX Polish & Production Readiness (Current 🚀)
-- [ ] **UI/UX Flow Improvements**: Ongoing — finding issues through hands-on testing.
-- [ ] **Vocabulary Wiring**: Frontend still hardcodes "Resources"/"Employees" — wire to vocabulary system.
-- [ ] **Cloud Migration**: Move from local Docker to managed Supabase.
-- [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`.
-- [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL.
-- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx.
-- [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n.
-- [ ] **Outlook Sync**: Implement empty Outlook calendar sync branch.
-- [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook sync.
-- [ ] **Beta Testing**: Real-world call tests with DynaTire.
+- [ ] **UI/UX Flow Improvements**: Ongoing — finding issues through hands-on testing
+- [ ] **Vocabulary Wiring**: Frontend still hardcodes "Resources"/"Employees" — wire to vocabulary system
+- [ ] **Cloud Migration**: Move from local Docker to managed Supabase
+- [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`
+- [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL
+- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx
+- [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n
+- [ ] **Outlook Sync**: Implement empty Outlook calendar sync branch
+- [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook sync
+- [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow
+- [ ] **Live RAG Testing**: Upload a real policy PDF and verify AI uses it during a call
+- [ ] **Live Shift Testing**: Attempt to book out-of-hours and verify AI rejection
+- [ ] **Beta Testing**: Real-world call tests with DynaTire
 
 ---
 
 ## Backlog
 
-> Features that are valuable but not required for market launch. Prioritize after Phase 13 is shipped and DynaTire is live. Ideas are preserved here so nothing is lost.
+> Features that are valuable but not required for market launch. Prioritize after Phase 13 is shipped and DynaTire is live.
 
-### Automated Phone Provisioning
-Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works for the first 10–20 customers. Automate when manual onboarding becomes the bottleneck.
+### UI/UX
+
+#### Drag-and-Drop Reordering (Services, Employees, Resources)
+- [ ] Service list reordering: Manager drags services into preferred order (e.g., workflow order). Requires `sort_order` column on `services` table. Applies to: Service Catalog, Skill Matrix, Staffing Map, Skill Relationship Map.
+- [ ] Employee list reordering: Same pattern for employee display order across all views.
+- [ ] Resource list reordering: Same pattern for resources.
+- [ ] Skill Map column reordering: Drag-and-drop within Skill Relationship Map columns.
+- [ ] Requires drag library (dnd-kit or react-beautiful-dnd). `sort_order` INTEGER column on employees, services, and resources tables.
+
+#### Landing Page
+- [ ] Design reference: LandingPage.html from March 18 session. Dark industrial aesthetic, Bebas Neue / DM Sans fonts.
+- [ ] Hero with live phone mockup, $126K missed call stat, competitor comparison, pricing cards, 8 categories.
+- [ ] Separate project from the app. Build before public launch.
+
+#### Sign-Up Page (6-step progressive reveal)
+- [ ] Design reference: SignUpPage.html from March 18 session.
+- [ ] Flow: Category > Type > Specialty > Size > Services > Account.
+- [ ] Routes to: SoloWizard (team_size=1) or SetupWizard (team_size>1).
+- [ ] Build after solo wizard and pricing are implemented.
+
+### Infrastructure
+
+#### Automated Phone Provisioning
+Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works for the first 10-20 customers. Automate when manual onboarding becomes the bottleneck.
 
 - [ ] `src/services/telnyx.ts` — search numbers by area code, purchase, configure SIP trunk via Telnyx REST API.
 - [ ] Vapi agent auto-creation from `vapi/agent.template.json` with tenant vocabulary, system prompt, voice ID, and Edge Function URL injected.
@@ -242,17 +114,126 @@ Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works 
 - [ ] Suggest nearby area codes if requested code has no availability.
 - [ ] Env vars: `TELNYX_API_KEY`, `VAPI_API_KEY`.
 
-### Full Billing System (Stripe)
-Extends Stripe Lite (12F) with trial management, a third pricing tier, plan switching, call limits, and self-service billing portal. Build when customer volume justifies the complexity.
+#### Platform Adapter Architecture (Analysis Required)
 
-**Additional tier:**
-| Plan | Price | Calls/mo | Staff | Resources |
-|---|---|---|---|---|
-| Professional | $449/mo | Unlimited | Unlimited | Unlimited |
+> Status: Under consideration. Large architectural change requiring serious analysis. The goal is to make the platform agnostic — able to swap databases, sync with external CRMs, integrate with multiple calendar providers, and support add-on plugins without touching core business logic.
 
-**Platform Cost Model:** ~$12–36/mo per tenant (Telnyx ~$5–15, Vapi ~$5–15, OpenAI ~$2–5, Supabase ~$0.50–1). Call limits protect margin.
+**Current Coupling Map:**
 
-- [ ] Professional tier ($449/mo) product in Stripe + `STRIPE_PRO_PRICE_ID`.
+| Layer | Currently Coupled To |
+|-------|---------------------|
+| Data Access | PostgreSQL (raw SQL in 15 route files, pgvector, RLS, PL/pgSQL functions, 50+ migrations) |
+| Voice AI | Vapi (webhook format, tool definitions) |
+| Telephony | Telnyx (SIP trunk config, planned provisioning API) |
+| Embeddings | OpenAI (`text-embedding-3-small`) |
+| LLM | OpenAI/Groq (GPT-4o-mini for normalization, Groq/Llama 3 for voice) |
+| Calendar Sync | Google Calendar (n8n workflow) |
+| Payments | Stripe (direct API in `src/routes/billing.ts`) |
+| Auth | bcrypt + JWT (hardcoded, no OAuth/SSO) |
+
+**Proposed Architecture:** Plugin/Integration Registry with TypeScript contracts (`IDataStore`, `ICalendarSync`, `ICrmSync`, `IEmbeddingProvider`) and swappable adapter implementations per provider.
+
+**Proposed Interface Contracts:**
+
+```typescript
+interface Integration {
+  id: string;
+  name: string;
+  type: 'calendar' | 'crm' | 'sms' | 'embedding' | 'payment' | 'database';
+  configure(tenantId: string, config: Record<string, string>): Promise<void>;
+  isConfigured(tenantId: string): Promise<boolean>;
+}
+
+interface ICalendarSync extends Integration {
+  syncAppointment(tenantId: string, appointment: Appointment): Promise<string>;
+  deleteEvent(tenantId: string, externalId: string): Promise<void>;
+  getFreeBusy(tenantId: string, start: Date, end: Date): Promise<BusySlot[]>;
+}
+
+interface ICrmSync extends Integration {
+  syncCustomer(tenantId: string, customer: Customer): Promise<string>;
+  importContacts(tenantId: string): Promise<Customer[]>;
+  syncCallSummary(tenantId: string, summary: CallSummary): Promise<void>;
+}
+
+interface IDataStore {
+  getTenant(id: string): Promise<Tenant | null>;
+  createTenant(data: CreateTenantInput): Promise<Tenant>;
+  listCustomers(tenantId: string, opts: PaginationOpts): Promise<Customer[]>;
+  bookAppointment(tenantId: string, data: BookAppointmentInput): Promise<BookingResult>;
+  // ... etc for all entity types
+}
+
+interface IEmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+  dimensions: number;
+}
+```
+
+**Database Abstraction Challenges:**
+
+| Feature | Postgres-specific | Abstraction Difficulty |
+|---------|------------------|-----------------------|
+| pgvector | `vector(1536)`, `<=>` cosine distance | Very High (needs vector DB adapter) |
+| Row Level Security | `CREATE POLICY` | Medium (application-level WHERE) |
+| `jsonb` columns | `jsonb_set()`, `->` operator | Medium |
+| PL/pgSQL functions | `book_appointment_atomic()`, `check_coverage_gaps()` | High (rewrite as service functions) |
+| `ON CONFLICT` / `RETURNING *` | Postgres upsert syntax | Medium |
+
+**Recommendation:** Extract all SQL into a Data Access Layer (repository pattern), keep Postgres as primary adapter, build a second adapter only when a specific customer/scale requirement demands it. For RAG, use a dedicated vector DB alongside relational DB rather than making pgvector portable.
+
+**Database Schema (when ready):**
+
+```sql
+CREATE TABLE tenant_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  integration_type TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  config JSONB NOT NULL DEFAULT '{}',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (tenant_id, integration_type, provider)
+);
+```
+
+**Priority Order:**
+
+| Priority | Adapter | Effort |
+|----------|---------|--------|
+| 1 | Calendar Sync (Google + Outlook) | 1-2 weeks |
+| 2 | CRM Sync (HubSpot, Salesforce) | 2-3 weeks |
+| 3 | Embedding Provider (OpenAI > Cohere/local) | 1-2 days |
+| 4 | SMS/Notifications (Telnyx > Twilio) | 1 week |
+| 5 | Payment Provider (Stripe > Square) | 1-2 weeks |
+| 6 | Data Access Layer (PostgreSQL abstraction) | 4-8 weeks |
+| 7 | Voice AI Provider (Vapi > alternatives) | 2-4 weeks |
+
+**What NOT to abstract:** Auth (add OAuth/SSO as feature, not adapter), frontend framework (Next.js/React), Edge Functions runtime (Deno/Supabase).
+
+**Next step:** Start with Calendar Sync adapter. Build `ICalendarSync` interface, implement `GoogleCalendarAdapter` and `OutlookCalendarAdapter`, create `tenant_integrations` table, add Settings UI.
+
+### Integrations
+
+#### Multi-Business Phone Routing
+- [ ] **One number, multiple businesses**: Caller dials one number, AI routes to the right context based on intent.
+- [ ] **Option A (simple)**: Two separate tenants, two numbers, two Vapi agents. Works today.
+- [ ] **Option B (elegant)**: Single tenant with "divisions" — each has its own service catalog, knowledge base, and AI persona. Requires new routing layer and multi-division data model.
+- [ ] Decision not yet made. Revisit when deployment is live and real routing needs emerge.
+
+#### Combo/Package Bookings
+- [ ] Two chained sequential queries for multi-skill bookings, both must pass before acceptance.
+- [ ] Wrapped in a single PostgreSQL transaction with `SELECT FOR UPDATE` row-level locking.
+- [ ] Clarify whether `book_appointment_atomic` already handles this or needs extension.
+
+### Business Features
+
+#### Full Billing System (Stripe)
+Extends Stripe Lite (Phase 12) with trial management, plan switching, call limits, and self-service billing portal. Build when customer volume justifies complexity.
+
+**Platform Cost Model:** ~$12-36/mo per tenant (Telnyx ~$5-15, Vapi ~$5-15, OpenAI ~$2-5, Supabase ~$0.50-1). Call limits protect margin.
+
 - [ ] Plan picker UI in onboarding wizard (replace direct Checkout redirect).
 - [ ] Stripe Elements card form embedded in dashboard (instead of Checkout redirect).
 - [ ] 14-day free trial: `trial_ends_at` on tenants, reminder SMS/email 3 days before expiry.
@@ -261,35 +242,68 @@ Extends Stripe Lite (12F) with trial management, a third pricing tier, plan swit
 - [ ] Plan upgrade/downgrade flow in dashboard settings.
 - [ ] `STRIPE_PUBLISHABLE_KEY` for client-side Stripe Elements.
 
-### Business Intelligence & Employee ROI
-Retention feature — not needed for launch. Build when you have enough booking data to make recommendations meaningful.
+#### Business Intelligence & Employee ROI
+Retention feature. Build when booking data is sufficient for meaningful recommendations.
 
-- [ ] Employee efficiency: utilisation %, revenue/hr, skills used vs idle.
-- [ ] Service ROI: bookings/mo, revenue/hr, single-point-of-failure detection.
-- [ ] Recommendations engine: ranked action items with revenue impact estimates.
+- [ ] Employee efficiency: utilisation %, revenue/hr, skills used vs idle, thresholds (>85% near capacity, 50-85% healthy, <50% underutilised).
+- [ ] Service ROI: bookings/mo, revenue/hr, single-point-of-failure detection, ROI signals (Strong/Review/Poor/Remove).
+- [ ] Recommendations engine: ranked action items with revenue impact estimates — broken chains, cross-training, pricing, capacity warnings.
 - [ ] Materialized views: `employee_roi_metrics`, `service_roi_metrics` (refreshed nightly).
-- [ ] `GET /analytics/employees`, `GET /analytics/services`, `GET /analytics/recommendations`.
-- [ ] BI tab in AI & Insights section (3 sub-tabs).
-- [ ] Period selector: 7 days, 30 days, 90 days, 12 months.
+- [ ] API endpoints: `GET /analytics/employees`, `/services`, `/recommendations`.
+- [ ] BI tab in AI & Insights section (3 sub-tabs), period selector (7d/30d/90d/12mo).
 
-### Personal Resources & Unified Booking Model
-Only needed when onboarding businesses with mobile techs or service writers who don't work at fixed stations. DynaTire may not need this day one.
+#### Personal Resources & Unified Booking Model
+Only needed when onboarding businesses with mobile techs or service writers at non-fixed stations.
 
 - [ ] `is_personal` boolean on `resources` table.
 - [ ] Hide personal resources from bay/chair resource manager UI.
-- [ ] Employee setup: "Does this person work at a fixed station?" → No → auto-create personal resource.
-- [ ] Skill map: personal resources show clean green chain (not warning).
+- [ ] Employee setup: "Does this person work at a fixed station?" > No > auto-create personal resource.
+- [ ] Skill map: personal resources show clean green chain (not warning), "personal" label.
 - [ ] Coverage logic: personal resource availability = employee availability.
 - [ ] Dashboard alert: "Sarah W. has no resource assigned — [Create Sarah's Desk]".
 
-### Advanced Coverage Alerts
-The visual coverage indicators in Phase 12 (12D) cover the dashboard experience. These are the automated notification and AI behaviour extensions — build when owners ask for them.
+#### Advanced Coverage Alerts
+Visual coverage in Phase 12 covers the dashboard. These are automated notification and AI behaviour extensions.
 
 - [ ] Owner SMS alerts for critical gaps (Telnyx SMS, deduplicated within 24 hours).
 - [ ] AI behaviour change: offer alternative times when booking into a gap.
 - [ ] Missed revenue tracking: "This week you missed $240 due to coverage gaps."
 - [ ] Nightly coverage check job for next 7 days.
 - [ ] Dashboard notification banner for critical gaps with action buttons (Reassign / Call customers / Dismiss).
+
+#### 8 Industry Categories (Financial Services, IT Services)
+- [ ] Expand from 6 to 8 categories. Don't show empty categories until templates exist.
+- [ ] Define default services, vocabulary labels, and templates for Financial Services and IT Services.
+
+#### Enterprise Tier ($1,200+/mo)
+- [ ] Multi-location, white label, dedicated support. Not yet technically defined.
+- [ ] Requires: parent/child tenant relationships, cross-tenant reporting, shared billing, multi-location dashboard, custom domain support, branding overrides.
+- [ ] Build when enterprise prospect appears. Don't build speculatively.
+
+### Architecture
+
+#### Query Routing Normalization
+- [ ] GPT-4o-mini call before every caller question (~150ms, temp 0.1). Returns `{ normalized, route: "database" | "rag" | "booking" }`. Main LLM never makes routing decisions. Falls back to "rag" on failure.
+- [ ] Distinct from embedding normalization (`shared/normalizeForEmbedding.ts`): this routes incoming caller questions in real time, while embedding normalization preprocesses stored text for pgvector.
+- [ ] Build after beta testing reveals routing accuracy issues.
+
+#### Travel Buffer
+- [ ] `buffer_minutes` field for mobile businesses (time between appointments for driving).
+- [ ] Open question: goes on employee or tenant table? Different employees might need different buffers.
+- [ ] Solo wizard: None / 15 / 30 / 45 / 60 min picker. DynaTire default: 30 min.
+- [ ] Update `book_appointment_atomic` and `check_availability` to enforce buffer.
+
+#### Zero-Duration Services (Fee-Only)
+- [ ] Duration of 0 is a valid service entry (e.g., Tire Disposal, Environmental Fee). No time slot allocated.
+- [ ] Open question: how does the booking engine handle this? Options: (a) cannot be booked standalone — add-on only, (b) 1-minute minimum, (c) line item on invoice only.
+- [ ] Update `book_appointment_atomic` and `check_coverage_gaps()` once decision is made.
+
+#### Solo Wizard Branching
+- [ ] `team_size = 1` > SoloWizard (2 steps: services + availability). `team_size > 1` > SetupWizard (6 steps).
+- [ ] Auto-created on solo completion: 1 employee (the owner), 1 personal resource, all services assigned.
+- [ ] Design reference: SoloWizard.html mockup from March 18 session.
+
+---
 
 ## HIPAA Exclusion Policy
 
