@@ -1,4 +1,4 @@
-# AI Secretary - Multi-Tenant Voice AI Reception SaaS
+# SecretaryHQ - Multi-Tenant Voice AI Reception SaaS
 
 ## Project Overview
 Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded — they do not appear anywhere in the UI.
@@ -40,7 +40,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Test backend: `npm test`
 - Test dashboard: `cd dashboard && npm test`
 - Test edge functions: `deno task test --no-check`
-- Login: dale@ai-sec.com / password
+- Login: admin@secretaryhq.com / password
 - Super-admin tenant: `00000000-0000-0000-0000-000000000000`
 - PoC tenant (DynaTire): `f234e471-0e60-4163-86c9-93cfd9338e3a`
 - Docker DB on port 5433

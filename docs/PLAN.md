@@ -1,4 +1,4 @@
-# AI Secretary — Project Roadmap
+# SecretaryHQ — Project Roadmap
 
 ## Completed Phases
 

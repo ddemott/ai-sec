@@ -1,8 +1,8 @@
-# AI Secretary SaaS – Mission Statement
+# SecretaryHQ SaaS – Mission Statement
 
 ## 1. Purpose
 
-We are building an **AI Secretary as a Service** that gives small and medium businesses a reliable, always-available front desk without the cost and complexity of hiring full-time staff.
+We are building **SecretaryHQ** — an AI secretary as a service that gives small and medium businesses a reliable, always-available front desk without the cost and complexity of hiring full-time staff.
 
 The system should:
 - Answer calls and messages as naturally as a human.
@@ -27,7 +27,7 @@ These businesses typically:
 
 ## 3. What We Are Creating
 
-### 3.1 AI Secretary
+### 3.1 SecretaryHQ
 
 A conversational agent that:
 - Answers phone calls and SMS on behalf of the business.

@@ -2,7 +2,7 @@ import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
 
 /**
- * AI Secretary: Knowledge Ingestion CLI
+ * SecretaryHQ: Knowledge Ingestion CLI
  * 
  * Usage:
  * export OPENAI_API_KEY=your_key

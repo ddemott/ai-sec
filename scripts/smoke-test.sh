@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# smoke-test.sh: Runs basic smoke tests against a deployed AI Secretary backend.
+# smoke-test.sh: Runs basic smoke tests against a deployed SecretaryHQ backend.
 # Usage: ./scripts/smoke-test.sh <backend-url> [admin-email] [admin-password]
 #
 # Examples:
 #   ./scripts/smoke-test.sh https://your-backend.railway.app
-#   ./scripts/smoke-test.sh https://localhost:3000 dale@ai-sec.com password
+#   ./scripts/smoke-test.sh https://localhost:3000 admin@secretaryhq.com password
 #
 # Uses env vars ADMIN_EMAIL and ADMIN_PASSWORD as fallbacks.
 
 BACKEND_URL="${1:-}"
-ADMIN_EMAIL="${2:-${ADMIN_EMAIL:-dale@ai-sec.com}}"
+ADMIN_EMAIL="${2:-${ADMIN_EMAIL:-admin@secretaryhq.com}}"
 ADMIN_PASSWORD="${3:-${ADMIN_PASSWORD:-password}}"
 
 if [ -z "$BACKEND_URL" ]; then
@@ -23,7 +23,7 @@ fi
 # Strip trailing slash
 BACKEND_URL="${BACKEND_URL%/}"
 
-log() { echo "[ai-sec] $1"; }
+log() { echo "[secretaryhq] $1"; }
 
 PASS=0
 FAIL=0
@@ -49,7 +49,7 @@ run_test() {
 }
 
 echo "============================================"
-echo " AI Secretary - Smoke Tests"
+echo " SecretaryHQ - Smoke Tests"
 echo " Target: $BACKEND_URL"
 echo "============================================"
 echo ""

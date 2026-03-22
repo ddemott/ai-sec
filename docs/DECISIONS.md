@@ -1,4 +1,4 @@
-# AI Secretary — Decision Log
+# SecretaryHQ — Decision Log
 
 ## Adopted (implemented)
 

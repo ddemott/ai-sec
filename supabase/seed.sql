@@ -1,17 +1,17 @@
--- Seed Data for AI Secretary SaaS (Platform + Demo Tenants)
+-- Seed Data for SecretaryHQ SaaS (Platform + Demo Tenants)
 
--- 0. Create a Platform Tenant for the Site Owner (Super Admin)
+-- 0. Create a Platform Tenant for the SecretaryHQ Admin (Super Admin)
 INSERT INTO tenants (id, name, business_type, timezone)
 VALUES (
     '00000000-0000-0000-0000-000000000000',
-    'AI Sec Platform',
+    'SecretaryHQ Platform',
     'platform-admin',
     'America/New_York'
 ) ON CONFLICT (id) DO NOTHING;
 
--- 0b. Create a Site Owner User (Platform Admin)
+-- 0b. Create a SecretaryHQ Admin User (Platform Admin)
 INSERT INTO users (tenant_id, email, password_hash, full_name)
-VALUES ('00000000-0000-0000-0000-000000000000', 'dale@ai-sec.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Site Owner')
+VALUES ('00000000-0000-0000-0000-000000000000', 'admin@secretaryhq.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'SecretaryHQ Admin')
 ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- 1. Create a default tenant

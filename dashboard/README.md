@@ -1,7 +1,7 @@
-## AI Secretary Dashboard
+## SecretaryHQ Dashboard
 ## README.MD
 
-This is the **management UI** for the AI Secretary SaaS. It lets owners and admins:
+This is the **management UI** for the SecretaryHQ SaaS. It lets owners and admins:
 
 - View and manage appointments across tenants/resources.
 - See unified customer profiles with upcoming/past appointments, AI call summaries, and internal notes.

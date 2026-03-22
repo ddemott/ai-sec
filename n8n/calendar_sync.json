@@ -1,5 +1,5 @@
 {
-  "name": "AI Secretary: Calendar Sync (Google/Outlook)",
+  "name": "SecretaryHQ: Calendar Sync (Google/Outlook)",
   "nodes": [
     {
       "parameters": {
@@ -48,7 +48,7 @@
         "end": "={{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"end_time\"]}}",
         "summary": "AI Booking: {{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"description\"]}}",
         "additionalFields": {
-          "description": "Booked via AI Secretary. Call ID: {{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"call_id\"]}}"
+          "description": "Booked via SecretaryHQ. Call ID: {{$node[\"Webhook: New Appointment\"].json[\"body\"][\"record\"][\"call_id\"]}}"
         }
       },
       "name": "Google Calendar: Create Event",

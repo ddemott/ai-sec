@@ -29,8 +29,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 cd "$ROOT_DIR"
 
-log() { echo "[ai-sec] $1"; }
-err() { echo "[ai-sec] ERROR: $1" >&2; }
+log() { echo "[secretaryhq] $1"; }
+err() { echo "[secretaryhq] ERROR: $1" >&2; }
 
 TEMPLATE="$ROOT_DIR/vapi/agent.template.json"
 

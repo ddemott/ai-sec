@@ -1,4 +1,4 @@
-# AI Secretary SaaS – n8n Workflows (Async Layer)
+# SecretaryHQ SaaS – n8n Workflows (Async Layer)
 
 To maintain ultra-low latency in the voice call, all high-latency external tasks (Sync, SMS, Summarization) are handled by **n8n** in the background.
 

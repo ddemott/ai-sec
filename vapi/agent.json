@@ -1,5 +1,5 @@
 {
-  "name": "DynaTire AI Secretary",
+  "name": "DynaTire SecretaryHQ",
   "transcriber": {
     "provider": "deepgram",
     "model": "nova-2",

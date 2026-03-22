@@ -1,4 +1,4 @@
-# AI Secretary SaaS
+# SecretaryHQ SaaS
 
 A multi-tenant AI reception platform for service businesses (tire shops, salons, auto repair, fitness studios, and more). An AI receptionist answers inbound calls 24/7, books appointments, answers policy questions via RAG, and syncs with the owner's dashboard — no missed calls.
 
@@ -25,7 +25,7 @@ npm start
 - **Backend API:** [https://localhost:3000](https://localhost:3000)
 
 ### 4. Sign In
-- **Email:** `dale@ai-sec.com`
+- **Email:** `admin@secretaryhq.com`
 - **Password:** `password`
 
 ### 5. Load Demo Data (optional)
@@ -36,7 +36,7 @@ Reset the database with 3 realistic businesses:
 
 | Email | Business | Password |
 |-------|----------|----------|
-| `dale@ai-sec.com` | Super Admin | `password` |
+| `admin@secretaryhq.com` | Super Admin | `password` |
 | `admin@dynatire.com` | DynaTire (tire shop) | `password` |
 | `bella@bellashair.com` | Bella's Hair Studio (salon) | `password` |
 | `owner@quickfixauto.com` | QuickFix Auto Repair | `password` |

@@ -52,7 +52,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           <div className="bg-white/20 p-3 rounded-xl mb-4 backdrop-blur-sm">
             <Bot className="w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">AI Secretary Portal</h1>
+          <h1 className="text-2xl font-bold tracking-tight">SecretaryHQ Portal</h1>
           <p className="text-blue-100 text-sm mt-1">Multi-Tenant Management Console</p>
         </div>
 
@@ -125,7 +125,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       
       <div className="mt-8 flex items-center text-gray-400 text-xs">
         <Calendar className="w-4 h-4 mr-2" />
-        <span>AI Secretary SaaS v0.1.0 • Ready for Live Integration</span>
+        <span>SecretaryHQ v0.1.0 • Ready for Live Integration</span>
       </div>
     </div>
   )

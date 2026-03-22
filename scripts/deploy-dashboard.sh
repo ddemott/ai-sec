@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# deploy-dashboard.sh: Builds and deploys the Next.js dashboard for AI Secretary.
+# deploy-dashboard.sh: Builds and deploys the Next.js dashboard for SecretaryHQ.
 # Detects Vercel CLI or prints manual instructions.
 #
 # Requires env vars: NEXT_PUBLIC_API_BASE_URL
@@ -11,8 +11,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 DASHBOARD_DIR="$ROOT_DIR/dashboard"
 
-log() { echo "[ai-sec] $1"; }
-err() { echo "[ai-sec] ERROR: $1" >&2; }
+log() { echo "[secretaryhq] $1"; }
+err() { echo "[secretaryhq] ERROR: $1" >&2; }
 
 # ---------------------------------------------------------------------------
 # 1. Validate

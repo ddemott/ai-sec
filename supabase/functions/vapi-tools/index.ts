@@ -37,7 +37,7 @@ const BookAppointmentSchema = z.object({
   name: z.string().optional(),
   start_time: z.string().datetime(),
   end_time: z.string().datetime(),
-  description: z.string().default("Booking via AI Secretary"),
+  description: z.string().default("Booking via SecretaryHQ"),
   call_id: z.string().min(1),
   location: z.string().optional(),
   employee_id: z.string().or(z.number()).optional().transform(v => v?.toString())

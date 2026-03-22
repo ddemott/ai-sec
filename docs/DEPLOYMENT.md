@@ -1,4 +1,4 @@
-# AI Secretary SaaS - Production Deployment Guide
+# SecretaryHQ SaaS - Production Deployment Guide
 
 This guide walks through migrating from the local Docker development environment to a production Supabase project with live telephony.
 
@@ -206,7 +206,7 @@ Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 
 ### 6.2 Telnyx: Create a SIP Trunk
 1. Go to **Voice** > **SIP Trunking** > **Create SIP Trunk**
-2. Name it `AI Secretary`
+2. Name it `SecretaryHQ`
 3. Set the **Inbound Webhook URL** to Vapi's SIP endpoint (from Vapi dashboard)
 4. Assign your purchased number to this trunk
 
@@ -269,7 +269,7 @@ If `pg_net` isn't available or you prefer Supabase-native webhooks:
 
 ### 8.1 Dashboard Smoke Test
 1. Open the dashboard URL
-2. Log in with the seeded credentials (`dale@ai-sec.com` / `password`)
+2. Log in with the seeded credentials (`admin@secretaryhq.com` / `password`)
 3. Verify you can see appointments, customers, and resources
 4. Try creating a test appointment through the UI
 

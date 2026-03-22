@@ -75,7 +75,7 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
           </div>
           <h1 className="text-3xl font-bold">Business Analytics</h1>
         </div>
-        <p className="text-gray-500 dark:text-gray-400 text-sm ml-12">Monitor your AI Secretary&apos;s performance and booking conversion.</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm ml-12">Monitor your SecretaryHQ agent&apos;s performance and booking conversion.</p>
       </header>
 
       {/* KPI GRID */}

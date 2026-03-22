@@ -126,7 +126,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
           </div>
           <div>
             <h1 className="text-xl md:text-3xl font-bold dark:text-white">AI Persona Tuning</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Customize how your AI Secretary talks and behaves</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Customize how your SecretaryHQ agent talks and behaves</p>
           </div>
         </div>
         <Button

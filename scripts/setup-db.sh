@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# setup-db.sh: Automates schema migrations and seeding for AI Secretary SaaS.
+# setup-db.sh: Automates schema migrations and seeding for SecretaryHQ SaaS.
 # Usage: ./scripts/setup-db.sh [DATABASE_URL]
 # If DATABASE_URL is not provided, it defaults to the local Docker Postgres.
 
@@ -10,7 +10,7 @@ DB_URL="${1:-postgres://postgres:postgres@localhost:5433/postgres}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 cd "$ROOT_DIR"
 
-echo "[ai-sec] 🚀 Starting database setup for: $DB_URL"
+echo "[secretaryhq] 🚀 Starting database setup for: $DB_URL"
 
 # 1. Check if psql is available
 if ! command -v psql >/dev/null 2>&1; then
@@ -19,12 +19,12 @@ if ! command -v psql >/dev/null 2>&1; then
 fi
 
 # 2. Apply Migrations in alphabetical order
-echo "[ai-sec] 📂 Applying migrations from supabase/migrations/..."
+echo "[secretaryhq] 📂 Applying migrations from supabase/migrations/..."
 # Using find and sort to ensure strict alphabetical/chronological order
 MIGRATIONS=$(find supabase/migrations -name "*.sql" | sort)
 
 for f in $MIGRATIONS; do
-  echo "[ai-sec]   Applying $f..."
+  echo "[secretaryhq]   Applying $f..."
   # We use --single-transaction to ensure each migration file succeeds fully or fails fully
   if ! psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f "$f" > /dev/null; then
     echo "Error applying $f. Aborting."
@@ -33,10 +33,10 @@ for f in $MIGRATIONS; do
 done
 
 # 3. Apply Seed Data
-echo "[ai-sec] 🌱 Seeding database from supabase/seed.sql..."
+echo "[secretaryhq] 🌱 Seeding database from supabase/seed.sql..."
 if ! psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f supabase/seed.sql > /dev/null; then
   echo "Error applying seed data. Aborting."
   exit 1
 fi
 
-echo "[ai-sec] ✅ Database setup complete!"
+echo "[secretaryhq] ✅ Database setup complete!"

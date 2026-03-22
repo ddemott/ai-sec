@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# deploy-edge-functions.sh: Deploys Supabase Edge Functions for AI Secretary.
+# deploy-edge-functions.sh: Deploys Supabase Edge Functions for SecretaryHQ.
 # Requires env vars: SUPABASE_PROJECT_ID, SUPABASE_ACCESS_TOKEN, OPENAI_API_KEY,
 #                    VAPI_SERVER_URL_SECRET, DATABASE_URL
 #
@@ -10,8 +10,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 cd "$ROOT_DIR"
 
-log() { echo "[ai-sec] $1"; }
-err() { echo "[ai-sec] ERROR: $1" >&2; }
+log() { echo "[secretaryhq] $1"; }
+err() { echo "[secretaryhq] ERROR: $1" >&2; }
 
 # ---------------------------------------------------------------------------
 # 1. Validate required env vars

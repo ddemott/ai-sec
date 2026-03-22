@@ -1,7 +1,7 @@
-# AI Secretary SaaS – Architecture
+# SecretaryHQ SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** AI Secretary built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 15 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 15 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 

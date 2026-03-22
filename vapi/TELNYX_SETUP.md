@@ -1,25 +1,25 @@
 # Telnyx + Vapi Setup Guide (The "Glue")
 
-To connect your phone number to the AI Secretary, follow these steps in the Telnyx and Vapi Dashboards.
+To connect your phone number to the SecretaryHQ, follow these steps in the Telnyx and Vapi Dashboards.
 
 ---
 
 ### 1. Telnyx: Create a SIP Trunk
 1.  Go to **Voice** → **SIP Trunking** → **Create SIP Trunk**.
-2.  Name it `AI Secretary (Vapi)`.
+2.  Name it `SecretaryHQ (Vapi)`.
 3.  In **Inbound Settings**, set the **Webhook URL** to Vapi's SIP endpoint (usually provided in the Vapi dashboard under "Phone Numbers" → "Import").
 4.  In **Outbound Settings**, set the **SIP Auth** to "IP-based" or "Credentials" depending on Vapi's current requirement.
 
 ### 2. Telnyx: Buy and Assign a Number
 1.  Go to **Numbers** → **Search and Buy Numbers**.
 2.  Purchase a number for DynaTire.
-3.  Assign the number to the `AI Secretary (Vapi)` SIP Trunk.
+3.  Assign the number to the `SecretaryHQ (Vapi)` SIP Trunk.
 
 ### 3. Vapi: Import the Number
 1.  Go to the **Vapi Dashboard** → **Phone Numbers**.
 2.  Click **Import from Provider** or **Link SIP Trunk**.
 3.  Enter the Telnyx Number and the Trunk ID.
-4.  Assign the **DynaTire AI Secretary** Agent to this number.
+4.  Assign the **DynaTire SecretaryHQ** Agent to this number.
 
 ### 4. Vapi: Configure the Server URL
 1.  In the Vapi Agent settings, ensure the **Server URL** points to your Supabase Edge Function:

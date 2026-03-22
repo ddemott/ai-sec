@@ -562,7 +562,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
               <section className="space-y-6">
                 <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-800 pb-2">
                     <ShieldAlert className="w-5 h-5 text-amber-500" />
-                    <h2 className="text-lg font-bold tracking-tight">AI Secretary Core Attributes</h2>
+                    <h2 className="text-lg font-bold tracking-tight">SecretaryHQ Core Attributes</h2>
                 </div>
                 
                 <div className="space-y-6">

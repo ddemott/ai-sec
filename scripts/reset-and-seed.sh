@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: ./scripts/reset-and-seed.sh
 #
 # Creates:
-#   - Super admin (dale@ai-sec.com)
+#   - Super admin (admin@secretaryhq.com)
 #   - DynaTire Mobile Tire Shop (3 techs, 2 trucks, 3 services, shifts, 8 customers, 12 appointments)
 #   - Bella's Hair Studio salon (4 stylists, 3 chairs, 5 services, shifts, 10 customers, 15 appointments)
 #   - QuickFix Auto Repair shop (3 mechanics, 4 bays, 6 services, shifts, 6 customers, 8 appointments)
@@ -14,14 +14,14 @@ set -euo pipefail
 
 DB_URL="${1:-postgres://postgres:postgres@localhost:5433/postgres}"
 
-echo "[ai-sec] 🗑️  Clearing database..."
+echo "[secretaryhq] 🗑️  Clearing database..."
 psql "$DB_URL" -c "
 TRUNCATE tenants, resources, customers, appointments, call_summaries, call_transcripts,
   soft_reservations, users, services, employees, employee_shifts, service_employee,
   service_resource, tenant_docs, tenant_skills CASCADE;
 " > /dev/null
 
-echo "[ai-sec] 🌱 Seeding realistic demo data..."
+echo "[secretaryhq] 🌱 Seeding realistic demo data..."
 
 psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SEED'
 
@@ -32,11 +32,11 @@ psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SEED'
 -- 1. SUPER ADMIN
 -- ===================================================================
 INSERT INTO tenants (id, name, business_type, timezone)
-VALUES ('00000000-0000-0000-0000-000000000000', 'AI Sec Platform', 'platform-admin', 'America/New_York');
+VALUES ('00000000-0000-0000-0000-000000000000', 'SecretaryHQ Platform', 'platform-admin', 'America/New_York');
 
 INSERT INTO users (tenant_id, email, password_hash, full_name)
-VALUES ('00000000-0000-0000-0000-000000000000', 'dale@ai-sec.com',
-  '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Dale DeMott');
+VALUES ('00000000-0000-0000-0000-000000000000', 'admin@secretaryhq.com',
+  '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'SecretaryHQ Admin');
 
 -- ===================================================================
 -- 2. DYNATIRE — Mobile Tire Shop
@@ -366,11 +366,11 @@ END $$;
 
 SEED
 
-echo "[ai-sec] ✅ Database reset and seeded!"
+echo "[secretaryhq] ✅ Database reset and seeded!"
 echo ""
 echo "   Logins (all passwords: 'password'):"
 echo "   ─────────────────────────────────────────"
-echo "   dale@ai-sec.com          Super Admin"
+echo "   admin@secretaryhq.com     Super Admin"
 echo "   admin@dynatire.com       DynaTire (tire shop)"
 echo "   bella@bellashair.com     Bella's Hair Studio (salon)"
 echo "   owner@quickfixauto.com   QuickFix Auto Repair (auto shop)"

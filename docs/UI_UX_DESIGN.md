@@ -1,4 +1,4 @@
-# AI Secretary Dashboard — UI/UX Design Brief
+# SecretaryHQ Dashboard — UI/UX Design Brief
 
 ## Purpose
 This document captures the current state of the dashboard UI, its problems, and proposed improvements. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, spas, trades, fitness) who are not technical users.
@@ -270,7 +270,7 @@ Consider a landing page (instead of defaulting to Calendar) that shows:
 ```
 Step 1: Tell Us About Your Business
 ┌─────────────────────────────────────────────────────────┐
-│  Welcome to AI Secretary!                                │
+│  Welcome to SecretaryHQ!                                │
 │  Let's get your AI receptionist set up.                  │
 │                                                          │
 │  Business Name: [DynaTire                    ]           │

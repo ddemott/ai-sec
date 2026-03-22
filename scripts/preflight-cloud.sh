@@ -23,7 +23,7 @@ fail() { echo "  [FAIL] $1"; FAIL=$((FAIL + 1)); }
 warn() { echo "  [WARN] $1"; WARN=$((WARN + 1)); }
 
 echo "============================================"
-echo " AI Secretary - Cloud Migration Pre-flight"
+echo " SecretaryHQ - Cloud Migration Pre-flight"
 echo "============================================"
 echo ""
 

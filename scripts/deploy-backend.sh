@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# deploy-backend.sh: Builds and deploys the Fastify backend for AI Secretary.
+# deploy-backend.sh: Builds and deploys the Fastify backend for SecretaryHQ.
 # Detects available platform CLIs (Railway, Fly.io) or prints manual instructions.
 #
 # Requires env vars: DATABASE_URL, OPENAI_API_KEY, VAPI_SERVER_URL_SECRET,
@@ -12,8 +12,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 cd "$ROOT_DIR"
 
-log() { echo "[ai-sec] $1"; }
-err() { echo "[ai-sec] ERROR: $1" >&2; }
+log() { echo "[secretaryhq] $1"; }
+err() { echo "[secretaryhq] ERROR: $1" >&2; }
 
 # ---------------------------------------------------------------------------
 # 1. Check required tools
@@ -54,7 +54,7 @@ log "Build successful: dist/src/index.js"
 if [ ! -f "$ROOT_DIR/Dockerfile" ]; then
   log "Creating Dockerfile..."
   cat > "$ROOT_DIR/Dockerfile" << 'DOCKERFILE'
-# AI Secretary Backend - Production Dockerfile
+# SecretaryHQ Backend - Production Dockerfile
 FROM node:20-slim AS builder
 
 WORKDIR /app

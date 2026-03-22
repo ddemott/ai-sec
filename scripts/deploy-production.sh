@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# deploy-production.sh: Master deployment orchestrator for AI Secretary SaaS.
+# deploy-production.sh: Master deployment orchestrator for SecretaryHQ SaaS.
 # Usage: ./scripts/deploy-production.sh .env.production
 #
 # Required env vars in .env.production:
@@ -22,9 +22,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 cd "$ROOT_DIR"
 
-log() { echo "[ai-sec] $1"; }
-err() { echo "[ai-sec] ERROR: $1" >&2; }
-step() { echo ""; echo "========================================"; echo "[ai-sec] STEP $1: $2"; echo "========================================"; }
+log() { echo "[secretaryhq] $1"; }
+err() { echo "[secretaryhq] ERROR: $1" >&2; }
+step() { echo ""; echo "========================================"; echo "[secretaryhq] STEP $1: $2"; echo "========================================"; }
 
 # ---------------------------------------------------------------------------
 # 0. Parse arguments
@@ -219,7 +219,7 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "========================================================"
-echo " AI Secretary - Production Deployment Complete"
+echo " SecretaryHQ - Production Deployment Complete"
 echo "========================================================"
 echo ""
 echo " Backend API:     $NEXT_PUBLIC_API_BASE_URL"
@@ -234,7 +234,7 @@ echo "   3. Configure n8n workflows (see docs/DEPLOYMENT.md Phase 7)"
 echo "   4. Run a live call test"
 echo ""
 echo " Security reminders:"
-echo "   - Change the default seeded password (dale@ai-sec.com / password)"
+echo "   - Change the default seeded password (admin@secretaryhq.com / password)"
 echo "   - Restrict CORS to your dashboard domain"
 echo "   - Verify RLS is enabled on all tenant-scoped tables"
 echo ""
