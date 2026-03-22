@@ -72,6 +72,8 @@
 - [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow
 - [ ] **Live RAG Testing**: Upload a real policy PDF and verify AI uses it during a call
 - [ ] **Live Shift Testing**: Attempt to book out-of-hours and verify AI rejection
+- [ ] **Stripe Test Products**: Recreate 4 products (Solo/Growth/Professional/Enterprise) in Stripe test mode. Update Price IDs in `.env.production`. Live mode products already created.
+- [ ] **Rotate Exposed Keys**: Supabase DB password, OpenAI API key, Supabase access token were exposed in chat. Regenerate all and update `.env.production`.
 - [ ] **Beta Testing**: Real-world call tests with DynaTire
 
 ---
