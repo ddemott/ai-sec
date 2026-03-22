@@ -222,7 +222,7 @@ describe('StaffSwimLaneView', () => {
     expect(onEmployeeClick).toHaveBeenCalledWith(employees[0]);
   });
 
-  test('calls onSlotClick when an on-shift slot is clicked (mousedown + mouseup)', () => {
+  test('clicking on-shift cell initiates move (no onSlotClick — replaced with shift move)', () => {
     const apptMap = new Map<string, SchedulerAppointment[]>();
     apptMap.set('1', []);
     apptMap.set('2', []);
@@ -230,77 +230,46 @@ describe('StaffSwimLaneView', () => {
     const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
     shiftMap.set('1', [{ id: 'shift-1', start_time: '09:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);
-    const onSlotClick = vi.fn();
+    const onShiftResize = vi.fn();
 
     render(
       <StaffSwimLaneView
         employees={employees}
         appointmentsByEmployee={apptMap}
         shiftsByEmployee={shiftMap}
-        onSlotClick={onSlotClick}
+        onShiftResize={onShiftResize}
       />
     );
+    // Click on an on-shift cell starts a move — same position = no change, so onShiftResize not called
     const slot = screen.getByTestId('slot-1-10');
     fireEvent.mouseDown(slot);
     fireEvent.mouseUp(slot);
-    expect(onSlotClick).toHaveBeenCalledWith('1', 10);
+    // No resize called because shift didn't actually move
+    expect(onShiftResize).not.toHaveBeenCalled();
   });
 
-  test('calls onSlotDrag when dragging across multiple hours', () => {
+  test('calls onShiftDrag when clicking on off-shift (hatched) cell', () => {
     const apptMap = new Map<string, SchedulerAppointment[]>();
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
     const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
-    shiftMap.set('1', [{ id: 'shift-1', start_time: '09:00', end_time: '17:00', day_of_week: 4 }]);
-    shiftMap.set('2', []);
-    const onSlotDrag = vi.fn();
-    const onSlotClick = vi.fn();
-
-    render(
-      <StaffSwimLaneView
-        employees={employees}
-        appointmentsByEmployee={apptMap}
-        shiftsByEmployee={shiftMap}
-        onSlotClick={onSlotClick}
-        onSlotDrag={onSlotDrag}
-      />
-    );
-    // Single click on an on-shift cell triggers onSlotClick (book appointment)
-    // Note: multi-cell drag uses document mousemove which jsdom can't simulate with layout
-    fireEvent.mouseDown(screen.getByTestId('slot-1-10'));
-    fireEvent.mouseUp(screen.getByTestId('slot-1-10'));
-    expect(onSlotClick).toHaveBeenCalledWith('1', 10);
-  });
-
-  test('calls onShiftDrag when dragging on off-shift (hatched) cells', () => {
-    const apptMap = new Map<string, SchedulerAppointment[]>();
-    apptMap.set('1', []);
-    apptMap.set('2', []);
-    apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
-    // Employee 1 has shift 12-17, so hours 8-11 are OFF shift
     shiftMap.set('1', [{ id: 'shift-2', start_time: '12:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);
     const onShiftDrag = vi.fn();
-    const onSlotDrag = vi.fn();
 
     render(
       <StaffSwimLaneView
         employees={employees}
         appointmentsByEmployee={apptMap}
         shiftsByEmployee={shiftMap}
-        onSlotDrag={onSlotDrag}
         onShiftDrag={onShiftDrag}
       />
     );
-    // Drag on off-shift hours 8am-11am
-    // Single click on off-shift cell triggers onShiftDrag for a 1-hour shift
-    // Note: multi-cell drag uses document mousemove which jsdom can't simulate with layout
+    // Single click on off-shift cell creates a 1-hour shift
     fireEvent.mouseDown(screen.getByTestId('slot-1-8'));
     fireEvent.mouseUp(screen.getByTestId('slot-1-8'));
     expect(onShiftDrag).toHaveBeenCalledWith('1', 8, 9);
-    expect(onSlotDrag).not.toHaveBeenCalled();
   });
 });
 
