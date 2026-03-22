@@ -16,7 +16,7 @@ This is a high-level, human-readable overview of the AI Secretary SaaS for colla
 
 ## Main Components & Verification
 
-- **598 Tests Passing**: 229 backend + 369 dashboard tests verified via Vitest.
+- **612 Tests Passing**: 244 backend + 368 dashboard tests verified via Vitest.
 - **Postgres (Supabase)**: Single source of truth with Row-Level Security (RLS) for tenant isolation.
 - **Supabase Edge Function (`vapi-tools`)**:
   - `getCustomerContext` – CRM history lookup.

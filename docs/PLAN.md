@@ -44,7 +44,7 @@ Full code review identified 58 bugs across all severity levels. All resolved.
 - [x] **Validation**: Zod schemas at API boundaries, JSONB CHECK constraints, UUID validation.
 - [x] **Booking Engine**: DST-safe shift checks, auto end-time, customer upsert, service enforcement.
 - [x] **Dashboard**: Error boundaries, SessionContext, structured logging, debounce guards.
-- [x] **Test Coverage**: 229 backend + 369 dashboard = 598 total, all passing.
+- [x] **Test Coverage**: 244 backend + 368 dashboard = 612 total, all passing.
 
 ## Phase 8: Production Go-Live (Current 🚀)
 - [x] **Agent Template**: Templatize `agent.json` with Mustache variables.

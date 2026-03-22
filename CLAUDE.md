@@ -17,7 +17,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 51 SQL migrations (schema, RLS, RPCs, coverage, billing, bug fixes)
+- `/supabase/migrations` - 54 SQL migrations (schema, RLS, RPCs, coverage, billing, bug fixes)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
@@ -75,7 +75,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phase 12 complete (Scheduler, Assignments & Coverage Visibility). Phases 1–12 all complete, including security hardening (Phase 7.5), scale/polish (Phase 9), CRM enhancements (Phase 10), navigation restructure + vocabulary system (Phase 11), and scheduler views + skill map + coverage + RAG normalization + Stripe Lite (Phase 12). 229 backend tests + 369 dashboard tests = 598 total passing.
+Phase 12 complete (Scheduler, Assignments & Coverage Visibility). Phases 1–12 all complete, including security hardening (Phase 7.5), scale/polish (Phase 9), CRM enhancements (Phase 10), navigation restructure + vocabulary system (Phase 11), and scheduler views + skill map + coverage + RAG normalization + Stripe Lite (Phase 12). 244 backend tests + 368 dashboard tests = 612 total passing.
 
 ### Remaining (Phase 8 Go-Live tasks)
 - Cloud migration (local Docker → managed Supabase)
