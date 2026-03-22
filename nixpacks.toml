@@ -1,0 +1,15 @@
+# Force Node.js provider (not Deno)
+# Railway auto-detects Deno because of supabase/functions/ — override that
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node dist/src/index.js"
