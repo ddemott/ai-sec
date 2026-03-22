@@ -91,7 +91,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
         state: selectedCustomer.state || '',
         postal_code: selectedCustomer.postal_code || '',
         timezone: selectedCustomer.timezone || 'America/New_York',
-            notes: selectedCustomer.metadata?.notes || ''
+            notes: (selectedCustomer.metadata?.notes as string) || ''
         })
         setIsEditing(false)
         setIsCreating(false)
@@ -120,8 +120,8 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
             setCustomers([])
         }
       } else {
-        setCustomers(data)
-        if (!selectedCustomer) setSelectedCustomer(data[0])
+        setCustomers(data as Customer[])
+        if (!selectedCustomer) setSelectedCustomer((data as Customer[])[0])
       }
     } catch {
       setCustomers(MOCK_CUSTOMERS)
@@ -136,7 +136,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
       if (!data || data.length === 0) {
         setSummaries(MOCK_SUMMARIES.filter(s => s.customer_id === customerId))
       } else {
-        setSummaries(data)
+        setSummaries(data as typeof summaries)
       }
     } catch {
       setSummaries(MOCK_SUMMARIES.filter(s => s.customer_id === customerId))
@@ -146,7 +146,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
   async function fetchCustomerAppointments(customerId: string) {
     try {
       const data = await Api.customers.appointments(customerId, tenantId)
-      setCustomerAppointments(data || [])
+      setCustomerAppointments((data || []) as typeof customerAppointments)
     } catch {
       setCustomerAppointments([])
     }
@@ -401,13 +401,13 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                         <div className="flex items-start">
                             <RefreshCw className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
                             <span className="dark:text-gray-300">
-                              Timezone: {US_TIMEZONES.find(t => t.value === selectedCustomer.timezone)?.label || selectedCustomer.timezone || 'Not set'}
+                              Timezone: {US_TIMEZONES.find(t => t.value === selectedCustomer?.timezone)?.label || selectedCustomer?.timezone || 'Not set'}
                             </span>
                         </div>
                         <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
                             <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Internal Notes</p>
                             <p className="text-gray-700 dark:text-gray-400 italic leading-relaxed">
-                                {selectedCustomer?.metadata?.notes || 'No internal notes added yet.'}
+                                {(selectedCustomer?.metadata?.notes as string) || 'No internal notes added yet.'}
                             </p>
                         </div>
                     </div>
@@ -532,7 +532,7 @@ export default function CRMView({ overrideTenantId }: { overrideTenantId?: strin
                         <div key={s.id} className="p-5 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm">
                           <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mb-2">
                             <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">AI Summary</span>
-                            <span>{new Date(s.call_timestamp || s.created_at).toLocaleDateString()}</span>
+                            <span>{new Date(s.call_timestamp || s.created_at || '').toLocaleDateString()}</span>
                           </div>
                           <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">&quot;{s.summary}&quot;</p>
                           {s.has_transcript && (
