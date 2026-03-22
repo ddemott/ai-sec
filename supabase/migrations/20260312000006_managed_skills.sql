@@ -25,10 +25,12 @@ BEGIN
 END
 $$;
 
--- Seed some initial skills for DynaTire PoC
+-- Seed some initial skills for DynaTire PoC (only if tenant exists)
 INSERT INTO tenant_skills (tenant_id, name, description)
-VALUES 
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'tire-rotation', 'Standard 4-tire rotation'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'flat-repair', 'Puncture plugging and patching'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'tire-install', 'Full mount and balance of new tires')
+SELECT * FROM (VALUES
+    ('f234e471-0e60-4163-86c9-93cfd9338e3a'::UUID, 'tire-rotation', 'Standard 4-tire rotation'),
+    ('f234e471-0e60-4163-86c9-93cfd9338e3a'::UUID, 'flat-repair', 'Puncture plugging and patching'),
+    ('f234e471-0e60-4163-86c9-93cfd9338e3a'::UUID, 'tire-install', 'Full mount and balance of new tires')
+) AS v(tenant_id, name, description)
+WHERE EXISTS (SELECT 1 FROM tenants WHERE id = 'f234e471-0e60-4163-86c9-93cfd9338e3a')
 ON CONFLICT DO NOTHING;
