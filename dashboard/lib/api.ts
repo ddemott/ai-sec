@@ -324,6 +324,12 @@ export const Api = {
     listFull: () => apiFetch<Record<string, unknown>[]>(`/templates/full`),
   },
 
+  // --- FEEDBACK ---
+  feedback: {
+    submit: (tenantId: string | null, data: { page: string; context?: string; comment: string; rating?: number }) =>
+      apiMutate<Record<string, unknown>>(`/feedback`, 'POST', { tenant_id: tenantId, ...data }),
+  },
+
   // --- CALL SUMMARIES ---
   callSummaries: {
     list: (tenantId: string | null, customerId: string) =>

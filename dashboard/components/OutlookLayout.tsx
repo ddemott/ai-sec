@@ -20,6 +20,7 @@ import {
 import { Api } from '../lib/api'
 import { useTheme, THEMES } from '@/lib/ThemeContext'
 import { useSessionContext } from '@/lib/SessionContext'
+import { FeedbackButton } from './ui/FeedbackButton'
 
 type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses';
 
@@ -338,6 +339,16 @@ export function OutlookLayout({
         </div>
       </>
     )}
+
+    {/* Feedback button — appears on every page with automatic context */}
+    <FeedbackButton
+      page={`${currentMode === 'front-desk' ? 'Front Desk' : 'Back Office'} > ${
+        FRONT_DESK_TABS.find(t => t.id === activeTab)?.label ||
+        BACK_OFFICE_TABS.find(t => t.id === activeTab)?.label ||
+        activeTab
+      }`}
+      context={managedTenantName ? `Viewing as: ${managedTenantName}` : undefined}
+    />
     </>
   )
 }
