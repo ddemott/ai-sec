@@ -5,10 +5,11 @@ import { Wand2 } from 'lucide-react'
 import ServiceAssignmentView from './ServiceAssignmentView'
 import ResourceManagerView from './ResourceManagerView'
 import KnowledgeBaseView from './KnowledgeBaseView'
+import ServiceCoverageView from './ServiceCoverageView'
 import SetupWizard from './SetupWizard'
 import { useVocabulary } from '@/lib/VocabularyContext'
 
-type SubTab = 'services' | 'resources' | 'knowledge'
+type SubTab = 'services' | 'resources' | 'knowledge' | 'coverage'
 
 export default function MyBusinessView({ overrideTenantId }: { overrideTenantId?: string | null }) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('services')
@@ -18,6 +19,7 @@ export default function MyBusinessView({ overrideTenantId }: { overrideTenantId?
     { id: 'services', label: 'Services' },
     { id: 'resources', label: vocab.resource_plural },
     { id: 'knowledge', label: 'Knowledge Base' },
+    { id: 'coverage', label: 'Staffing Map' },
   ]
   const [wizardOpen, setWizardOpen] = useState(false)
 
@@ -51,6 +53,7 @@ export default function MyBusinessView({ overrideTenantId }: { overrideTenantId?
         {activeSubTab === 'services' && <ServiceAssignmentView overrideTenantId={overrideTenantId} />}
         {activeSubTab === 'resources' && <ResourceManagerView overrideTenantId={overrideTenantId} />}
         {activeSubTab === 'knowledge' && <KnowledgeBaseView overrideTenantId={overrideTenantId} />}
+        {activeSubTab === 'coverage' && <ServiceCoverageView overrideTenantId={overrideTenantId} />}
       </div>
       <SetupWizard
         isOpen={wizardOpen}

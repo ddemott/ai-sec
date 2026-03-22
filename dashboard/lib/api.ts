@@ -362,6 +362,21 @@ export const Api = {
     },
   },
 
+  // --- STAFFING MAP ---
+  staffing: {
+    get: (tenantId: string | null, dayOfWeek?: number) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (dayOfWeek !== undefined) params.day_of_week = String(dayOfWeek);
+      return apiFetch<Array<{
+        service_id: string;
+        service_name: string;
+        duration_minutes: number;
+        employees: Array<{ id: string; name: string; shift_start: string | null; shift_end: string | null }>;
+      }>>(`/coverage/staffing`, params);
+    },
+  },
+
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
     list: (tenantId: string | null) => 

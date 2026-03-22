@@ -87,6 +87,35 @@ BEGIN
   INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', emp_id, 6, '09:00', '14:00');
 END $$;
 
+-- Service-Employee and Service-Resource Mappings for DynaTire
+DO $$
+DECLARE
+  v_tid UUID := 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+  v_mike UUID; v_steve UUID; v_carlos UUID;
+  v_svc_rotation UUID; v_svc_repair UUID; v_svc_install UUID;
+  v_res1 UUID; v_res2 UUID;
+BEGIN
+  SELECT id INTO v_mike FROM employees WHERE email='mike@dynatire.com';
+  SELECT id INTO v_steve FROM employees WHERE email='steve@dynatire.com';
+  SELECT id INTO v_carlos FROM employees WHERE email='carlos@dynatire.com';
+  SELECT id INTO v_svc_rotation FROM services WHERE name='Tire Rotation' AND tenant_id=v_tid;
+  SELECT id INTO v_svc_repair FROM services WHERE name='Flat Repair' AND tenant_id=v_tid;
+  SELECT id INTO v_svc_install FROM services WHERE name='Full Tire Install' AND tenant_id=v_tid;
+  SELECT id INTO v_res1 FROM resources WHERE name='Truck Alpha' AND tenant_id=v_tid;
+  SELECT id INTO v_res2 FROM resources WHERE name='Truck Bravo' AND tenant_id=v_tid;
+
+  -- All 3 techs can do rotation
+  INSERT INTO service_employee (tenant_id, service_id, employee_id) VALUES (v_tid, v_svc_rotation, v_mike), (v_tid, v_svc_rotation, v_steve), (v_tid, v_svc_rotation, v_carlos) ON CONFLICT DO NOTHING;
+  -- Mike and Steve can do flat repair
+  INSERT INTO service_employee (tenant_id, service_id, employee_id) VALUES (v_tid, v_svc_repair, v_mike), (v_tid, v_svc_repair, v_steve) ON CONFLICT DO NOTHING;
+  -- Only Mike and Carlos can do full install
+  INSERT INTO service_employee (tenant_id, service_id, employee_id) VALUES (v_tid, v_svc_install, v_mike), (v_tid, v_svc_install, v_carlos) ON CONFLICT DO NOTHING;
+  -- Both trucks for all services
+  INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES (v_tid, v_svc_rotation, v_res1), (v_tid, v_svc_rotation, v_res2) ON CONFLICT DO NOTHING;
+  INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES (v_tid, v_svc_repair, v_res1), (v_tid, v_svc_repair, v_res2) ON CONFLICT DO NOTHING;
+  INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES (v_tid, v_svc_install, v_res1), (v_tid, v_svc_install, v_res2) ON CONFLICT DO NOTHING;
+END $$;
+
 -- Customers
 INSERT INTO customers (tenant_id, phone, name, first_name, last_name, email, city, state, timezone, metadata) VALUES
   ('f234e471-0e60-4163-86c9-93cfd9338e3a', '+15552001001', 'Bob Smith',       'Bob',    'Smith',     'bob@example.com',     'New York',  'NY', 'America/New_York',    '{"vehicle":"2022 Honda Civic","notes":"Prefers morning appointments"}'),

@@ -35,6 +35,66 @@ export function registerAnalyticsRoutes(
     return reply.send(res.rows);
   }, 'Failed to check coverage gaps'));
 
+  // Service staffing map — per-service employee availability for a given day of week
+  app.get('/coverage/staffing', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = req.tenantId;
+    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+
+    const dayOfWeek = parseInt((req.query as Record<string, string>).day_of_week || String(new Date().getDay()), 10);
+
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(`
+        SELECT
+          s.id as service_id,
+          s.name as service_name,
+          s.duration_minutes,
+          e.id as employee_id,
+          e.name as employee_name,
+          es.start_time::text as shift_start,
+          es.end_time::text as shift_end
+        FROM services s
+        LEFT JOIN service_employee se ON se.service_id = s.id AND se.tenant_id = s.tenant_id
+        LEFT JOIN employees e ON e.id = se.employee_id AND e.is_deleted = false
+        LEFT JOIN employee_shifts es ON es.employee_id = e.id AND es.tenant_id = s.tenant_id
+          AND es.day_of_week = $2 AND es.is_active = true
+        WHERE s.tenant_id = $1
+        ORDER BY s.name, e.name
+      `, [tenantId, dayOfWeek]);
+    });
+
+    // Group by service with employee shift details
+    const serviceMap = new Map<string, {
+      service_id: string;
+      service_name: string;
+      duration_minutes: number;
+      employees: { id: string; name: string; shift_start: string | null; shift_end: string | null }[];
+    }>();
+
+    for (const row of res.rows) {
+      if (!serviceMap.has(row.service_id)) {
+        serviceMap.set(row.service_id, {
+          service_id: row.service_id,
+          service_name: row.service_name,
+          duration_minutes: row.duration_minutes,
+          employees: [],
+        });
+      }
+      const svc = serviceMap.get(row.service_id)!;
+      if (row.employee_id && row.shift_start) {
+        if (!svc.employees.some(e => e.id === row.employee_id && e.shift_start === row.shift_start)) {
+          svc.employees.push({
+            id: row.employee_id,
+            name: row.employee_name,
+            shift_start: row.shift_start,
+            shift_end: row.shift_end,
+          });
+        }
+      }
+    }
+
+    return reply.send(Array.from(serviceMap.values()));
+  }, 'Failed to fetch staffing map'));
+
   app.get('/call-summaries', withHandler(async (req: AppRequest, reply) => {
     const tenantId = req.tenantId;
     const customerId = (req.query as any).customer_id;
