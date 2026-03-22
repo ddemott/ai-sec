@@ -76,16 +76,6 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     refreshStaticData();
   }, [refreshScheduler, refreshStaticData]);
 
-  const handleSlotClick = useCallback((employeeId: string, hour: number) => {
-    setQuickBookPrefill({ employeeId, hour, date: selectedDate });
-    setQuickBookOpen(true);
-  }, [selectedDate]);
-
-  const handleSlotDrag = useCallback((employeeId: string, startHour: number, endHour: number) => {
-    setQuickBookPrefill({ employeeId, hour: startHour, endHour, date: selectedDate });
-    setQuickBookOpen(true);
-  }, [selectedDate]);
-
   const handleShiftDrag = useCallback(async (employeeId: string, startHour: number, endHour: number) => {
     if (!tenantId) return;
     // Only create shifts for actual employees, not user accounts
@@ -262,8 +252,6 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             appointmentsByEmployee={appointmentsByEmployee}
             shiftsByEmployee={shiftsByEmployee}
             onAppointmentClick={handleAppointmentClick}
-            onSlotClick={handleSlotClick}
-            onSlotDrag={handleSlotDrag}
             onShiftDrag={handleShiftDrag}
             onShiftDelete={handleShiftDelete}
             onShiftResize={handleShiftResize}

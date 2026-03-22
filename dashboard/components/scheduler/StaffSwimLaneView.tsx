@@ -11,8 +11,6 @@ interface StaffSwimLaneViewProps {
   appointmentsByEmployee: Map<string, SchedulerAppointment[]>;
   shiftsByEmployee: Map<string, SwimLaneShift[]>;
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
-  onSlotClick?: (employeeId: string, hour: number) => void;
-  onSlotDrag?: (employeeId: string, startHour: number, endHour: number) => void;
   onShiftDrag?: (employeeId: string, startHour: number, endHour: number) => void;
   onShiftDelete?: (shiftId: string) => void;
   onShiftResize?: (shiftId: string, startHour: number, endHour: number) => void;
@@ -42,16 +40,17 @@ function findShiftAtHour(shifts: SwimLaneShift[], hour: number): SwimLaneShift |
   return null;
 }
 
-type DragMode = 'create' | 'resize-left' | 'resize-right' | 'book';
+type DragMode = 'create' | 'resize-left' | 'resize-right' | 'move';
 
 interface DragState {
   employeeId: string;
   mode: DragMode;
   startHour: number;
   currentHour: number;
-  shiftId?: number;
+  shiftId?: string;
   originalStart?: number;
   originalEnd?: number;
+  grabOffset?: number; // for move: which hour within the shift was grabbed
 }
 
 export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
@@ -59,8 +58,6 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   appointmentsByEmployee,
   shiftsByEmployee,
   onAppointmentClick,
-  onSlotClick,
-  onSlotDrag,
   onShiftDrag,
   onShiftDelete,
   onShiftResize,
@@ -134,53 +131,71 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
       if (onShiftResize && newEnd !== d.originalEnd) {
         onShiftResize(d.shiftId, d.originalStart, newEnd);
       }
-    } else if (d.mode === 'book') {
-      if (didDrag.current && onSlotDrag) {
-        onSlotDrag(d.employeeId, minH, maxH);
-      } else if (onSlotClick) {
-        onSlotClick(d.employeeId, d.startHour);
+    } else if (d.mode === 'move' && d.shiftId != null && d.originalStart != null && d.originalEnd != null && d.grabOffset != null) {
+      // Move: shift the entire block by the drag delta
+      const duration = d.originalEnd - d.originalStart;
+      const newStart = d.currentHour - d.grabOffset;
+      const clampedStart = Math.max(SCHEDULER_START_HOUR, Math.min(newStart, SCHEDULER_END_HOUR - duration));
+      const newEnd = clampedStart + duration;
+      if (onShiftResize && (clampedStart !== d.originalStart || newEnd !== d.originalEnd)) {
+        onShiftResize(d.shiftId, clampedStart, newEnd);
       }
     }
 
     dragRef.current = null;
     didDrag.current = false;
     setDrag(null);
-  }, [onSlotClick, onSlotDrag, onShiftDrag, onShiftResize]);
+  }, [onShiftDrag, onShiftResize]);
 
   const startDrag = useCallback((employeeId: string, hour: number, empShifts: SwimLaneShift[], mode?: DragMode, shift?: SwimLaneShift) => {
     let dragMode: DragMode = mode || 'create';
-    let shiftId: number | undefined;
+    let shiftId: string | undefined;
     let originalStart: number | undefined;
     let originalEnd: number | undefined;
+    let grabOffset: number | undefined;
 
-    if (shift && (dragMode === 'resize-left' || dragMode === 'resize-right')) {
+    if (shift && (dragMode === 'resize-left' || dragMode === 'resize-right' || dragMode === 'move')) {
       const { start, end } = parseShiftHours(shift);
       shiftId = shift.id;
       originalStart = start;
       originalEnd = end;
+      if (dragMode === 'move') {
+        grabOffset = hour - start; // how far into the shift the user grabbed
+      }
     } else if (!mode) {
-      // Auto-detect: empty space = create, inside shift = book
+      // Auto-detect: empty space = create, inside shift = move
       const existingShift = findShiftAtHour(empShifts, hour);
       if (existingShift) {
-        dragMode = 'book';
+        dragMode = 'move';
+        const { start, end } = parseShiftHours(existingShift);
+        shiftId = existingShift.id;
+        originalStart = start;
+        originalEnd = end;
+        grabOffset = hour - start;
       } else {
         dragMode = 'create';
       }
     }
 
-    const state: DragState = { employeeId, mode: dragMode, startHour: hour, currentHour: hour, shiftId, originalStart, originalEnd };
+    const state: DragState = { employeeId, mode: dragMode, startHour: hour, currentHour: hour, shiftId, originalStart, originalEnd, grabOffset };
     dragRef.current = state;
     didDrag.current = false;
     setDrag(state);
     setSelectedLane(employeeId);
   }, []);
 
-  // Compute visual shift during resize
+  // Compute visual shift during resize or move
   function getVisualShift(empId: string, shift: SwimLaneShift): { start: number; end: number } {
     const { start, end } = parseShiftHours(shift);
     if (!drag || drag.employeeId !== empId || drag.shiftId !== shift.id) return { start, end };
     if (drag.mode === 'resize-left') return { start: Math.min(drag.currentHour, end - 1), end };
     if (drag.mode === 'resize-right') return { start, end: Math.max(drag.currentHour + 1, start + 1) };
+    if (drag.mode === 'move' && drag.grabOffset != null) {
+      const duration = end - start;
+      const newStart = drag.currentHour - drag.grabOffset;
+      const clamped = Math.max(SCHEDULER_START_HOUR, Math.min(newStart, SCHEDULER_END_HOUR - duration));
+      return { start: clamped, end: clamped + duration };
+    }
     return { start, end };
   }
 
@@ -270,38 +285,41 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
             if (vis.end <= SCHEDULER_START_HOUR || vis.start >= SCHEDULER_END_HOUR) return null;
             const cs = Math.max(vis.start, SCHEDULER_START_HOUR);
             const ce = Math.min(vis.end, SCHEDULER_END_HOUR);
-            const isResizing = drag?.shiftId === shift.id;
+            const isDragging = drag?.shiftId === shift.id;
+            const isMoving = isDragging && drag?.mode === 'move';
 
             return (
               <div
                 key={`shift-${idx}`}
                 className={`absolute top-0.5 bottom-0.5 rounded border z-[2] group/shift transition-colors ${
-                  isResizing
+                  isMoving
+                    ? 'bg-green-300/90 dark:bg-green-600/60 border-green-500 dark:border-green-400 shadow-lg cursor-grabbing'
+                    : isDragging
                     ? 'bg-green-300/80 dark:bg-green-700/50 border-green-500 dark:border-green-400 shadow-md'
-                    : 'bg-green-100/70 dark:bg-green-900/30 border-green-300/60 dark:border-green-700/40 hover:bg-green-200/80 dark:hover:bg-green-800/40 hover:border-green-400 dark:hover:border-green-500'
+                    : 'bg-green-100/70 dark:bg-green-900/30 border-green-300/60 dark:border-green-700/40 hover:bg-green-200/80 dark:hover:bg-green-800/40 hover:border-green-400 dark:hover:border-green-500 cursor-grab'
                 }`}
                 style={{
                   left: (cs - SCHEDULER_START_HOUR) * hourWidth,
                   width: (ce - cs) * hourWidth,
-                  pointerEvents: isResizing ? 'none' : 'auto',
+                  pointerEvents: isDragging ? 'none' : 'auto',
                 }}
                 onMouseDown={(e) => {
-                  // Click inside shift = book appointment
+                  // Click inside shift = move the shift
                   e.preventDefault();
                   e.stopPropagation();
                   const hour = xToHour(e.clientX);
-                  startDrag(empId, hour, empShifts, 'book');
+                  startDrag(empId, hour, empShifts, 'move', shift);
                 }}
               >
                 {/* Time label */}
                 <span className={`absolute left-2 top-1 text-[10px] font-semibold pointer-events-none ${
-                  isResizing ? 'text-green-800 dark:text-green-200' : 'text-green-700/80 dark:text-green-400/60'
+                  isDragging ? 'text-green-800 dark:text-green-200' : 'text-green-700/80 dark:text-green-400/60'
                 }`}>
                   {formatHour(cs)} – {formatHour(ce)}
                 </span>
 
                 {/* Delete button */}
-                {onShiftDelete && !isResizing && (
+                {onShiftDelete && !isDragging && (
                   <button
                     className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
                     onClick={(e) => {
