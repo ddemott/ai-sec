@@ -40,12 +40,85 @@ Phase 13 (Production Readiness) is in progress. The backend is deployed to Railw
 6. Tested with no auth header (should get instant 401) — still times out
 7. Reset database password in Supabase dashboard — still times out
 
-**Root cause (suspected):** Supabase free tier compute budget exhausted. The edge function had repeated 150-second timeout failures (wrong DB password after we changed it mid-session) which consumed all available compute. Logs show `WORKER_LIMIT` errors and status code `546` (custom Supabase timeout code).
+**Timeline of how it broke:**
+1. Edge functions were working fine (deployed since March 1, version 5)
+2. Mid-session, we changed the Supabase database password (from old to `llYAVWp0x8U9DfBm`)
+3. The `DATABASE_URL` secret in edge functions still had the OLD password
+4. Every Vapi tool call triggered the edge function → tried to connect to DB → wrong password → hung for 150 seconds → `WORKER_LIMIT` error
+5. This happened repeatedly (every time the AI tried to use a tool during test calls)
+6. After several of these 150-second failures, the function stopped responding entirely
+7. Even after fixing the password, it remains completely unresponsive
 
-**Resolution:** Upgrade Supabase to Pro tier ($25/mo) — removes compute limits. This may also fix the `SUPABASE_DB_URL` auto-provisioning. If upgrading doesn't fix it, investigate:
-- Whether `SUPABASE_DB_URL` has the correct password after reset
-- Whether the Deno postgres library (`postgres@v0.17.0`) has connection issues
-- Whether the edge function has a startup crash (check BOOT_ERROR in logs)
+**Key evidence:**
+- Logs show `WORKER_LIMIT` error: "Function failed due to not having enough compute resources"
+- Status code `546` with `execution_time_ms: 150738` (2.5 minutes per attempt)
+- Even a simple request with NO database access times out (meaning the function isn't even booting)
+- Redeploying the function doesn't help — it gets "No change found" or deploys but still won't respond
+
+---
+
+### Analysis: Why It's Failing (Theories Ranked by Likelihood)
+
+**Theory 1: Free tier compute budget exhausted (MOST LIKELY — 70%)**
+- Supabase free tier has limited compute for edge functions
+- Each failed invocation burned 150 seconds of compute (the max before timeout)
+- We triggered many of these back-to-back (test calls + manual curl tests)
+- Once the budget is gone, ALL invocations are rejected — even ones that would succeed
+- Evidence: `WORKER_LIMIT` error is specifically about compute resources
+- Fix: Upgrade to Pro tier ($25/mo) — compute limits are much higher or removed
+- Alternative: Wait for the monthly budget to reset (unclear when this happens on free tier)
+
+**Theory 2: Function stuck in bad state / boot crash (LIKELY — 20%)**
+- The Deno postgres Pool is created at module load time (line 14 of repository.ts: `new Pool(DB_URL, 3, true)`)
+- If the Pool constructor hangs on a bad connection string, the entire function never finishes loading
+- This would explain why even non-DB requests time out — the function can't boot
+- The `SUPABASE_DB_URL` auto-set by Supabase may still have the old password (we reset it, but Supabase might cache it)
+- Fix: Make the Pool lazy (don't create it until first use) so the function can at least boot
+- Fix: Add a connection timeout to the Pool constructor
+- Fix: Verify `SUPABASE_DB_URL` has the correct password in Supabase dashboard
+
+**Theory 3: Supabase infrastructure issue / throttling (POSSIBLE — 10%)**
+- The project might be flagged for abuse after repeated long-running failures
+- Supabase might rate-limit the function after too many `WORKER_LIMIT` errors
+- Could also be a regional issue (project is in us-west-2, edge functions run in us-east-2 per logs)
+- Fix: Contact Supabase support or check their status page
+- Fix: Create a new Supabase project and migrate (nuclear option)
+
+---
+
+### Possible Solutions (in order of what to try)
+
+**Solution A: Upgrade to Supabase Pro ($25/mo)** ← Try first
+- Removes or significantly raises compute limits
+- Should immediately unblock edge functions
+- Required for production anyway (free tier not suitable for live phone calls)
+- Estimated fix probability: 70%
+
+**Solution B: Make DB pool lazy (code change)**
+- Move `new Pool(DB_URL, 3, true)` out of module scope into a `getPool()` function
+- Add connection timeout (e.g., 5 seconds) so it fails fast instead of hanging 150 seconds
+- Redeploy edge function
+- This fixes Theory 2 and prevents future occurrences
+- Should do this regardless of whether Solution A works
+- Estimated fix probability: 20% (if the issue is boot crash, not compute budget)
+
+**Solution C: Wait for compute reset**
+- Free tier budget may reset monthly or weekly
+- No action needed, just wait
+- Risky — unclear when/if it resets
+- Estimated fix probability: Unknown
+
+**Solution D: Check Supabase dashboard for clues**
+- Edge Functions → vapi-tools → look for `BOOT_ERROR` vs `WORKER_LIMIT` in invocation logs
+- Settings → Database → verify the password matches what we set
+- Settings → Edge Functions → check if there's a "compute usage" indicator
+- This is diagnostic, not a fix, but tells us which theory is correct
+
+**Solution E: New Supabase project (last resort)**
+- Create a fresh project, apply all 57 migrations, re-deploy edge functions
+- Fresh compute budget, no throttling history
+- Painful but guaranteed to work
+- Only do this if upgrading to Pro doesn't fix it
 
 ### Voice Quality Observations (from first test call)
 
