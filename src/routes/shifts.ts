@@ -1,6 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerShiftRoutes(
   app: any,
@@ -8,8 +8,8 @@ export function registerShiftRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/shifts', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query('SELECT * FROM employee_shifts WHERE tenant_id = $1 ORDER BY day_of_week, start_time', [tenantId]);
@@ -54,8 +54,8 @@ export function registerShiftRoutes(
 
   app.delete('/shifts/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2', [id, tenantId]);

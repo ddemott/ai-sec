@@ -1,6 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerServiceRoutes(
   app: any,
@@ -9,8 +9,8 @@ export function registerServiceRoutes(
 ) {
   // GET /services/catalog?tenant_id=X — public-facing service list for AI callers (Layer 1: database facts)
   app.get('/services/catalog', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = (req.query as Record<string, string>)?.tenant_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -23,8 +23,8 @@ export function registerServiceRoutes(
   }, 'Failed to fetch service catalog'));
 
   app.get('/services', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query('SELECT * FROM services WHERE tenant_id = $1 ORDER BY name ASC', [tenantId]);
@@ -49,8 +49,8 @@ export function registerServiceRoutes(
   app.post('/services/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { tenant_id?: string; name?: string; subtitle?: string; description?: string; duration_minutes?: number; price?: number };
-    const tenantId = req.tenantId || body.tenant_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -65,8 +65,8 @@ export function registerServiceRoutes(
 
   app.delete('/services/:id/delete', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       // Remove mappings first, then delete the service

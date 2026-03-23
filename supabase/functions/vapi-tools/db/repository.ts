@@ -6,13 +6,25 @@ import type { ResourceCandidate, EmployeeCandidate, ExistingAppointment, TimeWin
 // Prefer SUPABASE_DB_URL (internal networking on Supabase) over DATABASE_URL (external pooler)
 const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable";
 
+// Lazy pool — created on first use, not at module load time.
+// This prevents the edge function from hanging on boot if the DB is unreachable.
+let _pool: Pool | null = null;
+function getPool(): Pool {
+  if (!_pool) {
+    _pool = new Pool(DB_URL, 3, true);
+  }
+  return _pool;
+}
+
 export class PostgresRepository implements IRepository {
-  private pool: Pool;
   private logger: Logger = baseLogger;
 
+  private get pool(): Pool {
+    return getPool();
+  }
+
   constructor() {
-    // Create a pool with a few connections
-    this.pool = new Pool(DB_URL, 3, true);
+    // Pool is created lazily on first use via the getter
   }
 
   setLogger(logger: Logger) {
@@ -20,7 +32,10 @@ export class PostgresRepository implements IRepository {
   }
 
   async close() {
-    await this.pool.end();
+    if (_pool) {
+      await _pool.end();
+      _pool = null;
+    }
   }
 
   private async withClient<T>(tenantId: string | null, fn: (client: any) => Promise<T>): Promise<T> {

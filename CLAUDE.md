@@ -80,7 +80,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 263 backend tests + 368 dashboard tests = 631 total passing.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 270 backend tests + 368 dashboard tests = 638 total passing.
 
 ### Remaining (Phase 13)
 - **Upgrade Supabase to Pro tier** ($25/mo — free tier compute budget exhausted, edge functions throttled)

@@ -1,6 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 
 export function registerAnalyticsRoutes(
   app: any,
@@ -13,10 +13,8 @@ export function registerAnalyticsRoutes(
 
   // Coverage gap detection — returns per-service coverage status for a date range
   app.get('/coverage', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) {
-      return reply.status(400).send({ error: 'tenant_id is required' });
-    }
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const startDate = (req.query as any).start_date || new Date().toISOString().split('T')[0];
     const endDate = (req.query as any).end_date || null;
@@ -37,8 +35,8 @@ export function registerAnalyticsRoutes(
 
   // Service staffing map — per-service employee availability for a given day of week
   app.get('/coverage/staffing', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const dayOfWeek = parseInt((req.query as Record<string, string>).day_of_week || String(new Date().getDay()), 10);
 
@@ -96,10 +94,11 @@ export function registerAnalyticsRoutes(
   }, 'Failed to fetch staffing map'));
 
   app.get('/call-summaries', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
     const customerId = (req.query as any).customer_id;
-    if (!tenantId || !customerId) {
-      return reply.status(400).send({ error: 'tenant_id and customer_id are required' });
+    if (!customerId) {
+      return reply.status(400).send({ error: 'customer_id is required' });
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
@@ -117,9 +116,9 @@ export function registerAnalyticsRoutes(
 
   // User feedback — contextual feedback from any page
   app.post('/feedback', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
     const userId = req.auth?.user_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
 
     const body = req.body as { page: string; context?: string; comment: string; rating?: number };
     if (!body.page || !body.comment) {
@@ -140,15 +139,14 @@ export function registerAnalyticsRoutes(
 
   // Admin: list all feedback (super-admin sees all tenants, regular user sees own)
   app.get('/feedback', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const isSuperAdmin = tenantId === '00000000-0000-0000-0000-000000000000';
 
     if (isSuperAdmin) {
       // Super admin sees ALL feedback across all tenants
-      const client = await pool.connect();
-      try {
+      return withPoolClient(pool, async (client) => {
         const res = await client.query(
           `SELECT f.*, u.full_name as user_name, t.name as tenant_name
            FROM user_feedback f
@@ -158,9 +156,7 @@ export function registerAnalyticsRoutes(
            LIMIT 200`
         );
         return reply.send(res.rows);
-      } finally {
-        client.release();
-      }
+      });
     }
 
     const res = await withTenantClient(tenantId, async (client) => {

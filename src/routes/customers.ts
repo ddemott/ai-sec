@@ -2,7 +2,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 
 const CustomerCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -26,24 +26,16 @@ export function registerCustomerRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/customers', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
     const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
     const offset = parseInt((req.query as any)['offset']) || 0;
 
-    if (!tenantId) {
-      return reply.status(400).send({ error: 'tenant_id is required' });
-    }
-
-    const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
-
-    if (isSuperAdmin) {
-      const client = await pool.connect();
-      try {
-        const res = await client.query('SELECT * FROM customers ORDER BY name LIMIT $1 OFFSET $2', [limit, offset]);
-        return reply.send(res.rows);
-      } finally {
-        client.release();
-      }
+    if (tenantId === SUPER_ADMIN_TENANT_ID) {
+      const res = await withPoolClient(pool, (client) =>
+        client.query('SELECT * FROM customers ORDER BY name LIMIT $1 OFFSET $2', [limit, offset])
+      );
+      return reply.send(res.rows);
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
@@ -79,8 +71,8 @@ export function registerCustomerRoutes(
   app.put('/customers/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as any;
-    const tenantId = req.tenantId || body.tenant_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       await client.query(
@@ -103,8 +95,8 @@ export function registerCustomerRoutes(
   // GET /customers/:id/appointments - all appointments for a specific customer
   app.get('/customers/:id/appointments', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -124,8 +116,8 @@ export function registerCustomerRoutes(
 
   app.delete('/customers/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM customers WHERE id = $1', [id]);

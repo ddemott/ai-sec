@@ -1,7 +1,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 import pdfParse from 'pdf-parse';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerKnowledgeRoutes(
   app: any,
@@ -11,8 +11,8 @@ export function registerKnowledgeRoutes(
   normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
 ) {
   app.get('/knowledge', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -25,8 +25,8 @@ export function registerKnowledgeRoutes(
 
   app.delete('/knowledge/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2', [id, tenantId]);

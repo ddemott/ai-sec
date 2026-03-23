@@ -1,6 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerEmployeeRoutes(
   app: any,
@@ -8,8 +8,8 @@ export function registerEmployeeRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/employees', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(`
@@ -43,8 +43,8 @@ export function registerEmployeeRoutes(
 
   app.delete('/employees/:id/delete', withHandler(async (req: AppRequest, reply) => {
     const id = (req.params as any).id;
-    const tenantId = req.tenantId || (req.body as any)?.tenant_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -64,8 +64,8 @@ export function registerEmployeeRoutes(
   app.post('/employees/:id/update', withHandler(async (req: AppRequest, reply) => {
     const id = (req.params as any).id;
     const body = req.body as { tenant_id?: string; name?: string; first_name?: string; last_name?: string; email?: string; phone?: string; skills?: string[]; is_active?: boolean };
-    const tenantId = req.tenantId || body.tenant_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     // Recompute display name if first/last provided
     const displayName = (body.first_name !== undefined || body.last_name !== undefined)

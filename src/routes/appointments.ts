@@ -2,7 +2,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -45,15 +45,13 @@ export function registerAppointmentRoutes(
   }, 'Failed to create appointment'));
 
   app.get('/appointments', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
     const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
     const offset = parseInt((req.query as any)['offset']) || 0;
     const startDate = (req.query as any)['start_date'] || null;
     const endDate = (req.query as any)['end_date'] || null;
-
-    if (!tenantId) {
-      return reply.status(400).send({ error: 'tenant_id is required' });
-    }
 
     const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
@@ -98,14 +96,11 @@ export function registerAppointmentRoutes(
        ORDER BY a.start_time ASC`;
 
     if (isSuperAdmin) {
-      const client = await pool.connect();
-      try {
-        params.push(limit, offset);
+      params.push(limit, offset);
+      return withPoolClient(pool, async (client) => {
         const res = await client.query(`${baseQuery} LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`, params);
         return reply.send(res.rows);
-      } finally {
-        client.release();
-      }
+      });
     }
 
     params.push(limit, offset);
@@ -117,8 +112,8 @@ export function registerAppointmentRoutes(
 
   app.delete('/appointments/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM appointments WHERE id = $1', [id]);
@@ -132,8 +127,8 @@ export function registerAppointmentRoutes(
   app.post('/appointments/:id/cancel', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { tenant_id?: string };
-    const tenantId = req.tenantId || body.tenant_id;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(

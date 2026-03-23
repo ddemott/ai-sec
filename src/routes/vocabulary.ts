@@ -1,6 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, type AppRequest } from '../middleware';
+import { withHandler, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerVocabularyRoutes(
   app: any,
@@ -9,8 +9,8 @@ export function registerVocabularyRoutes(
 ) {
   // GET /vocabulary?tenant_id=X - Resolved vocabulary labels (3-tier fallback)
   app.get('/vocabulary', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(`

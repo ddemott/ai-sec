@@ -1,7 +1,7 @@
 
 import type { Pool, PoolClient } from 'pg';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 
 export function registerResourceRoutes(
   app: any,
@@ -9,19 +9,16 @@ export function registerResourceRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/resources', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
     if (isSuperAdmin) {
-      const client = await pool.connect();
-      try {
+      return withPoolClient(pool, async (client) => {
         const res = await client.query('SELECT * FROM resources ORDER BY name');
         return reply.send(res.rows);
-      } finally {
-        client.release();
-      }
+      });
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
@@ -32,9 +29,10 @@ export function registerResourceRoutes(
 
   app.post('/resources/create', withHandler(async (req: AppRequest, reply) => {
     const body = req.body as { tenant_id: string; name: string; description?: string };
-    const tenantId = req.tenantId || body.tenant_id;
-    if (!tenantId || !body.name) {
-      return reply.status(400).send({ success: false, error: 'tenant_id and name are required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+    if (!body.name) {
+      return reply.status(400).send({ success: false, error: 'name is required' });
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
@@ -51,8 +49,8 @@ export function registerResourceRoutes(
   app.post('/resources/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { tenant_id?: string; name?: string; description?: string; is_active?: boolean; capabilities?: string[] };
-    const tenantId = req.tenantId || body.tenant_id;
-    if (!tenantId) return reply.status(400).send({ success: false, error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
       const fields: string[] = [];

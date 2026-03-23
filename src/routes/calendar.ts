@@ -1,6 +1,6 @@
 
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerCalendarRoutes(
   app: any,
@@ -13,8 +13,8 @@ export function registerCalendarRoutes(
   }, 'Failed to sync calendar'));
 
   app.get('/calendar/settings', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query('SELECT * FROM tenant_calendar_settings WHERE tenant_id = $1', [tenantId]);
@@ -24,16 +24,17 @@ export function registerCalendarRoutes(
 
   app.post('/calendar/settings', withHandler(async (req: AppRequest, reply) => {
     const body = req.body as any;
-    if (!body.tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
-    const res = await withTenantClient(body.tenant_id, async (client) => {
+    const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
         `INSERT INTO tenant_calendar_settings (tenant_id, provider, external_calendar_id, is_active)
          VALUES ($1, $2, $3, true)
          ON CONFLICT (tenant_id)
          DO UPDATE SET provider = $2, external_calendar_id = $3, is_active = true, updated_at = NOW()
          RETURNING *`,
-        [body.tenant_id, body.provider, body.external_calendar_id]
+        [tenantId, body.provider, body.external_calendar_id]
       );
     });
 
@@ -42,11 +43,11 @@ export function registerCalendarRoutes(
   }, 'Failed to update calendar settings'));
 
   app.post('/calendar/settings/disconnect', withHandler(async (req: AppRequest, reply) => {
-    const { tenant_id } = req.body as any;
-    if (!tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
-    await withTenantClient(tenant_id, async (client) => {
-      await client.query('DELETE FROM tenant_calendar_settings WHERE tenant_id = $1', [tenant_id]);
+    await withTenantClient(tenantId, async (client) => {
+      await client.query('DELETE FROM tenant_calendar_settings WHERE tenant_id = $1', [tenantId]);
     });
 
     logEvent(req, 'calendar_disconnected', {});

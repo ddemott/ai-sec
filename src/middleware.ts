@@ -89,6 +89,47 @@ export function withHandler(handler: RouteHandler, errorMessage: string): RouteH
   };
 }
 
+// ── Pool Client Helper ───────────────────────────────────────────────
+
+import type { Pool, PoolClient } from 'pg';
+
+/**
+ * Wraps a pool.connect() / release() lifecycle.
+ * Eliminates the repeated try/finally/release pattern in route handlers.
+ *
+ * Usage:
+ *   const result = await withPoolClient(pool, async (client) => {
+ *     return client.query('SELECT * FROM tenants');
+ *   });
+ */
+export async function withPoolClient<T>(pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    return await fn(client);
+  } finally {
+    client.release();
+  }
+}
+
+// ── Tenant Validation Helper ─────────────────────────────────────────
+
+/**
+ * Extracts and validates tenant_id from request. Returns the tenant_id
+ * or sends a 400 response and returns null.
+ *
+ * Usage:
+ *   const tenantId = requireTenantId(req, reply);
+ *   if (!tenantId) return;
+ */
+export function requireTenantId(req: AppRequest, reply: FastifyReply): string | null {
+  const tenantId = req.tenantId || (req.body as Record<string, string>)?.tenant_id;
+  if (!tenantId) {
+    reply.status(400).send({ error: 'tenant_id is required' });
+    return null;
+  }
+  return tenantId;
+}
+
 // ── Tenant ID Middleware (Chain of Responsibility) ────────────────────
 
 /** Routes that don't require a tenant_id */

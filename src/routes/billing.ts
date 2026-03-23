@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import Stripe from 'stripe';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -23,8 +23,9 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       return reply.status(503).send({ error: 'Billing not configured' });
     }
 
-    const { tenant_id, plan } = (req.body as any) || {};
-    if (!tenant_id) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenant_id = requireTenantId(req, reply);
+    if (!tenant_id) return;
+    const { plan } = (req.body as any) || {};
     if (!plan || !['solo', 'growth', 'professional'].includes(plan)) {
       return reply.status(400).send({ error: 'plan must be "solo", "growth", or "professional"' });
     }
@@ -158,8 +159,8 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
   // GET /billing/status — check subscription status for a tenant
   app.get('/billing/status', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = req.tenantId;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
 
     const res = await pool.query(
       'SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1',
