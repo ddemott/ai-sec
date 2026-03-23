@@ -160,6 +160,7 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
 
 // --- Health & Admin ---
 
+app.get('/', async () => ({ name: 'SecretaryHQ API', status: 'ok' }));
 app.get('/health', async () => ({ status: 'ok' }));
 
 app.post('/admin/purge-soft-reservations', async (req, reply) => {
