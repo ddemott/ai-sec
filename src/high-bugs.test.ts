@@ -531,4 +531,148 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             expect(invalid.success).toBe(false);
         });
     });
+
+    // =========================================================
+    // Error diagnostics — verify error responses contain context
+    // =========================================================
+    describe("Error diagnostics — contextual error messages", () => {
+        it("booking RPC error_message identifies WHY it failed (missing capabilities)", async () => {
+            if (!dbAvailable) return;
+
+            const tenantId = await createTenant(root, "Diag Shop", "auto-shop");
+            const resourceId = (await root.query(
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Empty Bay', '{}') RETURNING id",
+                [tenantId]
+            )).rows[0].id;
+            const customerId = await createCustomerFull(root, tenantId, "+15550009876", "Diag Customer");
+            const serviceId = (await root.query(
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Special Service', 60, ARRAY['hydraulic-lift']) RETURNING id",
+                [tenantId]
+            )).rows[0].id;
+
+            const result = await root.query(
+                "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                [
+                    tenantId, resourceId, customerId,
+                    new Date("2026-04-01T10:00:00Z"),
+                    new Date("2026-04-01T11:00:00Z"),
+                    'Diagnostic test', 'call_diag_001', null, null,
+                    serviceId
+                ]
+            );
+
+            expect(result.rows[0].success).toBe(false);
+            const msg = result.rows[0].error_message;
+            // Error should be specific — not "booking failed" but WHY
+            expect(msg).toBeDefined();
+            expect(msg.length).toBeGreaterThan(10);
+            expect(msg).toContain('capabilities');
+            // Should NOT be a generic message
+            expect(msg).not.toMatch(/^(error|failed|something went wrong)$/i);
+        });
+
+        it("booking RPC error_message identifies WHY it failed (missing skills)", async () => {
+            if (!dbAvailable) return;
+
+            const tenantId = await createTenant(root, "Skill Diag", "auto-shop");
+            const resourceId = await createResource(root, tenantId, "Bay 1");
+            const customerId = await createCustomerFull(root, tenantId, "+15550005555", "Diag Alice");
+            const employeeId = await createEmployee(root, tenantId, "Junior", ["sweeping"]);
+            await createShift(root, tenantId, employeeId, 3, "08:00", "18:00");
+
+            const serviceId = (await root.query(
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Expert Service', 60, ARRAY['advanced-repair']) RETURNING id",
+                [tenantId]
+            )).rows[0].id;
+
+            const result = await root.query(
+                "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                [
+                    tenantId, resourceId, customerId,
+                    new Date("2026-04-01T10:00:00Z"),
+                    new Date("2026-04-01T11:00:00Z"),
+                    'Skill check', 'call_diag_002', null,
+                    employeeId.toString(),
+                    serviceId
+                ]
+            );
+
+            expect(result.rows[0].success).toBe(false);
+            const msg = result.rows[0].error_message;
+            expect(msg).toBeDefined();
+            expect(msg).toContain('skills');
+            expect(msg).not.toMatch(/^(error|failed|something went wrong)$/i);
+        });
+
+        it("zod validation errors include field-level detail", () => {
+            const { z } = require('zod');
+            const AppointmentSchema = z.object({
+                tenant_id: z.string().uuid(),
+                resource_id: z.string().uuid(),
+                start_time: z.string().datetime(),
+                description: z.string().min(1).max(500),
+            });
+
+            const result = AppointmentSchema.safeParse({
+                tenant_id: 'not-uuid',
+                resource_id: '',
+                start_time: 'tuesday',
+                description: '',
+            });
+
+            expect(result.success).toBe(false);
+            if (!result.success) {
+                const issues = result.error.issues;
+                // Should have multiple field-level errors, not one generic error
+                expect(issues.length).toBeGreaterThanOrEqual(3);
+
+                // Each issue should identify WHICH field (path) and WHY (message)
+                const paths = issues.map((i: any) => i.path[0]);
+                expect(paths).toContain('tenant_id');
+                expect(paths).toContain('start_time');
+                expect(paths).toContain('description');
+
+                // Messages should be specific
+                issues.forEach((issue: any) => {
+                    expect(issue.message).toBeDefined();
+                    expect(issue.message.length).toBeGreaterThan(0);
+                    expect(issue.message).not.toBe('error');
+                });
+            }
+        });
+
+        it("JWT verification error clearly states reason (expired vs invalid)", () => {
+            // Expired token
+            const expiredToken = jwt.sign(
+                { tenant_id: 'test', user_id: 'u1', email: 'a@b.com' },
+                JWT_SECRET,
+                { expiresIn: '0s' }
+            );
+
+            try {
+                jwt.verify(expiredToken, JWT_SECRET);
+                expect.fail("Should have thrown");
+            } catch (err: any) {
+                // Error should clearly say "expired" — not just "invalid"
+                expect(err.message).toMatch(/expired/i);
+                expect(err.name).toBe('TokenExpiredError');
+                expect(err.expiredAt).toBeDefined();
+            }
+
+            // Wrong secret token
+            const badSecretToken = jwt.sign(
+                { tenant_id: 'test', user_id: 'u1', email: 'a@b.com' },
+                'wrong-secret'
+            );
+
+            try {
+                jwt.verify(badSecretToken, JWT_SECRET);
+                expect.fail("Should have thrown");
+            } catch (err: any) {
+                // Error should clearly say "invalid signature" — different from expired
+                expect(err.message).toMatch(/invalid signature/i);
+                expect(err.name).toBe('JsonWebTokenError');
+            }
+        });
+    });
 });

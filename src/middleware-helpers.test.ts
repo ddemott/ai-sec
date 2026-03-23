@@ -137,13 +137,96 @@ describe("Middleware Helpers", () => {
         });
     });
 
-    describe("Route integration (customers endpoint pattern)", () => {
+    describe("requireTenantId — error message quality", () => {
+        it("error response includes actionable message", async () => {
+            const { requireTenantId } = await import("./middleware");
+
+            let sentBody: any = null;
+            const req = {} as any; // no tenantId, no body
+            const reply = {
+                status: () => ({
+                    send: (body: any) => { sentBody = body; }
+                })
+            } as any;
+
+            requireTenantId(req, reply);
+            expect(sentBody.error).toBe("tenant_id is required");
+            // Error message should be clear enough to debug — tells you exactly what's missing
+            expect(sentBody.error).toContain("tenant_id");
+        });
+
+        it("handles undefined body gracefully", async () => {
+            const { requireTenantId } = await import("./middleware");
+
+            let sentStatus = 0;
+            const req = { body: undefined } as any;
+            const reply = {
+                status: (code: number) => {
+                    sentStatus = code;
+                    return { send: () => {} };
+                }
+            } as any;
+
+            const result = requireTenantId(req, reply);
+            expect(result).toBeNull();
+            expect(sentStatus).toBe(400);
+        });
+    });
+
+    describe("withPoolClient — error propagation", () => {
+        it("propagates database query errors with original message", async () => {
+            if (!dbAvailable) return;
+            const { Pool } = await import("pg");
+            const { withPoolClient } = await import("./middleware");
+
+            const pool = new Pool({
+                user: "postgres", host: "localhost", database: "test_db",
+                password: "postgres", port: 5433,
+            });
+
+            try {
+                await expect(
+                    withPoolClient(pool, async (client) => {
+                        return client.query("SELECT * FROM nonexistent_table_xyz");
+                    })
+                ).rejects.toThrow(/nonexistent_table_xyz/);
+            } finally {
+                await pool.end();
+            }
+        });
+
+        it("pool remains usable after query error", async () => {
+            if (!dbAvailable) return;
+            const { Pool } = await import("pg");
+            const { withPoolClient } = await import("./middleware");
+
+            const pool = new Pool({
+                user: "postgres", host: "localhost", database: "test_db",
+                password: "postgres", port: 5433,
+            });
+
+            try {
+                // First call fails
+                await withPoolClient(pool, async (client) => {
+                    return client.query("INVALID SQL SYNTAX HERE");
+                }).catch(() => {}); // swallow
+
+                // Second call should still work — connection was properly released
+                const result = await withPoolClient(pool, async (client) => {
+                    return client.query("SELECT 42 as answer");
+                });
+                expect(result.rows[0].answer).toBe(42);
+            } finally {
+                await pool.end();
+            }
+        });
+    });
+
+    describe("Route integration", () => {
         it("customers list returns data with valid tenant_id", async () => {
             if (!dbAvailable) return;
-            // Create a customer to verify the route pattern works
             await createCustomerFull(root, tenantId, "+15559999999", "Test Customer");
 
-            // Verify data exists via direct query (validates the DB setup)
             const res = await root.query(
                 "SELECT * FROM customers WHERE tenant_id = $1",
                 [tenantId]

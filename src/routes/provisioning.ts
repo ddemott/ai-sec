@@ -28,24 +28,42 @@ export function registerProvisioningRoutes(
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found' });
+        return reply.status(404).send({ error: 'Tenant not found', tenant_id, timestamp: new Date().toISOString() });
       }
 
       const tenant = tenantRes.rows[0];
 
-      // Validate prerequisites
-      if (!tenant.business_type || !tenant.voice_id || !tenant.system_prompt) {
+      // Validate prerequisites — tell the caller exactly which fields are missing
+      const missingFields: string[] = [];
+      if (!tenant.business_type) missingFields.push('business_type');
+      if (!tenant.voice_id) missingFields.push('voice_id');
+      if (!tenant.system_prompt) missingFields.push('system_prompt');
+      if (missingFields.length > 0) {
         return reply.status(400).send({
-          error: 'Tenant must have business_type, voice_id, and system_prompt configured before activating phone',
+          error: 'Tenant is missing required configuration for phone activation',
+          missing_fields: missingFields,
+          tenant_id,
+          tenant_name: tenant.name,
+          timestamp: new Date().toISOString(),
         });
       }
 
       // Check status
       if (tenant.phone_status === 'active') {
-        return reply.status(409).send({ error: 'Phone is already active for this tenant' });
+        return reply.status(409).send({
+          error: 'Phone is already active for this tenant',
+          tenant_id, tenant_name: tenant.name,
+          current_status: tenant.phone_status,
+          timestamp: new Date().toISOString(),
+        });
       }
       if (tenant.phone_status === 'provisioning') {
-        return reply.status(409).send({ error: 'Phone provisioning is already in progress' });
+        return reply.status(409).send({
+          error: 'Phone provisioning is already in progress',
+          tenant_id, tenant_name: tenant.name,
+          current_status: tenant.phone_status,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       // Get default resource for this tenant
@@ -108,10 +126,15 @@ export function registerProvisioningRoutes(
 
         await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['failed', tenant_id]);
 
-        app.log.error({ vapiError, tenant_id }, 'Phone provisioning failed');
+        app.log.error({ vapiError, tenant_id, assistantId }, 'Phone provisioning failed');
         return reply.status(502).send({
           error: 'Phone provisioning failed',
           detail: vapiError.message || 'Unknown Vapi API error',
+          tenant_id,
+          tenant_name: tenant.name,
+          assistant_created: !!assistantId,
+          rolled_back: !!assistantId,
+          timestamp: new Date().toISOString(),
         });
       }
 

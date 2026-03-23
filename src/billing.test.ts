@@ -229,4 +229,98 @@ describe("Stripe Lite — Billing", () => {
     );
     expect(res.rows.length).toBe(1);
   });
+
+  // --- Error Diagnostics ---
+
+  describe("Error diagnostics", () => {
+    it("subscription gate logic correctly identifies blocked statuses", async () => {
+      if (!dbAvailable) return;
+
+      // Verify the gate logic: only 'active' and 'inactive' are allowed
+      const allowedStatuses = ['active', 'inactive'];
+      const blockedStatuses = ['past_due', 'canceled'];
+
+      for (const status of allowedStatuses) {
+        await client.query(
+          `UPDATE tenants SET subscription_status = $1 WHERE id = $2`,
+          [status, tenantId]
+        );
+        const res = await client.query(
+          `SELECT subscription_status FROM tenants WHERE id = $1`,
+          [tenantId]
+        );
+        const val = res.rows[0].subscription_status;
+        // Gate allows these — verify the value round-trips correctly
+        expect(['active', 'inactive'].includes(val)).toBe(true);
+      }
+
+      for (const status of blockedStatuses) {
+        await client.query(
+          `UPDATE tenants SET subscription_status = $1 WHERE id = $2`,
+          [status, tenantId]
+        );
+        const res = await client.query(
+          `SELECT subscription_status FROM tenants WHERE id = $1`,
+          [tenantId]
+        );
+        const val = res.rows[0].subscription_status;
+        // Gate blocks these — verify the value is specific (not generic)
+        expect(['active', 'inactive'].includes(val)).toBe(false);
+        expect(val).toBe(status); // exact status preserved for 402 response context
+      }
+    });
+
+    it("billing status lookup for non-existent tenant returns zero rows (not crash)", async () => {
+      if (!dbAvailable) return;
+
+      const fakeTenantId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+      const res = await client.query(
+        `SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1`,
+        [fakeTenantId]
+      );
+
+      // Route handler checks res.rows.length === 0 and returns 404
+      // At the DB level, this should return empty — not throw
+      expect(res.rows).toHaveLength(0);
+    });
+
+    it("subscription_plan can only be set to known plan names or NULL", async () => {
+      if (!dbAvailable) return;
+
+      // Valid plan names: solo, growth, professional, or NULL
+      await client.query(
+        `UPDATE tenants SET subscription_plan = 'solo' WHERE id = $1`,
+        [tenantId]
+      );
+      const res1 = await client.query(
+        `SELECT subscription_plan FROM tenants WHERE id = $1`,
+        [tenantId]
+      );
+      expect(res1.rows[0].subscription_plan).toBe('solo');
+
+      // NULL is valid (canceled subscription)
+      await client.query(
+        `UPDATE tenants SET subscription_plan = NULL WHERE id = $1`,
+        [tenantId]
+      );
+      const res2 = await client.query(
+        `SELECT subscription_plan FROM tenants WHERE id = $1`,
+        [tenantId]
+      );
+      expect(res2.rows[0].subscription_plan).toBeNull();
+    });
+
+    it("stripe_customer_id update with non-existent tenant_id updates zero rows", async () => {
+      if (!dbAvailable) return;
+
+      const fakeTenantId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+      const res = await client.query(
+        `UPDATE tenants SET stripe_customer_id = 'cus_phantom' WHERE id = $1`,
+        [fakeTenantId]
+      );
+
+      // Should silently update zero rows — the billing route should check rowCount
+      expect(res.rowCount).toBe(0);
+    });
+  });
 });

@@ -764,4 +764,99 @@ describe("CRUD Routes - Database Level", () => {
             expect(res.rows.length).toBe(0);
         });
     });
+
+    // ── Error Diagnostics ───────────────────────────────────────────────
+
+    describe("Error diagnostics", () => {
+        it("should reject employee insert with NULL tenant_id via NOT NULL constraint", async () => {
+            if (!dbAvailable) return;
+
+            try {
+                await client.query(
+                    "INSERT INTO employees (tenant_id, name, first_name, last_name) VALUES ($1, 'Ghost', 'Ghost', 'Worker')",
+                    [null]
+                );
+                expect.fail("Should have thrown a NOT NULL violation");
+            } catch (err: any) {
+                // Postgres error should identify the column that failed
+                expect(err.message).toMatch(/null value|not-null|violates not-null/i);
+                expect(err.column || err.message).toBeDefined();
+                // Postgres provides a specific error code for not-null violations (23502)
+                expect(err.code).toBe("23502");
+            }
+        });
+
+        it("should reject resource insert with NULL name via NOT NULL constraint", async () => {
+            if (!dbAvailable) return;
+
+            try {
+                await client.query(
+                    "INSERT INTO resources (tenant_id, name) VALUES ($1, $2)",
+                    [tenantId, null]
+                );
+                expect.fail("Should have thrown a NOT NULL violation");
+            } catch (err: any) {
+                expect(err.code).toBe("23502");
+                expect(err.message).toMatch(/null value|not-null/i);
+            }
+        });
+
+        it("should return empty result (not error) when deleting non-existent resource", async () => {
+            if (!dbAvailable) return;
+
+            const fakeId = "00000000-0000-0000-0000-000000000099";
+            const res = await client.query(
+                "DELETE FROM resources WHERE id = $1 AND tenant_id = $2 RETURNING id",
+                [fakeId, tenantId]
+            );
+
+            // Deleting a non-existent row returns 0 rows — callers should check rowCount
+            expect(res.rowCount).toBe(0);
+            expect(res.rows).toHaveLength(0);
+        });
+
+        it("should reject resource insert with invalid FK tenant_id", async () => {
+            if (!dbAvailable) return;
+
+            const fakeTenantId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+            try {
+                await client.query(
+                    "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Orphan Resource')",
+                    [fakeTenantId]
+                );
+                expect.fail("Should have thrown a FK violation");
+            } catch (err: any) {
+                // Postgres FK violation code is 23503 — error should mention the constraint
+                expect(err.code).toBe("23503");
+                expect(err.message).toMatch(/foreign key|violates foreign key/i);
+                // The detail should reference the specific key that failed
+                expect(err.detail).toBeDefined();
+                expect(err.detail).toMatch(/tenant/i);
+            }
+        });
+
+        it("should include constraint name in duplicate skill error", async () => {
+            if (!dbAvailable) return;
+
+            await client.query(
+                "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'dup-test')",
+                [tenantId]
+            );
+
+            try {
+                await client.query(
+                    "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'dup-test')",
+                    [tenantId]
+                );
+                expect.fail("Should have thrown a unique violation");
+            } catch (err: any) {
+                // Postgres unique violation code is 23505
+                expect(err.code).toBe("23505");
+                expect(err.message).toMatch(/duplicate key|unique/i);
+                // detail should mention the specific values that conflicted
+                expect(err.detail).toBeDefined();
+                expect(err.detail).toMatch(/dup-test/);
+            }
+        });
+    });
 });
