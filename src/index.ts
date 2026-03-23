@@ -160,7 +160,43 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
 
 // --- Health & Admin ---
 
-app.get('/', async () => ({ name: 'SecretaryHQ API', status: 'ok' }));
+app.get('/', async (_req, reply) => {
+  reply.type('text/html').send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecretaryHQ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { text-align: center; max-width: 600px; padding: 2rem; }
+    .logo { font-size: 3rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
+    .tagline { font-size: 1.25rem; color: #94a3b8; margin-bottom: 2rem; }
+    .status { display: inline-flex; align-items: center; gap: 0.5rem; background: #1e293b; border: 1px solid #334155; border-radius: 9999px; padding: 0.5rem 1.25rem; font-size: 0.875rem; color: #94a3b8; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .features { margin-top: 2.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; text-align: left; }
+    .feature { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.25rem; }
+    .feature h3 { font-size: 0.875rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.25rem; }
+    .feature p { font-size: 0.75rem; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">SecretaryHQ</div>
+    <div class="tagline">AI-Powered Reception for Service Businesses</div>
+    <div class="status"><span class="dot"></span> API Online</div>
+    <div class="features">
+      <div class="feature"><h3>Voice AI</h3><p>Handles inbound calls, books appointments, answers questions</p></div>
+      <div class="feature"><h3>Smart Scheduling</h3><p>Staff skills, resource availability, shift coverage</p></div>
+      <div class="feature"><h3>Knowledge Base</h3><p>RAG-powered answers from your business docs</p></div>
+      <div class="feature"><h3>Multi-Tenant</h3><p>One platform, unlimited businesses</p></div>
+    </div>
+  </div>
+</body>
+</html>`);
+});
 app.get('/health', async () => ({ status: 'ok' }));
 
 app.post('/admin/purge-soft-reservations', async (req, reply) => {
