@@ -50,14 +50,20 @@ export class VapiClient {
 
   buildAssistantPayload(tenant: TenantConfig): Record<string, unknown> {
     // Read template
-    const templatePath = path.resolve(__dirname, '..', '..', 'vapi', 'agent.template.json');
-    const toolsPath = path.resolve(__dirname, '..', '..', 'vapi', 'tools.json');
+    const templatePath = path.resolve(process.cwd(), 'vapi', 'agent.template.json');
+    const toolsPath = path.resolve(process.cwd(), 'vapi', 'tools.json');
 
     let template = fs.readFileSync(templatePath, 'utf-8');
     const tools = JSON.parse(fs.readFileSync(toolsPath, 'utf-8'));
 
     // Determine voice provider from voice_id pattern
-    const voiceProvider = tenant.voice_id?.includes('-') ? 'cartesia' : '11labs';
+    // UUIDs (with hyphens) = cartesia, short names = 11labs, 'default' = use Vapi's default
+    let voiceProvider = '11labs';
+    if (tenant.voice_id === 'default' || !tenant.voice_id) {
+      voiceProvider = '11labs';
+    } else if (tenant.voice_id.match(/^[0-9a-f]{8}-/)) {
+      voiceProvider = 'cartesia';
+    }
 
     // Service description from business type
     const serviceDescriptions: Record<string, string> = {
@@ -104,6 +110,11 @@ export class VapiClient {
     if (payload.model?.tools) {
       payload.model.tools = tools;
     }
+
+    // Override voice to use Vapi's built-in voices (no external credentials needed)
+    // Cartesia/ElevenLabs/PlayHT require their API keys configured in Vapi dashboard
+    // Vapi's own voices (provider: 'vapi') work out of the box
+    payload.voice = { provider: 'vapi', voiceId: 'Elliot' };
 
     return payload;
   }

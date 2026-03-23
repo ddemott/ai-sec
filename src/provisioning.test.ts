@@ -141,9 +141,10 @@ describe("Phone Provisioning", () => {
             expect(payload.name).toBe('Test Salon SecretaryHQ');
             expect(payload.serverUrl).toBe('https://test.supabase.co/vapi-tools');
             expect(payload.serverUrlSecret).toBe('test-secret');
+            // Voice is always overridden to Vapi built-in (no external credentials needed)
             expect(payload.voice).toEqual({
-                provider: 'cartesia',
-                voiceId: 'a0e99841-438c-4a64-b679-ae501e7d6091',
+                provider: 'vapi',
+                voiceId: 'Elliot',
             });
             // Tools should be full definitions, not just names
             expect(Array.isArray(payload.model.tools)).toBe(true);
