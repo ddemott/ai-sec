@@ -40,3 +40,4 @@ dashboard/dist/
 
 # Production secrets
 .env.production
+.env.production.save

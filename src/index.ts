@@ -71,7 +71,9 @@ app.register(multipart, {
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// --- Database Pools ---
+// --- Database Pool ---
+// Single pool using postgres role. RLS is enforced via FORCE ROW LEVEL SECURITY
+// on all tables + set_tenant_context() GUC. Works on both local Docker and Supabase.
 
 const isLocal = process.env.DATABASE_URL?.includes('localhost') || !process.env.DATABASE_URL;
 const pool = isLocal ? new Pool({
@@ -85,34 +87,18 @@ const pool = isLocal ? new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const apiPool = isLocal ? new Pool({
-  user: 'api_user',
-  host: 'localhost',
-  database: 'postgres',
-  password: 'api_password',
-  port: 5433,
-}) : new Pool({
-  connectionString: (process.env.DATABASE_URL || '').replace(/postgres:\/\/[^:]+:[^@]+@/, 'postgres://api_user:api_password@'),
-  ssl: { rejectUnauthorized: false },
-});
-
 async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  // Validate tenant exists using admin pool (api_user is blocked by RLS before context is set)
-  const adminClient = await pool.connect();
+  const client = await pool.connect();
   try {
-    const tenantCheck = await adminClient.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+    // Validate tenant exists (before setting context, so RLS doesn't block the check)
+    const tenantCheck = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
     if (tenantCheck.rows.length === 0) {
       const err = new Error(`Tenant ${tenantId} not found`);
       (err as unknown as { statusCode: number }).statusCode = 404;
       (err as unknown as { code: string }).code = 'TENANT_NOT_FOUND';
       throw err;
     }
-  } finally {
-    adminClient.release();
-  }
-
-  const client = await apiPool.connect();
-  try {
+    // Set tenant context — RLS policies filter by this GUC
     await client.query('SELECT set_tenant_context($1::UUID)', [tenantId]);
     return await fn(client);
   } finally {
@@ -220,3 +206,13 @@ app
     app.log.error(err);
     process.exit(1);
   });
+
+// Graceful shutdown — Railway sends SIGTERM during deploys
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, async () => {
+    app.log.info(`Received ${signal}, shutting down...`);
+    await app.close();
+    await pool.end();
+    process.exit(0);
+  });
+}

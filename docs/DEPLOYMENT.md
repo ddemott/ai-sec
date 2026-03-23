@@ -134,41 +134,47 @@ You should get a response (even if it's an error about unknown function — that
 
 The Fastify backend serves the dashboard and management API. Deploy options:
 
-### Option A: Railway / Render / Fly.io (Recommended)
-These platforms support Node.js apps with minimal config.
+### Option A: Railway (Current Setup)
+Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 
-1. **Environment variables** to set:
-   ```
-   DATABASE_URL=postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres
-   OPENAI_API_KEY=sk-proj-...
-   VAPI_SERVER_URL_SECRET=your-shared-secret
-   JWT_SECRET=<generate-a-strong-random-string>
-   NODE_ENV=production
-   PORT=3000
-   ```
+1. **Build**: Nixpacks auto-detects Node.js 20, runs `npm install && npm run build`
+2. **Start**: `node dist/src/index.js`
+3. **Health check**: `/health` endpoint
+4. **Restart policy**: `ON_FAILURE` with max 10 retries
 
-2. **Build command**: `npm install && npm run build`
-3. **Start command**: `node dist/index.js`
+**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply the migration `20260323000000_force_rls_single_pool.sql` to Supabase before deploying.
 
-**Important**: In production (`NODE_ENV=production`), the backend skips HTTPS/TLS (the platform handles TLS termination). The `x-forwarded-proto` hook redirects HTTP to HTTPS when behind a proxy.
+**Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
-### Option B: Run on a VPS
+### Option B: Render / Fly.io
+These platforms also support Node.js apps with similar config. Use the same env vars and start command.
+
+### Option C: Run on a VPS
 ```bash
 npm install
 npm run build
-NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/index.js
+NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 ```
+
+**Important**: In production (`NODE_ENV=production`), the backend skips HTTPS/TLS (the platform handles TLS termination). The `x-forwarded-proto` hook redirects HTTP to HTTPS when behind a proxy.
 
 ### Backend Environment Variables Reference
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | Yes | Supabase Postgres connection string |
+| `DATABASE_URL` | Yes | Supabase Postgres connection string (use session-mode pooler) |
 | `OPENAI_API_KEY` | Yes | For RAG embedding generation |
 | `VAPI_SERVER_URL_SECRET` | Yes | Shared secret for Vapi webhook auth |
 | `JWT_SECRET` | Yes | Secret for signing JWT tokens (change from default!) |
 | `JWT_EXPIRY` | No | Token expiry duration (default: `8h`) |
 | `NODE_ENV` | Yes | Set to `production` |
 | `PORT` | No | Server port (default: `3000`) |
+| `STRIPE_SECRET_KEY` | Yes | Stripe API key (test or live) |
+| `STRIPE_WEBHOOK_SECRET` | Yes | Stripe webhook signing secret (create after deploy) |
+| `STRIPE_SOLO_PRICE_ID` | Yes | Stripe price ID for Solo plan |
+| `STRIPE_GROWTH_PRICE_ID` | Yes | Stripe price ID for Growth plan |
+| `STRIPE_PRO_PRICE_ID` | Yes | Stripe price ID for Pro plan |
+| `STRIPE_ENTERPRISE_PRICE_ID` | No | Stripe price ID for Enterprise plan |
+| `DASHBOARD_URL` | No | Dashboard URL for Stripe checkout redirects (default: `https://localhost:3001`) |
 
 ---
 
