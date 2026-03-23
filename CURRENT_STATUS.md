@@ -276,6 +276,14 @@ Result returned to Vapi → LLM continues conversation
 | Smoke test fix | Fixed stale "AI Secretary Portal" → "SecretaryHQ Portal" in dist |
 
 ### Test Counts
-- **270 backend tests** (30 test files) — all passing
+- **301 backend tests** (30 test files) — all passing
 - **368 dashboard tests** (27 test files) — all passing
-- **Total: 638 tests**
+- **Total: 669 tests**
+
+### Sad-Path / Error Diagnostic Coverage
+All error responses now verified to include debugging context:
+- **WHO**: tenant_id, tenant_name in error payloads
+- **WHAT**: specific operation that failed, missing fields listed
+- **WHEN**: timestamp on all error responses
+- **WHERE**: Postgres error codes (23502, 23503, 23505) with column/table detail
+- **WHY**: Vapi API error detail, Zod field-level paths, JWT error differentiation, booking RPC specificity
