@@ -186,7 +186,12 @@ app.post('/admin/purge-soft-reservations', async (req, reply) => {
     const res = await client.query('SELECT purge_expired_soft_reservations() as deleted_count');
     return reply.send({ success: true, deleted_count: res.rows[0].deleted_count });
   } catch (err) {
-    app.log.error(err);
+    app.log.error({
+      event: 'purge_soft_reservations_failed',
+      error_message: (err as Error).message,
+      error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
+      timestamp: new Date().toISOString(),
+    }, `purge_soft_reservations_failed: ${(err as Error).message}`);
     return reply.status(500).send({ error: 'Failed to purge soft reservations' });
   } finally {
     client.release();
@@ -226,7 +231,13 @@ app
     app.log.info(`Server listening on port ${port}`);
   })
   .catch((err) => {
-    app.log.error(err);
+    app.log.error({
+      event: 'server_startup_failed',
+      error_message: (err as Error).message,
+      error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
+      port,
+      timestamp: new Date().toISOString(),
+    }, `server_startup_failed: ${(err as Error).message}`);
     process.exit(1);
   });
 

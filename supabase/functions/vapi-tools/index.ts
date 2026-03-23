@@ -61,7 +61,12 @@ export async function handler(req: Request): Promise<Response> {
   // SECURITY: Verify webhook secret
   const incomingSecret = headers.get("x-vapi-secret");
   if (VAPI_SECRET !== "unset" && incomingSecret !== VAPI_SECRET) {
-    console.warn(`[UNAUTHORIZED] Request ID: ${requestId}`);
+    console.error(JSON.stringify({
+      event: "unauthorized_request",
+      requestId,
+      incomingSecret: incomingSecret ? `${incomingSecret.slice(0, 8)}...` : null,
+      timestamp: new Date().toISOString(),
+    }));
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
@@ -111,7 +116,14 @@ export async function handler(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ result: { success: false, error: err.message } }), { status: 200 });
     }
 
-    console.error(`[CRITICAL ERROR ${requestId}]`, err.message);
+    console.error(JSON.stringify({
+      event: "edge_function_critical_error",
+      requestId,
+      error_message: err.message,
+      error_name: err.name,
+      error_stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+      timestamp: new Date().toISOString(),
+    }));
     return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
   }
 }

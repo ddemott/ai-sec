@@ -53,7 +53,7 @@ export function registerAuthRoutes(
         return reply.status(401).send({ success: false, error: 'Invalid email or password' });
       }
     } catch (err) {
-      logError(req, 'auth_failed', err);
+      logError(req, 'login_failed', err);
       return reply.status(500).send({ error: 'Internal server error' });
     } finally {
       client.release();
@@ -111,7 +111,7 @@ export function registerAuthRoutes(
       });
     } catch (err) {
       await client.query('ROLLBACK');
-      req.log.error(err);
+      logError(req, 'registration_failed', err);
       return reply.status(500).send({ error: 'Registration failed' });
     } finally {
       client.release();

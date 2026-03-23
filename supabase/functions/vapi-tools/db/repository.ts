@@ -11,6 +11,15 @@ const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") |
 let _pool: Pool | null = null;
 function getPool(): Pool {
   if (!_pool) {
+    // Log which DB URL we're connecting to (masked password)
+    const maskedUrl = DB_URL.replace(/:([^@]+)@/, ':***@');
+    console.error(JSON.stringify({
+      event: "db_pool_created",
+      db_url: maskedUrl,
+      pool_size: 3,
+      source: Deno.env.get("SUPABASE_DB_URL") ? "SUPABASE_DB_URL" : "DATABASE_URL",
+      timestamp: new Date().toISOString(),
+    }));
     _pool = new Pool(DB_URL, 3, true);
   }
   return _pool;
@@ -53,6 +62,15 @@ export class PostgresRepository implements IRepository {
       }
       return await fn(client);
     } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error(JSON.stringify({
+        event: "db_operation_failed",
+        error_message: error.message,
+        error_name: error.name,
+        tenantId,
+        db_url_source: Deno.env.get("SUPABASE_DB_URL") ? "SUPABASE_DB_URL" : "DATABASE_URL",
+        timestamp: new Date().toISOString(),
+      }));
       this.logger.error({ err, tenantId }, "Database operation failed");
       throw err;
     } finally {
