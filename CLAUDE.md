@@ -83,9 +83,8 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 263 backend tests + 368 dashboard tests = 631 total passing.
 
 ### Remaining (Phase 13)
-- **Deploy Supabase edge functions** (vapi-tools — required for voice AI to have working tools)
-- **Add `VAPI_API_KEY`** to Railway env vars (needed to provision phone numbers)
-- **Test end-to-end call**: Provision number → call it → AI answers → books appointment
+- **Upgrade Supabase to Pro tier** ($25/mo — free tier compute budget exhausted, edge functions throttled)
+- **Test end-to-end call**: Edge functions deployed but not responding due to free tier limits. Once upgraded, test: call +1 (630) 397-0194 → AI answers → books appointment
 - **Deploy dashboard** (Vercel or Railway — currently local only)
 - **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
 - SetupWizard Step 7 "Go Live" (activate phone from wizard)
@@ -110,7 +109,11 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - `src/services/vapiClient.ts` — Vapi REST API client (template substitution + CRUD)
 - `src/routes/provisioning.ts` — activate/deactivate/status endpoints
 - SuperAdmin dashboard has "Activate Phone" button with area code input
-- **Still needs**: `VAPI_API_KEY` env var in Railway, edge function deployment, dashboard deployment
+- `VAPI_API_KEY` set in Railway
+- Edge functions deployed to Supabase (vapi-tools v9), DB URL secrets updated
+- Phone provisioned: +1 (630) 397-0194 on DynaTire (Vapi voice: Elliot, LLM: Groq llama-3.3-70b-versatile)
+- **Blocker**: Supabase free tier compute exhausted — edge functions not responding. Need Pro tier ($25/mo)
+- **Still needs**: Dashboard deployment, DASHBOARD_URL env var
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
 - **12A — Repeatable Setup Wizard**: 6-step guided setup, live coverage badges, coverage summary on final step.

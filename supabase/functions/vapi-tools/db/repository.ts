@@ -3,7 +3,8 @@ import { IRepository } from "../core/interfaces.ts";
 import { Logger, baseLogger } from "../core/logger.ts";
 import type { ResourceCandidate, EmployeeCandidate, ExistingAppointment, TimeWindow } from "../core/scheduling.ts";
 
-const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable";
+// Prefer SUPABASE_DB_URL (internal networking on Supabase) over DATABASE_URL (external pooler)
+const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable";
 
 export class PostgresRepository implements IRepository {
   private pool: Pool;
