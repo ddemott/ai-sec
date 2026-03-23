@@ -1,7 +1,7 @@
 
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { type AppRequest } from '../middleware';
+import { logError, type AppRequest } from '../middleware';
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -53,7 +53,7 @@ export function registerAuthRoutes(
         return reply.status(401).send({ success: false, error: 'Invalid email or password' });
       }
     } catch (err) {
-      req.log.error(err);
+      logError(req, 'auth_failed', err);
       return reply.status(500).send({ error: 'Internal server error' });
     } finally {
       client.release();

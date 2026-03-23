@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import Stripe from 'stripe';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { withHandler, logEvent, logError, requireTenantId, type AppRequest } from '../middleware';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -96,7 +96,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       const bodyStr = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
       event = stripe.webhooks.constructEvent(bodyStr, sig as string, STRIPE_WEBHOOK_SECRET);
     } catch (err: any) {
-      req.log.error({ err: err.message }, 'Webhook signature verification failed');
+      logError(req, 'stripe_webhook_signature_failed', err);
       return reply.status(400).send({ error: 'Invalid signature' });
     }
 
@@ -152,7 +152,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
       return reply.send({ received: true });
     } catch (err: any) {
-      req.log.error(err);
+      logError(req, 'stripe_webhook_processing_failed', err);
       return reply.status(500).send({ error: 'Webhook processing failed' });
     }
   });

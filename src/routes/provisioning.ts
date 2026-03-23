@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
 import { VapiClient } from '../services/vapiClient';
 
 export function registerProvisioningRoutes(
@@ -120,13 +120,13 @@ export function registerProvisioningRoutes(
           try {
             await vapiClient.deleteAssistant(assistantId);
           } catch (cleanupError) {
-            app.log.error({ cleanupError, assistantId }, 'Failed to clean up Vapi assistant after provisioning failure');
+            logError(req, 'vapi_assistant_cleanup_failed', cleanupError, { assistantId });
           }
         }
 
         await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['failed', tenant_id]);
 
-        app.log.error({ vapiError, tenant_id, assistantId }, 'Phone provisioning failed');
+        logError(req, 'phone_provisioning_failed', vapiError, { tenant_id, assistantId });
         return reply.status(502).send({
           error: 'Phone provisioning failed',
           detail: vapiError.message || 'Unknown Vapi API error',
@@ -171,7 +171,7 @@ export function registerProvisioningRoutes(
         try {
           await vapiClient.deletePhoneNumber(vapi_phone_number_id);
         } catch (err) {
-          app.log.error({ err, vapi_phone_number_id }, 'Failed to delete Vapi phone number');
+          logError(req, 'vapi_phone_delete_failed', err, { vapi_phone_number_id });
         }
       }
 
@@ -180,7 +180,7 @@ export function registerProvisioningRoutes(
         try {
           await vapiClient.deleteAssistant(vapi_assistant_id);
         } catch (err) {
-          app.log.error({ err, vapi_assistant_id }, 'Failed to delete Vapi assistant');
+          logError(req, 'vapi_assistant_delete_failed', err, { vapi_assistant_id });
         }
       }
 

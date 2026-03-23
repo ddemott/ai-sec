@@ -160,7 +160,14 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
   if (code === 'TENANT_NOT_FOUND') {
     return reply.status(404).send({ error: error.message, code: 'TENANT_NOT_FOUND' });
   }
-  app.log.error(error);
+  app.log.error({
+    event: 'unhandled_error',
+    error_message: error.message,
+    error_code: code || null,
+    error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+    statusCode,
+    timestamp: new Date().toISOString(),
+  }, `unhandled_error: ${error.message}`);
   return reply.status(statusCode).send({ error: error.message || 'Internal server error' });
 });
 

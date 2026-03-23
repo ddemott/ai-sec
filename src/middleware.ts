@@ -191,3 +191,35 @@ export function logEvent(req: AppRequest, event: string, data?: Record<string, u
 export function logWarning(req: AppRequest, event: string, data?: Record<string, unknown>) {
   req.log.warn({ event, ...data }, event);
 }
+
+/**
+ * Log an error with standardized structured fields for easy parsing.
+ * Every error log will have: event, error_message, error_code, route, method, tenantId.
+ *
+ * Output is JSON (Pino) so log aggregators (Datadog, CloudWatch, Railway logs)
+ * can filter/search by any field.
+ *
+ * Usage:
+ *   logError(req, 'provisioning_failed', err, { tenant_id, assistantId });
+ *   logError(req, 'booking_rpc_failed', err, { customerId, resourceId });
+ */
+export function logError(
+  req: AppRequest,
+  event: string,
+  err: unknown,
+  data?: Record<string, unknown>
+) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  req.log.error({
+    event,
+    error_message: error.message,
+    error_code: (error as any).code || (error as any).statusCode || null,
+    error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+    route: req.url,
+    method: req.method,
+    tenantId: req.tenantId,
+    userId: req.auth?.user_id,
+    timestamp: new Date().toISOString(),
+    ...data,
+  }, `${event}: ${error.message}`);
+}
