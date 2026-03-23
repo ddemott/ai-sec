@@ -5,19 +5,20 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (15 route modules under src/routes/) -> Postgres (Railway deployment)
+- **Backend API**: Node.js / Fastify (16 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 15 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing)
+- `/src` - Fastify backend (slim index.ts entry, 16 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning)
+- `/src/services` - Service layer (vapiClient.ts for Vapi REST API)
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/)
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 56 SQL migrations (schema, RLS, RPCs, coverage, billing, bug fixes)
+- `/supabase/migrations` - 57 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, bug fixes)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
@@ -79,7 +80,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 256 backend tests + 368 dashboard tests = 624 total passing.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 263 backend tests + 368 dashboard tests = 631 total passing.
 
 ### Remaining (Phase 13)
 - UI/UX flow improvements (ongoing — finding issues through hands-on testing)
@@ -93,14 +94,21 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - Beta testing with DynaTire
 
 ### Railway Deployment Status
+- Backend live at `https://ai-sec-production.up.railway.app/`
 - `railway.json` + `nixpacks.toml` configured (Node.js 20, Nixpacks builder)
-- Backend builds and starts on Railway (`node dist/src/index.js`)
-- Single DB pool via `DATABASE_URL` (eliminated `api_user` dependency for Supabase compatibility)
-- `FORCE ROW LEVEL SECURITY` migration ready (20260323000000) — must be applied to Supabase
+- Single DB pool via `DATABASE_URL` (Supabase session-mode pooler)
+- `FORCE ROW LEVEL SECURITY` migration applied to Supabase (20260323000000)
 - Graceful shutdown on SIGTERM/SIGINT
-- `.env.production.guide` documents all required env vars
-- **Still TODO**: `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_API_BASE_URL`, `DASHBOARD_URL` env vars in Railway
+- All env vars configured in Railway (DB, JWT, OpenAI, Vapi, Stripe keys + webhook secret)
+- Landing page at root URL, `/health` endpoint for monitoring
+- **Phone provisioning**: Automated via `POST /provisioning/activate` (creates Vapi assistant + phone number)
+- `src/services/vapiClient.ts` — Vapi REST API client (template substitution + CRUD)
+- `src/routes/provisioning.ts` — activate/deactivate/status endpoints
+- SuperAdmin dashboard has "Activate Phone" button with area code input
+- Env var needed: `VAPI_API_KEY` (Vapi private key)
+- **Still TODO**: `DASHBOARD_URL` env var (set after dashboard deployment)
 - **Still TODO**: Dashboard deployment (Vercel or Railway)
+- **Still TODO**: SetupWizard Step 7 "Go Live" (activate phone from wizard)
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
 - **12A — Repeatable Setup Wizard**: 6-step guided setup, live coverage badges, coverage summary on final step.

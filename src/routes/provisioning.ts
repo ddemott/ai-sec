@@ -1,0 +1,206 @@
+import type { Pool } from 'pg';
+import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { VapiClient } from '../services/vapiClient';
+
+export function registerProvisioningRoutes(
+  app: any,
+  pool: Pool,
+  vapiClient: VapiClient | null
+) {
+
+  // POST /provisioning/activate — provision Vapi assistant + phone number for a tenant
+  app.post('/provisioning/activate', withHandler(async (req: AppRequest, reply) => {
+    if (!vapiClient) {
+      return reply.status(503).send({ error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
+    }
+
+    const { tenant_id, area_code } = req.body as { tenant_id: string; area_code?: string };
+    if (!tenant_id) {
+      return reply.status(400).send({ error: 'tenant_id is required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      // Fetch tenant config
+      const tenantRes = await client.query(
+        `SELECT id, name, business_type, voice_id, system_prompt, first_message, phone_status
+         FROM tenants WHERE id = $1`,
+        [tenant_id]
+      );
+      if (tenantRes.rows.length === 0) {
+        return reply.status(404).send({ error: 'Tenant not found' });
+      }
+
+      const tenant = tenantRes.rows[0];
+
+      // Validate prerequisites
+      if (!tenant.business_type || !tenant.voice_id || !tenant.system_prompt) {
+        return reply.status(400).send({
+          error: 'Tenant must have business_type, voice_id, and system_prompt configured before activating phone',
+        });
+      }
+
+      // Check status
+      if (tenant.phone_status === 'active') {
+        return reply.status(409).send({ error: 'Phone is already active for this tenant' });
+      }
+      if (tenant.phone_status === 'provisioning') {
+        return reply.status(409).send({ error: 'Phone provisioning is already in progress' });
+      }
+
+      // Get default resource for this tenant
+      const resourceRes = await client.query(
+        'SELECT id FROM resources WHERE tenant_id = $1 ORDER BY created_at ASC LIMIT 1',
+        [tenant_id]
+      );
+      const defaultResourceId = resourceRes.rows[0]?.id || tenant_id;
+
+      // Set provisioning status
+      await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['provisioning', tenant_id]);
+
+      let assistantId: string | null = null;
+
+      try {
+        // Create Vapi assistant
+        const assistantResult = await vapiClient.createAssistant({
+          id: tenant.id,
+          name: tenant.name,
+          business_type: tenant.business_type,
+          voice_id: tenant.voice_id,
+          system_prompt: tenant.system_prompt,
+          first_message: tenant.first_message || `Thanks for calling ${tenant.name}! How can I help you today?`,
+          default_resource_id: defaultResourceId,
+        });
+        assistantId = assistantResult.id;
+
+        // Provision phone number
+        const phoneResult = await vapiClient.createPhoneNumber(assistantId, area_code);
+
+        // Update tenant with all provisioning data
+        await client.query(
+          `UPDATE tenants SET
+            vapi_assistant_id = $1,
+            vapi_phone_number_id = $2,
+            inbound_phone = $3,
+            phone_status = 'active'
+          WHERE id = $4`,
+          [assistantId, phoneResult.id, phoneResult.number, tenant_id]
+        );
+
+        logEvent(req, 'phone_provisioned', { tenant_id, phone: phoneResult.number, assistant_id: assistantId });
+
+        return reply.send({
+          success: true,
+          phone_number: phoneResult.number,
+          assistant_id: assistantId,
+          phone_number_id: phoneResult.id,
+        });
+
+      } catch (vapiError: any) {
+        // Rollback: delete assistant if it was created
+        if (assistantId) {
+          try {
+            await vapiClient.deleteAssistant(assistantId);
+          } catch (cleanupError) {
+            app.log.error({ cleanupError, assistantId }, 'Failed to clean up Vapi assistant after provisioning failure');
+          }
+        }
+
+        await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['failed', tenant_id]);
+
+        app.log.error({ vapiError, tenant_id }, 'Phone provisioning failed');
+        return reply.status(502).send({
+          error: 'Phone provisioning failed',
+          detail: vapiError.message || 'Unknown Vapi API error',
+        });
+      }
+
+    } finally {
+      client.release();
+    }
+  }, 'Failed to activate phone'));
+
+  // POST /provisioning/deactivate — remove Vapi assistant + phone number
+  app.post('/provisioning/deactivate', withHandler(async (req: AppRequest, reply) => {
+    if (!vapiClient) {
+      return reply.status(503).send({ error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
+    }
+
+    const { tenant_id } = req.body as { tenant_id: string };
+    if (!tenant_id) {
+      return reply.status(400).send({ error: 'tenant_id is required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const tenantRes = await client.query(
+        'SELECT vapi_assistant_id, vapi_phone_number_id FROM tenants WHERE id = $1',
+        [tenant_id]
+      );
+      if (tenantRes.rows.length === 0) {
+        return reply.status(404).send({ error: 'Tenant not found' });
+      }
+
+      const { vapi_assistant_id, vapi_phone_number_id } = tenantRes.rows[0];
+
+      // Delete phone number first (depends on assistant)
+      if (vapi_phone_number_id) {
+        try {
+          await vapiClient.deletePhoneNumber(vapi_phone_number_id);
+        } catch (err) {
+          app.log.error({ err, vapi_phone_number_id }, 'Failed to delete Vapi phone number');
+        }
+      }
+
+      // Delete assistant
+      if (vapi_assistant_id) {
+        try {
+          await vapiClient.deleteAssistant(vapi_assistant_id);
+        } catch (err) {
+          app.log.error({ err, vapi_assistant_id }, 'Failed to delete Vapi assistant');
+        }
+      }
+
+      // Clear tenant columns
+      await client.query(
+        `UPDATE tenants SET
+          vapi_assistant_id = NULL,
+          vapi_phone_number_id = NULL,
+          inbound_phone = NULL,
+          phone_status = 'deprovisioned'
+        WHERE id = $1`,
+        [tenant_id]
+      );
+
+      logEvent(req, 'phone_deprovisioned', { tenant_id });
+
+      return reply.send({ success: true });
+
+    } finally {
+      client.release();
+    }
+  }, 'Failed to deactivate phone'));
+
+  // GET /provisioning/status — get phone provisioning status for a tenant
+  app.get('/provisioning/status', withHandler(async (req: AppRequest, reply) => {
+    const { tenant_id } = req.query as { tenant_id: string };
+    if (!tenant_id) {
+      return reply.status(400).send({ error: 'tenant_id query parameter is required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      const res = await client.query(
+        'SELECT phone_status, inbound_phone, vapi_assistant_id FROM tenants WHERE id = $1',
+        [tenant_id]
+      );
+      if (res.rows.length === 0) {
+        return reply.status(404).send({ error: 'Tenant not found' });
+      }
+
+      return reply.send(res.rows[0]);
+    } finally {
+      client.release();
+    }
+  }, 'Failed to get provisioning status'));
+}

@@ -40,6 +40,9 @@ type Tenant = {
     voice_id?: string | null
     first_message?: string | null
     system_prompt?: string | null
+    vapi_assistant_id?: string | null
+    vapi_phone_number_id?: string | null
+    phone_status?: string
 }
 
 type Template = {
@@ -540,20 +543,74 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                                 <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium font-mono">{selectedTenant.owner_phone ? formatPhone(selectedTenant.owner_phone) : 'Not set'}</p>
                             </div>
                         )}
-                        {isEditing ? (
-                            <PhoneInput
-                                label="Vapi Inbound Phone"
-                                value={form.inbound_phone || ''}
-                                onChange={(val) => setForm({...form, inbound_phone: val})}
-                            />
-                        ) : (
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center text-blue-600">
-                                    <Globe className="w-3 h-3 mr-1" /> Vapi Inbound Phone (Routing)
-                                </label>
-                                <p className="p-2.5 text-blue-700 dark:text-blue-400 font-bold font-mono">{selectedTenant.inbound_phone ? formatPhone(selectedTenant.inbound_phone) : 'Not connected'}</p>
-                            </div>
-                        )}
+                        {/* Phone Provisioning */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center text-blue-600">
+                                <Globe className="w-3 h-3 mr-1" /> AI Phone Line
+                            </label>
+                            {selectedTenant.phone_status === 'active' && selectedTenant.inbound_phone ? (
+                                <div className="flex items-center gap-3">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Active
+                                    </span>
+                                    <span className="font-mono font-bold text-blue-700 dark:text-blue-400">{formatPhone(selectedTenant.inbound_phone)}</span>
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm('Deactivate this phone line? The number will be released.')) return
+                                            try {
+                                                await Api.provisioning.deactivate(selectedTenant.id)
+                                                setSelectedTenant({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, vapi_assistant_id: null, vapi_phone_number_id: null})
+                                            } catch (err: any) {
+                                                alert(err.message || 'Failed to deactivate phone')
+                                            }
+                                        }}
+                                        className="text-xs text-red-500 hover:text-red-700 underline"
+                                    >Deactivate</button>
+                                </div>
+                            ) : selectedTenant.phone_status === 'provisioning' ? (
+                                <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                                        <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                        Provisioning...
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        maxLength={3}
+                                        placeholder="Area code (optional)"
+                                        className="w-32 px-2.5 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        id="area-code-input"
+                                    />
+                                    <button
+                                        onClick={async () => {
+                                            const areaCode = (document.getElementById('area-code-input') as HTMLInputElement)?.value?.trim()
+                                            setSelectedTenant({...selectedTenant, phone_status: 'provisioning'})
+                                            try {
+                                                const result = await Api.provisioning.activate(selectedTenant.id, areaCode || undefined)
+                                                setSelectedTenant({
+                                                    ...selectedTenant,
+                                                    phone_status: 'active',
+                                                    inbound_phone: result.phone_number,
+                                                    vapi_assistant_id: result.assistant_id,
+                                                    vapi_phone_number_id: result.phone_number_id,
+                                                })
+                                            } catch (err: any) {
+                                                setSelectedTenant({...selectedTenant, phone_status: 'failed'})
+                                                alert(err.message || 'Failed to activate phone')
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-1.5"
+                                    >
+                                        <Phone className="w-3.5 h-3.5" /> Activate Phone
+                                    </button>
+                                    {selectedTenant.phone_status === 'failed' && (
+                                        <span className="text-xs text-red-500">Last attempt failed — try again</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
               </Card>

@@ -21,6 +21,8 @@ import { registerKnowledgeRoutes } from './routes/knowledge';
 import { registerAnalyticsRoutes } from './routes/analytics';
 import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
+import { registerProvisioningRoutes } from './routes/provisioning';
+import { VapiClient } from './services/vapiClient';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { tenantMiddleware } from './middleware';
@@ -28,6 +30,9 @@ import { tenantMiddleware } from './middleware';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
+const VAPI_API_KEY = process.env.VAPI_API_KEY || '';
+const VAPI_SERVER_URL = process.env.VAPI_SERVER_URL || 'https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools';
+const VAPI_SERVER_URL_SECRET = process.env.VAPI_SERVER_URL_SECRET || '';
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
@@ -197,6 +202,11 @@ registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient, normalizeForE
 registerAnalyticsRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
 registerBillingRoutes(app, pool);
+
+const vapiClient = VAPI_API_KEY
+  ? new VapiClient(VAPI_API_KEY, VAPI_SERVER_URL, VAPI_SERVER_URL_SECRET)
+  : null;
+registerProvisioningRoutes(app, pool, vapiClient);
 
 // --- Start Server ---
 
