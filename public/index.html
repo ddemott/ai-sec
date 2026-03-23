@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecretaryHQ — AI-Powered Reception for Service Businesses</title>
+  <meta name="description" content="Never miss a call again. SecretaryHQ is an AI receptionist that answers phones, books appointments, and handles customer questions for service businesses.">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #3b82f6;
+      --accent2: #8b5cf6;
+      --green: #22c55e;
+      --orange: #f59e0b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* --- Nav --- */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand {
+      font-size: 1.25rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; border: none; padding: 0.5rem 1.25rem;
+      border-radius: 8px; font-size: 0.875rem; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: opacity 0.2s;
+    }
+    .nav-cta:hover { opacity: 0.9; }
+
+    /* --- Hero --- */
+    .hero {
+      padding: 10rem 2rem 6rem;
+      text-align: center;
+      max-width: 900px; margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 9999px; padding: 0.4rem 1rem;
+      font-size: 0.8rem; color: var(--text-muted); margin-bottom: 2rem;
+    }
+    .hero-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .hero h1 {
+      font-size: 3.5rem; font-weight: 800; line-height: 1.1; margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p { font-size: 1.25rem; color: var(--text-muted); max-width: 640px; margin: 0 auto 2.5rem; }
+    .hero-ctas { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; border: none; padding: 0.875rem 2rem;
+      border-radius: 10px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: transform 0.2s, opacity 0.2s;
+    }
+    .btn-primary:hover { transform: translateY(-1px); opacity: 0.9; }
+    .btn-secondary {
+      background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
+      padding: 0.875rem 2rem; border-radius: 10px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: border-color 0.2s;
+    }
+    .btn-secondary:hover { border-color: var(--accent); }
+
+    /* --- Stats bar --- */
+    .stats {
+      display: flex; justify-content: center; gap: 4rem; padding: 3rem 2rem;
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      max-width: 800px; margin: 0 auto;
+    }
+    .stat-num { font-size: 2rem; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* --- Section layout --- */
+    section { padding: 6rem 2rem; max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--accent); margin-bottom: 0.75rem;
+    }
+    .section-title { font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem; }
+    .section-subtitle { font-size: 1.1rem; color: var(--text-muted); max-width: 600px; margin-bottom: 3rem; }
+    .section-header { text-align: center; }
+    .section-header .section-subtitle { margin: 0 auto 3rem; }
+
+    /* --- How it works --- */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+    .step {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 2rem; position: relative;
+    }
+    .step-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.875rem; margin-bottom: 1.25rem;
+    }
+    .step h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .step p { font-size: 0.875rem; color: var(--text-muted); }
+
+    /* --- Features grid --- */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .feature-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1.75rem; transition: border-color 0.3s, transform 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; margin-bottom: 1rem;
+    }
+    .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .feature-card p { font-size: 0.825rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* icon bg colors */
+    .icon-blue { background: rgba(59, 130, 246, 0.15); }
+    .icon-purple { background: rgba(139, 92, 246, 0.15); }
+    .icon-green { background: rgba(34, 197, 94, 0.15); }
+    .icon-orange { background: rgba(245, 158, 11, 0.15); }
+    .icon-pink { background: rgba(236, 72, 153, 0.15); }
+    .icon-cyan { background: rgba(6, 182, 212, 0.15); }
+
+    /* --- Verticals --- */
+    .verticals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .vertical {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 0.75rem;
+      transition: border-color 0.2s;
+    }
+    .vertical:hover { border-color: var(--accent); }
+    .vertical-icon { font-size: 1.5rem; }
+    .vertical h3 { font-size: 0.9rem; font-weight: 600; }
+    .vertical p { font-size: 0.75rem; color: var(--text-dim); }
+
+    /* --- Pricing --- */
+    .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .price-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 2rem; position: relative;
+    }
+    .price-card.featured { border-color: var(--accent); }
+    .price-card.featured::before {
+      content: 'Most Popular';
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      padding: 0.25rem 1rem; border-radius: 9999px; letter-spacing: 0.05em;
+    }
+    .price-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .price-card .price { font-size: 2.5rem; font-weight: 800; margin-bottom: 0.25rem; }
+    .price-card .price span { font-size: 1rem; font-weight: 400; color: var(--text-muted); }
+    .price-card .price-desc { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 1.5rem; }
+    .price-card ul { list-style: none; margin-bottom: 1.5rem; }
+    .price-card li { font-size: 0.85rem; color: var(--text-muted); padding: 0.35rem 0; display: flex; align-items: center; gap: 0.5rem; }
+    .price-card li::before { content: '\2713'; color: var(--green); font-weight: 700; font-size: 0.75rem; }
+    .price-btn {
+      display: block; width: 100%; padding: 0.75rem; border-radius: 8px;
+      font-size: 0.875rem; font-weight: 600; text-align: center;
+      cursor: pointer; transition: opacity 0.2s; text-decoration: none;
+    }
+    .price-btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; border: none; }
+    .price-btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .price-btn:hover { opacity: 0.85; }
+
+    /* --- Call-to-action phone demo --- */
+    .demo-section {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+      border: 1px solid var(--border); border-radius: 16px;
+      padding: 4rem 2rem; text-align: center; margin: 0 auto; max-width: 800px;
+    }
+    .demo-section h2 { font-size: 2rem; font-weight: 700; margin-bottom: 1rem; }
+    .demo-section p { color: var(--text-muted); margin-bottom: 2rem; max-width: 500px; margin-left: auto; margin-right: auto; }
+    .phone-mockup {
+      background: var(--bg); border: 2px solid var(--border); border-radius: 24px;
+      max-width: 320px; margin: 2rem auto 0; padding: 1.5rem;
+      text-align: left;
+    }
+    .call-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .call-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+    }
+    .call-info h4 { font-size: 0.875rem; }
+    .call-info p { font-size: 0.75rem; color: var(--text-dim); }
+    .transcript { font-size: 0.8rem; line-height: 1.7; }
+    .transcript .ai { color: var(--accent); }
+    .transcript .caller { color: var(--text-muted); }
+    .transcript .label { font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* --- Footer --- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 2rem; text-align: center;
+      color: var(--text-dim); font-size: 0.8rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.25rem; }
+      .stats { flex-direction: column; gap: 2rem; align-items: center; }
+      .steps, .features-grid, .verticals-grid, .pricing-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+    }
+    @media (max-width: 480px) {
+      .hero { padding: 7rem 1rem 4rem; }
+      .hero h1 { font-size: 1.75rem; }
+      .hero-ctas { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-brand">SecretaryHQ</div>
+  <ul class="nav-links">
+    <li><a href="#how-it-works">How It Works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#industries">Industries</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+  </ul>
+  <a href="#pricing" class="nav-cta">Get Started</a>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> Now accepting early access signups</div>
+  <h1>Your Business Deserves a Receptionist That <span>Never Misses a Call</span></h1>
+  <p>SecretaryHQ is an AI-powered receptionist that answers your phones, books appointments, and handles customer questions &mdash; 24/7, for a fraction of the cost of a human receptionist.</p>
+  <div class="hero-ctas">
+    <a href="#pricing" class="btn-primary">Start Free Trial</a>
+    <a href="#demo" class="btn-secondary">See It In Action</a>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats">
+  <div>
+    <div class="stat-num">24/7</div>
+    <div class="stat-label">Always Available</div>
+  </div>
+  <div>
+    <div class="stat-num">30s</div>
+    <div class="stat-label">Avg. Booking Time</div>
+  </div>
+  <div>
+    <div class="stat-num">0</div>
+    <div class="stat-label">Missed Calls</div>
+  </div>
+</div>
+
+<!-- How It Works -->
+<section id="how-it-works">
+  <div class="section-header">
+    <div class="section-label">How It Works</div>
+    <div class="section-title">Up and running in minutes, not months</div>
+    <div class="section-subtitle">Connect your phone number, upload your business info, and let SecretaryHQ handle the rest.</div>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Set Up Your Business</h3>
+      <p>Add your services, staff, hours, and resources through the guided setup wizard. Takes about 10 minutes.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Connect Your Phone</h3>
+      <p>Forward your business line or get a new number. Calls are answered instantly by your AI receptionist.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Watch It Work</h3>
+      <p>Monitor calls, appointments, and customer interactions from your real-time dashboard. Step in anytime.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="section-header">
+    <div class="section-label">Features</div>
+    <div class="section-title">Everything your front desk needs</div>
+    <div class="section-subtitle">Built specifically for service businesses that run on appointments, walk-ins, and phone calls.</div>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon icon-blue">&#128222;</div>
+      <h3>Voice AI Receptionist</h3>
+      <p>Natural-sounding AI answers calls, understands context, handles accents and background noise. Powered by best-in-class speech models.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-purple">&#128197;</div>
+      <h3>Smart Appointment Booking</h3>
+      <p>Books appointments in real-time based on staff availability, skills, resource capacity, and shift schedules. No double-bookings, ever.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-green">&#128218;</div>
+      <h3>Knowledge Base (RAG)</h3>
+      <p>Upload your policies, pricing, and FAQs. The AI answers caller questions accurately from your own business documents.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-orange">&#128101;</div>
+      <h3>Customer CRM</h3>
+      <p>Automatically tracks customers, visit history, and contact info. Recognizes returning callers by phone number.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-pink">&#128200;</div>
+      <h3>Real-Time Dashboard</h3>
+      <p>See today's schedule, monitor active calls, review transcripts, and manage your entire operation from one screen.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-cyan">&#128736;</div>
+      <h3>Staff &amp; Resource Management</h3>
+      <p>Map employee skills to services and resources. The AI knows who can do what, on which equipment, and when they're available.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-blue">&#128197;</div>
+      <h3>Calendar Sync</h3>
+      <p>Two-way sync with Google Calendar. Appointments booked by AI show up on your team's calendars instantly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-purple">&#128202;</div>
+      <h3>Analytics &amp; Call Summaries</h3>
+      <p>AI-generated summaries after every call. Track call volume, booking rates, peak hours, and service demand.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-green">&#127912;</div>
+      <h3>Custom Branding &amp; Themes</h3>
+      <p>8 built-in themes from light to dark. Your dashboard, your look. White-label ready for agencies.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Industries -->
+<section id="industries">
+  <div class="section-header">
+    <div class="section-label">Industries</div>
+    <div class="section-title">Built for service businesses</div>
+    <div class="section-subtitle">From tire shops to salons, any appointment-based business can be up and running today.</div>
+  </div>
+  <div class="verticals-grid">
+    <div class="vertical">
+      <div class="vertical-icon">&#128663;</div>
+      <div><h3>Auto &amp; Tire Shops</h3><p>Oil changes, tire rotations, bay scheduling</p></div>
+    </div>
+    <div class="vertical">
+      <div class="vertical-icon">&#9986;</div>
+      <div><h3>Hair &amp; Beauty Salons</h3><p>Stylist booking, chair management</p></div>
+    </div>
+    <div class="vertical">
+      <div class="vertical-icon">&#128295;</div>
+      <div><h3>Trades &amp; Home Services</h3><p>HVAC, plumbing, electrical dispatch</p></div>
+    </div>
+    <div class="vertical">
+      <div class="vertical-icon">&#127947;</div>
+      <div><h3>Fitness &amp; Wellness</h3><p>Class booking, trainer schedules, equipment</p></div>
+    </div>
+    <div class="vertical">
+      <div class="vertical-icon">&#127860;</div>
+      <div><h3>Food &amp; Beverage</h3><p>Reservations, catering inquiries, takeout</p></div>
+    </div>
+    <div class="vertical">
+      <div class="vertical-icon">&#128137;</div>
+      <div><h3>Pet Services</h3><p>Grooming, boarding, daycare scheduling</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Demo -->
+<section id="demo">
+  <div class="demo-section">
+    <div class="section-label">See It In Action</div>
+    <h2>Hear what a call sounds like</h2>
+    <p>Here's a real example of SecretaryHQ handling an inbound call for an auto shop.</p>
+    <div class="phone-mockup">
+      <div class="call-header">
+        <div class="call-avatar">&#128222;</div>
+        <div class="call-info">
+          <h4>Incoming Call</h4>
+          <p>(503) 555-0142 &middot; 0:47</p>
+        </div>
+      </div>
+      <div class="transcript">
+        <p><span class="label ai">AI:</span> <span class="ai">"Good morning, thanks for calling DynaTire! How can I help you today?"</span></p>
+        <br>
+        <p><span class="label caller">Caller:</span> <span class="caller">"Hi, I need to get my tires rotated. Do you have anything open tomorrow?"</span></p>
+        <br>
+        <p><span class="label ai">AI:</span> <span class="ai">"Sure! I have a 10:15 AM or a 2:30 PM slot on Bay 2. A tire rotation takes about 30 minutes. Which works better?"</span></p>
+        <br>
+        <p><span class="label caller">Caller:</span> <span class="caller">"2:30 works great."</span></p>
+        <br>
+        <p><span class="label ai">AI:</span> <span class="ai">"You're all set for 2:30 PM tomorrow on Bay 2. Can I get your name for the appointment?"</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing">
+  <div class="section-header">
+    <div class="section-label">Pricing</div>
+    <div class="section-title">Simple, predictable pricing</div>
+    <div class="section-subtitle">No per-minute fees. No hidden charges. Cancel anytime.</div>
+  </div>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <h3>Solo</h3>
+      <div class="price">$129<span>/mo</span></div>
+      <div class="price-desc">For single-location businesses</div>
+      <ul>
+        <li>1 phone line</li>
+        <li>Unlimited inbound calls</li>
+        <li>Smart appointment booking</li>
+        <li>Knowledge base (25 documents)</li>
+        <li>Customer CRM</li>
+        <li>Google Calendar sync</li>
+        <li>Call summaries &amp; transcripts</li>
+      </ul>
+      <button class="price-btn price-btn-secondary">Start Free Trial</button>
+    </div>
+    <div class="price-card featured">
+      <h3>Growth</h3>
+      <div class="price">$279<span>/mo</span></div>
+      <div class="price-desc">For growing teams</div>
+      <ul>
+        <li>3 phone lines</li>
+        <li>Everything in Solo, plus:</li>
+        <li>Unlimited staff &amp; resources</li>
+        <li>Knowledge base (100 documents)</li>
+        <li>Coverage gap alerts</li>
+        <li>Analytics dashboard</li>
+        <li>Priority support</li>
+      </ul>
+      <button class="price-btn price-btn-primary">Start Free Trial</button>
+    </div>
+    <div class="price-card">
+      <h3>Professional</h3>
+      <div class="price">$449<span>/mo</span></div>
+      <div class="price-desc">For multi-location operations</div>
+      <ul>
+        <li>10 phone lines</li>
+        <li>Everything in Growth, plus:</li>
+        <li>Multi-location management</li>
+        <li>Custom AI voice &amp; personality</li>
+        <li>Advanced analytics &amp; ROI</li>
+        <li>API access</li>
+        <li>Dedicated account manager</li>
+      </ul>
+      <button class="price-btn price-btn-secondary">Contact Sales</button>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section>
+  <div class="demo-section">
+    <h2>Stop missing calls. Start growing.</h2>
+    <p>Join service businesses that trust SecretaryHQ to handle their front desk, 24 hours a day, 7 days a week.</p>
+    <a href="#pricing" class="btn-primary">Get Started Today</a>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>&copy; 2026 SecretaryHQ. All rights reserved. &nbsp;&middot;&nbsp; <a href="#">Privacy</a> &nbsp;&middot;&nbsp; <a href="#">Terms</a> &nbsp;&middot;&nbsp; <a href="#">Contact</a></p>
+</footer>
+
+</body>
+</html>
