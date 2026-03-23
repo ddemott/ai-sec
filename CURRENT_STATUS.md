@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-03-23
+**Last updated:** 2026-03-23 (end of session)
 
 ---
 
@@ -244,16 +244,38 @@ Result returned to Vapi → LLM continues conversation
 - `src/services/vapiClient.ts` — Vapi REST API client
 - `src/routes/provisioning.ts` — activate/deactivate/status endpoints
 - `src/provisioning.test.ts` — 7 provisioning tests
+- `src/middleware-helpers.test.ts` — 7 tests for withPoolClient and requireTenantId
 - `public/index.html` — Marketing landing page
+- `dashboard/components/SetupWizard/` — 8 files (split from 1,386-line monolith)
 
 ### Modified Files
 - `src/index.ts` — dotenv, single pool, graceful shutdown, provisioning route registration
+- `src/middleware.ts` — added `withPoolClient()` and `requireTenantId()` helpers
+- `src/routes/*.ts` — 12 route files refactored (29 tenant validations + 19 pool boilerplate blocks replaced)
 - `vapi/agent.template.json` — updated model to llama-3.3-70b-versatile
 - `dashboard/lib/api.ts` — Api.provisioning namespace
 - `dashboard/components/SuperAdminDashboard.tsx` — Activate Phone UI
-- `supabase/functions/vapi-tools/db/repository.ts` — SUPABASE_DB_URL fallback
+- `supabase/functions/vapi-tools/db/repository.ts` — lazy DB pool + SUPABASE_DB_URL fallback
 - `.env` — populated with all local dev secrets
 - `.env.production.guide` — added VAPI_API_KEY, DASHBOARD_URL
 - `.gitignore` — added .env.production.save
 - `CLAUDE.md` — updated throughout session
 - `docs/DEPLOYMENT.md` — Railway deployment details, env var table
+
+### Deleted Files
+- `dashboard/app/onboard-business.tsx` — dead code (unused stub)
+
+### Refactoring Summary
+| Refactor | Impact |
+|----------|--------|
+| `withPoolClient()` helper | Eliminated 19 pool.connect/release blocks |
+| `requireTenantId()` helper | Replaced 29 tenant validation instances across 12 route files |
+| Lazy DB pool in edge function | Prevents boot crash if DB unreachable |
+| SetupWizard split | 1,386 lines → 8 focused files (types + 6 steps + orchestrator) |
+| Dead code removal | Deleted unused onboard-business.tsx |
+| Smoke test fix | Fixed stale "AI Secretary Portal" → "SecretaryHQ Portal" in dist |
+
+### Test Counts
+- **270 backend tests** (30 test files) — all passing
+- **368 dashboard tests** (27 test files) — all passing
+- **Total: 638 tests**
