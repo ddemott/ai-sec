@@ -83,32 +83,34 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 263 backend tests + 368 dashboard tests = 631 total passing.
 
 ### Remaining (Phase 13)
+- **Deploy Supabase edge functions** (vapi-tools — required for voice AI to have working tools)
+- **Add `VAPI_API_KEY`** to Railway env vars (needed to provision phone numbers)
+- **Test end-to-end call**: Provision number → call it → AI answers → books appointment
+- **Deploy dashboard** (Vercel or Railway — currently local only)
+- **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
+- SetupWizard Step 7 "Go Live" (activate phone from wizard)
 - UI/UX flow improvements (ongoing — finding issues through hands-on testing)
 - Vocabulary wiring (frontend still hardcodes "Resources"/"Employees")
-- **Railway deployment** (backend is up, still need: STRIPE_WEBHOOK_SECRET, NEXT_PUBLIC_API_BASE_URL, DASHBOARD_URL env vars, apply FORCE RLS migration to Supabase)
-- Vapi agent pointed to production Edge Function URL
-- Telnyx phone number assignment
 - Database webhooks for n8n triggers
 - Outlook calendar sync implementation
 - OAuth token refresh for calendar sync
 - Beta testing with DynaTire
 
-### Railway Deployment Status
+### Railway Deployment Status (as of 2026-03-23)
 - Backend live at `https://ai-sec-production.up.railway.app/`
 - `railway.json` + `nixpacks.toml` configured (Node.js 20, Nixpacks builder)
 - Single DB pool via `DATABASE_URL` (Supabase session-mode pooler)
 - `FORCE ROW LEVEL SECURITY` migration applied to Supabase (20260323000000)
+- Phone provisioning migration applied to Supabase (20260323000001)
 - Graceful shutdown on SIGTERM/SIGINT
-- All env vars configured in Railway (DB, JWT, OpenAI, Vapi, Stripe keys + webhook secret)
+- All env vars configured in Railway (DB, JWT, OpenAI, Vapi secret, Stripe keys + webhook secret)
 - Landing page at root URL, `/health` endpoint for monitoring
+- Stripe webhook registered: `https://ai-sec-production.up.railway.app/billing/webhook`
 - **Phone provisioning**: Automated via `POST /provisioning/activate` (creates Vapi assistant + phone number)
 - `src/services/vapiClient.ts` — Vapi REST API client (template substitution + CRUD)
 - `src/routes/provisioning.ts` — activate/deactivate/status endpoints
 - SuperAdmin dashboard has "Activate Phone" button with area code input
-- Env var needed: `VAPI_API_KEY` (Vapi private key)
-- **Still TODO**: `DASHBOARD_URL` env var (set after dashboard deployment)
-- **Still TODO**: Dashboard deployment (Vercel or Railway)
-- **Still TODO**: SetupWizard Step 7 "Go Live" (activate phone from wizard)
+- **Still needs**: `VAPI_API_KEY` env var in Railway, edge function deployment, dashboard deployment
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
 - **12A — Repeatable Setup Wizard**: 6-step guided setup, live coverage badges, coverage summary on final step.
