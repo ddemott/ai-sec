@@ -10,17 +10,18 @@ import {
   Search,
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession, useStaticData } from '../lib/hooks'
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Input } from './ui/Input'
 
-export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function SkillMatrixView() {
+  const tenantId = useActiveTenantId()
   const { employees, resources, services, loading } = useStaticData(tenantId)
   const vocab = useVocabulary()
   
-  const [empMappings, setEmpMappings] = useState<{ employee_id: number | string; service_id: number }[]>([])
-  const [resMappings, setResMappings] = useState<{ resource_id: string; service_id: number }[]>([])
+  const [empMappings, setEmpMappings] = useState<{ employee_id?: string; service_id: string }[]>([])
+  const [resMappings, setResMappings] = useState<{ resource_id?: string; service_id: string }[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'employee' | 'resource'>('all')
   const [saving, setSaving] = useState(false)
@@ -71,12 +72,12 @@ export default function SkillMatrixView({ overrideTenantId }: { overrideTenantId
   // Debounce guard to prevent rapid duplicate requests (BUG-043)
   const pendingToggle = useRef<string | null>(null)
 
-  async function toggleMapping(entityType: 'employee' | 'resource', entityId: string | number, serviceId: number) {
+  async function toggleMapping(entityType: 'employee' | 'resource', entityId: string, serviceId: string) {
     const key = `${entityType}-${entityId}-${serviceId}`
     if (pendingToggle.current === key) return
     pendingToggle.current = key
     setSaving(true)
-    const isMapped = entityType === 'employee' 
+    const isMapped = entityType === 'employee'
       ? empMappings.some(m => m.employee_id === entityId && m.service_id === serviceId)
       : resMappings.some(m => m.resource_id === entityId && m.service_id === serviceId)
 

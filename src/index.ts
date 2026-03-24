@@ -28,12 +28,31 @@ import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { tenantMiddleware } from './middleware';
 
+// --- Environment Validation ---
+// Fail fast on missing required env vars in production
+const isProduction = process.env.NODE_ENV === 'production';
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? '' : 'dev-jwt-secret-change-in-production');
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 const VAPI_API_KEY = process.env.VAPI_API_KEY || '';
 const VAPI_SERVER_URL = process.env.VAPI_SERVER_URL || 'https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools';
 const VAPI_SERVER_URL_SECRET = process.env.VAPI_SERVER_URL_SECRET || '';
+
+if (isProduction) {
+  const missing: string[] = [];
+  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
+  if (!JWT_SECRET) missing.push('JWT_SECRET');
+  if (!OPENAI_API_KEY) missing.push('OPENAI_API_KEY');
+  if (!process.env.STRIPE_SECRET_KEY) missing.push('STRIPE_SECRET_KEY');
+  if (missing.length > 0) {
+    console.error(`FATAL: Missing required env vars: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  // Warn for optional but important vars
+  if (!VAPI_API_KEY) console.warn('WARNING: VAPI_API_KEY not set — phone provisioning disabled');
+  if (!VAPI_SERVER_URL_SECRET) console.warn('WARNING: VAPI_SERVER_URL_SECRET not set — webhook auth disabled');
+}
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
@@ -141,7 +160,7 @@ app.addHook('onRequest', async (request, reply) => {
   const token = authHeader.slice(7);
   const decoded = verifyToken(token);
   if (!decoded) {
-    return reply.status(401).send({ error: 'Invalid or expired token' });
+    return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
   }
 
   (request as any).auth = decoded;
@@ -158,7 +177,7 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
   const statusCode = error.statusCode || 500;
   const code = error.code;
   if (code === 'TENANT_NOT_FOUND') {
-    return reply.status(404).send({ error: error.message, code: 'TENANT_NOT_FOUND' });
+    return reply.status(404).send({ success: false, error: error.message, code: 'TENANT_NOT_FOUND' });
   }
   app.log.error({
     event: 'unhandled_error',
@@ -168,7 +187,7 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
     statusCode,
     timestamp: new Date().toISOString(),
   }, `unhandled_error: ${error.message}`);
-  return reply.status(statusCode).send({ error: error.message || 'Internal server error' });
+  return reply.status(statusCode).send({ success: false, error: error.message || 'Internal server error' });
 });
 
 // --- Health & Admin ---
@@ -192,7 +211,7 @@ app.post('/admin/purge-soft-reservations', async (req, reply) => {
       error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
     }, `purge_soft_reservations_failed: ${(err as Error).message}`);
-    return reply.status(500).send({ error: 'Failed to purge soft reservations' });
+    return reply.status(500).send({ success: false, error: 'Failed to purge soft reservations' });
   } finally {
     client.release();
   }

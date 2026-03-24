@@ -1,7 +1,22 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
+
+const CreateResourceSchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(500).optional().nullable(),
+});
+
+const UpdateResourceSchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(500).optional().nullable(),
+  is_active: z.boolean().optional(),
+  capabilities: z.array(z.string()).optional(),
+});
 
 export function registerResourceRoutes(
   app: any,
@@ -28,12 +43,13 @@ export function registerResourceRoutes(
   }, 'Failed to fetch resources'));
 
   app.post('/resources/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as { tenant_id: string; name: string; description?: string };
+    const parsed = CreateResourceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
-    if (!body.name) {
-      return reply.status(400).send({ success: false, error: 'name is required' });
-    }
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -48,7 +64,11 @@ export function registerResourceRoutes(
 
   app.post('/resources/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { tenant_id?: string; name?: string; description?: string; is_active?: boolean; capabilities?: string[] };
+    const parsed = UpdateResourceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 

@@ -9,15 +9,11 @@ import {
   Wand2,
 } from 'lucide-react'
 import { Api } from '../../lib/api'
-import { useSession, useStaticData } from '../../lib/hooks'
+import { useStaticData } from '../../lib/hooks'
+import { useActiveTenantId } from '../../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from '../ui/Button'
-import { Step1Services } from './StepServices'
-import { Step2Resources } from './StepResources'
-import { Step3Employees } from './StepEmployees'
-import { Step4Shifts } from './StepShifts'
-import { Step5Assignments } from './StepAssignments'
-import { Step6Review } from './StepReview'
+import { WizardStepContent } from './WizardStepContent'
 import type {
   WizardStep,
   ServiceForm,
@@ -44,8 +40,8 @@ function getStepLabels(vocab: { resource_plural: string; employee_plural: string
   }
 }
 
-export default function SetupWizard({ isOpen, onClose, overrideTenantId }: SetupWizardProps) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
+  const tenantId = useActiveTenantId()
   const { services, resources, employees, loading, refresh } = useStaticData(tenantId)
   const vocab = useVocabulary()
   const STEP_LABELS = getStepLabels(vocab)
@@ -53,7 +49,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
 
   // Step 1 — Services
   const [editingService, setEditingService] = useState<ServiceForm | null>(null)
-  const [editingServiceId, setEditingServiceId] = useState<number | null>(null)
+  const [editingServiceId, setEditingServiceId] = useState<string | number | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -162,7 +158,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       name: svc.name || '',
       description: svc.description || '',
       duration_minutes: svc.duration_minutes || 30,
-      price: svc.price,
+      price: svc.price ?? undefined,
     })
     setEditingServiceId(svc.id)
     setError(null)
@@ -211,11 +207,11 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     }
   }
 
-  async function deleteService(id: number) {
+  async function deleteService(id: string | number) {
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.services.delete(id, tenantId)
+      await Api.services.delete(String(id), tenantId)
       await refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err) || 'Failed to delete service')
@@ -296,7 +292,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
       email: emp.email || '',
       phone: emp.phone || '',
     })
-    setEditingEmployeeId(emp.id)
+    setEditingEmployeeId(String(emp.id))
     setError(null)
   }
 
@@ -317,7 +313,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     try {
       const name = `${editingEmployee.first_name.trim()} ${editingEmployee.last_name.trim()}`.trim()
       if (editingEmployeeId) {
-        await Api.employees.update(editingEmployeeId as number, {
+        await Api.employees.update(editingEmployeeId, {
           tenant_id: tenantId, name, first_name: editingEmployee.first_name.trim(), last_name: editingEmployee.last_name.trim(),
           email: editingEmployee.email.trim(), phone: editingEmployee.phone.trim(),
         })
@@ -341,7 +337,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.employees.delete(id as number, tenantId)
+      await Api.employees.delete(String(id), tenantId)
       await refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err) || 'Failed to delete employee')
@@ -367,7 +363,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     setError(null)
     try {
       if (existing) {
-        await Api.shifts.delete(existing.id, tenantId)
+        await Api.shifts.delete(String(existing.id), tenantId)
       } else {
         await Api.shifts.create(tenantId, {
           employee_id: employeeId,
@@ -384,12 +380,12 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     }
   }
 
-  async function updateShiftTime(shiftId: number, startTime: string, endTime: string) {
+  async function updateShiftTime(shiftId: string | number, startTime: string, endTime: string) {
     if (!tenantId) return
     setSaving(true)
     setError(null)
     try {
-      await Api.shifts.update(shiftId, tenantId, { start_time: startTime, end_time: endTime })
+      await Api.shifts.update(String(shiftId), tenantId, { start_time: startTime, end_time: endTime })
       await refreshShifts()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err) || 'Failed to update shift time')
@@ -400,7 +396,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
 
   // --- Assignment toggle ---
 
-  async function toggleEmployeeAssignment(serviceId: number, employeeId: string) {
+  async function toggleEmployeeAssignment(serviceId: string | number, employeeId: string) {
     if (!tenantId) return
     const exists = serviceEmployeeMappings.some(
       (m: WizardMapping) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
@@ -409,9 +405,9 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     setError(null)
     try {
       if (exists) {
-        await Api.mappings.unassignServiceEmployee(serviceId, employeeId, tenantId)
+        await Api.mappings.unassignServiceEmployee(String(serviceId), employeeId, tenantId)
       } else {
-        await Api.mappings.assignServiceEmployee(serviceId, employeeId, tenantId)
+        await Api.mappings.assignServiceEmployee(String(serviceId), employeeId, tenantId)
       }
       const updated = await Api.mappings.listServiceEmployee(tenantId)
       setServiceEmployeeMappings(Array.isArray(updated) ? updated : [])
@@ -422,7 +418,7 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     }
   }
 
-  async function toggleResourceAssignment(serviceId: number, resourceId: string) {
+  async function toggleResourceAssignment(serviceId: string | number, resourceId: string) {
     if (!tenantId) return
     const exists = serviceResourceMappings.some(
       (m: WizardMapping) => m.service_id === serviceId && m.resource_id === resourceId
@@ -431,9 +427,9 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
     setError(null)
     try {
       if (exists) {
-        await Api.mappings.unassignServiceResource(serviceId, resourceId, tenantId)
+        await Api.mappings.unassignServiceResource(String(serviceId), resourceId, tenantId)
       } else {
-        await Api.mappings.assignServiceResource(serviceId, resourceId, tenantId)
+        await Api.mappings.assignServiceResource(String(serviceId), resourceId, tenantId)
       }
       const updated = await Api.mappings.listServiceResource(tenantId)
       setServiceResourceMappings(Array.isArray(updated) ? updated : [])
@@ -446,9 +442,9 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
 
   if (!isOpen) return null
 
-  const activeServices = services.filter((s: WizardService) => !s.is_deleted)
-  const activeResources = resources.filter((r: WizardResource) => !r.is_deleted && r.is_active !== false)
-  const activeEmployees = employees.filter((e: WizardEmployee) => !e.is_deleted && e.is_active !== false)
+  const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ id: s.id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
+  const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ id: r.id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
+  const activeEmployees: WizardEmployee[] = employees.filter(e => !e.is_deleted && e.is_active !== false).map(e => ({ id: e.id, name: e.name, first_name: e.first_name ?? undefined, last_name: e.last_name ?? undefined, email: e.email ?? undefined, phone: e.phone ?? undefined, type: e.type, is_active: e.is_active }))
 
   return (
     <div
@@ -506,90 +502,52 @@ export default function SetupWizard({ isOpen, onClose, overrideTenantId }: Setup
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {step === 1 && (
-            <Step1Services
-              services={activeServices}
-              loading={loading}
-              editingService={editingService}
-              editingServiceId={editingServiceId}
-              saving={saving}
-              error={error}
-              onAdd={startAddService}
-              onEdit={startEditService}
-              onDelete={deleteService}
-              onSave={saveService}
-              onCancel={cancelEditService}
-              onChange={setEditingService}
-            />
-          )}
-          {step === 2 && (
-            <Step2Resources
-              resources={activeResources}
-              loading={loading}
-              editingResource={editingResource}
-              editingResourceId={editingResourceId}
-              saving={saving}
-              error={error}
-              onAdd={startAddResource}
-              onEdit={startEditResource}
-              onDelete={deleteResource}
-              onSave={saveResource}
-              onCancel={cancelEditResource}
-              onChange={setEditingResource}
-            />
-          )}
-          {step === 3 && (
-            <Step3Employees
-              employees={activeEmployees}
-              loading={loading}
-              editingEmployee={editingEmployee}
-              editingEmployeeId={editingEmployeeId}
-              saving={saving}
-              error={error}
-              onAdd={startAddEmployee}
-              onEdit={startEditEmployee}
-              onDelete={deleteEmployee}
-              onSave={saveEmployee}
-              onCancel={cancelEditEmployee}
-              onChange={setEditingEmployee}
-            />
-          )}
-          {step === 4 && (
-            <Step4Shifts
-              employees={activeEmployees}
-              shifts={shifts}
-              loading={shiftsLoading}
-              saving={saving}
-              error={error}
-              selectedEmployeeId={selectedShiftEmployee}
-              onSelectEmployee={setSelectedShiftEmployee}
-              onToggleShift={toggleShift}
-              onUpdateTime={updateShiftTime}
-            />
-          )}
-          {step === 5 && (
-            <Step5Assignments
-              services={activeServices}
-              resources={activeResources}
-              employees={activeEmployees}
-              serviceEmployeeMappings={serviceEmployeeMappings}
-              serviceResourceMappings={serviceResourceMappings}
-              loading={mappingsLoading}
-              saving={saving}
-              error={error}
-              onToggleEmployee={toggleEmployeeAssignment}
-              onToggleResource={toggleResourceAssignment}
-            />
-          )}
-          {step === 6 && (
-            <Step6Review
-              services={activeServices}
-              resources={activeResources}
-              employees={activeEmployees}
-              coverageData={coverageData}
-              loading={coverageLoading}
-            />
-          )}
+          <WizardStepContent
+            step={step}
+            services={activeServices}
+            editingService={editingService}
+            editingServiceId={editingServiceId}
+            onAddService={startAddService}
+            onEditService={startEditService}
+            onDeleteService={deleteService}
+            onSaveService={saveService}
+            onCancelEditService={cancelEditService}
+            onChangeService={setEditingService}
+            resources={activeResources}
+            editingResource={editingResource}
+            editingResourceId={editingResourceId}
+            onAddResource={startAddResource}
+            onEditResource={startEditResource}
+            onDeleteResource={deleteResource}
+            onSaveResource={saveResource}
+            onCancelEditResource={cancelEditResource}
+            onChangeResource={setEditingResource}
+            employees={activeEmployees}
+            editingEmployee={editingEmployee}
+            editingEmployeeId={editingEmployeeId}
+            onAddEmployee={startAddEmployee}
+            onEditEmployee={startEditEmployee}
+            onDeleteEmployee={deleteEmployee}
+            onSaveEmployee={saveEmployee}
+            onCancelEditEmployee={cancelEditEmployee}
+            onChangeEmployee={setEditingEmployee}
+            shifts={shifts}
+            shiftsLoading={shiftsLoading}
+            selectedShiftEmployee={selectedShiftEmployee}
+            onSelectShiftEmployee={setSelectedShiftEmployee}
+            onToggleShift={toggleShift}
+            onUpdateShiftTime={updateShiftTime}
+            serviceEmployeeMappings={serviceEmployeeMappings}
+            serviceResourceMappings={serviceResourceMappings}
+            mappingsLoading={mappingsLoading}
+            onToggleEmployeeAssignment={toggleEmployeeAssignment}
+            onToggleResourceAssignment={toggleResourceAssignment}
+            coverageData={coverageData}
+            coverageLoading={coverageLoading}
+            loading={loading}
+            saving={saving}
+            error={error}
+          />
         </div>
 
         {/* Footer */}

@@ -13,7 +13,8 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession, useStaticData } from '../lib/hooks'
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId, useSessionContext } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
@@ -21,8 +22,9 @@ import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Badge } from './ui/Badge'
 
-export default function SettingsView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId, isSuperAdmin } = useSession(overrideTenantId)
+export default function SettingsView() {
+  const tenantId = useActiveTenantId()
+  const { isAdmin: isSuperAdmin } = useSessionContext()
   const { resources, loading: resourcesLoading, error: resourcesError, refresh: refreshResources } = useStaticData(tenantId)
   const vocab = useVocabulary()
   
@@ -305,7 +307,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
                       className="h-8 text-xs px-3"
                       onClick={() => toggleResourceActive(r.id, r.is_active ?? true)}
                     >
-                      <Badge variant={r.is_active ?? true ? 'success' : 'default'}>
+                      <Badge variant={r.is_active ?? true ? 'success' : 'secondary'}>
                         {r.is_active ?? true ? 'Active' : 'Inactive'}
                       </Badge>
                     </Button>
@@ -428,7 +430,7 @@ export default function SettingsView({ overrideTenantId }: { overrideTenantId?: 
           <Button 
             type="submit"
             disabled={onboardingLoading}
-            loading={onboardingLoading}
+            isLoading={onboardingLoading}
             className="w-full py-4 text-lg"
             icon={PlusCircle}
           >

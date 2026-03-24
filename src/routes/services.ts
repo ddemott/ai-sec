@@ -1,6 +1,26 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+
+const CreateServiceSchema = z.object({
+  tenant_id: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  subtitle: z.string().max(200).optional(),
+  description: z.string().max(1000).optional(),
+  duration_minutes: z.number().int().min(5).max(480),
+  required_skills: z.array(z.string()).optional(),
+  required_resources: z.array(z.string()).optional(),
+});
+
+const UpdateServiceSchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  name: z.string().min(1).max(200).optional(),
+  subtitle: z.string().max(200).optional().nullable(),
+  description: z.string().max(1000).optional().nullable(),
+  duration_minutes: z.number().int().min(5).max(480).optional(),
+  price: z.number().min(0).optional().nullable(),
+});
 
 export function registerServiceRoutes(
   app: any,
@@ -33,7 +53,11 @@ export function registerServiceRoutes(
   }, 'Failed to fetch services'));
 
   app.post('/services/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as { tenant_id: string; name: string; subtitle?: string; description?: string; duration_minutes: number; required_skills?: string[]; required_resources?: string[] };
+    const parsed = CreateServiceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(
@@ -48,7 +72,11 @@ export function registerServiceRoutes(
 
   app.post('/services/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { tenant_id?: string; name?: string; subtitle?: string; description?: string; duration_minutes?: number; price?: number };
+    const parsed = UpdateServiceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 

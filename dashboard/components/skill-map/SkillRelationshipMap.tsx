@@ -2,7 +2,8 @@
 
 import React, { useRef, useState } from 'react'
 import { Users, BookOpen, Cog, GitBranch, X } from 'lucide-react'
-import { useSession, useStaticData } from '../../lib/hooks'
+import { useStaticData } from '../../lib/hooks'
+import { useActiveTenantId } from '../../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { useSkillMapData } from './useSkillMapData'
 import SkillMapColumn from './SkillMapColumn'
@@ -11,8 +12,8 @@ import SkillMapConnections from './SkillMapConnections'
 import SkillMapFixPanel from './SkillMapFixPanel'
 import type { BrokenChain } from './useSkillMapData'
 
-export default function SkillRelationshipMap({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function SkillRelationshipMap() {
+  const tenantId = useActiveTenantId()
   const { employees, resources, services, loading, refresh } = useStaticData(tenantId)
   const vocab = useVocabulary()
   const {

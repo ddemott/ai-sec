@@ -53,7 +53,7 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
   return (
     <div className="divide-y divide-gray-100 dark:divide-gray-800" data-testid="appointment-list-view">
       {sorted.map((appt, idx) => {
-        const employee = findEmployee(appt.employee_id);
+        const employee = findEmployee(appt.employee_id != null ? String(appt.employee_id) : null);
         const resource = findResource(appt.resource_id);
 
         // Check for gap before this appointment

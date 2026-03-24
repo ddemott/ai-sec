@@ -1,7 +1,41 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createShift, createUser, beginTestTransaction, rollbackTestTransaction } from './test-utils';
 import { Client } from 'pg';
-import { dayStringToNum, dayNumToString, workingHoursToShifts, shiftsToWorkingHours } from './core/models';
+// Day-of-week conversion utilities (inlined from deleted core/models.ts)
+const DAY_STRING_TO_NUM: Record<string, number> = {
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+};
+const DAY_NUM_TO_STRING: Record<number, string> = {
+  0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat',
+};
+function dayStringToNum(day: string): number {
+  const num = DAY_STRING_TO_NUM[day.toLowerCase()];
+  if (num === undefined) throw new Error(`Unknown day string: ${day}`);
+  return num;
+}
+function dayNumToString(dow: number): string {
+  const str = DAY_NUM_TO_STRING[dow];
+  if (!str) throw new Error(`Unknown day number: ${dow}`);
+  return str;
+}
+interface WorkingHours { [day: string]: Array<{ start: string; end: string }> }
+function workingHoursToShifts(wh: WorkingHours): Array<{ day_of_week: number; start_time: string; end_time: string }> {
+  const shifts: Array<{ day_of_week: number; start_time: string; end_time: string }> = [];
+  for (const [day, windows] of Object.entries(wh)) {
+    const dow = dayStringToNum(day);
+    for (const w of windows) shifts.push({ day_of_week: dow, start_time: w.start, end_time: w.end });
+  }
+  return shifts;
+}
+function shiftsToWorkingHours(shifts: Array<{ day_of_week: number; start_time: string; end_time: string }>): WorkingHours {
+  const wh: WorkingHours = {};
+  for (const s of shifts) {
+    const day = dayNumToString(s.day_of_week);
+    if (!wh[day]) wh[day] = [];
+    wh[day].push({ start: s.start_time, end: s.end_time });
+  }
+  return wh;
+}
 
 describe('Medium Bug Fixes', () => {
     let client: Client;

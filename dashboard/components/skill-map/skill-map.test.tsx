@@ -41,9 +41,27 @@ const mockResMappings = [
   { service_id: 'svc-uuid-2', resource_id: 'res-uuid-1' }, // Tire Rotation -> Bay 1
 ]
 
+// --- Mock SessionContext ---
+vi.mock('../../lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'test-tenant',
+    userName: 'Test',
+    isAdmin: false,
+    managedTenantId: 'test-tenant',
+    managedTenantName: 'Test Tenant',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'test-tenant',
+  SessionProvider: ({ children }: any) => children,
+}))
+
 // --- Mock hooks ---
 vi.mock('../../lib/hooks', () => ({
-  useSession: () => ({ tenantId: 'test-tenant', userName: 'Test', isSuperAdmin: false, logout: vi.fn() }),
   useStaticData: () => ({
     employees: mockEmployees,
     resources: mockResources,

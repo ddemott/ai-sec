@@ -11,7 +11,7 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'analytics', label: 'Analytics' },
 ]
 
-export default function AIInsightsView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+export default function AIInsightsView() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('persona')
 
   return (
@@ -32,8 +32,8 @@ export default function AIInsightsView({ overrideTenantId }: { overrideTenantId?
         ))}
       </nav>
       <div className="flex-1 overflow-hidden">
-        {activeSubTab === 'persona' && <AIConfigView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'analytics' && <AnalyticsView overrideTenantId={overrideTenantId} />}
+        {activeSubTab === 'persona' && <AIConfigView />}
+        {activeSubTab === 'analytics' && <AnalyticsView />}
       </div>
     </div>
   )

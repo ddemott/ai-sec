@@ -53,7 +53,7 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
     SCHEDULER_START_HOUR,
     SCHEDULER_END_HOUR
   );
-  const color = colorClass || getEmployeeColor(appointment.employee_id);
+  const color = colorClass || getEmployeeColor(appointment.employee_id != null ? String(appointment.employee_id) : null);
   const customerName = appointment.customers?.name || 'Unknown';
   const isCanceled = appointment.status === 'canceled';
 

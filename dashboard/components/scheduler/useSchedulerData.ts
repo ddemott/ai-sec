@@ -6,7 +6,7 @@ export interface SchedulerAppointment {
   tenant_id: string;
   resource_id: string;
   customer_id: string;
-  employee_id: string | null;
+  employee_id?: string | number | null;
   start_time: string;
   end_time: string;
   description: string;

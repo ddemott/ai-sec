@@ -5,6 +5,35 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import AppointmentView from './components/AppointmentView'
 import { MOCK_APPOINTMENTS } from './lib/mockData'
 
+// Mock VocabularyContext
+vi.mock('@/lib/VocabularyContext', () => ({
+  useVocabulary: () => ({
+    resource_label: 'Resource', resource_plural: 'Resources',
+    employee_label: 'Employee', employee_plural: 'Employees',
+    booking_label: 'Appointment',
+  }),
+}))
+
+// Mock SessionContext for useActiveTenantId
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: any) => children,
+}))
+
+
 // Mock fetch
 global.fetch = vi.fn()
 
@@ -51,10 +80,10 @@ beforeEach(() => {
       return Promise.resolve(createMockResponse({ success: true }))
     }
     // Mock GET appointments (simulate real tenant, not mock mode)
-    if (typeof input === 'string' && input.includes('/appointments') && (!init || init.method === 'GET')) {
+    if (typeof input === 'string' && input.includes('/appointments') && (!init?.method || init.method === 'GET')) {
       return Promise.resolve(createMockResponse([...MOCK_APPOINTMENTS]))
     }
-    // Mock GET customers/resources
+    // Mock GET customers/resources/employees/services/skills
     return Promise.resolve(createMockResponse([]))
   })
 })
@@ -153,6 +182,7 @@ test('AppointmentView: month navigation moves between months', async () => {
   // Find the Next button inside the calendar toolbar
   const toolbar = container.querySelector('.rbc-toolbar')
   const nextButton = toolbar && Array.from(toolbar.querySelectorAll('button')).find(btn => btn.textContent?.match(/Next/i))
+
   expect(nextButton).toBeTruthy()
   fireEvent.click(nextButton!)
 

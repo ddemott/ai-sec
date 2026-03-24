@@ -539,6 +539,26 @@ describe('SetupWizard: Step 6 Review', () => {
   })
 
   test('shows coverage badges from API data', async () => {
+
+// Mock SessionContext for useActiveTenantId
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: any) => children,
+}))
+
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({

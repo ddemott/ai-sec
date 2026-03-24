@@ -27,7 +27,7 @@ export function registerVocabularyRoutes(
     });
 
     if (res.rows.length === 0) {
-      return reply.status(404).send({ error: 'Tenant not found' });
+      return reply.status(404).send({ success: false, error: 'Tenant not found' });
     }
 
     return reply.send(res.rows[0]);

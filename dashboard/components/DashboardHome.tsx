@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Calendar, Users, Clock, AlertTriangle, Wrench, ChevronRight, Wand2, ArrowRight } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession } from '../lib/hooks'
+import { useActiveTenantId, useSessionContext } from '../lib/SessionContext'
 import { useVocabulary, type Vocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Badge } from './ui/Badge'
@@ -11,16 +11,16 @@ import { Button } from './ui/Button'
 import type { Tab } from '../app/page'
 
 interface DashboardHomeProps {
-  overrideTenantId?: string | null
   onNavigate?: (tab: Tab) => void
 }
 
-export default function DashboardHome({ overrideTenantId, onNavigate }: DashboardHomeProps) {
-  const { tenantId, userName } = useSession(overrideTenantId)
+export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
+  const tenantId = useActiveTenantId()
+  const { userName } = useSessionContext()
   const vocab = useVocabulary()
 
   interface DashboardAppointment { id: string; start_time: string; status: string; description?: string; customer_name?: string }
-  interface DashboardEmployee { id: string; name: string; type: string; is_active: boolean }
+  interface DashboardEmployee { id: string; name: string; type?: string; is_active: boolean }
   interface DashboardService { id: string | number; name: string }
   interface DashboardResource { id: string; name: string }
   interface CoverageItem { service_id: string | number; service_name: string; coverage_status: string; covered_hours?: number; total_open_hours?: number }

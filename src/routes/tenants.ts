@@ -1,184 +1,201 @@
 
 import type { Pool } from 'pg';
-import { withHandler, logEvent, type AppRequest } from '../middleware';
+import { z } from 'zod';
+import { withHandler, withPoolClient, logEvent, type AppRequest } from '../middleware';
+
+const CreateTenantSchema = z.object({
+  tenant_name: z.string().min(1).max(200),
+  business_type: z.string().min(1).max(50),
+  owner_first_name: z.string().min(1).max(100),
+  owner_last_name: z.string().min(1).max(100),
+  owner_email: z.string().email(),
+  owner_pass: z.string().min(6).max(200),
+});
+
+const UpdateAttributesSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  business_type: z.string().max(50).optional(),
+  timezone: z.string().max(50).optional(),
+  voice_id: z.string().max(100).optional().nullable(),
+  system_prompt: z.string().optional().nullable(),
+  first_message: z.string().optional().nullable(),
+  owner_phone: z.string().max(30).optional().nullable(),
+  inbound_phone: z.string().max(30).optional().nullable(),
+});
+
+const UpdateConfigSchema = z.object({
+  system_prompt: z.string().optional().nullable(),
+  voice_id: z.string().max(100).optional().nullable(),
+  business_type: z.string().max(50).optional(),
+  first_message: z.string().optional().nullable(),
+});
+
+const CreateTemplateSchema = z.object({
+  business_type: z.string().min(1).max(50),
+  display_name: z.string().min(1).max(100),
+  category: z.string().min(1).max(50),
+  system_prompt_template: z.string().optional(),
+  first_message: z.string().optional(),
+  voice_id: z.string().optional().nullable(),
+  default_resource_name: z.string().optional(),
+  default_resource_description: z.string().optional().nullable(),
+  resource_label: z.string().optional(),
+  resource_plural: z.string().optional(),
+  employee_label: z.string().optional(),
+  employee_plural: z.string().optional(),
+  booking_label: z.string().optional(),
+  example_services: z.array(z.string()).optional(),
+});
 
 export function registerTenantRoutes(app: any, pool: Pool) {
   app.get('/tenants', withHandler(async (req: AppRequest, reply) => {
-    const client = await pool.connect();
-    try {
-      const res = await client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC');
-      return reply.send(res.rows);
-    } finally {
-      client.release();
-    }
+    const res = await withPoolClient(pool, client =>
+      client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC')
+    );
+    return reply.send(res.rows);
   }, 'Failed to fetch tenants'));
 
   app.delete('/tenants/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const client = await pool.connect();
-    try {
-      await client.query('DELETE FROM tenants WHERE id = $1', [id]);
-      logEvent(req, 'tenant_deleted', { tenantId: id });
-      return reply.send({ success: true });
-    } finally {
-      client.release();
-    }
+    await withPoolClient(pool, client =>
+      client.query('DELETE FROM tenants WHERE id = $1', [id])
+    );
+    logEvent(req, 'tenant_deleted', { tenantId: id });
+    return reply.send({ success: true });
   }, 'Failed to delete tenant'));
 
   app.post('/tenants/:id/update-attributes', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as any;
-    const client = await pool.connect();
-    try {
-      await client.query(
+    const parsed = UpdateAttributesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
+    await withPoolClient(pool, client =>
+      client.query(
         `UPDATE tenants SET
             name = $1, business_type = $2, timezone = $3, voice_id = $4,
             system_prompt = $5, first_message = $6, owner_phone = $7, inbound_phone = $8
          WHERE id = $9`,
         [body.name, body.business_type, body.timezone, body.voice_id,
          body.system_prompt, body.first_message, body.owner_phone, body.inbound_phone, id]
-      );
-      logEvent(req, 'tenant_attributes_updated', { tenantId: id });
-      return reply.send({ success: true });
-    } finally {
-      client.release();
-    }
+      )
+    );
+    logEvent(req, 'tenant_attributes_updated', { tenantId: id });
+    return reply.send({ success: true });
   }, 'Failed to update tenant'));
 
   app.get('/tenants/:id/config', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const client = await pool.connect();
-    try {
-      const res = await client.query(
+    const res = await withPoolClient(pool, client =>
+      client.query(
         'SELECT id, name, business_type, system_prompt, voice_id, first_message FROM tenants WHERE id = $1',
         [id]
-      );
-      if (res.rows.length === 0) return reply.status(404).send({ error: 'Tenant not found' });
-      return reply.send(res.rows[0]);
-    } finally {
-      client.release();
-    }
+      )
+    );
+    if (res.rows.length === 0) return reply.status(404).send({ success: false, error: 'Tenant not found' });
+    return reply.send(res.rows[0]);
   }, 'Failed to fetch tenant config'));
 
   app.post('/tenants/:id/update-config', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as any;
-    const client = await pool.connect();
-    try {
-      await client.query(
+    const parsed = UpdateConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
+    await withPoolClient(pool, client =>
+      client.query(
         'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE id = $5',
         [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
-      );
-      logEvent(req, 'tenant_config_updated', { tenantId: id });
-      return reply.send({ success: true });
-    } finally {
-      client.release();
-    }
+      )
+    );
+    logEvent(req, 'tenant_config_updated', { tenantId: id });
+    return reply.send({ success: true });
   }, 'Failed to update tenant config'));
 
   app.post('/tenants/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as {
-      tenant_name: string;
-      business_type: string;
-      owner_first_name: string;
-      owner_last_name: string;
-      owner_email: string;
-      owner_pass: string;
-    };
-    const client = await pool.connect();
-    try {
-      const firstName = (body.owner_first_name || '').trim();
-      const lastName = (body.owner_last_name || '').trim();
-      if (!firstName || !lastName) {
-        client.release();
-        return reply.status(400).send({ error: 'owner_first_name and owner_last_name are required' });
-      }
-
-      await client.query('BEGIN');
-      const tenantRes = await client.query(
-        'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
-        [body.tenant_name, body.business_type]
-      );
-      const tenantId = tenantRes.rows[0].id;
-
-      const fullName = [firstName, lastName].filter(Boolean).join(' ');
-      const bcrypt = await import('bcrypt');
-      const hashedPass = await bcrypt.hash(body.owner_pass, 10);
-      await client.query(
-        'INSERT INTO users (tenant_id, email, password_hash, full_name, first_name, last_name) VALUES ($1, $2, $3, $4, $5, $6)',
-        [tenantId, body.owner_email, hashedPass, fullName, firstName || null, lastName || null]
-      );
-
-      await client.query('COMMIT');
-      logEvent(req, 'tenant_created', { tenantId, name: body.tenant_name });
-      return reply.send({ success: true, tenant_id: tenantId });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+    const parsed = CreateTenantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
+    const body = parsed.data;
+    const firstName = body.owner_first_name.trim();
+    const lastName = body.owner_last_name.trim();
+
+    const result = await withPoolClient(pool, async (client) => {
+      await client.query('BEGIN');
+      try {
+        const tenantRes = await client.query(
+          'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
+          [body.tenant_name, body.business_type]
+        );
+        const tenantId = tenantRes.rows[0].id;
+
+        const fullName = [firstName, lastName].filter(Boolean).join(' ');
+        const bcrypt = await import('bcrypt');
+        const hashedPass = await bcrypt.hash(body.owner_pass, 10);
+        await client.query(
+          'INSERT INTO users (tenant_id, email, password_hash, full_name, first_name, last_name) VALUES ($1, $2, $3, $4, $5, $6)',
+          [tenantId, body.owner_email, hashedPass, fullName, firstName || null, lastName || null]
+        );
+
+        await client.query('COMMIT');
+        return tenantId;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
+    });
+    logEvent(req, 'tenant_created', { tenantId: result, name: body.tenant_name });
+    return reply.send({ success: true, tenant_id: result });
   }, 'Failed to create tenant'));
 
   // Save tenant sort order (admin drag-and-drop reordering)
   app.post('/tenants/reorder', withHandler(async (req: AppRequest, reply) => {
     const { order } = req.body as { order: string[] }; // array of tenant IDs in desired order
     if (!Array.isArray(order) || order.length === 0) {
-      return reply.status(400).send({ error: 'order must be a non-empty array of tenant IDs' });
+      return reply.status(400).send({ success: false, error: 'order must be a non-empty array of tenant IDs' });
     }
-    const client = await pool.connect();
-    try {
+    await withPoolClient(pool, async (client) => {
       await client.query('BEGIN');
-      for (let i = 0; i < order.length; i++) {
-        await client.query('UPDATE tenants SET sort_order = $1 WHERE id = $2', [i, order[i]]);
+      try {
+        for (let i = 0; i < order.length; i++) {
+          await client.query('UPDATE tenants SET sort_order = $1 WHERE id = $2', [i, order[i]]);
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
       }
-      await client.query('COMMIT');
-      logEvent(req, 'tenants_reordered', { count: order.length });
-      return reply.send({ success: true });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
+    logEvent(req, 'tenants_reordered', { count: order.length });
+    return reply.send({ success: true });
   }, 'Failed to save tenant order'));
 
   app.get('/templates', withHandler(async (req: AppRequest, reply) => {
-    const client = await pool.connect();
-    try {
-      const res = await client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY sort_order, display_name');
-      return reply.send(res.rows);
-    } finally {
-      client.release();
-    }
+    const res = await withPoolClient(pool, client =>
+      client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY sort_order, display_name')
+    );
+    return reply.send(res.rows);
   }, 'Failed to fetch templates'));
 
   app.get('/templates/full', withHandler(async (req: AppRequest, reply) => {
-    const client = await pool.connect();
-    try {
-      const res = await client.query('SELECT * FROM business_templates ORDER BY sort_order, display_name');
-      return reply.send(res.rows);
-    } finally {
-      client.release();
-    }
+    const res = await withPoolClient(pool, client =>
+      client.query('SELECT * FROM business_templates ORDER BY sort_order, display_name')
+    );
+    return reply.send(res.rows);
   }, 'Failed to fetch full templates'));
 
   // POST /templates/create — Admin adds a new business type
   app.post('/templates/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as {
-      business_type: string; display_name: string; category: string;
-      system_prompt_template?: string; first_message?: string; voice_id?: string;
-      default_resource_name?: string; default_resource_description?: string;
-      resource_label?: string; resource_plural?: string;
-      employee_label?: string; employee_plural?: string;
-      booking_label?: string; example_services?: string[];
-    };
-    if (!body.business_type || !body.display_name || !body.category) {
-      return reply.status(400).send({ success: false, error: 'business_type, display_name, and category are required' });
+    const parsed = CreateTemplateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
-    const client = await pool.connect();
-    try {
-      const res = await client.query(`
+    const body = parsed.data;
+    const res = await withPoolClient(pool, client =>
+      client.query(`
         INSERT INTO business_templates (
           business_type, display_name, category,
           system_prompt_template, first_message, voice_id,
@@ -211,11 +228,9 @@ export function registerTenantRoutes(app: any, pool: Pool) {
         body.employee_label || 'Employee', body.employee_plural || 'Employees',
         body.booking_label || 'Appointment',
         body.example_services || '{}'
-      ]);
-      logEvent(req, 'template_created', { businessType: body.business_type });
-      return reply.send({ success: true, template: res.rows[0] });
-    } finally {
-      client.release();
-    }
+      ])
+    );
+    logEvent(req, 'template_created', { businessType: body.business_type });
+    return reply.send({ success: true, template: res.rows[0] });
   }, 'Failed to create template'));
 }

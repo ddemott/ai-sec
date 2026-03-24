@@ -1,6 +1,13 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+
+const CreateSkillSchema = z.object({
+  tenant_id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional().nullable(),
+});
 
 export function registerSkillRoutes(
   app: any,
@@ -18,7 +25,11 @@ export function registerSkillRoutes(
   }, 'Failed to fetch master skills'));
 
   app.post('/skills/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as { tenant_id: string; name: string; description?: string };
+    const parsed = CreateSkillSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(

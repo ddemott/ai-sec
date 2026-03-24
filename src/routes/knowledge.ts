@@ -38,10 +38,10 @@ export function registerKnowledgeRoutes(
 
   app.post('/knowledge/ingest', withHandler(async (req: AppRequest, reply) => {
     const data = await req.file();
-    if (!data) return reply.status(400).send({ error: 'No file uploaded' });
+    if (!data) return reply.status(400).send({ success: false, error: 'No file uploaded' });
 
     const tenantId = (data.fields.tenant_id as any)?.value;
-    if (!tenantId) return reply.status(400).send({ error: 'tenant_id is required' });
+    if (!tenantId) return reply.status(400).send({ success: false, error: 'tenant_id is required' });
 
     const buffer = await data.toBuffer();
     const filename = data.filename;
@@ -55,7 +55,7 @@ export function registerKnowledgeRoutes(
     }
 
     if (!text || text.trim().length < 10) {
-      return reply.status(400).send({ error: 'No readable text found in file' });
+      return reply.status(400).send({ success: false, error: 'No readable text found in file' });
     }
 
     const chunks = text.split('\n\n').filter(c => c.trim().length > 20);

@@ -11,7 +11,8 @@ import {
   Info
 } from 'lucide-react';
 import { Api } from '../lib/api';
-import { useSession, useStaticData } from '../lib/hooks';
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -22,17 +23,17 @@ import { Modal } from './ui/Modal';
 type Resource = {
   id: string;
   name: string;
-  description: string;
+  description?: string | null;
   is_active: boolean;
 };
 
 type Mapping = {
-  service_id: number;
-  resource_id: string;
+  service_id: string;
+  resource_id?: string;
 };
 
-export default function ResourceManagerView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId);
+export default function ResourceManagerView() {
+  const tenantId = useActiveTenantId();
   const vocab = useVocabulary();
   const { resources: staticResources, services, loading: staticLoading, refresh } = useStaticData(tenantId);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -124,7 +125,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
     }
   }
 
-  async function toggleServiceMapping(serviceId: number, resourceId: string) {
+  async function toggleServiceMapping(serviceId: string, resourceId: string) {
     const isMapped = (mappings || []).some(m => m.service_id === serviceId && m.resource_id === resourceId);
     
     try {
@@ -228,7 +229,7 @@ export default function ResourceManagerView({ overrideTenantId }: { overrideTena
                 (mappings || []).filter(m => m.resource_id === res.id).map(m => {
                   const s = (services || []).find(s => s.id === m.service_id);
                   return s ? (
-                    <Badge key={s.id} variant="info" className="text-[10px] uppercase">
+                    <Badge key={s.id} variant="primary" className="text-[10px] uppercase">
                       {s.name}
                     </Badge>
                   ) : null;

@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { MessageCircle, Star, X, Send } from 'lucide-react'
 import { Api } from '../../lib/api'
-import { useSession } from '../../lib/hooks'
+import { useActiveTenantId } from '../../lib/SessionContext'
 import { showToast } from './Toast'
 import { Button } from './Button'
 
@@ -13,7 +13,7 @@ interface FeedbackButtonProps {
 }
 
 export function FeedbackButton({ page, context }: FeedbackButtonProps) {
-  const { tenantId } = useSession()
+  const tenantId = useActiveTenantId()
   const [isOpen, setIsOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [rating, setRating] = useState<number | null>(null)

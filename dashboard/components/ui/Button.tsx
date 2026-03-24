@@ -4,7 +4,6 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success' | 'info' | 'warning';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
-  loading?: boolean;
   icon?: React.ElementType;
 }
 
@@ -13,13 +12,12 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   size = 'md',
   isLoading,
-  loading,
   icon: Icon,
   className = '',
   disabled,
   ...props
 }) => {
-  const activeLoading = isLoading || loading;
+  const activeLoading = isLoading;
   const baseStyles = 'inline-flex items-center justify-center font-bold transition-all duration-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed';
   
   const variants = {

@@ -12,7 +12,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { Card } from './ui/Card'
 
 interface ActivityItem {
@@ -23,15 +23,15 @@ interface ActivityItem {
 }
 
 interface AnalyticsStats {
-  calls?: { total: number };
-  appointments?: { total: number };
+  calls?: { total?: number; today?: number; week?: number };
+  appointments?: { total?: number; today?: number; week?: number; upcoming?: number };
   revenue?: { estimate: number };
-  customers?: { new_30d: number };
+  customers?: { total?: number; new_this_week?: number; new_30d?: number };
   recent_activity?: ActivityItem[];
 }
 
-export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function AnalyticsView() {
+  const tenantId = useActiveTenantId()
   const [stats, setStats] = useState<AnalyticsStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -45,7 +45,7 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
     setLoading(true)
     try {
       const data = await Api.analytics.getStats(tenantId)
-      setStats(data)
+      setStats(data as unknown as AnalyticsStats)
     } catch (err) {
       console.error("Failed to fetch analytics", err)
     } finally {
@@ -62,8 +62,8 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
     )
   }
 
-  const conversionRate = stats?.calls?.total > 0 
-    ? ((stats.appointments.total / stats.calls.total) * 100).toFixed(1) 
+  const conversionRate = (stats?.calls?.total ?? 0) > 0
+    ? (((stats?.appointments?.total ?? 0) / (stats?.calls?.total ?? 1)) * 100).toFixed(1)
     : '0'
 
   return (
@@ -189,14 +189,14 @@ export default function AnalyticsView({ overrideTenantId }: { overrideTenantId?:
         <Card className="p-6 overflow-hidden flex flex-col">
           <h3 className="text-lg font-bold mb-6">Recent Activity</h3>
           <div className="flex-1 space-y-6 overflow-auto pr-2 custom-scrollbar">
-            {stats?.recent_activity?.length > 0 ? (
-              stats.recent_activity.map((item: ActivityItem, i: number) => (
+            {(stats?.recent_activity?.length ?? 0) > 0 ? (
+              stats!.recent_activity!.map((item: ActivityItem, i: number) => (
                 <div key={item.id} className="flex gap-4 group">
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-xs font-bold border-2 border-white dark:border-[#1a1a1a] z-10 relative text-blue-600 dark:text-blue-400">
                       {(item.customer_name || '??').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                     </div>
-                    {i < stats.recent_activity.length - 1 && <div className="absolute top-10 left-1/2 -translate-x-1/2 w-0.5 h-6 bg-gray-100 dark:bg-gray-800" />}
+                    {i < stats!.recent_activity!.length - 1 && <div className="absolute top-10 left-1/2 -translate-x-1/2 w-0.5 h-6 bg-gray-100 dark:bg-gray-800" />}
                   </div>
                   <div>
                     <div className="text-sm font-bold">{item.customer_name || 'Unknown Caller'}</div>

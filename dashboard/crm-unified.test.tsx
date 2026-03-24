@@ -141,6 +141,26 @@ describe('CRM Unified View - Search', () => {
     fireEvent.change(searchInput, { target: { value: 'zzzznotfound' } })
 
     // Both should be gone from the list (but Bob may persist in detail header from prior selection)
+
+// Mock SessionContext for useActiveTenantId
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: any) => children,
+}))
+
     await waitFor(() => {
       expect(screen.queryByText('Alice Johnson')).toBeNull()
     })

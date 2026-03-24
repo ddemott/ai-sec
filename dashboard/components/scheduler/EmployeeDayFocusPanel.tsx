@@ -96,7 +96,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
               {shifts.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                   <Clock className="w-3.5 h-3.5 text-gray-400" />
-                  {formatShiftTime(s.start_time)} — {formatShiftTime(s.end_time)}
+                  {formatShiftTime(s.start_time ?? '00:00')} — {formatShiftTime(s.end_time ?? '00:00')}
                 </div>
               ))}
             </div>

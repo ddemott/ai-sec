@@ -1,6 +1,23 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+
+const CreateShiftSchema = z.object({
+  tenant_id: z.string().uuid(),
+  employee_id: z.string().or(z.number()),
+  day_of_week: z.number().int().min(0).max(6),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+const UpdateShiftSchema = z.object({
+  tenant_id: z.string().uuid(),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  day_of_week: z.number().int().min(0).max(6).optional(),
+  is_active: z.boolean().optional(),
+});
 
 export function registerShiftRoutes(
   app: any,
@@ -18,7 +35,11 @@ export function registerShiftRoutes(
   }, 'Failed to fetch shifts'));
 
   app.post('/shifts/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as { tenant_id: string; employee_id: number; day_of_week: number; start_time: string; end_time: string };
+    const parsed = CreateShiftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(
@@ -33,7 +54,11 @@ export function registerShiftRoutes(
 
   app.post('/shifts/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { tenant_id: string; start_time?: string; end_time?: string; day_of_week?: number; is_active?: boolean };
+    const parsed = UpdateShiftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { forceLogout as apiForceLogout } from './api'
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -63,16 +64,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
-    localStorage.removeItem('tenantId')
-    localStorage.removeItem('userName')
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('managedTenantId')
-    localStorage.removeItem('managedTenantName')
     setTenantId(null)
     setManagedTenantId(null)
     setManagedTenantName(null)
     setUserName(null)
     setIsAdmin(false)
+    apiForceLogout()
   }, [])
 
   const selectManagedTenant = useCallback((id: string, name: string) => {
@@ -109,4 +106,15 @@ export function useSessionContext() {
   const ctx = useContext(SessionContext)
   if (!ctx) throw new Error('useSessionContext must be used within a SessionProvider')
   return ctx
+}
+
+/**
+ * Returns the effective tenant ID for API calls.
+ * For super-admin: returns the managed (selected) tenant ID.
+ * For regular users: returns their own tenant ID.
+ * Replaces the old useSession(overrideTenantId) pattern — no prop drilling needed.
+ */
+export function useActiveTenantId(): string | null {
+  const { tenantId, managedTenantId } = useSessionContext()
+  return managedTenantId || tenantId
 }

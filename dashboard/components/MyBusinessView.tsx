@@ -11,7 +11,7 @@ import { useVocabulary } from '@/lib/VocabularyContext'
 
 type SubTab = 'services' | 'resources' | 'knowledge' | 'coverage'
 
-export default function MyBusinessView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+export default function MyBusinessView() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('services')
   const vocab = useVocabulary()
 
@@ -50,15 +50,15 @@ export default function MyBusinessView({ overrideTenantId }: { overrideTenantId?
         </div>
       </nav>
       <div className="flex-1 overflow-hidden">
-        {activeSubTab === 'services' && <ServiceAssignmentView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'resources' && <ResourceManagerView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'knowledge' && <KnowledgeBaseView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'coverage' && <ServiceCoverageView overrideTenantId={overrideTenantId} />}
+        {activeSubTab === 'services' && <ServiceAssignmentView />}
+        {activeSubTab === 'resources' && <ResourceManagerView />}
+        {activeSubTab === 'knowledge' && <KnowledgeBaseView />}
+        {activeSubTab === 'coverage' && <ServiceCoverageView />}
       </div>
       <SetupWizard
         isOpen={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        overrideTenantId={overrideTenantId}
+       
       />
     </div>
   )

@@ -13,14 +13,14 @@ import {
   Plus
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Badge } from './ui/Badge'
 
-export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function KnowledgeBaseView() {
+  const tenantId = useActiveTenantId()
   const [docs, setDocs] = useState<{ id: string; content: string; source?: string; created_at: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -173,7 +173,7 @@ export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenant
                     <span className="text-[10px] text-gray-400 font-medium">
                       Added {new Date(doc.created_at).toLocaleDateString()}
                     </span>
-                    <Badge variant="outline" className="text-[9px] py-0 px-1.5 opacity-50">
+                    <Badge variant="secondary" className="text-[9px] py-0 px-1.5 opacity-50">
                       ID: {doc.id.split('-')[0]}
                     </Badge>
                   </div>
@@ -189,7 +189,7 @@ export default function KnowledgeBaseView({ overrideTenantId }: { overrideTenant
               Upload your first business document to give the AI context about your policies and services.
             </p>
             <Button 
-              variant="outline" 
+              variant="secondary" 
               onClick={() => fileInputRef.current?.click()}
               icon={Plus}
             >

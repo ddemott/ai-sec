@@ -1,59 +1,47 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Api, getLocalStorageItem, SUPER_ADMIN_TENANT_ID } from './api';
+import { Api } from './api';
+import { useActiveTenantId } from '@/lib/SessionContext';
+import type { Customer, Resource, Employee, Service, Skill } from './types';
 
 /**
- * Hook to manage session and authentication logic
+ * Generic form state hook. Manages form fields, dirty tracking, and reset.
+ * Eliminates the repeated useState + handleChange pattern across CRUD views.
+ *
+ * Usage:
+ *   const { form, setField, setForm, reset, isDirty } = useFormState({ name: '', email: '' });
+ *   <Input value={form.name} onChange={e => setField('name', e.target.value)} />
  */
-export function useSession(overrideTenantId?: string | null) {
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string | null>(null);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+export function useFormState<T extends Record<string, unknown>>(initialState: T) {
+  const [form, setForm] = useState<T>(initialState);
+  const [original, setOriginal] = useState<T>(initialState);
 
-  useEffect(() => {
-    // If override provided, use it. Otherwise use localStorage
-    if (overrideTenantId) {
-      setTenantId(overrideTenantId);
-      const storedUserName = getLocalStorageItem('userName');
-      setUserName(storedUserName);
-      const storedTenantId = getLocalStorageItem('tenantId');
-      setIsSuperAdmin(storedTenantId === SUPER_ADMIN_TENANT_ID);
-    } else {
-      const storedTenantId = getLocalStorageItem('tenantId');
-      const storedUserName = getLocalStorageItem('userName');
-      
-      setTenantId(storedTenantId);
-      setUserName(storedUserName);
-      setIsSuperAdmin(storedTenantId === SUPER_ADMIN_TENANT_ID);
-    }
-  }, [overrideTenantId]);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('tenantId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('authToken');
-    setTenantId(null);
-    setUserName(null);
-    setIsSuperAdmin(false);
-    window.location.href = '/';
+  const setField = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
+    setForm(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  return {
-    tenantId,
-    userName,
-    isSuperAdmin,
-    logout
-  };
+  const reset = useCallback((newState?: T) => {
+    const state = newState ?? original;
+    setForm(state);
+    setOriginal(state);
+  }, [original]);
+
+  const isDirty = JSON.stringify(form) !== JSON.stringify(original);
+
+  return { form, setField, setForm, reset, isDirty };
 }
 
 /**
- * Hook to fetch and manage static data for a tenant
+ * Hook to fetch and manage static data for the active tenant.
+ * Automatically uses the active tenant ID from SessionContext.
  */
-export function useStaticData(tenantId: string | null) {
-  const [customers, setCustomers] = useState<Record<string, unknown>[]>([]);
-  const [resources, setResources] = useState<Record<string, unknown>[]>([]);
-  const [employees, setEmployees] = useState<Record<string, unknown>[]>([]);
-  const [services, setServices] = useState<Record<string, unknown>[]>([]);
-  const [skills, setSkills] = useState<Record<string, unknown>[]>([]);
+export function useStaticData(tenantIdOverride?: string | null) {
+  const contextTenantId = useActiveTenantId();
+  const tenantId = tenantIdOverride !== undefined ? tenantIdOverride : contextTenantId;
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

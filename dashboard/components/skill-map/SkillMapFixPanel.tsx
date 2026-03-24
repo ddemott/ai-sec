@@ -38,7 +38,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.mappings.assignServiceEmployee(serviceId as unknown as number, emp.id, tenantId)
+      await Api.mappings.assignServiceEmployee(serviceId, String(emp.id), tenantId)
       onFixed()
     } catch (err) {
       console.error('Failed to assign employee to service', err)
@@ -51,7 +51,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.mappings.assignServiceResource(serviceId as unknown as number, res.id, tenantId)
+      await Api.mappings.assignServiceResource(serviceId, String(res.id), tenantId)
       onFixed()
     } catch (err) {
       console.error('Failed to assign resource to service', err)

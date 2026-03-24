@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectAssignments, type ResourceCandidate, type EmployeeCandidate, type ExistingAppointment } from './scheduling';
-import type { TimeWindow } from './models';
+import { selectAssignments, type ResourceCandidate, type EmployeeCandidate, type ExistingAppointment, type TimeWindow } from '../../shared/scheduling';
 
 function window(from: string, to: string): TimeWindow {
   return { from: new Date(from), to: new Date(to) };

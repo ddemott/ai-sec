@@ -14,15 +14,15 @@ import {
   Check,
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Modal } from './ui/Modal'
 import { showToast } from './ui/Toast'
 
-export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function AIConfigView() {
+  const tenantId = useActiveTenantId()
   const [config, setConfig] = useState<Tenant | null>(null)
   const [templates, setTemplates] = useState<BusinessTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,15 +104,15 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
 
   // Group templates by category
   const templatesByCategory = templates.reduce((acc, t) => {
-    const cat = (t as Record<string, unknown>).category as string || 'Other'
+    const cat = t.category || 'Other'
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(t)
     return acc
   }, {} as Record<string, BusinessTemplate[]>)
 
   const sortedCategories = Object.entries(templatesByCategory).sort(
-    (a, b) => ((templates.find(t => (t as Record<string, unknown>).category === a[0]) as Record<string, unknown>)?.sort_order as number || 99)
-      - ((templates.find(t => (t as Record<string, unknown>).category === b[0]) as Record<string, unknown>)?.sort_order as number || 99)
+    (a, b) => (templates.find(t => t.category === a[0])?.sort_order ?? 99)
+      - (templates.find(t => t.category === b[0])?.sort_order ?? 99)
   )
 
   if (loading) return <div className="p-8 text-gray-500 italic">Loading AI configuration...</div>
@@ -131,7 +131,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
         </div>
         <Button
           onClick={handleSave}
-          loading={saving}
+          isLoading={saving}
           variant={success ? 'success' : dirty ? 'warning' : 'primary'}
           className={`px-6 py-2.5 transition-shadow ${dirty ? 'ring-2 ring-yellow-400 shadow-lg' : ''}`}
           disabled={!dirty || saving}
@@ -281,7 +281,7 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
               <div>
                 <h2 className="text-xl font-bold">{previewTemplate.display_name}</h2>
                 <p className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider">
-                  {(previewTemplate as Record<string, unknown>).category as string || 'Business Template'}
+                  {previewTemplate.category || 'Business Template'}
                 </p>
               </div>
               <button onClick={() => setPreviewTemplate(null)} className="p-1 text-gray-400 hover:text-gray-600">
@@ -293,9 +293,9 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
             <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 space-y-1">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Dashboard Labels</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                <div><span className="text-gray-400">Resources called:</span> <span className="font-medium">{(previewTemplate as Record<string, unknown>).resource_plural as string || 'Resources'}</span></div>
-                <div><span className="text-gray-400">Staff called:</span> <span className="font-medium">{(previewTemplate as Record<string, unknown>).employee_plural as string || 'Employees'}</span></div>
-                <div><span className="text-gray-400">Bookings called:</span> <span className="font-medium">{(previewTemplate as Record<string, unknown>).booking_label as string || 'Appointments'}</span></div>
+                <div><span className="text-gray-400">Resources called:</span> <span className="font-medium">{previewTemplate.resource_plural || 'Resources'}</span></div>
+                <div><span className="text-gray-400">Staff called:</span> <span className="font-medium">{previewTemplate.employee_plural || 'Employees'}</span></div>
+                <div><span className="text-gray-400">Bookings called:</span> <span className="font-medium">{previewTemplate.booking_label || 'Appointments'}</span></div>
                 <div><span className="text-gray-400">Default resource:</span> <span className="font-medium">{previewTemplate.default_resource_name || 'Station 1'}</span></div>
               </div>
             </div>
@@ -317,11 +317,11 @@ export default function AIConfigView({ overrideTenantId }: { overrideTenantId?: 
             </div>
 
             {/* Example Services */}
-            {(previewTemplate as Record<string, unknown>).example_services && Array.isArray((previewTemplate as Record<string, unknown>).example_services) && ((previewTemplate as Record<string, unknown>).example_services as string[]).length > 0 && (
+            {previewTemplate.example_services && previewTemplate.example_services.length > 0 && (
               <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Suggested Services</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {((previewTemplate as Record<string, unknown>).example_services as string[]).map((svc, i) => (
+                  {previewTemplate.example_services.map((svc, i) => (
                     <span key={i} className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-full">{svc}</span>
                   ))}
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
-import { useSession, useStaticData } from '../lib/hooks';
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext';
 import { useSchedulerData } from './scheduler/useSchedulerData';
 import type { SchedulerAppointment } from './scheduler/useSchedulerData';
 import { SchedulerDateNav } from './scheduler/SchedulerDateNav';
@@ -23,7 +24,6 @@ function formatHourLabel(hour: number): string {
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
 
 interface SchedulerViewProps {
-  overrideTenantId?: string | null;
 }
 
 const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType }[] = [
@@ -33,12 +33,12 @@ const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType 
   { key: 'calendar', label: 'Calendar', icon: Calendar },
 ];
 
-export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) {
-  const { tenantId } = useSession(overrideTenantId);
+export default function SchedulerView({}: SchedulerViewProps) {
+  const tenantId = useActiveTenantId();
   const { customers, resources, employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
   // Only show actual employees in the scheduler, not user accounts (owners/admins)
   const employees = useMemo(() =>
-    allStaff.filter(e => (e as Record<string, unknown>).type !== 'user'),
+    allStaff.filter(e => e.type !== 'user'),
     [allStaff]
   );
 
@@ -80,7 +80,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
     if (!tenantId) return;
     // Only create shifts for actual employees, not user accounts
     const emp = employees.find(e => String(e.id) === employeeId);
-    if (emp && (emp as Record<string, unknown>).type === 'user') {
+    if (emp && emp.type === 'user') {
       showToast('Shifts can only be created for employees, not user accounts', 'warning');
       return;
     }
@@ -183,7 +183,7 @@ export default function SchedulerView({ overrideTenantId }: SchedulerViewProps) 
             ))}
           </div>
         </div>
-        <AppointmentView overrideTenantId={overrideTenantId} />
+        <AppointmentView />
       </div>
     );
   }

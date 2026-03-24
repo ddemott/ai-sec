@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { ChevronRight, ChevronDown, Users } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 
 const HOURS_START = 6  // 6am
 const HOURS_END = 22   // 10pm
@@ -88,8 +88,8 @@ const EMP_COLORS = [
   'bg-orange-400 dark:bg-orange-500',
 ]
 
-export default function ServiceCoverageView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function ServiceCoverageView() {
+  const tenantId = useActiveTenantId()
   const [data, setData] = useState<ServiceStaffing[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDay())

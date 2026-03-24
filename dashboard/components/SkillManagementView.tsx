@@ -9,13 +9,14 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession, useStaticData } from '../lib/hooks'
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 
 export default function SkillManagementView() {
-  const { tenantId } = useSession()
+  const tenantId = useActiveTenantId()
   const { skills, loading, refresh } = useStaticData(tenantId)
   
   const [newSkill, setNewSkill] = useState({ name: '', description: '' })
@@ -43,7 +44,7 @@ export default function SkillManagementView() {
     }
   }
 
-  async function handleDeleteSkill(id: number) {
+  async function handleDeleteSkill(id: string) {
     if (!confirm("Are you sure? This will NOT remove the skill from employees who already have it, but it will be removed from the master list.")) return
     
     try {
@@ -95,7 +96,7 @@ export default function SkillManagementView() {
             type="submit" 
             disabled={saving || !newSkill.name.trim()}
             icon={Plus}
-            loading={saving}
+            isLoading={saving}
             className="md:mb-1"
           >
             Define Skill

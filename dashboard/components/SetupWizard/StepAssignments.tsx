@@ -11,15 +11,15 @@ export function Step5Assignments({
   onToggleEmployee, onToggleResource,
 }: Step5Props) {
   const vocab = useVocabulary()
-  function isEmployeeAssigned(serviceId: number, employeeId: string) {
+  function isEmployeeAssigned(serviceId: string | number, employeeId: string) {
     return serviceEmployeeMappings.some(
-      (m: WizardMapping) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
+      (m: WizardMapping) => String(m.service_id) === String(serviceId) && String(m.employee_id) === String(employeeId)
     )
   }
 
-  function isResourceAssigned(serviceId: number, resourceId: string) {
+  function isResourceAssigned(serviceId: string | number, resourceId: string) {
     return serviceResourceMappings.some(
-      (m: WizardMapping) => m.service_id === serviceId && m.resource_id === resourceId
+      (m: WizardMapping) => String(m.service_id) === String(serviceId) && m.resource_id === resourceId
     )
   }
 

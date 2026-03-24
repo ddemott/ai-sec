@@ -8,6 +8,10 @@ const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") |
 
 // Lazy pool — created on first use, not at module load time.
 // This prevents the edge function from hanging on boot if the DB is unreachable.
+// Pool size of 2 is appropriate for serverless (Supabase edge functions).
+const POOL_SIZE = 2;
+const CONNECT_TIMEOUT_MS = 5_000;
+
 let _pool: Pool | null = null;
 function getPool(): Pool {
   if (!_pool) {
@@ -16,13 +20,32 @@ function getPool(): Pool {
     console.error(JSON.stringify({
       event: "db_pool_created",
       db_url: maskedUrl,
-      pool_size: 3,
+      pool_size: POOL_SIZE,
       source: Deno.env.get("SUPABASE_DB_URL") ? "SUPABASE_DB_URL" : "DATABASE_URL",
       timestamp: new Date().toISOString(),
     }));
-    _pool = new Pool(DB_URL, 3, true);
+    _pool = new Pool(DB_URL, POOL_SIZE, true);
   }
   return _pool;
+}
+
+/** Acquire a pool connection with a timeout to prevent hanging on unreachable DB. */
+async function connectWithTimeout(pool: Pool): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
+  try {
+    const client = await Promise.race([
+      pool.connect(),
+      new Promise<never>((_, reject) => {
+        controller.signal.addEventListener("abort", () =>
+          reject(new Error(`DB connection timed out after ${CONNECT_TIMEOUT_MS}ms`))
+        );
+      }),
+    ]);
+    return client;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export class PostgresRepository implements IRepository {
@@ -48,7 +71,7 @@ export class PostgresRepository implements IRepository {
   }
 
   private async withClient<T>(tenantId: string | null, fn: (client: any) => Promise<T>): Promise<T> {
-    const client = await this.pool.connect();
+    const client = await connectWithTimeout(this.pool);
     try {
       if (tenantId) {
         // BUG-026: Verify tenant context was set successfully

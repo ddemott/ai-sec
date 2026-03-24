@@ -1,4 +1,10 @@
 import { normalizePhone } from './phone'
+import type {
+  Appointment, Customer, Resource, Employee, Service, Shift, Skill,
+  ServiceMapping, TenantFull, BusinessTemplate, Tenant,
+  CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
+  CallSummary,
+} from './types'
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -45,6 +51,44 @@ export function getTargetTenantId(entityTenantId?: string) {
 }
 
 /**
+ * Force logout: clear all auth state and redirect to login.
+ * Single source of truth for auth cleanup — used by apiFetch, apiMutate, and hooks.
+ */
+export function forceLogout() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('tenantId');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('managedTenantId');
+    localStorage.removeItem('managedTenantName');
+    window.location.href = '/';
+  }
+}
+
+/**
+ * Check response for auth failures (401, tenant-not-found 404) and force logout if needed.
+ * Returns an error message string if logout was triggered, or null if response is fine.
+ */
+async function checkAuthFailure(response: Response): Promise<string | null> {
+  if (response.status === 401) {
+    forceLogout();
+    return 'Session expired. Please log in again.';
+  }
+  if (response.status === 404) {
+    try {
+      const body = await response.clone().json();
+      if (body.code === 'TENANT_NOT_FOUND') {
+        forceLogout();
+        return 'Your business account was not found. Please log in again.';
+      }
+    } catch {
+      // Not a JSON response or not tenant error — fall through
+    }
+  }
+  return null;
+}
+
+/**
  * Generic Fetcher
  */
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
@@ -56,32 +100,8 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
 
   const response = await fetch(url, { headers: getHeaders() });
 
-  // Auto-logout on expired/invalid token
-  if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('tenantId');
-      localStorage.removeItem('userName');
-      localStorage.removeItem('authToken');
-      window.location.href = '/';
-    }
-    throw new Error('Session expired. Please log in again.');
-  }
-
-  // Auto-logout if tenant no longer exists
-  if (response.status === 404) {
-    try {
-      const body = await response.clone().json();
-      if (body.code === 'TENANT_NOT_FOUND' && typeof window !== 'undefined') {
-        localStorage.removeItem('tenantId');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('authToken');
-        window.location.href = '/';
-        throw new Error('Your business account was not found. Please log in again.');
-      }
-    } catch {
-      // Not a JSON response or not tenant error — fall through
-    }
-  }
+  const authError = await checkAuthFailure(response);
+  if (authError) throw new Error(authError);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -94,40 +114,20 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
  * Generic Mutation (POST/PUT/DELETE)
  */
 async function apiMutate<T>(
-  endpoint: string, 
-  method: 'POST' | 'PUT' | 'DELETE', 
+  endpoint: string,
+  method: 'POST' | 'PUT' | 'DELETE',
   body?: Record<string, unknown>
 ): Promise<{ success: boolean; error?: string } & T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const response = await fetch(url, {
     method,
     headers: getHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // Auto-logout on expired/invalid token
-  if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('tenantId');
-      localStorage.removeItem('userName');
-      localStorage.removeItem('authToken');
-      window.location.href = '/';
-    }
-    return { success: false, error: 'Session expired. Please log in again.' } as { success: boolean; error?: string } & T;
-  }
-
-  // Auto-logout if tenant no longer exists
-  if (response.status === 404) {
-    const data = await response.clone().json().catch(() => null);
-    if (data?.code === 'TENANT_NOT_FOUND' && typeof window !== 'undefined') {
-      localStorage.removeItem('tenantId');
-      localStorage.removeItem('userName');
-      localStorage.removeItem('authToken');
-      window.location.href = '/';
-      return { success: false, error: 'Your business account was not found.' } as { success: boolean; error?: string } & T;
-    }
-  }
+  const authError = await checkAuthFailure(response);
+  if (authError) return { success: false, error: authError } as { success: boolean; error?: string } & T;
 
   const data = await response.json();
   if (!response.ok) {
@@ -142,28 +142,28 @@ async function apiMutate<T>(
 export const Api = {
   // --- CUSTOMERS ---
   customers: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/customers`, tenantId ? { tenant_id: tenantId } : undefined),
-    
-    create: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/customers/create`, 'POST', { 
-        tenant_id: tenantId, 
+    list: (tenantId: string | null) =>
+      apiFetch<Customer[]>(`/customers`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    create: (tenantId: string | null, data: Partial<Customer>) =>
+      apiMutate<{ customer: Customer }>(`/customers/create`, 'POST', {
+        tenant_id: tenantId,
         ...data,
-        phone: normalizePhone(data.phone)
+        phone: normalizePhone(data.phone),
       }),
-    
-    update: (id: string, entityTenantId: string, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/customers/${id}`, 'PUT', { 
-        tenant_id: getTargetTenantId(entityTenantId), 
+
+    update: (id: string, entityTenantId: string, data: Partial<Customer>) =>
+      apiMutate<{ customer: Customer }>(`/customers/${id}`, 'PUT', {
+        tenant_id: getTargetTenantId(entityTenantId),
         ...data,
-        phone: normalizePhone(data.phone)
+        phone: normalizePhone(data.phone),
       }),
-    
+
     delete: (id: string) =>
-      apiMutate<Record<string, unknown>>(`/customers/${id}`, 'DELETE'),
+      apiMutate(`/customers/${id}`, 'DELETE'),
 
     appointments: (customerId: string, tenantId: string | null) =>
-      apiFetch<Record<string, unknown>[]>(`/customers/${customerId}/appointments`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Appointment[]>(`/customers/${customerId}/appointments`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- APPOINTMENTS ---
@@ -173,175 +173,173 @@ export const Api = {
       if (tenantId) params.tenant_id = tenantId;
       if (opts?.startDate) params.start_date = opts.startDate;
       if (opts?.endDate) params.end_date = opts.endDate;
-      return apiFetch<Record<string, unknown>[]>(`/appointments`, Object.keys(params).length > 0 ? params : undefined);
+      return apiFetch<Appointment[]>(`/appointments`, Object.keys(params).length > 0 ? params : undefined);
     },
-    
-    create: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/appointments/create`, 'POST', { 
-        tenant_id: tenantId, 
+
+    create: (tenantId: string | null, data: Partial<Appointment> & Record<string, unknown>) =>
+      apiMutate<{ appointment_id: string }>(`/appointments/create`, 'POST', {
+        tenant_id: tenantId,
         ...data,
-        customer_phone: normalizePhone(data.customer_phone)
+        customer_phone: normalizePhone(data.customer_phone as string | undefined),
       }),
-    
-    update: (id: string, entityTenantId: string, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/appointments/${id}/update`, 'POST', { 
-        tenant_id: getTargetTenantId(entityTenantId), 
+
+    update: (id: string, entityTenantId: string, data: Partial<Appointment> & Record<string, unknown>) =>
+      apiMutate(`/appointments/${id}/update`, 'POST', {
+        tenant_id: getTargetTenantId(entityTenantId),
         ...data,
-        customer_phone: normalizePhone(data.customer_phone)
+        customer_phone: normalizePhone(data.customer_phone as string | undefined),
       }),
-    
+
     delete: (id: string) =>
-      apiMutate<Record<string, unknown>>(`/appointments/${id}`, 'DELETE'),
+      apiMutate(`/appointments/${id}`, 'DELETE'),
 
     cancel: (id: string, tenantId: string | null) =>
-      apiMutate<Record<string, unknown>>(`/appointments/${id}/cancel`, 'POST', { tenant_id: tenantId }),
+      apiMutate(`/appointments/${id}/cancel`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- RESOURCES ---
   resources: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/resources`, tenantId ? { tenant_id: tenantId } : undefined),
-    
-    create: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/resources/create`, 'POST', { tenant_id: tenantId, ...data }),
-    
-    update: (id: string, data: Record<string, unknown>, tenantId?: string | null) =>
-      apiMutate<Record<string, unknown>>(`/resources/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
+    list: (tenantId: string | null) =>
+      apiFetch<Resource[]>(`/resources`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    create: (tenantId: string | null, data: Partial<Resource>) =>
+      apiMutate<{ resource: Resource }>(`/resources/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    update: (id: string, data: Partial<Resource>, tenantId?: string | null) =>
+      apiMutate(`/resources/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
     delete: (id: string, tenantId?: string | null) =>
-      apiMutate<Record<string, unknown>>(`/resources/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
+      apiMutate(`/resources/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
   },
 
   // --- EMPLOYEES ---
   employees: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/employees`, tenantId ? { tenant_id: tenantId } : undefined),
-    
-    create: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/employees/create`, 'POST', { tenant_id: tenantId, ...data }),
-    
-    update: (id: string, data: Record<string, unknown>) =>
-      apiMutate<Record<string, unknown>>(`/employees/${id}/update`, 'POST', data),
-    
+    list: (tenantId: string | null) =>
+      apiFetch<Employee[]>(`/employees`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    create: (tenantId: string | null, data: Partial<Employee>) =>
+      apiMutate<{ employee: Employee }>(`/employees/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    update: (id: string, data: Partial<Employee>) =>
+      apiMutate<{ employee: Employee }>(`/employees/${id}/update`, 'POST', data),
+
     delete: (id: string, tenantId: string | null) =>
-      apiMutate<Record<string, unknown>>(`/employees/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
+      apiMutate(`/employees/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
   },
 
   // --- MAPPINGS ---
   mappings: {
-    listServiceResource: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/mappings/service-resource`, tenantId ? { tenant_id: tenantId } : undefined),
-    
-    assignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) => 
-      apiMutate<Record<string, unknown>>(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', { tenant_id: tenantId }),
-    
-    unassignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) => 
-      apiMutate<Record<string, unknown>>(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', { tenant_id: tenantId }),
+    listServiceResource: (tenantId: string | null) =>
+      apiFetch<ServiceMapping[]>(`/mappings/service-resource`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    assignServiceEmployee: (serviceId: string, employeeId: string, tenantId: string | null) => 
-      apiMutate<Record<string, unknown>>(`/services/${serviceId}/employees/${employeeId}/assign`, 'POST', { tenant_id: tenantId }),
-    
-    unassignServiceEmployee: (serviceId: string, employeeId: string, tenantId: string | null) => 
-      apiMutate<Record<string, unknown>>(`/services/${serviceId}/employees/${employeeId}/unassign`, 'POST', { tenant_id: tenantId }),
+    assignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) =>
+      apiMutate(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', { tenant_id: tenantId }),
 
-    listServiceEmployee: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/mappings/service-employee`, tenantId ? { tenant_id: tenantId } : undefined),
+    unassignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) =>
+      apiMutate(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', { tenant_id: tenantId }),
+
+    assignServiceEmployee: (serviceId: string, employeeId: string, tenantId: string | null) =>
+      apiMutate(`/services/${serviceId}/employees/${employeeId}/assign`, 'POST', { tenant_id: tenantId }),
+
+    unassignServiceEmployee: (serviceId: string, employeeId: string, tenantId: string | null) =>
+      apiMutate(`/services/${serviceId}/employees/${employeeId}/unassign`, 'POST', { tenant_id: tenantId }),
+
+    listServiceEmployee: (tenantId: string | null) =>
+      apiFetch<ServiceMapping[]>(`/mappings/service-employee`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- SERVICES ---
   services: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/services`, tenantId ? { tenant_id: tenantId } : undefined),
-    
-    create: (tenantId: string | null, data: Record<string, unknown>) =>
-      apiMutate<Record<string, unknown>>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
+    list: (tenantId: string | null) =>
+      apiFetch<Service[]>(`/services`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    update: (id: string | number, tenantId: string | null, data: Record<string, unknown>) =>
-      apiMutate<Record<string, unknown>>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
+    create: (tenantId: string | null, data: Partial<Service>) =>
+      apiMutate<{ service: Service }>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    update: (id: string | number, tenantId: string | null, data: Partial<Service>) =>
+      apiMutate<{ service: Service }>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
     delete: (id: string, tenantId: string | null) =>
-      apiMutate<Record<string, unknown>>(`/services/${id}/delete?tenant_id=${tenantId}`, 'DELETE'),
+      apiMutate(`/services/${id}/delete?tenant_id=${tenantId}`, 'DELETE'),
   },
 
-    // --- SHIFTS ---
-    shifts: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/shifts`, tenantId ? { tenant_id: tenantId } : undefined),
+  // --- SHIFTS ---
+  shifts: {
+    list: (tenantId: string | null) =>
+      apiFetch<Shift[]>(`/shifts`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    create: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/shifts/create`, 'POST', { tenant_id: tenantId, ...data }),
+    create: (tenantId: string | null, data: Partial<Shift>) =>
+      apiMutate<{ shift: Shift }>(`/shifts/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-    update: (id: string, tenantId: string | null, data: Record<string, unknown>) =>
-      apiMutate<Record<string, unknown>>(`/shifts/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
-
-    delete: (id: string, tenantId: string | null) =>
-      apiMutate<Record<string, unknown>>(`/shifts/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
-    },
-
-    // --- CALENDAR SYNC ---
-    calendar: {
-    getSettings: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>>(`/calendar/settings`, tenantId ? { tenant_id: tenantId } : undefined),
-
-    updateSettings: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/calendar/settings`, 'POST', { tenant_id: tenantId, ...data }),
-
-    disconnect: (tenantId: string | null) => 
-      apiMutate<Record<string, unknown>>(`/calendar/settings/disconnect`, 'POST', { tenant_id: tenantId }),
-    },
-
-    // --- ANALYTICS ---
-    analytics: {
-    getStats: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
-    },
-
-    // --- MASTER SKILLS ---
-    skills: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/skills`, tenantId ? { tenant_id: tenantId } : undefined),
-
-    create: (tenantId: string | null, data: Record<string, unknown>) => 
-      apiMutate<Record<string, unknown>>(`/skills/create`, 'POST', { tenant_id: tenantId, ...data }),
+    update: (id: string, tenantId: string | null, data: Partial<Shift>) =>
+      apiMutate<{ shift: Shift }>(`/shifts/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
     delete: (id: string, tenantId: string | null) =>
-      apiMutate<Record<string, unknown>>(`/skills/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
-    },
+      apiMutate(`/shifts/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
+  },
 
-    // --- TENANTS & TEMPLATES ---
+  // --- CALENDAR SYNC ---
+  calendar: {
+    getSettings: (tenantId: string | null) =>
+      apiFetch<CalendarSettings | null>(`/calendar/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    updateSettings: (tenantId: string | null, data: Partial<CalendarSettings>) =>
+      apiMutate<{ settings: CalendarSettings }>(`/calendar/settings`, 'POST', { tenant_id: tenantId, ...data }),
+
+    disconnect: (tenantId: string | null) =>
+      apiMutate(`/calendar/settings/disconnect`, 'POST', { tenant_id: tenantId }),
+  },
+
+  // --- ANALYTICS ---
+  analytics: {
+    getStats: (tenantId: string | null) =>
+      apiFetch<AnalyticsStats>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- MASTER SKILLS ---
+  skills: {
+    list: (tenantId: string | null) =>
+      apiFetch<Skill[]>(`/skills`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    create: (tenantId: string | null, data: Partial<Skill>) =>
+      apiMutate<{ skill: Skill }>(`/skills/create`, 'POST', { tenant_id: tenantId, ...data }),
+
+    delete: (id: string, tenantId: string | null) =>
+      apiMutate(`/skills/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- TENANTS & TEMPLATES ---
   tenants: {
-    list: () => apiFetch<Record<string, unknown>[]>(`/tenants`),
-    getConfig: (tenantId: string | null) => apiFetch<Record<string, unknown>>(`/tenants/${tenantId}/config`),
-    update: (id: string, data: Record<string, unknown>) => apiMutate<Record<string, unknown>>(`/tenants/${id}/update-attributes`, 'POST', data),
-    updateConfig: (id: string, data: Record<string, unknown>) => apiMutate<Record<string, unknown>>(`/tenants/${id}/update-config`, 'POST', data),
-    delete: (id: string) => apiMutate<Record<string, unknown>>(`/tenants/${id}`, 'DELETE'),
-    create: (data: Record<string, unknown>) => apiMutate<Record<string, unknown>>(`/tenants/create`, 'POST', data),
-    reorder: (order: string[]) => apiMutate<Record<string, unknown>>(`/tenants/reorder`, 'POST', { order }),
+    list: () => apiFetch<TenantFull[]>(`/tenants`),
+    getConfig: (tenantId: string | null) => apiFetch<Tenant>(`/tenants/${tenantId}/config`),
+    update: (id: string, data: Partial<TenantFull>) => apiMutate(`/tenants/${id}/update-attributes`, 'POST', data as Record<string, unknown>),
+    updateConfig: (id: string, data: Partial<Tenant>) => apiMutate(`/tenants/${id}/update-config`, 'POST', data as Record<string, unknown>),
+    delete: (id: string) => apiMutate(`/tenants/${id}`, 'DELETE'),
+    create: (data: Record<string, unknown>) => apiMutate<{ tenant_id: string }>(`/tenants/create`, 'POST', data),
+    reorder: (order: string[]) => apiMutate(`/tenants/reorder`, 'POST', { order }),
   },
-  
+
   templates: {
-    list: () => apiFetch<Record<string, unknown>[]>(`/templates`),
-    listFull: () => apiFetch<Record<string, unknown>[]>(`/templates/full`),
+    list: () => apiFetch<BusinessTemplate[]>(`/templates`),
+    listFull: () => apiFetch<BusinessTemplate[]>(`/templates/full`),
   },
 
   // --- FEEDBACK ---
   feedback: {
     submit: (tenantId: string | null, data: { page: string; context?: string; comment: string; rating?: number }) =>
-      apiMutate<Record<string, unknown>>(`/feedback`, 'POST', { tenant_id: tenantId, ...data }),
+      apiMutate(`/feedback`, 'POST', { tenant_id: tenantId, ...data }),
   },
 
   // --- CALL SUMMARIES ---
   callSummaries: {
     list: (tenantId: string | null, customerId: string) =>
-      apiFetch<Record<string, unknown>[]>(`/call-summaries`, tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }),
+      apiFetch<CallSummary[]>(`/call-summaries`, tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }),
   },
 
   // --- VOCABULARY ---
   vocabulary: {
     get: (tenantId: string | null) =>
-      apiFetch<{ resource_label: string; resource_plural: string; employee_label: string; employee_plural: string; booking_label: string }>(
-        `/vocabulary`, tenantId ? { tenant_id: tenantId } : undefined
-      ),
+      apiFetch<Vocabulary>(`/vocabulary`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- COVERAGE ---
@@ -351,20 +349,7 @@ export const Api = {
       if (tenantId) params.tenant_id = tenantId;
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
-      return apiFetch<Array<{
-        service_id: string;
-        service_name: string;
-        duration_minutes: number;
-        coverage_status: 'full' | 'partial' | 'uncovered' | 'no_staff' | 'no_resource';
-        total_open_hours: number;
-        covered_hours: number;
-        gap_hours: number;
-        has_qualified_staff: boolean;
-        has_capable_resource: boolean;
-        qualified_employee_count: number;
-        capable_resource_count: number;
-        gap_details: Array<{ date: string; day_name: string; gap_start: string; gap_end: string }>;
-      }>>(`/coverage`, params);
+      return apiFetch<CoverageItem[]>(`/coverage`, params);
     },
   },
 
@@ -374,23 +359,18 @@ export const Api = {
       const params: Record<string, string> = {};
       if (tenantId) params.tenant_id = tenantId;
       if (dayOfWeek !== undefined) params.day_of_week = String(dayOfWeek);
-      return apiFetch<Array<{
-        service_id: string;
-        service_name: string;
-        duration_minutes: number;
-        employees: Array<{ id: string; name: string; shift_start: string | null; shift_end: string | null }>;
-      }>>(`/coverage/staffing`, params);
+      return apiFetch<StaffingEntry[]>(`/coverage/staffing`, params);
     },
   },
 
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
-    list: (tenantId: string | null) => 
-      apiFetch<Record<string, unknown>[]>(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
-    
-    delete: (id: string, tenantId: string | null) => 
-      apiMutate<Record<string, unknown>>(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
-    
+    list: (tenantId: string | null) =>
+      apiFetch<Array<{ id: string; title: string; content: string; source: string; created_at: string }>>(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    delete: (id: string, tenantId: string | null) =>
+      apiMutate(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
+
     ingest: async (tenantId: string | null, file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -398,10 +378,10 @@ export const Api = {
 
       const response = await fetch(`${API_BASE_URL}/knowledge/ingest`, {
         method: 'POST',
-        body: formData, // No JSON headers for multipart/form-data
+        body: formData,
       });
 
-      return response.json();
+      return response.json() as Promise<{ success: boolean; chunksIngested: number; error?: string }>;
     }
   },
 

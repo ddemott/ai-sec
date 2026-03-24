@@ -149,6 +149,26 @@ describe('BUG-005: No dev bypass button in production code', () => {
 // =========================================================
 import { ErrorBoundary } from './ErrorBoundary';
 
+// Mock SessionContext for useActiveTenantId
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: any) => children,
+}))
+
+
 function ThrowingComponent({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) {
     throw new Error('Test component error');

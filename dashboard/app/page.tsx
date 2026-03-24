@@ -69,13 +69,13 @@ export default function DashboardPage() {
         {activeTab === 'all-businesses' && (
           <SuperAdminDashboard onSelectTenant={selectManagedTenant} currentTenantId={managedTenantId} />
         )}
-        {activeTab === 'dashboard' && <DashboardHome overrideTenantId={managedTenantId} onNavigate={setActiveTab} />}
-        {activeTab === 'schedule' && <SchedulerView overrideTenantId={managedTenantId} />}
-        {activeTab === 'customers' && <CRMView overrideTenantId={managedTenantId} />}
-        {activeTab === 'my-team' && <MyTeamView overrideTenantId={managedTenantId} />}
-        {activeTab === 'my-business' && <MyBusinessView overrideTenantId={managedTenantId} />}
-        {activeTab === 'ai-insights' && <AIInsightsView overrideTenantId={managedTenantId} />}
-        {activeTab === 'settings' && <SettingsView overrideTenantId={managedTenantId} />}
+        {activeTab === 'dashboard' && <DashboardHome onNavigate={setActiveTab} />}
+        {activeTab === 'schedule' && <SchedulerView />}
+        {activeTab === 'customers' && <CRMView />}
+        {activeTab === 'my-team' && <MyTeamView />}
+        {activeTab === 'my-business' && <MyBusinessView />}
+        {activeTab === 'ai-insights' && <AIInsightsView />}
+        {activeTab === 'settings' && <SettingsView />}
       </ErrorBoundary>
     </OutlookLayout>
   )

@@ -1,6 +1,28 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+
+const CreateEmployeeSchema = z.object({
+  tenant_id: z.string().uuid(),
+  name: z.string().optional(),
+  first_name: z.string().max(100).optional(),
+  last_name: z.string().max(100).optional(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().max(30).optional().nullable(),
+  skills: z.array(z.string()).optional(),
+});
+
+const UpdateEmployeeSchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  name: z.string().max(200).optional(),
+  first_name: z.string().max(100).optional(),
+  last_name: z.string().max(100).optional(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().max(30).optional().nullable(),
+  skills: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
+});
 
 export function registerEmployeeRoutes(
   app: any,
@@ -25,7 +47,11 @@ export function registerEmployeeRoutes(
   }, 'Failed to fetch employees'));
 
   app.post('/employees/create', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as { tenant_id: string; name?: string; first_name?: string; last_name?: string; email?: string; phone?: string; skills?: string[] };
+    const parsed = CreateEmployeeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const firstName = body.first_name || body.name || '';
     const lastName = body.last_name || '';
     const displayName = [firstName, lastName].filter(Boolean).join(' ');
@@ -54,7 +80,7 @@ export function registerEmployeeRoutes(
       );
     });
     if (res.rows.length === 0) {
-      return reply.status(404).send({ error: 'Employee not found' });
+      return reply.status(404).send({ success: false, error: 'Employee not found' });
     }
 
     logEvent(req, 'employee_deleted', { employeeId: id });
@@ -63,7 +89,11 @@ export function registerEmployeeRoutes(
 
   app.post('/employees/:id/update', withHandler(async (req: AppRequest, reply) => {
     const id = (req.params as any).id;
-    const body = req.body as { tenant_id?: string; name?: string; first_name?: string; last_name?: string; email?: string; phone?: string; skills?: string[]; is_active?: boolean };
+    const parsed = UpdateEmployeeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 

@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-03-23 (end of session)
+**Last updated:** 2026-03-24
 
 ---
 
@@ -20,7 +20,7 @@ Phase 13 (Production Readiness) is in progress. The backend is deployed to Railw
 | **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant created, phone assigned |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 263 backend + 368 dashboard = 631 passing | All green as of this session |
+| **Tests** | 301 backend + 194 dashboard = 495 passing | All green, zero failures, zero TS errors |
 | **Supabase CLI** | v2.83.0 | Updated from 2.77.1 |
 
 ## What's Broken / Blocked
@@ -264,6 +264,8 @@ Result returned to Vapi → LLM continues conversation
 
 ### Deleted Files
 - `dashboard/app/onboard-business.tsx` — dead code (unused stub)
+- `src/core/models.ts` — dead types + utility functions only used by one test (inlined into test)
+- `src/core/scheduling.ts` — dead re-export wrapper (nothing imported it)
 
 ### Refactoring Summary
 | Refactor | Impact |
@@ -272,13 +274,28 @@ Result returned to Vapi → LLM continues conversation
 | `requireTenantId()` helper | Replaced 29 tenant validation instances across 12 route files |
 | Lazy DB pool in edge function | Prevents boot crash if DB unreachable |
 | SetupWizard split | 1,386 lines → 8 focused files (types + 6 steps + orchestrator) |
-| Dead code removal | Deleted unused onboard-business.tsx |
+| Dead code removal | Deleted unused onboard-business.tsx, core/models.ts, core/scheduling.ts |
+| Fetch timeouts | AbortController on getEmbedding (10s) and normalizeForEmbedding (15s) |
+| Pool standardization | tenants.ts + auth.ts: all pool.connect() → withPoolClient() + withHandler() |
+| Auth logout utility | forceLogout() + checkAuthFailure() extracted in api.ts (4 duplication sites → 1) |
+| Vapi error format | All edge function errors return `{result: {success, error}}` with status 200 |
+| Env validation | Production startup fails fast on missing DATABASE_URL/JWT/OpenAI/Stripe |
+| Button prop cleanup | Removed deprecated `loading` prop; standardized on `isLoading` (12 callers) |
+| Modal accessibility | Escape key + backdrop click to close |
+| DB pool timeout | connectWithTimeout (5s) + pool size 2 for serverless edge functions |
+| Session consolidation | Removed useSession hook + overrideTenantId prop drilling (~20 components) |
+| Zod schemas | Added to tenants, employees, shifts, resources, services, skills, calendar routes |
+| Error format | All error responses standardized to `{ success: false, error, details? }` |
+| useFormState hook | Generic form state + dirty tracking in hooks.ts |
+| Component splits | AppointmentView → +ListSidebar +DetailPanel; SuperAdmin → +TenantCard +CreateForm +EditPanel; CRM → +CustomerDetailPanel; Wizard → +WizardStepContent |
+| Full type safety | API layer + hooks + 19 components: 233 TS errors → 0. All `Record<string, unknown>` replaced with proper entity types |
 | Smoke test fix | Fixed stale "AI Secretary Portal" → "SecretaryHQ Portal" in dist |
 
 ### Test Counts
 - **301 backend tests** (30 test files) — all passing
-- **368 dashboard tests** (27 test files) — all passing
-- **Total: 669 tests**
+- **194 dashboard tests** (14 test files) — all passing
+- **Total: 495 tests, zero failures**
+- Note: previous "669" count was inflated by stale compiled `.js` test copies in `dashboard/dist/` — cleaned up
 
 ### Sad-Path / Error Diagnostic Coverage
 All error responses now verified to include debugging context:

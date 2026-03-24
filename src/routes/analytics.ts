@@ -98,7 +98,7 @@ export function registerAnalyticsRoutes(
     if (!tenantId) return;
     const customerId = (req.query as any).customer_id;
     if (!customerId) {
-      return reply.status(400).send({ error: 'customer_id is required' });
+      return reply.status(400).send({ success: false, error: 'customer_id is required' });
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
@@ -122,7 +122,7 @@ export function registerAnalyticsRoutes(
 
     const body = req.body as { page: string; context?: string; comment: string; rating?: number };
     if (!body.page || !body.comment) {
-      return reply.status(400).send({ error: 'page and comment are required' });
+      return reply.status(400).send({ success: false, error: 'page and comment are required' });
     }
 
     await withTenantClient(tenantId, async (client) => {

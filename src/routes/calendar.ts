@@ -1,6 +1,13 @@
 
 import type { Pool, PoolClient } from 'pg';
+import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+
+const CalendarSettingsSchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  provider: z.string().min(1).max(50),
+  external_calendar_id: z.string().min(1).max(500),
+});
 
 export function registerCalendarRoutes(
   app: any,
@@ -23,7 +30,11 @@ export function registerCalendarRoutes(
   }, 'Failed to fetch calendar settings'));
 
   app.post('/calendar/settings', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as any;
+    const parsed = CalendarSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 

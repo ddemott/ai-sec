@@ -11,7 +11,8 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { formatPhone } from '../lib/phone'
-import { useSession, useStaticData } from '../lib/hooks'
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
@@ -21,21 +22,21 @@ import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
 
 type Employee = {
-  id: number
+  id: string
   name: string
-  first_name?: string
-  last_name?: string
-  email?: string
-  phone?: string
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
+  phone?: string | null
   is_active: boolean
   type?: string
 }
 
-export default function EmployeeManagementView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function EmployeeManagementView() {
+  const tenantId = useActiveTenantId()
   const vocab = useVocabulary()
   const { employees, services, loading, error, refresh } = useStaticData(tenantId)
-  const [mappings, setMappings] = useState<{ service_id: number; employee_id: number }[]>([])
+  const [mappings, setMappings] = useState<{ service_id: string; employee_id?: string }[]>([])
 
   // Edit State
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
@@ -85,13 +86,13 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
     if (!selectedEmployee || !editForm.first_name.trim()) return
     setSaving(true)
     try {
-      const res = await Api.employees.update(selectedEmployee.id as number, {
+      const res = await Api.employees.update(selectedEmployee.id, {
         first_name: editForm.first_name.trim(),
         last_name: editForm.last_name.trim(),
         email: editForm.email.trim() || undefined,
         phone: editForm.phone.trim() || undefined,
         is_active: editForm.is_active,
-        tenant_id: tenantId
+        tenant_id: tenantId || undefined
       })
       if (res.success) {
         refresh()
@@ -104,7 +105,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
     }
   }
 
-  async function handleDeleteEmployee(id: number) {
+  async function handleDeleteEmployee(id: string) {
     if (!confirm(`Are you sure? This will remove the ${vocab.employee_label.toLowerCase()} permanently.`)) return
     try {
       const res = await Api.employees.delete(id, tenantId)
@@ -119,7 +120,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
     }
   }
 
-  async function toggleService(serviceId: number, employeeId: number) {
+  async function toggleService(serviceId: string, employeeId: string) {
     const isMapped = (mappings || []).some(m => m.service_id === serviceId && m.employee_id === employeeId)
     try {
       if (isMapped) {
@@ -168,7 +169,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
             type="submit"
             disabled={saving || !newEmployee.first_name.trim()}
             icon={PlusCircle}
-            loading={saving}
+            isLoading={saving}
             className="whitespace-nowrap"
           >
             {`Add ${vocab.employee_label}`}
@@ -239,7 +240,7 @@ export default function EmployeeManagementView({ overrideTenantId }: { overrideT
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleUpdateEmployee} loading={saving}>Save Changes</Button>
+            <Button onClick={handleUpdateEmployee} isLoading={saving}>Save Changes</Button>
           </div>
         }
       >

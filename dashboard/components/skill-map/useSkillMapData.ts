@@ -307,7 +307,7 @@ export function useSkillMapData(
           m => String(m.service_id) === String(serviceId) && String(m.employee_id) === String(employeeId)
         )
         if (!alreadyMapped) {
-          await Api.mappings.assignServiceEmployee(serviceId as number, employeeId, tenantId)
+          await Api.mappings.assignServiceEmployee(String(serviceId), String(employeeId), tenantId)
         }
       } else if (resourceNode && serviceNode) {
         // Assign resource to service via mapping table
@@ -317,7 +317,7 @@ export function useSkillMapData(
           m => String(m.service_id) === String(serviceId) && String(m.resource_id) === String(resourceId)
         )
         if (!alreadyMapped) {
-          await Api.mappings.assignServiceResource(serviceId as number, resourceId as string, tenantId)
+          await Api.mappings.assignServiceResource(String(serviceId), String(resourceId), tenantId)
         }
       }
       await fetchMappings()
@@ -347,11 +347,11 @@ export function useSkillMapData(
       if (isLeft) {
         const empRawId = fromId.replace('emp-', '')
         const svcRawId = toId.replace('skill-', '')
-        await Api.mappings.unassignServiceEmployee(svcRawId as unknown as number, empRawId, tenantId)
+        await Api.mappings.unassignServiceEmployee(svcRawId, empRawId, tenantId)
       } else {
         const svcRawId = fromId.replace('skill-', '')
         const resRawId = toId.replace('res-', '')
-        await Api.mappings.unassignServiceResource(svcRawId as unknown as number, resRawId, tenantId)
+        await Api.mappings.unassignServiceResource(svcRawId, resRawId, tenantId)
       }
       await fetchMappings()
     } catch (err) {

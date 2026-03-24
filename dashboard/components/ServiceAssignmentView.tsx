@@ -14,7 +14,8 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession, useStaticData } from '../lib/hooks'
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
@@ -23,20 +24,20 @@ import { Modal } from './ui/Modal'
 import { Badge } from './ui/Badge'
 
 type Service = {
-  id: number
+  id: string
   name: string
-  description: string
+  description?: string
   duration_minutes: number
-  price?: number
+  price?: number | null
 }
 
-export default function ServiceAssignmentView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function ServiceAssignmentView() {
+  const tenantId = useActiveTenantId()
   const vocab = useVocabulary()
   const { services, resources, employees, loading, error: staticError, refresh } = useStaticData(tenantId)
   
-  const [resMappings, setResMappings] = useState<{ service_id: number; resource_id: string }[]>([])
-  const [empMappings, setEmpMappings] = useState<{ service_id: number; employee_id: number }[]>([])
+  const [resMappings, setResMappings] = useState<{ service_id: string; resource_id?: string }[]>([])
+  const [empMappings, setEmpMappings] = useState<{ service_id: string; employee_id?: string }[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
 
   // Wizard State (Creation)
@@ -122,7 +123,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
     }
   }
 
-  async function handleDeleteService(id: number) {
+  async function handleDeleteService(id: string) {
     if (!confirm("Are you sure? This will remove the service definition permanently.")) return
     setActionError(null)
     try {
@@ -138,7 +139,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
     }
   }
 
-  async function toggleResourceMapping(serviceId: number, resourceId: string) {
+  async function toggleResourceMapping(serviceId: string, resourceId: string) {
     const isMapped = resMappings.some(m => m.service_id === serviceId && m.resource_id === resourceId)
     try {
       if (isMapped) {
@@ -151,7 +152,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
     } catch { alert("Mapping update failed") }
   }
 
-  async function toggleEmployeeMapping(serviceId: number, employeeId: number) {
+  async function toggleEmployeeMapping(serviceId: string, employeeId: string) {
     const isMapped = empMappings.some(m => m.service_id === serviceId && m.employee_id === employeeId)
     try {
       if (isMapped) {
@@ -203,7 +204,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
             className="relative group cursor-pointer hover:border-blue-500/50 transition-all"
             onClick={() => {
               setSelectedService(service);
-              setEditForm({ name: service.name, description: service.description, duration_minutes: service.duration_minutes, price: service.price });
+              setEditForm({ name: service.name, description: service.description, duration_minutes: service.duration_minutes, price: service.price ?? undefined });
               setIsEditModalOpen(true);
             }}
           >
@@ -211,8 +212,8 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 h-10 overflow-hidden line-clamp-2">{service.description}</p>
             
             <div className="flex items-center gap-2 mb-4">
-              <Badge variant="default">{service.duration_minutes} MIN</Badge>
-              {service.price > 0 && <Badge variant="info">${service.price}</Badge>}
+              <Badge variant="secondary">{service.duration_minutes} MIN</Badge>
+              {(service.price ?? 0) > 0 && <Badge variant="primary">${service.price}</Badge>}
             </div>
 
             <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
@@ -239,7 +240,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleUpdateService} loading={saving}>Save Changes</Button>
+            <Button onClick={handleUpdateService} isLoading={saving}>Save Changes</Button>
           </div>
         }
       >
@@ -273,7 +274,7 @@ export default function ServiceAssignmentView({ overrideTenantId }: { overrideTe
                 <Input 
                   label="Price ($)"
                   type="number"
-                  value={editForm.price}
+                  value={editForm.price ?? ''}
                   onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
                 />
               </div>

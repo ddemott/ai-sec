@@ -7,15 +7,21 @@ import { Dispatcher } from "./core/dispatcher.ts";
 import { createGetEmbedding } from "../../../shared/getEmbedding.ts";
 import { createNormalizer } from "../../../shared/normalizeForEmbedding.ts";
 
+// --- Environment Validation ---
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+const VAPI_SECRET = Deno.env.get("VAPI_SERVER_URL_SECRET") || "unset";
+const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") || "";
+
+if (!OPENAI_API_KEY) console.warn("WARNING: OPENAI_API_KEY not set — embeddings and normalization will fail");
+if (!DB_URL) console.warn("WARNING: No database URL configured — all DB operations will fail");
+if (VAPI_SECRET === "unset") console.warn("WARNING: VAPI_SERVER_URL_SECRET not set — webhook auth disabled");
+
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
 
 export const repo = new PostgresRepository();
 const service = new AISecretaryService(repo);
 const dispatcher = new Dispatcher(service, getEmbedding, normalizeForEmbedding);
-
-const VAPI_SECRET = Deno.env.get("VAPI_SERVER_URL_SECRET") || "unset";
 
 // Validation Schemas
 const GetContextSchema = z.object({
@@ -78,7 +84,7 @@ export async function handler(req: Request): Promise<Response> {
     const logger = createLogger({ requestId });
 
     if (!message || !message.type) {
-        return new Response(JSON.stringify({ error: "Invalid message format" }), { status: 400 });
+        return new Response(JSON.stringify({ result: { success: false, error: "Invalid message format" } }), { status: 200 });
     }
 
     // Validate tool-call arguments at the entry point (single validation pass — BUG-044)
@@ -90,7 +96,7 @@ export async function handler(req: Request): Promise<Response> {
       try {
         args = JSON.parse(argsString);
       } catch (e) {
-        return new Response(JSON.stringify({ error: "Invalid JSON in arguments" }), { status: 400 });
+        return new Response(JSON.stringify({ result: { success: false, error: "Invalid JSON in tool arguments" } }), { status: 200 });
       }
 
       // Validate with Zod — typed args are passed to dispatcher via toolCall
@@ -109,7 +115,8 @@ export async function handler(req: Request): Promise<Response> {
   } catch (e) {
     const err = e as Error;
     if (err instanceof z.ZodError) {
-      return new Response(JSON.stringify({ error: "Validation failed", details: err.errors }), { status: 400 });
+      // Return 200 with Vapi-compatible error shape so the AI can relay the error to the caller
+      return new Response(JSON.stringify({ result: { success: false, error: `Validation failed: ${err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}` } }), { status: 200 });
     }
     
     if (err instanceof DomainError) {
@@ -124,6 +131,6 @@ export async function handler(req: Request): Promise<Response> {
       error_stack: err.stack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
     }));
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
+    return new Response(JSON.stringify({ result: { success: false, error: "Internal server error" } }), { status: 200 });
   }
 }

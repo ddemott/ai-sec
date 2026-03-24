@@ -20,14 +20,14 @@ export function registerBillingRoutes(app: any, pool: Pool) {
   app.post('/billing/checkout', withHandler(async (req: AppRequest, reply) => {
     const stripe = getStripe();
     if (!stripe) {
-      return reply.status(503).send({ error: 'Billing not configured' });
+      return reply.status(503).send({ success: false, error: 'Billing not configured' });
     }
 
     const tenant_id = requireTenantId(req, reply);
     if (!tenant_id) return;
     const { plan } = (req.body as any) || {};
     if (!plan || !['solo', 'growth', 'professional'].includes(plan)) {
-      return reply.status(400).send({ error: 'plan must be "solo", "growth", or "professional"' });
+      return reply.status(400).send({ success: false, error: 'plan must be "solo", "growth", or "professional"' });
     }
 
     const priceMap: Record<string, string> = {
@@ -37,7 +37,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
     };
     const priceId = priceMap[plan];
     if (!priceId) {
-      return reply.status(503).send({ error: `Price ID not configured for ${plan} plan` });
+      return reply.status(503).send({ success: false, error: `Price ID not configured for ${plan} plan` });
     }
 
     // Look up or create Stripe customer
@@ -46,7 +46,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       [tenant_id]
     );
     if (tenantRes.rows.length === 0) {
-      return reply.status(404).send({ error: 'Tenant not found' });
+      return reply.status(404).send({ success: false, error: 'Tenant not found' });
     }
 
     const tenant = tenantRes.rows[0];
@@ -82,12 +82,12 @@ export function registerBillingRoutes(app: any, pool: Pool) {
   app.post('/billing/webhook', async (req: AppRequest, reply) => {
     const stripe = getStripe();
     if (!stripe) {
-      return reply.status(503).send({ error: 'Billing not configured' });
+      return reply.status(503).send({ success: false, error: 'Billing not configured' });
     }
 
     const sig = req.headers['stripe-signature'];
     if (!sig) {
-      return reply.status(400).send({ error: 'Missing stripe-signature header' });
+      return reply.status(400).send({ success: false, error: 'Missing stripe-signature header' });
     }
 
     let event: Stripe.Event;
@@ -97,7 +97,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       event = stripe.webhooks.constructEvent(bodyStr, sig as string, STRIPE_WEBHOOK_SECRET);
     } catch (err: any) {
       logError(req, 'stripe_webhook_signature_failed', err);
-      return reply.status(400).send({ error: 'Invalid signature' });
+      return reply.status(400).send({ success: false, error: 'Invalid signature' });
     }
 
     try {
@@ -153,7 +153,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       return reply.send({ received: true });
     } catch (err: any) {
       logError(req, 'stripe_webhook_processing_failed', err);
-      return reply.status(500).send({ error: 'Webhook processing failed' });
+      return reply.status(500).send({ success: false, error: 'Webhook processing failed' });
     }
   });
 
@@ -167,7 +167,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       [tenantId]
     );
     if (res.rows.length === 0) {
-      return reply.status(404).send({ error: 'Tenant not found' });
+      return reply.status(404).send({ success: false, error: 'Tenant not found' });
     }
     return reply.send(res.rows[0]);
   }, 'Failed to check billing status'));

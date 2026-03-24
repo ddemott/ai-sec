@@ -61,10 +61,22 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Dashboard navigation: Front Desk / Back Office two-tab layout with sub-views in each tab
 - Toast notification system (dashboard/components/ui/Toast.tsx)
 - Dashboard components follow List+Detail pane pattern (sidebar list, detail right)
-- UI primitives in `dashboard/components/ui/` (Button, Card, Input, Select, Modal, Badge)
-- API client centralized in `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`
+- Large views split into sub-components (e.g., AppointmentView → AppointmentListSidebar + AppointmentDetailPanel)
+- UI primitives in `dashboard/components/ui/` (Button with `isLoading`, Card, Input, Select, Modal with Escape/backdrop-close, Badge)
+- API client centralized in `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`, fully typed return values (no `Record<string, unknown>`), shared `forceLogout()` + `checkAuthFailure()`
+- Entity types in `dashboard/lib/types.ts` (Appointment, Customer, Resource, Employee, Service, Shift, Skill, Tenant, BusinessTemplate, etc.)
+- **Zero TypeScript errors** — strict type checking passes (`npx tsc --noEmit`)
+- Session state via `SessionContext` — use `useActiveTenantId()` for the effective tenant ID (replaces old `useSession` hook)
+- No `overrideTenantId` prop drilling — components read tenant from context directly
+- `useFormState<T>()` hook for generic form state + dirty tracking
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 15 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 16 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- All route mutations validated with Zod schemas (auth, tenants, employees, shifts, resources, services, skills, calendar, appointments, customers)
+- All error responses use `{ success: false, error: string, details?: any }` format
+- Production env validation: server refuses to start if DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, or STRIPE_SECRET_KEY are missing
+- Edge function errors always return `{ result: { success: false, error } }` with status 200 (Vapi-compatible)
+- Edge function DB pool: lazy init, pool size 2, 5s connection timeout via `connectWithTimeout()`
+- Fetch timeouts on all OpenAI API calls (10s embeddings, 15s normalization) via AbortController
 - Graceful shutdown: SIGTERM/SIGINT handlers close Fastify + drain DB pool (required for Railway deploys)
 
 ## Known Issues (as of March 2026)
@@ -80,7 +92,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 301 backend tests + 368 dashboard tests = 669 total passing.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 301 backend tests + 194 dashboard tests = 495 total passing. Zero TypeScript errors.
 
 ### Remaining (Phase 13)
 - **Upgrade Supabase to Pro tier** ($25/mo — free tier compute budget exhausted, edge functions throttled)

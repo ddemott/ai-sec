@@ -11,12 +11,12 @@ export function registerProvisioningRoutes(
   // POST /provisioning/activate — provision Vapi assistant + phone number for a tenant
   app.post('/provisioning/activate', withHandler(async (req: AppRequest, reply) => {
     if (!vapiClient) {
-      return reply.status(503).send({ error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
+      return reply.status(503).send({ success: false, error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
     }
 
     const { tenant_id, area_code } = req.body as { tenant_id: string; area_code?: string };
     if (!tenant_id) {
-      return reply.status(400).send({ error: 'tenant_id is required' });
+      return reply.status(400).send({ success: false, error: 'tenant_id is required' });
     }
 
     const client = await pool.connect();
@@ -28,7 +28,7 @@ export function registerProvisioningRoutes(
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found', tenant_id, timestamp: new Date().toISOString() });
+        return reply.status(404).send({ success: false, error: 'Tenant not found', tenant_id, timestamp: new Date().toISOString() });
       }
 
       const tenant = tenantRes.rows[0];
@@ -146,12 +146,12 @@ export function registerProvisioningRoutes(
   // POST /provisioning/deactivate — remove Vapi assistant + phone number
   app.post('/provisioning/deactivate', withHandler(async (req: AppRequest, reply) => {
     if (!vapiClient) {
-      return reply.status(503).send({ error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
+      return reply.status(503).send({ success: false, error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
     }
 
     const { tenant_id } = req.body as { tenant_id: string };
     if (!tenant_id) {
-      return reply.status(400).send({ error: 'tenant_id is required' });
+      return reply.status(400).send({ success: false, error: 'tenant_id is required' });
     }
 
     const client = await pool.connect();
@@ -161,7 +161,7 @@ export function registerProvisioningRoutes(
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found' });
+        return reply.status(404).send({ success: false, error: 'Tenant not found' });
       }
 
       const { vapi_assistant_id, vapi_phone_number_id } = tenantRes.rows[0];
@@ -208,7 +208,7 @@ export function registerProvisioningRoutes(
   app.get('/provisioning/status', withHandler(async (req: AppRequest, reply) => {
     const { tenant_id } = req.query as { tenant_id: string };
     if (!tenant_id) {
-      return reply.status(400).send({ error: 'tenant_id query parameter is required' });
+      return reply.status(400).send({ success: false, error: 'tenant_id query parameter is required' });
     }
 
     const client = await pool.connect();
@@ -218,7 +218,7 @@ export function registerProvisioningRoutes(
         [tenant_id]
       );
       if (res.rows.length === 0) {
-        return reply.status(404).send({ error: 'Tenant not found' });
+        return reply.status(404).send({ success: false, error: 'Tenant not found' });
       }
 
       return reply.send(res.rows[0]);

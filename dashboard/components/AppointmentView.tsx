@@ -4,31 +4,9 @@ import { formatPhone } from '../lib/phone';
 import { Appointment } from '../lib/types';
 import { MOCK_APPOINTMENTS } from '../lib/mockData';
 import { toLocalISO, toISOStringWithOffset, formatCustomerAddress, splitFullName } from '../lib/utils';
-import { useSession, useStaticData } from '../lib/hooks';
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Select } from './ui/Select';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
-import { Modal } from './ui/Modal';
-import { 
-  Calendar as CalendarIcon, 
-  RefreshCw, 
-  ChevronRight, 
-  ChevronLeft,
-  Search,
-  Save,
-  X,
-  MapPin,
-  Navigation,
-  Copy,
-  Edit,
-  // Loader2,
-  StickyNote,
-  Trash2,
-  Plus
-} from 'lucide-react'
 import {
   Calendar as BigCalendar,
   dateFnsLocalizer,
@@ -39,6 +17,9 @@ import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale/en-US'
 import { parse, startOfWeek, getDay } from 'date-fns'
+
+import { AppointmentListSidebar } from './AppointmentListSidebar';
+import { AppointmentDetailPanel } from './AppointmentDetailPanel';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -69,8 +50,8 @@ interface DnDEventArgs {
   end: Date;
 }
 
-export default function AppointmentView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId);
+export default function AppointmentView() {
+  const tenantId = useActiveTenantId();
   const { customers, resources, employees } = useStaticData(tenantId);
   const vocab = useVocabulary();
 
@@ -330,7 +311,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
       setError('Please log in to delete appointments.')
       return
     }
-    
+
     try {
       const res = await Api.appointments.delete(selectedAppointment.id)
       if (res.success) {
@@ -372,7 +353,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
   const requestUpdateConfirmation = () => {
     if (!selectedAppointment) return;
     setShowConfirmModal(true);
-    setIsEditing(true); 
+    setIsEditing(true);
   }
 
   // Keep the draft calendar block in sync with the form while creating
@@ -417,7 +398,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                   disabled={zoomIndex <= 0}
                   className="px-2 py-0.5 text-xs font-bold rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
                   title="Zoom out"
-                >−</button>
+                >{'\u2212'}</button>
               </div>
             )}
             <DnDCalendar
@@ -449,7 +430,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                 setOriginalAppointment(apt as Appointment)
                 const startIso = (start as Date).toISOString()
                 const endIso = (end as Date).toISOString()
-                
+
                 setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, start_time: startIso, end_time: endIso } : a))
                 setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
                 setIsEditing(true)
@@ -468,7 +449,7 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
                 setOriginalAppointment(apt as Appointment)
                 const startIso = (start as Date).toISOString()
                 const endIso = (end as Date).toISOString()
-                
+
                 setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, start_time: startIso, end_time: endIso } : a))
                 setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
                 setIsEditing(true)
@@ -515,323 +496,56 @@ export default function AppointmentView({ overrideTenantId }: { overrideTenantId
           </div>
         </div>
       </section>
-      
+
       <div className="flex flex-1 overflow-hidden relative">
-        {/* List Pane */}
-        <section className={`w-full md:w-80 flex flex-col bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}>
-          <header className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] sticky top-0 z-10">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">{`${vocab.booking_label}s`}</h2>
-              <div className="flex space-x-1">
-                  <Button onClick={startNewAppointment} size="sm" className="p-1.5">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => fetchAppointments()} className="p-1.5">
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  </Button>
-              </div>
-            </div>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500" />
-              <input type="text" placeholder="Search bookings..." className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#222] border-none rounded-md text-sm outline-none dark:text-gray-200" />
-            </div>
-          </header>
+        <AppointmentListSidebar
+          appointments={appointments}
+          selectedAppointment={selectedAppointment}
+          loading={loading}
+          usingMockData={usingMockData}
+          showDetailOnMobile={showDetailOnMobile}
+          bookingLabel={vocab.booking_label}
+          onSelectAppointment={(apt) => {
+            setSelectedAppointment(apt)
+            setShowDetailOnMobile(true)
+            setIsCreating(false)
+            setCalendarDate(new Date(apt.start_time))
+          }}
+          onRefresh={() => fetchAppointments()}
+          onStartNew={startNewAppointment}
+          getServiceBaseTimes={getServiceBaseTimes}
+        />
 
-          <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-            {usingMockData && (
-              <div className="p-3 m-2 text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                Showing sample data. Log in to see real appointments.
-              </div>
-            )}
-            {appointments.map((apt) => (
-              <div 
-                key={apt.id}
-                onClick={() => {
-                  setSelectedAppointment(apt)
-                  setShowDetailOnMobile(true)
-                  setIsCreating(false)
-                  setCalendarDate(new Date(apt.start_time))
-                }}
-                className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-start
-                  ${selectedAppointment?.id === apt.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}`}
-              >
-                <div>
-                  <p className={`text-sm font-semibold ${selectedAppointment?.id === apt.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                    {apt.customers?.name || 'Unknown'}
-                  </p>
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1 truncate max-w-[180px]">
-                    {apt.description}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {(() => {
-                      const { start } = getServiceBaseTimes(apt as Appointment)
-                      return `${format(start, 'MMM d')} at ${format(start, 'p')}`
-                    })()}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 mt-1" />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Detail Pane */}
-        <section className={`flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`}>
-          {(selectedAppointment || isCreating) ? (
-            <>
-              <header className="p-4 md:p-8 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#111] sticky top-0 z-10 shadow-sm flex items-center justify-between">
-                <div className="flex items-start">
-                  <button onClick={() => { setShowDetailOnMobile(false); setIsCreating(false); }} className="md:hidden p-2 -ml-2 mr-2 text-blue-600 dark:text-blue-400"><ChevronLeft className="w-6 h-6" /></button>
-                  <div>
-                      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                          {isCreating ? `New ${vocab.booking_label}` : (isEditing ? `Edit ${vocab.booking_label}` : selectedAppointment?.description)}
-                      </h1>
-                        {selectedAppointment?.status === 'canceled' && (
-                          <Badge variant="danger">Canceled</Badge>
-                        )}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {!isEditing && !isCreating ? (
-                    <>
-                      <Button variant="danger" size="sm" onClick={handleDelete} title="Delete record">
-                        <Trash2 className="w-5 h-5" />
-                      </Button>
-                      {selectedAppointment?.status === 'scheduled' && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            if (selectedAppointment) {
-                              setOriginalAppointment(selectedAppointment)
-                            }
-                            setIsEditing(true)
-                          }}
-                        >
-                          <Edit className="w-4 h-4 mr-2" /> Modify
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                      <Button variant="ghost" onClick={() => { setIsEditing(false); setIsCreating(false); setDraftEvent(null) }}>
-                        <X className="w-6 h-6" />
-                      </Button>
-                  )}
-                </div>
-              </header>
-              
-              <div className="p-4 md:p-8 space-y-8">
-                  {error && (
-                      <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-sm font-medium">
-                          {error}
-                      </div>
-                  )}
-
-                  {(isEditing || isCreating) ? (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                          <div className="space-y-6">
-                              <Card title="Drive To" icon={<Navigation className="w-4 h-4" />} variant="success">
-                                  <div className="space-y-4">
-                                      <Input 
-                                          label="Location / Address"
-                                          value={form.location} 
-                                          onChange={e => setForm({...form, location: e.target.value})} 
-                                          placeholder="Business address or mobile location" 
-                                      />
-                                      <div className="grid grid-cols-2 gap-4">
-                                          <Input 
-                                              type="datetime-local" 
-                                              label="Start Time"
-                                              value={form.start_time} 
-                                              onChange={e => setForm({...form, start_time: e.target.value})} 
-                                          />
-                                          <Input 
-                                              type="datetime-local" 
-                                              label="End Time"
-                                              value={form.end_time} 
-                                              onChange={e => setForm({...form, end_time: e.target.value})} 
-                                          />
-                                      </div>
-                                  </div>
-                              </Card>
-
-                              <Card title="Customer Details">
-                                  <div className="space-y-4">
-                                      {isCreating ? (
-                                          <Select
-                                              label="Select Customer"
-                                              value={form.customer_id}
-                                              onChange={e => {
-                                                  const newCustomerId = e.target.value
-                                                  const customer = findCustomerById(newCustomerId)
-                                                  const suggestedLocation = formatCustomerAddress(customer)
-                                                  setForm(prev => ({
-                                                      ...prev,
-                                                      customer_id: newCustomerId,
-                                                      location: prev.location || suggestedLocation
-                                                  }))
-                                              }}
-                                              options={customers.map(c => ({ label: `${c.name} ${formatPhone(c.phone)}`, value: c.id }))}
-                                          />
-                                      ) : (
-                                          <div className="grid grid-cols-2 gap-4">
-                                              <Input label="First Name" value={form.customer_first_name} onChange={e => setForm({...form, customer_first_name: e.target.value})} />
-                                              <Input label="Last Name" value={form.customer_last_name} onChange={e => setForm({...form, customer_last_name: e.target.value})} />
-                                          </div>
-                                      )}
-                                      <Input label="Phone Number" value={form.customer_phone} onChange={e => setForm({...form, customer_phone: e.target.value})} />
-                                      <div className="grid grid-cols-2 gap-4">
-                                          <Select
-                                              label={vocab.resource_label}
-                                              value={form.resource_id}
-                                              onChange={e => setForm({...form, resource_id: e.target.value})}
-                                              options={resources.map(r => ({ label: r.name, value: r.id }))}
-                                          />
-                                          <Select
-                                              label={`${vocab.employee_label} Assigned`}
-                                              value={form.employee_id}
-                                              onChange={e => setForm({...form, employee_id: e.target.value})}
-                                              options={[
-                                                { label: 'Unassigned', value: '' },
-                                                ...employees.map(e => ({ label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`, value: e.id.toString() }))
-                                              ]}
-                                          />
-                                      </div>
-                                      <div>
-                                          <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>
-                                          <textarea rows={2} value={form.customer_notes} onChange={e => setForm({...form, customer_notes: e.target.value})} className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-sm italic" placeholder="Private notes..." />
-                                      </div>
-                                  </div>
-                              </Card>
-                          </div>
-
-                          <div className="space-y-6">
-                              <Card title="SecretaryHQ Summary" variant="dark">
-                                  <div className="space-y-4">
-                                      <Input 
-                                          label="Description / Service"
-                                          value={form.description} 
-                                          onChange={e => setForm({...form, description: e.target.value})} 
-                                          className="bg-blue-800 dark:bg-blue-900 border-blue-700 dark:border-blue-800 text-lg font-medium italic text-white" 
-                                          placeholder="e.g. Oil Change" 
-                                      />
-                                      <p className="text-sm text-blue-200 dark:text-blue-400 leading-relaxed italic opacity-80">
-                                          Editing this will update the core service description the AI uses for future reference.
-                                      </p>
-                                  </div>
-                              </Card>
-                              
-                              <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3 pt-6">
-                                  <Button variant="secondary" className="px-8 py-3" onClick={() => { setIsEditing(false); setIsCreating(false); setDraftEvent(null) }}>
-                                      Discard
-                                  </Button>
-                                  <Button 
-                                      className="flex-1 py-3"
-                                      onClick={isCreating ? handleCreate : requestUpdateConfirmation} 
-                                      isLoading={saving}
-                                      data-testid="update-appointment-btn"
-                                  >
-                                      {!saving && <Save className="w-5 h-5 mr-2" />}
-                                      {isCreating ? `Create ${vocab.booking_label}` : `Update ${vocab.booking_label}`}
-                                  </Button>
-                              </div>
-                          </div>
-                      </div>
-                  ) : (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                          <div className="space-y-6">
-                              <Card title="Drive To" icon={<Navigation className="w-4 h-4" />} variant="success">
-                                  <div className="flex items-start justify-between">
-                                      <div className="flex items-start">
-                                          <MapPin className="w-5 h-5 text-green-600 dark:text-green-500 mr-3 mt-1 flex-shrink-0" />
-                                          <div>
-                                              <p className="text-lg font-bold text-green-900 dark:text-green-100 leading-tight">
-                                                  {selectedAppointment?.location || 'No address provided'}
-                                              </p>
-                                              <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">
-                                                  {(() => {
-                                                    const { start, end } = getServiceBaseTimes(selectedAppointment as Appointment)
-                                                    return `${format(start, 'PPPP')} from ${format(start, 'p')} to ${format(end, 'p')}`
-                                                  })()}
-                                              </p>
-                                          </div>
-                                      </div>
-                                      <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(selectedAppointment?.location || '')} title="Copy Address">
-                                          <Copy className="w-4 h-4" />
-                                      </Button>
-                                  </div>
-                              </Card>
-
-                              <Card title="Customer Details">
-                                  <div className="space-y-4">
-                                      <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                          <span className="text-gray-500 dark:text-gray-400 text-sm">Name</span>
-                                          <span className="font-bold text-gray-900 dark:text-white">{selectedAppointment?.customers?.name}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                          <span className="text-gray-500 dark:text-gray-400 text-sm">Phone</span>
-                                          <a
-                                            href={`tel:${selectedAppointment?.customers?.phone}`}
-                                            className="font-bold text-blue-600 dark:text-blue-400 underline"
-                                          >
-                                            {formatPhone(selectedAppointment?.customers?.phone)}
-                                          </a>
-                                      </div>
-                                      <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                          <span className="text-gray-500 dark:text-gray-400 text-sm">{vocab.resource_label}</span>
-                                          <span className="font-bold text-gray-900 dark:text-white">{
-                                            resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'
-                                          }</span>
-                                      </div>
-                                      <div className="flex justify-between items-center">
-                                          <span className="text-gray-500 dark:text-gray-400 text-sm">{`${vocab.employee_label} Assigned`}</span>
-                                          <span className="font-bold text-gray-900 dark:text-white">
-                                            {employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name || 'Unassigned'}
-                                          </span>
-                                      </div>
-                                      {selectedAppointment?.customers?.metadata?.notes && (
-                                          <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800">
-                                              <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 flex items-center">
-                                                  <StickyNote className="w-3 h-3 mr-1" /> Customer Notes
-                                              </p>
-                                              <p className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed">
-                                                  {String(selectedAppointment!.customers?.metadata?.notes || '')}
-                                              </p>
-                                          </div>
-                                      )}
-                                  </div>
-                              </Card>
-                          </div>
-                          <Card title="SecretaryHQ Summary" variant="dark">
-                              <p className="text-lg leading-relaxed font-medium italic">
-                                  {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
-                              </p>
-                          </Card>
-                      </div>
-                  )}
-              </div>
-              <Modal
-                isOpen={showConfirmModal && !isCreating}
-                onClose={cancelUpdate}
-                title="Make this change permanent?"
-                footer={
-                  <>
-                    <Button variant="secondary" onClick={cancelUpdate}>Keep Original</Button>
-                    <Button onClick={handleUpdate} data-testid="save-changes-btn">Save Changes</Button>
-                  </>
-                }
-              >
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Save these changes to the appointment, or keep the original details.
-                </p>
-              </Modal>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic flex-col">
-              <CalendarIcon className="w-12 h-12 mb-4 opacity-20" />
-              {`Select ${vocab.booking_label === 'Appointment' ? 'an' : 'a'} ${vocab.booking_label.toLowerCase()} or click "+" to book one manually.`}
-            </div>
-          )}
-        </section>
+        <AppointmentDetailPanel
+          selectedAppointment={selectedAppointment}
+          isCreating={isCreating}
+          isEditing={isEditing}
+          showDetailOnMobile={showDetailOnMobile}
+          saving={saving}
+          error={error}
+          form={form}
+          showConfirmModal={showConfirmModal}
+          customers={customers}
+          resources={resources}
+          employees={employees}
+          vocab={vocab}
+          getServiceBaseTimes={getServiceBaseTimes}
+          findCustomerById={findCustomerById}
+          onFormChange={setForm}
+          onEdit={() => {
+            if (selectedAppointment) {
+              setOriginalAppointment(selectedAppointment)
+            }
+            setIsEditing(true)
+          }}
+          onCancelEdit={() => { setIsEditing(false); setIsCreating(false); setDraftEvent(null) }}
+          onDelete={handleDelete}
+          onSave={handleCreate}
+          onRequestUpdateConfirmation={requestUpdateConfirmation}
+          onCancelUpdate={cancelUpdate}
+          onConfirmUpdate={handleUpdate}
+          onCloseMobile={() => { setShowDetailOnMobile(false); setIsCreating(false); }}
+        />
       </div>
     </div>
   )

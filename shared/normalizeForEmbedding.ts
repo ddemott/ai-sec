@@ -38,6 +38,8 @@ Rules:
 - If the input is already concise and factual, return it unchanged
 - Do NOT add information that isn't in the input`;
 
+const FETCH_TIMEOUT_MS = 15_000;
+
 export function createNormalizer(apiKey: string) {
   return async function normalizeForEmbedding(
     text: string,
@@ -57,25 +59,39 @@ export function createNormalizer(apiKey: string) {
     const contextHint = options?.context || 'business document';
     const maxTokens = options?.maxTokens || 200;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Context: ${contextHint}\n\nNormalize this text:\n${trimmed}`,
-          },
-        ],
-        max_tokens: maxTokens,
-        temperature: 0,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: `Context: ${contextHint}\n\nNormalize this text:\n${trimmed}`,
+            },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(`Normalization request timed out after ${FETCH_TIMEOUT_MS}ms`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const error = await response.json();

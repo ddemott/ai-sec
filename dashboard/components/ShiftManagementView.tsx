@@ -11,14 +11,15 @@ import {
   Edit2
 } from 'lucide-react'
 import { Api } from '../lib/api'
-import { useSession, useStaticData } from '../lib/hooks'
+import { useStaticData } from '../lib/hooks'
+import { useActiveTenantId } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Modal } from './ui/Modal'
 
 interface ShiftRecord {
-  id: number;
+  id: string | number;
   employee_id: string | number;
   day_of_week: number;
   start_time: string;
@@ -35,8 +36,8 @@ const DAYS = [
   { id: 6, name: 'Saturday' },
 ]
 
-export default function ShiftManagementView({ overrideTenantId }: { overrideTenantId?: string | null }) {
-  const { tenantId } = useSession(overrideTenantId)
+export default function ShiftManagementView() {
+  const tenantId = useActiveTenantId()
   const { employees, loading: empsLoading } = useStaticData(tenantId)
   const vocab = useVocabulary()
   
@@ -100,7 +101,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
   async function handleUpdateShift() {
     if (!editingShift || !tenantId) return
     try {
-      const res = await Api.shifts.update(editingShift.id, tenantId, newShift)
+      const res = await Api.shifts.update(String(editingShift.id), tenantId, newShift)
       if (res.success) {
         setShifts(shifts.map(s => s.id === editingShift.id ? res.shift : s))
         setIsWizardOpen(false)
@@ -111,9 +112,9 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
     }
   }
 
-  async function handleDeleteShift(id: number) {
+  async function handleDeleteShift(id: string | number) {
     try {
-      await Api.shifts.delete(id, tenantId)
+      await Api.shifts.delete(String(id), tenantId)
       setShifts(shifts.filter(s => s.id !== id))
     } catch {
       alert("Failed to delete shift")
@@ -125,7 +126,7 @@ export default function ShiftManagementView({ overrideTenantId }: { overrideTena
       const promises = DAYS
         .filter(d => d.id !== baseShift.day_of_week)
         .map(d => Api.shifts.create(tenantId, {
-          employee_id: baseShift.employee_id,
+          employee_id: String(baseShift.employee_id),
           day_of_week: d.id,
           start_time: baseShift.start_time,
           end_time: baseShift.end_time

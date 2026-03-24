@@ -74,6 +74,26 @@ test('SettingsView (owner): shows resources list and creation form', async () =>
   await screen.findByText(/Resources & Capacity Units/i)
 
   // Existing resource from mock should appear
+
+// Mock SessionContext for useActiveTenantId
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: any) => children,
+}))
+
   await screen.findByText(/Resource 1/i)
 })
 

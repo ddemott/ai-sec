@@ -9,7 +9,7 @@ import { useVocabulary } from '@/lib/VocabularyContext'
 
 type SubTab = 'employees' | 'shifts' | 'skills' | 'skill-map'
 
-export default function MyTeamView({ overrideTenantId }: { overrideTenantId?: string | null }) {
+export default function MyTeamView() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('employees')
   const vocab = useVocabulary()
 
@@ -38,10 +38,10 @@ export default function MyTeamView({ overrideTenantId }: { overrideTenantId?: st
         ))}
       </nav>
       <div className="flex-1 overflow-hidden">
-        {activeSubTab === 'employees' && <EmployeeManagementView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'shifts' && <ShiftManagementView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'skills' && <SkillMatrixView overrideTenantId={overrideTenantId} />}
-        {activeSubTab === 'skill-map' && <SkillRelationshipMap overrideTenantId={overrideTenantId} />}
+        {activeSubTab === 'employees' && <EmployeeManagementView />}
+        {activeSubTab === 'shifts' && <ShiftManagementView />}
+        {activeSubTab === 'skills' && <SkillMatrixView />}
+        {activeSubTab === 'skill-map' && <SkillRelationshipMap />}
       </div>
     </div>
   )
