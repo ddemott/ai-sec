@@ -10,6 +10,7 @@ import { ResourceColumnsView } from './scheduler/ResourceColumnsView';
 import { AppointmentListView } from './scheduler/AppointmentListView';
 import { QuickBookPanel } from './scheduler/QuickBookPanel';
 import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
+import NewSchedulerView from './scheduler/NewSchedulerView';
 import { Button } from './ui/Button';
 import { Api } from '../lib/api';
 import { showToast } from './ui/Toast';
@@ -188,6 +189,15 @@ export default function SchedulerView({}: SchedulerViewProps) {
     );
   }
 
+  // Staff tab: use the new redesigned scheduler
+  if (activeView === 'staff') {
+    return (
+      <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
+        <NewSchedulerView />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
       {/* Toolbar */}
@@ -214,7 +224,7 @@ export default function SchedulerView({}: SchedulerViewProps) {
         {/* Date nav + actions */}
         <div className="flex items-center gap-3">
           <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
-          {(activeView === 'staff' || activeView === 'resources') && (
+          {activeView === 'resources' && (
             <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <button
                 onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
@@ -246,19 +256,6 @@ export default function SchedulerView({}: SchedulerViewProps) {
 
       {/* View content */}
       <div className="flex-1 overflow-auto bg-white dark:bg-[#111]">
-        {activeView === 'staff' && (
-          <StaffSwimLaneView
-            employees={employees}
-            appointmentsByEmployee={appointmentsByEmployee}
-            shiftsByEmployee={shiftsByEmployee}
-            onAppointmentClick={handleAppointmentClick}
-            onShiftDrag={handleShiftDrag}
-            onShiftDelete={handleShiftDelete}
-            onShiftResize={handleShiftResize}
-            onEmployeeClick={handleEmployeeClick}
-            hourWidth={hourWidth}
-          />
-        )}
         {activeView === 'resources' && (
           <ResourceColumnsView
             resources={resources}

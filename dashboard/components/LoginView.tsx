@@ -31,6 +31,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       if (response.ok && data.success) {
         localStorage.setItem('tenantId', data.tenant_id)
         localStorage.setItem('userName', data.user_name)
+        localStorage.setItem('userEmail', email)
         if (data.token) localStorage.setItem('authToken', data.token)
         onLoginSuccess(data)
       } else {

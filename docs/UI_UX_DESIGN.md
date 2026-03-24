@@ -1,7 +1,8 @@
 # SecretaryHQ Dashboard — UI/UX Design Brief
+**Last updated:** March 24, 2026 — Incorporates decisions from full-day design session with Dale.
 
 ## Purpose
-This document captures the current state of the dashboard UI, its problems, and proposed improvements. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, spas, trades, fitness) who are not technical users.
+This document captures the current state of the dashboard UI, its problems, and all design decisions. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, spas, trades, fitness) who are not technical users.
 
 ---
 
@@ -13,6 +14,78 @@ This document captures the current state of the dashboard UI, its problems, and 
 
 These users care about: "Who's calling?", "What's booked?", "Who's working today?", "How's business going?" They do NOT think in terms of "Skill Matrix", "Resources", or "RLS".
 
+**Plain language rule:** Every label, tooltip, and description must be written for a tire shop owner, not a developer. "Remembers your customers" not "CRM." "Answers questions from your own documents" not "RAG." This applies everywhere.
+
+---
+
+## Design Philosophy (March 2026 — Non-Negotiable)
+
+These principles were established during a full design session and must be applied to every future UI decision:
+
+**We show data. They manage their business.**
+Every time the UI starts telling users what's wrong, what to do, or grading their operation — stop. Show the information clearly. Let them interpret it. They are the expert on their own business.
+
+**No babysitting.**
+Don't tell a tire shop owner nobody is scheduled for seasonal tire swaps in July. They know it's July. Showing that warning constantly fires with information the owner already knows is intentional — it erodes trust in the system.
+
+**Managers are still needed to manage.**
+The software is a tool. It doesn't replace judgment. Jimmy being new, the bay count constraint, who works well together — we don't know any of that. We show who can do what. They decide if it's enough.
+
+---
+
+## Fonts — Bebas Neue + DM Sans (Locked)
+
+**Decision:** Bebas Neue (display/headers) + DM Sans (body) everywhere. Universal. Not swappable per business template.
+
+Bebas Neue only appears in: page titles, stat numbers, the logo, section headings. Everything else is DM Sans. The concern was raised that Bebas Neue feels "masculine." Dale's response: the font isn't what makes something feel masculine or feminine — the color palette does that work. It's the SecretaryHQ brand. It stays.
+
+**Implementation:** All CSS must reference `--font-display` and `--font-body` CSS variables. Never hardcode font families in components.
+
+```css
+--font-display: 'Bebas Neue', sans-serif;
+--font-body: 'DM Sans', sans-serif;
+```
+
+---
+
+## Theme System
+
+**Decision:** Rebuild all 8 existing themes to include font variables (`--font-display` and `--font-body`) alongside color variables. Theme switcher is a **dropdown**, not buttons.
+
+**Why dropdown:** Cleaner, scales to 8+ themes without breaking layout, future-proofs custom theme creation — a user-created "My Brand Theme" is just another dropdown option.
+
+**Custom themes (future):** Users will eventually be able to create a custom theme — pick a base, adjust accent color to match their brand, name it, save it. Don't build now, but don't architect against it. The CSS variable structure already supports it.
+
+Each theme defines:
+```css
+--bg-base, --bg-surface, --bg-raised, --bg-card
+--accent, --accent-soft, --accent-muted
+--text-primary, --text-secondary, --text-muted
+--border, --border-soft
+--font-display, --font-body  /* NEW — add to all 8 themes */
+--green, --red, --yellow     /* semantic colors */
+```
+
+**Soft/feminine theme:** A rose/plum dark theme is planned for salon/spa verticals. Same Bebas Neue + DM Sans fonts, different color palette. The color palette is what changes the feel — not the font.
+
+---
+
+## Navigation Structure — Keep Existing, Apply New Visual Style
+
+**Decision:** Do NOT restructure navigation. Keep the existing Front Desk / Back Office two-tab layout with all current sub-views intact. Apply the new dark sidebar visual style on top.
+
+**Sidebar visual spec:**
+- Background: `var(--bg-surface)`
+- Section labels: `10px, font-weight 600, letter-spacing 0.12em, uppercase, color var(--text-muted)`
+- Nav items default: `13px, color var(--text-secondary)`
+- Nav items active: `color var(--text-primary)`, left border `2px solid var(--accent)`, background `var(--accent-muted)`
+- Icons: `14×14px, opacity 0.6` default, `opacity 1` active
+
+**Sidebar bottom — no Quick Book button:**
+The sidebar bottom shows today's appointment count and staff count as a summary. There is NO Quick Book button in the sidebar. Replaced with a "Go to Scheduler to book" navigation link.
+
+**Why:** You cannot book without seeing the schedule — you'd have no way to know if you're double-booking. Booking must happen inside the Scheduler where availability is visible.
+
 ---
 
 ## Current Dashboard Architecture
@@ -22,15 +95,10 @@ These users care about: "Who's calling?", "What's booked?", "Who's working today
 - **Styling**: Tailwind CSS 3.4
 - **Icons**: Lucide React
 - **Layout**: Outlook-inspired sidebar + content pane
-- **Theme**: Light/dark mode toggle
+- **Theme**: 8 themes via CSS custom properties
 - **Responsive**: Desktop sidebar collapses to mobile bottom nav
 
-### Entry Points
-- `dashboard/app/page.tsx` — Main page, renders login or layout
-- `dashboard/components/OutlookLayout.tsx` — Shell with sidebar nav + content area
-- `dashboard/app/layout.tsx` — Root layout with SessionProvider
-
-### Current Navigation Structure (Front Desk / Back Office)
+### Navigation Structure (Front Desk / Back Office)
 
 ```
 Desktop: Two primary tabs at top level
@@ -45,591 +113,251 @@ Desktop: Two primary tabs at top level
 │              AI & Insights               │
 │                                          │
 │ Admin* (* super-admin only)              │
-│ [theme] [settings] [logout]              │
+│ [theme dropdown] [settings] [logout]     │
 └──────────────────────────────────────────┘
-
-Mobile Bottom Nav: Primary sections
 ```
 
-**Note**: The navigation was restructured from the original 12 flat tabs to 5 grouped sections, and then further simplified to the current Front Desk / Back Office two-tab layout. The Staffing Map (Service Coverage View) is now implemented under Front Desk.
+---
 
-### Current Views (12 components)
+## Scheduler — Complete Redesign (March 2026)
+
+### Orientation: Rows = Staff, Columns = Hours
+
+**Decision:** Rows are staff members, columns are hours of the day. This is a complete flip from the original.
+
+**Why:** Original had time going down, staff going across. With 3 staff it worked. With 8–15 staff it falls apart — columns squish or break. New orientation scales naturally — add 20 staff and the grid grows down the page.
+
+### Fixed Staff Names Panel
+
+Staff names must remain visible at all times as the user scrolls horizontally.
+
+**Implementation:** Two separate scroll containers:
+- **Left panel (160px):** Staff names only. Fixed, no horizontal scroll. Syncs vertically with appointment rows.
+- **Right panel:** Hour header + appointment rows. Scrolls both horizontally and vertically.
+- JS scroll sync: right panel horizontal → header syncs. Right panel vertical → left panel syncs.
+
+Do NOT use CSS `position: sticky` — it breaks because the scroll container cuts it off. The split panel approach is required.
+
+### Full 24-Hour Day
+
+Render all 24 hours (midnight to midnight). On load, auto-scroll to 1 hour before the earliest appointment (or 7am if no appointments).
+
+### Business Hours Visual Distinction
+
+Closed hours (outside business hours) get `background: rgba(0,0,0,0.28)` on both the hour header cell and slot cells. Business hours have transparent background.
+
+**No OPEN/CLOSE labels.** The color contrast tells the story. Labels are redundant noise.
+
+### Zoom Control
+
+`−/+` buttons in the scheduler header control `COL_W` (column width). Default 72px = 100%. Range: 36px–140px, increments of 16px. Shows percentage label. Persists in state during session.
+
+### Staff Quick Profile Card
+
+Clicking a staff member's name opens a compact read-only card. **Read-only. No editing.**
+
+**Exact layout:**
+```
+[Avatar]  Name
+          Role
+─────────────────────
+Today     X appts · X hrs
+Shift     7am – 4pm
+─────────────────────
+SKILLS
+  Flat Repair (On-site)
+  Seasonal Tire Swap
+  Tire Rotation
+  New Tire Install (x4)
+  Balancing
+```
+
+Skills are a **vertical indented list** under the SKILLS header. Not pills, not checkmarks, not left-to-right. Eyes go down a list naturally — left-to-right breaks the scan pattern and forces the brain to separate words. SKILLS is the header, indented list beneath reads as its children.
+
+Card anchors below the clicked name cell. Repositions above if near bottom of screen. Dismisses on any outside click. Hover state on name cell: `var(--accent-muted)` background + pointer cursor.
+
+### Skills View Toggle (To Build)
+
+Add a toggle at the top of the scheduler: **Hours | Skills**
+
+**Hours mode:** One bar per staff member showing their shift duration.
+
+**Skills mode:** Stacked bars within each staff member's shift hours. Each skill is a separate horizontal bar spanning their working hours.
+
+**Color logic:** Skill-based color, not person-based. "Oil Change" is always the same color regardless of who performs it. This lets the manager scan a column and instantly see which skills are available at any hour. Multiple people with the same color bar = multiple people covering that skill.
+
+**Label:** Sits at the left edge of the bar. Readable when wide enough, gracefully disappears (color only) at small zoom.
+
+**Example:**
+```
+Mike    [Oil Change      8am ————————————— 4pm]
+        [Tire Rotation   8am ————————————— 4pm]
+
+Carlos  [Oil Change      8am ———————— 3pm     ]
+        [Tire Rotation   8am ———————— 3pm     ]
+```
+
+**This replaces Coverage Map entirely.** See below.
+
+### Drag to Reorder Staff Rows (To Build)
+
+Staff rows are draggable. Drag handle on the left edge of the name cell (grip icon, same as tenant reorder in admin panel).
+
+**Save behavior:**
+- Save button appears in header when unsaved changes exist ("Save Order" + "Discard")
+- Save clicked → persists, same order next visit
+- Discard clicked → reverts immediately, no prompt
+- Navigate away without saving → silently reverts, no prompt, no nag
+- Close browser/tab → reverts, no prompt
+- **Default: NOT saved on exit.** Intentional. If they wanted to save they would have clicked Save.
+
+---
+
+## Coverage Map — Removed
+
+**Decision:** Remove Coverage Map from navigation entirely.
+
+**Why (important):**
+
+The original Gap Analysis told managers: "Carlos not certified," "Dana unavailable after 1pm," "50% staffed," "CRITICAL GAP." This is the system telling managers how to run their business. We don't know what 50% means for their operation. We don't know if they need seasonal tire swaps in July (they don't — and showing that warning erodes trust). We don't know if 2 cashiers at 9pm is fine or a disaster. Only the manager knows.
+
+The gap analysis was also vague and actionless. A bar showing "50% coverage" doesn't tell you which hours, which days, or what to do about it. It creates noise without signal.
+
+**The replacement:** The Skills toggle in the scheduler IS the coverage tool. Who is on the floor, when, what they can do. Manager looks at it and decides if they're covered. No percentages, no warnings, no opinions from us.
+
+**Remove from:** sidebar navigation, routing, and all references.
+
+---
+
+## Detail Panel — Keep Existing Right-Side Pane
+
+**Decision:** Keep the existing List + Detail right-side pane pattern. Do NOT adopt a floating bottom-right card.
+
+**Why:** The floating card is a peek surface. The real app needs an editing surface — change time, reassign staff, update notes. Existing pane supports inline editing. That functionality must not be lost.
+
+Reskin to match dark theme. Do not restructure.
+
+---
+
+## Analytics — Rebuilt Around Real Business Questions
+
+**Old version was wrong.** It showed: appointment count, estimated revenue, avg booking value, bar charts of services and staff. A business owner would look at it and say "this is useless to me." Numbers without context, no action implied.
+
+**Philosophy:**
+> We give them numbers so they can look at their own business and figure it out. We surface patterns that make them ask WHY. We are not answering their questions — we are holding a mirror.
+
+**Note on total calls:** This is NOT a vanity metric. Total calls over time reflects whether marketing is working. You run a Facebook ad in March, calls spike — that's the connection. Show as a trend over time, not just today's number.
+
+### The Six Metrics (Phase 1)
+
+**1. Call Volume Over Time**
+Trend over days/weeks. Reflects marketing effectiveness. "14 calls today" is vanity. "Calls up 40% since March" is signal.
+
+**2. Call to Booking Conversion — by day and by hour**
+Calls in vs bookings made. Where is the gap? Big gap on Saturday might mean the AI can't handle weekend volume. Gap at 2pm every day might mean something else. We show it, they investigate.
+
+**3. Busiest Hours**
+When is the phone ringing? When are bookings made? These are often different times. Staffing decisions live here.
+
+**4. Caller Abandonment Point**
+At what point in the conversation do people hang up? If 31% abandon at "checking availability" that's a script problem or an availability problem. Highlight worst offenders. We show where, they figure out why.
+
+**5. Return Rate by First Service**
+Of customers whose first booking was a specific service, how many came back? Low return on high-volume service worth a closer look. No judgment from us — just the pattern.
+
+**6. No-Show Pattern**
+Which days have the most no-shows? Color coded. Patterns here often have meaning the owner will recognize.
+
+### What We Explicitly Do NOT Build (Phase 1)
+
+- "AI Performance Score" — meaningless without context
+- Average call length — interesting, not actionable
+- Staff request tracking — lives in unstructured notes, can't be reliably parsed. Phase 2 when AI captures it as structured data during the call.
+- Upsell attachment rate — Phase 2, requires upsell feature first
+- Revenue per customer lifetime — requires payment data
+- Real-time AI call data (calls answered today, etc.) — Phase 2, requires Vapi call log integration
+
+### Staff Request Tracking (Future Note)
+
+Staff requests ("I want Suzy") currently live in free-text notes. Can't be reliably parsed. To track properly we need:
+- Structured field on booking: "Requested staff member"
+- AI to recognize preference during call and capture it explicitly
+
+This is valuable especially for salons (80% of calls asking for one stylist = business risk if they leave). Defer to Phase 2. Don't show in analytics until data is clean.
+
+---
+
+## Current Views (12 components)
 
 | Tab ID | Component | What it does |
 |--------|-----------|-------------|
 | `all-businesses` | SuperAdminDashboard | Multi-tenant management (super-admin only) |
-| `appointments` | AppointmentView | Outlook-style calendar with resource columns, appointment CRUD |
+| `appointments` | AppointmentView | Scheduler — REDESIGN per spec above |
 | `crm` | CRMView | Customer list + detail pane (contact info, appointments, call history, notes, search) |
-| `staff` | EmployeeManagementView | Employee list with add/edit/delete, name/email/phone fields |
-| `staff-shifts` | ShiftManagementView | Employee shift scheduling (day of week + time ranges) |
-| `service-catalog` | ServiceAssignmentView | Service definitions with duration, price, and employee/resource assignments |
+| `staff` | EmployeeManagementView | Employee list with add/edit/delete |
+| `staff-shifts` | ShiftManagementView | Employee shift scheduling |
+| `service-catalog` | ServiceAssignmentView | Service definitions with duration, price, employee/resource assignments |
 | `manage-resources` | ResourceManagerView | Physical resource management (bays, trucks, chairs) |
 | `skill-matrix` | SkillMatrixView | Grid matching employee skills to resource capabilities |
-| `knowledge-base` | KnowledgeBaseView | RAG document upload (PDF/text) and management |
+| `knowledge-base` | KnowledgeBaseView | RAG document upload and management |
 | `ai-tuning` | AIConfigView | System prompt, voice ID, first message, persona settings |
-| `analytics` | AnalyticsView | Call volume, booking conversion, revenue metrics |
+| `analytics` | AnalyticsView | REBUILD per spec above |
 | `settings` | SettingsView | Calendar sync, tenant configuration |
 
 ---
 
-## Problems with Current UI
+## Vocabulary System
 
-### 1. Too Many Top-Level Items
-12 sidebar icons with tiny 9px labels is overwhelming. Most users will use 3-4 tabs daily but are confronted with 12 choices. There's no visual distinction between "use this every day" and "set this up once."
+UI labels adapt per business type via 3-tier fallback:
+1. Tenant override (owner changed "Bay" to "Stall")
+2. Template default (auto-shop template says "Bay")
+3. Hardcoded fallback ("Resource")
 
-### 2. No Logical Grouping
-Related features are scattered:
-- **Staff management** is split across 3 tabs: Employees, Shifts, Skill Matrix
-- **Business setup** is split across 3 tabs: Services, Resources, Knowledge Base
-- **AI features** are split across 2 tabs: AI Tuning, Analytics
+29 business types across 6 categories. Vocabulary changes: Bays/Technicians for tire shops, Chairs/Stylists for salons, Bays/Mechanics for auto shops, etc.
 
-### 3. Confusing Labels and Icons
-- "Skill Matrix" — means nothing to a salon owner
-- "Resources" — too generic (these are bays, trucks, chairs)
-- "AI Tuning" — vague
-- ShieldCheck icon for Employees doesn't convey "staff"
-- Settings icon (gear) used for both Services and Settings
-
-### 4. ~~Mobile Navigation is Incomplete~~ (RESOLVED)
-~~The bottom nav only shows 5 of 12 tabs.~~ Mobile bottom nav now shows all 5 primary sections: Schedule, Customers, My Team, My Business, AI.
-
-### 5. No Visual Hierarchy
-Daily-use items (Calendar, Customers) have the same visual weight as setup-once items (Resources, Skills, Knowledge Base). There's no sense of primary vs secondary actions.
-
-### 6. No Onboarding Flow
-A new business owner who just signed up sees 12 tabs with no guidance on where to start or what order to set things up.
-
-### 7. No Self-Service Tenant Creation or Business Type Selection
-There is **no page flow for a new business to sign up and configure themselves**. The current state:
-
-- **What exists**: The super-admin can create tenants from the Admin panel (`SuperAdminDashboard.tsx`). When creating a tenant, the admin picks a `business_type` from a dropdown populated by the `business_templates` table. A Postgres trigger (`apply_business_template_defaults`) then auto-fills the AI system prompt, voice, greeting, and creates a default resource.
-- **What does NOT exist**:
-  - No self-service sign-up page for new businesses
-  - No way for a regular business owner to see or change their business type
-  - No public-facing registration flow (email → verify → pick business type → create tenant → onboard)
-  - The business type dropdown only appears in the super-admin "Create Business" form — regular users never see it
-  - The `business_templates` table has 29 types across 6 categories (8 planned)
-  - Business type selection doesn't connect to the onboarding wizard (which doesn't exist yet)
-  - The vocabulary system (Chair vs Bay vs Operatory) doesn't exist yet — business type is stored but never used to adapt UI labels
-
-**What needs to be built** (in order):
-
-```
-Page Flow: New Business Sign-Up → Onboarding → Dashboard
-
-1. SIGN-UP PAGE (public, no auth required)
-   ┌─────────────────────────────────────────────────────────┐
-   │  Start Your AI Receptionist                              │
-   │                                                          │
-   │  Business Name: [________________________]               │
-   │  Your Name:     [________________________]               │
-   │  Email:         [________________________]               │
-   │  Password:      [________________________]               │
-   │                                                          │
-   │  What kind of business do you run?                       │
-   │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
-   │  │ 🚗 Tire │ │ 💇 Salon│ │ 🔧 Auto │ │ 💆 Spa  │      │
-   │  │  Shop   │ │         │ │  Shop   │ │         │      │
-   │  └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
-   │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │
-   │  │ 💪 Gym  │ │ 🔌 Elec │ │ 🪠 Plumb│ │ ✂ Barber│      │
-   │  │         │ │ trician │ │  ing    │ │  shop   │      │
-   │  └─────────┘ └─────────┘ └─────────┘ └─────────┘      │
-   │  ... (scrollable grid of 29 business types)              │
-   │                                                          │
-   │  Medical verticals (dental, chiropractic, veterinary,    │
-   │  optometry) are permanently excluded and do not appear.  │
-   │                                                          │
-   │                         [Create My Account →]            │
-   └─────────────────────────────────────────────────────────┘
-
-   Backend: POST /tenants/register (public endpoint)
-   - Creates tenant with business_type
-   - Trigger applies template defaults (prompt, voice, resource)
-   - Creates user account with bcrypt hash
-   - Returns JWT token
-   - Redirects to onboarding wizard
-
-2. ONBOARDING WIZARD (authenticated, first login)
-   → Steps 1-8 as described in the Onboarding Wizard section above
-   → Vocabulary adapts immediately based on business_type chosen in sign-up
-   → "Add your Chairs" for salon, "Add your Bays" for auto shop, etc.
-
-3. DASHBOARD (authenticated, daily use)
-   → Lands on Schedule view after wizard completes
-   → All labels use business-specific vocabulary
-   → Navigation grouped into 5 sections as proposed
-```
-
-**What exists today vs what's needed:**
-
-| Capability | Status | Where | Type |
-|-----------|--------|-------|------|
-| `business_templates` table with 20 types + vocabulary | Exists | `20260228000006` + `20260317000000-0002` migrations | Coding |
-| Template auto-apply trigger | Exists | `apply_business_template_defaults()` in same migration | Coding |
-| Business type dropdown | Exists | `SuperAdminDashboard.tsx` (admin only) | UI/UX |
-| `Api.templates.list()` | Exists | `dashboard/lib/api.ts` | Coding |
-| `POST /tenants/create` | Exists | `src/routes/tenants.ts` (admin only) | Coding |
-| Public sign-up page | **Missing** | Needs new component + public route | Both |
-| Public registration API (`POST /register`) | **Done** | `src/routes/auth.ts` | Coding |
-| Self-service business type picker | **Missing** | Needs card-grid UI component | UI/UX |
-| Vocabulary columns on templates | **Done** | `20260317000000_vocabulary_columns.sql` | Coding |
-| Vocabulary override columns on tenants | **Done** | `20260317000001_tenant_vocabulary_overrides.sql` | Coding |
-| GET /vocabulary endpoint (3-tier fallback) | **Done** | `src/routes/vocabulary.ts` | Coding |
-| `Api.vocabulary.get()` client method | **Done** | `dashboard/lib/api.ts` | Coding |
-| Vocabulary context/hook in dashboard | **Missing** | Needs `useVocabulary` React Context | Coding |
-| Onboarding wizard | **Missing** | Needs full implementation | Both |
-| 20 business type templates | **Done** | `20260317000002_new_business_templates.sql` | Coding |
-| Example services per template | **Done** | `20260317000004_example_services.sql` | Coding |
-| `onboarding_completed` flag on tenants | **Done** | `20260317000003_onboarding_and_registration.sql` | Coding |
-
----
-
-## Navigation Restructure (Implemented)
-
-### Principle: Group by User Intent
-
-> **Status**: Navigation has been restructured. The current implementation uses a **Front Desk / Back Office two-tab layout** rather than the 5-section sidebar originally proposed below. The original proposal is preserved for historical context.
-
-```
-Proposed Sidebar:
-┌──────────────┐
-│ [logo]       │
-│              │
-│ 📅 Schedule  │  ← Daily use (appointments calendar)
-│ 👥 Customers │  ← Daily use (unified CRM with appointments, calls, notes)
-│ 🏢 My Team   │  ← Setup + manage (employees, shifts, skill matrix)
-│ 🔧 My Business│ ← Setup + manage (services, resources, knowledge base)
-│ 🤖 AI & Insights│ ← Monitor + tune (AI persona, analytics)
-│              │
-│ [theme]      │
-│ [settings]   │
-│ [logout]     │
-└──────────────┘
-```
-
-### Mapping: Old → New
-
-| Old Tab | New Location | Notes |
-|---------|-------------|-------|
-| Calendar | **Schedule** (top level) | No change |
-| Customers | **Customers** (top level) | No change — already unified with appointments + call history |
-| Employees | **My Team** → Employees tab | Sub-tab within My Team |
-| Shifts | **My Team** → Shifts tab | Sub-tab within My Team |
-| Skill Matrix | **My Team** → Skills tab | Sub-tab within My Team |
-| Services | **My Business** → Services tab | Sub-tab within My Business |
-| Resources | **My Business** → Resources tab | Sub-tab within My Business |
-| Knowledge Base | **My Business** → Knowledge tab | Sub-tab within My Business |
-| AI Tuning | **AI & Insights** → AI Persona tab | Sub-tab within AI & Insights |
-| Analytics | **AI & Insights** → Analytics tab | Sub-tab within AI & Insights |
-| Settings | **Settings** (footer area) | No change |
-| Admin | **Admin** (super-admin only, stays at top) | No change |
-
-### Sub-Tab Navigation Pattern
-
-When a user clicks "My Team", the content area shows a horizontal tab bar at the top:
-
-```
-┌─────────────────────────────────────────────────┐
-│  [Employees]  [Shifts]  [Skills]                │
-├─────────────────────────────────────────────────┤
-│                                                 │
-│  (Active sub-view renders here)                 │
-│                                                 │
-└─────────────────────────────────────────────────┘
-```
-
-### Mobile Navigation (Proposed)
-
-```
-Bottom Nav (5 items — matches the 5 primary sections):
-[ Schedule | Customers | My Team | My Business | AI ]
-```
-
-All features now accessible from mobile. Sub-tabs appear as a horizontal scrollable bar at the top of the content area.
-
----
-
-## Additional UX Improvements to Consider
-
-### Quick Actions / Dashboard Home
-Consider a landing page (instead of defaulting to Calendar) that shows:
-- Today's appointments at a glance
-- Recent calls / missed calls
-- Staff on shift right now
-- Quick links to common tasks
-
-### Onboarding Wizard (Does Not Exist — Needs to Be Built)
-
-**Current problem**: When a new business is created, the owner logs in and sees 12 empty tabs with no guidance. There is no wizard, no checklist, and no indication of where to start. They have to discover the correct setup order themselves.
-
-**What's needed**: A guided onboarding flow that walks a new business owner through setup step by step. This should appear automatically when a tenant has no services, resources, or employees configured.
-
-#### Proposed Wizard Flow
-
-```
-Step 1: Tell Us About Your Business
-┌─────────────────────────────────────────────────────────┐
-│  Welcome to SecretaryHQ!                                │
-│  Let's get your AI receptionist set up.                  │
-│                                                          │
-│  Business Name: [DynaTire                    ]           │
-│  Business Type: [Mobile Tire Shop         ▾  ]           │
-│                 (salon, auto shop, clinic, etc.)          │
-│                                                          │
-│  This helps us pre-configure your AI with the right      │
-│  vocabulary and greeting style.                          │
-│                                                          │
-│                              [Next →]                    │
-└─────────────────────────────────────────────────────────┘
-
-Step 2: What Services Do You Offer?
-┌─────────────────────────────────────────────────────────┐
-│  Add the services your customers can book.               │
-│                                                          │
-│  ┌─────────────────────────────────────────────┐        │
-│  │ Tire Rotation          30 min    $25         │  [x]  │
-│  │ Flat Tire Repair       45 min    $40         │  [x]  │
-│  │ Full Tire Install      90 min    $120        │  [x]  │
-│  └─────────────────────────────────────────────┘        │
-│  [+ Add another service]                                 │
-│                                                          │
-│  Tip: You can always edit these later under My Business. │
-│                                                          │
-│                     [← Back]  [Next →]                   │
-└─────────────────────────────────────────────────────────┘
-
-Step 3: Add Your Resources (What Gets Booked?)
-┌─────────────────────────────────────────────────────────┐
-│  Resources are the physical things customers book        │
-│  against — trucks, bays, chairs, rooms, etc.             │
-│                                                          │
-│  ┌─────────────────────────────────────────────┐        │
-│  │ Service Truck 1    Main mobile tire unit     │  [x]  │
-│  └─────────────────────────────────────────────┘        │
-│  [+ Add another resource]                                │
-│                                                          │
-│                     [← Back]  [Next →]                   │
-└─────────────────────────────────────────────────────────┘
-
-Step 4: Add Your Team
-┌─────────────────────────────────────────────────────────┐
-│  Add the employees who will be assigned to appointments. │
-│                                                          │
-│  ┌─────────────────────────────────────────────┐        │
-│  │ Mike    mike@dynatire.com    All services    │  [x]  │
-│  │ Steve   steve@dynatire.com   Rotation, Repair│  [x]  │
-│  └─────────────────────────────────────────────┘        │
-│  [+ Add another employee]                                │
-│                                                          │
-│  Tip: You'll set their working hours in the next step.   │
-│                                                          │
-│                     [← Back]  [Next →]                   │
-└─────────────────────────────────────────────────────────┘
-
-Step 5: Set Working Hours
-┌─────────────────────────────────────────────────────────┐
-│  When is your team available? Set shift hours per        │
-│  employee. The AI will only book during these times.     │
-│                                                          │
-│  Mike:                                                   │
-│    Mon-Fri  8:00 AM - 5:00 PM                           │
-│    Sat      9:00 AM - 1:00 PM                           │
-│                                                          │
-│  Steve:                                                  │
-│    Mon-Fri  8:00 AM - 5:00 PM                           │
-│                                                          │
-│  [Edit shifts]                                           │
-│                                                          │
-│                     [← Back]  [Next →]                   │
-└─────────────────────────────────────────────────────────┘
-
-Step 6: Teach the AI Your Policies (Optional)
-┌─────────────────────────────────────────────────────────┐
-│  Upload documents so the AI can answer questions about   │
-│  your policies, pricing, hours, and procedures.          │
-│                                                          │
-│  [📄 Upload PDF or Text File]                            │
-│                                                          │
-│  Examples of what to upload:                             │
-│  • Cancellation policy                                   │
-│  • Pricing sheet                                         │
-│  • Business hours and holiday schedule                   │
-│  • FAQ or common customer questions                      │
-│                                                          │
-│  Tip: You can skip this and add documents later.         │
-│                                                          │
-│                     [← Back]  [Next →]                   │
-└─────────────────────────────────────────────────────────┘
-
-Step 7: Configure Your AI Persona
-┌─────────────────────────────────────────────────────────┐
-│  How should your AI receptionist sound and behave?       │
-│                                                          │
-│  Voice:    [Professional Female ▾]                       │
-│  Greeting: "Thank you for calling DynaTire, how can I    │
-│             help you today?"                             │
-│                                                          │
-│  Personality notes (system prompt):                      │
-│  ┌─────────────────────────────────────────────┐        │
-│  │ You are a friendly, professional receptionist│        │
-│  │ for DynaTire. Be concise and helpful...     │        │
-│  └─────────────────────────────────────────────┘        │
-│                                                          │
-│  Tip: We've pre-filled this based on your business type. │
-│                                                          │
-│                     [← Back]  [Finish Setup →]           │
-└─────────────────────────────────────────────────────────┘
-
-Step 8: You're Ready!
-┌─────────────────────────────────────────────────────────┐
-│  🎉 Your AI receptionist is configured!                  │
-│                                                          │
-│  Here's what's set up:                                   │
-│  ✓ 3 services                                           │
-│  ✓ 1 resource                                           │
-│  ✓ 2 employees with shifts                              │
-│  ✓ AI persona configured                                │
-│                                                          │
-│  Next steps:                                             │
-│  • Assign a phone number (contact support)               │
-│  • Upload business policy documents                      │
-│  • Make a test call to try it out                        │
-│                                                          │
-│                    [Go to Dashboard →]                    │
-└─────────────────────────────────────────────────────────┘
-```
-
-#### Wizard Detection Logic
-The wizard should appear when ALL of the following are true for the logged-in tenant:
-- `services` count = 0
-- `resources` count = 0
-- `employees` count = 0
-
-Once the wizard is completed (or dismissed), it should not appear again. Store a flag like `onboarding_completed` on the tenant record or in `tenant_calendar_settings`/metadata.
-
-#### Wizard Should Also Be Accessible Later
-Add a "Setup Guide" or "Getting Started" link in Settings so owners can re-run the wizard if they want to start over or review their setup.
-
-#### Relationship to Navigation Restructure
-The wizard replaces the need for new users to discover the correct tab order themselves. After the wizard completes, they land on the Schedule (calendar) view — which is the daily-use home screen. The grouped navigation (My Team, My Business) then serves as the place to edit what they set up during onboarding.
-
-### Business-Specific Vocabulary (Does Not Exist — Needs to Be Built)
-
-**Current problem**: The UI uses generic terms like "Resources", "Employees", and "Services" everywhere. A salon owner thinks in terms of "Chairs" and "Stylists", not "Resources" and "Employees". An auto shop has "Bays" and "Mechanics", not "Resources" and "Staff". The current labels feel like enterprise software, not a tool built for their business.
-
-**What's needed**: A vocabulary map per business type that adapts all UI labels, placeholders, empty states, and tooltips to match the language the business owner actually uses.
-
-#### Proposed Vocabulary Map
-
-```
-business_type  | resource_label | resource_plural | employee_label | employee_plural | booking_label  | example_services
-───────────────┼────────────────┼─────────────────┼────────────────┼─────────────────┼────────────────┼──────────────────
-mobile-tire    | Truck          | Trucks          | Technician     | Technicians     | Appointment    | Tire Rotation, Flat Repair, Install
-salon          | Chair          | Chairs          | Stylist        | Stylists        | Appointment    | Haircut, Coloring, Blowout
-auto-shop      | Bay            | Bays            | Mechanic       | Mechanics       | Appointment    | Oil Change, Brake Service, Inspection
-barbershop     | Chair          | Chairs          | Barber         | Barbers         | Appointment    | Haircut, Shave, Beard Trim
-nail-salon     | Station        | Stations        | Nail Tech      | Nail Techs      | Appointment    | Manicure, Pedicure, Gel Nails
-spa            | Treatment Room | Treatment Rooms | Therapist      | Therapists      | Session        | Massage, Facial, Body Wrap
-plumber        | Van            | Vans            | Plumber        | Plumbers        | Service Call   | Leak Repair, Drain Cleaning, Install
-electrician    | Van            | Vans            | Electrician    | Electricians    | Service Call   | Wiring, Panel Upgrade, Inspection
-hvac           | Van            | Vans            | Technician     | Technicians     | Service Call   | AC Repair, Furnace Tune-up, Install
-pest-control   | Van            | Vans            | Technician     | Technicians     | Service Call   | Inspection, Treatment, Follow-up
-cleaning       | Team           | Teams           | Cleaner        | Cleaners        | Booking        | Deep Clean, Regular Clean, Move-out
-landscaping    | Crew           | Crews           | Crew Lead      | Crew Leads      | Job            | Mowing, Trim, Seasonal Cleanup
-personal-trainer| N/A           | N/A             | Trainer        | Trainers        | Session        | 1-on-1, Group Class, Assessment
-yoga-studio    | Studio         | Studios         | Instructor     | Instructors     | Class          | Vinyasa, Hot Yoga, Meditation
-tax-prep       | Office         | Offices         | Preparer       | Preparers       | Appointment    | Tax Filing, Consultation, Audit Help
-tutoring       | Room           | Rooms           | Tutor          | Tutors          | Session        | Math, Science, SAT Prep, Essay Review
-photography    | Studio         | Studios         | Photographer   | Photographers   | Session        | Headshots, Family Portrait, Event
-```
-
-#### Where Vocabulary Appears in the UI
-
-Every place the UI currently says a generic term should be replaced with the business-specific label:
-
-| Current (hardcoded) | Becomes (dynamic) | Example for salon |
-|---------------------|-------------------|-------------------|
-| "Resources" sidebar label | `resource_plural` | "Chairs" |
-| "Add Resource" button | "Add {resource_label}" | "Add Chair" |
-| "No resources yet" empty state | "No {resource_plural} yet" | "No chairs yet" |
-| "Employees" sidebar label | `employee_plural` | "Stylists" |
-| "Add Staff" button | "Add {employee_label}" | "Add Stylist" |
-| "Manage Resources" tab title | "Manage {resource_plural}" | "Manage Chairs" |
-| "Appointment" in calendar | `booking_label` | "Appointment" |
-| Resource column headers in calendar | `resource_label` names | "Chair 1", "Chair 2" |
-| Wizard step 3 title | "Add Your {resource_plural}" | "Add Your Chairs" |
-| Wizard step 4 title | "Add Your {employee_plural}" | "Add Your Stylists" |
-
-#### Implementation Approach
-
-1. **Extend `business_templates` table** with vocabulary columns (these are the defaults per business type):
-   ```sql
-   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS resource_label TEXT DEFAULT 'Resource';
-   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS resource_plural TEXT DEFAULT 'Resources';
-   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS employee_label TEXT DEFAULT 'Employee';
-   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS employee_plural TEXT DEFAULT 'Employees';
-   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS booking_label TEXT DEFAULT 'Appointment';
-   ALTER TABLE business_templates ADD COLUMN IF NOT EXISTS example_services TEXT[] DEFAULT '{}';
-   ```
-
-2. **Add vocabulary override columns to `tenants` table** (these let each business customize their own labels):
-   ```sql
-   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS resource_label TEXT;
-   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS resource_plural TEXT;
-   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS employee_label TEXT;
-   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS employee_plural TEXT;
-   ALTER TABLE tenants ADD COLUMN IF NOT EXISTS booking_label TEXT;
-   ```
-   These columns are nullable — NULL means "use the template default."
-
-3. **Vocabulary resolution order** (3-tier fallback):
-   ```
-   Priority 1: tenant override    →  "Stall"     (owner customized it in Settings)
-   Priority 2: template default   →  "Bay"       (default for auto-shop business type)
-   Priority 3: hardcoded fallback →  "Resource"  (no template found)
-   ```
-
-   In SQL or API:
-   ```sql
-   COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label
-   ```
-
-4. **Load vocabulary into dashboard context**: A `useVocabulary` hook fetches the resolved labels (tenant override > template default > fallback) and provides them via React Context.
-
-5. **Pass vocabulary to components**: Components receive labels via context instead of hardcoding strings. Example:
-   ```tsx
-   const { resourceLabel, employeeLabel } = useVocabulary();
-   // Renders "Add Stall" instead of "Add Resource"
-   <Button>Add {resourceLabel}</Button>
-   ```
-
-6. **Settings page**: Add a "Customize Labels" section where the business owner can override any vocabulary term:
-   ```
-   ┌─────────────────────────────────────────────────────────┐
-   │  Customize Your Dashboard Labels                         │
-   │                                                          │
-   │  We call your bookable spaces:                           │
-   │  Singular: [Stall________]  (default: Bay)               │
-   │  Plural:   [Stalls_______]  (default: Bays)              │
-   │                                                          │
-   │  We call your team members:                              │
-   │  Singular: [Mechanic_____]  (default: Mechanic)          │
-   │  Plural:   [Mechanics____]  (default: Mechanics)         │
-   │                                                          │
-   │  We call your bookings:                                  │
-   │  Label:    [Work Order___]  (default: Appointment)       │
-   │                                                          │
-   │  [Reset to Defaults]              [Save Changes]         │
-   └─────────────────────────────────────────────────────────┘
-   ```
-   The placeholder text shows the template default so the owner knows what they're overriding.
-
-#### Relationship to Onboarding Wizard
-The wizard should use vocabulary from the moment the user picks their business type in Step 1. Once they select "salon", all subsequent steps say "Chair" instead of "Resource" and "Stylist" instead of "Employee". This makes the wizard feel purpose-built for their business, not generic. If the owner later wants to change "Chair" to "Station", they do it in Settings — the override takes effect everywhere immediately.
-
-### Contextual Navigation
-- Clicking a customer's appointment in the CRM should navigate to that appointment in the Calendar
-- Clicking an employee's name in the Calendar should link to their profile in My Team
-- The AI Persona view could show a "test call" button
-
-### Breadcrumbs
-For sub-tab views: `My Team > Shifts` — helps users know where they are.
-
-### Empty States
-Each view should have a helpful empty state explaining what to do:
-- "No employees yet — add your first team member to start scheduling"
-- "No services defined — tell us what your business offers"
-- "No documents uploaded — upload your policies so the AI can answer customer questions"
-
----
-
-## File Structure Reference
-
-All dashboard components live in `dashboard/components/`:
-
-```
-dashboard/
-├── app/
-│   ├── page.tsx              ← Main entry (login → layout → views)
-│   └── layout.tsx            ← Root layout with SessionProvider
-├── components/
-│   ├── OutlookLayout.tsx     ← Shell: sidebar nav + content area (NEEDS RESTRUCTURE)
-│   ├── AppointmentView.tsx   ← Schedule view
-│   ├── CRMView.tsx           ← Unified customer detail view
-│   ├── EmployeeManagementView.tsx  ← Employee CRUD
-│   ├── ShiftManagementView.tsx     ← Shift scheduling
-│   ├── SkillMatrixView.tsx         ← Skill/capability grid
-│   ├── ServiceAssignmentView.tsx   ← Service catalog + mappings
-│   ├── ResourceManagerView.tsx     ← Resource CRUD
-│   ├── KnowledgeBaseView.tsx       ← RAG document management
-│   ├── AIConfigView.tsx            ← AI persona settings
-│   ├── AnalyticsView.tsx           ← Business metrics
-│   ├── SettingsView.tsx            ← Tenant settings + calendar sync
-│   ├── SuperAdminDashboard.tsx     ← Multi-tenant admin
-│   ├── LoginView.tsx               ← Login form
-│   ├── ErrorBoundary.tsx           ← React error boundary
-│   └── ui/                         ← Primitives (Button, Card, Input, Select, Modal, Badge)
-├── lib/
-│   ├── api.ts              ← Centralized API client (Api.{resource}.{action}())
-│   ├── types.ts            ← TypeScript interfaces
-│   ├── hooks.ts            ← useSession, useStaticData
-│   ├── SessionContext.tsx   ← Auth state context
-│   ├── mockData.ts         ← Mock data for development
-│   ├── constants.ts        ← US states, timezones, detection
-│   ├── phone.ts            ← Phone formatting utilities
-│   └── utils.ts            ← Shared utilities
-└── vitest.config.ts
-```
-
----
-
-## Design Constraints
-
-- **Tailwind CSS only** — no external component libraries (no MUI, Chakra, etc.)
-- **Lucide icons** — consistent icon set already in use
-- **Dark mode support** — all changes must work in both themes
-- **Mobile-first** — bottom nav on mobile, sidebar on desktop/tablet
-- **No new dependencies** — use what's already installed
-- **Existing UI primitives** — Button, Card, Input, Select, Modal, Badge in `components/ui/`
+**Implementation status:** Vocabulary columns on both `business_templates` and `tenants` tables are done. `useVocabulary` hook and React Context still missing. All hardcoded "Resource"/"Employee" strings in UI not yet replaced.
 
 ---
 
 ## Implementation Scope
 
-All work items across the entire design doc, categorized:
-
 | # | Item | Type | Status | Notes |
 |---|------|------|--------|-------|
-| # | Item | Type | Status | Notes |
-|---|------|------|--------|-------|
-| 1 | Restructure sidebar from 12 → 5 grouped sections | UI/UX | **Done** | `OutlookLayout.tsx` |
-| 2 | Update tab routing logic | Coding | **Done** | `page.tsx` tab type changes |
-| 3 | MyTeamView composite (Employees + Shifts + Skills) | Both | **Done** | `MyTeamView.tsx` with sub-tabs |
-| 4 | MyBusinessView composite (Services + Resources + Knowledge) | Both | **Done** | `MyBusinessView.tsx` with sub-tabs |
-| 5 | AIInsightsView composite (AI Persona + Analytics) | Both | **Done** | `AIInsightsView.tsx` with sub-tabs |
-| 6 | Reusable sub-tab bar component | UI/UX | **Done** | Inline in each composite view (can extract later) |
-| 7 | Mobile bottom nav (5 items matching sidebar) | UI/UX | **Done** | All 5 sections accessible |
-| 8 | Public sign-up page | Both | Missing | Needs new component + public route |
-| 9 | Public registration API (`POST /register`) | Coding | **Done** | `src/routes/auth.ts` |
-| 10 | Self-service business type picker (card grid) | UI/UX | Missing | 20 business type cards with icons |
-| 11 | Onboarding wizard (8 steps) | Both | Missing | Full guided setup flow |
-| 12 | Wizard detection logic (show when no data) | Coding | **Done** | `onboarding_completed` flag on tenants |
-| 13 | 29 business type templates | Coding | **Done** | All 29 with vocabulary + example services |
-| 14 | Vocabulary columns on `business_templates` | Coding | **Done** | Migration applied |
-| 15 | Vocabulary override columns on `tenants` | Coding | **Done** | Migration applied |
-| 16 | `useVocabulary` hook + React Context | Coding | Missing | 3-tier fallback: tenant > template > hardcoded |
-| 17 | Replace all hardcoded labels with vocabulary | Both | Missing | Every "Resource"/"Employee" string in UI |
-| 18 | Settings page: "Customize Labels" section | Both | Missing | Owner overrides Bay → Stall, etc. |
-| 19 | Dashboard home / quick actions landing page | UI/UX | Missing | Today's appointments, recent calls, staff on shift |
-| 20 | Contextual navigation (CRM → Calendar links) | Both | Missing | Click appointment in CRM → opens in Calendar |
-| 21 | Breadcrumbs for sub-tab views | UI/UX | Missing | "My Team > Shifts" |
-| 22 | Empty states with helpful guidance | UI/UX | Missing | Per-view messages explaining what to do |
-| 23 | Pre-populated service suggestions per type | Coding | **Done** | `20260317000004_example_services.sql` |
-| 24 | "Setup Guide" link in Settings | UI/UX | Missing | Re-access onboarding wizard after completion |
+| 1 | Restructure sidebar from 12 → 5 grouped sections | UI/UX | **Done** | |
+| 2 | Update tab routing logic | Coding | **Done** | |
+| 3 | MyTeamView composite (Employees + Shifts + Skills) | Both | **Done** | |
+| 4 | MyBusinessView composite (Services + Resources + Knowledge) | Both | **Done** | |
+| 5 | AIInsightsView composite (AI Persona + Analytics) | Both | **Done** | |
+| 6 | Mobile bottom nav (5 items) | UI/UX | **Done** | |
+| 7 | Public sign-up page | Both | Missing | |
+| 8 | Public registration API | Coding | **Done** | |
+| 9 | Business type picker (card grid) | UI/UX | Missing | |
+| 10 | Onboarding wizard (6-step) | Both | Missing | |
+| 11 | `useVocabulary` hook + React Context | Coding | Missing | 3-tier fallback |
+| 12 | Replace hardcoded labels with vocabulary | Both | Missing | |
+| 13 | Settings: "Customize Labels" section | Both | Missing | |
+| 14 | Dashboard home / quick actions landing | UI/UX | Missing | |
+| 15 | Contextual navigation (CRM → Calendar links) | Both | Missing | |
+| 16 | Empty states with helpful guidance | UI/UX | Missing | |
+| **17** | **Apply dark sidebar visual style to real app** | **UI/UX** | **Missing** | **Per spec above** |
+| **18** | **Rebuild theme system with font variables** | **Coding** | **Missing** | **Add --font-display/body to all 8 themes** |
+| **19** | **Flip scheduler: rows=staff, columns=hours** | **Both** | **Missing** | **Full spec above** |
+| **20** | **Staff quick profile card** | **UI/UX** | **Missing** | **Read-only, exact layout above** |
+| **21** | **Skills toggle in scheduler** | **Both** | **Missing** | **Hours/Skills mode** |
+| **22** | **Drag to reorder staff rows** | **Both** | **Missing** | **Same as tenant reorder** |
+| **23** | **Rebuild analytics — 6 real metrics** | **Both** | **Missing** | **Per spec above** |
+| **24** | **Remove Coverage Map from navigation** | **Both** | **Missing** | **Fully replaced by Skills toggle** |
+| **25** | **Theme switcher → dropdown** | **UI/UX** | **Missing** | **Not buttons** |
 
-**Summary:**
-- **Done**: 14 of 24 items (1-7, 9, 12-15, 23)
-- **Remaining UI/UX**: 4 items (10, 19, 21, 22)
-- **Remaining Coding**: 1 item (16)
-- **Remaining Both**: 5 items (8, 11, 17, 18, 20, 24)
+**Bold rows** = new work items from March 24, 2026 design session.
+
+---
+
+## Design Constraints
+
+- **Tailwind CSS only** — no external component libraries
+- **Lucide icons** — consistent icon set already in use
+- **Dark mode support** — all themes must work (all are dark by default now)
+- **Mobile-first** — bottom nav on mobile, sidebar on desktop
+- **No new dependencies** — use what's already installed
+- **Existing UI primitives** — Button, Card, Input, Select, Modal, Badge in `components/ui/`

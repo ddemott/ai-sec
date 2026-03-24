@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   ChevronRight,
   LayoutDashboard,
-  Palette,
   Phone,
   UserCog,
 } from 'lucide-react'
@@ -70,9 +69,7 @@ export function OutlookLayout({
   const { theme, setTheme, themeInfo } = useTheme()
   const [allTenants, setAllTenants] = useState<{ id: string; name: string; business_type: string }[]>([])
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false)
-  const [themePickerOpen, setThemePickerOpen] = useState(false)
   const tenantBtnRef = useRef<HTMLButtonElement>(null)
-  const themeBtnRef = useRef<HTMLButtonElement>(null)
 
   const { tenantsVersion } = useSessionContext()
 
@@ -97,7 +94,7 @@ export function OutlookLayout({
 
   return (
     <>
-    <div className="flex flex-col h-screen overflow-hidden font-sans transition-colors duration-200" style={{ backgroundColor: 'var(--page-bg)', color: 'var(--text-primary)' }}>
+    <div className="flex flex-col h-screen overflow-hidden transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>
 
       {/* ADMIN HEADER (super-admin only) */}
       {isAdmin && managedTenantName && (
@@ -125,7 +122,7 @@ export function OutlookLayout({
       )}
 
       {/* TOP NAVIGATION BAR */}
-      <div className="shrink-0 border-b transition-colors duration-200" style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}>
+      <div className="shrink-0 border-b transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center justify-between px-4">
           {/* Left: Mode tabs + Sub-tabs */}
           <div className="flex items-center gap-0">
@@ -133,22 +130,22 @@ export function OutlookLayout({
             <div className="flex mr-4">
               <button
                 onClick={() => handleModeSwitch('front-desk')}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-bold border-b-2 transition-all ${
-                  currentMode === 'front-desk'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                }`}
+                className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
+                style={{
+                  color: currentMode === 'front-desk' ? 'var(--accent-soft)' : 'var(--text-muted)',
+                  borderBottom: currentMode === 'front-desk' ? '2px solid var(--accent)' : '2px solid transparent',
+                }}
               >
                 <Phone className="w-4 h-4" />
                 Front Desk
               </button>
               <button
                 onClick={() => handleModeSwitch('back-office')}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-bold border-b-2 transition-all ${
-                  currentMode === 'back-office'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                }`}
+                className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
+                style={{
+                  color: currentMode === 'back-office' ? 'var(--accent-soft)' : 'var(--text-muted)',
+                  borderBottom: currentMode === 'back-office' ? '2px solid var(--accent)' : '2px solid transparent',
+                }}
               >
                 <Wrench className="w-4 h-4" />
                 Back Office
@@ -165,13 +162,13 @@ export function OutlookLayout({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-all ${
-                    activeTab === tab.id
-                      ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
+                  className="flex items-center gap-1.5 px-3 py-3 text-sm font-medium transition-all"
+                  style={{
+                    color: activeTab === tab.id ? 'var(--accent-soft)' : 'var(--text-secondary)',
+                    borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
+                  }}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-4 h-4" style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
                   <span className="hidden sm:inline">{tab.label}</span>
                 </button>
               )
@@ -189,14 +186,23 @@ export function OutlookLayout({
                 <Globe className="w-4 h-4" />
               </button>
             )}
-            <button
-              ref={themeBtnRef}
-              onClick={() => setThemePickerOpen(!themePickerOpen)}
+            <select
+              value={theme}
+              onChange={e => setTheme(e.target.value as typeof theme)}
               title={`Theme: ${themeInfo.name}`}
-              className="p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+              className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
+              style={{
+                backgroundColor: 'var(--bg-raised)',
+                borderColor: 'var(--border-soft)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border-soft)',
+                fontFamily: 'var(--font-body)',
+              }}
             >
-              <Palette className="w-4 h-4" />
-            </button>
+              {THEMES.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
             <button
               title={`User: ${userName || 'Profile'}`}
               className="p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
@@ -288,51 +294,6 @@ export function OutlookLayout({
               >
                 <span className="text-sm font-bold">{t.name}</span>
                 <span className="text-[10px] opacity-50 uppercase tracking-tighter">{t.business_type}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </>
-    )}
-    {/* Theme picker dropdown */}
-    {themePickerOpen && (
-      <>
-        <div className="fixed inset-0 z-[99]" onClick={() => setThemePickerOpen(false)} />
-        <div
-          className="fixed z-[100] w-56 rounded-xl shadow-2xl border overflow-hidden"
-          style={{
-            backgroundColor: 'var(--surface-elevated)',
-            borderColor: 'var(--border)',
-            color: 'var(--text-primary)',
-            top: themeBtnRef.current ? themeBtnRef.current.getBoundingClientRect().bottom + 4 : 0,
-            right: 8,
-          }}
-        >
-          <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Theme</span>
-          </div>
-          <div className="py-1 max-h-80 overflow-y-auto">
-            {THEMES.map(t => (
-              <button
-                key={t.id}
-                onClick={() => { setTheme(t.id); setThemePickerOpen(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2 text-left transition-colors"
-                style={{ backgroundColor: theme === t.id ? 'var(--hover)' : 'transparent' }}
-                onMouseEnter={e => { if (theme !== t.id) (e.currentTarget.style.backgroundColor = 'var(--hover)') }}
-                onMouseLeave={e => { if (theme !== t.id) (e.currentTarget.style.backgroundColor = 'transparent') }}
-              >
-                <div className="flex gap-0.5 shrink-0">
-                  <div className="w-3 h-6 rounded-l-sm" style={{ backgroundColor: t.preview.bg }} />
-                  <div className="w-3 h-6" style={{ backgroundColor: t.preview.surface }} />
-                  <div className="w-3 h-6 rounded-r-sm" style={{ backgroundColor: t.preview.accent }} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {t.name}
-                    {theme === t.id && <span className="ml-1.5 text-xs" style={{ color: 'var(--primary)' }}>&#10003;</span>}
-                  </div>
-                  <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>{t.description}</div>
-                </div>
               </button>
             ))}
           </div>

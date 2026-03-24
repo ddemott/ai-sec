@@ -1,0 +1,850 @@
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { Minus, Plus, RefreshCw, Save, X } from 'lucide-react';
+import { useStaticData } from '../../lib/hooks';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { useSchedulerData } from './useSchedulerData';
+import { SchedulerDateNav } from './SchedulerDateNav';
+import { StaffProfileCard } from './StaffProfileCard';
+import type { SchedulerAppointment } from './useSchedulerData';
+import type { Service, Employee } from '../../lib/types';
+
+// --- Constants ---
+const STAFF_PANEL_WIDTH = 160;
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const DEFAULT_COL_W = 72;
+const MIN_COL_W = 36;
+const MAX_COL_W = 140;
+const ZOOM_STEP = 16;
+const ROW_HEIGHT = 56;
+const SKILL_BAR_HEIGHT = 22;
+const SKILL_ROW_MIN_HEIGHT = 54;
+const HEADER_HEIGHT = 36;
+const DEFAULT_OPEN_HOUR = 8;
+const DEFAULT_CLOSE_HOUR = 17;
+
+// --- Skill color palette ---
+const SKILL_COLORS = [
+  '#3b82f6', // blue
+  '#22c55e', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#14b8a6', // teal
+  '#a855f7', // purple
+  '#84cc16', // lime
+  '#e11d48', // rose
+];
+
+// --- Types ---
+type ViewMode = 'hours' | 'skills';
+
+interface ProfileCardState {
+  employeeId: string;
+  anchorRect: DOMRect;
+}
+
+// --- Helpers ---
+
+function formatHour(h: number): string {
+  if (h === 0 || h === 24) return '12am';
+  if (h === 12) return '12pm';
+  return h < 12 ? `${h}am` : `${h - 12}pm`;
+}
+
+function getZoomPercent(colW: number): number {
+  return Math.round((colW / DEFAULT_COL_W) * 100);
+}
+
+/** Parse an ISO datetime to fractional hours (e.g. 9:30 -> 9.5) */
+function toFractionalHour(isoStr: string): number {
+  const d = new Date(isoStr);
+  return d.getHours() + d.getMinutes() / 60;
+}
+
+/** Parse a shift time string (e.g. "08:00:00") to fractional hours */
+function shiftTimeToHour(timeStr: string): number {
+  const parts = timeStr.split(':');
+  return parseInt(parts[0], 10) + parseInt(parts[1] || '0', 10) / 60;
+}
+
+/** Format a shift time string to display (e.g. "08:00:00" -> "8am") */
+function formatShiftTime(timeStr: string): string {
+  const h = Math.floor(shiftTimeToHour(timeStr));
+  return formatHour(h);
+}
+
+/** Get appointment status color classes */
+function getStatusColor(status: string): { bg: string; border: string; text: string } {
+  switch (status) {
+    case 'completed':
+      return { bg: 'var(--green, #22c55e)', border: 'var(--green, #22c55e)', text: '#fff' };
+    case 'scheduled':
+      return { bg: 'var(--accent, #3b82f6)', border: 'var(--accent, #3b82f6)', text: '#fff' };
+    default:
+      // pending or anything else
+      return { bg: 'var(--yellow, #eab308)', border: 'var(--yellow, #eab308)', text: '#000' };
+  }
+}
+
+function findServiceName(description: string, services: Service[]): string {
+  // Try to match appointment description to a service name
+  const svc = services.find(s =>
+    s.name.toLowerCase() === description?.toLowerCase()
+  );
+  return svc?.name || description || '';
+}
+
+/** Build a consistent color map from skill names to colors */
+function buildSkillColorMap(employees: Employee[]): Map<string, string> {
+  const allSkills = new Set<string>();
+  for (const emp of employees) {
+    if (emp.skills) {
+      for (const skill of emp.skills) {
+        allSkills.add(skill);
+      }
+    }
+  }
+  const sorted = Array.from(allSkills).sort();
+  const map = new Map<string, string>();
+  sorted.forEach((skill, i) => {
+    map.set(skill, SKILL_COLORS[i % SKILL_COLORS.length]);
+  });
+  return map;
+}
+
+/** Drag handle grip dots SVG (same pattern as tenant reorder) */
+function GripDots() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" data-testid="grip-handle">
+      <circle cx="3" cy="2" r="1.5" /><circle cx="9" cy="2" r="1.5" />
+      <circle cx="3" cy="6" r="1.5" /><circle cx="9" cy="6" r="1.5" />
+      <circle cx="3" cy="10" r="1.5" /><circle cx="9" cy="10" r="1.5" />
+    </svg>
+  );
+}
+
+// --- Component ---
+
+export interface NewSchedulerViewProps {
+  /** Override tenant ID (defaults to active tenant from context) */
+  tenantId?: string | null;
+}
+
+export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedulerViewProps) {
+  const contextTenantId = useActiveTenantId();
+  const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
+
+  const { employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
+
+  // Filter out user accounts — only show employees in scheduler
+  const baseEmployees = useMemo(
+    () => allStaff.filter(e => e.type !== 'user'),
+    [allStaff]
+  );
+
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [colW, setColW] = useState(DEFAULT_COL_W);
+  const [viewMode, setViewMode] = useState<ViewMode>('hours');
+
+  // --- Drag-to-reorder state (Item #6) ---
+  const [staffOrder, setStaffOrder] = useState<string[]>([]);
+  const [savedOrder, setSavedOrder] = useState<string[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [orderDirty, setOrderDirty] = useState(false);
+
+  // Sync staff order with baseEmployees when they change
+  useEffect(() => {
+    const ids = baseEmployees.map(e => String(e.id));
+    // Only reset if the set of employee IDs changed (not just reordering)
+    const currentSet = new Set(savedOrder);
+    const newSet = new Set(ids);
+    const sameSet = currentSet.size === newSet.size && ids.every(id => currentSet.has(id));
+    if (!sameSet) {
+      setStaffOrder(ids);
+      setSavedOrder(ids);
+      setOrderDirty(false);
+    }
+  }, [baseEmployees, savedOrder]);
+
+  // Ordered employees based on staffOrder
+  const employees = useMemo(() => {
+    if (staffOrder.length === 0) return baseEmployees;
+    const empMap = new Map(baseEmployees.map(e => [String(e.id), e]));
+    const ordered: Employee[] = [];
+    for (const id of staffOrder) {
+      const emp = empMap.get(id);
+      if (emp) ordered.push(emp);
+    }
+    // Add any employees not in the order (newly added)
+    for (const emp of baseEmployees) {
+      if (!staffOrder.includes(String(emp.id))) {
+        ordered.push(emp);
+      }
+    }
+    return ordered;
+  }, [baseEmployees, staffOrder]);
+
+  // --- Profile card state (Item #4) ---
+  const [profileCard, setProfileCard] = useState<ProfileCardState | null>(null);
+
+  // Business hours (hardcoded default for now)
+  const openHour = DEFAULT_OPEN_HOUR;
+  const closeHour = DEFAULT_CLOSE_HOUR;
+
+  const {
+    appointments,
+    loading,
+    appointmentsByEmployee,
+    shiftsByEmployee,
+    refresh: refreshScheduler,
+  } = useSchedulerData(tenantId, selectedDate, employees, []);
+
+  const handleRefresh = useCallback(() => {
+    refreshScheduler();
+    refreshStaticData();
+  }, [refreshScheduler, refreshStaticData]);
+
+  // --- Skill color map (Item #5) ---
+  const skillColorMap = useMemo(() => buildSkillColorMap(employees), [employees]);
+
+  // --- Refs for scroll sync ---
+  const staffPanelRef = useRef<HTMLDivElement>(null);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const hasAutoScrolled = useRef(false);
+
+  // Scroll sync: grid vertical -> staff panel vertical
+  // Scroll sync: grid horizontal -> header horizontal
+  useEffect(() => {
+    const gridEl = gridContainerRef.current;
+    if (!gridEl) return;
+
+    const handleScroll = () => {
+      if (staffPanelRef.current) {
+        staffPanelRef.current.scrollTop = gridEl.scrollTop;
+      }
+      if (headerRef.current) {
+        headerRef.current.scrollLeft = gridEl.scrollLeft;
+      }
+    };
+
+    gridEl.addEventListener('scroll', handleScroll, { passive: true });
+    return () => gridEl.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll to 1hr before earliest appointment (or 7am)
+  useEffect(() => {
+    if (hasAutoScrolled.current) return;
+    if (loading) return;
+
+    const gridEl = gridContainerRef.current;
+    if (!gridEl) return;
+
+    let scrollToHour = 7; // default if no appointments
+    if (appointments.length > 0) {
+      let earliest = 24;
+      for (const appt of appointments) {
+        const h = toFractionalHour(appt.start_time);
+        if (h < earliest) earliest = h;
+      }
+      scrollToHour = Math.max(0, Math.floor(earliest) - 1);
+    }
+
+    gridEl.scrollLeft = scrollToHour * colW;
+    hasAutoScrolled.current = true;
+  }, [appointments, loading, colW]);
+
+  // Reset auto-scroll flag when date changes
+  useEffect(() => {
+    hasAutoScrolled.current = false;
+  }, [selectedDate]);
+
+  // --- Zoom ---
+  const handleZoomIn = useCallback(() => {
+    setColW(prev => Math.min(prev + ZOOM_STEP, MAX_COL_W));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setColW(prev => Math.max(prev - ZOOM_STEP, MIN_COL_W));
+  }, []);
+
+  // --- Staff name click -> open profile card (Item #4) ---
+  const handleStaffNameClick = useCallback((employeeId: string, e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setProfileCard(prev =>
+      prev?.employeeId === employeeId ? null : { employeeId, anchorRect: rect }
+    );
+  }, []);
+
+  const handleProfileCardClose = useCallback(() => {
+    setProfileCard(null);
+  }, []);
+
+  // --- Drag-to-reorder handlers (Item #6) ---
+  const handleDragStart = useCallback((index: number) => {
+    setDragIndex(index);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) return;
+
+    setStaffOrder(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(dragIndex, 1);
+      updated.splice(index, 0, moved);
+      return updated;
+    });
+    setDragIndex(index);
+    setOrderDirty(true);
+  }, [dragIndex]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+  }, []);
+
+  const handleSaveOrder = useCallback(() => {
+    setSavedOrder([...staffOrder]);
+    setOrderDirty(false);
+  }, [staffOrder]);
+
+  const handleDiscardOrder = useCallback(() => {
+    setStaffOrder([...savedOrder]);
+    setOrderDirty(false);
+  }, [savedOrder]);
+
+  // --- Compute profile card data (Item #4) ---
+  const profileCardEmployee = useMemo(() => {
+    if (!profileCard) return null;
+    return employees.find(e => String(e.id) === profileCard.employeeId) || null;
+  }, [profileCard, employees]);
+
+  const profileCardData = useMemo(() => {
+    if (!profileCard || !profileCardEmployee) return null;
+    const empId = profileCard.employeeId;
+    const empAppts = appointmentsByEmployee.get(empId) || [];
+    const todayApptCount = empAppts.length;
+    let todayHours = 0;
+    for (const appt of empAppts) {
+      const start = toFractionalHour(appt.start_time);
+      const end = toFractionalHour(appt.end_time);
+      todayHours += Math.max(end - start, 0);
+    }
+    todayHours = Math.round(todayHours * 10) / 10;
+
+    const empShifts = shiftsByEmployee.get(empId) || [];
+    let shiftStart: string | null = null;
+    let shiftEnd: string | null = null;
+    if (empShifts.length > 0 && empShifts[0].start_time && empShifts[0].end_time) {
+      shiftStart = formatShiftTime(empShifts[0].start_time);
+      shiftEnd = formatShiftTime(empShifts[0].end_time);
+    }
+
+    return { todayApptCount, todayHours, shiftStart, shiftEnd };
+  }, [profileCard, profileCardEmployee, appointmentsByEmployee, shiftsByEmployee]);
+
+  // --- Compute row heights for skills mode (Item #5) ---
+  const getRowHeight = useCallback((emp: Employee): number => {
+    if (viewMode !== 'skills') return ROW_HEIGHT;
+    const skillCount = emp.skills?.length || 0;
+    return Math.max(SKILL_ROW_MIN_HEIGHT, skillCount * SKILL_BAR_HEIGHT + 10);
+  }, [viewMode]);
+
+  // --- Compute grid width ---
+  const totalGridWidth = 24 * colW;
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden" data-testid="new-scheduler-view">
+      {/* Header toolbar */}
+      <div
+        className="px-4 py-3 flex items-center justify-between gap-4 flex-wrap"
+        style={{
+          borderBottom: '1px solid var(--border-soft, #333)',
+          background: 'var(--bg-surface, #1a1a1a)',
+        }}
+      >
+        <h1
+          className="font-display text-2xl tracking-wide uppercase"
+          style={{
+            fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
+            color: 'var(--text-primary, #fff)',
+          }}
+        >
+          Schedule
+        </h1>
+
+        <div className="flex items-center gap-3">
+          <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+
+          {/* View mode toggle (Item #5) */}
+          <div
+            className="flex items-center gap-0 rounded-lg overflow-hidden"
+            style={{ border: '1px solid var(--border-soft, #444)' }}
+            data-testid="view-mode-toggle"
+          >
+            <button
+              onClick={() => setViewMode('hours')}
+              className="px-3 py-1.5 text-xs font-bold transition-colors"
+              style={{
+                background: viewMode === 'hours' ? 'var(--accent, #3b82f6)' : 'transparent',
+                color: viewMode === 'hours' ? '#fff' : 'var(--text-secondary, #aaa)',
+              }}
+              data-testid="view-mode-hours"
+            >
+              Hours
+            </button>
+            <button
+              onClick={() => setViewMode('skills')}
+              className="px-3 py-1.5 text-xs font-bold transition-colors"
+              style={{
+                background: viewMode === 'skills' ? 'var(--accent, #3b82f6)' : 'transparent',
+                color: viewMode === 'skills' ? '#fff' : 'var(--text-secondary, #aaa)',
+              }}
+              data-testid="view-mode-skills"
+            >
+              Skills
+            </button>
+          </div>
+
+          {/* Zoom controls */}
+          <div
+            className="flex items-center gap-0 rounded-lg overflow-hidden"
+            style={{ border: '1px solid var(--border-soft, #444)' }}
+          >
+            <button
+              onClick={handleZoomOut}
+              disabled={colW <= MIN_COL_W}
+              className="p-1.5 transition-colors disabled:opacity-30"
+              style={{ color: 'var(--text-secondary, #aaa)' }}
+              aria-label="Zoom out"
+              data-testid="zoom-out"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <span
+              className="text-xs font-bold px-2 select-none"
+              style={{ color: 'var(--text-muted, #888)' }}
+              data-testid="zoom-label"
+            >
+              {getZoomPercent(colW)}%
+            </span>
+            <button
+              onClick={handleZoomIn}
+              disabled={colW >= MAX_COL_W}
+              className="p-1.5 transition-colors disabled:opacity-30"
+              style={{ color: 'var(--text-secondary, #aaa)' }}
+              aria-label="Zoom in"
+              data-testid="zoom-in"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Save/Discard reorder buttons (Item #6) */}
+          {orderDirty && (
+            <div className="flex items-center gap-1.5" data-testid="reorder-controls">
+              <button
+                onClick={handleSaveOrder}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-bold transition-colors"
+                style={{
+                  background: 'var(--accent, #3b82f6)',
+                  color: '#fff',
+                }}
+                data-testid="save-order"
+              >
+                <Save className="w-3 h-3" />
+                Save Order
+              </button>
+              <button
+                onClick={handleDiscardOrder}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-bold transition-colors"
+                style={{
+                  background: 'transparent',
+                  color: 'var(--text-secondary, #aaa)',
+                  border: '1px solid var(--border-soft, #444)',
+                }}
+                data-testid="discard-order"
+              >
+                <X className="w-3 h-3" />
+                Discard
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 rounded transition-colors"
+            style={{ color: 'var(--text-secondary, #aaa)' }}
+            aria-label="Refresh"
+            data-testid="scheduler-refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Main scheduler body */}
+      <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--bg-base, #111)' }}>
+        {/* Left: fixed staff names panel */}
+        <div
+          className="flex flex-col shrink-0"
+          style={{ width: STAFF_PANEL_WIDTH, borderRight: '1px solid var(--border-soft, #333)' }}
+        >
+          {/* Top-left corner (aligns with hour header) */}
+          <div
+            className="shrink-0"
+            style={{
+              height: HEADER_HEIGHT,
+              borderBottom: '1px solid var(--border-soft, #333)',
+              background: 'var(--bg-surface, #1a1a1a)',
+            }}
+          />
+
+          {/* Staff names (scrolls vertically in sync with grid) */}
+          <div
+            ref={staffPanelRef}
+            className="flex-1 overflow-hidden"
+            style={{ background: 'var(--bg-surface, #1a1a1a)' }}
+            data-testid="staff-names-panel"
+          >
+            {employees.map((emp, idx) => {
+              const rowH = getRowHeight(emp);
+              return (
+                <div
+                  key={String(emp.id)}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  className="flex items-center px-1.5 cursor-pointer transition-all"
+                  style={{
+                    height: rowH,
+                    borderBottom: '1px solid var(--border-soft, #333)',
+                    color: 'var(--text-primary, #fff)',
+                    opacity: dragIndex === idx ? 0.5 : 1,
+                    transform: dragIndex === idx ? 'scale(1.02)' : 'none',
+                  }}
+                  onClick={(e) => handleStaffNameClick(String(emp.id), e)}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted, rgba(59,130,246,0.1))';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                  }}
+                  data-testid={`staff-name-${emp.id}`}
+                >
+                  {/* Drag handle (Item #6) */}
+                  <div
+                    className="shrink-0 cursor-grab active:cursor-grabbing mr-1.5 flex items-center"
+                    style={{ color: 'var(--text-muted, #666)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-secondary, #aaa)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted, #666)'; }}
+                    data-testid={`drag-handle-${emp.id}`}
+                  >
+                    <GripDots />
+                  </div>
+                  <span
+                    className="text-sm font-bold truncate"
+                    style={{ fontFamily: 'var(--font-body, "DM Sans", sans-serif)' }}
+                  >
+                    {emp.name}
+                  </span>
+                </div>
+              );
+            })}
+
+            {/* Unassigned row if applicable */}
+            {(appointmentsByEmployee.get('unassigned')?.length || 0) > 0 && (
+              <div
+                className="flex items-center px-3"
+                style={{
+                  height: ROW_HEIGHT,
+                  borderBottom: '1px solid var(--border-soft, #333)',
+                  color: 'var(--text-muted, #888)',
+                  fontStyle: 'italic',
+                }}
+                data-testid="staff-name-unassigned"
+              >
+                <span className="text-sm truncate" style={{ fontFamily: 'var(--font-body, "DM Sans", sans-serif)' }}>
+                  Unassigned
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: hour header + appointment grid */}
+        <div className="flex flex-col flex-1 overflow-hidden">
+          {/* Hour header (scrolls horizontally in sync with grid) */}
+          <div
+            ref={headerRef}
+            className="shrink-0 overflow-hidden"
+            style={{
+              height: HEADER_HEIGHT,
+              borderBottom: '1px solid var(--border-soft, #333)',
+              background: 'var(--bg-surface, #1a1a1a)',
+            }}
+            data-testid="hour-header"
+          >
+            <div className="flex" style={{ width: totalGridWidth }}>
+              {HOURS.map((h) => {
+                const isOutsideBusiness = h < openHour || h >= closeHour;
+                return (
+                  <div
+                    key={h}
+                    className="text-center text-xs font-bold shrink-0 flex items-center justify-center select-none"
+                    style={{
+                      width: colW,
+                      height: HEADER_HEIGHT,
+                      color: 'var(--text-muted, #888)',
+                      fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+                      background: isOutsideBusiness ? 'rgba(0,0,0,0.28)' : 'transparent',
+                      borderRight: '1px solid var(--border-soft, #333)',
+                    }}
+                    data-testid={`hour-cell-${h}`}
+                  >
+                    {formatHour(h)}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Scrollable grid area */}
+          <div
+            ref={gridContainerRef}
+            className="flex-1 overflow-auto"
+            data-testid="scheduler-grid"
+          >
+            <div style={{ width: totalGridWidth, minHeight: '100%' }}>
+              {employees.map((emp) => {
+                const empId = String(emp.id);
+                const empAppointments = appointmentsByEmployee.get(empId) || [];
+                const rowH = getRowHeight(emp);
+
+                return (
+                  <div
+                    key={empId}
+                    className="relative"
+                    style={{
+                      height: rowH,
+                      borderBottom: '1px solid var(--border-soft, #333)',
+                    }}
+                    data-testid={`scheduler-row-${empId}`}
+                  >
+                    {/* Hour slot backgrounds */}
+                    <div className="absolute inset-0 flex">
+                      {HOURS.map((h) => {
+                        const isOutsideBusiness = h < openHour || h >= closeHour;
+                        return (
+                          <div
+                            key={h}
+                            className="shrink-0"
+                            style={{
+                              width: colW,
+                              height: rowH,
+                              background: isOutsideBusiness ? 'rgba(0,0,0,0.28)' : 'transparent',
+                              borderRight: '1px solid var(--border-soft, #333)',
+                            }}
+                            data-testid={`slot-${empId}-${h}`}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {/* Hours mode: appointment blocks */}
+                    {viewMode === 'hours' && empAppointments.map((appt) => (
+                      <AppointmentBlockNew
+                        key={appt.id}
+                        appointment={appt}
+                        colW={colW}
+                        services={services}
+                      />
+                    ))}
+
+                    {/* Skills mode: stacked skill bars (Item #5) */}
+                    {viewMode === 'skills' && (
+                      <SkillBars
+                        employee={emp}
+                        shifts={shiftsByEmployee.get(empId) || []}
+                        colW={colW}
+                        skillColorMap={skillColorMap}
+                        openHour={openHour}
+                        closeHour={closeHour}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Unassigned row */}
+              {viewMode === 'hours' && (appointmentsByEmployee.get('unassigned')?.length || 0) > 0 && (
+                <div
+                  className="relative"
+                  style={{
+                    height: ROW_HEIGHT,
+                    borderBottom: '1px solid var(--border-soft, #333)',
+                  }}
+                  data-testid="scheduler-row-unassigned"
+                >
+                  <div className="absolute inset-0 flex">
+                    {HOURS.map((h) => {
+                      const isOutsideBusiness = h < openHour || h >= closeHour;
+                      return (
+                        <div
+                          key={h}
+                          className="shrink-0"
+                          style={{
+                            width: colW,
+                            height: ROW_HEIGHT,
+                            background: isOutsideBusiness ? 'rgba(0,0,0,0.28)' : 'transparent',
+                            borderRight: '1px solid var(--border-soft, #333)',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {(appointmentsByEmployee.get('unassigned') || []).map((appt) => (
+                    <AppointmentBlockNew
+                      key={appt.id}
+                      appointment={appt}
+                      colW={colW}
+                      services={services}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Staff Profile Card (Item #4) */}
+      {profileCard && profileCardEmployee && profileCardData && (
+        <StaffProfileCard
+          employee={profileCardEmployee}
+          todayApptCount={profileCardData.todayApptCount}
+          todayHours={profileCardData.todayHours}
+          shiftStart={profileCardData.shiftStart}
+          shiftEnd={profileCardData.shiftEnd}
+          anchorRect={profileCard.anchorRect}
+          onClose={handleProfileCardClose}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Skill bars sub-component (Item #5) ---
+
+interface SkillBarsProps {
+  employee: Employee;
+  shifts: { start_time?: string; end_time?: string }[];
+  colW: number;
+  skillColorMap: Map<string, string>;
+  openHour: number;
+  closeHour: number;
+}
+
+function SkillBars({ employee, shifts, colW, skillColorMap, openHour, closeHour }: SkillBarsProps) {
+  const skills = employee.skills || [];
+  if (skills.length === 0) return null;
+
+  // Determine shift hours (fallback to business hours)
+  let shiftStartH = openHour;
+  let shiftEndH = closeHour;
+  if (shifts.length > 0 && shifts[0].start_time && shifts[0].end_time) {
+    shiftStartH = shiftTimeToHour(shifts[0].start_time);
+    shiftEndH = shiftTimeToHour(shifts[0].end_time);
+  }
+
+  const barLeft = shiftStartH * colW;
+  const barWidth = (shiftEndH - shiftStartH) * colW;
+
+  return (
+    <div className="absolute inset-0" style={{ pointerEvents: 'none', zIndex: 2 }}>
+      {skills.map((skill, i) => {
+        const color = skillColorMap.get(skill) || '#666';
+        return (
+          <div
+            key={skill}
+            className="absolute rounded-sm overflow-hidden"
+            style={{
+              left: barLeft,
+              width: Math.max(barWidth, 4),
+              top: 5 + i * SKILL_BAR_HEIGHT,
+              height: SKILL_BAR_HEIGHT - 3,
+              background: color,
+              opacity: 0.8,
+            }}
+            title={skill}
+            data-testid={`skill-bar-${employee.id}-${i}`}
+          >
+            {/* Label at left edge — hide if bar is too narrow */}
+            {barWidth > 50 && (
+              <span
+                className="text-[10px] font-bold px-1.5 leading-tight block truncate"
+                style={{
+                  color: '#fff',
+                  fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+                  lineHeight: `${SKILL_BAR_HEIGHT - 3}px`,
+                }}
+              >
+                {skill}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Appointment block sub-component ---
+
+interface AppointmentBlockNewProps {
+  appointment: SchedulerAppointment;
+  colW: number;
+  services: Service[];
+}
+
+function AppointmentBlockNew({ appointment, colW, services }: AppointmentBlockNewProps) {
+  const startH = toFractionalHour(appointment.start_time);
+  const endH = toFractionalHour(appointment.end_time);
+  const duration = Math.max(endH - startH, 0.25); // min 15 min visual
+
+  const left = startH * colW;
+  const width = duration * colW;
+
+  const customerName = appointment.customers?.name || 'Unknown';
+  const serviceName = findServiceName(appointment.description, services);
+  const statusColors = getStatusColor(appointment.status);
+
+  return (
+    <div
+      className="absolute rounded px-1.5 py-0.5 text-xs font-bold truncate cursor-pointer transition-opacity hover:opacity-90"
+      style={{
+        left,
+        width: Math.max(width, 20),
+        top: 4,
+        bottom: 4,
+        background: statusColors.bg,
+        border: `1px solid ${statusColors.border}`,
+        color: statusColors.text,
+        zIndex: 2,
+        fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+      }}
+      title={`${customerName} — ${serviceName}`}
+      data-testid={`appt-block-${appointment.id}`}
+    >
+      <span className="block truncate leading-tight">{customerName}</span>
+      {width > 60 && (
+        <span className="block truncate leading-tight text-[10px] opacity-80">{serviceName}</span>
+      )}
+    </div>
+  );
+}

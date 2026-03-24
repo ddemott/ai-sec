@@ -147,3 +147,30 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - **Business Intelligence & ROI**: Employee utilisation, service ROI, recommendations engine. Retention feature — not needed for launch.
 - **Personal Resources**: `is_personal` flag on resources for mobile techs and service writers. Only needed for businesses without fixed stations.
 - **Advanced Coverage Alerts**: Owner SMS, AI alternative time suggestions, missed revenue tracking, nightly coverage jobs.
+
+## Design Session — March 24, 2026
+
+A full UI/UX design session was completed. All decisions are documented in `docs/UI_UX_DESIGN.md`, `docs/DECISIONS.md`, and `docs/DESIGN_HANDOFF.md`. Do not second-guess these decisions without explicit instruction from Dale.
+
+### Key changes that affect your work:
+
+**New work items (in priority order):**
+1. Apply dark sidebar visual style to real Next.js dashboard
+2. Rebuild theme system — add `--font-display` / `--font-body` to all 8 themes, implement dropdown switcher
+3. Flip the scheduler — rows=staff, columns=hours, sticky names, business hours shading, zoom control
+4. Staff quick profile card — read-only, anchored to name cell, exact layout in UI_UX_DESIGN.md
+5. Skills toggle in scheduler — Hours | Skills mode, skill-based coloring, labeled bars
+6. Drag to reorder staff rows — same pattern as tenant reorder, save/discard, default no-save on exit
+7. Rebuild analytics — 6 real metrics, see UI_UX_DESIGN.md
+8. Remove Coverage Map from navigation entirely
+
+**Fonts locked:** Bebas Neue (`--font-display`) + DM Sans (`--font-body`). Universal. Use CSS variables only.
+
+**Coverage Map removed:** Replaced by Skills toggle in Scheduler. Remove from sidebar, routing, and all references.
+
+**Analytics rebuilt:** Old version discarded. New version in UI_UX_DESIGN.md. Only build what we can actually measure.
+
+**Logo:** "Secretary HQ" (space between words).
+
+**Philosophy:** We show data. They manage their business. No warnings, no grades, no opinions. See UI_UX_DESIGN.md Design Philosophy section.
+
