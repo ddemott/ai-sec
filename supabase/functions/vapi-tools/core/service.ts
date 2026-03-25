@@ -165,10 +165,9 @@ export class AISecretaryService {
   }
 
   /**
-   * Experimental: booking flow driven by selector-derived options.
-   * Uses getSchedulingOptions to choose the first viable assignment
-   * and then calls bookAtomic. Currently only used in unit tests
-   * with fake repositories.
+   * Single-query booking: finds best resource/employee and books in one DB round trip.
+   * Uses book_with_scheduling_atomic() RPC — customer upsert, skill/shift matching,
+   * conflict checking, and appointment insert all in one transaction.
    */
   async bookWithScheduling(args: {
     tenant_id: string;
@@ -180,44 +179,45 @@ export class AISecretaryService {
     requirements: ServiceRequirements;
     window: TimeWindow;
   }, logger: Logger) {
-    logger.info({ tenantId: args.tenant_id, requirements: args.requirements, window: args.window }, "Starting selector-driven booking");
+    logger.info({ tenantId: args.tenant_id, requirements: args.requirements, window: args.window }, "Starting atomic scheduling booking");
 
-    const optionsResult = await this.getSchedulingOptions(args.tenant_id, args.requirements, args.window, logger);
-    const options = optionsResult.result.options;
-
-    if (!options.length) {
-      logger.warn({ tenantId: args.tenant_id }, "No scheduling options available");
-      throw new AvailabilityError("No available scheduling options");
-    }
-
-    const chosen = options[0];
-
-    let customer = await this.repo.findCustomerByPhone(args.tenant_id, args.phone, logger);
-    let customerId = customer?.id;
-
-    if (!customerId) {
-      customerId = await this.repo.createCustomer(args.tenant_id, args.phone, args.name || "Valued Customer", logger);
-    }
-
-    const bookingResult = await this.repo.bookAtomic({
+    const result = await this.repo.bookWithSchedulingAtomic({
       tenantId: args.tenant_id,
-      resourceId: chosen.resourceId,
-      customerId,
-      startTime: args.window.from.toISOString(),
-      endTime: args.window.to.toISOString(),
+      phone: args.phone,
+      customerName: args.name,
       description: args.description,
       callId: args.call_id,
       location: args.location,
-      employeeId: chosen.employeeId,
+      windowFrom: args.window.from.toISOString(),
+      windowTo: args.window.to.toISOString(),
+      requiredSkills: args.requirements.requiredEmployeeSkills,
+      requiredCapabilities: args.requirements.requiredResourceCapabilities,
+      preferredResourceId: args.requirements.preferredResourceId || undefined,
+      serviceType: args.requirements.serviceType,
     }, logger);
 
-    if (!bookingResult.success) {
-      logger.warn({ error: bookingResult.error_message }, "Selector booking failed due to conflict");
-      throw new AvailabilityError(bookingResult.error_message);
+    if (!result.success) {
+      logger.warn({ error: result.error_message }, "Atomic booking failed");
+      throw new AvailabilityError(result.error_message || "No available scheduling options");
     }
 
-    logger.info({ appointmentId: bookingResult.appointment_id }, "Selector booking successful");
-    return { result: { ...bookingResult, option: chosen } };
+    logger.info({
+      appointmentId: result.appointment_id,
+      resource: result.resource_name,
+      employee: result.employee_name,
+    }, "Atomic booking successful");
+
+    return {
+      result: {
+        success: true,
+        appointment_id: result.appointment_id,
+        resource_name: result.resource_name,
+        employee_name: result.employee_name,
+        booked_start: result.booked_start,
+        booked_end: result.booked_end,
+        error_message: null,
+      }
+    };
   }
 
   /**

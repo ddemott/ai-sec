@@ -70,6 +70,40 @@ export interface IRepository {
     threshold?: number
   ): Promise<Array<{ content: string; similarity: number }>>;
 
+  /**
+   * Single-query find-and-book: customer upsert + resource/employee matching + booking.
+   * Replaces the 4-query getSchedulingOptions + bookAtomic flow.
+   */
+  bookWithSchedulingAtomic(params: {
+    tenantId: string;
+    phone: string;
+    customerName?: string;
+    description: string;
+    callId: string;
+    location?: string;
+    startTime?: string;
+    endTime?: string;
+    windowFrom?: string;
+    windowTo?: string;
+    requiredSkills?: string[];
+    requiredCapabilities?: string[];
+    preferredResourceId?: string;
+    preferredEmployeeId?: string;
+    serviceType?: string;
+    durationMinutes?: number;
+  }, logger: Logger): Promise<{
+    success: boolean;
+    appointment_id: string | null;
+    resource_id: string | null;
+    resource_name: string | null;
+    employee_id: string | null;
+    employee_name: string | null;
+    booked_start: string | null;
+    booked_end: string | null;
+    customer_id: string | null;
+    error_message: string | null;
+  }>;
+
   setLogger(logger: Logger): void;
   close(): Promise<void>;
 }

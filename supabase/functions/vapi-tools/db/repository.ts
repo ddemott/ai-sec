@@ -482,11 +482,69 @@ export class PostgresRepository implements IRepository {
     logger.info({ tenantId, limit, threshold }, "Searching knowledge base");
     return this.withClient(tenantId, async (c) => {
       // Use the JSON string and cast it explicitly in SQL
-      const res = await c.queryObject<{ content: string; similarity: number }>(
-        "SELECT content, similarity FROM search_tenant_docs($1, $2::vector, $3, $4)",
+      const res = await c.queryObject<{ content: string; normalized_text: string; similarity: number }>(
+        "SELECT content, normalized_text, similarity FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)",
         [tenantId, JSON.stringify(queryEmbedding), threshold, limit]
       );
       return res.rows;
+    });
+  }
+
+  async bookWithSchedulingAtomic(params: {
+    tenantId: string;
+    phone: string;
+    customerName?: string;
+    description: string;
+    callId: string;
+    location?: string;
+    startTime?: string;
+    endTime?: string;
+    windowFrom?: string;
+    windowTo?: string;
+    requiredSkills?: string[];
+    requiredCapabilities?: string[];
+    preferredResourceId?: string;
+    preferredEmployeeId?: string;
+    serviceType?: string;
+    durationMinutes?: number;
+  }, logger: Logger) {
+    logger.info({ tenantId: params.tenantId, phone: params.phone }, "Calling book_with_scheduling_atomic RPC");
+    return this.withClient(params.tenantId, async (c) => {
+      const res = await c.queryObject<{
+        success: boolean;
+        appointment_id: string | null;
+        resource_id: string | null;
+        resource_name: string | null;
+        employee_id: string | null;
+        employee_name: string | null;
+        booked_start: string | null;
+        booked_end: string | null;
+        customer_id: string | null;
+        error_message: string | null;
+      }>(
+        `SELECT * FROM book_with_scheduling_atomic(
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+        )`,
+        [
+          params.tenantId,
+          params.phone,
+          params.customerName || null,
+          params.description,
+          params.callId || null,
+          params.location || null,
+          params.startTime || null,
+          params.endTime || null,
+          params.windowFrom || null,
+          params.windowTo || null,
+          params.requiredSkills || [],
+          params.requiredCapabilities || [],
+          params.preferredResourceId || null,
+          params.preferredEmployeeId || null,
+          params.serviceType || null,
+          params.durationMinutes || 30,
+        ]
+      );
+      return res.rows[0];
     });
   }
 }
