@@ -86,7 +86,7 @@ export default function KnowledgeBaseView() {
   )
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-hidden text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-hidden p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center">
           <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-lg mr-4 text-orange-600 dark:text-orange-400">
@@ -94,7 +94,7 @@ export default function KnowledgeBaseView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">Knowledge Base</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Feed the AI with PDFs and documents to handle complex business questions.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Feed the AI with PDFs and documents to handle complex business questions.</p>
           </div>
         </div>
 
@@ -149,7 +149,7 @@ export default function KnowledgeBaseView() {
         ) : filteredDocs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredDocs.map((doc) => (
-              <Card key={doc.id} className="group relative flex flex-col h-full border-gray-100 dark:border-gray-800 hover:border-orange-200 dark:hover:border-orange-900/50 transition-all duration-300">
+              <Card key={doc.id} className="group relative flex flex-col h-full hover:border-orange-200 dark:hover:border-orange-900/50 transition-all duration-300" style={{ borderColor: 'var(--border-soft)' }}>
                 <div className="p-5 flex-1 flex flex-col">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2 text-[10px] font-bold text-orange-500 uppercase tracking-widest">
@@ -165,7 +165,7 @@ export default function KnowledgeBaseView() {
                     </button>
                   </div>
                   
-                  <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-6 leading-relaxed">
+                  <p className="text-sm line-clamp-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                     {doc.content}
                   </p>
                   
@@ -182,10 +182,10 @@ export default function KnowledgeBaseView() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-64 bg-gray-50/50 dark:bg-black/20 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+          <div className="flex flex-col items-center justify-center h-64 rounded-3xl border-2 border-dashed" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
             <BookOpen className="w-12 h-12 text-gray-200 dark:text-gray-800 mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 font-medium mb-2">The Knowledge Base is empty</p>
-            <p className="text-gray-400 dark:text-gray-500 text-sm max-w-xs text-center mb-6">
+            <p className="font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>The Knowledge Base is empty</p>
+            <p className="text-sm max-w-xs text-center mb-6" style={{ color: 'var(--text-muted)' }}>
               Upload your first business document to give the AI context about your policies and services.
             </p>
             <Button 

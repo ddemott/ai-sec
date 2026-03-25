@@ -140,7 +140,7 @@ export default function EmployeeManagementView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8">
         <div className="flex items-center mb-6">
           <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg mr-4 text-green-600 dark:text-green-400">
@@ -148,7 +148,7 @@ export default function EmployeeManagementView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">{vocab.employee_plural}</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">{`Manage ${vocab.employee_plural.toLowerCase()} and assign them to services.`}</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{`Manage ${vocab.employee_plural.toLowerCase()} and assign them to services.`}</p>
           </div>
         </div>
 
@@ -202,7 +202,7 @@ export default function EmployeeManagementView() {
             className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="bg-white dark:bg-[#222] p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+              <div className="p-3 rounded-2xl shadow-sm border" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
                 <Users className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
               </div>
               <Badge variant={emp.is_active ? 'success' : 'secondary'}>
@@ -212,7 +212,7 @@ export default function EmployeeManagementView() {
             
             <h3 className="text-xl font-bold mb-1">{emp.name}</h3>
             {(emp.phone || emp.email) && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 space-y-0.5">
+              <div className="text-xs mb-2 space-y-0.5" style={{ color: 'var(--text-secondary)' }}>
                 {emp.phone && <div>{formatPhone(emp.phone)}</div>}
                 {emp.email && <div>{emp.email}</div>}
               </div>
@@ -278,7 +278,7 @@ export default function EmployeeManagementView() {
                 />
               </div>
               <div className="flex items-center justify-between pt-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active</span>
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Active</span>
                 <button
                   type="button"
                   role="switch"
@@ -303,7 +303,8 @@ export default function EmployeeManagementView() {
                     <button 
                       key={service.id}
                       onClick={() => toggleService(service.id, selectedEmployee.id)}
-                      className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-50 dark:bg-[#222] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                      className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-lg' : ''}`}
+                      style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                     >
                       {service.name}
                       {isMapped ? <CheckCircle2 className="w-5 h-5 text-white" /> : <PlusCircle className="w-5 h-5 opacity-30" />}
@@ -311,7 +312,7 @@ export default function EmployeeManagementView() {
                   )
                 })}
                 {(services || []).length === 0 && (
-                  <div className="text-center p-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-3xl text-gray-400">
+                  <div className="text-center p-8 border-2 border-dashed rounded-3xl" style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}>
                     No services defined in the catalog.
                   </div>
                 )}
@@ -319,7 +320,7 @@ export default function EmployeeManagementView() {
             </section>
 
             {/* DELETE SECTION */}
-            <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+            <section className="pt-6 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <Button 
                 variant="ghost" 
                 className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 w-full justify-center"

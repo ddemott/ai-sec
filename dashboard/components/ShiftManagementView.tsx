@@ -152,7 +152,7 @@ export default function ShiftManagementView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-hidden text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-hidden p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8 shrink-0">
         <div className="flex items-center mb-6">
           <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
@@ -160,7 +160,7 @@ export default function ShiftManagementView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">{vocab.employee_label} Working Hours</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Define when your team is available so the AI never overbooks.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Define when your team is available so the AI never overbooks.</p>
           </div>
         </div>
 
@@ -172,7 +172,8 @@ export default function ShiftManagementView() {
                 <button
                   key={emp.id}
                   onClick={() => setSelectedEmployeeId(emp.id)}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.id ? 'bg-blue-600 text-white shadow-lg scale-105' : 'bg-gray-100 dark:bg-[#222] text-gray-500 hover:bg-gray-200 dark:hover:bg-[#333]'}`}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.id ? 'bg-blue-600 text-white shadow-lg scale-105' : ''}`}
+                  style={selectedEmployeeId === emp.id ? {} : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                 >
                   {emp.name}
                 </button>
@@ -196,7 +197,7 @@ export default function ShiftManagementView() {
 
       <div className="flex-1 overflow-auto">
         {!selectedEmployeeId ? (
-          <div className="h-full flex flex-col items-center justify-center bg-gray-50/50 dark:bg-black/20 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+          <div className="h-full flex flex-col items-center justify-center rounded-3xl border-2 border-dashed" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
             <Users className="w-12 h-12 text-gray-200 dark:text-gray-800 mb-4" />
             <p className="text-gray-500 font-medium">Select an {vocab.employee_label.toLowerCase()} to manage their schedule</p>
           </div>
@@ -205,7 +206,7 @@ export default function ShiftManagementView() {
             {DAYS.map(day => {
               const dayShifts = employeeShifts.filter(s => s.day_of_week === day.id)
               return (
-                <div key={day.id} className="bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 flex items-center gap-6">
+                <div key={day.id} className="border rounded-2xl p-4 flex items-center gap-6" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
                   <div className="w-32">
                     <span className="font-bold text-sm">{day.name}</span>
                   </div>
@@ -213,8 +214,8 @@ export default function ShiftManagementView() {
                   <div className="flex-1 flex flex-wrap gap-2">
                     {dayShifts.length > 0 ? (
                       dayShifts.map(s => (
-                        <div key={s.id} className="bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl flex items-center gap-3 shadow-sm group">
-                          <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
+                        <div key={s.id} className="border px-3 py-1.5 rounded-xl flex items-center gap-3 shadow-sm group" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+                          <span className="text-xs font-mono font-bold" style={{ color: 'var(--accent-soft)' }}>
                             {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
                           </span>
                           <button
@@ -267,7 +268,7 @@ export default function ShiftManagementView() {
           <div>
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Day of Week</label>
             <select 
-              className="w-full bg-gray-100 dark:bg-[#222] border-none rounded-xl p-3 text-sm font-bold"
+              className="w-full border-none rounded-xl p-3 text-sm font-bold" style={{ backgroundColor: 'var(--bg-raised)' }}
               value={newShift.day_of_week}
               onChange={e => setNewShift({...newShift, day_of_week: parseInt(e.target.value)})}
             >
@@ -280,7 +281,7 @@ export default function ShiftManagementView() {
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Start Time</label>
               <input 
                 type="time"
-                className="w-full bg-gray-100 dark:bg-[#222] border-none rounded-xl p-3 text-sm font-bold"
+                className="w-full border-none rounded-xl p-3 text-sm font-bold" style={{ backgroundColor: 'var(--bg-raised)' }}
                 value={newShift.start_time}
                 onChange={e => setNewShift({...newShift, start_time: e.target.value})}
               />
@@ -289,7 +290,7 @@ export default function ShiftManagementView() {
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">End Time</label>
               <input 
                 type="time"
-                className="w-full bg-gray-100 dark:bg-[#222] border-none rounded-xl p-3 text-sm font-bold"
+                className="w-full border-none rounded-xl p-3 text-sm font-bold" style={{ backgroundColor: 'var(--bg-raised)' }}
                 value={newShift.end_time}
                 onChange={e => setNewShift({...newShift, end_time: e.target.value})}
               />

@@ -37,7 +37,7 @@ export function TenantCreateForm({ newBusiness, templates, onChange }: TenantCre
             onChange={e => onChange({...newBusiness, business_type: e.target.value})}
             options={templates.map(t => ({ label: t.display_name, value: t.business_type }))}
         />
-        <div className="pt-4 border-t border-gray-50 dark:border-gray-800 space-y-4">
+        <div className="pt-4 border-t space-y-4" style={{ borderColor: 'var(--border-soft)' }}>
             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Initial Owner Credentials</h4>
             <div className="grid grid-cols-2 gap-3">
                 <Input

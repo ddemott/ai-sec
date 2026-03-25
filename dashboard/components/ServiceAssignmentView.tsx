@@ -170,7 +170,7 @@ export default function ServiceAssignmentView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center">
           <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
@@ -178,7 +178,7 @@ export default function ServiceAssignmentView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">Service Catalog</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Manage your business offerings and operational logic.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Manage your business offerings and operational logic.</p>
           </div>
         </div>
         <Button 
@@ -209,23 +209,23 @@ export default function ServiceAssignmentView() {
             }}
           >
             <h3 className="text-xl font-bold mb-1">{service.name}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 h-10 overflow-hidden line-clamp-2">{service.description}</p>
+            <p className="text-sm mb-4 h-10 overflow-hidden line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{service.description}</p>
             
             <div className="flex items-center gap-2 mb-4">
               <Badge variant="secondary">{service.duration_minutes} MIN</Badge>
               {(service.price ?? 0) > 0 && <Badge variant="primary">${service.price}</Badge>}
             </div>
 
-            <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Wrench className="w-3 h-3 mr-2 text-blue-500" />
-                <span className="text-gray-400">{vocab.resource_plural}: </span>
-                <span className="ml-1 text-gray-600 dark:text-gray-300">{resMappings.filter(m => m.service_id === service.id).length} assigned</span>
+                <span style={{ color: 'var(--text-muted)' }}>{vocab.resource_plural}: </span>
+                <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.id).length} assigned</span>
               </div>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Users className="w-3 h-3 mr-2 text-green-500" />
                 <span className="text-gray-400">{vocab.employee_plural}: </span>
-                <span className="ml-1 text-gray-600 dark:text-gray-300">{empMappings.filter(m => m.service_id === service.id).length} authorized</span>
+                <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{empMappings.filter(m => m.service_id === service.id).length} authorized</span>
               </div>
             </div>
           </Card>
@@ -259,7 +259,8 @@ export default function ServiceAssignmentView() {
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1 tracking-widest">Description</label>
                 <textarea 
-                  className="w-full p-3 bg-gray-50 dark:bg-[#222] border border-gray-100 dark:border-gray-800 rounded-xl text-sm h-20 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 border rounded-xl text-sm h-20 outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
                   value={editForm.description}
                   onChange={e => setEditForm({ ...editForm, description: e.target.value })}
                 />
@@ -296,7 +297,8 @@ export default function ServiceAssignmentView() {
                       <button 
                         key={res.id}
                         onClick={() => selectedService && toggleResourceMapping(selectedService.id, res.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-[#222] border-gray-200 dark:border-gray-800 text-gray-500'}`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-blue-600 text-white border-blue-600' : ''}`}
+                        style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
                         {res.name}
                       </button>
@@ -313,7 +315,8 @@ export default function ServiceAssignmentView() {
                       <button 
                         key={emp.id}
                         onClick={() => selectedService && toggleEmployeeMapping(selectedService.id, emp.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-green-600 text-white border-green-600' : 'bg-white dark:bg-[#222] border-gray-200 dark:border-gray-800 text-gray-500'}`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-green-600 text-white border-green-600' : ''}`}
+                        style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
                         {emp.name}
                       </button>
@@ -324,7 +327,7 @@ export default function ServiceAssignmentView() {
             </div>
           </section>
 
-          <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+          <section className="pt-6 border-t" style={{ borderColor: 'var(--border-soft)' }}>
             <Button 
               variant="ghost" 
               className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 w-full justify-center"
@@ -374,7 +377,7 @@ export default function ServiceAssignmentView() {
             <div className="space-y-6">
               <header>
                 <h2 className="text-2xl font-display mb-2">Service Details</h2>
-                <p className="text-gray-500 dark:text-gray-400">Tell us what this service is called and how long it takes.</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Tell us what this service is called and how long it takes.</p>
               </header>
               <div className="space-y-4">
                 <Input 
@@ -384,9 +387,10 @@ export default function ServiceAssignmentView() {
                   onChange={e => setWizardData({...wizardData, name: e.target.value})}
                 />
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 ml-1">Description</label>
+                  <label className="block text-xs font-bold uppercase mb-1 ml-1" style={{ color: 'var(--text-muted)' }}>Description</label>
                   <textarea 
-                    className="w-full p-3 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-24 text-sm"
+                    className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-24 text-sm"
+                    style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
                     placeholder="What is included in this service?"
                     value={wizardData.description}
                     onChange={e => setWizardData({...wizardData, description: e.target.value})}
@@ -406,7 +410,7 @@ export default function ServiceAssignmentView() {
             <div className="space-y-6">
               <header>
                 <h2 className="text-2xl font-display mb-2">{vocab.resource_plural} & Equipment</h2>
-                <p className="text-gray-500 dark:text-gray-400">Which {vocab.resource_plural.toLowerCase()} can this service be performed at?</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Which {vocab.resource_plural.toLowerCase()} can this service be performed at?</p>
               </header>
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                 {resources.map(res => (
@@ -433,7 +437,7 @@ export default function ServiceAssignmentView() {
             <div className="space-y-6">
               <header>
                 <h2 className="text-2xl font-display mb-2">Qualified {vocab.employee_plural}</h2>
-                <p className="text-gray-500 dark:text-gray-400">Which {vocab.employee_plural.toLowerCase()} are qualified to perform this service?</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Which {vocab.employee_plural.toLowerCase()} are qualified to perform this service?</p>
               </header>
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                 {employees.filter(e => e.type !== 'user').map(emp => (

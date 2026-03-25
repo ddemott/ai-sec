@@ -45,9 +45,15 @@ export function TenantCard({
       onDragOver={(e) => onDragOver(e, index)}
       onDragEnd={onDragEnd}
       onClick={onSelect}
-      className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-center
-        ${isSelected ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}
+      className={`p-4 border-b cursor-pointer transition flex justify-between items-center
+        ${isSelected ? 'border-l-4 shadow-sm' : ''}
         ${isDragging ? 'opacity-50' : ''}`}
+      style={{
+        borderBottomColor: 'var(--border-soft)',
+        ...(isSelected
+          ? { backgroundColor: 'var(--bg-raised)', borderLeftColor: 'var(--accent-soft)' }
+          : {}),
+      }}
     >
       <div className="flex items-center gap-3">
         <div className="cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400">
@@ -58,7 +64,7 @@ export function TenantCard({
           </svg>
         </div>
         <div>
-          <p className={`text-sm font-semibold ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>{tenant.name}</p>
+          <p className="text-sm font-semibold" style={{ color: isSelected ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{tenant.name}</p>
           <div className="flex items-center mt-1">
               <Badge variant="secondary" className="mr-2">
                   {tenant.business_type}

@@ -156,7 +156,7 @@ export default function ResourceManagerView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8">
         <div className="flex items-center mb-6">
           <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
@@ -164,7 +164,7 @@ export default function ResourceManagerView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">{vocab.resource_plural} & Services</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Define which services can be performed at each location.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Define which services can be performed at each location.</p>
           </div>
         </div>
 
@@ -213,8 +213,8 @@ export default function ResourceManagerView() {
             className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="bg-white dark:bg-[#222] p-3 rounded-2xl shadow-sm">
-                <Wrench className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
+              <div className="p-3 rounded-2xl shadow-sm" style={{ backgroundColor: 'var(--bg-raised)' }}>
+                <Wrench className="w-6 h-6 group-hover:text-blue-500 transition-colors" style={{ color: 'var(--text-muted)' }} />
               </div>
               <Badge variant={res.is_active !== false ? 'success' : 'secondary'}>
                 {res.is_active !== false ? 'Active' : 'Inactive'}
@@ -222,7 +222,7 @@ export default function ResourceManagerView() {
             </div>
             
             <h3 className="text-xl font-bold mb-2">{res.name}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-1">{res.description || 'No description provided'}</p>
+            <p className="text-sm mb-4 line-clamp-1" style={{ color: 'var(--text-secondary)' }}>{res.description || 'No description provided'}</p>
             
             <div className="flex flex-wrap gap-1">
               {(mappings || []).filter(m => m.resource_id === res.id).length > 0 ? (
@@ -271,7 +271,7 @@ export default function ResourceManagerView() {
                 onChange={e => setEditForm({ ...editForm, description: e.target.value })}
               />
               <div className="flex items-center justify-between pt-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active</span>
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Active</span>
                 <button
                   type="button"
                   role="switch"
@@ -297,7 +297,8 @@ export default function ResourceManagerView() {
                   <button 
                     key={service.id}
                     onClick={() => selectedResource && toggleServiceMapping(service.id, selectedResource.id)}
-                    className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 dark:bg-[#222] text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-md' : ''}`}
+                    style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                   >
                     {service.name}
                     {isMapped ? <CheckCircle2 className="w-5 h-5 text-white" /> : <PlusCircle className="w-5 h-5 opacity-30" />}
@@ -305,7 +306,7 @@ export default function ResourceManagerView() {
                 );
               })}
               {(services || []).length === 0 && (
-                <div className="text-center p-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-3xl text-gray-400">
+                <div className="text-center p-8 border-2 border-dashed rounded-3xl" style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}>
                   No services defined in the catalog.
                 </div>
               )}
@@ -322,7 +323,7 @@ export default function ResourceManagerView() {
             </p>
           </Card>
 
-          <section className="pt-4 border-t border-gray-100 dark:border-gray-800">
+          <section className="pt-4 border-t" style={{ borderColor: 'var(--border-soft)' }}>
             <Button 
                 variant="ghost" 
                 size="sm" 

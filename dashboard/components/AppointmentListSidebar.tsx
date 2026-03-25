@@ -35,8 +35,8 @@ export function AppointmentListSidebar({
   getServiceBaseTimes,
 }: AppointmentListSidebarProps) {
   return (
-    <section className={`w-full md:w-80 flex flex-col bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}>
-      <header className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] sticky top-0 z-10">
+    <section className={`w-full md:w-80 flex flex-col ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`} style={{ backgroundColor: 'var(--bg-raised)', borderRight: '1px solid var(--border-soft)' }}>
+      <header className="p-4 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold">{`${bookingLabel}s`}</h2>
           <div className="flex space-x-1">
@@ -49,8 +49,8 @@ export function AppointmentListSidebar({
           </div>
         </div>
         <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500" />
-          <input type="text" placeholder="Search bookings..." className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#222] border-none rounded-md text-sm outline-none dark:text-gray-200" />
+          <Search className="w-4 h-4 absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }} />
+          <input type="text" placeholder="Search bookings..." className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }} />
         </div>
       </header>
 
@@ -64,24 +64,30 @@ export function AppointmentListSidebar({
           <div
             key={apt.id}
             onClick={() => onSelectAppointment(apt)}
-            className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-start
-              ${selectedAppointment?.id === apt.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}`}
+            className={`p-4 cursor-pointer transition flex justify-between items-start
+              ${selectedAppointment?.id === apt.id ? 'border-l-4 shadow-sm' : ''}`}
+            style={{
+              borderBottom: '1px solid var(--border-soft)',
+              ...(selectedAppointment?.id === apt.id
+                ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
+                : {})
+            }}
           >
             <div>
-              <p className={`text-sm font-semibold ${selectedAppointment?.id === apt.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>
+              <p className="text-sm font-semibold" style={{ color: selectedAppointment?.id === apt.id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>
                 {apt.customers?.name || 'Unknown'}
               </p>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1 truncate max-w-[180px]">
                 {apt.description}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {(() => {
                   const { start } = getServiceBaseTimes(apt as Appointment)
                   return `${format(start, 'MMM d')} at ${format(start, 'p')}`
                 })()}
               </p>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 mt-1" />
+            <ChevronRight className="w-4 h-4 mt-1" style={{ color: 'var(--text-muted)' }} />
           </div>
         ))}
       </div>

@@ -44,7 +44,8 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-20 md:bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white pl-3 pr-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
+        className="fixed bottom-20 md:bottom-6 right-6 z-50 hover:opacity-90 text-white pl-3 pr-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
+        style={{ backgroundColor: 'var(--accent)' }}
       >
         <MessageCircle className="w-4 h-4" />
         <span className="text-xs font-medium">Feedback</span>
@@ -53,9 +54,9 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
   }
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 right-6 z-50 w-80 bg-white dark:bg-[#222] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="fixed bottom-20 md:bottom-6 right-6 z-50 w-80 rounded-xl shadow-2xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white">
+      <div className="flex items-center justify-between px-4 py-3 text-white" style={{ backgroundColor: 'var(--accent)' }}>
         <div>
           <p className="text-sm font-bold">Send Feedback</p>
           <p className="text-[10px] opacity-70 truncate max-w-[200px]">{page}</p>
@@ -69,7 +70,7 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
       <div className="p-4 space-y-3">
         {/* Rating */}
         <div>
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">How&apos;s this page working for you?</p>
+          <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>How&apos;s this page working for you?</p>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map(n => (
               <button
@@ -95,7 +96,8 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
           onChange={e => setComment(e.target.value)}
           placeholder="What's working? What's confusing? What would you change?"
           rows={3}
-          className="w-full p-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#1a1a1a] outline-none focus:ring-2 focus:ring-blue-500 resize-none dark:text-gray-200"
+          className="w-full p-2.5 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
         />
 
         {/* Submit */}

@@ -45,11 +45,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f2f1] dark:bg-[#111] flex flex-col items-center justify-center p-4 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      <div className="w-full max-w-md bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-800">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+      <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}>
         
         {/* Header/Logo */}
-        <div className="p-8 bg-blue-600 flex flex-col items-center text-white">
+        <div className="p-8 flex flex-col items-center text-white" style={{ backgroundColor: 'var(--accent)' }}>
           <div className="bg-white/20 p-3 rounded-xl mb-4 backdrop-blur-sm">
             <Bot className="w-10 h-10" />
           </div>
@@ -66,7 +66,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 ml-1">
+              <label className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
                 Business Email
               </label>
               <div className="relative">
@@ -76,14 +76,15 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-[#2a2a2a] outline-none transition-all text-sm text-gray-900 dark:text-gray-100"
+                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
                   placeholder="admin@business.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 ml-1">
+              <label className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
                 Password
               </label>
               <div className="relative">
@@ -93,7 +94,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-[#2a2a2a] outline-none transition-all text-sm text-gray-900 dark:text-gray-100"
+                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
@@ -103,7 +105,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center"
+              className="w-full py-4 text-white rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center"
+              style={{ backgroundColor: 'var(--accent)' }}
             >
               {loading ? (
                 <>
@@ -116,7 +119,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
+          <div className="mt-8 pt-6 border-t text-center" style={{ borderColor: 'var(--border-soft)' }}>
             <p className="text-xs text-gray-400 italic">
               &quot;Providing human-like AI reception for modern businesses.&quot;
             </p>

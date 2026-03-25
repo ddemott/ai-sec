@@ -88,12 +88,12 @@ export function AppointmentDetailPanel({
   onCloseMobile,
 }: AppointmentDetailPanelProps) {
   return (
-    <section className={`flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`}>
+    <section className={`flex-1 flex flex-col overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`} style={{ backgroundColor: 'var(--bg-surface)' }}>
       {(selectedAppointment || isCreating) ? (
         <>
-          <header className="p-4 md:p-8 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#111] sticky top-0 z-10 shadow-sm flex items-center justify-between">
+          <header className="p-4 md:p-8 sticky top-0 z-10 shadow-sm flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
             <div className="flex items-start">
-              <button onClick={onCloseMobile} className="md:hidden p-2 -ml-2 mr-2 text-blue-600 dark:text-blue-400"><ChevronLeft className="w-6 h-6" /></button>
+              <button onClick={onCloseMobile} className="md:hidden p-2 -ml-2 mr-2" style={{ color: 'var(--accent-soft)' }}><ChevronLeft className="w-6 h-6" /></button>
               <div>
                   <h1 className="text-2xl md:text-3xl font-display">
                       {isCreating ? `New ${vocab.booking_label}` : (isEditing ? `Edit ${vocab.booking_label}` : selectedAppointment?.description)}
@@ -128,7 +128,7 @@ export function AppointmentDetailPanel({
 
           <div className="p-4 md:p-8 space-y-8">
               {error && (
-                  <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-sm font-medium">
+                  <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-sm font-medium">
                       {error}
                   </div>
               )}
@@ -204,8 +204,8 @@ export function AppointmentDetailPanel({
                                       />
                                   </div>
                                   <div>
-                                      <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>
-                                      <textarea rows={2} value={form.customer_notes} onChange={e => onFormChange({...form, customer_notes: e.target.value})} className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-sm italic" placeholder="Private notes..." />
+                                      <label className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-muted)' }}>Internal Notes</label>
+                                      <textarea rows={2} value={form.customer_notes} onChange={e => onFormChange({...form, customer_notes: e.target.value})} className="w-full p-2.5 rounded-lg outline-none text-sm italic" style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Private notes..." />
                                   </div>
                               </div>
                           </Card>
@@ -270,37 +270,38 @@ export function AppointmentDetailPanel({
 
                           <Card title="Customer Details">
                               <div className="space-y-4">
-                                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                      <span className="text-gray-500 dark:text-gray-400 text-sm">Name</span>
-                                      <span className="font-bold text-gray-900 dark:text-white">{selectedAppointment?.customers?.name}</span>
+                                  <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Name</span>
+                                      <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{selectedAppointment?.customers?.name}</span>
                                   </div>
-                                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                      <span className="text-gray-500 dark:text-gray-400 text-sm">Phone</span>
+                                  <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Phone</span>
                                       <a
                                         href={`tel:${selectedAppointment?.customers?.phone}`}
-                                        className="font-bold text-blue-600 dark:text-blue-400 underline"
+                                        className="font-bold underline"
+                                        style={{ color: 'var(--accent-soft)' }}
                                       >
                                         {formatPhone(selectedAppointment?.customers?.phone)}
                                       </a>
                                   </div>
-                                  <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-gray-800">
-                                      <span className="text-gray-500 dark:text-gray-400 text-sm">{vocab.resource_label}</span>
-                                      <span className="font-bold text-gray-900 dark:text-white">{
+                                  <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{vocab.resource_label}</span>
+                                      <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{
                                         resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'
                                       }</span>
                                   </div>
                                   <div className="flex justify-between items-center">
-                                      <span className="text-gray-500 dark:text-gray-400 text-sm">{`${vocab.employee_label} Assigned`}</span>
-                                      <span className="font-bold text-gray-900 dark:text-white">
+                                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{`${vocab.employee_label} Assigned`}</span>
+                                      <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
                                         {employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name || 'Unassigned'}
                                       </span>
                                   </div>
                                   {!!selectedAppointment?.customers?.metadata?.notes && (
-                                      <div className="mt-4 pt-4 border-t border-gray-50 dark:border-gray-800">
-                                          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 flex items-center">
+                                      <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border-soft)' }}>
+                                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center" style={{ color: 'var(--text-muted)' }}>
                                               <StickyNote className="w-3 h-3 mr-1" /> Customer Notes
                                           </p>
-                                          <p className="text-sm text-gray-600 dark:text-gray-400 italic leading-relaxed">
+                                          <p className="text-sm italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                               {String(selectedAppointment!.customers?.metadata?.notes || '')}
                                           </p>
                                       </div>
@@ -327,13 +328,13 @@ export function AppointmentDetailPanel({
               </>
             }
           >
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Save these changes to the appointment, or keep the original details.
             </p>
           </Modal>
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic flex-col">
+        <div className="flex-1 flex items-center justify-center italic flex-col" style={{ color: 'var(--text-muted)' }}>
           <CalendarIcon className="w-12 h-12 mb-4 opacity-20" />
           {`Select ${vocab.booking_label === 'Appointment' ? 'an' : 'a'} ${vocab.booking_label.toLowerCase()} or click "+" to book one manually.`}
         </div>

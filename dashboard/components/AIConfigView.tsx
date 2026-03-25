@@ -118,15 +118,15 @@ export default function AIConfigView() {
   if (loading) return <div className="p-8 text-gray-500 italic">Loading AI configuration...</div>
 
   return (
-    <div className="flex flex-1 flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      <header className="p-4 md:p-8 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1a1a1a] flex items-center justify-between sticky top-0 bg-white dark:bg-[#111] z-10">
+    <div className="flex flex-1 flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+      <header className="p-4 md:p-8 flex items-center justify-between sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex items-center">
           <div className="bg-blue-600 p-2 rounded-lg mr-4 shadow-md text-white">
             <Settings className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-xl md:text-3xl font-display">AI Persona Tuning</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Customize how your SecretaryHQ agent talks and behaves</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Customize how your SecretaryHQ agent talks and behaves</p>
           </div>
         </div>
         <Button
@@ -144,17 +144,17 @@ export default function AIConfigView() {
 
         {/* Template Browsing Section */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold flex items-center dark:text-gray-200">
+          <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
             <LayoutTemplate className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
             Business Type Templates
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             Browse templates to see what each business type provides. Click any to preview before applying.
           </p>
 
           {sortedCategories.map(([category, categoryTemplates]) => (
             <div key={category} className="space-y-2">
-              <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{category}</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{category}</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {categoryTemplates.map(t => {
                   const isActive = config?.business_type === t.business_type
@@ -163,10 +163,12 @@ export default function AIConfigView() {
                       key={t.business_type}
                       onClick={() => setPreviewTemplate(t)}
                       className={`p-3 border rounded-xl text-sm font-medium transition text-left group ${
-                        isActive
-                          ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-700 dark:text-blue-300'
-                          : 'bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-600 text-gray-700 dark:text-gray-300'
+                        isActive ? 'border-blue-500' : ''
                       }`}
+                      style={isActive
+                        ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent-soft)' }
+                        : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }
+                      }
                     >
                       <div className="flex items-center justify-between">
                         <span>{t.display_name}</span>
@@ -188,11 +190,11 @@ export default function AIConfigView() {
         {/* System Prompt Section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center dark:text-gray-200">
+            <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
               <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
               System Instructions (The &quot;Brain&quot;)
             </h2>
-            <span className="text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-[#222] px-2 py-1 rounded">Advanced</span>
+            <span className="text-xs font-medium px-2 py-1 rounded" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-raised)' }}>Advanced</span>
           </div>
           <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 p-4 rounded-xl flex items-start">
             <Info className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 mt-0.5 flex-shrink-0" />
@@ -207,14 +209,15 @@ export default function AIConfigView() {
               setConfig(prev => prev ? {...prev, system_prompt: e.target.value} : null);
               setDirty(true);
             }}
-            className="w-full p-4 border border-gray-200 dark:border-gray-800 rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 focus:ring-blue-500 outline-none shadow-inner bg-gray-50/30 dark:bg-[#1a1a1a] font-mono dark:text-gray-200"
+            className="w-full p-4 border rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 focus:ring-blue-500 outline-none shadow-inner font-mono"
+            style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }}
             placeholder="Ex: You are a helpful assistant for DynaTire. Be professional and concise..."
           />
         </section>
 
         {/* First Message Section */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold flex items-center dark:text-gray-200">
+          <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
             <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
             First Message (Greeting)
           </h2>
@@ -230,7 +233,7 @@ export default function AIConfigView() {
 
         {/* Voice Selection Section */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold flex items-center dark:text-gray-200">
+          <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
             <Mic className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
             Voice Identity
           </h2>
@@ -251,16 +254,16 @@ export default function AIConfigView() {
               >
                 <div>
                   <p className="font-bold">{voice.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{voice.desc}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{voice.desc}</p>
                 </div>
-                <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === voice.id ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'}`} />
+                <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === voice.id ? 'bg-blue-600 border-blue-600' : ''}`} style={config?.voice_id === voice.id ? {} : { borderColor: 'var(--border-soft)' }} />
               </Card>
             ))}
           </div>
         </section>
 
         {/* Test Section */}
-        <section className="pt-8 border-t border-gray-100 dark:border-gray-800">
+        <section className="pt-8 border-t" style={{ borderColor: 'var(--border-soft)' }}>
           <Card className="p-6 bg-gray-900 dark:bg-[#1a1a1a] text-white flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
             <div>
               <h3 className="text-lg font-bold">Ready to test?</h3>
@@ -329,7 +332,7 @@ export default function AIConfigView() {
             )}
 
             {/* Apply Button */}
-            <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <p className="text-xs text-gray-400">
                 {config?.business_type === previewTemplate.business_type
                   ? 'This is your current template.'

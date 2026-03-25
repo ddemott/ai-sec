@@ -90,7 +90,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         <h1 className="text-2xl font-display">
           {greeting}, {userName || 'there'}
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
         </p>
       </div>
@@ -103,8 +103,8 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
               <Wand2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1">
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Complete your setup</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Complete your setup</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {services.length === 0 && `Add your services. `}
                 {resources.length === 0 && `Add your ${vocab.resource_plural.toLowerCase()}. `}
                 {employees.length === 0 && `Add your ${vocab.employee_plural.toLowerCase()}. `}
@@ -156,7 +156,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       {/* COVERAGE ALERTS */}
       {coverageIssues.length > 0 && (
         <Card>
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+          <h2 className="font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <AlertTriangle className="w-4 h-4 text-yellow-500" />
             Coverage Attention Needed
           </h2>
@@ -186,13 +186,14 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       {/* TODAY'S APPOINTMENTS */}
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <Clock className="w-4 h-4 text-blue-500" />
             Today&apos;s {vocab.booking_label}s
           </h2>
           <button
             onClick={() => onNavigate?.('schedule')}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            className="text-xs hover:underline flex items-center gap-1"
+            style={{ color: 'var(--accent-soft)' }}
           >
             View schedule <ChevronRight className="w-3 h-3" />
           </button>
@@ -206,19 +207,20 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
             {todayAppointments.slice(0, 8).map((appt) => (
               <div
                 key={appt.id}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800"
+                className="flex items-center justify-between p-2.5 rounded-lg border"
+                style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
               >
                 <div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {appt.description || vocab.booking_label}
                   </span>
                   {appt.customer_name && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                    <span className="text-xs ml-2" style={{ color: 'var(--text-secondary)' }}>
                       — {appt.customer_name}
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                   {new Date(appt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                 </span>
               </div>
@@ -264,20 +266,21 @@ function StatCard({ icon: Icon, label, value, color, onClick }: {
   color?: 'red' | 'green'
   onClick?: () => void
 }) {
-  const colorClass = color === 'red'
-    ? 'text-red-600 dark:text-red-400'
+  const colorStyle = color === 'red'
+    ? { color: '#ef4444' }
     : color === 'green'
-    ? 'text-green-600 dark:text-green-400'
-    : 'text-blue-600 dark:text-blue-400'
+    ? { color: '#22c55e' }
+    : { color: 'var(--accent-soft)' }
 
   return (
     <button
       onClick={onClick}
-      className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] hover:border-blue-300 dark:hover:border-blue-700 transition-colors text-left"
+      className="p-4 rounded-xl border transition-colors text-left"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
     >
-      <Icon className={`w-5 h-5 ${colorClass} mb-2`} />
-      <div className={`text-2xl font-display ${colorClass}`}>{value}</div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
+      <Icon className="w-5 h-5 mb-2" style={colorStyle} />
+      <div className="text-2xl font-display" style={colorStyle}>{value}</div>
+      <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{label}</div>
     </button>
   )
 }
@@ -298,8 +301,8 @@ function CoverageRow({ service, status, detail, vocab }: {
   const cfg = statusConfig[status] || { label: status, color: 'secondary' }
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-[#1a1a1a]">
-      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{service}</span>
+    <div className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
+      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{service}</span>
       <div className="flex items-center gap-2">
         {detail && <span className="text-xs text-gray-500">{detail}</span>}
         <Badge variant={cfg.color as 'danger' | 'warning' | 'secondary'}>{cfg.label}</Badge>
@@ -317,14 +320,15 @@ function QuickAction({ icon: Icon, label, description, onClick }: {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] hover:border-blue-300 dark:hover:border-blue-700 transition-colors text-left"
+      className="flex items-center gap-3 p-4 rounded-xl border transition-colors text-left"
+      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
     >
-      <div className="p-2 bg-gray-100 dark:bg-[#222] rounded-lg">
-        <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
+        <Icon className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
       </div>
       <div>
-        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{label}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">{description}</div>
+        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{label}</div>
+        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</div>
       </div>
       <ArrowRight className="w-4 h-4 text-gray-400 ml-auto" />
     </button>

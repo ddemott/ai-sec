@@ -73,7 +73,7 @@ export default function SkillRelationshipMap() {
   const uncoveredCount = skillNodes.filter(s => s.coverage === 'uncovered').length
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-hidden text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-hidden p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       <header className="mb-6 shrink-0">
         <div className="flex items-center mb-2">
           <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg mr-4 text-purple-600 dark:text-purple-400">
@@ -81,7 +81,7 @@ export default function SkillRelationshipMap() {
           </div>
           <div>
             <h1 className="text-3xl font-display">Skill Relationship Map</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Click the link icon on any node to connect it. Click a line to disconnect.
             </p>
           </div>
@@ -208,7 +208,7 @@ export default function SkillRelationshipMap() {
       </div>
 
       {/* Footer legend + stats */}
-      <footer className="mt-4 flex items-center justify-between text-xs text-gray-400 font-medium shrink-0 px-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+      <footer className="mt-4 flex items-center justify-between text-xs font-medium shrink-0 px-2 pt-3 border-t" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-4">
           <div className="flex items-center">
             <div className="w-6 h-0.5 bg-blue-400 mr-2 rounded" /> Connected

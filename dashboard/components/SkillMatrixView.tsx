@@ -112,7 +112,7 @@ export default function SkillMatrixView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-hidden text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-hidden p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8 shrink-0">
         <div className="flex items-center mb-6">
           <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg mr-4 text-purple-600 dark:text-purple-400">
@@ -120,7 +120,7 @@ export default function SkillMatrixView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">Service Assignment Matrix</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Align your people and places with the services you provide.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Align your people and places with the services you provide.</p>
           </div>
         </div>
 
@@ -134,22 +134,25 @@ export default function SkillMatrixView() {
               className="pl-10"
             />
           </div>
-          <div className="flex gap-2 bg-gray-100 dark:bg-[#222] p-1 rounded-xl font-bold">
-            <button 
+          <div className="flex gap-2 p-1 rounded-xl font-bold" style={{ backgroundColor: 'var(--bg-raised)' }}>
+            <button
               onClick={() => setFilterType('all')}
-              className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'all' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'all' ? 'shadow-sm' : ''}`}
+              style={filterType === 'all' ? { backgroundColor: 'var(--bg-surface)', color: 'var(--accent-soft)' } : { color: 'var(--text-secondary)' }}
             >
               All
             </button>
-            <button 
+            <button
               onClick={() => setFilterType('employee')}
-              className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'employee' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'employee' ? 'shadow-sm' : ''}`}
+              style={filterType === 'employee' ? { backgroundColor: 'var(--bg-surface)', color: 'var(--accent-soft)' } : { color: 'var(--text-secondary)' }}
             >
               People
             </button>
-            <button 
+            <button
               onClick={() => setFilterType('resource')}
-              className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'resource' ? 'bg-white dark:bg-[#333] shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'resource' ? 'shadow-sm' : ''}`}
+              style={filterType === 'resource' ? { backgroundColor: 'var(--bg-surface)', color: 'var(--accent-soft)' } : { color: 'var(--text-secondary)' }}
             >
               Places
             </button>
@@ -158,15 +161,15 @@ export default function SkillMatrixView() {
       </header>
 
       {/* MATRIX GRID */}
-      <div className="flex-1 overflow-auto border border-gray-200 dark:border-gray-800 rounded-3xl bg-gray-50/30 dark:bg-black/20">
+      <div className="flex-1 overflow-auto border rounded-3xl" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}>
         <table className="w-full border-collapse min-w-[800px]">
-          <thead className="sticky top-0 z-20 bg-gray-100 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-800">
+          <thead className="sticky top-0 z-20 border-b" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
             <tr>
-              <th className="p-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-100 dark:bg-[#1a1a1a] sticky left-0 z-30 min-w-[200px]">
+              <th className="p-4 text-left text-xs font-bold uppercase tracking-widest sticky left-0 z-30 min-w-[200px]" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-muted)' }}>
                 Entity
               </th>
               {(services || []).map(service => (
-                <th key={service.id} className="p-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest border-l border-gray-200 dark:border-gray-800 min-w-[150px]">
+                <th key={service.id} className="p-4 text-center text-[10px] font-bold uppercase tracking-widest border-l min-w-[150px]" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-soft)' }}>
                   {service.name}
                 </th>
               ))}
@@ -175,7 +178,7 @@ export default function SkillMatrixView() {
           <tbody>
             {filteredEntities.map((entity, idx) => (
               <tr key={`${entity.type}-${entity.id}`} className={idx % 2 === 0 ? 'bg-white/50 dark:bg-white/5' : ''}>
-                <td className="p-4 bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-800 sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                <td className="p-4 border-b sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
                   <div className="flex items-center">
                     <div className={`p-1.5 rounded-lg mr-3 ${entity.type === 'employee' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
                       {entity.type === 'employee' ? <Users className="w-3 h-3" /> : <Wrench className="w-3 h-3" />}
@@ -194,7 +197,8 @@ export default function SkillMatrixView() {
                   return (
                     <td 
                       key={service.id} 
-                      className="p-0 border-b border-l border-gray-100 dark:border-gray-800 text-center"
+                      className="p-0 border-b border-l text-center"
+                      style={{ borderColor: 'var(--border-soft)' }}
                     >
                       <button
                         disabled={saving}

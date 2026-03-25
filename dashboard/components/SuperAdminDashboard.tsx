@@ -271,7 +271,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   if (loading) return <div className="p-8 text-gray-500 italic flex items-center"><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Loading all businesses...</div>
 
   return (
-    <div className="flex flex-1 overflow-hidden relative text-gray-900 dark:text-gray-100 bg-white dark:bg-[#111] transition-colors duration-200">
+    <div className="flex flex-1 overflow-hidden relative transition-colors duration-200" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-base)' }}>
 
       <Modal
         isOpen={isCreateModalOpen}
@@ -292,11 +292,11 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
       </Modal>
 
       {/* Sidebar List */}
-      <section className="w-full md:w-80 flex flex-col bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 transition-colors duration-200">
-        <header className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] sticky top-0 z-10 transition-colors duration-200">
+      <section className="w-full md:w-80 flex flex-col border-r transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+        <header className="p-4 border-b sticky top-0 z-10 transition-colors duration-200" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold flex items-center">
-                <Globe className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+                <Globe className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
                 All Businesses
             </h2>
             <div className="flex items-center space-x-1">
@@ -309,14 +309,14 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                 >
                     <Building2 className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={fetchData} className="p-1.5 text-gray-500 dark:text-gray-400">
+                <Button variant="ghost" size="sm" onClick={fetchData} className="p-1.5" style={{ color: 'var(--text-secondary)' }}>
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
             </div>
           </div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500" />
-            <input type="text" placeholder="Search businesses..." className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#222] border-none rounded-md text-sm outline-none dark:text-gray-200 transition-colors duration-200" />
+            <input type="text" placeholder="Search businesses..." className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none transition-colors duration-200" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }} />
           </div>
         </header>
 
@@ -363,7 +363,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
       </section>
 
       {/* Detail Pane */}
-      <section className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto transition-colors duration-200">
+      <section className="flex-1 flex flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)' }}>
         {selectedTenant && form ? (
           <TenantEditPanel
             selectedTenant={selectedTenant}

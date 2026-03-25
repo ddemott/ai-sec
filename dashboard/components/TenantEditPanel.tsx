@@ -78,14 +78,14 @@ export function TenantEditPanel({
 }: TenantEditPanelProps) {
   return (
     <>
-      <header className="p-4 md:p-8 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1a1a1a] flex items-center justify-between sticky top-0 bg-white dark:bg-[#111] z-10 transition-colors duration-200">
+      <header className="p-4 md:p-8 border-b flex items-center justify-between sticky top-0 z-10 transition-colors duration-200" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex items-center">
-          <div className="bg-blue-600 dark:bg-blue-700 p-2 rounded-lg mr-4 shadow-md text-white">
+          <div className="p-2 rounded-lg mr-4 shadow-md text-white" style={{ backgroundColor: 'var(--accent)' }}>
             <Building2 className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-xl md:text-3xl font-display">{selectedTenant.name}</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-mono italic">
+            <p className="text-sm font-mono italic" style={{ color: 'var(--text-secondary)' }}>
               {isEditing ? 'Global Attributes Editor' : 'Business Settings Overview'}
             </p>
           </div>
@@ -139,8 +139,8 @@ export function TenantEditPanel({
                       />
                   ) : (
                       <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Display Name</label>
-                          <p className="p-2.5 font-bold text-lg text-gray-900 dark:text-white">{selectedTenant.name}</p>
+                          <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>Display Name</label>
+                          <p className="p-2.5 font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{selectedTenant.name}</p>
                       </div>
                   )}
                   {isEditing ? (
@@ -152,10 +152,10 @@ export function TenantEditPanel({
                       />
                   ) : (
                       <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center">
+                          <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <LayoutTemplate className="w-3 h-3 mr-1" /> Template Type
                           </label>
-                          <p className="p-2.5 text-blue-700 dark:text-blue-400 font-bold uppercase tracking-tight text-sm">
+                          <p className="p-2.5 font-bold uppercase tracking-tight text-sm" style={{ color: 'var(--accent-soft)' }}>
                               {templates.find(t => t.business_type === selectedTenant.business_type)?.display_name || selectedTenant.business_type}
                           </p>
                       </div>
@@ -171,10 +171,10 @@ export function TenantEditPanel({
                       />
                   ) : (
                       <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center">
+                          <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <Clock className="w-3 h-3 mr-1" /> Timezone
                           </label>
-                          <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium text-sm">
+                          <p className="p-2.5 font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
                               {US_TIMEZONES.find(tz => tz.value === selectedTenant.timezone)?.label || selectedTenant.timezone}
                           </p>
                       </div>
@@ -187,15 +187,15 @@ export function TenantEditPanel({
                       />
                   ) : (
                       <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center">
+                          <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <Phone className="w-3 h-3 mr-1" /> Owner Notification Phone
                           </label>
-                          <p className="p-2.5 text-gray-700 dark:text-gray-300 font-medium font-mono">{selectedTenant.owner_phone ? formatPhone(selectedTenant.owner_phone) : 'Not set'}</p>
+                          <p className="p-2.5 font-medium font-mono" style={{ color: 'var(--text-primary)' }}>{selectedTenant.owner_phone ? formatPhone(selectedTenant.owner_phone) : 'Not set'}</p>
                       </div>
                   )}
                   {/* Phone Provisioning */}
                   <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center text-blue-600">
+                      <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--accent-soft)' }}>
                           <Globe className="w-3 h-3 mr-1" /> AI Phone Line
                       </label>
                       {selectedTenant.phone_status === 'active' && selectedTenant.inbound_phone ? (
@@ -203,7 +203,7 @@ export function TenantEditPanel({
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Active
                               </span>
-                              <span className="font-mono font-bold text-blue-700 dark:text-blue-400">{formatPhone(selectedTenant.inbound_phone)}</span>
+                              <span className="font-mono font-bold" style={{ color: 'var(--accent-soft)' }}>{formatPhone(selectedTenant.inbound_phone)}</span>
                               <button
                                   onClick={async () => {
                                       if (!confirm('Deactivate this phone line? The number will be released.')) return
@@ -230,7 +230,8 @@ export function TenantEditPanel({
                                   type="text"
                                   maxLength={3}
                                   placeholder="Area code (optional)"
-                                  className="w-32 px-2.5 py-1.5 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  className="w-32 px-2.5 py-1.5 text-sm border rounded-lg"
+                                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
                                   id="area-code-input"
                               />
                               <button
@@ -251,7 +252,8 @@ export function TenantEditPanel({
                                           alert(err.message || 'Failed to activate phone')
                                       }
                                   }}
-                                  className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-1.5"
+                                  className="px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 rounded-lg flex items-center gap-1.5"
+                                  style={{ backgroundColor: 'var(--accent)' }}
                               >
                                   <Phone className="w-3.5 h-3.5" /> Activate Phone
                               </button>
@@ -267,7 +269,7 @@ export function TenantEditPanel({
 
         {/* AI Config */}
         <section className="space-y-6">
-          <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-gray-800 pb-2">
+          <div className="flex items-center space-x-2 border-b pb-2" style={{ color: 'var(--text-primary)', borderColor: 'var(--border-soft)' }}>
               <ShieldAlert className="w-5 h-5 text-amber-500" />
               <h2 className="text-lg font-bold tracking-tight">SecretaryHQ Core Attributes</h2>
           </div>
@@ -282,10 +284,10 @@ export function TenantEditPanel({
                   />
               ) : (
                   <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center">
+                      <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
                           <Mic className="w-3 h-3 mr-1" /> Voice ID (Vapi/ElevenLabs)
                       </label>
-                      <p className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl text-gray-600 dark:text-gray-400 font-mono text-xs border dark:border-gray-800">{selectedTenant.voice_id || 'Not set'}</p>
+                      <p className="p-3 rounded-xl font-mono text-xs border" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border-soft)' }}>{selectedTenant.voice_id || 'Not set'}</p>
                   </div>
               )}
 
@@ -297,15 +299,15 @@ export function TenantEditPanel({
                   />
               ) : (
                   <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center">
+                      <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
                           <MessageSquare className="w-3 h-3 mr-1" /> First Message (Greeting)
                       </label>
-                      <p className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl text-gray-700 dark:text-gray-300 italic border-l-4 border-blue-200 dark:border-l-blue-900 leading-relaxed">&quot;{selectedTenant.first_message || 'No greeting set'}&quot;</p>
+                      <p className="p-3 rounded-xl italic border-l-4 leading-relaxed" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)', borderLeftColor: 'var(--accent)' }}>&quot;{selectedTenant.first_message || 'No greeting set'}&quot;</p>
                   </div>
               )}
 
               <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1 flex items-center">
+                  <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
                       <RefreshCw className="w-3 h-3 mr-1" /> System Prompt (Brain)
                   </label>
                   {isEditing ? (
@@ -313,10 +315,11 @@ export function TenantEditPanel({
                           rows={10}
                           value={form.system_prompt || ''}
                           onChange={e => onFormChange({...form, system_prompt: e.target.value})}
-                          className="w-full p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono shadow-inner dark:text-gray-100 transition"
+                          className="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono shadow-inner transition"
+                          style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
                       />
                   ) : (
-                      <div className="p-4 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl text-gray-600 dark:text-gray-400 text-sm leading-relaxed font-mono whitespace-pre-wrap max-h-60 overflow-y-auto border border-gray-100 dark:border-gray-800">
+                      <div className="p-4 rounded-xl text-sm leading-relaxed font-mono whitespace-pre-wrap max-h-60 overflow-y-auto border" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border-soft)' }}>
                           {selectedTenant.system_prompt || 'No prompt configured.'}
                       </div>
                   )}
@@ -325,7 +328,7 @@ export function TenantEditPanel({
         </section>
 
         {isEditing && (
-          <div className="pt-8 border-t border-gray-200 dark:border-gray-800 flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4">
+          <div className="pt-8 border-t flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4" style={{ borderColor: 'var(--border-soft)' }}>
               <Button
                   onClick={onSave}
                   isLoading={saving}

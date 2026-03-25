@@ -167,23 +167,23 @@ export default function SettingsView() {
 
   if (!isSuperAdmin) {
     return (
-      <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+      <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
         <header className="mb-8 flex items-center">
-            <div className="bg-gray-100 dark:bg-[#222] p-2 rounded-lg mr-4 text-gray-500 dark:text-gray-400">
+            <div className="p-2 rounded-lg mr-4" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>
                 <Settings className="w-6 h-6" />
             </div>
             <div>
                 <h1 className="text-3xl font-display">Business Settings</h1>
-                <p className="text-gray-500 dark:text-gray-400">Manage your bays, resources, and preferences</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Manage your bays, resources, and preferences</p>
             </div>
         </header>
         <div className="space-y-8">
-          <Card className="p-8 text-center bg-gray-50 dark:bg-[#1a1a1a]">
-            <p className="text-gray-400 dark:text-gray-500 italic">User profile settings will appear here.</p>
+          <Card className="p-8 text-center" style={{ backgroundColor: 'var(--bg-raised)' }}>
+            <p className="italic" style={{ color: 'var(--text-muted)' }}>User profile settings will appear here.</p>
           </Card>
 
           {/* CALENDAR SYNC SECTION */}
-          <Card className="p-6 bg-gray-50 dark:bg-[#1a1a1a]">
+          <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center">
                 <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
@@ -191,7 +191,7 @@ export default function SettingsView() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">Calendar Synchronization</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                     Automatically push AI bookings to your Google or Outlook calendar.
                   </p>
                 </div>
@@ -208,7 +208,8 @@ export default function SettingsView() {
                 <button
                   onClick={() => handleConnectCalendar('google')}
                   disabled={calLoading}
-                  className="flex items-center justify-center gap-3 p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 transition-all font-bold group"
+                  className="flex items-center justify-center gap-3 p-4 border rounded-2xl hover:border-blue-500 transition-all font-bold group"
+                  style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
                 >
                   <div className="w-8 h-8 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center text-red-600">G</div>
                   <span>Connect Google Calendar</span>
@@ -217,7 +218,8 @@ export default function SettingsView() {
                 <button
                   onClick={() => handleConnectCalendar('outlook')}
                   disabled={calLoading}
-                  className="flex items-center justify-center gap-3 p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-2xl hover:border-blue-500 transition-all font-bold group"
+                  className="flex items-center justify-center gap-3 p-4 border rounded-2xl hover:border-blue-500 transition-all font-bold group"
+                  style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
                 >
                   <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center text-blue-600">O</div>
                   <span>Connect Outlook Calendar</span>
@@ -225,7 +227,7 @@ export default function SettingsView() {
                 </button>
               </div>
             ) : (
-              <div className="p-4 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-2xl flex items-center justify-between">
+              <div className="p-4 border rounded-2xl flex items-center justify-between" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
                 <div className="flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${calendarSettings.provider === 'google' ? 'bg-red-500' : 'bg-blue-500'}`}>
                     {calendarSettings.provider === 'google' ? 'G' : 'O'}
@@ -248,11 +250,11 @@ export default function SettingsView() {
             )}
           </Card>
 
-          <Card className="p-6 bg-gray-50 dark:bg-[#1a1a1a]">
+          <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold">{vocab.resource_plural} & Capacity Units</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Each unit (bay, chair, room, or vehicle) is a {vocab.resource_label.toLowerCase()} that can run its own {vocab.booking_label.toLowerCase()}s in parallel.</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Each unit (bay, chair, room, or vehicle) is a {vocab.resource_label.toLowerCase()} that can run its own {vocab.booking_label.toLowerCase()}s in parallel.</p>
               </div>
             </div>
 
@@ -284,22 +286,22 @@ export default function SettingsView() {
               </Button>
             </form>
 
-            <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-              <div className="bg-gray-100 dark:bg-[#222] px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 flex justify-between">
+            <div className="border rounded-xl overflow-hidden" style={{ borderColor: 'var(--border-soft)' }}>
+              <div className="px-4 py-2 text-xs font-bold uppercase tracking-widest flex justify-between" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>
                 <span>Name</span>
                 <span className="w-32 text-right">Status</span>
               </div>
               {resourcesLoading && resources.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading {vocab.resource_plural.toLowerCase()}...</div>
+                <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>Loading {vocab.resource_plural.toLowerCase()}...</div>
               ) : resources.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No {vocab.resource_plural.toLowerCase()} yet. Add your first {vocab.resource_label.toLowerCase()} above.</div>
+                <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>No {vocab.resource_plural.toLowerCase()} yet. Add your first {vocab.resource_label.toLowerCase()} above.</div>
               ) : (
                 resources.map(r => (
-                  <div key={r.id} className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-sm">
+                  <div key={r.id} className="px-4 py-3 border-t flex items-center justify-between text-sm" style={{ borderColor: 'var(--border-soft)' }}>
                     <div>
                       <div className="font-semibold">{r.name}</div>
                       {r.description && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{r.description}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{r.description}</div>
                       )}
                     </div>
                     <Button
@@ -322,14 +324,14 @@ export default function SettingsView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      <header className="p-4 md:p-8 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1a1a1a] sticky top-0 bg-white dark:bg-[#111] z-10 flex items-center">
+    <div className="flex-1 flex flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+      <header className="p-4 md:p-8 sticky top-0 z-10 flex items-center" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="bg-blue-600 p-2 rounded-lg mr-4 shadow-md text-white">
           <ShieldCheck className="w-6 h-6" />
         </div>
         <div>
           <h1 className="text-2xl md:text-3xl font-display">Business Onboarding</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic font-medium">Super-Admin Console (Multi-Tenant Management)</p>
+          <p className="text-sm italic font-medium" style={{ color: 'var(--text-secondary)' }}>Super-Admin Console (Multi-Tenant Management)</p>
         </div>
       </header>
 
@@ -351,13 +353,13 @@ export default function SettingsView() {
           
           {/* Business Info */}
           <section className="space-y-4">
-            <h2 className="text-lg font-bold flex items-center text-gray-700 dark:text-gray-200">
+            <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
               <Building2 className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
               1. Business Information
             </h2>
-            <Card className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 border-gray-100 dark:border-gray-800">
+            <Card className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Company Name</label>
+                <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>Company Name</label>
                 <Input 
                   required
                   value={form.tenant_name}
@@ -366,7 +368,7 @@ export default function SettingsView() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Business Template</label>
+                <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>Business Template</label>
                 <Select 
                   required
                   value={form.business_type}
@@ -379,14 +381,14 @@ export default function SettingsView() {
 
           {/* Owner Info */}
           <section className="space-y-4">
-            <h2 className="text-lg font-bold flex items-center text-gray-700 dark:text-gray-200">
+            <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
               <UserPlus className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
               2. Owner Account
             </h2>
-            <Card className="space-y-4 bg-gray-50 dark:bg-[#1a1a1a] p-6 border-gray-100 dark:border-gray-800">
+            <Card className="space-y-4 p-6" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">First Name</label>
+                  <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>First Name</label>
                   <Input 
                     required
                     value={form.owner_first_name}
@@ -395,7 +397,7 @@ export default function SettingsView() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Last Name</label>
+                  <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>Last Name</label>
                   <Input 
                     required
                     value={form.owner_last_name}
@@ -404,7 +406,7 @@ export default function SettingsView() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Email</label>
+                  <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>Email</label>
                   <Input 
                     type="email" 
                     required
@@ -415,7 +417,7 @@ export default function SettingsView() {
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ml-1">Password</label>
+                <label className="text-xs font-bold uppercase ml-1" style={{ color: 'var(--text-secondary)' }}>Password</label>
                 <Input 
                   type="password" 
                   required

@@ -379,8 +379,8 @@ export default function AppointmentView() {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden relative text-gray-900 dark:text-gray-100 transition-colors duration-200 flex-col">
-      <section className="w-full border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] p-4 md:p-6 flex-1 overflow-auto flex flex-col">
+    <div className="flex flex-1 overflow-hidden relative transition-colors duration-200 flex-col" style={{ color: 'var(--text-primary)' }}>
+      <section className="w-full p-4 md:p-6 flex-1 overflow-auto flex flex-col" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex-1 flex flex-col">
           <div className="w-full flex-1 flex flex-col">
             {(calendarView === 'week' || calendarView === 'day') && (
@@ -389,14 +389,16 @@ export default function AppointmentView() {
                 <button
                   onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
                   disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
-                  className="px-2 py-0.5 text-xs font-bold rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  className="px-2 py-0.5 text-xs font-bold rounded disabled:opacity-30 transition-colors"
+                  style={{ border: '1px solid var(--border-soft)' }}
                   title="Zoom in"
                 >+</button>
-                <span className="text-xs text-gray-500 font-mono w-12 text-center">{calendarStep}min</span>
+                <span className="text-xs font-mono w-12 text-center" style={{ color: 'var(--text-secondary)' }}>{calendarStep}min</span>
                 <button
                   onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
                   disabled={zoomIndex <= 0}
-                  className="px-2 py-0.5 text-xs font-bold rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  className="px-2 py-0.5 text-xs font-bold rounded disabled:opacity-30 transition-colors"
+                  style={{ border: '1px solid var(--border-soft)' }}
                   title="Zoom out"
                 >{'\u2212'}</button>
               </div>

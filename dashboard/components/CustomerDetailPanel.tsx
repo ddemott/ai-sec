@@ -101,25 +101,26 @@ export function CustomerDetailPanel({
   onCloseMobile,
 }: CustomerDetailPanelProps) {
   return (
-    <section className={`flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`}>
+    <section className={`flex-1 flex flex-col overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`} style={{ backgroundColor: 'var(--bg-surface)' }}>
       {(selectedCustomer || isCreating) ? (
         <>
-          <header className="p-4 md:p-8 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1a1a1a] flex items-center justify-between">
+          <header className="p-4 md:p-8 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}>
             <div className="flex items-center">
               <button
                   onClick={onCloseMobile}
-                  className="md:hidden p-2 -ml-2 mr-2 text-blue-600 dark:text-blue-400"
+                  className="md:hidden p-2 -ml-2 mr-2"
+                  style={{ color: 'var(--accent-soft)' }}
               >
                   <ChevronLeft className="w-6 h-6" />
               </button>
               <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-600 dark:bg-blue-700 rounded-full flex items-center justify-center text-white text-xl md:text-2xl font-bold">
+                  <div className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center text-white text-xl md:text-2xl font-bold" style={{ backgroundColor: 'var(--accent)' }}>
                   {isCreating ? '+' : (selectedCustomer?.name?.charAt(0) || '?')}
                   </div>
                   <div>
                   <h1 className="text-xl md:text-3xl font-display">{isCreating ? 'New Customer' : (selectedCustomer?.name || 'Unknown')}</h1>
                   {!isCreating && (
-                      <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base flex items-center">
+                      <p className="text-sm md:text-base flex items-center" style={{ color: 'var(--text-secondary)' }}>
                       <Phone className="w-4 h-4 mr-2" /> {formatPhone(selectedCustomer?.phone)}
                       </p>
                   )}
@@ -159,12 +160,12 @@ export function CustomerDetailPanel({
               {(!isEditing && !isCreating) ? (
                   <div className="space-y-4 text-sm">
                       <div className="flex items-start">
-                          <Mail className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
-                          <span className="dark:text-gray-300">{selectedCustomer?.email || 'No email provided'}</span>
+                          <Mail className="w-4 h-4 mr-3 mt-0.5" style={{ color: 'var(--text-muted)' }} />
+                          <span style={{ color: 'var(--text-primary)' }}>{selectedCustomer?.email || 'No email provided'}</span>
                       </div>
                       <div className="flex items-start">
-                          <MapPin className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
-                          <span className="dark:text-gray-300">
+                          <MapPin className="w-4 h-4 mr-3 mt-0.5" style={{ color: 'var(--text-muted)' }} />
+                          <span style={{ color: 'var(--text-primary)' }}>
                             {selectedCustomer
                               ? [
                                   selectedCustomer.address,
@@ -181,14 +182,14 @@ export function CustomerDetailPanel({
                           </span>
                        </div>
                       <div className="flex items-start">
-                          <RefreshCw className="w-4 h-4 mr-3 text-gray-400 dark:text-gray-500 mt-0.5" />
-                          <span className="dark:text-gray-300">
+                          <RefreshCw className="w-4 h-4 mr-3 mt-0.5" style={{ color: 'var(--text-muted)' }} />
+                          <span style={{ color: 'var(--text-primary)' }}>
                             Timezone: {US_TIMEZONES.find(t => t.value === selectedCustomer?.timezone)?.label || selectedCustomer?.timezone || 'Not set'}
                           </span>
                       </div>
-                      <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
-                          <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Internal Notes</p>
-                          <p className="text-gray-700 dark:text-gray-400 italic leading-relaxed">
+                      <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--border-soft)' }}>
+                          <p className="text-xs font-bold uppercase mb-2" style={{ color: 'var(--text-muted)' }}>Internal Notes</p>
+                          <p className="italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                               {(selectedCustomer?.metadata?.notes as string) || 'No internal notes added yet.'}
                           </p>
                       </div>
@@ -222,12 +223,13 @@ export function CustomerDetailPanel({
                       options={US_TIMEZONES}
                     />
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Internal Notes</label>
+                      <label className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-muted)' }}>Internal Notes</label>
                       <textarea
                         rows={4}
                         value={editForm.notes}
                         onChange={(e) => onEditFormChange('notes', e.target.value)}
-                        className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100 transition"
+                        className="w-full p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition"
+                        style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
                         placeholder="Add private notes the AI should consider..."
                       />
                     </div>
@@ -239,24 +241,24 @@ export function CustomerDetailPanel({
               <>
                 {/* UPCOMING APPOINTMENTS */}
                 <div className="space-y-4">
-                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center text-lg">
-                    <Calendar className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
+                  <h3 className="font-bold flex items-center text-lg" style={{ color: 'var(--text-primary)' }}>
+                    <Calendar className="w-5 h-5 mr-2" style={{ color: 'var(--text-muted)' }} />
                     Upcoming Appointments
                   </h3>
                   {upcomingAppointments.length > 0 ? (
                     <div className="space-y-3">
                       {upcomingAppointments.map((a) => (
-                        <div key={a.id} className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm flex justify-between items-start">
+                        <div key={a.id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
                           <div className="space-y-1">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{a.description}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
+                            <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <Clock className="w-3 h-3 mr-1" />
                               {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                               {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
                             </p>
-                            {a.location && <p className="text-xs text-gray-400 dark:text-gray-500">{a.location}</p>}
+                            {a.location && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.location}</p>}
                           </div>
                           <div className="flex items-center space-x-2">
                             <Badge variant="primary">Scheduled</Badge>
@@ -268,27 +270,27 @@ export function CustomerDetailPanel({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-400 dark:text-gray-600 italic text-sm">No upcoming appointments.</p>
+                    <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>No upcoming appointments.</p>
                   )}
                 </div>
 
                 {/* APPOINTMENT HISTORY */}
                 <div className="space-y-4">
-                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center text-lg">
-                    <History className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
+                  <h3 className="font-bold flex items-center text-lg" style={{ color: 'var(--text-primary)' }}>
+                    <History className="w-5 h-5 mr-2" style={{ color: 'var(--text-muted)' }} />
                     Appointment History
                   </h3>
                   {pastAppointments.length > 0 ? (
                     <div className="space-y-3">
                       {pastAppointments.map((a) => (
-                        <div key={a.id} className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm flex justify-between items-start">
+                        <div key={a.id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
                           <div className="space-y-1">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{a.description}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
+                            <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <Clock className="w-3 h-3 mr-1" />
                               {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                               {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
                             </p>
                           </div>
@@ -299,30 +301,30 @@ export function CustomerDetailPanel({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-400 dark:text-gray-600 italic text-sm">No past appointments.</p>
+                    <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>No past appointments.</p>
                   )}
                 </div>
 
                 {/* AI CALL HISTORY */}
                 <div className="space-y-4">
-                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center text-lg">
-                    <Phone className="w-5 h-5 mr-2 text-gray-400 dark:text-gray-500" />
+                  <h3 className="font-bold flex items-center text-lg" style={{ color: 'var(--text-primary)' }}>
+                    <Phone className="w-5 h-5 mr-2" style={{ color: 'var(--text-muted)' }} />
                     AI Call History
                   </h3>
                   <div className="space-y-4">
                     {summaries.length > 0 ? summaries.map((s) => (
-                      <div key={s.id} className="p-5 border border-gray-100 dark:border-gray-800 rounded-xl bg-white dark:bg-[#1a1a1a] shadow-sm">
-                        <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mb-2">
-                          <span className="font-bold text-blue-600 dark:text-blue-400 uppercase">AI Summary</span>
+                      <div key={s.id} className="p-5 rounded-xl shadow-sm" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+                        <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                          <span className="font-bold uppercase" style={{ color: 'var(--accent-soft)' }}>AI Summary</span>
                           <span>{new Date(s.call_timestamp || s.created_at || '').toLocaleDateString()}</span>
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed italic">&quot;{s.summary}&quot;</p>
+                        <p className="text-sm leading-relaxed italic" style={{ color: 'var(--text-secondary)' }}>&quot;{s.summary}&quot;</p>
                         {s.has_transcript && (
                           <p className="text-xs text-green-600 dark:text-green-400 mt-2">Transcript available</p>
                         )}
                       </div>
                     )) : (
-                      <p className="text-gray-400 dark:text-gray-600 italic text-sm">No call history available.</p>
+                      <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>No call history available.</p>
                     )}
                   </div>
                 </div>
@@ -331,7 +333,7 @@ export function CustomerDetailPanel({
           </div>
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 italic text-center px-4 flex-col">
+        <div className="flex-1 flex items-center justify-center italic text-center px-4 flex-col" style={{ color: 'var(--text-muted)' }}>
           <Users className="w-12 h-12 mb-4 opacity-20" />
           Select a customer or click the &quot;+&quot; button to add one.
         </div>

@@ -60,7 +60,7 @@ export default function SkillManagementView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-[#111] overflow-y-auto text-gray-900 dark:text-gray-100 p-8 transition-colors duration-200">
+    <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-10 shrink-0">
         <div className="flex items-center mb-6">
           <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg mr-4 text-purple-600 dark:text-purple-400">
@@ -68,11 +68,11 @@ export default function SkillManagementView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">Skills Master List</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Define the certified expertise and capabilities for your business.</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Define the certified expertise and capabilities for your business.</p>
           </div>
         </div>
 
-        <form onSubmit={handleCreateSkill} className="max-w-2xl bg-gray-50 dark:bg-[#1a1a1a] p-6 rounded-3xl border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-4 items-end">
+        <form onSubmit={handleCreateSkill} className="max-w-2xl p-6 rounded-3xl border flex flex-col md:flex-row gap-4 items-end" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
           <div className="flex-1 w-full space-y-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Skill Name (Slug)</label>
@@ -120,7 +120,7 @@ export default function SkillManagementView() {
                   <Tag className="w-3 h-3 text-purple-500" />
                   <span className="font-mono text-sm font-black text-purple-600 dark:text-purple-400 uppercase">{skill.name}</span>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   {skill.description || "No description provided."}
                 </p>
               </div>
@@ -135,7 +135,7 @@ export default function SkillManagementView() {
         ))}
 
         {skills.length === 0 && (
-          <div className="col-span-full h-40 flex flex-col items-center justify-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-3xl text-gray-400 italic">
+          <div className="col-span-full h-40 flex flex-col items-center justify-center border-2 border-dashed rounded-3xl italic" style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}>
             <Award className="w-8 h-8 mb-2 opacity-20" />
             <p>No master skills defined yet.</p>
           </div>

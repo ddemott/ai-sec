@@ -263,10 +263,10 @@ export default function CRMView() {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden relative text-gray-900 dark:text-gray-100 transition-colors duration-200">
+    <div className="flex flex-1 overflow-hidden relative transition-colors duration-200" style={{ color: 'var(--text-primary)' }}>
       {/* ITEM LIST PANE */}
-      <section className={`w-full md:w-80 flex flex-col bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}>
-        <header className="p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] sticky top-0 z-10">
+      <section className={`w-full md:w-80 flex flex-col ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`} style={{ backgroundColor: 'var(--bg-raised)', borderRight: '1px solid var(--border-soft)' }}>
+        <header className="p-4 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold">Customers</h2>
             <div className="flex space-x-1">
@@ -279,8 +279,8 @@ export default function CRMView() {
             </div>
           </div>
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500" />
-            <input type="text" placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-100 dark:bg-[#222] border-none rounded-md text-sm outline-none dark:text-gray-200" />
+            <Search className="w-4 h-4 absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }} />
+            <input type="text" placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }} />
           </div>
         </header>
         <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
@@ -288,14 +288,20 @@ export default function CRMView() {
             <div
               key={c.id}
               onClick={() => { setSelectedCustomer(c); setIsCreating(false); setShowDetailOnMobile(true); }}
-              className={`p-4 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition flex justify-between items-center
-                ${selectedCustomer?.id === c.id ? 'bg-white dark:bg-[#2a2a2a] border-l-4 border-l-blue-600 dark:border-l-blue-400' : 'hover:bg-gray-100 dark:hover:bg-[#222]'}`}
+              className={`p-4 cursor-pointer transition flex justify-between items-center
+                ${selectedCustomer?.id === c.id ? 'border-l-4' : ''}`}
+              style={{
+                borderBottom: '1px solid var(--border-soft)',
+                ...(selectedCustomer?.id === c.id
+                  ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
+                  : {})
+              }}
             >
               <div>
-                <p className={`text-sm font-semibold ${selectedCustomer?.id === c.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>{c.name || 'Unknown'}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatPhone(c.phone)}</p>
+                <p className="text-sm font-semibold" style={{ color: selectedCustomer?.id === c.id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{c.name || 'Unknown'}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{formatPhone(c.phone)}</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+              <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
             </div>
           ))}
         </div>
