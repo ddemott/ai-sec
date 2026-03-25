@@ -280,6 +280,130 @@ describe("book_with_scheduling_atomic()", () => {
         });
     });
 
+    describe("Performance", () => {
+        it("completes full find-and-book in under 50ms", async () => {
+            if (!dbAvailable) return;
+            const tenantId = await createTenant(root, "Perf Test Shop", "auto-shop");
+            await root.query("DELETE FROM resources WHERE tenant_id = $1", [tenantId]);
+
+            // Set up realistic data: 3 bays, 4 employees, shifts, some existing appointments
+            const bay1 = await createResource(root, tenantId, "Bay 1");
+            const bay2 = await createResource(root, tenantId, "Bay 2");
+            const bay3 = await createResource(root, tenantId, "Bay 3");
+            await root.query("UPDATE resources SET capabilities = $1 WHERE id = ANY($2)", ['{lift,air-tools}', [bay1, bay2, bay3]]);
+
+            const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change", "brakes"]);
+            const emp2 = await createEmployee(root, tenantId, "Bob", ["oil-change", "tires"]);
+            const emp3 = await createEmployee(root, tenantId, "Carol", ["tires", "alignment"]);
+            const emp4 = await createEmployee(root, tenantId, "Dave", ["oil-change", "brakes", "tires"]);
+
+            // Monday shifts for all
+            for (const empId of [emp1, emp2, emp3, emp4]) {
+                await createShift(root, tenantId, empId, 1, '08:00', '17:00');
+            }
+
+            // Add some existing appointments to make it realistic
+            const cust1 = await createCustomerFull(root, tenantId, '+15550001111', 'Existing 1');
+            await createAppointment(root, tenantId, bay1, cust1, '2026-04-06T09:00:00Z', '2026-04-06T09:30:00Z', 'Oil change', 'scheduled', emp1);
+            await createAppointment(root, tenantId, bay2, cust1, '2026-04-06T10:00:00Z', '2026-04-06T10:30:00Z', 'Brakes', 'scheduled', emp2);
+
+            // Now time the atomic RPC
+            const runs = 5;
+            const times: number[] = [];
+
+            for (let i = 0; i < runs; i++) {
+                const start = performance.now();
+                const res = await root.query(
+                    `SELECT * FROM book_with_scheduling_atomic(
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+                    )`,
+                    [
+                        tenantId, `+1555000${2000 + i}`, `Perf Customer ${i}`, 'Oil change perf test',
+                        `perf-call-${i}`, null,
+                        '2026-04-06T11:00:00Z', '2026-04-06T11:30:00Z',
+                        null, null,
+                        '{oil-change}', '{lift}',
+                        null, null, null, 30,
+                    ]
+                );
+                const elapsed = performance.now() - start;
+                times.push(elapsed);
+
+                // Clean up the appointment so next iteration can book the same slot
+                if (res.rows[0].success) {
+                    await root.query("DELETE FROM appointments WHERE id = $1", [res.rows[0].appointment_id]);
+                }
+            }
+
+            const avg = times.reduce((a, b) => a + b, 0) / times.length;
+            const min = Math.min(...times);
+            const max = Math.max(...times);
+
+            console.log(`\n  ⏱  book_with_scheduling_atomic performance (${runs} runs):`);
+            console.log(`     Avg: ${avg.toFixed(1)}ms | Min: ${min.toFixed(1)}ms | Max: ${max.toFixed(1)}ms`);
+            console.log(`     Times: [${times.map(t => t.toFixed(1) + 'ms').join(', ')}]`);
+
+            // Should complete in under 50ms on local DB
+            // Remote Supabase will be slower (network) but still under 100ms
+            expect(avg).toBeLessThan(50);
+        });
+
+        it("compare: old 4-query approach timing", async () => {
+            if (!dbAvailable) return;
+            const tenantId = await createTenant(root, "Perf Compare", "auto-shop");
+            await root.query("DELETE FROM resources WHERE tenant_id = $1", [tenantId]);
+
+            const bay1 = await createResource(root, tenantId, "Bay 1");
+            await root.query("UPDATE resources SET capabilities = $1 WHERE id = $2", ['{lift}', bay1]);
+            const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
+            await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
+
+            const runs = 5;
+            const oldTimes: number[] = [];
+            const newTimes: number[] = [];
+
+            for (let i = 0; i < runs; i++) {
+                // OLD approach: 4 separate queries
+                const oldStart = performance.now();
+                await root.query("SELECT id, capabilities FROM resources WHERE tenant_id = $1 AND is_active = true", [tenantId]);
+                await root.query("SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true", [tenantId]);
+                await root.query("SELECT employee_id, day_of_week, start_time, end_time FROM employee_shifts WHERE tenant_id = $1 AND is_active = true", [tenantId]);
+                await root.query("SELECT resource_id, start_time, end_time FROM appointments WHERE tenant_id = $1 AND status = 'scheduled'", [tenantId]);
+                oldTimes.push(performance.now() - oldStart);
+
+                // NEW approach: 1 atomic RPC
+                const newStart = performance.now();
+                const res = await root.query(
+                    `SELECT * FROM book_with_scheduling_atomic(
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+                    )`,
+                    [
+                        tenantId, `+1555000${3000 + i}`, 'Compare Test', 'Timing test',
+                        `compare-${i}`, null,
+                        '2026-04-06T14:00:00Z', '2026-04-06T14:30:00Z',
+                        null, null, '{oil-change}', '{lift}', null, null, null, 30,
+                    ]
+                );
+                newTimes.push(performance.now() - newStart);
+
+                if (res.rows[0].success) {
+                    await root.query("DELETE FROM appointments WHERE id = $1", [res.rows[0].appointment_id]);
+                }
+            }
+
+            const oldAvg = oldTimes.reduce((a, b) => a + b, 0) / oldTimes.length;
+            const newAvg = newTimes.reduce((a, b) => a + b, 0) / newTimes.length;
+
+            console.log(`\n  ⏱  4-query approach: Avg ${oldAvg.toFixed(1)}ms [${oldTimes.map(t => t.toFixed(1)).join(', ')}]`);
+            console.log(`  ⏱  Atomic RPC:      Avg ${newAvg.toFixed(1)}ms [${newTimes.map(t => t.toFixed(1)).join(', ')}]`);
+            console.log(`  ⏱  Speedup: ${(oldAvg / newAvg).toFixed(1)}x faster`);
+
+            // Atomic should be faster (fewer round trips)
+            // On local DB the difference is small; on remote DB it's dramatic
+            expect(newAvg).toBeLessThan(100);
+        });
+    });
+
     describe("Error diagnostics", () => {
         it("returns clear error when no time specified", async () => {
             if (!dbAvailable) return;
