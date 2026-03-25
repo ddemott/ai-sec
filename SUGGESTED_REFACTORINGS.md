@@ -73,4 +73,6 @@
 | 17 | Done | 2026-03-24 | Retry logic for transient DB errors (connection_failure, deadlock, admin_shutdown). Up to 2 retries with 200ms backoff. Logs pg_code on retry. |
 | 18 | Done | 2026-03-24 | Config constants (DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, DEFAULT_TIMEZONE, MAX_FILE_SIZE_BYTES) in src/constants.ts |
 | 20 | Done | 2026-03-24 | X-Request-Id correlation header on all edge function responses. jsonResponse() helper standardizes response creation. |
+| 19 | Done | 2026-03-24 | Replaced with book_with_scheduling_atomic() — single SQL function does the entire find+book flow, eliminating the dynamic query builder need |
+| 21 | Done | 2026-03-24 | Edge function uses search_tenant_docs_normalized() RPC. Query normalization was already wired. |
 | 22 | Done | 2026-03-24 | Zod schemas for get_scheduling_options and book_with_scheduling. All 7 edge function tools validated. Schema lookup table replaces if/else chain. |
