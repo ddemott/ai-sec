@@ -90,3 +90,54 @@ export function useStaticData(tenantIdOverride?: string | null) {
     refresh: fetchData
   };
 }
+
+// ── Granular data hooks ─────────────────────────────────────────────
+// Use these when a component only needs 1-2 resource types.
+// Avoids fetching all 5 when only 1 is needed.
+
+function useEntityList<T>(
+  fetcher: (tenantId: string) => Promise<T[]>,
+  tenantIdOverride?: string | null
+) {
+  const contextTenantId = useActiveTenantId();
+  const tenantId = tenantIdOverride !== undefined ? tenantIdOverride : contextTenantId;
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!tenantId) return;
+    setLoading(true);
+    try {
+      const result = await fetcher(tenantId);
+      setData(Array.isArray(result) ? result : []);
+    } catch {
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantId, fetcher]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { data, loading, refresh };
+}
+
+export function useCustomers(tenantId?: string | null) {
+  return useEntityList<Customer>(Api.customers.list, tenantId);
+}
+
+export function useResources(tenantId?: string | null) {
+  return useEntityList<Resource>(Api.resources.list, tenantId);
+}
+
+export function useEmployees(tenantId?: string | null) {
+  return useEntityList<Employee>(Api.employees.list, tenantId);
+}
+
+export function useServices(tenantId?: string | null) {
+  return useEntityList<Service>(Api.services.list, tenantId);
+}
+
+export function useSkills(tenantId?: string | null) {
+  return useEntityList<Skill>(Api.skills.list, tenantId);
+}

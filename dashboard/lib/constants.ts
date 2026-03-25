@@ -2,6 +2,38 @@
  * Shared constants and lookups for the dashboard
  */
 
+// UI labels and error messages — single source of truth for copy
+export const UI = {
+  loading: 'Loading...',
+  saving: 'Saving...',
+  noData: 'No data available',
+
+  // Error helpers (used with entity name)
+  failedToFetch: (entity: string) => `Failed to fetch ${entity}`,
+  failedToCreate: (entity: string) => `Failed to create ${entity}`,
+  failedToUpdate: (entity: string) => `Failed to update ${entity}`,
+  failedToDelete: (entity: string) => `Failed to delete ${entity}`,
+  failedToSave: (entity: string) => `Failed to save ${entity}`,
+
+  // Confirmation
+  confirmDelete: (entity: string) => `Are you sure you want to delete this ${entity}?`,
+
+  // Empty states
+  noItems: (entity: string) => `No ${entity} yet`,
+  addFirst: (entity: string) => `Add your first ${entity} to get started`,
+} as const;
+
+// Day names
+export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+export const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+// Default shift times
+export const DEFAULT_SHIFT_START = '08:00';
+export const DEFAULT_SHIFT_END = '17:00';
+
+// Pagination
+export const DEFAULT_PAGE_SIZE = 50;
+
 export const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
   'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
