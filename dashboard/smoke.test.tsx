@@ -1,11 +1,11 @@
 import React from 'react'
 import { expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import Home from './app/page'
+import DashboardPage from './app/dashboard/page'
 import { SessionProvider } from './lib/SessionContext'
 
-test('Dashboard Home Page Smoke Test', () => {
-  render(<SessionProvider><Home /></SessionProvider>)
+test('Dashboard Page Smoke Test', () => {
+  render(<SessionProvider><DashboardPage /></SessionProvider>)
 
   // Verify that the login portal renders correctly
   expect(screen.getByText(/Secretary HQ Portal/i)).toBeTruthy()

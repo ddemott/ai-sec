@@ -339,15 +339,15 @@ UI labels adapt per business type via 3-tier fallback:
 | 14 | Dashboard home / quick actions landing | UI/UX | Missing | |
 | 15 | Contextual navigation (CRM → Calendar links) | Both | Missing | |
 | 16 | Empty states with helpful guidance | UI/UX | Missing | |
-| **17** | **Apply dark sidebar visual style to real app** | **UI/UX** | **Missing** | **Per spec above** |
-| **18** | **Rebuild theme system with font variables** | **Coding** | **Missing** | **Add --font-display/body to all 8 themes** |
-| **19** | **Flip scheduler: rows=staff, columns=hours** | **Both** | **Missing** | **Full spec above** |
-| **20** | **Staff quick profile card** | **UI/UX** | **Missing** | **Read-only, exact layout above** |
-| **21** | **Skills toggle in scheduler** | **Both** | **Missing** | **Hours/Skills mode** |
-| **22** | **Drag to reorder staff rows** | **Both** | **Missing** | **Same as tenant reorder** |
-| **23** | **Rebuild analytics — 6 real metrics** | **Both** | **Missing** | **Per spec above** |
-| **24** | **Remove Coverage Map from navigation** | **Both** | **Missing** | **Fully replaced by Skills toggle** |
-| **25** | **Theme switcher → dropdown** | **UI/UX** | **Missing** | **Not buttons** |
+| **17** | **Apply dark sidebar visual style to real app** | **UI/UX** | **Done** | All components use CSS vars, all themes dark |
+| **18** | **Rebuild theme system with font variables** | **Coding** | **Done** | `--font-display`/`--font-body` in all 8 themes |
+| **19** | **Flip scheduler: rows=staff, columns=hours** | **Both** | **Done** | NewSchedulerView: 24hr, split-panel scroll sync |
+| **20** | **Staff quick profile card** | **UI/UX** | **Done** | Read-only, anchored, outside-click dismiss, skills list |
+| **21** | **Skills toggle in scheduler** | **Both** | **Done** | Hours (shift bar + appts) / Skills (stacked skill bars) |
+| **22** | **Drag to reorder staff rows** | **Both** | **Done** | Grip handles, save/discard, persists to localStorage |
+| **23** | **Rebuild analytics — 6 real metrics** | **Both** | **Done** | 3 active (booking data), 3 Phase 2 (Vapi) |
+| **24** | **Remove Coverage Map from navigation** | **Both** | **Done** | ServiceCoverageView.tsx deleted, zero references |
+| **25** | **Theme switcher → dropdown** | **UI/UX** | **Done** | `<select>` dropdown in OutlookLayout topbar |
 
 **Bold rows** = new work items from March 24, 2026 design session.
 

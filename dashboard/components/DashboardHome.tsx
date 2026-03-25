@@ -10,7 +10,7 @@ import { Button } from './ui/Button'
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
-import type { Tab } from '../app/page'
+import type { Tab } from '../app/dashboard/page'
 
 interface DashboardHomeProps {
   onNavigate?: (tab: Tab) => void
@@ -25,6 +25,18 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   type WizardMode = 'solo' | 'team' | null
   const [wizardMode, setWizardMode] = useState<WizardMode>(null)
   const [wizardDismissed, setWizardDismissed] = useState(false)
+
+  // Check for ?trial=true from landing page CTA
+  const [trialParam] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('trial') === 'true') {
+        window.history.replaceState({}, '', window.location.pathname)
+        return true
+      }
+    }
+    return false
+  })
 
   interface DashboardAppointment { id: string; start_time: string; status: string; description?: string; customer_name?: string }
   interface DashboardEmployee { id: string; name: string; type?: string; is_active: boolean }
@@ -85,6 +97,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   }
 
   // Auto-show wizard chooser for new tenants that need setup
+  // trialParam only triggers the wizard if the tenant actually needs setup
   const showWizardChooser = needsSetup && !wizardDismissed && !wizardMode && !loading
 
   if (loading) {

@@ -1,11 +1,13 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-03-24
+**Last updated:** 2026-03-25
 
 ---
 
 ## Where We Are
 
-Phase 13 (Production Readiness) is in progress. The backend is deployed to Railway and live. A phone number has been provisioned via Vapi. The edge functions (voice AI tool handlers) are deployed to Supabase but are currently not responding — suspected Supabase free tier compute exhaustion.
+Phase 13 (Production Readiness) is in progress. The backend is deployed to Railway and live. A phone number has been provisioned via Vapi. The edge functions (voice AI tool handlers) are deployed to Supabase but are currently not responding — Supabase project stuck in "pausing" state (known platform bug, not free tier). Waiting on Supabase support ticket.
+
+All 8 design session work items from March 24 are now **complete** (dark theme, theme system, scheduler redesign, profile card, skills toggle, drag reorder, analytics rebuild, coverage map removal). See `docs/UI_UX_DESIGN.md` implementation table.
 
 ---
 
@@ -20,105 +22,25 @@ Phase 13 (Production Readiness) is in progress. The backend is deployed to Railw
 | **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant created, phone assigned |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 301 backend + 194 dashboard = 495 passing | All green, zero failures, zero TS errors |
+| **Tests** | 315 backend + 252 dashboard = 567 passing | All green, zero failures, zero TS errors |
 | **Supabase CLI** | v2.83.0 | Updated from 2.77.1 |
 
 ## What's Broken / Blocked
 
 ### Edge Functions Not Responding (CRITICAL BLOCKER)
 
-**Symptom:** All HTTP requests to `https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools` time out (no response at all, even simple requests without DB access).
+**Root Cause: Supabase platform bug — project stuck in "pausing" state.**
 
-**Impact:** The voice AI cannot use any tools (check availability, book appointments, look up customers). Calls connect and the AI talks, but it stalls for 30-60+ seconds saying "just a sec" when trying to use tools, then never completes the action.
+This is a known Supabase issue affecting multiple users. The project's internal state is stuck in a transitional "pausing" state, which prevents the edge function gateway from forwarding HTTP requests. The function boots successfully (69ms) but requests never reach it. The Restart/Pause buttons in the dashboard are greyed out.
 
-**What we tried:**
-1. Redeployed edge function (v9) — still times out
-2. Updated `DATABASE_URL` secret with new password — still times out
-3. Changed code to prefer `SUPABASE_DB_URL` (internal networking) — still times out
-4. Set `DATABASE_URL` to direct connection (`db.xxx.supabase.co`) — still times out
-5. Set `DATABASE_URL` to transaction pooler (port 6543) — still times out
-6. Tested with no auth header (should get instant 401) — still times out
-7. Reset database password in Supabase dashboard — still times out
+**Status:** Waiting on Supabase support ticket. See `TRIAGE.md` for the full report and evidence.
 
-**Timeline of how it broke:**
-1. Edge functions were working fine (deployed since March 1, version 5)
-2. Mid-session, we changed the Supabase database password (from old to `llYAVWp0x8U9DfBm`)
-3. The `DATABASE_URL` secret in edge functions still had the OLD password
-4. Every Vapi tool call triggered the edge function → tried to connect to DB → wrong password → hung for 150 seconds → `WORKER_LIMIT` error
-5. This happened repeatedly (every time the AI tried to use a tool during test calls)
-6. After several of these 150-second failures, the function stopped responding entirely
-7. Even after fixing the password, it remains completely unresponsive
+**Known matching issues:**
+- [Project stuck in PAUSING state #44125](https://github.com/supabase/supabase/issues/44125)
+- [Project stuck in "Pausing..." state indefinitely #35136](https://github.com/supabase/supabase/issues/35136)
+- [Discussion #37844](https://github.com/orgs/supabase/discussions/37844)
 
-**Key evidence:**
-- Logs show `WORKER_LIMIT` error: "Function failed due to not having enough compute resources"
-- Status code `546` with `execution_time_ms: 150738` (2.5 minutes per attempt)
-- Even a simple request with NO database access times out (meaning the function isn't even booting)
-- Redeploying the function doesn't help — it gets "No change found" or deploys but still won't respond
-
----
-
-### Analysis: Why It's Failing (Theories Ranked by Likelihood)
-
-**Theory 1: Free tier compute budget exhausted (MOST LIKELY — 70%)**
-- Supabase free tier has limited compute for edge functions
-- Each failed invocation burned 150 seconds of compute (the max before timeout)
-- We triggered many of these back-to-back (test calls + manual curl tests)
-- Once the budget is gone, ALL invocations are rejected — even ones that would succeed
-- Evidence: `WORKER_LIMIT` error is specifically about compute resources
-- Fix: Upgrade to Pro tier ($25/mo) — compute limits are much higher or removed
-- Alternative: Wait for the monthly budget to reset (unclear when this happens on free tier)
-
-**Theory 2: Function stuck in bad state / boot crash (LIKELY — 20%)**
-- The Deno postgres Pool is created at module load time (line 14 of repository.ts: `new Pool(DB_URL, 3, true)`)
-- If the Pool constructor hangs on a bad connection string, the entire function never finishes loading
-- This would explain why even non-DB requests time out — the function can't boot
-- The `SUPABASE_DB_URL` auto-set by Supabase may still have the old password (we reset it, but Supabase might cache it)
-- Fix: Make the Pool lazy (don't create it until first use) so the function can at least boot
-- Fix: Add a connection timeout to the Pool constructor
-- Fix: Verify `SUPABASE_DB_URL` has the correct password in Supabase dashboard
-
-**Theory 3: Supabase infrastructure issue / throttling (POSSIBLE — 10%)**
-- The project might be flagged for abuse after repeated long-running failures
-- Supabase might rate-limit the function after too many `WORKER_LIMIT` errors
-- Could also be a regional issue (project is in us-west-2, edge functions run in us-east-2 per logs)
-- Fix: Contact Supabase support or check their status page
-- Fix: Create a new Supabase project and migrate (nuclear option)
-
----
-
-### Possible Solutions (in order of what to try)
-
-**Solution A: Upgrade to Supabase Pro ($25/mo)** ← Try first
-- Removes or significantly raises compute limits
-- Should immediately unblock edge functions
-- Required for production anyway (free tier not suitable for live phone calls)
-- Estimated fix probability: 70%
-
-**Solution B: Make DB pool lazy (code change)**
-- Move `new Pool(DB_URL, 3, true)` out of module scope into a `getPool()` function
-- Add connection timeout (e.g., 5 seconds) so it fails fast instead of hanging 150 seconds
-- Redeploy edge function
-- This fixes Theory 2 and prevents future occurrences
-- Should do this regardless of whether Solution A works
-- Estimated fix probability: 20% (if the issue is boot crash, not compute budget)
-
-**Solution C: Wait for compute reset**
-- Free tier budget may reset monthly or weekly
-- No action needed, just wait
-- Risky — unclear when/if it resets
-- Estimated fix probability: Unknown
-
-**Solution D: Check Supabase dashboard for clues**
-- Edge Functions → vapi-tools → look for `BOOT_ERROR` vs `WORKER_LIMIT` in invocation logs
-- Settings → Database → verify the password matches what we set
-- Settings → Edge Functions → check if there's a "compute usage" indicator
-- This is diagnostic, not a fix, but tells us which theory is correct
-
-**Solution E: New Supabase project (last resort)**
-- Create a fresh project, apply all 57 migrations, re-deploy edge functions
-- Fresh compute budget, no throttling history
-- Painful but guaranteed to work
-- Only do this if upgrading to Pro doesn't fix it
+**Resolution:** Supabase support needs to manually reset the project state. Upgrading to Pro tier alone will not fix this.
 
 ### Voice Quality Observations (from first test call)
 
@@ -207,8 +129,8 @@ Result returned to Vapi → LLM continues conversation
 
 ## Remaining TODO (Priority Order)
 
-1. **Upgrade Supabase to Pro** ($25/mo) — unblocks edge functions
-2. **Verify edge functions work** — test tool calls after upgrade
+1. **Open Supabase support ticket** — project stuck in pausing state, needs manual reset (see TRIAGE.md)
+2. **Verify edge functions work** — test tool calls after Supabase fixes the project state
 3. **Tune voice quality** — speed, endpointing, system prompt
 4. **Deploy dashboard** (Vercel or Railway) — currently local only
 5. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout redirects
@@ -292,10 +214,27 @@ Result returned to Vapi → LLM continues conversation
 | Smoke test fix | Fixed stale "AI Secretary Portal" → "SecretaryHQ Portal" in dist |
 
 ### Test Counts
-- **301 backend tests** (30 test files) — all passing
-- **194 dashboard tests** (14 test files) — all passing
-- **Total: 495 tests, zero failures**
-- Note: previous "669" count was inflated by stale compiled `.js` test copies in `dashboard/dist/` — cleaned up
+- **315 backend tests** (31 test files) — all passing
+- **252 dashboard tests** (15 test files) — all passing
+- **Total: 567 tests, zero failures**
+- Note: dashboard test count increased from 194 → 252 due to NewSchedulerView tests (58 tests covering scheduler redesign features)
+
+### Changes — 2026-03-25 Session
+- Added shift duration bars in Hours mode (NewSchedulerView)
+- Drag-to-reorder staff rows now persists to localStorage per tenant
+- Deleted `ServiceCoverageView.tsx` (Coverage Map) — zero references remain
+- Fixed "SecretaryHQ" → "Secretary HQ" in 4 UI files (5 occurrences)
+- Updated Supabase blocker diagnosis: platform bug (project stuck in pausing state), not free tier
+- Updated all status docs (CLAUDE.md, CURRENT_STATUS.md, UI_UX_DESIGN.md, MEMORY.md)
+- **Route restructure**: Dashboard app moved to `/dashboard` route, landing page at `/`
+- **Next.js landing page**: Full marketing page in `dashboard/app/page.tsx` (replaces static `public/index.html` for Next.js)
+- **Backend `/demo` route**: Serves `public/secretaryhq-demo.html`
+- **`{{DASHBOARD_URL}}` template**: Backend injects `DASHBOARD_URL` env var into landing page HTML
+- **Duplicate tenant name prevention**: Both frontend (SuperAdminDashboard) + backend (tenants.ts, 409 on conflict)
+- **Card `style` prop**: Added to `CardProps` interface, fixing 6 TS errors in KnowledgeBaseView + SettingsView
+- **Area code input UX**: Added label with "Area code (optional)" above input
+- **Flash-of-white prevention**: Inline critical CSS + localStorage theme script in `layout.tsx`
+- **JetBrains Mono font**: Added to Google Fonts import for monospace UI elements
 
 ### Sad-Path / Error Diagnostic Coverage
 All error responses now verified to include debugging context:

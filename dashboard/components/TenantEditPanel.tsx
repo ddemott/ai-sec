@@ -225,15 +225,20 @@ export function TenantEditPanel({
                               </span>
                           </div>
                       ) : (
-                          <div className="flex items-center gap-2">
-                              <input
-                                  type="text"
-                                  maxLength={3}
-                                  placeholder="Area code (optional)"
-                                  className="w-32 px-2.5 py-1.5 text-sm border rounded-lg"
-                                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
-                                  id="area-code-input"
-                              />
+                          <div className="flex items-end gap-2">
+                              <div>
+                                  <label htmlFor="area-code-input" className="block text-xs font-bold uppercase ml-1 mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                      Area code <span className="normal-case font-normal" style={{ color: 'var(--text-muted)' }}>(optional)</span>
+                                  </label>
+                                  <input
+                                      type="text"
+                                      maxLength={3}
+                                      placeholder="e.g. 630"
+                                      className="w-24 px-2.5 py-1.5 text-sm border rounded-lg"
+                                      style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
+                                      id="area-code-input"
+                                  />
+                              </div>
                               <button
                                   onClick={async () => {
                                       const areaCode = (document.getElementById('area-code-input') as HTMLInputElement)?.value?.trim()
@@ -271,7 +276,7 @@ export function TenantEditPanel({
         <section className="space-y-6">
           <div className="flex items-center space-x-2 border-b pb-2" style={{ color: 'var(--text-primary)', borderColor: 'var(--border-soft)' }}>
               <ShieldAlert className="w-5 h-5 text-amber-500" />
-              <h2 className="text-lg font-bold tracking-tight">SecretaryHQ Core Attributes</h2>
+              <h2 className="text-lg font-bold tracking-tight">Secretary HQ Core Attributes</h2>
           </div>
 
           <div className="space-y-6">

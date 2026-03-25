@@ -89,6 +89,25 @@ async function checkAuthFailure(response: Response): Promise<string | null> {
 }
 
 /**
+ * Detect self-signed cert errors and redirect user to accept the backend certificate.
+ * Browser throws TypeError("Failed to fetch") when the cert is untrusted.
+ */
+let certRedirectTriggered = false;
+function handleFetchError(err: unknown) {
+  if (
+    err instanceof TypeError &&
+    err.message === 'Failed to fetch' &&
+    !certRedirectTriggered &&
+    typeof window !== 'undefined' &&
+    API_BASE_URL.startsWith('https://localhost')
+  ) {
+    certRedirectTriggered = true;
+    // Redirect to backend so the user can accept the self-signed cert
+    window.location.href = `${API_BASE_URL}/health?redirect=${encodeURIComponent(window.location.href)}`;
+  }
+}
+
+/**
  * Generic Fetcher
  */
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
@@ -98,7 +117,13 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
     url += `?${searchParams.toString()}`;
   }
 
-  const response = await fetch(url, { headers: getHeaders() });
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: getHeaders() });
+  } catch (err) {
+    handleFetchError(err);
+    throw err;
+  }
 
   const authError = await checkAuthFailure(response);
   if (authError) throw new Error(authError);
@@ -120,11 +145,17 @@ async function apiMutate<T>(
 ): Promise<{ success: boolean; error?: string } & T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    method,
-    headers: getHeaders(),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: getHeaders(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    handleFetchError(err);
+    throw err;
+  }
 
   const authError = await checkAuthFailure(response);
   if (authError) return { success: false, error: authError } as { success: boolean; error?: string } & T;

@@ -5,6 +5,7 @@ interface CardProps {
   title?: string;
   icon?: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
   variant?: 'default' | 'success' | 'info' | 'dark';
   onClick?: () => void;
 }
@@ -14,6 +15,7 @@ export const Card: React.FC<CardProps> = ({
   title,
   icon,
   className = '',
+  style,
   variant = 'default',
   onClick,
 }) => {
@@ -40,7 +42,7 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div
       className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${className}`}
-      style={defaultStyle}
+      style={style ? { ...defaultStyle, ...style } : defaultStyle}
       onClick={onClick}
     >
       {title && (

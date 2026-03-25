@@ -244,6 +244,17 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   async function handleCreate() {
     setSaving(true)
     setError(null)
+
+    // Prevent duplicate tenant names
+    const nameExists = tenants.some(
+      t => t.name.toLowerCase() === newBusiness.tenant_name.trim().toLowerCase()
+    )
+    if (nameExists) {
+      setError(`A business named "${newBusiness.tenant_name.trim()}" already exists. Choose a different name.`)
+      setSaving(false)
+      return
+    }
+
     try {
       const res = await Api.tenants.create(newBusiness)
         if (res.success) {

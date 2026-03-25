@@ -126,7 +126,7 @@ export default function AIConfigView() {
           </div>
           <div>
             <h1 className="text-xl md:text-3xl font-display">AI Persona Tuning</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Customize how your SecretaryHQ agent talks and behaves</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Customize how your Secretary HQ agent talks and behaves</p>
           </div>
         </div>
         <Button

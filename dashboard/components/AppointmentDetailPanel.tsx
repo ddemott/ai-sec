@@ -212,7 +212,7 @@ export function AppointmentDetailPanel({
                       </div>
 
                       <div className="space-y-6">
-                          <Card title="SecretaryHQ Summary" variant="dark">
+                          <Card title="Secretary HQ Summary" variant="dark">
                               <div className="space-y-4">
                                   <Input
                                       label="Description / Service"
@@ -309,7 +309,7 @@ export function AppointmentDetailPanel({
                               </div>
                           </Card>
                       </div>
-                      <Card title="SecretaryHQ Summary" variant="dark">
+                      <Card title="Secretary HQ Summary" variant="dark">
                           <p className="text-lg leading-relaxed font-medium italic">
                               {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
                           </p>

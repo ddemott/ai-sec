@@ -270,6 +270,31 @@ describe('NewSchedulerView', () => {
     });
   });
 
+  describe('Shift bars in Hours mode', () => {
+    test('renders shift bars for employees with shifts', () => {
+      render(<NewSchedulerView />);
+      // emp-1 has a shift, so shift-bar should render inside their row
+      const row1 = screen.getByTestId('scheduler-row-emp-1');
+      expect(row1.querySelector('[data-testid="shift-bar-0"]')).toBeInTheDocument();
+    });
+
+    test('shift bars use accent-muted background', () => {
+      render(<NewSchedulerView />);
+      const row1 = screen.getByTestId('scheduler-row-emp-1');
+      const bar = row1.querySelector('[data-testid="shift-bar-0"]') as HTMLElement;
+      expect(bar.style.background).toContain('var(--accent-muted');
+    });
+
+    test('shift bars are hidden in Skills mode', () => {
+      render(<NewSchedulerView />);
+      const row1 = screen.getByTestId('scheduler-row-emp-1');
+      expect(row1.querySelector('[data-testid="shift-bar-0"]')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('view-mode-skills'));
+      expect(row1.querySelector('[data-testid="shift-bar-0"]')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Appointment blocks', () => {
     test('renders appointment blocks for assigned employees', () => {
       render(<NewSchedulerView />);
@@ -362,7 +387,7 @@ describe('NewSchedulerView', () => {
     test('staff names use font-body CSS variable', () => {
       render(<NewSchedulerView />);
       const nameCell = screen.getByTestId('staff-name-emp-1');
-      const span = nameCell.querySelector('span:last-child');
+      const span = nameCell.querySelector('span:last-child') as HTMLElement | null;
       expect(span?.style.fontFamily).toContain('var(--font-body');
     });
   });
@@ -565,6 +590,39 @@ describe('NewSchedulerView', () => {
       // Click save
       fireEvent.click(screen.getByTestId('save-order'));
       expect(screen.queryByTestId('reorder-controls')).not.toBeInTheDocument();
+    });
+
+    test('save persists order to localStorage', () => {
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+      render(<NewSchedulerView />);
+      const firstRow = screen.getByTestId('staff-name-emp-1');
+      const secondRow = screen.getByTestId('staff-name-emp-2');
+
+      fireEvent.dragStart(firstRow);
+      fireEvent.dragOver(secondRow);
+      fireEvent.dragEnd(firstRow);
+      fireEvent.click(screen.getByTestId('save-order'));
+
+      expect(setItemSpy).toHaveBeenCalledWith(
+        'scheduler-staff-order-tenant-1',
+        expect.any(String)
+      );
+      setItemSpy.mockRestore();
+    });
+
+    test('discard does not persist to localStorage', () => {
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+      render(<NewSchedulerView />);
+      const firstRow = screen.getByTestId('staff-name-emp-1');
+      const secondRow = screen.getByTestId('staff-name-emp-2');
+
+      fireEvent.dragStart(firstRow);
+      fireEvent.dragOver(secondRow);
+      fireEvent.dragEnd(firstRow);
+      fireEvent.click(screen.getByTestId('discard-order'));
+
+      expect(setItemSpy).not.toHaveBeenCalled();
+      setItemSpy.mockRestore();
     });
 
     test('drag handle has grip dots icon', () => {

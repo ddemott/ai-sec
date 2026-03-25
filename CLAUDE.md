@@ -16,7 +16,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning)
 - `/src/services` - Service layer (vapiClient.ts for Vapi REST API)
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
-- `/dashboard` - Next.js frontend (components/, lib/, app/)
+- `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
 - `/supabase/migrations` - 57 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, bug fixes)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
@@ -92,11 +92,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 301 backend tests + 194 dashboard tests = 495 total passing. Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 315 backend tests + 252 dashboard tests = 567 total passing. Zero TypeScript errors.
 
 ### Remaining (Phase 13)
-- **Upgrade Supabase to Pro tier** ($25/mo — free tier compute budget exhausted, edge functions throttled)
-- **Test end-to-end call**: Edge functions deployed but not responding due to free tier limits. Once upgraded, test: call +1 (630) 397-0194 → AI answers → books appointment
+- **Supabase support ticket** — project stuck in "pausing" state (known platform bug, not free tier). Edge functions boot but gateway won't forward requests. See `TRIAGE.md` for full report.
+- **Test end-to-end call**: Edge functions deployed but not responding due to Supabase bug. Once support resets project state, test: call +1 (630) 397-0194 → AI answers → books appointment
 - **Deploy dashboard** (Vercel or Railway — currently local only)
 - **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
 - SetupWizard Step 7 "Go Live" (activate phone from wizard)
@@ -124,7 +124,7 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - `VAPI_API_KEY` set in Railway
 - Edge functions deployed to Supabase (vapi-tools v9), DB URL secrets updated
 - Phone provisioned: +1 (630) 397-0194 on DynaTire (Vapi voice: Elliot, LLM: Groq llama-3.3-70b-versatile)
-- **Blocker**: Supabase free tier compute exhausted — edge functions not responding. Need Pro tier ($25/mo)
+- **Blocker**: Supabase project stuck in "pausing" state — edge functions unreachable. Support ticket needed (see TRIAGE.md)
 - **Still needs**: Dashboard deployment, DASHBOARD_URL env var
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
@@ -154,21 +154,21 @@ A full UI/UX design session was completed. All decisions are documented in `docs
 
 ### Key changes that affect your work:
 
-**New work items (in priority order):**
-1. Apply dark sidebar visual style to real Next.js dashboard
-2. Rebuild theme system — add `--font-display` / `--font-body` to all 8 themes, implement dropdown switcher
-3. Flip the scheduler — rows=staff, columns=hours, sticky names, business hours shading, zoom control
-4. Staff quick profile card — read-only, anchored to name cell, exact layout in UI_UX_DESIGN.md
-5. Skills toggle in scheduler — Hours | Skills mode, skill-based coloring, labeled bars
-6. Drag to reorder staff rows — same pattern as tenant reorder, save/discard, default no-save on exit
-7. Rebuild analytics — 6 real metrics, see UI_UX_DESIGN.md
-8. Remove Coverage Map from navigation entirely
+**Design session work items (all complete as of 2026-03-25):**
+1. ~~Apply dark sidebar visual style~~ — Done. All components use CSS vars, all themes dark.
+2. ~~Rebuild theme system~~ — Done. `--font-display`/`--font-body` in all 8 themes, dropdown switcher.
+3. ~~Flip the scheduler~~ — Done. NewSchedulerView: rows=staff, cols=hours, 24hr, split-panel scroll sync, business hours shading, zoom.
+4. ~~Staff quick profile card~~ — Done. Read-only, anchored, outside-click dismiss, skills as indented vertical list.
+5. ~~Skills toggle~~ — Done. Hours mode (shift bar + appointments) / Skills mode (stacked skill-colored bars).
+6. ~~Drag to reorder staff rows~~ — Done. Grip handles, save/discard, persists to localStorage per tenant.
+7. ~~Rebuild analytics~~ — Done. 3 active metrics (booking data), 3 Phase 2 placeholders (Vapi).
+8. ~~Remove Coverage Map~~ — Done. `ServiceCoverageView.tsx` deleted, zero references remain.
 
 **Fonts locked:** Bebas Neue (`--font-display`) + DM Sans (`--font-body`). Universal. Use CSS variables only.
 
-**Coverage Map removed:** Replaced by Skills toggle in Scheduler. Remove from sidebar, routing, and all references.
+**Coverage Map removed:** Fully deleted. `ServiceCoverageView.tsx` removed. `CoverageBar` and `CoverageStatusBadge` primitives retained (used by SetupWizard, SkillMap, ResourceColumns).
 
-**Analytics rebuilt:** Old version discarded. New version in UI_UX_DESIGN.md. Only build what we can actually measure.
+**Analytics rebuilt:** Old version discarded. 6 metrics defined — 3 active from booking data (Busiest Hours, Return Rate, No-Show Pattern), 3 pending Vapi call log integration.
 
 **Logo:** "Secretary HQ" (space between words).
 

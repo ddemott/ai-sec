@@ -150,8 +150,23 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   const [viewMode, setViewMode] = useState<ViewMode>('hours');
 
   // --- Drag-to-reorder state (Item #6) ---
-  const [staffOrder, setStaffOrder] = useState<string[]>([]);
-  const [savedOrder, setSavedOrder] = useState<string[]>([]);
+  const storageKey = tenantId ? `scheduler-staff-order-${tenantId}` : null;
+
+  // Load persisted order from localStorage on mount
+  const [staffOrder, setStaffOrder] = useState<string[]>(() => {
+    if (!storageKey) return [];
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+  const [savedOrder, setSavedOrder] = useState<string[]>(() => {
+    if (!storageKey) return [];
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [orderDirty, setOrderDirty] = useState(false);
 
@@ -163,8 +178,17 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
     const newSet = new Set(ids);
     const sameSet = currentSet.size === newSet.size && ids.every(id => currentSet.has(id));
     if (!sameSet) {
-      setStaffOrder(ids);
-      setSavedOrder(ids);
+      // If we have a persisted order, apply it (filter to only existing employees)
+      if (savedOrder.length > 0) {
+        const validSaved = savedOrder.filter(id => newSet.has(id));
+        const newIds = ids.filter(id => !new Set(validSaved).has(id));
+        const merged = [...validSaved, ...newIds];
+        setStaffOrder(merged);
+        setSavedOrder(merged);
+      } else {
+        setStaffOrder(ids);
+        setSavedOrder(ids);
+      }
       setOrderDirty(false);
     }
   }, [baseEmployees, savedOrder]);
@@ -309,7 +333,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   const handleSaveOrder = useCallback(() => {
     setSavedOrder([...staffOrder]);
     setOrderDirty(false);
-  }, [staffOrder]);
+    if (storageKey) {
+      try { localStorage.setItem(storageKey, JSON.stringify(staffOrder)); } catch { /* ignore */ }
+    }
+  }, [staffOrder, storageKey]);
 
   const handleDiscardOrder = useCallback(() => {
     setStaffOrder([...savedOrder]);
@@ -655,15 +682,24 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                       })}
                     </div>
 
-                    {/* Hours mode: appointment blocks */}
-                    {viewMode === 'hours' && empAppointments.map((appt) => (
-                      <AppointmentBlockNew
-                        key={appt.id}
-                        appointment={appt}
-                        colW={colW}
-                        services={services}
-                      />
-                    ))}
+                    {/* Hours mode: shift bar + appointment blocks */}
+                    {viewMode === 'hours' && (
+                      <>
+                        <ShiftBar
+                          shifts={shiftsByEmployee.get(empId) || []}
+                          colW={colW}
+                          rowHeight={rowH}
+                        />
+                        {empAppointments.map((appt) => (
+                          <AppointmentBlockNew
+                            key={appt.id}
+                            appointment={appt}
+                            colW={colW}
+                            services={services}
+                          />
+                        ))}
+                      </>
+                    )}
 
                     {/* Skills mode: stacked skill bars (Item #5) */}
                     {viewMode === 'skills' && (
@@ -735,6 +771,60 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
           onClose={handleProfileCardClose}
         />
       )}
+    </div>
+  );
+}
+
+// --- Shift bar sub-component (Hours mode) ---
+
+interface ShiftBarProps {
+  shifts: { start_time?: string; end_time?: string }[];
+  colW: number;
+  rowHeight: number;
+}
+
+function ShiftBar({ shifts, colW, rowHeight }: ShiftBarProps) {
+  if (shifts.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0" style={{ pointerEvents: 'none', zIndex: 1 }}>
+      {shifts.map((shift, i) => {
+        if (!shift.start_time || !shift.end_time) return null;
+        const startH = shiftTimeToHour(shift.start_time);
+        const endH = shiftTimeToHour(shift.end_time);
+        const left = startH * colW;
+        const width = (endH - startH) * colW;
+
+        return (
+          <div
+            key={i}
+            className="absolute rounded-sm"
+            style={{
+              left,
+              width: Math.max(width, 4),
+              top: 3,
+              bottom: 3,
+              background: 'var(--accent-muted, rgba(59,130,246,0.1))',
+              border: '1px solid var(--border-soft, #333)',
+            }}
+            data-testid={`shift-bar-${i}`}
+          >
+            {/* Shift time label at left edge */}
+            {width > 80 && (
+              <span
+                className="absolute left-1.5 top-0.5 text-[10px] font-medium"
+                style={{
+                  color: 'var(--text-muted, #888)',
+                  fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+                  lineHeight: `${rowHeight - 8}px`,
+                }}
+              >
+                {formatHour(Math.floor(startH))} – {formatHour(Math.floor(endH))}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

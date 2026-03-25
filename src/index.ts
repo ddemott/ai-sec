@@ -146,7 +146,7 @@ function verifyToken(token: string): { tenant_id: string; user_id: string; email
   }
 }
 
-const PUBLIC_ROUTES = ['/health', '/login', '/', '/billing/webhook'];
+const PUBLIC_ROUTES = ['/health', '/login', '/', '/demo', '/billing/webhook'];
 app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS') return;
   const urlPath = request.url.split('?')[0];
@@ -194,6 +194,13 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
 
 app.get('/', async (_req, reply) => {
   const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'index.html');
+  const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
+  const html = fs.readFileSync(htmlPath, 'utf-8')
+    .replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
+  reply.type('text/html').send(html);
+});
+app.get('/demo', async (_req, reply) => {
+  const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'secretaryhq-demo.html');
   const html = fs.readFileSync(htmlPath, 'utf-8');
   reply.type('text/html').send(html);
 });

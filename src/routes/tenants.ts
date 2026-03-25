@@ -126,9 +126,19 @@ export function registerTenantRoutes(app: any, pool: Pool) {
     const result = await withPoolClient(pool, async (client) => {
       await client.query('BEGIN');
       try {
+        // Prevent duplicate tenant names
+        const existing = await client.query(
+          'SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)',
+          [body.tenant_name.trim()]
+        );
+        if (existing.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return { error: `A business named "${body.tenant_name.trim()}" already exists.` };
+        }
+
         const tenantRes = await client.query(
           'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
-          [body.tenant_name, body.business_type]
+          [body.tenant_name.trim(), body.business_type]
         );
         const tenantId = tenantRes.rows[0].id;
 
@@ -147,6 +157,9 @@ export function registerTenantRoutes(app: any, pool: Pool) {
         throw err;
       }
     });
+    if (result && typeof result === 'object' && 'error' in result) {
+      return reply.status(409).send({ success: false, error: result.error });
+    }
     logEvent(req, 'tenant_created', { tenantId: result, name: body.tenant_name });
     return reply.send({ success: true, tenant_id: result });
   }, 'Failed to create tenant'));

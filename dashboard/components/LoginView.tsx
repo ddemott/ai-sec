@@ -129,7 +129,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       
       <div className="mt-8 flex items-center text-gray-400 text-xs">
         <Calendar className="w-4 h-4 mr-2" />
-        <span>SecretaryHQ v0.1.0 • Ready for Live Integration</span>
+        <span>Secretary HQ v0.1.0 • Ready for Live Integration</span>
       </div>
     </div>
   )

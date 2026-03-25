@@ -15,12 +15,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="navy" className="dark">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
+        {/* Inline critical theme to prevent white flash before React hydrates */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          html { background-color: #090E1A; color: #E8F0FF; }
+        ` }} />
+        {/* Apply saved theme before React loads */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var t = localStorage.getItem('theme');
+            if (t) document.documentElement.setAttribute('data-theme', t);
+          } catch(e) {}
+        ` }} />
       </head>
       <body className="antialiased" style={{ fontFamily: 'var(--font-body)' }}>
         <Providers>{children}</Providers>
