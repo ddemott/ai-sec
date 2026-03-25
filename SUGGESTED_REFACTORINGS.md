@@ -76,3 +76,5 @@
 | 19 | Done | 2026-03-24 | Replaced with book_with_scheduling_atomic() — single SQL function does the entire find+book flow, eliminating the dynamic query builder need |
 | 21 | Done | 2026-03-24 | Edge function uses search_tenant_docs_normalized() RPC. Query normalization was already wired. |
 | 22 | Done | 2026-03-24 | Zod schemas for get_scheduling_options and book_with_scheduling. All 7 edge function tools validated. Schema lookup table replaces if/else chain. |
+| 23 | Done | 2026-03-24 | ERR constants in src/constants.ts; UI constants in dashboard/lib/constants.ts (error helpers, day names, shift defaults) |
+| 24 | Done | 2026-03-24 | Granular hooks: useCustomers(), useResources(), useEmployees(), useServices(), useSkills() — fetch single resource type instead of all 5 |
