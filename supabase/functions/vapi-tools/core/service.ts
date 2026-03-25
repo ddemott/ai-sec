@@ -11,6 +11,16 @@ export class AISecretaryService {
   }
 
   /**
+   * Warm up the DB connection pool. Called on call-start event
+   * so the pool is ready before the first tool call.
+   */
+  async warmUp(logger: Logger): Promise<void> {
+    logger.info("Warming up DB pool");
+    await this.repo.ping();
+    logger.info("DB pool warm");
+  }
+
+  /**
    * Enhanced context lookup that detects the tenant based on the inbound phone number
    * if tenantId is not provided.
    */

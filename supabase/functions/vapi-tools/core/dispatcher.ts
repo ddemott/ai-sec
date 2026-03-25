@@ -133,6 +133,14 @@ export class Dispatcher {
 
   private async handleCallStarted(message: any, logger: Logger): Promise<Response> {
     logger.info({ callId: message.call.id }, "Call started event received");
+
+    // Warm up DB pool while the greeting plays — eliminates cold start on first tool call
+    try {
+      await this.service.warmUp(logger);
+    } catch (err) {
+      logger.error({ err }, "Pool warm-up failed (non-fatal)");
+    }
+
     return new Response(null, { status: 200 });
   }
 
