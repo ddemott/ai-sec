@@ -163,7 +163,7 @@ export default function ResourceManagerView() {
             <Wrench className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">{vocab.resource_plural} & Services</h1>
+            <h1 className="text-3xl font-display">{vocab.resource_plural} & Services</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Define which services can be performed at each location.</p>
           </div>
         </div>

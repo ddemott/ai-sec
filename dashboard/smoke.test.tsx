@@ -8,6 +8,6 @@ test('Dashboard Home Page Smoke Test', () => {
   render(<SessionProvider><Home /></SessionProvider>)
 
   // Verify that the login portal renders correctly
-  expect(screen.getByText(/SecretaryHQ Portal/i)).toBeTruthy()
+  expect(screen.getByText(/Secretary HQ Portal/i)).toBeTruthy()
   expect(screen.getByText(/Sign In to Dashboard/i)).toBeTruthy()
 })

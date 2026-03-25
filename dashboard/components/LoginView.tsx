@@ -53,7 +53,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           <div className="bg-white/20 p-3 rounded-xl mb-4 backdrop-blur-sm">
             <Bot className="w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">SecretaryHQ Portal</h1>
+          <h1 className="text-2xl font-display tracking-tight">Secretary HQ Portal</h1>
           <p className="text-blue-100 text-sm mt-1">Multi-Tenant Management Console</p>
         </div>
 

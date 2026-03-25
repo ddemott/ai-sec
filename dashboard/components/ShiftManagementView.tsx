@@ -159,7 +159,7 @@ export default function ShiftManagementView() {
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">{vocab.employee_label} Working Hours</h1>
+            <h1 className="text-3xl font-display">{vocab.employee_label} Working Hours</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Define when your team is available so the AI never overbooks.</p>
           </div>
         </div>

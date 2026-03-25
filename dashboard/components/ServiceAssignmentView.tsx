@@ -177,7 +177,7 @@ export default function ServiceAssignmentView() {
             <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Service Catalog</h1>
+            <h1 className="text-3xl font-display">Service Catalog</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Manage your business offerings and operational logic.</p>
           </div>
         </div>
@@ -373,7 +373,7 @@ export default function ServiceAssignmentView() {
           {wizardStep === 1 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-2xl font-bold mb-2">Service Details</h2>
+                <h2 className="text-2xl font-display mb-2">Service Details</h2>
                 <p className="text-gray-500 dark:text-gray-400">Tell us what this service is called and how long it takes.</p>
               </header>
               <div className="space-y-4">
@@ -405,7 +405,7 @@ export default function ServiceAssignmentView() {
           {wizardStep === 2 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-2xl font-bold mb-2">{vocab.resource_plural} & Equipment</h2>
+                <h2 className="text-2xl font-display mb-2">{vocab.resource_plural} & Equipment</h2>
                 <p className="text-gray-500 dark:text-gray-400">Which {vocab.resource_plural.toLowerCase()} can this service be performed at?</p>
               </header>
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
@@ -432,7 +432,7 @@ export default function ServiceAssignmentView() {
           {wizardStep === 3 && (
             <div className="space-y-6">
               <header>
-                <h2 className="text-2xl font-bold mb-2">Qualified {vocab.employee_plural}</h2>
+                <h2 className="text-2xl font-display mb-2">Qualified {vocab.employee_plural}</h2>
                 <p className="text-gray-500 dark:text-gray-400">Which {vocab.employee_plural.toLowerCase()} are qualified to perform this service?</p>
               </header>
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">

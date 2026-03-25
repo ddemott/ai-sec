@@ -173,7 +173,7 @@ export default function SettingsView() {
                 <Settings className="w-6 h-6" />
             </div>
             <div>
-                <h1 className="text-3xl font-bold">Business Settings</h1>
+                <h1 className="text-3xl font-display">Business Settings</h1>
                 <p className="text-gray-500 dark:text-gray-400">Manage your bays, resources, and preferences</p>
             </div>
         </header>
@@ -328,7 +328,7 @@ export default function SettingsView() {
           <ShieldCheck className="w-6 h-6" />
         </div>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold dark:text-white">Business Onboarding</h1>
+          <h1 className="text-2xl md:text-3xl font-display">Business Onboarding</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 italic font-medium">Super-Admin Console (Multi-Tenant Management)</p>
         </div>
       </header>

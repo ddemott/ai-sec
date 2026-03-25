@@ -125,7 +125,7 @@ export default function AIConfigView() {
             <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl md:text-3xl font-bold dark:text-white">AI Persona Tuning</h1>
+            <h1 className="text-xl md:text-3xl font-display">AI Persona Tuning</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">Customize how your SecretaryHQ agent talks and behaves</p>
           </div>
         </div>

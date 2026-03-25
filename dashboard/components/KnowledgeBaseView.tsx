@@ -93,7 +93,7 @@ export default function KnowledgeBaseView() {
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Knowledge Base</h1>
+            <h1 className="text-3xl font-display">Knowledge Base</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Feed the AI with PDFs and documents to handle complex business questions.</p>
           </div>
         </div>

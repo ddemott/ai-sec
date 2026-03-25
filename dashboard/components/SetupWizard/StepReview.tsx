@@ -21,15 +21,15 @@ export function Step6Review({ services, resources, employees, coverageData, load
       {/* Summary counts */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{services.length}</div>
+          <div className="text-2xl font-display">{services.length}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">Services</div>
         </div>
         <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{employees.length}</div>
+          <div className="text-2xl font-display">{employees.length}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">{vocab.employee_plural}</div>
         </div>
         <div className="rounded-xl bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-700 p-3 text-center">
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{resources.length}</div>
+          <div className="text-2xl font-display">{resources.length}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">{vocab.resource_plural}</div>
         </div>
       </div>

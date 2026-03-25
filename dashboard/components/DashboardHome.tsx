@@ -87,7 +87,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl mx-auto">
       {/* GREETING */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-2xl font-display">
           {greeting}, {userName || 'there'}
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -276,7 +276,7 @@ function StatCard({ icon: Icon, label, value, color, onClick }: {
       className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] hover:border-blue-300 dark:hover:border-blue-700 transition-colors text-left"
     >
       <Icon className={`w-5 h-5 ${colorClass} mb-2`} />
-      <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+      <div className={`text-2xl font-display ${colorClass}`}>{value}</div>
       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
     </button>
   )

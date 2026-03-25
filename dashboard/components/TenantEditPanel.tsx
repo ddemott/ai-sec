@@ -84,7 +84,7 @@ export function TenantEditPanel({
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl md:text-3xl font-bold dark:text-white">{selectedTenant.name}</h1>
+            <h1 className="text-xl md:text-3xl font-display">{selectedTenant.name}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-mono italic">
               {isEditing ? 'Global Attributes Editor' : 'Business Settings Overview'}
             </p>

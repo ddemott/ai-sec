@@ -117,7 +117,7 @@ export function CustomerDetailPanel({
                   {isCreating ? '+' : (selectedCustomer?.name?.charAt(0) || '?')}
                   </div>
                   <div>
-                  <h1 className="text-xl md:text-3xl font-bold dark:text-white">{isCreating ? 'New Customer' : (selectedCustomer?.name || 'Unknown')}</h1>
+                  <h1 className="text-xl md:text-3xl font-display">{isCreating ? 'New Customer' : (selectedCustomer?.name || 'Unknown')}</h1>
                   {!isCreating && (
                       <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base flex items-center">
                       <Phone className="w-4 h-4 mr-2" /> {formatPhone(selectedCustomer?.phone)}

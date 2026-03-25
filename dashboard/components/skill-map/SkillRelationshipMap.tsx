@@ -80,7 +80,7 @@ export default function SkillRelationshipMap() {
             <GitBranch className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Skill Relationship Map</h1>
+            <h1 className="text-3xl font-display">Skill Relationship Map</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               Click the link icon on any node to connect it. Click a line to disconnect.
             </p>

@@ -67,7 +67,7 @@ export default function SkillManagementView() {
             <Award className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Skills Master List</h1>
+            <h1 className="text-3xl font-display">Skills Master List</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Define the certified expertise and capabilities for your business.</p>
           </div>
         </div>

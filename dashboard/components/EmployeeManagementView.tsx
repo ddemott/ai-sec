@@ -147,7 +147,7 @@ export default function EmployeeManagementView() {
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">{vocab.employee_plural}</h1>
+            <h1 className="text-3xl font-display">{vocab.employee_plural}</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">{`Manage ${vocab.employee_plural.toLowerCase()} and assign them to services.`}</p>
           </div>
         </div>

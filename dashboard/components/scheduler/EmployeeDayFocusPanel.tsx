@@ -72,11 +72,11 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
         <div className="p-4 border-b border-gray-100 dark:border-gray-800">
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100" data-testid="focus-appointment-count">{sorted.length}</div>
+              <div className="text-2xl font-display" data-testid="focus-appointment-count">{sorted.length}</div>
               <div className="text-xs text-gray-400 dark:text-gray-500 uppercase font-bold">Appointments</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100" data-testid="focus-booked-hours">{totalBookedHours.toFixed(1)}h</div>
+              <div className="text-2xl font-display" data-testid="focus-booked-hours">{totalBookedHours.toFixed(1)}h</div>
               <div className="text-xs text-gray-400 dark:text-gray-500 uppercase font-bold">Booked</div>
             </div>
             <div className="text-center">

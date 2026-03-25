@@ -95,7 +95,7 @@ export function AppointmentDetailPanel({
             <div className="flex items-start">
               <button onClick={onCloseMobile} className="md:hidden p-2 -ml-2 mr-2 text-blue-600 dark:text-blue-400"><ChevronLeft className="w-6 h-6" /></button>
               <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+                  <h1 className="text-2xl md:text-3xl font-display">
                       {isCreating ? `New ${vocab.booking_label}` : (isEditing ? `Edit ${vocab.booking_label}` : selectedAppointment?.description)}
                   </h1>
                     {selectedAppointment?.status === 'canceled' && (
