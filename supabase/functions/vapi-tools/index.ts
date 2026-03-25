@@ -54,14 +54,57 @@ const GetPolicyAnswerSchema = z.object({
   question: z.string().min(1)
 });
 
+const GetSchedulingOptionsSchema = z.object({
+  tenant_id: z.string().uuid(),
+  requirements: z.object({
+    serviceType: z.string().min(1),
+    requiredResourceCapabilities: z.array(z.string()).optional(),
+    requiredEmployeeSkills: z.array(z.string()).optional(),
+  }),
+  window: z.object({
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+  }),
+});
+
+const BookWithSchedulingSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  name: z.string().optional(),
+  description: z.string().default("Booking via SecretaryHQ"),
+  call_id: z.string().min(1),
+  location: z.string().optional(),
+  requirements: z.object({
+    serviceType: z.string().min(1),
+    requiredResourceCapabilities: z.array(z.string()).optional(),
+    requiredEmployeeSkills: z.array(z.string()).optional(),
+    preferredResourceId: z.string().optional(),
+  }),
+  window: z.object({
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+  }),
+});
+
 const GetServiceCatalogSchema = z.object({
   tenant_id: z.string().uuid()
 });
 
+/** Create a JSON response with correlation headers for tracing */
+function jsonResponse(body: unknown, status: number, requestId: string): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Request-Id": requestId,
+    },
+  });
+}
+
 export async function handler(req: Request): Promise<Response> {
   const { method, headers } = req;
-  const requestId = crypto.randomUUID();
-  
+  const requestId = headers.get("x-request-id") || crypto.randomUUID();
+
   if (method === "OPTIONS") return new Response("ok", { status: 200 });
 
   // SECURITY: Verify webhook secret
@@ -73,7 +116,7 @@ export async function handler(req: Request): Promise<Response> {
       incomingSecret: incomingSecret ? `${incomingSecret.slice(0, 8)}...` : null,
       timestamp: new Date().toISOString(),
     }));
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return jsonResponse({ error: "Unauthorized" }, 401, requestId);
   }
 
   try {
@@ -84,7 +127,7 @@ export async function handler(req: Request): Promise<Response> {
     const logger = createLogger({ requestId });
 
     if (!message || !message.type) {
-        return new Response(JSON.stringify({ result: { success: false, error: "Invalid message format" } }), { status: 200 });
+        return jsonResponse({ result: { success: false, error: "Invalid message format" } }, 200, requestId);
     }
 
     // Validate tool-call arguments at the entry point (single validation pass — BUG-044)
@@ -96,15 +139,23 @@ export async function handler(req: Request): Promise<Response> {
       try {
         args = JSON.parse(argsString);
       } catch (e) {
-        return new Response(JSON.stringify({ result: { success: false, error: "Invalid JSON in tool arguments" } }), { status: 200 });
+        return jsonResponse({ result: { success: false, error: "Invalid JSON in tool arguments" } }, 200, requestId);
       }
 
       // Validate with Zod — typed args are passed to dispatcher via toolCall
-      if (name === "get_customer_context") GetContextSchema.parse(args);
-      if (name === "check_availability") CheckAvailabilitySchema.parse(args);
-      if (name === "book_appointment") BookAppointmentSchema.parse(args);
-      if (name === "get_company_policy_answer") GetPolicyAnswerSchema.parse(args);
-      if (name === "get_service_catalog") GetServiceCatalogSchema.parse(args);
+      const schemas: Record<string, z.ZodType> = {
+        get_customer_context: GetContextSchema,
+        check_availability: CheckAvailabilitySchema,
+        book_appointment: BookAppointmentSchema,
+        get_company_policy_answer: GetPolicyAnswerSchema,
+        get_service_catalog: GetServiceCatalogSchema,
+        get_scheduling_options: GetSchedulingOptionsSchema,
+        book_with_scheduling: BookWithSchedulingSchema,
+      };
+      const schema = schemas[name];
+      if (schema) {
+        args = schema.parse(args);
+      }
 
       // Store parsed args back so dispatcher doesn't re-parse
       toolCall.function.parsedArgs = args;
@@ -116,11 +167,11 @@ export async function handler(req: Request): Promise<Response> {
     const err = e as Error;
     if (err instanceof z.ZodError) {
       // Return 200 with Vapi-compatible error shape so the AI can relay the error to the caller
-      return new Response(JSON.stringify({ result: { success: false, error: `Validation failed: ${err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}` } }), { status: 200 });
+      return jsonResponse({ result: { success: false, error: `Validation failed: ${err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}` } }, 200, requestId);
     }
     
     if (err instanceof DomainError) {
-      return new Response(JSON.stringify({ result: { success: false, error: err.message } }), { status: 200 });
+      return jsonResponse({ result: { success: false, error: err.message } }, 200, requestId);
     }
 
     console.error(JSON.stringify({
@@ -131,6 +182,6 @@ export async function handler(req: Request): Promise<Response> {
       error_stack: err.stack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
     }));
-    return new Response(JSON.stringify({ result: { success: false, error: "Internal server error" } }), { status: 200 });
+    return jsonResponse({ result: { success: false, error: "Internal server error", requestId } }, 200, requestId);
   }
 }

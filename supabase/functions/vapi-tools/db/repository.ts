@@ -70,7 +70,22 @@ export class PostgresRepository implements IRepository {
     }
   }
 
+  /** Transient Postgres error codes that are safe to retry */
+  private static RETRYABLE_CODES = new Set([
+    '08000', // connection_exception
+    '08003', // connection_does_not_exist
+    '08006', // connection_failure
+    '57P01', // admin_shutdown
+    '57P03', // cannot_connect_now
+    '40001', // serialization_failure
+    '40P01', // deadlock_detected
+  ]);
+
   private async withClient<T>(tenantId: string | null, fn: (client: any) => Promise<T>): Promise<T> {
+    return this.withClientRetry(tenantId, fn, 2);
+  }
+
+  private async withClientRetry<T>(tenantId: string | null, fn: (client: any) => Promise<T>, retriesLeft: number): Promise<T> {
     const client = await connectWithTimeout(this.pool);
     try {
       if (tenantId) {
@@ -86,11 +101,30 @@ export class PostgresRepository implements IRepository {
       return await fn(client);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
+      const pgCode = (error as any).code || (error as any).fields?.code;
+
+      // Retry on transient errors (connection dropped, deadlock, etc.)
+      if (retriesLeft > 0 && pgCode && PostgresRepository.RETRYABLE_CODES.has(pgCode)) {
+        console.error(JSON.stringify({
+          event: "db_operation_retrying",
+          error_message: error.message,
+          pg_code: pgCode,
+          retries_left: retriesLeft,
+          tenantId,
+          timestamp: new Date().toISOString(),
+        }));
+        client.release();
+        await new Promise(r => setTimeout(r, 200)); // brief backoff
+        return this.withClientRetry(tenantId, fn, retriesLeft - 1);
+      }
+
       console.error(JSON.stringify({
         event: "db_operation_failed",
         error_message: error.message,
         error_name: error.name,
+        pg_code: pgCode || null,
         tenantId,
+        retries_left: retriesLeft,
         db_url_source: Deno.env.get("SUPABASE_DB_URL") ? "SUPABASE_DB_URL" : "DATABASE_URL",
         timestamp: new Date().toISOString(),
       }));
