@@ -1,13 +1,15 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Clock, AlertTriangle, Wrench, ChevronRight, Wand2, ArrowRight } from 'lucide-react'
+import { Calendar, Users, Clock, Wrench, ChevronRight, Wand2, ArrowRight } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext'
-import { useVocabulary, type Vocabulary } from '@/lib/VocabularyContext'
+import { useVocabulary } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
-import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
+import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
+import SetupWizard from './SetupWizard'
+import SoloWizard from './SetupWizard/SoloWizard'
 import type { Tab } from '../app/page'
 
 interface DashboardHomeProps {
@@ -18,6 +20,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const tenantId = useActiveTenantId()
   const { userName } = useSessionContext()
   const vocab = useVocabulary()
+
+  // Wizard state
+  type WizardMode = 'solo' | 'team' | null
+  const [wizardMode, setWizardMode] = useState<WizardMode>(null)
+  const [wizardDismissed, setWizardDismissed] = useState(false)
 
   interface DashboardAppointment { id: string; start_time: string; status: string; description?: string; customer_name?: string }
   interface DashboardEmployee { id: string; name: string; type?: string; is_active: boolean }
@@ -42,10 +49,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     setLoading(true)
     try {
       const today = new Date().toISOString().split('T')[0]
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
       const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
 
       const [appts, emps, svcs, res, cov] = await Promise.all([
-        Api.appointments.list(tenantId, { startDate: today, endDate: today }).catch(() => []),
+        Api.appointments.list(tenantId, { startDate: today, endDate: tomorrow }).catch(() => []),
         Api.employees.list(tenantId).catch(() => []),
         Api.services.list(tenantId).catch(() => []),
         Api.resources.list(tenantId).catch(() => []),
@@ -64,16 +72,20 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   }
 
   const todayAppointments = appointments.filter((a) => a.status === 'scheduled')
-  const coverageIssues = coverage.filter((c) => c.coverage_status !== 'full')
-  const noStaff = coverage.filter((c) => c.coverage_status === 'no_staff')
-  const noResource = coverage.filter((c) => c.coverage_status === 'no_resource')
-  const partial = coverage.filter((c) => c.coverage_status === 'partial')
-  const uncovered = coverage.filter((c) => c.coverage_status === 'uncovered')
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   const needsSetup = services.length === 0 || employees.length === 0 || resources.length === 0
+
+  function handleCloseWizard() {
+    setWizardMode(null)
+    setWizardDismissed(true)
+    loadData() // refresh counts after wizard completes
+  }
+
+  // Auto-show wizard chooser for new tenants that need setup
+  const showWizardChooser = needsSetup && !wizardDismissed && !wizardMode && !loading
 
   if (loading) {
     return (
@@ -95,26 +107,25 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </p>
       </div>
 
-      {/* SETUP PROMPT */}
-      {needsSetup && (
-        <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-5">
+      {/* SETUP PROMPT — shown if wizard was dismissed but setup still incomplete */}
+      {needsSetup && wizardDismissed && (
+        <div className="rounded-xl border-2 p-5" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' }}>
           <div className="flex items-start gap-4">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
-              <Wand2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
+              <Wand2 className="w-6 h-6" style={{ color: 'var(--accent-soft)' }} />
             </div>
             <div className="flex-1">
-              <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Complete your setup</h2>
+              <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Finish setting up your business</h2>
               <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {services.length === 0 && `Add your services. `}
                 {resources.length === 0 && `Add your ${vocab.resource_plural.toLowerCase()}. `}
                 {employees.length === 0 && `Add your ${vocab.employee_plural.toLowerCase()}. `}
-                The Setup Assistant will walk you through everything.
               </p>
               <Button
                 variant="primary"
                 size="sm"
                 className="mt-3"
-                onClick={() => onNavigate?.('my-business')}
+                onClick={() => setWizardDismissed(false)}
               >
                 <Wand2 className="w-4 h-4 mr-1.5" />
                 Open Setup Assistant
@@ -122,6 +133,20 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* WIZARD — auto-opens for new tenants, mode chooser first */}
+      {showWizardChooser && (
+        <WizardModeChooser
+          onChoose={(mode) => setWizardMode(mode)}
+          onClose={() => setWizardDismissed(true)}
+        />
+      )}
+      {wizardMode === 'solo' && (
+        <SoloWizard isOpen={true} onClose={handleCloseWizard} />
+      )}
+      {wizardMode === 'team' && (
+        <SetupWizard isOpen={true} onClose={handleCloseWizard} />
       )}
 
       {/* STAT CARDS */}
@@ -145,39 +170,28 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
           onClick={() => onNavigate?.('my-business')}
         />
         <StatCard
-          icon={AlertTriangle}
-          label="Coverage Issues"
-          value={coverageIssues.length}
-          color={coverageIssues.length > 0 ? 'red' : 'green'}
+          icon={Calendar}
+          label={`${vocab.resource_plural}`}
+          value={resources.length}
           onClick={() => onNavigate?.('my-business')}
         />
       </div>
 
-      {/* COVERAGE ALERTS */}
-      {coverageIssues.length > 0 && (
+      {/* SERVICE COVERAGE — neutral data, no judgment */}
+      {coverage.length > 0 && (
         <Card>
           <h2 className="font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <AlertTriangle className="w-4 h-4 text-yellow-500" />
-            Coverage Attention Needed
+            <Calendar className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
+            This Week&apos;s Coverage
           </h2>
           <div className="space-y-2">
-            {noStaff.map((c) => (
-              <CoverageRow key={c.service_id} service={c.service_name} status="no_staff" vocab={vocab} />
-            ))}
-            {noResource.map((c) => (
-              <CoverageRow key={c.service_id} service={c.service_name} status="no_resource" vocab={vocab} />
-            ))}
-            {uncovered.map((c) => (
-              <CoverageRow key={c.service_id} service={c.service_name} status="uncovered" vocab={vocab} />
-            ))}
-            {partial.map((c) => (
-              <CoverageRow
-                key={c.service_id}
-                service={c.service_name}
-                status="partial"
-                detail={`${c.covered_hours}/${c.total_open_hours} hours covered`}
-                vocab={vocab}
-              />
+            {coverage.map((c) => (
+              <div key={c.service_id} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{c.service_name}</span>
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {c.covered_hours}/{c.total_open_hours} hrs covered
+                </span>
+              </div>
             ))}
           </div>
         </Card>
@@ -259,55 +273,22 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   )
 }
 
-function StatCard({ icon: Icon, label, value, color, onClick }: {
+function StatCard({ icon: Icon, label, value, onClick }: {
   icon: React.ElementType
   label: string
   value: number
-  color?: 'red' | 'green'
   onClick?: () => void
 }) {
-  const colorStyle = color === 'red'
-    ? { color: '#ef4444' }
-    : color === 'green'
-    ? { color: '#22c55e' }
-    : { color: 'var(--accent-soft)' }
-
   return (
     <button
       onClick={onClick}
       className="p-4 rounded-xl border transition-colors text-left"
       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
     >
-      <Icon className="w-5 h-5 mb-2" style={colorStyle} />
-      <div className="text-2xl font-display" style={colorStyle}>{value}</div>
+      <Icon className="w-5 h-5 mb-2" style={{ color: 'var(--accent-soft)' }} />
+      <div className="text-2xl font-display" style={{ color: 'var(--text-primary)' }}>{value}</div>
       <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{label}</div>
     </button>
-  )
-}
-
-function CoverageRow({ service, status, detail, vocab }: {
-  service: string
-  status: string
-  detail?: string
-  vocab: Vocabulary
-}) {
-  const statusConfig: Record<string, { label: string; color: string }> = {
-    no_staff: { label: `No ${vocab.employee_plural.toLowerCase()} assigned`, color: 'danger' },
-    no_resource: { label: `No ${vocab.resource_plural.toLowerCase()} assigned`, color: 'danger' },
-    uncovered: { label: 'No shift coverage', color: 'danger' },
-    partial: { label: 'Partial coverage', color: 'warning' },
-  }
-
-  const cfg = statusConfig[status] || { label: status, color: 'secondary' }
-
-  return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
-      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{service}</span>
-      <div className="flex items-center gap-2">
-        {detail && <span className="text-xs text-gray-500">{detail}</span>}
-        <Badge variant={cfg.color as 'danger' | 'warning' | 'secondary'}>{cfg.label}</Badge>
-      </div>
-    </div>
   )
 }
 
