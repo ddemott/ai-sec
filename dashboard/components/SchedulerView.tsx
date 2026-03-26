@@ -6,22 +6,13 @@ import { useVocabulary } from '@/lib/VocabularyContext';
 import { useSchedulerData } from './scheduler/useSchedulerData';
 import type { SchedulerAppointment } from './scheduler/useSchedulerData';
 import { SchedulerDateNav } from './scheduler/SchedulerDateNav';
-import { StaffSwimLaneView } from './scheduler/StaffSwimLaneView';
 import { ResourceColumnsView } from './scheduler/ResourceColumnsView';
 import { AppointmentListView } from './scheduler/AppointmentListView';
 import { QuickBookPanel } from './scheduler/QuickBookPanel';
 import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
 import NewSchedulerView from './scheduler/NewSchedulerView';
 import { Button } from './ui/Button';
-import { Api } from '../lib/api';
-import { showToast } from './ui/Toast';
 import AppointmentView from './AppointmentView';
-
-function formatHourLabel(hour: number): string {
-  const h = hour % 12 || 12;
-  const ampm = hour < 12 ? 'AM' : 'PM';
-  return `${h}${ampm}`;
-}
 
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
 
@@ -78,74 +69,6 @@ export default function SchedulerView({}: SchedulerViewProps) {
     refreshScheduler();
     refreshStaticData();
   }, [refreshScheduler, refreshStaticData]);
-
-  const handleShiftDrag = useCallback(async (employeeId: string, startHour: number, endHour: number) => {
-    if (!tenantId) return;
-    // Only create shifts for actual employees, not user accounts
-    const emp = employees.find(e => String(e.id) === employeeId);
-    if (emp && emp.type === 'user') {
-      showToast('Shifts can only be created for employees, not user accounts', 'warning');
-      return;
-    }
-    const dayOfWeek = selectedDate.getDay(); // 0=Sun..6=Sat
-    const startTime = `${String(startHour).padStart(2, '0')}:00`;
-    const endTime = `${String(endHour).padStart(2, '0')}:00`;
-    try {
-      // Only delete shifts that overlap with the new one (allows split shifts like 8-12 + 1-5)
-      const existingShifts = shiftsByEmployee.get(String(employeeId)) || [];
-      for (const existing of existingShifts) {
-        if (!existing.id || !existing.start_time || !existing.end_time) continue;
-        const exStart = parseInt(existing.start_time.split(':')[0], 10);
-        const exEnd = parseInt(existing.end_time.split(':')[0], 10);
-        // Overlaps if new shift starts before existing ends AND new shift ends after existing starts
-        if (startHour < exEnd && endHour > exStart) {
-          await Api.shifts.delete(existing.id, tenantId);
-        }
-      }
-      // Create the new shift
-      await Api.shifts.create(tenantId, {
-        employee_id: employeeId,
-        day_of_week: dayOfWeek,
-        start_time: startTime,
-        end_time: endTime,
-      });
-      handleRefresh();
-      showToast(`Shift saved: ${formatHourLabel(startHour)}–${formatHourLabel(endHour)}`);
-    } catch (err) {
-      console.error('Failed to create shift:', err);
-      showToast('Failed to save shift', 'error');
-    }
-  }, [tenantId, selectedDate, handleRefresh, employees, shiftsByEmployee]);
-
-  const handleShiftResize = useCallback(async (shiftId: string, startHour: number, endHour: number) => {
-    if (!tenantId) return;
-    const startTime = `${String(startHour).padStart(2, '0')}:00`;
-    const endTime = `${String(endHour).padStart(2, '0')}:00`;
-    try {
-      await Api.shifts.update(shiftId, tenantId, { start_time: startTime, end_time: endTime });
-      handleRefresh();
-      showToast(`Shift resized: ${formatHourLabel(startHour)}–${formatHourLabel(endHour)}`);
-    } catch (err) {
-      console.error('Failed to resize shift:', err);
-      showToast('Failed to resize shift', 'error');
-    }
-  }, [tenantId, handleRefresh]);
-
-  const handleShiftDelete = useCallback(async (shiftId: string) => {
-    if (!tenantId) return;
-    try {
-      await Api.shifts.delete(shiftId, tenantId);
-      handleRefresh();
-      showToast('Shift deleted');
-    } catch (err) {
-      console.error('Failed to delete shift:', err);
-      showToast('Failed to delete shift', 'error');
-    }
-  }, [tenantId, handleRefresh]);
-
-  const handleEmployeeClick = useCallback((employee: { id: string | number; name: string }) => {
-    setFocusEmployee(employee);
-  }, []);
 
   const handleAppointmentClick = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
