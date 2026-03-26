@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { useStaticData } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext';
+import { useVocabulary } from '@/lib/VocabularyContext';
 import { useSchedulerData } from './scheduler/useSchedulerData';
 import type { SchedulerAppointment } from './scheduler/useSchedulerData';
 import { SchedulerDateNav } from './scheduler/SchedulerDateNav';
@@ -27,15 +28,16 @@ export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
 interface SchedulerViewProps {
 }
 
-const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType }[] = [
-  { key: 'staff', label: 'Staff', icon: Users },
-  { key: 'resources', label: 'Resources', icon: Columns3 },
-  { key: 'list', label: 'List', icon: List },
-  { key: 'calendar', label: 'Calendar', icon: Calendar },
-];
-
 export default function SchedulerView({}: SchedulerViewProps) {
   const tenantId = useActiveTenantId();
+  const vocab = useVocabulary();
+
+  const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType }[] = [
+    { key: 'staff', label: vocab.employee_plural, icon: Users },
+    { key: 'resources', label: vocab.resource_plural, icon: Columns3 },
+    { key: 'list', label: 'List', icon: List },
+    { key: 'calendar', label: 'Calendar', icon: Calendar },
+  ];
   const { customers, resources, employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
   // Only show actual employees in the scheduler, not user accounts (owners/admins)
   const employees = useMemo(() =>

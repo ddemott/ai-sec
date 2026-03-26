@@ -21,19 +21,16 @@ const typeConfig = {
     icon: Users,
     bgColor: 'bg-green-100 dark:bg-green-900/30',
     textColor: 'text-green-600 dark:text-green-400',
-    label: 'Staff',
   },
   skill: {
     icon: BookOpen,
     bgColor: 'bg-purple-100 dark:bg-purple-900/30',
     textColor: 'text-purple-600 dark:text-purple-400',
-    label: 'Skill',
   },
   resource: {
     icon: Cog,
     bgColor: 'bg-blue-100 dark:bg-blue-900/30',
     textColor: 'text-blue-600 dark:text-blue-400',
-    label: 'Resource',
   },
 }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { Employee } from '../../lib/types';
+import { useVocabulary } from '@/lib/VocabularyContext';
 
 export interface StaffProfileCardProps {
   employee: Employee;
@@ -26,6 +27,7 @@ export function StaffProfileCard({
   anchorRect,
   onClose,
 }: StaffProfileCardProps) {
+  const vocab = useVocabulary();
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Dismiss on outside click
@@ -108,7 +110,7 @@ export function StaffProfileCard({
             style={{ color: 'var(--text-muted, #888)' }}
             data-testid="staff-card-role"
           >
-            {employee.type === 'user' ? 'Admin' : 'Staff'}
+            {employee.type === 'user' ? 'Admin' : vocab.employee_label}
           </div>
         </div>
       </div>

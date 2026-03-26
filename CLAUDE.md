@@ -101,7 +101,7 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
 - SetupWizard Step 7 "Go Live" (activate phone from wizard)
 - UI/UX flow improvements (ongoing — finding issues through hands-on testing)
-- Vocabulary wiring (frontend still hardcodes "Resources"/"Employees")
+- ~~Vocabulary wiring~~ — Done. All dashboard components use `useVocabulary()` hook
 - Database webhooks for n8n triggers
 - Outlook calendar sync implementation
 - OAuth token refresh for calendar sync
