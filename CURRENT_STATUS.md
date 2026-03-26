@@ -195,7 +195,7 @@ Result returned to Vapi → LLM continues conversation
 | `withPoolClient()` helper | Eliminated 19 pool.connect/release blocks |
 | `requireTenantId()` helper | Replaced 29 tenant validation instances across 12 route files |
 | Lazy DB pool in edge function | Prevents boot crash if DB unreachable |
-| SetupWizard split | 1,386 lines → 8 focused files (types + 6 steps + orchestrator) |
+| SetupWizard split | 1,386 lines → 9 focused files (types + 7 steps + orchestrator) |
 | Dead code removal | Deleted unused onboard-business.tsx, core/models.ts, core/scheduling.ts |
 | Fetch timeouts | AbortController on getEmbedding (10s) and normalizeForEmbedding (15s) |
 | Pool standardization | tenants.ts + auth.ts: all pool.connect() → withPoolClient() + withHandler() |

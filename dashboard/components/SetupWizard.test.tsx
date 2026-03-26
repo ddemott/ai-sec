@@ -838,7 +838,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
 
     await waitFor(() => {
       const activateCall = mockFetch.mock.calls.find(
-        (call: [string, RequestInit?]) => typeof call[0] === 'string' && call[0].includes('/provisioning/activate')
+        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/provisioning/activate')
       )
       expect(activateCall).toBeDefined()
       const body = JSON.parse(activateCall![1]?.body as string)

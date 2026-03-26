@@ -128,7 +128,7 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - **Still needs**: Dashboard deployment, DASHBOARD_URL env var
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
-- **12A — Repeatable Setup Wizard**: 6-step guided setup, live coverage badges, coverage summary on final step.
+- **12A — Repeatable Setup Wizard**: 7-step guided setup (Services, Resources, Employees, Shifts, Assignments, Review, Go Live), live coverage badges, phone activation on final step.
 - **12B — Scheduler Views**: Staff swimlanes (24hr, zoom), resource columns, appointment list, calendar sub-view. Quick Book panel, Employee Day Focus panel.
 - **12C — Skill Relationship Map**: Interactive 3-column mind map with click-to-connect/disconnect. BookOpen icon for skills, Cog for resources.
 - **12D — Coverage Visibility**: `check_coverage_gaps()` RPC, coverage bars, status badges, `GET /coverage` endpoint.

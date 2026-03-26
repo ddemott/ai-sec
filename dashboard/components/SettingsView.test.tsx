@@ -100,7 +100,7 @@ describe('SettingsView: Calendar Section', () => {
 
     await waitFor(() => {
       const authCall = mockFetch.mock.calls.find(
-        (call: [string]) => typeof call[0] === 'string' && call[0].includes('/calendar/auth/google')
+        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/calendar/auth/google')
       )
       expect(authCall).toBeDefined()
     })
@@ -161,7 +161,7 @@ describe('SettingsView: Calendar Section', () => {
 
     await waitFor(() => {
       const disconnectCall = mockFetch.mock.calls.find(
-        (call: [string, RequestInit?]) =>
+        (call: any[]) =>
           typeof call[0] === 'string' && call[0].includes('/calendar/settings/disconnect')
       )
       expect(disconnectCall).toBeDefined()
@@ -199,7 +199,7 @@ describe('SettingsView: Calendar Section', () => {
     // The useEffect should detect calendarConnected=true and fetch calendar settings
     await waitFor(() => {
       const settingsCalls = mockFetch.mock.calls.filter(
-        (call: [string]) => typeof call[0] === 'string' && call[0].includes('/calendar/settings')
+        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/calendar/settings')
       )
       // Should be called at least twice: once from initial mount useEffect, once from query param detection
       expect(settingsCalls.length).toBeGreaterThanOrEqual(2)

@@ -49,7 +49,7 @@
 - Self-service registration (`POST /register`), onboarding flag, mobile bottom nav
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility
-- **Setup Wizard**: 6-step repeatable guided setup (Services, Resources, Employees, Shifts, Assignments, Review) with live coverage feedback, re-entry logic, first-run vs return modes
+- **Setup Wizard**: 7-step repeatable guided setup (Services, Resources, Employees, Shifts, Assignments, Review, Go Live) with live coverage feedback, phone activation, re-entry logic, first-run vs return modes
 - **Scheduler**: Staff swimlane view, resource columns view, appointment list view, date navigation, employee day focus panel, quick book panel (under 30 seconds)
 - **Skill Relationship Map**: Interactive 3-column layout (Employees | Skills | Resources) with animated SVG connection lines, broken chain detection, coverage badges
 - **Coverage Visibility**: `check_coverage_gaps()` Postgres function, coverage triggers, reusable coverage bar and badge components, `GET /coverage` and `GET /coverage/staffing` endpoints
@@ -302,7 +302,7 @@ Visual coverage in Phase 12 covers the dashboard. These are automated notificati
 - [ ] Update `book_appointment_atomic` and `check_coverage_gaps()` once decision is made.
 
 #### Solo Wizard Branching
-- [ ] `team_size = 1` > SoloWizard (2 steps: services + availability). `team_size > 1` > SetupWizard (6 steps).
+- [ ] `team_size = 1` > SoloWizard (3 steps: services + availability + review). `team_size > 1` > SetupWizard (7 steps).
 - [ ] Auto-created on solo completion: 1 employee (the owner), 1 personal resource, all services assigned.
 - [ ] Design reference: SoloWizard.html mockup from March 18 session.
 

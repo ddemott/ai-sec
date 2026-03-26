@@ -131,7 +131,7 @@ See `docs/DEPLOYMENT.md` for the detailed step-by-step guide.
 - **Service Staffing Map** — per-service, per-hour employee availability heatmap
 - **Unified CRM** — customer detail with appointments, call history, notes
 - **Skill Relationship Map** — interactive 3-column employee > service > resource view
-- **6-step setup wizard** — repeatable, re-enterable, with live coverage feedback
+- **7-step setup wizard** — repeatable, re-enterable, with live coverage feedback and phone activation
 - **Two-layer knowledge** — database facts (zero hallucination) + RAG for policies
 - **Contextual feedback** — in-app feedback button on every page
 - **Theme system** — 8 themes with CSS custom properties
