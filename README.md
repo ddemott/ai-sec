@@ -52,12 +52,13 @@ Reset the database with 3 realistic businesses:
 - **Coverage Visibility**: Coverage gaps are visible throughout the UI — scheduler, services list, skill map, and setup wizard.
 - **Analytics**: Call volume, booking conversion, and estimated revenue tracking.
 - **Calendar Sync**: Google Calendar and Outlook Calendar OAuth integration — appointments automatically sync on create, update, delete, and cancel.
+- **CRM Integrations**: Bidirectional sync with Jobber, HubSpot, Square, and ServiceTitan. OAuth flows, webhook receivers, timestamp-based conflict resolution. Push triggers fire on every appointment and customer mutation.
 - **Async Automation**: Post-call summarization and sentiment analysis via n8n workflows.
 
 ## Architecture at a Glance
 
 - **Voice Pipeline**: Telnyx (telephony) > Vapi (orchestrator, STT/LLM/TTS) > Supabase Edge Function (Deno) > Postgres
-- **Backend**: Fastify with 16 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
+- **Backend**: Fastify with 21 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript, 5 grouped navigation sections
 - **Database**: PostgreSQL + pgvector, Row Level Security for multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n workflows for post-call summaries, SMS notifications
@@ -67,11 +68,11 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Project Structure
 
-- `/src` — Fastify backend (16 route modules under `src/routes/`, middleware layer)
+- `/src` — Fastify backend (21 route modules under `src/routes/`, middleware layer)
 - `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
 - `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
 - `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` — 57 SQL migrations
+- `/supabase/migrations` — 60 SQL migrations
 - `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
 - `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
 - `/docs` — Architecture, plans, decisions, deployment guide, mockups
@@ -99,7 +100,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**795 tests passing** (482 backend + 313 dashboard) in ~25 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**1,104 tests passing** (791 backend + 313 dashboard) in ~25 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend
