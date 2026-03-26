@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
+import { syncAppointmentToCalendar } from '../services/calendarSync';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -38,6 +39,8 @@ export function registerAppointmentRoutes(
     const result = res.rows[0];
     if (result.success) {
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
+      // Fire-and-forget calendar sync — never blocks the response
+      syncAppointmentToCalendar(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
       return reply.send({ success: true, appointment_id: result.appointment_id });
     } else {
       return reply.status(400).send({ success: false, error: result.error_message });
@@ -115,6 +118,9 @@ export function registerAppointmentRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
+    // Sync delete to Google Calendar before removing from DB
+    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(() => {});
+
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM appointments WHERE id = $1', [id]);
     });
@@ -141,6 +147,8 @@ export function registerAppointmentRoutes(
     }
 
     logEvent(req, 'appointment_canceled', { appointmentId: id });
+    // Remove from Google Calendar — canceled appointments shouldn't block the slot
+    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(() => {});
     return reply.send({ success: true });
   }, 'Failed to cancel appointment'));
 
@@ -202,6 +210,8 @@ export function registerAppointmentRoutes(
     });
 
     logEvent(req, 'appointment_updated', { appointmentId: id });
+    // Sync update to Google Calendar
+    syncAppointmentToCalendar(pool, body.tenant_id, id, 'update').catch(() => {});
     return reply.send({ success: true });
   }, 'Failed to update appointment'));
 }

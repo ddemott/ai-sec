@@ -335,6 +335,7 @@ UI labels adapt per business type via 3-tier fallback:
 | 10 | Onboarding wizard (6-step) | Both | Missing | |
 | 11 | `useVocabulary` hook + React Context | Coding | **Done** | 3-tier fallback |
 | 12 | Replace hardcoded labels with vocabulary | Both | **Done** | 21 components wired |
+| — | Google Calendar OAuth + sync | Both | **Done** | Real OAuth, auto-sync on mutations |
 | 13 | Settings: "Customize Labels" section | Both | Missing | |
 | 14 | Dashboard home / quick actions landing | UI/UX | Missing | |
 | 15 | Contextual navigation (CRM → Calendar links) | Both | Missing | |

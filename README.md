@@ -51,26 +51,27 @@ Reset the database with 3 realistic businesses:
 - **CRM**: Searchable customer profiles with appointment history, call summaries, transcripts, and internal notes.
 - **Coverage Visibility**: Coverage gaps are visible throughout the UI — scheduler, services list, skill map, and setup wizard.
 - **Analytics**: Call volume, booking conversion, and estimated revenue tracking.
-- **Async Automation**: Post-call summarization, sentiment analysis, and Google Calendar sync via n8n workflows.
+- **Calendar Sync**: Google Calendar OAuth integration — appointments automatically sync on create, update, delete, and cancel. Outlook planned.
+- **Async Automation**: Post-call summarization and sentiment analysis via n8n workflows.
 
 ## Architecture at a Glance
 
 - **Voice Pipeline**: Telnyx (telephony) > Vapi (orchestrator, STT/LLM/TTS) > Supabase Edge Function (Deno) > Postgres
-- **Backend**: Fastify with 15 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
+- **Backend**: Fastify with 16 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript, 5 grouped navigation sections
 - **Database**: PostgreSQL + pgvector, Row Level Security for multi-tenancy, atomic booking RPCs
-- **Async Workers**: n8n workflows for post-call summaries, calendar sync, SMS notifications
+- **Async Workers**: n8n workflows for post-call summaries, SMS notifications
 - **Billing**: Stripe Checkout with subscription gate middleware (Solo $129/mo, Growth $279/mo, Professional $449/mo)
 
 See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Project Structure
 
-- `/src` — Fastify backend (15 route modules under `src/routes/`, middleware layer)
+- `/src` — Fastify backend (16 route modules under `src/routes/`, middleware layer)
 - `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
 - `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
 - `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` — 55 SQL migrations
+- `/supabase/migrations` — 57 SQL migrations
 - `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
 - `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
 - `/docs` — Architecture, plans, decisions, deployment guide, mockups
@@ -98,7 +99,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**624 tests passing** (256 backend + 368 dashboard) in ~20 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**567 tests passing** (315 backend + 252 dashboard) in ~20 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend

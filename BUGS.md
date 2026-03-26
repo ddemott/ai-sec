@@ -242,6 +242,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: The n8n calendar sync workflow routes to Google or Outlook, but the Outlook branch has no implementation. Neither branch handles OAuth token refresh.
 - **Impact**: Outlook calendar sync doesn't work. Google sync breaks when access tokens expire.
 - **Fix**: Implement Outlook branch; add token refresh logic before API calls.
+- **Status**: PARTIALLY FIXED — Google Calendar sync reimplemented directly in Fastify backend (`src/services/googleCalendar.ts`, `src/services/calendarSync.ts`) with full OAuth flow, automatic token refresh, and fire-and-forget sync on appointment mutations. Outlook branch remains unimplemented.
 
 ### BUG-034: notify_n8n_on_appointment trigger is a placeholder
 - **File**: `supabase/migrations/20260228000001_webhooks_and_logs.sql`

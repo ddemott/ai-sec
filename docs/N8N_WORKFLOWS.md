@@ -21,17 +21,12 @@ To maintain ultra-low latency in the voice call, all high-latency external tasks
 
 ---
 
-## 2. Workflow: External Calendar Sync (Planned)
-**Status:** Design complete, implementation pending.
+## 2. Workflow: External Calendar Sync (Superseded)
+**Status:** Replaced by direct Fastify integration.
 
-**Trigger:** Postgres Webhook (on `appointments` insert/update).
+Google Calendar sync is now handled directly in the Fastify backend (`src/services/googleCalendar.ts` + `src/services/calendarSync.ts`) rather than through n8n. Appointment mutations trigger fire-and-forget sync to Google Calendar with automatic token refresh. The n8n workflow blueprint (`n8n/calendar_sync.json`) is retained for reference but is no longer the active implementation.
 
-1.  **Lookup Tenant Credentials:** Get Google/Outlook OAuth tokens from the `tenants` table.
-2.  **Filter Status:** If status is `scheduled`:
-    -   **Google Calendar Node:** Create Event.
-    -   **Outlook Calendar Node:** Create Event.
-3.  **Store Mapping:** Update the `appointments` table with the `external_id` from the provider.
-4.  **Error Handling:** If sync fails, retry 3 times with exponential backoff.
+See `docs/ARCHITECTURE.md` section 7 for the current architecture.
 
 ---
 

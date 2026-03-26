@@ -175,6 +175,9 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 | `STRIPE_PRO_PRICE_ID` | Yes | Stripe price ID for Pro plan |
 | `STRIPE_ENTERPRISE_PRICE_ID` | No | Stripe price ID for Enterprise plan |
 | `DASHBOARD_URL` | No | Dashboard URL for Stripe checkout redirects (default: `https://localhost:3001`) |
+| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID (for Google Calendar sync) |
+| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
+| `GOOGLE_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/calendar/auth/google/callback`) |
 
 ---
 
@@ -249,10 +252,10 @@ The project includes two n8n workflow blueprints in `n8n/`:
 - Generates AI summaries and sentiment via OpenAI
 - Stores results in `call_summaries` table
 
-### 7.2 Calendar Sync (`n8n/calendar_sync.json`)
-- Triggered by the `notify_n8n_on_appointment` Postgres trigger (via `pg_net`)
-- Syncs new appointments to Google Calendar
-- Outlook sync branch is not yet implemented
+### 7.2 Calendar Sync (Direct Backend Integration)
+Google Calendar sync is now built directly into the Fastify backend — no n8n required. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` in Railway env vars. Tenants connect via Settings > Calendar Synchronization > Connect Google Calendar (OAuth flow). Appointments automatically sync on create, update, delete, and cancel.
+
+The legacy n8n blueprint (`n8n/calendar_sync.json`) is retained for reference but is no longer the active implementation.
 
 ### Setup
 1. Deploy n8n (self-hosted or [n8n.cloud](https://n8n.cloud))

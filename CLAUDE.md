@@ -14,7 +14,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 ## Key Directories
 - `/src` - Fastify backend (slim index.ts entry, 16 route modules under src/routes/)
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning)
-- `/src/services` - Service layer (vapiClient.ts for Vapi REST API)
+- `/src/services` - Service layer (vapiClient.ts for Vapi REST API, googleCalendar.ts for OAuth + Calendar API, calendarSync.ts for sync orchestration)
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
@@ -88,23 +88,23 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - RLS standardized on `app.current_tenant_id` (BUG-006)
 - Dev bypass button removed (BUG-005)
 - handleEditFormChange fixed in CRMView (BUG-004)
-- Fastify monolith broken into 15 route modules with RLS enforcement (BUG-017)
+- Fastify monolith broken into 16 route modules with RLS enforcement (BUG-017)
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
 Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 315 backend tests + 252 dashboard tests = 567 total passing. Zero TypeScript errors.
 
 ### Remaining (Phase 13)
-- **Supabase support ticket** — project stuck in "pausing" state (known platform bug, not free tier). Edge functions boot but gateway won't forward requests. See `TRIAGE.md` for full report.
+- **Supabase support ticket** — Email sent to support@supabase.com on 2026-03-26. Project stuck in "pausing" state (known platform bug affecting multiple users). Awaiting ticket number for infra team escalation. See `TRIAGE.md` for full log.
 - **Test end-to-end call**: Edge functions deployed but not responding due to Supabase bug. Once support resets project state, test: call +1 (630) 397-0194 → AI answers → books appointment
 - **Deploy dashboard** (Vercel or Railway — currently local only)
 - **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
 - SetupWizard Step 7 "Go Live" (activate phone from wizard)
 - UI/UX flow improvements (ongoing — finding issues through hands-on testing)
 - ~~Vocabulary wiring~~ — Done. All dashboard components use `useVocabulary()` hook
+- ~~Google Calendar sync~~ — Done. Real OAuth flow, token refresh, auto-sync on appointment create/update/delete/cancel
+- Outlook calendar sync implementation (Google done, Outlook deferred)
 - Database webhooks for n8n triggers
-- Outlook calendar sync implementation
-- OAuth token refresh for calendar sync
 - Beta testing with DynaTire
 
 ### Railway Deployment Status (as of 2026-03-23)

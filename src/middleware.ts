@@ -136,6 +136,7 @@ export function requireTenantId(req: AppRequest, reply: FastifyReply): string | 
 const TENANT_EXEMPT_ROUTES = [
   '/health', '/login', '/register', '/',
   '/billing/webhook',
+  '/calendar/auth/google/callback',
   '/tenants', '/templates', '/templates/full', '/templates/create',
 ];
 

@@ -314,6 +314,9 @@ export const Api = {
     getSettings: (tenantId: string | null) =>
       apiFetch<CalendarSettings | null>(`/calendar/settings`, tenantId ? { tenant_id: tenantId } : undefined),
 
+    getAuthUrl: (tenantId: string | null) =>
+      apiFetch<{ url: string }>(`/calendar/auth/google`, tenantId ? { tenant_id: tenantId } : undefined),
+
     updateSettings: (tenantId: string | null, data: Partial<CalendarSettings>) =>
       apiMutate<{ settings: CalendarSettings }>(`/calendar/settings`, 'POST', { tenant_id: tenantId, ...data }),
 

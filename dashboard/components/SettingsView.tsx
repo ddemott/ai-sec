@@ -57,6 +57,26 @@ export default function SettingsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuperAdmin, tenantId])
 
+  // Detect OAuth redirect params
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('calendarConnected') === 'true') {
+      fetchCalendarSettings()
+      // Clean up URL
+      const url = new URL(window.location.href)
+      url.searchParams.delete('calendarConnected')
+      window.history.replaceState({}, '', url.pathname)
+    }
+    if (params.get('calendarError')) {
+      console.error('Calendar connection failed:', params.get('calendarError'))
+      const url = new URL(window.location.href)
+      url.searchParams.delete('calendarError')
+      window.history.replaceState({}, '', url.pathname)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function fetchCalendarSettings() {
     try {
       const data = await Api.calendar.getSettings(tenantId)
@@ -67,20 +87,17 @@ export default function SettingsView() {
   }
 
   async function handleConnectCalendar(provider: 'google' | 'outlook') {
+    if (provider === 'outlook') {
+      // Outlook OAuth not yet implemented
+      return
+    }
     setCalLoading(true)
     try {
-      // Mocking the OAuth flow for the prototype
-      const mockCalendarId = provider === 'google' ? 'primary' : 'me/calendar'
-      const res = await Api.calendar.updateSettings(tenantId, {
-        provider,
-        external_calendar_id: mockCalendarId
-      })
-      if (res.success) {
-        setCalendarSettings(res.settings)
-      }
+      const res = await Api.calendar.getAuthUrl(tenantId)
+      // Redirect browser to Google's consent screen
+      window.location.href = res.url
     } catch {
-      console.error("Connection failed")
-    } finally {
+      console.error("Failed to get auth URL")
       setCalLoading(false)
     }
   }

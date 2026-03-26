@@ -62,6 +62,7 @@
 
 - [ ] **UI/UX Flow Improvements**: Ongoing — finding issues through hands-on testing
 - [x] **Vocabulary Wiring**: Done — 21 business-facing components use `useVocabulary()` hook
+- [x] **Google Calendar Sync**: Done — OAuth flow, token refresh, auto-sync on appointment mutations
 - [ ] **Cloud Migration**: Move from local Docker to managed Supabase
 - [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`
 - [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL

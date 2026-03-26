@@ -129,7 +129,7 @@ Result returned to Vapi → LLM continues conversation
 
 ## Remaining TODO (Priority Order)
 
-1. **Open Supabase support ticket** — project stuck in pausing state, needs manual reset (see TRIAGE.md)
+1. ~~**Open Supabase support ticket**~~ — Email sent to support@supabase.com on 2026-03-26. Awaiting ticket number. See TRIAGE.md for full log
 2. **Verify edge functions work** — test tool calls after Supabase fixes the project state
 3. **Tune voice quality** — speed, endpointing, system prompt
 4. **Deploy dashboard** (Vercel or Railway) — currently local only
@@ -137,9 +137,9 @@ Result returned to Vapi → LLM continues conversation
 6. **SetupWizard Step 7** "Go Live" — activate phone from onboarding wizard
 7. **UI/UX flow improvements** — hands-on testing
 8. ~~**Vocabulary wiring**~~ — Done. 21 business-facing components use `useVocabulary()` hook
-9. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
-10. **Outlook calendar sync** — Google works, Outlook not implemented
-11. **OAuth token refresh** — for calendar sync
+9. ~~**Google Calendar sync**~~ — Done. Real OAuth flow, token refresh, auto-sync on create/update/delete/cancel
+10. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
+11. **Outlook calendar sync** — Google done, Outlook deferred
 12. **Beta testing with DynaTire** — real-world validation
 
 ---

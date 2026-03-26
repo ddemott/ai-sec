@@ -152,6 +152,9 @@ export interface CalendarSettings {
   provider: string;
   external_calendar_id: string;
   is_active: boolean;
+  token_expires_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AnalyticsStats {

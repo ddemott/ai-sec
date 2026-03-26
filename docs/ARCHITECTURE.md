@@ -1,7 +1,7 @@
 # SecretaryHQ SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 15 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 16 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
@@ -53,7 +53,7 @@ The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template,
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 15 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 16 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning).
 
 ### 4.0 Middleware Layer
 Shared middleware lives in `src/middleware.ts`:
@@ -71,7 +71,7 @@ Shared middleware lives in `src/middleware.ts`:
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 256 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, and index suites. 368 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, and component suites. 624 total.
+- **Coverage**: 315 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, and index suites. 252 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, and component suites. 567 total.
 
 ---
 
@@ -94,9 +94,16 @@ The scheduler ensures valid bookings by verifying multiple layers of constraints
 
 ---
 
-## 7. Async Integration Layer (n8n)
+## 7. Calendar Sync (Google Calendar)
+- **OAuth Flow**: `GET /calendar/auth/google` initiates consent, `GET /calendar/auth/google/callback` exchanges code for tokens, stores in `tenant_calendar_settings`.
+- **Auto-Sync**: Appointment create/update/delete/cancel triggers fire-and-forget sync to Google Calendar via `src/services/calendarSync.ts`.
+- **Token Refresh**: Automatic refresh with 5-minute buffer; marks calendar inactive if refresh fails.
+- **Service Layer**: `src/services/googleCalendar.ts` wraps `googleapis` — OAuth2, token management, Calendar API CRUD.
+- **Security**: State param is a signed JWT (CSRF protection), tokens never exposed to frontend, best-effort revocation on disconnect.
+- **Outlook**: Deferred — UI button exists but handler returns early.
+
+## 8. Async Integration Layer (n8n)
 - **Post-Call Processing**: Generates summaries and sentiment analysis.
-- **Calendar Synchronization**: Bi-directional sync with Google Calendar and Outlook via the `tenant_calendar_settings` and `appointment_sync_map` tables.
 - **Notifications**: Automated SMS/Email alerts to business owners upon new bookings.
 - **Trigger**: The Postgres trigger (`notify_n8n_on_appointment`) uses `pg_net` for real HTTP calls to the tenant's n8n webhook URL. Falls back to `RAISE NOTICE` on local dev without `pg_net`.
 

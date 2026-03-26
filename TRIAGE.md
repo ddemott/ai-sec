@@ -141,7 +141,65 @@ The recommended resolution from Supabase is to **open a support ticket** for man
 
 ---
 
-## Request to Supabase Support
+## Support Ticket Log
+
+### 2026-03-26 — Email sent to support@supabase.com
+
+**From:** daledemott@gmail.com
+**To:** support@supabase.com
+**Subject:** Project stuck in PAUSING state — edge functions unreachable (sgibijfchvfuizudrmir)
+**Status:** Awaiting response / ticket number
+
+**Full email text (verbatim):**
+
+> Hi Supabase Support,
+>
+> My project is stuck in a transitional "pausing" state and edge functions are completely unreachable. This is a known recurring issue affecting multiple users — see the references below.
+>
+> **Project details:**
+> - **Project ref:** sgibijfchvfuizudrmir
+> - **Organization:** DeMott LLC
+> - **Account email:** daledemott@gmail.com
+> - **Region:** us-west-2
+> - **Plan:** Free tier
+>
+> **Problem:**
+> - Restart and Pause buttons are greyed out in the dashboard
+> - Edge function gateway accepts TLS connections but returns zero bytes (all requests time out)
+> - Management API reports `ACTIVE_HEALTHY` but dashboard shows stuck state
+> - Database is accessible via session pooler — only edge functions are down
+> - This has been stuck since March 23, 2026
+>
+> **Business impact:** This project is a production-grade SaaS platform (SecretaryHQ — AI receptionist for service businesses) that I'm building to launch my company. The edge functions are the backbone of the voice AI call handling pipeline. A provisioned phone number (+1 630-397-0194) is live but unable to serve callers, and I cannot move forward with beta testing or onboarding customers until this is resolved. Every day this remains stuck delays my business launch.
+>
+> **This is not a one-off.** Multiple users are hitting the same issue right now:
+> - **Issue #44125** (ianmerrill10, March 24) — project `hpssqzqwtsczsxvdfktt` stuck in PAUSING for 3+ hours: https://github.com/supabase/supabase/issues/44125
+> - **Issue #42764** (Feb 13) — project stuck in PAUSING indefinitely: https://github.com/supabase/supabase/issues/42764
+> - **Issue #35136** — same pattern reported months ago: https://github.com/supabase/supabase/issues/35136
+> - **Discussion #37844** — cannot pause or delete: https://github.com/orgs/supabase/discussions/37844
+> - As recently as today (March 26), new users are commenting on #44125 with the same problem (gerbenupinion, project `oxexkyjshtbfaujqnzdk`)
+>
+> **What I need:**
+> 1. Reset the project state so Restart/Pause buttons work
+> 2. Ensure the edge function gateway forwards requests to my `vapi-tools` function
+> 3. If a free tier compute quota was exceeded, please reset it
+>
+> I've tried redeploying the edge function, resetting the DB password, updating all secrets, and deleting/redeploying the function entirely — nothing helps. Full triage details are in my repo if needed.
+>
+> If this requires infrastructure team intervention, please escalate and provide me with a ticket number so I can follow up. I'm also open to upgrading to the Pro plan if that would help resolve the stuck state.
+>
+> Thank you,
+> Dale DeMott
+
+**Next steps:**
+- [ ] Receive ticket confirmation / ticket number from Supabase
+- [ ] If no response within 48 hours (by March 28), follow up via email
+- [ ] If ticket number received, post it on GitHub issue #44125 for community escalation (per GaryAustin1's advice)
+- [ ] Once resolved, implement prevention plan (see below)
+
+---
+
+## Request to Supabase Support (Reference Copy)
 
 **Please reset the project state for `sgibijfchvfuizudrmir`.**
 

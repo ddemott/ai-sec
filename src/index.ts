@@ -52,6 +52,7 @@ if (isProduction) {
   // Warn for optional but important vars
   if (!VAPI_API_KEY) console.warn('WARNING: VAPI_API_KEY not set — phone provisioning disabled');
   if (!VAPI_SERVER_URL_SECRET) console.warn('WARNING: VAPI_SERVER_URL_SECRET not set — webhook auth disabled');
+  if (!process.env.GOOGLE_CLIENT_ID) console.warn('WARNING: GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
 }
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
@@ -146,7 +147,7 @@ function verifyToken(token: string): { tenant_id: string; user_id: string; email
   }
 }
 
-const PUBLIC_ROUTES = ['/health', '/login', '/', '/demo', '/billing/webhook'];
+const PUBLIC_ROUTES = ['/health', '/login', '/', '/demo', '/billing/webhook', '/calendar/auth/google/callback'];
 app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS') return;
   const urlPath = request.url.split('?')[0];
