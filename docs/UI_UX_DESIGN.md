@@ -315,7 +315,7 @@ UI labels adapt per business type via 3-tier fallback:
 
 29 business types across 6 categories. Vocabulary changes: Bays/Technicians for tire shops, Chairs/Stylists for salons, Bays/Mechanics for auto shops, etc.
 
-**Implementation status:** Vocabulary columns on both `business_templates` and `tenants` tables are done. `useVocabulary` hook and React Context still missing. All hardcoded "Resource"/"Employee" strings in UI not yet replaced.
+**Implementation status:** Complete. Vocabulary columns on both `business_templates` and `tenants` tables, `useVocabulary` hook + React Context, and all 21 business-facing components wired to use vocabulary labels.
 
 ---
 
@@ -333,8 +333,8 @@ UI labels adapt per business type via 3-tier fallback:
 | 8 | Public registration API | Coding | **Done** | |
 | 9 | Business type picker (card grid) | UI/UX | Missing | |
 | 10 | Onboarding wizard (6-step) | Both | Missing | |
-| 11 | `useVocabulary` hook + React Context | Coding | Missing | 3-tier fallback |
-| 12 | Replace hardcoded labels with vocabulary | Both | Missing | |
+| 11 | `useVocabulary` hook + React Context | Coding | **Done** | 3-tier fallback |
+| 12 | Replace hardcoded labels with vocabulary | Both | **Done** | 21 components wired |
 | 13 | Settings: "Customize Labels" section | Both | Missing | |
 | 14 | Dashboard home / quick actions landing | UI/UX | Missing | |
 | 15 | Contextual navigation (CRM → Calendar links) | Both | Missing | |

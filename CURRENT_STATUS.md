@@ -136,7 +136,7 @@ Result returned to Vapi → LLM continues conversation
 5. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout redirects
 6. **SetupWizard Step 7** "Go Live" — activate phone from onboarding wizard
 7. **UI/UX flow improvements** — hands-on testing
-8. **Vocabulary wiring** — frontend still hardcodes "Resources"/"Employees"
+8. ~~**Vocabulary wiring**~~ — Done. 21 business-facing components use `useVocabulary()` hook
 9. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
 10. **Outlook calendar sync** — Google works, Outlook not implemented
 11. **OAuth token refresh** — for calendar sync
