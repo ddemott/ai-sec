@@ -124,7 +124,7 @@ describe("Calendar Sync — Happy Paths", () => {
 
     // Client released
     expect(mockClient.release).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event created'));
   });
 
   it("updates Google Calendar event when appointment is updated and sync map entry exists", async () => {
@@ -160,7 +160,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(updateCall[1]).toEqual([APPOINTMENT_ID]);
 
     expect(mockClient.release).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('updated'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event updated'));
   });
 
   it("deletes Google Calendar event when appointment is deleted and sync map entry exists", async () => {
@@ -192,7 +192,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(deleteCall[1]).toEqual([APPOINTMENT_ID]);
 
     expect(mockClient.release).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('deleted'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted'));
   });
 
   it("refreshes expired token before syncing", async () => {
@@ -237,7 +237,7 @@ describe("Calendar Sync — Happy Paths", () => {
     const [accessToken] = vi.mocked(gcal.createEvent).mock.calls[0];
     expect(accessToken).toBe('new-access-token');
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('refreshed'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('token refreshed'));
   });
 
   it("update falls back to create when no sync map entry exists", async () => {
@@ -337,6 +337,11 @@ describe("Calendar Sync — Happy Paths", () => {
 // =============================================
 
 describe("Calendar Sync — Sad Paths", () => {
+  // WHO: Any tenant without a connected calendar
+  // WHAT: Sync is called after appointment mutation but no calendar_settings row exists
+  // WHY: Most tenants won't have Google Calendar connected — sync must be a silent no-op
+  // WHERE: syncAppointmentToCalendar → settings query returns empty
+  // HOW: Returns early without calling any Google API or writing to sync_map
   it("returns silently when no calendar settings exist for tenant", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -352,6 +357,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant whose calendar was auto-deactivated (e.g., token refresh failed)
+  // WHAT: Sync called but is_active=false in settings — calendar was disconnected
+  // WHY: After a failed token refresh, we mark is_active=false so user sees "Reconnect" prompt
+  // WHERE: syncAppointmentToCalendar → settings.is_active check
+  // HOW: Returns early, no Google API calls, no sync_map writes
   it("returns silently when calendar is not active (is_active = false)", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -364,6 +374,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant who connected Outlook (future) — only Google is implemented
+  // WHAT: Sync called but provider is 'outlook', not 'google'
+  // WHY: Outlook sync is deferred — we must not attempt Google API calls for non-Google providers
+  // WHERE: syncAppointmentToCalendar → settings.provider check
+  // HOW: Returns early, no API calls
   it("returns silently when provider is not 'google'", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -376,6 +391,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant whose OAuth flow was interrupted — settings row exists but tokens are null
+  // WHAT: Calendar settings exist but access_token is null (incomplete OAuth)
+  // WHY: OAuth callback might have failed partway — we must not call Google without a token
+  // WHERE: syncAppointmentToCalendar → access_token/refresh_token null check
+  // HOW: Returns early, no API calls
   it("returns silently when access_token is missing", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -388,6 +408,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant whose refresh_token was revoked or never stored
+  // WHAT: access_token exists but refresh_token is null
+  // WHY: Without a refresh_token, we can't recover when the access_token expires
+  // WHERE: syncAppointmentToCalendar → refresh_token null check
+  // HOW: Returns early, no API calls
   it("returns silently when refresh_token is missing", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -400,6 +425,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant whose Google OAuth grant was revoked (e.g., user removed app in Google settings)
+  // WHAT: Token is expired, refresh attempt fails with "Token revoked"
+  // WHY: Must mark calendar as inactive so the dashboard shows "Reconnect" instead of silently failing
+  // WHERE: syncAppointmentToCalendar → refreshAccessToken catch → UPDATE is_active=false
+  // HOW: Catches refresh error, writes is_active=false to DB, logs error, returns early
   it("marks calendar inactive when token refresh fails", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -426,11 +456,19 @@ describe("Calendar Sync — Sad Paths", () => {
     // No Google API calls should have been made
     expect(gcal.createEvent).not.toHaveBeenCalled();
 
-    // Error was logged
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('refresh failed'));
+    // Error was logged with structured 5W context
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('refresh FAILED'));
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('WHO:'));
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('WHY:'));
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Token revoked'));
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Appointment being deleted that was never synced to Google Calendar
+  // WHAT: Delete action but no appointment_sync_map entry exists
+  // WHY: Appointments created before calendar was connected have no sync map — must not error
+  // WHERE: syncAppointmentToCalendar(delete) → sync map query returns empty
+  // HOW: Returns early, no Google deleteEvent call
   it("delete handles missing sync map entry gracefully", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -449,6 +487,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant deleting appointment whose Google Calendar event was already manually removed
+  // WHAT: deleteEvent throws "Not Found" but sync map cleanup still completes
+  // WHY: Users may delete events directly in Google Calendar — our cleanup must not fail
+  // WHERE: syncAppointmentToCalendar(delete) → deleteEvent catch → still DELETE FROM sync_map
+  // HOW: Swallows the Google API error, proceeds to clean up sync_map, logs success
   it("delete handles Google API error gracefully (event already deleted)", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -475,10 +518,15 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(deleteCall[1]).toEqual([APPOINTMENT_ID]);
 
     expect(mockClient.release).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('deleted'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted'));
   });
 
-  it("sync failure does not throw (fire-and-forget behavior)", async () => {
+  // WHO: Any appointment mutation when Google Calendar API is down (500 error)
+  // WHAT: createEvent throws a Google API error during sync
+  // WHY: Calendar sync is fire-and-forget — appointment mutations must NEVER fail due to sync errors
+  // WHERE: syncAppointmentToCalendar → createEvent rejects → finally block releases client
+  // HOW: Error propagates but client is always released; caller (.catch(() => {})) swallows it
+  it("sync failure does not throw (fire-and-forget behavior) — client always released", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -507,6 +555,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Any sync attempt when the database connection fails
+  // WHAT: The initial settings query throws a connection error
+  // WHY: DB outages must not leak pool connections — client.release() must always be called
+  // WHERE: syncAppointmentToCalendar → first query throws → finally block
+  // HOW: Error propagates, but finally block ensures client.release() is called
   it("releases client even when settings query throws", async () => {
     const mockClient = {
       query: vi.fn().mockRejectedValue(new Error('Connection reset')),
@@ -524,6 +577,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
+  // WHO: Tenant whose access_token expires in 3 minutes (within 5-minute buffer)
+  // WHAT: Token isn't technically expired yet, but will be soon — proactive refresh
+  // WHY: Google API calls take time; refreshing proactively avoids mid-request expiry
+  // WHERE: syncAppointmentToCalendar → Date.now() > expiresAt - 5min check
+  // HOW: Triggers refreshAccessToken even though token hasn't expired yet
   it("token refresh triggered when token_expires_at is within 5 minute buffer", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -551,7 +609,12 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(vi.mocked(gcal.createEvent).mock.calls[0][0]).toBe('refreshed-token');
   });
 
-  it("skips token refresh when token_expires_at is null (treats as expired)", async () => {
+  // WHO: Tenant whose token_expires_at was never stored (legacy or partial OAuth)
+  // WHAT: token_expires_at is null, so expiresAt resolves to 0 — always triggers refresh
+  // WHY: Null expiry must be treated as expired, not as "never expires"
+  // WHERE: syncAppointmentToCalendar → expiresAt = 0 → Date.now() > -300000 → true
+  // HOW: Calls refreshAccessToken, uses the new token for the sync
+  it("treats null token_expires_at as expired and refreshes", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 

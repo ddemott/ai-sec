@@ -178,6 +178,11 @@ describe("verifyState", () => {
     expect(result).toBe(TENANT_ID);
   });
 
+  // WHO: Attacker or delayed OAuth callback — state JWT has expired (>10 min old)
+  // WHAT: verifyState receives an expired JWT
+  // WHY: Prevents replay attacks — OAuth state tokens must be short-lived
+  // WHERE: verifyState → jwt.verify throws TokenExpiredError
+  // HOW: Returns null, callback route redirects with calendarError=invalid_state
   it("returns null for an expired state JWT", () => {
     setGoogleEnv();
     const state = jwt.sign(
@@ -190,6 +195,11 @@ describe("verifyState", () => {
     expect(result).toBeNull();
   });
 
+  // WHO: Attacker reusing a JWT from a different OAuth flow (e.g., Outlook)
+  // WHAT: JWT is valid but purpose field is wrong — not "google-calendar-oauth"
+  // WHY: Prevents cross-flow CSRF — a valid JWT for one flow must not work for another
+  // WHERE: verifyState → decoded.purpose !== 'google-calendar-oauth'
+  // HOW: Returns null even though JWT signature is valid
   it("returns null when purpose doesn't match", () => {
     setGoogleEnv();
     const state = jwt.sign(
@@ -202,12 +212,22 @@ describe("verifyState", () => {
     expect(result).toBeNull();
   });
 
+  // WHO: Attacker sending garbage data as the state parameter
+  // WHAT: State is not a JWT at all — random string
+  // WHY: Must handle malformed input without crashing
+  // WHERE: verifyState → jwt.verify throws JsonWebTokenError
+  // HOW: Returns null, caught by try/catch
   it("returns null for a completely invalid token", () => {
     setGoogleEnv();
     const result = verifyState("not-a-jwt");
     expect(result).toBeNull();
   });
 
+  // WHO: Attacker who forged a JWT with a different secret key
+  // WHAT: JWT structure is valid but signature doesn't match our JWT_SECRET
+  // WHY: Prevents tenant impersonation — only our server can issue valid state tokens
+  // WHERE: verifyState → jwt.verify throws JsonWebTokenError (signature mismatch)
+  // HOW: Returns null, attacker cannot link their Google account to another tenant
   it("returns null for a token signed with a different secret", () => {
     setGoogleEnv();
     const state = jwt.sign(
@@ -265,6 +285,11 @@ describe("exchangeCodeForTokens", () => {
     expect(tokens.expiry_date).toBeLessThanOrEqual(after + 3600 * 1000);
   });
 
+  // WHO: Google returning a partial response — access_token missing from token exchange
+  // WHAT: getToken succeeds but tokens.access_token is null
+  // WHY: Must fail loudly — storing null tokens would break all future sync attempts
+  // WHERE: exchangeCodeForTokens → null check after getToken
+  // HOW: Throws "Failed to get tokens from Google", callback route redirects with error
   it("throws when access_token is missing", async () => {
     setGoogleEnv();
     mockGetToken.mockResolvedValue({
@@ -276,6 +301,11 @@ describe("exchangeCodeForTokens", () => {
     );
   });
 
+  // WHO: Google returning tokens without a refresh_token (happens when prompt≠consent)
+  // WHAT: access_token present but refresh_token is null
+  // WHY: Without refresh_token, tokens can't be renewed — sync would break after 1 hour
+  // WHERE: exchangeCodeForTokens → refresh_token null check
+  // HOW: Throws error, forces re-auth with prompt=consent to get refresh_token
   it("throws when refresh_token is missing", async () => {
     setGoogleEnv();
     mockGetToken.mockResolvedValue({
@@ -287,6 +317,11 @@ describe("exchangeCodeForTokens", () => {
     );
   });
 
+  // WHO: Server deployed without GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL env vars
+  // WHAT: exchangeCodeForTokens called but OAuth2 client can't be created
+  // WHY: Calendar sync is optional — server must run without Google credentials
+  // WHERE: exchangeCodeForTokens → createOAuth2Client returns null → throw
+  // HOW: Throws "Google Calendar not configured", caller shows appropriate error
   it("throws when Google Calendar is not configured", async () => {
     delete process.env.GOOGLE_CLIENT_ID;
     delete process.env.GOOGLE_CLIENT_SECRET;
@@ -337,6 +372,11 @@ describe("refreshAccessToken", () => {
     expect(result.expiry_date).toBeLessThanOrEqual(after + 3600 * 1000);
   });
 
+  // WHO: Google returning empty credentials during token refresh (service outage)
+  // WHAT: refreshAccessToken succeeds but credentials.access_token is null
+  // WHY: Must fail — calendarSync will catch this and mark calendar as inactive
+  // WHERE: refreshAccessToken → credentials.access_token null check
+  // HOW: Throws "Failed to refresh Google access token"
   it("throws when access_token is missing from refreshed credentials", async () => {
     setGoogleEnv();
     mockRefreshAccessToken.mockResolvedValue({
@@ -372,6 +412,11 @@ describe("revokeToken", () => {
     expect(mockRevokeToken).toHaveBeenCalledWith("token-to-revoke");
   });
 
+  // WHO: Tenant disconnecting calendar — Google revoke endpoint is down or token already expired
+  // WHAT: revokeToken API call fails with an error
+  // WHY: Token revocation is best-effort — disconnect must succeed even if Google is unreachable
+  // WHERE: revokeToken → try/catch swallows the error
+  // HOW: Resolves successfully despite the API error — disconnect proceeds
   it("does not throw when revokeToken fails (best-effort)", async () => {
     setGoogleEnv();
     mockRevokeToken.mockRejectedValue(new Error("revoke failed"));
@@ -446,6 +491,11 @@ describe("createEvent", () => {
     );
   });
 
+  // WHO: Google Calendar API returning a malformed response (no event ID)
+  // WHAT: events.insert succeeds (200) but response has no id field
+  // WHY: Without an event ID, we can't update or delete the event later — must fail
+  // WHERE: createEvent → res.data.id check
+  // HOW: Throws "Google Calendar did not return an event ID"
   it("throws when Google Calendar returns no event ID", async () => {
     setGoogleEnv();
     mockEventsInsert.mockResolvedValue({ data: {} });
