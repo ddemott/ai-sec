@@ -30,14 +30,19 @@ export class VapiClient {
   ) {}
 
   private async request<T>(method: string, endpoint: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${VAPI_BASE_URL}${endpoint}`, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${VAPI_BASE_URL}${endpoint}`, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch (networkErr: any) {
+      throw new Error(`Vapi API ${method} ${endpoint} failed: network error reaching ${VAPI_BASE_URL} — ${networkErr.message}`);
+    }
 
     if (!res.ok) {
       const text = await res.text();
@@ -85,6 +90,9 @@ export class VapiClient {
       'pet-boarding': 'pet boarding and daycare services',
     };
     const serviceDescription = serviceDescriptions[tenant.business_type] || 'services';
+    if (!serviceDescriptions[tenant.business_type]) {
+      console.warn(`[vapiClient] buildAssistantPayload: unknown business_type "${tenant.business_type}" for tenant "${tenant.name}" (${tenant.id}) — falling back to generic "services" description. Add this type to serviceDescriptions if it should have a specific prompt.`);
+    }
 
     // Template variable substitution
     const replacements: Record<string, string> = {

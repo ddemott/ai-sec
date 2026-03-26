@@ -11,4 +11,6 @@ export {
   type ExistingAppointment,
   type ServiceRequirements,
   type AssignmentOption,
+  type SchedulingDiagnostics,
+  type SelectAssignmentsResult,
 } from '../../../../shared/scheduling.ts';

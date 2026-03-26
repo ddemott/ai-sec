@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the googleCalendar module before importing calendarSync
+// Mock both calendar modules before importing calendarSync
 vi.mock('./services/googleCalendar', () => ({
+  refreshAccessToken: vi.fn(),
+  createEvent: vi.fn(),
+  updateEvent: vi.fn(),
+  deleteEvent: vi.fn(),
+}));
+
+vi.mock('./services/outlookCalendar', () => ({
   refreshAccessToken: vi.fn(),
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
@@ -10,6 +17,7 @@ vi.mock('./services/googleCalendar', () => ({
 
 import { syncAppointmentToCalendar } from "./services/calendarSync";
 import * as gcal from "./services/googleCalendar";
+import * as outlookCal from "./services/outlookCalendar";
 
 // ---- Mock helpers ----
 
@@ -17,6 +25,7 @@ const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const APPOINTMENT_ID = '11111111-2222-3333-4444-555555555555';
 const CALENDAR_ID = 'primary';
 const EXTERNAL_EVENT_ID = 'gcal-event-abc123';
+const OUTLOOK_EVENT_ID = 'AAMkAGI2TAAAA=';
 
 function makeSettings(overrides: Record<string, any> = {}) {
   return {
@@ -117,10 +126,10 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(event.start).toBe('2026-03-26T10:00:00Z');
     expect(event.end).toBe('2026-03-26T11:00:00Z');
 
-    // Verify sync map INSERT was called with appointment ID and external event ID
+    // Verify sync map INSERT was called with appointment ID, external event ID, and provider
     const insertCall = mockClient.query.mock.calls[2];
     expect(insertCall[0]).toContain('INSERT INTO appointment_sync_map');
-    expect(insertCall[1]).toEqual([APPOINTMENT_ID, EXTERNAL_EVENT_ID]);
+    expect(insertCall[1]).toEqual([APPOINTMENT_ID, EXTERNAL_EVENT_ID, 'google']);
 
     // Client released
     expect(mockClient.release).toHaveBeenCalledOnce();
@@ -364,11 +373,11 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 
-  it("returns silently when provider is not 'google'", async () => {
+  it("returns silently when provider is unsupported", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
-    queryResponses.push({ rows: [makeSettings({ provider: 'outlook' })] });
+    queryResponses.push({ rows: [makeSettings({ provider: 'icloud' })] });
 
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
@@ -576,5 +585,318 @@ describe("Calendar Sync — Sad Paths", () => {
 
     // null token_expires_at means expiresAt=0, so Date.now() > 0 - 300000 is true -> refresh
     expect(gcal.refreshAccessToken).toHaveBeenCalledOnce();
+  });
+});
+
+// =============================================
+// OUTLOOK — HAPPY PATHS
+// =============================================
+
+function makeOutlookSettings(overrides: Record<string, any> = {}) {
+  return {
+    provider: 'outlook',
+    external_calendar_id: CALENDAR_ID,
+    access_token: 'outlook-access-token',
+    refresh_token: 'outlook-refresh-token',
+    token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+    is_active: true,
+    ...overrides,
+  };
+}
+
+describe("Calendar Sync — Outlook Happy Paths", () => {
+  it("creates Outlook Calendar event when provider is 'outlook'", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    const settings = makeOutlookSettings();
+    const appt = makeAppointment();
+
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [appt] });
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    vi.mocked(outlookCal.createEvent).mockResolvedValue(OUTLOOK_EVENT_ID);
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
+
+    // Verify Outlook createEvent was called — NOT Google
+    expect(outlookCal.createEvent).toHaveBeenCalledOnce();
+    expect(gcal.createEvent).not.toHaveBeenCalled();
+
+    const [accessToken, refreshToken, calendarId, event] = vi.mocked(outlookCal.createEvent).mock.calls[0];
+    expect(accessToken).toBe('outlook-access-token');
+    expect(refreshToken).toBe('outlook-refresh-token');
+    expect(calendarId).toBe(CALENDAR_ID);
+    expect(event.summary).toBe('Oil Change - John Doe');
+
+    // Verify sync map INSERT uses 'outlook' provider
+    const insertCall = mockClient.query.mock.calls[2];
+    expect(insertCall[0]).toContain('INSERT INTO appointment_sync_map');
+    expect(insertCall[1]).toEqual([APPOINTMENT_ID, OUTLOOK_EVENT_ID, 'outlook']);
+
+    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('Outlook Calendar'));
+  });
+
+  it("updates Outlook Calendar event when provider is 'outlook'", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    const settings = makeOutlookSettings();
+    const appt = makeAppointment();
+
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [{ external_event_id: OUTLOOK_EVENT_ID }] });
+    queryResponses.push({ rows: [appt] });
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    vi.mocked(outlookCal.updateEvent).mockResolvedValue(undefined);
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
+
+    expect(outlookCal.updateEvent).toHaveBeenCalledOnce();
+    expect(gcal.updateEvent).not.toHaveBeenCalled();
+
+    const [accessToken, refreshToken, calendarId, eventId, event] = vi.mocked(outlookCal.updateEvent).mock.calls[0];
+    expect(accessToken).toBe('outlook-access-token');
+    expect(eventId).toBe(OUTLOOK_EVENT_ID);
+    expect(event.summary).toBe('Oil Change - John Doe');
+
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event updated in Outlook'));
+  });
+
+  it("deletes Outlook Calendar event when provider is 'outlook'", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    const settings = makeOutlookSettings();
+
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [{ external_event_id: OUTLOOK_EVENT_ID }] });
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    vi.mocked(outlookCal.deleteEvent).mockResolvedValue(undefined);
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
+
+    expect(outlookCal.deleteEvent).toHaveBeenCalledOnce();
+    expect(gcal.deleteEvent).not.toHaveBeenCalled();
+
+    const [accessToken, refreshToken, calendarId, eventId] = vi.mocked(outlookCal.deleteEvent).mock.calls[0];
+    expect(accessToken).toBe('outlook-access-token');
+    expect(eventId).toBe(OUTLOOK_EVENT_ID);
+
+    const deleteCall = mockClient.query.mock.calls[2];
+    expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
+
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted from Outlook'));
+  });
+
+  it("refreshes expired Outlook token using the Outlook provider module", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    const settings = makeOutlookSettings({
+      token_expires_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+    const appt = makeAppointment();
+
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // token update
+    queryResponses.push({ rows: [appt] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // sync map
+
+    vi.mocked(outlookCal.refreshAccessToken).mockResolvedValue({
+      access_token: 'new-outlook-token',
+      expiry_date: Date.now() + 3600 * 1000,
+    });
+    vi.mocked(outlookCal.createEvent).mockResolvedValue(OUTLOOK_EVENT_ID);
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
+
+    // Verify Outlook refresh was called — NOT Google
+    expect(outlookCal.refreshAccessToken).toHaveBeenCalledWith('outlook-refresh-token');
+    expect(gcal.refreshAccessToken).not.toHaveBeenCalled();
+
+    // Verify createEvent used the refreshed token
+    const [accessToken] = vi.mocked(outlookCal.createEvent).mock.calls[0];
+    expect(accessToken).toBe('new-outlook-token');
+
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('token refreshed'));
+  });
+
+  it("Outlook update falls back to create when no sync map entry exists", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    const settings = makeOutlookSettings();
+    const appt = makeAppointment();
+
+    // First call (update path):
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [] }); // sync map empty
+
+    // Recursive call (create path):
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [appt] });
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    vi.mocked(outlookCal.createEvent).mockResolvedValue(OUTLOOK_EVENT_ID);
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
+
+    expect(outlookCal.createEvent).toHaveBeenCalledOnce();
+    expect(outlookCal.updateEvent).not.toHaveBeenCalled();
+    expect(gcal.createEvent).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================
+// OUTLOOK — SAD PATHS
+// =============================================
+
+describe("Calendar Sync — Outlook Sad Paths", () => {
+  it("marks Outlook calendar inactive when token refresh fails", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    const settings = makeOutlookSettings({
+      token_expires_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // deactivate
+
+    vi.mocked(outlookCal.refreshAccessToken).mockRejectedValue(new Error('Token revoked'));
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
+
+    // Calendar marked inactive
+    const deactivateCall = mockClient.query.mock.calls[1];
+    expect(deactivateCall[0]).toContain('UPDATE tenant_calendar_settings SET is_active = false');
+
+    // No Outlook or Google API calls
+    expect(outlookCal.createEvent).not.toHaveBeenCalled();
+    expect(gcal.createEvent).not.toHaveBeenCalled();
+
+    // Error log mentions Outlook specifically
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('refresh FAILED'));
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Outlook'));
+    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Token revoked'));
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("Outlook delete handles missing sync map entry gracefully", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeOutlookSettings()] });
+    queryResponses.push({ rows: [] }); // no sync map entry
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
+
+    expect(outlookCal.deleteEvent).not.toHaveBeenCalled();
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('Outlook Calendar'));
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("Outlook delete handles Graph API error gracefully (event already deleted)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeOutlookSettings()] });
+    queryResponses.push({ rows: [{ external_event_id: OUTLOOK_EVENT_ID }] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // sync map cleanup
+
+    vi.mocked(outlookCal.deleteEvent).mockRejectedValue(new Error('Not Found'));
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
+
+    // deleteEvent was called but error was swallowed
+    expect(outlookCal.deleteEvent).toHaveBeenCalledOnce();
+
+    // Sync map entry was still cleaned up
+    const deleteCall = mockClient.query.mock.calls[2];
+    expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
+
+    // Warning logged with Outlook context
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Outlook deleteEvent failed'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted from Outlook'));
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("Outlook sync failure releases client (fire-and-forget)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeOutlookSettings()] });
+    queryResponses.push({ rows: [makeAppointment()] });
+
+    vi.mocked(outlookCal.createEvent).mockRejectedValue(new Error('Graph API 500'));
+
+    try {
+      await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
+    } catch {
+      // Expected
+    }
+
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("Outlook create skips when appointment not found in DB", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeOutlookSettings()] });
+    queryResponses.push({ rows: [] }); // appointment not found
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
+
+    expect(outlookCal.createEvent).not.toHaveBeenCalled();
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('appointment not found'));
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("Outlook update skips when appointment not found in DB", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeOutlookSettings()] });
+    queryResponses.push({ rows: [{ external_event_id: OUTLOOK_EVENT_ID }] }); // sync map exists
+    queryResponses.push({ rows: [] }); // appointment not found
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
+
+    expect(outlookCal.updateEvent).not.toHaveBeenCalled();
+    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('appointment not found'));
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("Outlook token refresh within 5-minute buffer triggers proactive refresh", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    // Token expires in 3 minutes (within buffer)
+    const settings = makeOutlookSettings({
+      token_expires_at: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
+    });
+    const appt = makeAppointment();
+
+    queryResponses.push({ rows: [settings] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // token update
+    queryResponses.push({ rows: [appt] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // sync map
+
+    vi.mocked(outlookCal.refreshAccessToken).mockResolvedValue({
+      access_token: 'refreshed-outlook-token',
+      expiry_date: Date.now() + 3600 * 1000,
+    });
+    vi.mocked(outlookCal.createEvent).mockResolvedValue(OUTLOOK_EVENT_ID);
+
+    await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
+
+    expect(outlookCal.refreshAccessToken).toHaveBeenCalledOnce();
+    expect(vi.mocked(outlookCal.createEvent).mock.calls[0][0]).toBe('refreshed-outlook-token');
   });
 });

@@ -71,7 +71,7 @@ Shared middleware lives in `src/middleware.ts`:
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 369 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, calendar-sync, google-calendar, and index suites. 268 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 637 total.
+- **Coverage**: 482 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, calendar-sync, google-calendar, outlook-calendar, provisioning, normalizer, vapi-agent-config, and index suites. 313 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 795 total. All tests include happy and sad path coverage with 5W diagnostic context.
 
 ---
 

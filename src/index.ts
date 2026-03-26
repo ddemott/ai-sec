@@ -23,6 +23,10 @@ import { registerAnalyticsRoutes } from './routes/analytics';
 import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { registerProvisioningRoutes } from './routes/provisioning';
+import { registerJobberRoutes } from './routes/jobber';
+import { registerHubSpotRoutes } from './routes/hubspot';
+import { registerSquareRoutes } from './routes/square';
+import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { VapiClient } from './services/vapiClient';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
@@ -207,7 +211,7 @@ app.get('/demo', async (_req, reply) => {
 });
 app.get('/health', async () => ({ status: 'ok' }));
 
-app.post('/admin/purge-soft-reservations', async (req, reply) => {
+app.post('/admin/purge-soft-reservations', async (_req, reply) => {
   const client = await pool.connect();
   try {
     const res = await client.query('SELECT purge_expired_soft_reservations() as deleted_count');
@@ -247,6 +251,10 @@ const vapiClient = VAPI_API_KEY
   ? new VapiClient(VAPI_API_KEY, VAPI_SERVER_URL, VAPI_SERVER_URL_SECRET)
   : null;
 registerProvisioningRoutes(app, pool, vapiClient);
+registerJobberRoutes(app, pool, withTenantClient);
+registerHubSpotRoutes(app, pool, withTenantClient);
+registerSquareRoutes(app, pool, withTenantClient);
+registerServiceTitanRoutes(app, pool, withTenantClient);
 
 // --- Start Server ---
 

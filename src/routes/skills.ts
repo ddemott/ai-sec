@@ -11,7 +11,7 @@ const CreateSkillSchema = z.object({
 
 export function registerSkillRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/skills', withHandler(async (req: AppRequest, reply) => {

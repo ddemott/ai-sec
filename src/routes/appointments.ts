@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncAppointmentToCalendar } from '../services/calendarSync';
+import { syncAppointmentToJobber } from '../services/jobberSync';
+import { syncAppointmentToHubSpot } from '../services/hubspotSync';
+import { syncAppointmentToSquare } from '../services/squareSync';
+import { syncAppointmentToServiceTitan } from '../services/servicetitanSync';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -39,8 +43,12 @@ export function registerAppointmentRoutes(
     const result = res.rows[0];
     if (result.success) {
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
-      // Fire-and-forget calendar sync — never blocks the response
+      // Fire-and-forget sync — never blocks the response
       syncAppointmentToCalendar(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
+      syncAppointmentToJobber(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
+      syncAppointmentToHubSpot(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
+      syncAppointmentToSquare(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
+      syncAppointmentToServiceTitan(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
       return reply.send({ success: true, appointment_id: result.appointment_id });
     } else {
       return reply.status(400).send({ success: false, error: result.error_message });
@@ -118,8 +126,12 @@ export function registerAppointmentRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    // Sync delete to Google Calendar before removing from DB
+    // Sync delete before removing from DB
     syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(() => {});
 
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM appointments WHERE id = $1', [id]);
@@ -132,7 +144,6 @@ export function registerAppointmentRoutes(
   // POST /appointments/:id/cancel - soft cancel (status update, not delete)
   app.post('/appointments/:id/cancel', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { tenant_id?: string };
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
@@ -147,8 +158,12 @@ export function registerAppointmentRoutes(
     }
 
     logEvent(req, 'appointment_canceled', { appointmentId: id });
-    // Remove from Google Calendar — canceled appointments shouldn't block the slot
+    // Remove from calendars/CRMs — canceled appointments shouldn't block the slot
     syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(() => {});
     return reply.send({ success: true });
   }, 'Failed to cancel appointment'));
 
@@ -160,7 +175,7 @@ export function registerAppointmentRoutes(
       customer_name: string; customer_phone: string; customer_notes: string;
     };
 
-    const res = await withTenantClient(body.tenant_id, async (client) => {
+    await withTenantClient(body.tenant_id, async (client) => {
       // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
       // on the overloaded update_appointment_customer functions
       const fields: string[] = [];
@@ -210,8 +225,12 @@ export function registerAppointmentRoutes(
     });
 
     logEvent(req, 'appointment_updated', { appointmentId: id });
-    // Sync update to Google Calendar
+    // Sync update to calendars/CRMs
     syncAppointmentToCalendar(pool, body.tenant_id, id, 'update').catch(() => {});
+    syncAppointmentToJobber(pool, body.tenant_id, id, 'update').catch(() => {});
+    syncAppointmentToHubSpot(pool, body.tenant_id, id, 'update').catch(() => {});
+    syncAppointmentToSquare(pool, body.tenant_id, id, 'update').catch(() => {});
+    syncAppointmentToServiceTitan(pool, body.tenant_id, id, 'update').catch(() => {});
     return reply.send({ success: true });
   }, 'Failed to update appointment'));
 }

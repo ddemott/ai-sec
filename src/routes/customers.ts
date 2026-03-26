@@ -3,6 +3,10 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
+import { syncCustomerToJobber } from '../services/jobberSync';
+import { syncCustomerToHubSpot } from '../services/hubspotSync';
+import { syncCustomerToSquare } from '../services/squareSync';
+import { syncCustomerToServiceTitan } from '../services/servicetitanSync';
 
 const CustomerCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -65,6 +69,11 @@ export function registerCustomerRoutes(
     });
 
     logEvent(req, 'customer_created', { customerId: res.rows[0].id, name: body.name });
+    // Fire-and-forget CRM sync
+    syncCustomerToJobber(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
+    syncCustomerToHubSpot(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
+    syncCustomerToSquare(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
+    syncCustomerToServiceTitan(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
     return reply.send({ success: true, customer: res.rows[0] });
   }, 'Failed to create customer'));
 
@@ -89,6 +98,11 @@ export function registerCustomerRoutes(
     });
 
     logEvent(req, 'customer_updated', { customerId: id });
+    // Fire-and-forget CRM sync
+    syncCustomerToJobber(pool, tenantId, id, 'update').catch(() => {});
+    syncCustomerToHubSpot(pool, tenantId, id, 'update').catch(() => {});
+    syncCustomerToSquare(pool, tenantId, id, 'update').catch(() => {});
+    syncCustomerToServiceTitan(pool, tenantId, id, 'update').catch(() => {});
     return reply.send({ success: true });
   }, 'Failed to update customer'));
 
@@ -123,6 +137,11 @@ export function registerCustomerRoutes(
       await client.query('DELETE FROM customers WHERE id = $1', [id]);
     });
 
+    // Fire-and-forget CRM sync (remove sync map entries before DB delete)
+    syncCustomerToJobber(pool, tenantId, id, 'delete').catch(() => {});
+    syncCustomerToHubSpot(pool, tenantId, id, 'delete').catch(() => {});
+    syncCustomerToSquare(pool, tenantId, id, 'delete').catch(() => {});
+    syncCustomerToServiceTitan(pool, tenantId, id, 'delete').catch(() => {});
     logEvent(req, 'customer_deleted', { customerId: id });
     return reply.send({ success: true });
   }, 'Failed to delete customer'));

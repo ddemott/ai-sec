@@ -1,7 +1,7 @@
 import { IRepository } from "./interfaces.ts";
 import { AvailabilityError, ValidationError } from "./errors.ts";
 import { Logger } from "./logger.ts";
-import { selectAssignments, type ServiceRequirements, type TimeWindow, type AssignmentOption } from "./scheduling.ts";
+import { selectAssignments, type ServiceRequirements, type TimeWindow, type AssignmentOption, type SchedulingDiagnostics } from "./scheduling.ts";
 
 export class AISecretaryService {
   private repo: IRepository;
@@ -98,7 +98,7 @@ export class AISecretaryService {
     requirements: ServiceRequirements,
     window: TimeWindow,
     logger: Logger,
-  ): Promise<{ result: { options: AssignmentOption[] } }> {
+  ): Promise<{ result: { options: AssignmentOption[]; diagnostics: SchedulingDiagnostics } }> {
     logger.info({ tenantId, requirements, window }, "Computing scheduling options");
 
     const [resources, employees, shifts, existing] = await Promise.all([
@@ -108,7 +108,7 @@ export class AISecretaryService {
       this.repo.getExistingAppointments(tenantId, window, logger),
     ]);
 
-    const options = selectAssignments({
+    const { options, diagnostics } = selectAssignments({
       requirements,
       window,
       resources,
@@ -117,8 +117,8 @@ export class AISecretaryService {
       existingAppointments: existing,
     });
 
-    logger.info({ optionCount: options.length }, "Scheduling options computed");
-    return { result: { options } };
+    logger.info({ optionCount: options.length, diagnostics }, "Scheduling options computed");
+    return { result: { options, diagnostics } };
   }
 
   async bookAppointment(args: {

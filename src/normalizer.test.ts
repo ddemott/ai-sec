@@ -96,4 +96,146 @@ describe("normalizeForEmbedding", () => {
 
     vi.restoreAllMocks();
   });
+
+  // --- Sad path tests ---
+
+  it("throws timeout error when fetch is aborted via AbortController", async () => {
+    // The source wraps AbortError into a descriptive timeout message.
+    // Simulate what happens when the AbortController signal fires during fetch.
+    const abortError = new Error("The operation was aborted");
+    abortError.name = "AbortError";
+    vi.spyOn(global, "fetch").mockImplementationOnce(async () => {
+      throw abortError;
+    });
+
+    const normalize = createNormalizer("test-api-key");
+    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
+      "Normalization request timed out after 15000ms"
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it("throws on OpenAI 500 server error", async () => {
+    const mockResponse = {
+      ok: false,
+      json: async () => ({ error: { message: "Internal server error", type: "server_error" } }),
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
+      "Normalization LLM Error"
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it("throws on OpenAI 429 rate limit error", async () => {
+    const mockResponse = {
+      ok: false,
+      json: async () => ({
+        error: { message: "Rate limit exceeded", type: "rate_limit_error" },
+      }),
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
+      "Normalization LLM Error"
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it("throws when OpenAI returns malformed JSON", async () => {
+    const mockResponse = {
+      ok: false,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON at position 0");
+      },
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
+      SyntaxError
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to original text when OpenAI returns empty choices array", async () => {
+    const mockResponse = {
+      ok: true,
+      json: async () => ({ choices: [] }),
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    const result = await normalize("I think Suzy is great at oil changes");
+    expect(result).toBe("I think Suzy is great at oil changes");
+
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to original text when choices[0].message.content is null", async () => {
+    const mockResponse = {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: null } }],
+      }),
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    const result = await normalize("I think Suzy is great at oil changes");
+    expect(result).toBe("I think Suzy is great at oil changes");
+
+    vi.restoreAllMocks();
+  });
+
+  it("re-throws network error (TypeError: Failed to fetch)", async () => {
+    vi.spyOn(global, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const normalize = createNormalizer("test-api-key");
+    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
+      "Failed to fetch"
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it("handles input with special unicode characters without crashing", async () => {
+    const mockResponse = {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Customer asks about brake service. Name: Rene." } }],
+      }),
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    const result = await normalize("Hey! 😊 I'm René — do you guys do brakes? 🚗💨");
+    expect(result).toBe("Customer asks about brake service. Name: Rene.");
+
+    vi.restoreAllMocks();
+  });
+
+  it("handles very long input text without crashing", async () => {
+    const longText = "I need an oil change. ".repeat(5000); // ~110k chars
+    const mockResponse = {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Customer requests oil change." } }],
+      }),
+    };
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+
+    const normalize = createNormalizer("test-api-key");
+    const result = await normalize(longText);
+    expect(result).toBe("Customer requests oil change.");
+
+    vi.restoreAllMocks();
+  });
 });

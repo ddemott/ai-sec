@@ -1,7 +1,7 @@
 
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { withHandler, withPoolClient, logError, type AppRequest } from '../middleware';
+import { withHandler, withPoolClient, type AppRequest } from '../middleware';
 
 const LoginSchema = z.object({
   email: z.string().email(),

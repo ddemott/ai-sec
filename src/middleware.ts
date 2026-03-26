@@ -153,7 +153,7 @@ function isTenantExempt(url: string): boolean {
  * Priority: query param > body > JWT auth token
  */
 export function tenantMiddleware(app: FastifyInstance) {
-  app.addHook('preHandler', async (request: AppRequest, reply) => {
+  app.addHook('preHandler', async (request: AppRequest, _reply) => {
     if (request.method === 'OPTIONS') return;
     if (isTenantExempt(request.url)) return;
 

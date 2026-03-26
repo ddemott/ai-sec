@@ -16,7 +16,7 @@ Deno.test("Scheduling selector (Deno) – salon preferred stylist when free", ()
     { id: "alex", type: "STYLIST", capabilities: ["cut"] },
   ];
 
-  const result = selectAssignments({
+  const { options, diagnostics } = selectAssignments({
     requirements: {
       serviceType: "haircut",
       requiredResourceCapabilities: ["cut"],
@@ -26,7 +26,8 @@ Deno.test("Scheduling selector (Deno) – salon preferred stylist when free", ()
     resources,
   });
 
-  assertEquals(result, [{ resourceId: "suzy" }]);
+  assertEquals(options, [{ resourceId: "suzy" }]);
+  assertEquals(diagnostics.reason, "ok");
 });
 
 Deno.test("Scheduling selector (Deno) – auto shop alignment requires bay + skilled mechanic", () => {
@@ -45,7 +46,7 @@ Deno.test("Scheduling selector (Deno) – auto shop alignment requires bay + ski
     { employee_id: 102, day_of_week: 4, start_time: "08:00", end_time: "18:00" },
   ];
 
-  const result = selectAssignments({
+  const { options, diagnostics } = selectAssignments({
     requirements: {
       serviceType: "alignment",
       requiredResourceCapabilities: ["alignment"],
@@ -57,7 +58,8 @@ Deno.test("Scheduling selector (Deno) – auto shop alignment requires bay + ski
     shifts,
   });
 
-  assertEquals(result, [{ resourceId: "bay4", employeeId: "102" }]);
+  assertEquals(options, [{ resourceId: "bay4", employeeId: "102" }]);
+  assertEquals(diagnostics.reason, "ok");
 });
 
 Deno.test("Scheduling selector (Deno) – no options when bay busy", () => {
@@ -77,7 +79,7 @@ Deno.test("Scheduling selector (Deno) – no options when bay busy", () => {
     appt("bay4", "2026-10-01T10:00:00Z", "2026-10-01T11:00:00Z"),
   ];
 
-  const result = selectAssignments({
+  const { options, diagnostics } = selectAssignments({
     requirements: {
       serviceType: "alignment",
       requiredResourceCapabilities: ["alignment"],
@@ -90,5 +92,6 @@ Deno.test("Scheduling selector (Deno) – no options when bay busy", () => {
     existingAppointments: existing,
   });
 
-  assertEquals(result, []);
+  assertEquals(options, []);
+  assertEquals(diagnostics.reason, "all 1 resource busy during 10:00-11:00");
 });

@@ -24,7 +24,7 @@ const UpdateServiceSchema = z.object({
 
 export function registerServiceRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   // GET /services/catalog?tenant_id=X — public-facing service list for AI callers (Layer 1: database facts)

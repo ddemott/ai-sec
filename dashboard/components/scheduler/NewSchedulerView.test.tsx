@@ -81,8 +81,12 @@ function buildShiftsByEmployee() {
   ]);
 }
 
-vi.mock('../../lib/hooks', () => ({
-  useStaticData: () => ({
+// Overridable mock state — tests can set these before render to simulate sad paths
+let mockStaticDataOverride: ReturnType<typeof buildDefaultStaticData> | null = null;
+let mockSchedulerDataOverride: ReturnType<typeof buildDefaultSchedulerData> | null = null;
+
+function buildDefaultStaticData() {
+  return {
     employees: mockEmployees,
     services: mockServices,
     customers: [],
@@ -91,15 +95,11 @@ vi.mock('../../lib/hooks', () => ({
     refresh: mockRefreshStaticData,
     loading: false,
     error: null,
-  }),
-}));
+  };
+}
 
-vi.mock('../../lib/SessionContext', () => ({
-  useActiveTenantId: () => 'tenant-1',
-}));
-
-vi.mock('./useSchedulerData', () => ({
-  useSchedulerData: () => ({
+function buildDefaultSchedulerData() {
+  return {
     appointments: mockAppointments,
     shifts: mockShifts,
     loading: false,
@@ -107,7 +107,19 @@ vi.mock('./useSchedulerData', () => ({
     appointmentsByResource: new Map(),
     shiftsByEmployee: buildShiftsByEmployee(),
     refresh: mockRefreshScheduler,
-  }),
+  };
+}
+
+vi.mock('../../lib/hooks', () => ({
+  useStaticData: () => mockStaticDataOverride || buildDefaultStaticData(),
+}));
+
+vi.mock('../../lib/SessionContext', () => ({
+  useActiveTenantId: () => 'tenant-1',
+}));
+
+vi.mock('./useSchedulerData', () => ({
+  useSchedulerData: () => mockSchedulerDataOverride || buildDefaultSchedulerData(),
 }));
 
 // Must import after mocks
@@ -115,6 +127,8 @@ import NewSchedulerView from './NewSchedulerView';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockStaticDataOverride = null;
+  mockSchedulerDataOverride = null;
 });
 
 describe('NewSchedulerView', () => {
@@ -633,6 +647,208 @@ describe('NewSchedulerView', () => {
       // Grip dots has 6 circles
       const circles = svg?.querySelectorAll('circle');
       expect(circles?.length).toBe(6);
+    });
+  });
+
+  // --- Sad path tests ---
+  describe('Sad paths', () => {
+    describe('Empty employees list', () => {
+      test('renders without crashing when there are no employees', () => {
+        mockStaticDataOverride = {
+          employees: [],
+          services: mockServices,
+          customers: [],
+          resources: [],
+          skills: [],
+          refresh: mockRefreshStaticData,
+          loading: false,
+          error: null,
+        };
+        mockSchedulerDataOverride = {
+          appointments: [],
+          shifts: [],
+          loading: false,
+          appointmentsByEmployee: new Map(),
+          appointmentsByResource: new Map(),
+          shiftsByEmployee: new Map(),
+          refresh: mockRefreshScheduler,
+        };
+
+        render(<NewSchedulerView />);
+        expect(screen.getByTestId('new-scheduler-view')).toBeInTheDocument();
+        expect(screen.getByTestId('scheduler-grid')).toBeInTheDocument();
+        // No staff rows rendered
+        expect(screen.queryByTestId('staff-name-emp-1')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('staff-name-emp-2')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Empty appointments list', () => {
+      test('renders normally with no appointments displayed', () => {
+        mockSchedulerDataOverride = {
+          appointments: [],
+          shifts: mockShifts,
+          loading: false,
+          appointmentsByEmployee: new Map(),
+          appointmentsByResource: new Map(),
+          shiftsByEmployee: buildShiftsByEmployee(),
+          refresh: mockRefreshScheduler,
+        };
+
+        render(<NewSchedulerView />);
+        expect(screen.getByTestId('new-scheduler-view')).toBeInTheDocument();
+        // Staff rows still render
+        expect(screen.getByTestId('staff-name-emp-1')).toBeInTheDocument();
+        expect(screen.getByTestId('staff-name-emp-2')).toBeInTheDocument();
+        // No appointment blocks
+        expect(screen.queryByTestId('appt-block-appt-1')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('appt-block-appt-2')).not.toBeInTheDocument();
+        // No unassigned row (no unassigned appointments)
+        expect(screen.queryByTestId('staff-name-unassigned')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Employee with no shifts', () => {
+      test('employee still appears in the scheduler even without shifts', () => {
+        mockSchedulerDataOverride = {
+          appointments: mockAppointments,
+          shifts: [],
+          loading: false,
+          appointmentsByEmployee: buildApptMap(),
+          appointmentsByResource: new Map(),
+          shiftsByEmployee: new Map(), // no shifts for any employee
+          refresh: mockRefreshScheduler,
+        };
+
+        render(<NewSchedulerView />);
+        // Both employees still appear
+        expect(screen.getByTestId('staff-name-emp-1')).toBeInTheDocument();
+        expect(screen.getByTestId('staff-name-emp-2')).toBeInTheDocument();
+        expect(screen.getByTestId('scheduler-row-emp-1')).toBeInTheDocument();
+        expect(screen.getByTestId('scheduler-row-emp-2')).toBeInTheDocument();
+        // No shift bars rendered
+        const row1 = screen.getByTestId('scheduler-row-emp-1');
+        expect(row1.querySelector('[data-testid="shift-bar-0"]')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Appointment with invalid times', () => {
+      test('does not crash when appointment has empty string start_time or end_time', () => {
+        const badAppointments = [
+          {
+            id: 'appt-bad-1',
+            tenant_id: 't1',
+            resource_id: 'res-1',
+            customer_id: 'cust-1',
+            employee_id: 'emp-1',
+            start_time: '', // empty string
+            end_time: '',
+            description: 'Broken Appointment',
+            status: 'scheduled',
+            customers: { name: 'Bad Data', phone: '' },
+            resources: { name: 'Bay 1' },
+          },
+        ];
+
+        const badApptMap = new Map();
+        badApptMap.set('emp-1', badAppointments);
+
+        mockSchedulerDataOverride = {
+          appointments: badAppointments,
+          shifts: mockShifts,
+          loading: false,
+          appointmentsByEmployee: badApptMap,
+          appointmentsByResource: new Map(),
+          shiftsByEmployee: buildShiftsByEmployee(),
+          refresh: mockRefreshScheduler,
+        };
+
+        // Should not throw — empty string passed to new Date() gives Invalid Date,
+        // but toFractionalHour returns NaN which results in NaN positioning (renders offscreen, no crash)
+        render(<NewSchedulerView />);
+        expect(screen.getByTestId('new-scheduler-view')).toBeInTheDocument();
+        expect(screen.getByTestId('appt-block-appt-bad-1')).toBeInTheDocument();
+      });
+    });
+
+    describe('Zoom boundary limits', () => {
+      test('zoom does not go below minimum (36px) even with many clicks', () => {
+        render(<NewSchedulerView />);
+        const zoomOut = screen.getByTestId('zoom-out');
+        // Click zoom out 10 times (way past minimum)
+        for (let i = 0; i < 10; i++) {
+          fireEvent.click(zoomOut);
+        }
+        // Should be at minimum: 36/72*100 = 50%
+        expect(screen.getByTestId('zoom-label')).toHaveTextContent('50%');
+        expect(zoomOut).toBeDisabled();
+      });
+
+      test('zoom does not go above maximum (140px) even with many clicks', () => {
+        render(<NewSchedulerView />);
+        const zoomIn = screen.getByTestId('zoom-in');
+        // Click zoom in 10 times (way past maximum)
+        for (let i = 0; i < 10; i++) {
+          fireEvent.click(zoomIn);
+        }
+        // Should be at maximum: 140/72*100 = 194%
+        expect(screen.getByTestId('zoom-label')).toHaveTextContent('194%');
+        expect(zoomIn).toBeDisabled();
+      });
+
+      test('zoom out then zoom in returns to original value', () => {
+        render(<NewSchedulerView />);
+        expect(screen.getByTestId('zoom-label')).toHaveTextContent('100%');
+        fireEvent.click(screen.getByTestId('zoom-out'));
+        expect(screen.getByTestId('zoom-label')).toHaveTextContent('78%');
+        fireEvent.click(screen.getByTestId('zoom-in'));
+        expect(screen.getByTestId('zoom-label')).toHaveTextContent('100%');
+      });
+    });
+
+    describe('Loading state', () => {
+      test('refresh icon has animate-spin class while loading', () => {
+        mockSchedulerDataOverride = {
+          appointments: [],
+          shifts: [],
+          loading: true,
+          appointmentsByEmployee: new Map(),
+          appointmentsByResource: new Map(),
+          shiftsByEmployee: new Map(),
+          refresh: mockRefreshScheduler,
+        };
+
+        render(<NewSchedulerView />);
+        const refreshBtn = screen.getByTestId('scheduler-refresh');
+        const svg = refreshBtn.querySelector('svg');
+        expect(svg?.classList.contains('animate-spin')).toBe(true);
+      });
+
+      test('refresh icon does not have animate-spin when not loading', () => {
+        render(<NewSchedulerView />);
+        const refreshBtn = screen.getByTestId('scheduler-refresh');
+        const svg = refreshBtn.querySelector('svg');
+        expect(svg?.classList.contains('animate-spin')).toBe(false);
+      });
+
+      test('component still renders structural elements while loading', () => {
+        mockSchedulerDataOverride = {
+          appointments: [],
+          shifts: [],
+          loading: true,
+          appointmentsByEmployee: new Map(),
+          appointmentsByResource: new Map(),
+          shiftsByEmployee: new Map(),
+          refresh: mockRefreshScheduler,
+        };
+
+        render(<NewSchedulerView />);
+        expect(screen.getByTestId('new-scheduler-view')).toBeInTheDocument();
+        expect(screen.getByTestId('staff-names-panel')).toBeInTheDocument();
+        expect(screen.getByTestId('hour-header')).toBeInTheDocument();
+        expect(screen.getByTestId('scheduler-grid')).toBeInTheDocument();
+        expect(screen.getByText('Schedule')).toBeInTheDocument();
+      });
     });
   });
 });

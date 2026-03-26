@@ -7,7 +7,7 @@ export function registerAnalyticsRoutes(
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
-  app.post('/analytics/stats', withHandler(async (req: AppRequest, reply) => {
+  app.post('/analytics/stats', withHandler(async (_req: AppRequest, _reply) => {
     // Existing analytics logic (placeholder — was empty in original)
   }, 'Failed to fetch analytics stats'));
 

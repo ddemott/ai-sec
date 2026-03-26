@@ -3,7 +3,7 @@ import type {
   Appointment, Customer, Resource, Employee, Service, Shift, Skill,
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
   CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
-  CallSummary,
+  CallSummary, JobberSettings, JobberSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
 } from './types'
 
 export const API_BASE_URL =
@@ -314,8 +314,8 @@ export const Api = {
     getSettings: (tenantId: string | null) =>
       apiFetch<CalendarSettings | null>(`/calendar/settings`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ url: string }>(`/calendar/auth/google`, tenantId ? { tenant_id: tenantId } : undefined),
+    getAuthUrl: (tenantId: string | null, provider: 'google' | 'outlook' = 'google') =>
+      apiFetch<{ url: string }>(`/calendar/auth/${provider}`, tenantId ? { tenant_id: tenantId } : undefined),
 
     updateSettings: (tenantId: string | null, data: Partial<CalendarSettings>) =>
       apiMutate<{ settings: CalendarSettings }>(`/calendar/settings`, 'POST', { tenant_id: tenantId, ...data }),
@@ -443,5 +443,77 @@ export const Api = {
       apiFetch<{ phone_status: string; inbound_phone: string | null; vapi_assistant_id: string | null }>(
         `/provisioning/status`, { tenant_id: tenantId }
       ),
+  },
+
+  // --- JOBBER CRM ---
+  jobber: {
+    getSettings: (tenantId: string | null) =>
+      apiFetch<JobberSettings | null>(`/jobber/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getAuthUrl: (tenantId: string | null) =>
+      apiFetch<{ url: string }>(`/jobber/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    disconnect: (tenantId: string | null) =>
+      apiMutate(`/jobber/settings/disconnect`, 'POST', { tenant_id: tenantId }),
+
+    triggerSync: (tenantId: string | null) =>
+      apiMutate<{ clientsSynced: number; visitsSynced: number; errors: number }>(`/jobber/sync`, 'POST', { tenant_id: tenantId }),
+
+    getSyncStatus: (tenantId: string | null) =>
+      apiFetch<JobberSyncStatus>(`/jobber/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- HUBSPOT CRM ---
+  hubspot: {
+    getSettings: (tenantId: string | null) =>
+      apiFetch<HubSpotSettings | null>(`/hubspot/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getAuthUrl: (tenantId: string | null) =>
+      apiFetch<{ url: string }>(`/hubspot/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    disconnect: (tenantId: string | null) =>
+      apiMutate(`/hubspot/settings/disconnect`, 'POST', { tenant_id: tenantId }),
+
+    triggerSync: (tenantId: string | null) =>
+      apiMutate<{ contactsSynced: number; meetingsSynced: number; errors: number }>(`/hubspot/sync`, 'POST', { tenant_id: tenantId }),
+
+    getSyncStatus: (tenantId: string | null) =>
+      apiFetch<JobberSyncStatus>(`/hubspot/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- SQUARE CRM ---
+  square: {
+    getSettings: (tenantId: string | null) =>
+      apiFetch<SquareSettings | null>(`/square/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getAuthUrl: (tenantId: string | null) =>
+      apiFetch<{ url: string }>(`/square/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    disconnect: (tenantId: string | null) =>
+      apiMutate(`/square/settings/disconnect`, 'POST', { tenant_id: tenantId }),
+
+    triggerSync: (tenantId: string | null) =>
+      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(`/square/sync`, 'POST', { tenant_id: tenantId }),
+
+    getSyncStatus: (tenantId: string | null) =>
+      apiFetch<JobberSyncStatus>(`/square/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- SERVICETITAN CRM ---
+  servicetitan: {
+    getSettings: (tenantId: string | null) =>
+      apiFetch<ServiceTitanSettings | null>(`/servicetitan/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getAuthUrl: (tenantId: string | null) =>
+      apiFetch<{ url: string }>(`/servicetitan/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    disconnect: (tenantId: string | null) =>
+      apiMutate(`/servicetitan/settings/disconnect`, 'POST', { tenant_id: tenantId }),
+
+    triggerSync: (tenantId: string | null) =>
+      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(`/servicetitan/sync`, 'POST', { tenant_id: tenantId }),
+
+    getSyncStatus: (tenantId: string | null) =>
+      apiFetch<JobberSyncStatus>(`/servicetitan/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 };

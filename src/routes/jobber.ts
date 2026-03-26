@@ -1,0 +1,218 @@
+import type { Pool, PoolClient } from 'pg';
+import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import * as jobberClient from '../services/jobberClient';
+import * as jobberSync from '../services/jobberSync';
+
+export function registerJobberRoutes(
+  app: any,
+  pool: Pool,
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+) {
+  // --- Jobber OAuth: Initiate ---
+  app.get('/jobber/auth', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    if (!jobberClient.isJobberEnabled()) {
+      return reply.status(503).send({
+        success: false,
+        error: 'Jobber integration is not configured. Set JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET, and JOBBER_CALLBACK_URL.',
+      });
+    }
+
+    const url = jobberClient.getAuthUrl(tenantId);
+    if (!url) {
+      return reply.status(500).send({ success: false, error: 'Failed to generate Jobber auth URL' });
+    }
+
+    logEvent(req, 'jobber_oauth_initiated', {});
+    return reply.send({ url });
+  }, 'Failed to initiate Jobber auth'));
+
+  // --- Jobber OAuth: Callback (Jobber redirects here) ---
+  app.get('/jobber/auth/callback', async (req: any, reply: any) => {
+    const { code, state, error: oauthError } = req.query as Record<string, string>;
+    const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
+
+    if (oauthError) {
+      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=${encodeURIComponent(oauthError)}`);
+    }
+
+    if (!code || !state) {
+      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=missing_params`);
+    }
+
+    const tenantId = jobberClient.verifyState(state);
+    if (!tenantId) {
+      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=invalid_state`);
+    }
+
+    try {
+      const tokens = await jobberClient.exchangeCodeForTokens(code);
+
+      const client = await pool.connect();
+      try {
+        await client.query(
+          `INSERT INTO tenant_integration_settings
+             (tenant_id, provider, access_token, refresh_token, token_expires_at, is_active)
+           VALUES ($1, 'jobber', $2, $3, $4, true)
+           ON CONFLICT (tenant_id, provider) DO UPDATE SET
+             access_token = $2, refresh_token = $3, token_expires_at = $4,
+             is_active = true, updated_at = NOW()`,
+          [tenantId, tokens.access_token, tokens.refresh_token, new Date(tokens.expiry_date).toISOString()]
+        );
+      } finally {
+        client.release();
+      }
+
+      app.log.info({ event: 'jobber_oauth_complete', tenantId }, 'Jobber connected');
+      return reply.redirect(`${dashboardUrl}/dashboard?jobberConnected=true`);
+    } catch (err) {
+      app.log.error({ event: 'jobber_oauth_failed', tenantId, error: (err as Error).message }, 'Jobber OAuth failed');
+      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=token_exchange_failed`);
+    }
+  });
+
+  // --- Get Jobber integration settings (strip tokens) ---
+  app.get('/jobber/settings', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
+        `SELECT tenant_id, provider, is_active, last_sync_at, created_at, updated_at
+         FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
+        [tenantId]
+      );
+    });
+    return reply.send(res.rows[0] || null);
+  }, 'Failed to fetch Jobber settings'));
+
+  // --- Disconnect Jobber ---
+  app.post('/jobber/settings/disconnect', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    await withTenantClient(tenantId, async (client) => {
+      await client.query(
+        `DELETE FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
+        [tenantId]
+      );
+      // Clean up sync map entries
+      await client.query(
+        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'jobber'`,
+        [tenantId]
+      );
+    });
+
+    logEvent(req, 'jobber_disconnected', {});
+    return reply.send({ success: true });
+  }, 'Failed to disconnect Jobber'));
+
+  // --- Jobber webhook receiver ---
+  app.post('/jobber/webhook/:tenantId', async (req: any, reply: any) => {
+    const tenantId = req.params.tenantId as string;
+    const signature = req.headers['x-jobber-hmac-sha256'] as string;
+    const rawBody = JSON.stringify(req.body);
+
+    if (!tenantId || !signature) {
+      return reply.status(400).send({ success: false, error: 'Missing tenant ID or signature' });
+    }
+
+    // Look up webhook secret for this tenant
+    const client = await pool.connect();
+    let webhookSecret: string | null = null;
+    try {
+      const res = await client.query(
+        `SELECT webhook_secret FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber' AND is_active = true`,
+        [tenantId]
+      );
+      webhookSecret = res.rows[0]?.webhook_secret;
+    } finally {
+      client.release();
+    }
+
+    if (!webhookSecret) {
+      return reply.status(404).send({ success: false, error: 'No active Jobber integration for this tenant' });
+    }
+
+    // Verify HMAC signature
+    if (!jobberClient.verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+      app.log.warn({ event: 'jobber_webhook_invalid_signature', tenantId }, 'Jobber webhook signature mismatch');
+      return reply.status(401).send({ success: false, error: 'Invalid webhook signature' });
+    }
+
+    // Process webhook event
+    const body = req.body as { topic?: string; webHookEvent?: { itemId?: string } };
+    const topic = body.topic;
+    const itemId = body.webHookEvent?.itemId;
+
+    if (!topic || !itemId) {
+      return reply.status(200).send({ success: true, message: 'No actionable event' });
+    }
+
+    // Fire-and-forget — respond immediately, process async
+    reply.status(200).send({ success: true, message: 'Webhook received' });
+
+    // Fetch full record from Jobber and sync
+    try {
+      const tokens = await jobberSync.getTokensWithRefresh(pool, tenantId);
+      if (!tokens) return;
+
+      if (topic === 'CLIENT_CREATE' || topic === 'CLIENT_UPDATE') {
+        const result = await jobberClient.graphql(tokens.accessToken, jobberClient.QUERIES.getClient, { id: itemId });
+        const clientData = result.data?.client;
+        if (clientData) {
+          await jobberSync.pullJobberClient(pool, tenantId, clientData);
+        }
+      }
+      // VISIT_CREATE, VISIT_UPDATE would need a getVisit query — add when needed
+    } catch (err) {
+      app.log.error({ event: 'jobber_webhook_processing_failed', tenantId, topic, itemId, error: (err as Error).message });
+    }
+  });
+
+  // --- Trigger full sync ---
+  app.post('/jobber/sync', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    const result = await jobberSync.fullSync(pool, tenantId);
+    return reply.send({ success: true, ...result });
+  }, 'Failed to trigger Jobber sync'));
+
+  // --- Get sync status ---
+  app.get('/jobber/sync/status', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    const res = await withTenantClient(tenantId, async (client) => {
+      const settingsRes = await client.query(
+        `SELECT last_sync_at FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
+        [tenantId]
+      );
+
+      const countsRes = await client.query(
+        `SELECT entity_type, sync_status, COUNT(*)::int as count
+         FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'jobber'
+         GROUP BY entity_type, sync_status`,
+        [tenantId]
+      );
+
+      const counts = countsRes.rows;
+      const customerTotal = counts.filter(r => r.entity_type === 'customer').reduce((s, r) => s + r.count, 0);
+      const appointmentTotal = counts.filter(r => r.entity_type === 'appointment').reduce((s, r) => s + r.count, 0);
+      const pendingCount = counts.filter(r => r.sync_status === 'pending').reduce((s, r) => s + r.count, 0);
+      const errorCount = counts.filter(r => r.sync_status === 'error').reduce((s, r) => s + r.count, 0);
+
+      return {
+        last_sync_at: settingsRes.rows[0]?.last_sync_at || null,
+        pending_count: pendingCount,
+        error_count: errorCount,
+        total_mapped: { customers: customerTotal, appointments: appointmentTotal },
+      };
+    });
+
+    return reply.send(res);
+  }, 'Failed to get Jobber sync status'));
+}

@@ -806,7 +806,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
   })
 
   test('area code is passed to the API', async () => {
-    const mockFetch = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+    const mockFetch = vi.fn().mockImplementation((url: string, _options?: RequestInit) => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
@@ -861,5 +861,514 @@ describe('SetupWizard: Step 7 Go Live', () => {
       expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument()
     })
     expect(screen.getByPlaceholderText('e.g. 312')).toBeInTheDocument()
+  })
+})
+
+// =============================================================================
+// SAD PATH TESTS
+// =============================================================================
+
+describe('SetupWizard: Sad Paths — Service Creation Failure', () => {
+  test('shows error when service creation throws a network error', async () => {
+    // First call to /services (list) returns empty, then POST to /services/create rejects
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/services/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Network request failed'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Add a service'))
+
+    const nameInput = screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation')
+    fireEvent.change(nameInput, { target: { value: 'Brake Pad Replacement' } })
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Network request failed')).toBeInTheDocument()
+    })
+  })
+
+  test('form remains open after service creation failure so user can retry', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/services/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Server unavailable'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Add a service'))
+
+    const nameInput = screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation')
+    fireEvent.change(nameInput, { target: { value: 'Oil Change' } })
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Server unavailable')).toBeInTheDocument()
+    })
+    // Form should still be open with the name filled in
+    expect(screen.getByText('New Service')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Oil Change')).toBeInTheDocument()
+  })
+
+  test('saving indicator resets after service creation failure', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/services/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Timeout'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Add a service'))
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: 'Test' } })
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Timeout')).toBeInTheDocument()
+    })
+    // Button should not be stuck in "Saving..." state
+    expect(screen.getByText('Add Service')).toBeInTheDocument()
+    expect(screen.queryByText('Saving...')).toBeNull()
+  })
+})
+
+describe('SetupWizard: Sad Paths — Resource Creation Failure', () => {
+  test('shows error when resource creation throws a network error', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/resources/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Failed to create resource'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next')) // Go to Step 2
+    fireEvent.click(screen.getByText('Add a resource'))
+
+    const nameInput = screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3')
+    fireEvent.change(nameInput, { target: { value: 'Bay 3' } })
+    fireEvent.click(screen.getByText('Add Resource'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to create resource')).toBeInTheDocument()
+    })
+  })
+
+  test('resource form remains open after creation failure', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/resources/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('DB connection lost'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Add a resource'))
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3'), { target: { value: 'Bay 3' } })
+    fireEvent.click(screen.getByText('Add Resource'))
+
+    await waitFor(() => {
+      expect(screen.getByText('DB connection lost')).toBeInTheDocument()
+    })
+    expect(screen.getByText('New Resource')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Bay 3')).toBeInTheDocument()
+  })
+})
+
+describe('SetupWizard: Sad Paths — Employee Creation Failure', () => {
+  test('shows error when employee creation throws a network error', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/employees/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Employee creation failed'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next')) // Go to Step 3
+    fireEvent.click(screen.getByText('Add an employee'))
+
+    fireEvent.change(screen.getByPlaceholderText('First name'), { target: { value: 'John' } })
+    fireEvent.change(screen.getByPlaceholderText('Last name'), { target: { value: 'Doe' } })
+    fireEvent.click(screen.getByText('Add Employee'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Employee creation failed')).toBeInTheDocument()
+    })
+  })
+
+  test('employee form remains open after creation failure', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/employees/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Duplicate email'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Add an employee'))
+
+    fireEvent.change(screen.getByPlaceholderText('First name'), { target: { value: 'Jane' } })
+    fireEvent.change(screen.getByPlaceholderText('Last name'), { target: { value: 'Smith' } })
+    fireEvent.click(screen.getByText('Add Employee'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Duplicate email')).toBeInTheDocument()
+    })
+    expect(screen.getByText('New Employee')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Jane')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Smith')).toBeInTheDocument()
+  })
+})
+
+describe('SetupWizard: Sad Paths — Validation (Empty Form Submissions)', () => {
+  test('service: empty name and valid duration prevents submission', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Add a service'))
+
+    // Leave name empty, keep default duration
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Service name is required')).toBeInTheDocument()
+    })
+    // Form should still be open
+    expect(screen.getByText('New Service')).toBeInTheDocument()
+  })
+
+  test('service: whitespace-only name is treated as empty', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Add a service'))
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Service name is required')).toBeInTheDocument()
+    })
+  })
+
+  test('service: negative duration shows validation error', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Add a service'))
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: 'Haircut' } })
+    fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '-5' } })
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Duration must be at least 1 minute')).toBeInTheDocument()
+    })
+  })
+
+  test('resource: empty name prevents submission', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Add a resource'))
+
+    fireEvent.click(screen.getByText('Add Resource'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Resource name is required')).toBeInTheDocument()
+    })
+    expect(screen.getByText('New Resource')).toBeInTheDocument()
+  })
+
+  test('resource: whitespace-only name is treated as empty', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Add a resource'))
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByText('Add Resource'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Resource name is required')).toBeInTheDocument()
+    })
+  })
+
+  test('employee: empty first name prevents submission', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Add an employee'))
+
+    // Fill last name but leave first name empty
+    fireEvent.change(screen.getByPlaceholderText('Last name'), { target: { value: 'Doe' } })
+    fireEvent.click(screen.getByText('Add Employee'))
+
+    await waitFor(() => {
+      expect(screen.getByText('First name is required')).toBeInTheDocument()
+    })
+    expect(screen.getByText('New Employee')).toBeInTheDocument()
+  })
+
+  test('employee: whitespace-only first name is treated as empty', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Add an employee'))
+
+    fireEvent.change(screen.getByPlaceholderText('First name'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByText('Add Employee'))
+
+    await waitFor(() => {
+      expect(screen.getByText('First name is required')).toBeInTheDocument()
+    })
+  })
+})
+
+describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
+  function goToStep7() {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+    const goLiveBtns = screen.getAllByText('Go Live')
+    fireEvent.click(goLiveBtns[goLiveBtns.length - 1])
+  }
+
+  test('shows error state with descriptive message when activation network fails', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.reject(new Error('Connection timed out'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Activation failed')).toBeInTheDocument()
+      expect(screen.getByText('Connection timed out')).toBeInTheDocument()
+    })
+  })
+
+  test('activate button is re-enabled after provisioning failure so user can retry', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.reject(new Error('Vapi API error'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Activation failed')).toBeInTheDocument()
+    })
+    // Activate button should still be visible (not stuck in spinner)
+    expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument()
+  })
+
+  test('skip message is hidden when error is shown', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.reject(new Error('No numbers available'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Activation failed')).toBeInTheDocument()
+    })
+    // Skip message should be replaced by the error
+    expect(screen.queryByText('You can skip this step and activate later from Settings.')).toBeNull()
+  })
+
+  test('generic error message used when error is not an Error instance', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.reject('string error without Error wrapper')
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Activation failed')).toBeInTheDocument()
+      expect(screen.getByText('Failed to activate phone')).toBeInTheDocument()
+    })
+  })
+})
+
+describe('SetupWizard: Sad Paths — Empty Lists Handled Gracefully', () => {
+  test('step 4 (shifts) shows empty message when no employees exist', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText('No employees yet. Go back to Step 3 to add team members first.')).toBeInTheDocument()
+    })
+  })
+
+  test('step 5 (assignments) shows empty message when no services exist', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText('No services yet. Go back to Step 1 to add services first.')).toBeInTheDocument()
+    })
+  })
+
+  test('step 6 (review) shows "No services configured" with empty data', async () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+
+    await waitFor(() => {
+      expect(screen.getByText('No services configured yet.')).toBeInTheDocument()
+    })
+  })
+
+  test('step 6 (review) shows zero counts with empty data', () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+
+    const zeros = screen.getAllByText('0')
+    expect(zeros.length).toBe(3)
+  })
+
+  test('wizard does not crash when API returns non-array for services', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/services')) {
+        return Promise.resolve({ ok: true, json: async () => ({ unexpected: 'object' }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    // Should not crash — should show empty state
+    await waitFor(() => {
+      expect(screen.getByText('What services do you offer?')).toBeInTheDocument()
+    })
+  })
+})
+
+describe('SetupWizard: Sad Paths — Service Deletion Failure', () => {
+  test('deletion error does not crash the wizard and service remains in list', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/services') && !url.includes('delete')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 1, name: 'Oil Change', duration_minutes: 30, description: '' },
+          ],
+        })
+      }
+      if (url.includes('/delete') && options?.method === 'DELETE') {
+        return Promise.reject(new Error('Cannot delete: service has appointments'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Oil Change')).toBeInTheDocument()
+    })
+
+    // Click the delete button (trash icon)
+    const deleteBtn = screen.getByTitle('Delete')
+    fireEvent.click(deleteBtn)
+
+    // Wizard should not crash — service should still be visible
+    await waitFor(() => {
+      expect(screen.getByText('Oil Change')).toBeInTheDocument()
+    })
+    // Step heading still visible
+    expect(screen.getByText('What services do you offer?')).toBeInTheDocument()
+  })
+})
+
+describe('SetupWizard: Sad Paths — Navigation After Error', () => {
+  test('error clears when opening add form after a previous error', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/services/create') && options?.method === 'POST') {
+        return Promise.reject(new Error('Save failed'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+
+    // Trigger an error
+    fireEvent.click(screen.getByText('Add a service'))
+    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: 'Test' } })
+    fireEvent.click(screen.getByText('Add Service'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Save failed')).toBeInTheDocument()
+    })
+
+    // Cancel and re-open the form — error should be cleared
+    fireEvent.click(screen.getByText('Cancel'))
+    fireEvent.click(screen.getByText('Add a service'))
+
+    expect(screen.queryByText('Save failed')).toBeNull()
+  })
+
+  test('navigating back then forward preserves wizard state without crash', () => {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+
+    // Navigate forward to step 4
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByText('Next'))
+    expect(screen.getByText('Step 4 of 7')).toBeInTheDocument()
+
+    // Navigate back to step 2
+    fireEvent.click(screen.getByText('Back'))
+    fireEvent.click(screen.getByText('Back'))
+    expect(screen.getByText('Step 2 of 7')).toBeInTheDocument()
+
+    // Navigate forward again
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    expect(screen.getByText('Step 4 of 7')).toBeInTheDocument()
+    expect(screen.getByText('When does everyone work?')).toBeInTheDocument()
   })
 })

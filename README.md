@@ -51,7 +51,7 @@ Reset the database with 3 realistic businesses:
 - **CRM**: Searchable customer profiles with appointment history, call summaries, transcripts, and internal notes.
 - **Coverage Visibility**: Coverage gaps are visible throughout the UI — scheduler, services list, skill map, and setup wizard.
 - **Analytics**: Call volume, booking conversion, and estimated revenue tracking.
-- **Calendar Sync**: Google Calendar OAuth integration — appointments automatically sync on create, update, delete, and cancel. Outlook planned.
+- **Calendar Sync**: Google Calendar and Outlook Calendar OAuth integration — appointments automatically sync on create, update, delete, and cancel.
 - **Async Automation**: Post-call summarization and sentiment analysis via n8n workflows.
 
 ## Architecture at a Glance
@@ -99,7 +99,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**637 tests passing** (369 backend + 268 dashboard) in ~25 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**795 tests passing** (482 backend + 313 dashboard) in ~25 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend

@@ -59,7 +59,6 @@ export default function AnalyticsView() {
         const byDay: Record<string, number> = {}
         const byHour: Record<number, number> = {}
         const noShowsByDay: Record<string, number> = {}
-        const firstService: Record<string, Set<string>> = {}
         const allCustomerServices: Record<string, string[]> = {}
 
         for (const apt of appointments) {

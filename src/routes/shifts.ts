@@ -21,7 +21,7 @@ const UpdateShiftSchema = z.object({
 
 export function registerShiftRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/shifts', withHandler(async (req: AppRequest, reply) => {

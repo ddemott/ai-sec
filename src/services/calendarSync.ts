@@ -1,5 +1,8 @@
 import type { Pool } from 'pg';
 import * as gcal from './googleCalendar';
+import * as outlook from './outlookCalendar';
+
+type CalendarProvider = typeof gcal | typeof outlook;
 
 interface SyncLogger {
   warn: (msg: string) => void;
@@ -41,8 +44,8 @@ export async function syncAppointmentToCalendar(
       log.warn(`${prefix} — skipped: calendar marked inactive (WHY: previous token refresh failed, user needs to reconnect)`);
       return;
     }
-    if (settings.provider !== 'google') {
-      log.warn(`${prefix} — skipped: provider="${settings.provider}" not supported (HOW: only Google Calendar is implemented)`);
+    if (settings.provider !== 'google' && settings.provider !== 'outlook') {
+      log.warn(`${prefix} — skipped: provider="${settings.provider}" not supported (HOW: only Google and Outlook Calendar are implemented)`);
       return;
     }
     if (!settings.access_token || !settings.refresh_token) {
@@ -50,12 +53,16 @@ export async function syncAppointmentToCalendar(
       return;
     }
 
-    // 2. Refresh token if expired (5 minute buffer)
+    // 2. Select the provider module
+    const provider: CalendarProvider = settings.provider === 'outlook' ? outlook : gcal;
+    const providerName = settings.provider === 'outlook' ? 'Outlook' : 'Google';
+
+    // 3. Refresh token if expired (5 minute buffer)
     let accessToken = settings.access_token;
     const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
     if (Date.now() > expiresAt - 5 * 60 * 1000) {
       try {
-        const refreshed = await gcal.refreshAccessToken(settings.refresh_token);
+        const refreshed = await provider.refreshAccessToken(settings.refresh_token);
         accessToken = refreshed.access_token;
         await client.query(
           `UPDATE tenant_calendar_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
@@ -69,7 +76,7 @@ export async function syncAppointmentToCalendar(
           `UPDATE tenant_calendar_settings SET is_active = false, updated_at = NOW() WHERE tenant_id = $1`,
           [tenantId]
         );
-        log.error(`${prefix} — token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: Google OAuth grant likely revoked by user | HOW: is_active set to false, user will see "Reconnect" in dashboard | ERROR: ${err})`);
+        log.error(`${prefix} — token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked by user | HOW: is_active set to false, user will see "Reconnect" in dashboard | ERROR: ${err})`);
         return;
       }
     }
@@ -77,7 +84,7 @@ export async function syncAppointmentToCalendar(
     const calendarId = settings.external_calendar_id;
     const refreshToken = settings.refresh_token;
 
-    // 3. Execute the sync action
+    // 4. Execute the sync action
     if (action === 'create') {
       // Fetch appointment details
       const apptRes = await client.query(
@@ -100,15 +107,15 @@ export async function syncAppointmentToCalendar(
       }
 
       const event = buildCalendarEvent(appt);
-      const eventId = await gcal.createEvent(accessToken, refreshToken, calendarId, event);
+      const eventId = await provider.createEvent(accessToken, refreshToken, calendarId, event);
 
       await client.query(
         `INSERT INTO appointment_sync_map (appointment_id, external_event_id, provider, last_synced_at)
-         VALUES ($1, $2, 'google', NOW())
-         ON CONFLICT (appointment_id) DO UPDATE SET external_event_id = $2, last_synced_at = NOW()`,
-        [appointmentId, eventId]
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (appointment_id) DO UPDATE SET external_event_id = $2, provider = $3, last_synced_at = NOW()`,
+        [appointmentId, eventId, settings.provider]
       );
-      log.info(`${prefix} — event created in Google Calendar (WHERE: calendarId=${calendarId} gcalEventId=${eventId} customer=${appt.customer_name || 'unknown'})`);
+      log.info(`${prefix} — event created in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${eventId} customer=${appt.customer_name || 'unknown'})`);
 
     } else if (action === 'update') {
       // Get existing sync mapping
@@ -140,13 +147,13 @@ export async function syncAppointmentToCalendar(
       }
 
       const event = buildCalendarEvent(appt);
-      await gcal.updateEvent(accessToken, refreshToken, calendarId, externalEventId, event);
+      await provider.updateEvent(accessToken, refreshToken, calendarId, externalEventId, event);
 
       await client.query(
         `UPDATE appointment_sync_map SET last_synced_at = NOW() WHERE appointment_id = $1`,
         [appointmentId]
       );
-      log.info(`${prefix} — event updated in Google Calendar (WHERE: calendarId=${calendarId} gcalEventId=${externalEventId})`);
+      log.info(`${prefix} — event updated in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${externalEventId})`);
 
     } else if (action === 'delete') {
       const syncRes = await client.query(
@@ -154,24 +161,24 @@ export async function syncAppointmentToCalendar(
         [appointmentId]
       );
       if (syncRes.rows.length === 0) {
-        log.info(`${prefix} — skipped: no sync map entry (WHY: appointment was never synced to Google Calendar)`);
+        log.info(`${prefix} — skipped: no sync map entry (WHY: appointment was never synced to ${providerName} Calendar)`);
         return;
       }
 
       const externalEventId = syncRes.rows[0].external_event_id;
 
       try {
-        await gcal.deleteEvent(accessToken, refreshToken, calendarId, externalEventId);
+        await provider.deleteEvent(accessToken, refreshToken, calendarId, externalEventId);
       } catch (err) {
-        // Event may already be deleted in Google — that's fine
-        log.warn(`${prefix} — Google deleteEvent failed (WHY: event may already be deleted in Google Calendar | gcalEventId=${externalEventId} | ERROR: ${err})`);
+        // Event may already be deleted — that's fine
+        log.warn(`${prefix} — ${providerName} deleteEvent failed (WHY: event may already be deleted in ${providerName} Calendar | eventId=${externalEventId} | ERROR: ${err})`);
       }
 
       await client.query(
         `DELETE FROM appointment_sync_map WHERE appointment_id = $1`,
         [appointmentId]
       );
-      log.info(`${prefix} — event deleted from Google Calendar (WHERE: calendarId=${calendarId} gcalEventId=${externalEventId})`);
+      log.info(`${prefix} — event deleted from ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${externalEventId})`);
     }
   } finally {
     client.release();

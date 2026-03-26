@@ -5,20 +5,20 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (19 route modules under src/routes/) -> Postgres (Railway deployment)
+- **Backend API**: Node.js / Fastify (21 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 19 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot)
-- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts)
+- `/src` - Fastify backend (slim index.ts entry, 21 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan)
+- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts)
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 59 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, bug fixes)
+- `/supabase/migrations` - 60 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion)
@@ -92,7 +92,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 638 backend tests + 313 dashboard tests = 951 total passing. Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 791 backend tests + 313 dashboard tests = 1,104 total passing. Zero TypeScript errors.
 
 ### Remaining (Phase 13)
 - **Supabase support ticket** — Email sent to support@supabase.com on 2026-03-26. Project stuck in "pausing" state (known platform bug affecting multiple users). Awaiting ticket number for infra team escalation. See `TRIAGE.md` for full log.
@@ -106,7 +106,9 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - ~~Outlook calendar sync~~ — Done. Microsoft Graph API, OAuth flow, token refresh, auto-sync on appointment create/update/delete/cancel
 - ~~Jobber CRM integration~~ — Done. Bidirectional sync (push + pull), timestamp-based merge, OAuth flow, GraphQL API, webhook receiver, full sync
 - ~~HubSpot CRM integration~~ — Done. Bidirectional sync, REST API (contacts + meetings), OAuth flow, webhook receiver with v3 signature verification, full sync
-- ~~Comprehensive sad path test coverage~~ — Done. 849 total tests (536 backend + 313 dashboard), 5W diagnostics in all error paths
+- ~~Square CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + bookings), OAuth flow, HMAC webhook verification, full sync
+- ~~ServiceTitan CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + jobs), OAuth flow, ST-App-Key auth, full sync
+- ~~Comprehensive sad path test coverage~~ — Done. 1,104 total tests (791 backend + 313 dashboard), 5W diagnostics in all error paths
 - ~~Group 3 refactorings (production hardening)~~ — Done. All 24 items complete (see SUGGESTED_REFACTORINGS.md)
 - Database webhooks for n8n triggers
 - Beta testing with DynaTire

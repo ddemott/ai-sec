@@ -48,7 +48,7 @@ const CreateTemplateSchema = z.object({
 });
 
 export function registerTenantRoutes(app: any, pool: Pool) {
-  app.get('/tenants', withHandler(async (req: AppRequest, reply) => {
+  app.get('/tenants', withHandler(async (_req: AppRequest, reply) => {
     const res = await withPoolClient(pool, client =>
       client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC')
     );
@@ -186,14 +186,14 @@ export function registerTenantRoutes(app: any, pool: Pool) {
     return reply.send({ success: true });
   }, 'Failed to save tenant order'));
 
-  app.get('/templates', withHandler(async (req: AppRequest, reply) => {
+  app.get('/templates', withHandler(async (_req: AppRequest, reply) => {
     const res = await withPoolClient(pool, client =>
       client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY sort_order, display_name')
     );
     return reply.send(res.rows);
   }, 'Failed to fetch templates'));
 
-  app.get('/templates/full', withHandler(async (req: AppRequest, reply) => {
+  app.get('/templates/full', withHandler(async (_req: AppRequest, reply) => {
     const res = await withPoolClient(pool, client =>
       client.query('SELECT * FROM business_templates ORDER BY sort_order, display_name')
     );

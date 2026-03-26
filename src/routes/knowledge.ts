@@ -5,7 +5,7 @@ import { withHandler, logEvent, requireTenantId, type AppRequest } from '../midd
 
 export function registerKnowledgeRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   getEmbedding: (text: string) => Promise<number[]>,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
   normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>

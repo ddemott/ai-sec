@@ -15,7 +15,7 @@ interface ResourceColumnsViewProps {
 }
 
 function buildCoverageSlots(
-  resourceId: string,
+  _resourceId: string,
   appointments: SchedulerAppointment[],
   startHour: number,
   endHour: number

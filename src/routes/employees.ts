@@ -26,7 +26,7 @@ const UpdateEmployeeSchema = z.object({
 
 export function registerEmployeeRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/employees', withHandler(async (req: AppRequest, reply) => {

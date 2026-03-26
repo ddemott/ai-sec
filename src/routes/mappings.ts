@@ -4,7 +4,7 @@ import { withHandler, logEvent, requireTenantId, type AppRequest } from '../midd
 
 export function registerMappingRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get('/mappings/service-resource', withHandler(async (req: AppRequest, reply) => {

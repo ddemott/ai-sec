@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Check, Loader2, AlertCircle } from 'lucide-react'
+import { Check, AlertCircle } from 'lucide-react'
 import { Button } from '../ui/Button'
 import type { WizardShift } from './types'
 import type { Service, CoverageItem } from '../../lib/types'

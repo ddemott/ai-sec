@@ -165,13 +165,16 @@ export function registerProvisioningRoutes(
       }
 
       const { vapi_assistant_id, vapi_phone_number_id } = tenantRes.rows[0];
+      const warnings: string[] = [];
 
       // Delete phone number first (depends on assistant)
       if (vapi_phone_number_id) {
         try {
           await vapiClient.deletePhoneNumber(vapi_phone_number_id);
-        } catch (err) {
-          logError(req, 'vapi_phone_delete_failed', err, { vapi_phone_number_id });
+        } catch (err: any) {
+          const msg = `Failed to delete Vapi phone number ${vapi_phone_number_id}: ${err.message || 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
+          warnings.push(msg);
+          logError(req, 'vapi_phone_delete_failed', err, { vapi_phone_number_id, tenant_id });
         }
       }
 
@@ -179,12 +182,14 @@ export function registerProvisioningRoutes(
       if (vapi_assistant_id) {
         try {
           await vapiClient.deleteAssistant(vapi_assistant_id);
-        } catch (err) {
-          logError(req, 'vapi_assistant_delete_failed', err, { vapi_assistant_id });
+        } catch (err: any) {
+          const msg = `Failed to delete Vapi assistant ${vapi_assistant_id}: ${err.message || 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
+          warnings.push(msg);
+          logError(req, 'vapi_assistant_delete_failed', err, { vapi_assistant_id, tenant_id });
         }
       }
 
-      // Clear tenant columns
+      // Clear tenant columns — DB deactivation always succeeds even if Vapi cleanup failed
       await client.query(
         `UPDATE tenants SET
           vapi_assistant_id = NULL,
@@ -195,9 +200,12 @@ export function registerProvisioningRoutes(
         [tenant_id]
       );
 
-      logEvent(req, 'phone_deprovisioned', { tenant_id });
+      logEvent(req, 'phone_deprovisioned', { tenant_id, warnings_count: warnings.length });
 
-      return reply.send({ success: true });
+      return reply.send({
+        success: true,
+        ...(warnings.length > 0 ? { warnings } : {}),
+      });
 
     } finally {
       client.release();

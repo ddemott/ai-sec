@@ -68,8 +68,8 @@
 - [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL
 - [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx
 - [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n
-- [ ] **Outlook Sync**: Implement empty Outlook calendar sync branch
-- [ ] **Token Refresh**: Add OAuth token refresh logic to Google/Outlook sync
+- [x] **Outlook Sync**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel
+- [x] **Token Refresh**: Done — 5-minute buffer proactive refresh for both Google and Outlook
 - [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow
 - [ ] **Live RAG Testing**: Upload a real policy PDF and verify AI uses it during a call
 - [ ] **Live Shift Testing**: Attempt to book out-of-hours and verify AI rejection
@@ -205,7 +205,7 @@ CREATE TABLE tenant_integrations (
 
 | Priority | Adapter | Effort |
 |----------|---------|--------|
-| 1 | Calendar Sync (Google + Outlook) | 1-2 weeks |
+| 1 | ~~Calendar Sync (Google + Outlook)~~ | Done |
 | 2 | CRM Sync (HubSpot, Salesforce) | 2-3 weeks |
 | 3 | Embedding Provider (OpenAI > Cohere/local) | 1-2 days |
 | 4 | SMS/Notifications (Telnyx > Twilio) | 1 week |
@@ -215,7 +215,7 @@ CREATE TABLE tenant_integrations (
 
 **What NOT to abstract:** Auth (add OAuth/SSO as feature, not adapter), frontend framework (Next.js/React), Edge Functions runtime (Deno/Supabase).
 
-**Next step:** Start with Calendar Sync adapter. Build `ICalendarSync` interface, implement `GoogleCalendarAdapter` and `OutlookCalendarAdapter`, create `tenant_integrations` table, add Settings UI.
+**Next step:** Calendar Sync adapters are done (Google + Outlook). Next adapter to build would be CRM Sync (HubSpot, Salesforce).
 
 ### Integrations
 

@@ -157,6 +157,49 @@ export interface CalendarSettings {
   updated_at?: string;
 }
 
+export interface JobberSettings {
+  tenant_id: string;
+  provider: 'jobber';
+  is_active: boolean;
+  last_sync_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface JobberSyncStatus {
+  last_sync_at: string | null;
+  pending_count: number;
+  error_count: number;
+  total_mapped: { customers: number; appointments: number };
+}
+
+export interface HubSpotSettings {
+  tenant_id: string;
+  provider: 'hubspot';
+  is_active: boolean;
+  last_sync_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SquareSettings {
+  tenant_id: string;
+  provider: 'square';
+  is_active: boolean;
+  last_sync_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ServiceTitanSettings {
+  tenant_id: string;
+  provider: 'servicetitan';
+  is_active: boolean;
+  last_sync_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface AnalyticsStats {
   calls: { total: number; today: number; week: number };
   appointments: { total: number; today: number; week: number; upcoming: number };

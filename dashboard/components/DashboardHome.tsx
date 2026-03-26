@@ -27,7 +27,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const [wizardDismissed, setWizardDismissed] = useState(false)
 
   // Check for ?trial=true from landing page CTA
-  const [trialParam] = useState(() => {
+  const [_trialParam] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('trial') === 'true') {

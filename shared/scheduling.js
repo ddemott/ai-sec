@@ -42,23 +42,41 @@ function isEmployeeOnShift(employeeId, window, shifts) {
  * - Inline shifts: Pass `shifts` array and shift checking is done here
  */
 function selectAssignments(args) {
-    const { requirements, window } = args;
+    const { requirements, window: win } = args;
     const employees = args.employees ?? [];
     const shifts = args.shifts ?? [];
     const existing = args.existingAppointments ?? [];
-    const resourceMatches = args.resources.filter((r) => {
-        return (hasAll(r.capabilities, requirements.requiredResourceCapabilities) &&
-            isResourceFree(r.id, window, existing));
-    });
+    const totalResources = args.resources.length;
+    // Step 1: Filter resources by capability
+    const capableResources = args.resources.filter((r) => hasAll(r.capabilities, requirements.requiredResourceCapabilities));
+    // Step 2: Filter capable resources by availability
+    const availableResources = capableResources.filter((r) => isResourceFree(r.id, win, existing));
     const needEmployee = !!(requirements.requiredEmployeeSkills && requirements.requiredEmployeeSkills.length > 0);
-    let options = [];
+    // Step 3: Employee filtering (only when skills are required)
+    const totalEmployees = employees.length;
+    let skilledEmployees = 0;
+    let onShiftEmployees = 0;
     if (needEmployee) {
-        for (const r of resourceMatches) {
-            for (const e of employees) {
-                // Use pre-computed onShift if available, otherwise check inline
+        for (const e of employees) {
+            if (hasAll(e.skills, requirements.requiredEmployeeSkills)) {
+                skilledEmployees++;
                 const onShift = e.onShift !== undefined
                     ? e.onShift
-                    : (shifts.length > 0 ? isEmployeeOnShift(e.id, window, shifts) : true);
+                    : (shifts.length > 0 ? isEmployeeOnShift(e.id, win, shifts) : true);
+                if (onShift) {
+                    onShiftEmployees++;
+                }
+            }
+        }
+    }
+    // Step 4: Build assignment options
+    let options = [];
+    if (needEmployee) {
+        for (const r of availableResources) {
+            for (const e of employees) {
+                const onShift = e.onShift !== undefined
+                    ? e.onShift
+                    : (shifts.length > 0 ? isEmployeeOnShift(e.id, win, shifts) : true);
                 if (!onShift)
                     continue;
                 if (!hasAll(e.skills, requirements.requiredEmployeeSkills))
@@ -68,13 +86,62 @@ function selectAssignments(args) {
         }
     }
     else {
-        options = resourceMatches.map((r) => ({ resourceId: r.id }));
+        options = availableResources.map((r) => ({ resourceId: r.id }));
     }
     if (requirements.preferredResourceId) {
         const preferred = options.filter((o) => o.resourceId === requirements.preferredResourceId);
         if (preferred.length > 0) {
-            return preferred;
+            options = preferred;
         }
     }
-    return options;
+    // Step 5: Build diagnostics reason
+    const timeLabel = formatTimeWindow(win);
+    let reason = '';
+    if (options.length > 0) {
+        reason = 'ok';
+    }
+    else if (totalResources === 0) {
+        reason = 'no resources configured';
+    }
+    else if (capableResources.length === 0) {
+        const caps = (requirements.requiredResourceCapabilities ?? []).join(', ');
+        reason = `no resources have required capability '${caps}'`;
+    }
+    else if (availableResources.length === 0) {
+        const busyCount = capableResources.length;
+        reason = `all ${busyCount} ${busyCount === 1 ? 'resource' : 'resources'} busy during ${timeLabel}`;
+    }
+    else if (!needEmployee) {
+        reason = 'ok'; // resources available, no employee needed
+    }
+    else if (totalEmployees === 0) {
+        reason = 'no employees configured';
+    }
+    else if (skilledEmployees === 0) {
+        const skills = (requirements.requiredEmployeeSkills ?? []).join(', ');
+        reason = `no employees with required skill '${skills}'`;
+    }
+    else if (onShiftEmployees === 0) {
+        reason = `all ${skilledEmployees} qualified ${skilledEmployees === 1 ? 'employee' : 'employees'} off-shift during ${timeLabel}`;
+    }
+    else {
+        reason = 'no valid resource-employee combination found';
+    }
+    return {
+        options,
+        diagnostics: {
+            totalResources,
+            capableResources: capableResources.length,
+            availableResources: availableResources.length,
+            totalEmployees,
+            skilledEmployees,
+            onShiftEmployees,
+            reason,
+        },
+    };
+}
+function formatTimeWindow(win) {
+    const from = win.from.toISOString().substring(11, 16);
+    const to = win.to.toISOString().substring(11, 16);
+    return `${from}-${to}`;
 }

@@ -4,7 +4,7 @@ import { withHandler, requireTenantId, type AppRequest } from '../middleware';
 
 export function registerVocabularyRoutes(
   app: any,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   // GET /vocabulary?tenant_id=X - Resolved vocabulary labels (3-tier fallback)
