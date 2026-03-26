@@ -5,6 +5,7 @@ import { Step3Employees } from './StepEmployees'
 import { Step4Shifts } from './StepShifts'
 import { Step5Assignments } from './StepAssignments'
 import { Step6Review } from './StepReview'
+import { Step7GoLive } from './Step7GoLive'
 import type {
   WizardStep,
   ServiceForm,
@@ -73,6 +74,10 @@ interface WizardStepContentProps {
   coverageData: CoverageItem[]
   coverageLoading: boolean
 
+  // Step 7 — Go Live
+  phoneStatus: string | null
+  inboundPhone: string | null
+
   // Shared
   loading: boolean
   saving: boolean
@@ -121,6 +126,8 @@ export function WizardStepContent({
   onToggleResourceAssignment,
   coverageData,
   coverageLoading,
+  phoneStatus,
+  inboundPhone,
   loading,
   saving,
   error,
@@ -214,6 +221,13 @@ export function WizardStepContent({
           employees={employees}
           coverageData={coverageData}
           loading={coverageLoading}
+        />
+      )
+    case 7:
+      return (
+        <Step7GoLive
+          phoneStatus={phoneStatus}
+          inboundPhone={inboundPhone}
         />
       )
     default:

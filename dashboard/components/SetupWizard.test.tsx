@@ -30,10 +30,10 @@ describe('SetupWizard: Shell', () => {
   test('shows step 1 by default', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     expect(screen.getByText('What services do you offer?')).toBeInTheDocument()
-    expect(screen.getByText('Step 1 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
   })
 
-  test('displays all 6 step labels in progress bar', () => {
+  test('displays all 7 step labels in progress bar', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     expect(screen.getByText('Services')).toBeInTheDocument()
     expect(screen.getByText('Resources')).toBeInTheDocument()
@@ -41,6 +41,7 @@ describe('SetupWizard: Shell', () => {
     expect(screen.getByText('Shifts')).toBeInTheDocument()
     expect(screen.getByText('Assignments')).toBeInTheDocument()
     expect(screen.getByText('Review')).toBeInTheDocument()
+    expect(screen.getAllByText('Go Live').length).toBeGreaterThan(0)
   })
 
   test('calls onClose when X button is clicked', () => {
@@ -55,7 +56,7 @@ describe('SetupWizard: Navigation', () => {
   test('navigates to step 2 when Next is clicked', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Next'))
-    expect(screen.getByText('Step 2 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 2 of 7')).toBeInTheDocument()
     expect(screen.getByText('Where does work happen?')).toBeInTheDocument()
   })
 
@@ -70,16 +71,21 @@ describe('SetupWizard: Navigation', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByText('Back'))
-    expect(screen.getByText('Step 1 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
     expect(screen.getByText('What services do you offer?')).toBeInTheDocument()
   })
 
-  test('shows Done button on step 6', () => {
+  test('shows Go Live button on step 6 and Done on step 7', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     for (let i = 0; i < 5; i++) {
       fireEvent.click(screen.getByText('Next'))
     }
-    expect(screen.getByText('Step 6 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 6 of 7')).toBeInTheDocument()
+    // "Go Live" appears in both progress bar label and footer button
+    const goLiveButtons = screen.getAllByText('Go Live')
+    expect(goLiveButtons.length).toBeGreaterThanOrEqual(2)
+    // Click the footer button (last one)
+    fireEvent.click(goLiveButtons[goLiveButtons.length - 1])
     expect(screen.getByText('Done')).toBeInTheDocument()
     expect(screen.queryByText('Next')).toBeNull()
   })
@@ -87,8 +93,11 @@ describe('SetupWizard: Navigation', () => {
   test('Done button calls onClose', () => {
     const onClose = vi.fn()
     render(<SetupWizard isOpen={true} onClose={onClose} />)
-    for (let i = 0; i < 5; i++) {
-      fireEvent.click(screen.getByText('Next'))
+    for (let i = 0; i < 6; i++) {
+      const nextBtn = screen.queryByText('Next')
+      if (nextBtn) { fireEvent.click(nextBtn); continue }
+      const goLiveBtns = screen.queryAllByText('Go Live')
+      if (goLiveBtns.length > 0) fireEvent.click(goLiveBtns[goLiveBtns.length - 1])
     }
     fireEvent.click(screen.getByText('Done'))
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -99,10 +108,10 @@ describe('SetupWizard: Navigation', () => {
     // Go to step 3
     fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByText('Next'))
-    expect(screen.getByText('Step 3 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 3 of 7')).toBeInTheDocument()
     // Click step 1 in progress bar
     fireEvent.click(screen.getByText('Services'))
-    expect(screen.getByText('Step 1 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
   })
 })
 
@@ -192,12 +201,12 @@ describe('SetupWizard: Step 1 Services', () => {
     // Navigate to step 3
     fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByText('Next'))
-    expect(screen.getByText('Step 3 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 3 of 7')).toBeInTheDocument()
 
     // Close and reopen
     rerender(<SetupWizard isOpen={false} onClose={() => {}} />)
     rerender(<SetupWizard isOpen={true} onClose={() => {}} />)
-    expect(screen.getByText('Step 1 of 6')).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
   })
 })
 
@@ -653,5 +662,204 @@ vi.mock('@/lib/SessionContext', () => ({
     await waitFor(() => {
       expect(screen.getByText('No services configured yet.')).toBeInTheDocument()
     })
+  })
+})
+
+// --- Step 7: Go Live ---
+
+describe('SetupWizard: Step 7 Go Live', () => {
+  function goToStep7() {
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
+    // Step 6 → click "Go Live" footer button
+    const goLiveBtns = screen.getAllByText('Go Live')
+    fireEvent.click(goLiveBtns[goLiveBtns.length - 1])
+  }
+
+  test('shows Go Live heading and description', () => {
+    goToStep7()
+    expect(screen.getByText('Activate your AI phone line. Once active, callers will reach your AI receptionist who can book appointments, answer questions, and manage your schedule.')).toBeInTheDocument()
+    expect(screen.getByText('Step 7 of 7')).toBeInTheDocument()
+  })
+
+  test('shows area code input and activate button', () => {
+    goToStep7()
+    expect(screen.getByPlaceholderText('e.g. 312')).toBeInTheDocument()
+    expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument()
+  })
+
+  test('area code input only accepts digits and max 3 chars', () => {
+    goToStep7()
+    const input = screen.getByPlaceholderText('e.g. 312') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'abc123xyz' } })
+    expect(input.value).toBe('123')
+    fireEvent.change(input, { target: { value: '12345' } })
+    expect(input.value).toBe('123')
+  })
+
+  test('shows skip message', () => {
+    goToStep7()
+    expect(screen.getByText('You can skip this step and activate later from Settings.')).toBeInTheDocument()
+  })
+
+  test('shows provisioning state when activating', async () => {
+    // Mock fetch to delay the provisioning response
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return new Promise(() => {}) // Never resolves — stuck in provisioning
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Setting up your phone line...')).toBeInTheDocument()
+    })
+  })
+
+  test('shows success state with phone number after activation', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            success: true,
+            phone_number: '+1 (630) 555-1234',
+            assistant_id: 'asst_123',
+            phone_number_id: 'pn_456',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Your AI line is live')).toBeInTheDocument()
+      expect(screen.getByText('+1 (630) 555-1234')).toBeInTheDocument()
+      expect(screen.getByText('Try calling this number to test your AI receptionist.')).toBeInTheDocument()
+    })
+  })
+
+  test('shows error state when activation fails', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.reject(new Error('Business type not configured'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Activation failed')).toBeInTheDocument()
+      expect(screen.getByText('Business type not configured')).toBeInTheDocument()
+    })
+  })
+
+  test('shows already active state when phone is provisioned', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: 'active', inbound_phone: '+1 (312) 555-9999', vapi_assistant_id: 'asst_abc' }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+
+    await waitFor(() => {
+      expect(screen.getByText('Your AI line is live')).toBeInTheDocument()
+      expect(screen.getByText('+1 (312) 555-9999')).toBeInTheDocument()
+    })
+  })
+
+  test('area code is passed to the API', async () => {
+    const mockFetch = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+        })
+      }
+      if (url.includes('/provisioning/activate')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            success: true,
+            phone_number: '+1 (630) 555-0001',
+            assistant_id: 'asst_test',
+            phone_number_id: 'pn_test',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+    ;(global.fetch as unknown) = mockFetch
+
+    goToStep7()
+    await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
+
+    const input = screen.getByPlaceholderText('e.g. 312') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '630' } })
+
+    fireEvent.click(screen.getByText('Activate AI Phone Line'))
+
+    await waitFor(() => {
+      const activateCall = mockFetch.mock.calls.find(
+        (call: [string, RequestInit?]) => typeof call[0] === 'string' && call[0].includes('/provisioning/activate')
+      )
+      expect(activateCall).toBeDefined()
+      const body = JSON.parse(activateCall![1]?.body as string)
+      expect(body.area_code).toBe('630')
+    })
+  })
+
+  test('handles status API failure on mount gracefully', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes('/provisioning/status')) {
+        return Promise.reject(new Error('Network error'))
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+
+    goToStep7()
+
+    // Component should still render the activate button without crashing
+    await waitFor(() => {
+      expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument()
+    })
+    expect(screen.getByPlaceholderText('e.g. 312')).toBeInTheDocument()
   })
 })

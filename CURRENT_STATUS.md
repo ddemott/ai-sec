@@ -22,7 +22,7 @@ All 8 design session work items from March 24 are now **complete** (dark theme, 
 | **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant created, phone assigned |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 315 backend + 252 dashboard = 567 passing | All green, zero failures, zero TS errors |
+| **Tests** | 369 backend + 268 dashboard = 637 passing | All green, zero failures, zero TS errors |
 | **Supabase CLI** | v2.83.0 | Updated from 2.77.1 |
 
 ## What's Broken / Blocked
@@ -134,7 +134,7 @@ Result returned to Vapi → LLM continues conversation
 3. **Tune voice quality** — speed, endpointing, system prompt
 4. **Deploy dashboard** (Vercel or Railway) — currently local only
 5. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout redirects
-6. **SetupWizard Step 7** "Go Live" — activate phone from onboarding wizard
+6. ~~**SetupWizard Step 7 "Go Live"**~~ — Done. Activate phone from wizard with area code, provisioning states
 7. **UI/UX flow improvements** — hands-on testing
 8. ~~**Vocabulary wiring**~~ — Done. 21 business-facing components use `useVocabulary()` hook
 9. ~~**Google Calendar sync**~~ — Done. Real OAuth flow, token refresh, auto-sync on create/update/delete/cancel
@@ -214,9 +214,9 @@ Result returned to Vapi → LLM continues conversation
 | Smoke test fix | Fixed stale "AI Secretary Portal" → "SecretaryHQ Portal" in dist |
 
 ### Test Counts
-- **315 backend tests** (31 test files) — all passing
-- **252 dashboard tests** (15 test files) — all passing
-- **Total: 567 tests, zero failures**
+- **369 backend tests** (33 test files) — all passing
+- **268 dashboard tests** (16 test files) — all passing
+- **Total: 637 tests, zero failures**
 - Note: dashboard test count increased from 194 → 252 due to NewSchedulerView tests (58 tests covering scheduler redesign features)
 
 ### Changes — 2026-03-25 Session

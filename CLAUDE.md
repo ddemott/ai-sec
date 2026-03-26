@@ -92,14 +92,14 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 315 backend tests + 252 dashboard tests = 567 total passing. Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 369 backend tests + 268 dashboard tests = 637 total passing. Zero TypeScript errors.
 
 ### Remaining (Phase 13)
 - **Supabase support ticket** — Email sent to support@supabase.com on 2026-03-26. Project stuck in "pausing" state (known platform bug affecting multiple users). Awaiting ticket number for infra team escalation. See `TRIAGE.md` for full log.
 - **Test end-to-end call**: Edge functions deployed but not responding due to Supabase bug. Once support resets project state, test: call +1 (630) 397-0194 → AI answers → books appointment
 - **Deploy dashboard** (Vercel or Railway — currently local only)
 - **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
-- SetupWizard Step 7 "Go Live" (activate phone from wizard)
+- ~~SetupWizard Step 7 "Go Live"~~ — Done. Activate phone from wizard with area code input, provisioning spinner, success/error states
 - UI/UX flow improvements (ongoing — finding issues through hands-on testing)
 - ~~Vocabulary wiring~~ — Done. All dashboard components use `useVocabulary()` hook
 - ~~Google Calendar sync~~ — Done. Real OAuth flow, token refresh, auto-sync on appointment create/update/delete/cancel

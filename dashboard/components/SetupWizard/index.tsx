@@ -37,6 +37,7 @@ function getStepLabels(vocab: { resource_plural: string; employee_plural: string
     4: 'Shifts',
     5: 'Assignments',
     6: 'Review',
+    7: 'Go Live',
   }
 }
 
@@ -141,7 +142,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     }
   }, [isOpen])
 
-  const goNext = () => setStep(s => Math.min(s + 1, 6) as WizardStep)
+  const goNext = () => setStep(s => Math.min(s + 1, 7) as WizardStep)
   const goBack = () => setStep(s => Math.max(s - 1, 1) as WizardStep)
   const goToStep = (s: WizardStep) => setStep(s)
 
@@ -477,7 +478,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
         {/* Progress bar */}
         <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex items-center gap-1">
-            {([1, 2, 3, 4, 5, 6] as WizardStep[]).map(s => (
+            {([1, 2, 3, 4, 5, 6, 7] as WizardStep[]).map(s => (
               <button
                 key={s}
                 onClick={() => goToStep(s)}
@@ -544,6 +545,8 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
             onToggleResourceAssignment={toggleResourceAssignment}
             coverageData={coverageData}
             coverageLoading={coverageLoading}
+            phoneStatus={null}
+            inboundPhone={null}
             loading={loading}
             saving={saving}
             error={error}
@@ -553,7 +556,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
         {/* Footer */}
         <footer className="px-6 py-4 bg-gray-50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
           <div className="text-xs text-gray-400">
-            Step {step} of 6
+            Step {step} of 7
           </div>
           <div className="flex gap-2">
             {step > 1 && (
@@ -562,9 +565,9 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
                 Back
               </Button>
             )}
-            {step < 6 ? (
+            {step < 7 ? (
               <Button variant="primary" size="sm" onClick={goNext}>
-                Next
+                {step === 6 ? 'Go Live' : 'Next'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (

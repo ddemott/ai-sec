@@ -1,4 +1,4 @@
-export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6
+export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 export interface ServiceForm {
   name: string
@@ -168,4 +168,9 @@ export interface Step6Props {
   employees: WizardEmployee[]
   coverageData: CoverageItem[]
   loading: boolean
+}
+
+export interface Step7Props {
+  phoneStatus: string | null
+  inboundPhone: string | null
 }
