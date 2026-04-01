@@ -197,8 +197,11 @@ export class AISecretaryService {
     }, logger);
 
     if (!result.success) {
-      logger.warn({ error: result.error_message }, "Atomic booking failed");
-      throw new AvailabilityError(result.error_message || "No available scheduling options");
+      logger.warn({ error: result.error_message, code: result.error_code }, "Atomic booking failed");
+      throw new AvailabilityError(
+        result.error_message || "No available scheduling options",
+        result.error_code || "NO_AVAILABILITY"
+      );
     }
 
     logger.info({

@@ -521,6 +521,7 @@ export class PostgresRepository implements IRepository {
         booked_end: string | null;
         customer_id: string | null;
         error_message: string | null;
+        error_code: string | null;
       }>(
         `SELECT * FROM book_with_scheduling_atomic(
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16

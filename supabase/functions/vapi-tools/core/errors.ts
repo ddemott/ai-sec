@@ -6,9 +6,12 @@ export class DomainError extends Error {
 }
 
 export class AvailabilityError extends DomainError {
-  constructor(message = "The requested time slot is no longer available.") {
+  public readonly code: string;
+  
+  constructor(message = "The requested time slot is no longer available.", code = "NO_AVAILABILITY") {
     super(message);
     this.name = "AvailabilityError";
+    this.code = code;
   }
 }
 

@@ -226,6 +226,16 @@ export class Dispatcher {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       toolLogger.error({ err: error }, `Tool ${name} failed`);
+      
+      // If it's an AvailabilityError with error code, return structured error
+      if (error.name === "AvailabilityError" && "code" in error) {
+        return this.vapiToolResponse(toolCallId, {
+          success: false,
+          error_message: error.message,
+          error_code: (error as any).code
+        });
+      }
+      
       // Return error as plain conversational string so the LLM relays it naturally
       return this.vapiToolResponse(toolCallId, error.message);
     }

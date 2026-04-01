@@ -102,6 +102,7 @@ export interface IRepository {
     booked_end: string | null;
     customer_id: string | null;
     error_message: string | null;
+    error_code: string | null;
   }>;
 
   setLogger(logger: Logger): void;
