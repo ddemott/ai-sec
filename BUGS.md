@@ -433,3 +433,25 @@ Found during full code review on March 16, 2026.
 - **Impact**: Ambiguity about which field is authoritative; risk of displaying stale data if one is updated but not the other.
 - **Fix**: Remove the redundant `name` field from Appointment and always read from the joined customer record.
 - **Status**: FIXED — Made `name` optional (`name?: string`) in Appointment type. All dashboard code already uses `customers.name` for display. `dashboard/lib/types.ts`
+
+### BUG-060: Phone number capture incomplete — VOICE AI
+- **File**: `supabase/functions/vapi-tools/core/dispatcher.ts`
+- **Problem**: Customer records stored with phone "+1" (incomplete) instead of full E.164 number. normalizePhone() function wasn't rejecting partial phone numbers with fewer than 10 digits.
+- **Impact**: Can't identify returning customers, can't send SMS confirmations.
+- **Fix**: Updated normalizePhone() to return null for phone numbers < 10 digits. Added comprehensive logging for phone capture debugging.
+- **Status**: FIXED — code updated in dispatcher.ts, already deployed to edge function April 1, 2026
+
+### BUG-061: Wrong date booked (hardcoded date in system prompt) — VOICE AI
+- **File**: `vapi/agent.json` (template), Vapi assistant configuration
+- **Problem**: Vapi assistant had hardcoded "Today is Saturday, Feb 28, 2026" in system prompt. When customer said "tomorrow", AI calculated wrong date (March 31 instead of April 2).
+- **Impact**: Appointments scheduled on wrong dates or in the past.
+- **Fix**: Created `scripts/fix-vapi-assistant.js` to update assistant via Vapi API with dynamic current date. New prompt uses "Today is Wednesday, April 1, 2026" and instructs AI to calculate relative dates correctly.
+- **Status**: FIXED — Vapi assistant updated via API April 1, 2026 06:12 CDT
+
+### BUG-062: No employee assigned to booking — VOICE AI
+- **File**: Vapi assistant system prompt
+- **Problem**: AI wasn't passing `requiredEmployeeSkills` array to `book_with_scheduling` tool, causing bookings to run in resource-only mode. Employee (Mike Rivera) exists with correct skills but wasn't being assigned.
+- **Impact**: Booking confirmations don't mention who's doing the service.
+- **Fix**: Updated Vapi assistant system prompt with explicit instructions to extract service type, convert to skill format (lowercase with hyphens), and pass as requiredEmployeeSkills. Added service→skill mapping table in prompt.
+- **Status**: FIXED — Vapi assistant updated via API April 1, 2026 06:12 CDT
+
