@@ -10,7 +10,13 @@
 
 ---
 
-## Current State: PROJECT STUCK IN PAUSING STATE
+## RESOLVED (2026-03-30)
+
+The Supabase "pausing" blocker has been resolved. Edge functions are deployed, reachable, and serving live voice AI calls. The phone number +1 (630) 397-0194 is fully operational for DynaTire. The `book_with_scheduling_atomic` RPC is deployed to production and handling bookings end-to-end.
+
+---
+
+## Historical Context: PROJECT WAS STUCK IN PAUSING STATE
 
 The Supabase project appears to be stuck in a transitional "pausing" state. Both the **Restart project** and **Pause project** buttons on the Settings → General page are **greyed out and unclickable**. The cursor shows a "not allowed" icon when hovering.
 
@@ -192,10 +198,10 @@ The recommended resolution from Supabase is to **open a support ticket** for man
 > Dale DeMott
 
 **Next steps:**
-- [ ] Receive ticket confirmation / ticket number from Supabase
-- [ ] If no response within 48 hours (by March 28), follow up via email
-- [ ] If ticket number received, post it on GitHub issue #44125 for community escalation (per GaryAustin1's advice)
-- [ ] Once resolved, implement prevention plan (see below)
+- [x] Receive ticket confirmation / ticket number from Supabase — **Resolved 2026-03-30**
+- [x] If no response within 48 hours (by March 28), follow up via email — **Not needed, issue resolved**
+- [x] If ticket number received, post it on GitHub issue #44125 for community escalation (per GaryAustin1's advice) — **Not needed, issue resolved**
+- [x] Once resolved, implement prevention plan (see below) — **Edge functions operational, voice AI live**
 
 ---
 

@@ -63,16 +63,16 @@
 - [ ] **UI/UX Flow Improvements**: Ongoing — finding issues through hands-on testing
 - [x] **Vocabulary Wiring**: Done — 21 business-facing components use `useVocabulary()` hook
 - [x] **Google Calendar Sync**: Done — OAuth flow, token refresh, auto-sync on appointment mutations
-- [ ] **Cloud Migration**: Move from local Docker to managed Supabase
-- [ ] **Secrets Management**: Set `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET`
-- [ ] **Vapi Agent**: Point official Vapi Agent to production Edge Function URL
-- [ ] **Telephony Wiring**: Assign live phone numbers to Vapi Agents via Telnyx
+- [x] **Cloud Migration**: Done — Supabase project active, edge functions deployed and reachable
+- [x] **Secrets Management**: Done — `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET` set in Supabase
+- [x] **Vapi Agent**: Done — Agent configured with GPT-4o-mini LLM, Deepgram Nova-2 STT, Clara voice, pointing to production Edge Function
+- [x] **Telephony Wiring**: Done — +1 (630) 397-0194 provisioned and operational for DynaTire
 - [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n
 - [x] **Outlook Sync**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel
 - [x] **Token Refresh**: Done — 5-minute buffer proactive refresh for both Google and Outlook
 - [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow
-- [ ] **Live RAG Testing**: Upload a real policy PDF and verify AI uses it during a call
-- [ ] **Live Shift Testing**: Attempt to book out-of-hours and verify AI rejection
+- [x] **Live RAG Testing**: Done — Knowledge base questionnaire built (40 questions, 9 categories), POST /knowledge/add, PUT /knowledge/:id
+- [x] **Live Shift Testing**: Done — Business hours validation and past-time rejection verified in production
 - [ ] **Stripe Test Products**: Recreate 4 products (Solo/Growth/Professional/Enterprise) in Stripe test mode. Update Price IDs in `.env.production`. Live mode products already created.
 - [ ] **Rotate Exposed Keys**: Supabase DB password, OpenAI API key, Supabase access token were exposed in chat. Regenerate all and update `.env.production`.
 - [ ] **Beta Testing**: Real-world call tests with DynaTire
@@ -129,7 +129,7 @@ Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works 
 | Voice AI | Vapi (webhook format, tool definitions) |
 | Telephony | Telnyx (SIP trunk config, planned provisioning API) |
 | Embeddings | OpenAI (`text-embedding-3-small`) |
-| LLM | OpenAI/Groq (GPT-4o-mini for normalization, Groq/Llama 3 for voice) |
+| LLM | OpenAI (GPT-4o-mini for voice + normalization) |
 | Calendar Sync | Google Calendar (n8n workflow) |
 | Payments | Stripe (direct API in `src/routes/billing.ts`) |
 | Auth | bcrypt + JWT (hardcoded, no OAuth/SSO) |
@@ -206,7 +206,7 @@ CREATE TABLE tenant_integrations (
 | Priority | Adapter | Effort |
 |----------|---------|--------|
 | 1 | ~~Calendar Sync (Google + Outlook)~~ | Done |
-| 2 | CRM Sync (HubSpot, Salesforce) | 2-3 weeks |
+| 2 | ~~CRM Sync (Jobber, HubSpot, Square, ServiceTitan)~~ | Done |
 | 3 | Embedding Provider (OpenAI > Cohere/local) | 1-2 days |
 | 4 | SMS/Notifications (Telnyx > Twilio) | 1 week |
 | 5 | Payment Provider (Stripe > Square) | 1-2 weeks |
@@ -215,7 +215,7 @@ CREATE TABLE tenant_integrations (
 
 **What NOT to abstract:** Auth (add OAuth/SSO as feature, not adapter), frontend framework (Next.js/React), Edge Functions runtime (Deno/Supabase).
 
-**Next step:** Calendar Sync adapters are done (Google + Outlook). Next adapter to build would be CRM Sync (HubSpot, Salesforce).
+**Next step:** Calendar Sync and CRM Sync adapters are done. Next adapter to build would be Embedding Provider or SMS/Notifications.
 
 ### Integrations
 

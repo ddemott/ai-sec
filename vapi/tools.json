@@ -120,5 +120,34 @@
         "required": ["tenant_id", "phone", "description", "call_id", "requirements", "window"]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_company_policy_answer",
+      "description": "Searches the business knowledge base to answer policy questions (hours, payment methods, warranty, etc.).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "question": { "type": "string", "description": "The caller's question about business policy." }
+        },
+        "required": ["tenant_id", "question"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_service_catalog",
+      "description": "Returns the list of services offered by the business, including names, descriptions, durations, and prices.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" }
+        },
+        "required": ["tenant_id"]
+      }
+    }
   }
 ]

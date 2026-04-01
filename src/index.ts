@@ -87,7 +87,7 @@ app.addHook('onRequest', async (request, reply) => {
     const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
     if (host) {
       const url = `https://${host}${request.raw.url}`;
-      return reply.redirect(301, url);
+      return reply.redirect(url);
     }
   }
 });

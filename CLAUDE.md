@@ -18,10 +18,10 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 60 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations)
+- `/supabase/migrations` - 61 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
-- `/scripts` - Automation (knowledge ingestion)
+- `/scripts` - Automation (knowledge ingestion, `qa-live-test.py` QA suite)
 - `/vapi` - Vapi agent config and tool definitions
 - `/n8n` - Workflow blueprints (calendar sync, post-call summarizer)
 - `/docs` - Architecture, setup, plans, and reference docs
@@ -33,7 +33,8 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - **Edge Functions**: Deno, Supabase Edge Functions, Pino logger
 - **Database**: PostgreSQL + pgvector (ankane/pgvector Docker image)
 - **Testing**: Vitest (backend + dashboard), Deno test (edge functions)
-- **Voice**: Vapi, Telnyx, Groq/Llama 3, Deepgram Nova-2, Cartesia TTS
+- **Voice**: Vapi (Clara voice), Telnyx, OpenAI GPT-4o-mini, Deepgram Nova-2
+- **QA**: `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live Supabase edge function
 
 ## Development
 - Bootstrap: `npm run bootstrap` (installs deps, starts DB, applies migrations, seeds)
@@ -52,7 +53,8 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Single DB pool via `DATABASE_URL` (no separate `api_user` pool — works with Supabase managed Postgres)
 - Admin bypass policies on `tenants`, `users`, `business_templates` for cross-tenant operations when no tenant context set
 - Audit trigger (`fn_audit_trigger`) is `SECURITY DEFINER` to bypass RLS for internal logging
-- `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert)
+- `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert) + past-time rejection, business hours validation, fuzzy service matching
+- `book_with_scheduling_atomic()` RPC: Production booking RPC deployed to Supabase with natural language error messages
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
 - Polymorphic assignment: `p_assignment_id` is UUID
 - All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)
@@ -70,17 +72,20 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - No `overrideTenantId` prop drilling — components read tenant from context directly
 - `useFormState<T>()` hook for generic form state + dirty tracking
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 16 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 21 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
 - All route mutations validated with Zod schemas (auth, tenants, employees, shifts, resources, services, skills, calendar, appointments, customers)
 - All error responses use `{ success: false, error: string, details?: any }` format
 - Production env validation: server refuses to start if DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, or STRIPE_SECRET_KEY are missing
-- Edge function errors always return `{ result: { success: false, error } }` with status 200 (Vapi-compatible)
+- Edge function tool responses use Vapi format: `{ results: [{ toolCallId, result }] }` with status 200
+- Edge function errors return plain `"ERROR: ..."` strings (not nested JSON) so the LLM can relay them naturally
 - Edge function DB pool: lazy init, pool size 2, 5s connection timeout via `connectWithTimeout()`
 - Fetch timeouts on all OpenAI API calls (10s embeddings, 15s normalization) via AbortController
 - Graceful shutdown: SIGTERM/SIGINT handlers close Fastify + drain DB pool (required for Railway deploys)
 
 ## Known Issues (as of March 2026)
 - Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`
+- OpenAI API quota needs monitoring — edge functions use GPT-4o-mini for LLM + embeddings
+- Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering
 
 ## Resolved Issues (March 2026 Code Review)
 - 58 bugs identified and resolved across Critical/High/Medium/Low severity
@@ -92,11 +97,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 791 backend tests + 313 dashboard tests = 1,104 total passing. Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 791 backend tests + 313 dashboard tests = 1,104 total passing. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining (Phase 13)
-- **Supabase support ticket** — Email sent to support@supabase.com on 2026-03-26. Project stuck in "pausing" state (known platform bug affecting multiple users). Awaiting ticket number for infra team escalation. See `TRIAGE.md` for full log.
-- **Test end-to-end call**: Edge functions deployed but not responding due to Supabase bug. Once support resets project state, test: call +1 (630) 397-0194 → AI answers → books appointment
+- ~~Supabase support ticket~~ — Resolved 2026-03-30. Project no longer stuck in "pausing" state.
+- ~~End-to-end voice call~~ — Done (2026-03-30). Voice AI books appointments, answers policy questions, handles rejections naturally.
 - **Deploy dashboard** (Vercel or Railway — currently local only)
 - **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
 - ~~SetupWizard Step 7 "Go Live"~~ — Done. Activate phone from wizard with area code input, provisioning spinner, success/error states
@@ -110,6 +115,9 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - ~~ServiceTitan CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + jobs), OAuth flow, ST-App-Key auth, full sync
 - ~~Comprehensive sad path test coverage~~ — Done. 1,104 total tests (791 backend + 313 dashboard), 5W diagnostics in all error paths
 - ~~Group 3 refactorings (production hardening)~~ — Done. All 24 items complete (see SUGGESTED_REFACTORINGS.md)
+- ~~Knowledge base questionnaire~~ — Done (2026-03-30). 40 policy Q&A pairs across 9 categories, auto-save, document upload, embedding generation.
+- ~~Voice AI fixes~~ — Done (2026-03-30). 8 critical fixes (tool response format, Zod relaxation, caller ID capture, timezone handling, natural error messages).
+- ~~QA test suite~~ — Done (2026-03-30). `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function.
 - Database webhooks for n8n triggers
 - Beta testing with DynaTire
 
@@ -129,8 +137,8 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - SuperAdmin dashboard has "Activate Phone" button with area code input
 - `VAPI_API_KEY` set in Railway
 - Edge functions deployed to Supabase (vapi-tools v9), DB URL secrets updated
-- Phone provisioned: +1 (630) 397-0194 on DynaTire (Vapi voice: Elliot, LLM: Groq llama-3.3-70b-versatile)
-- **Blocker**: Supabase project stuck in "pausing" state — edge functions unreachable. Support ticket needed (see TRIAGE.md)
+- Phone provisioned: +1 (630) 397-0194 on DynaTire (Vapi voice: Clara, LLM: OpenAI GPT-4o-mini)
+- ~~Supabase pausing bug~~ — Resolved 2026-03-30. Edge functions now reachable.
 - **Still needs**: Dashboard deployment, DASHBOARD_URL env var
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)

@@ -62,7 +62,7 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 ./scripts/setup-db.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
 ```
 
-This applies all 55 migrations in order and seeds the database with the DynaTire demo tenant.
+This applies all 61 migrations in order and seeds the database with the DynaTire demo tenant.
 
 ### 2.3 Create the api_user Role
 The migrations create an `api_user` role with least-privilege grants. On Supabase, you may need to verify this role exists:
@@ -233,8 +233,8 @@ Use `vapi/agent.template.json` as the base. Replace the Mustache variables:
 | `{{TENANT_ID}}` | UUID from the `tenants` table |
 | `{{RESOURCE_ID}}` | UUID from the `resources` table |
 | `{{CURRENT_DATE}}` | Today's date (or use Vapi's dynamic date) |
-| `{{VOICE_PROVIDER}}` | e.g., `cartesia` or `11labs` |
-| `{{VOICE_ID}}` | Voice ID from your provider |
+| `{{VOICE_PROVIDER}}` | `vapi` (built-in Clara voice) |
+| `{{VOICE_ID}}` | Vapi voice ID (e.g., Clara) |
 | `{{SERVER_URL}}` | `https://<PROJECT_ID>.functions.supabase.co/vapi-tools` |
 | `{{SERVER_URL_SECRET}}` | Same secret set in Edge Function secrets |
 | `{{SERVICE_DESCRIPTION}}` | e.g., `tire changes, oil changes, and brake service` |

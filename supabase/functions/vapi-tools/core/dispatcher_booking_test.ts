@@ -23,6 +23,7 @@ Deno.test({
       type: "tool-calls",
       toolCalls: [
         {
+          id: "call-tool-1",
           function: {
             name: "book_with_scheduling",
             arguments: JSON.stringify({
@@ -50,8 +51,11 @@ Deno.test({
     const response = await dispatcher.dispatch(message, baseLogger);
     const body = await response.json();
 
-    // Response is passed through from the service
-    assertEquals(body, { result: { success: true, appointment_id: "appt-123", option: { resourceId: "suzy" } } });
+    // Response wrapped in Vapi format with toolCallId
+    assertEquals(body.results[0].toolCallId, "call-tool-1");
+    const result = JSON.parse(body.results[0].result);
+    assertEquals(result.success, true);
+    assertEquals(result.appointment_id, "appt-123");
 
     // Dispatcher passed correct args and converted window to Dates
     assertEquals(fakeService.lastCall.tenant_id, "tenant-1");

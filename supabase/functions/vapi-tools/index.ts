@@ -10,7 +10,7 @@ import { createNormalizer } from "../../../shared/normalizeForEmbedding.ts";
 // --- Environment Validation ---
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const VAPI_SECRET = Deno.env.get("VAPI_SERVER_URL_SECRET") || "unset";
-const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") || "";
+const DB_URL = Deno.env.get("DATABASE_URL") || "";
 
 if (!OPENAI_API_KEY) console.warn("WARNING: OPENAI_API_KEY not set — embeddings and normalization will fail");
 if (!DB_URL) console.warn("WARNING: No database URL configured — all DB operations will fail");
@@ -32,19 +32,19 @@ const GetContextSchema = z.object({
 const CheckAvailabilitySchema = z.object({
   tenant_id: z.string().uuid(),
   resource_id: z.string().uuid(),
-  start_time: z.string().datetime(),
-  end_time: z.string().datetime()
+  start_time: z.string(),
+  end_time: z.string()
 });
 
 const BookAppointmentSchema = z.object({
   tenant_id: z.string().uuid(),
   resource_id: z.string().uuid(),
-  phone: z.string().min(5),
+  phone: z.string().default(""),
   name: z.string().optional(),
-  start_time: z.string().datetime(),
-  end_time: z.string().datetime(),
+  start_time: z.string(),
+  end_time: z.string(),
   description: z.string().default("Booking via SecretaryHQ"),
-  call_id: z.string().min(1),
+  call_id: z.string().default(""),
   location: z.string().optional(),
   employee_id: z.string().or(z.number()).optional().transform(v => v?.toString())
 });
@@ -62,17 +62,17 @@ const GetSchedulingOptionsSchema = z.object({
     requiredEmployeeSkills: z.array(z.string()).optional(),
   }),
   window: z.object({
-    from: z.string().datetime(),
-    to: z.string().datetime(),
+    from: z.string(),
+    to: z.string(),
   }),
 });
 
 const BookWithSchedulingSchema = z.object({
   tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
+  phone: z.string().default(""),
   name: z.string().optional(),
   description: z.string().default("Booking via SecretaryHQ"),
-  call_id: z.string().min(1),
+  call_id: z.string().default(""),
   location: z.string().optional(),
   requirements: z.object({
     serviceType: z.string().min(1),
@@ -81,8 +81,8 @@ const BookWithSchedulingSchema = z.object({
     preferredResourceId: z.string().optional(),
   }),
   window: z.object({
-    from: z.string().datetime(),
-    to: z.string().datetime(),
+    from: z.string(),
+    to: z.string(),
   }),
 });
 
@@ -119,9 +119,27 @@ export async function handler(req: Request): Promise<Response> {
     return jsonResponse({ error: "Unauthorized" }, 401, requestId);
   }
 
+  // Track toolCallId outside try/catch so error handler can build Vapi-compatible responses
+  let toolCallId: string | undefined;
+
   try {
     const body = await req.json();
     const { message } = body;
+
+    // Log the full request for debugging live call issues
+    console.error(JSON.stringify({
+      event: "vapi_webhook_received",
+      requestId,
+      messageType: message?.type,
+      toolCallName: message?.toolCalls?.[0]?.function?.name,
+      toolCallId: message?.toolCalls?.[0]?.id,
+      callId: message?.call?.id,
+      customerNumber: message?.call?.customer?.number,
+      timestamp: new Date().toISOString(),
+    }));
+
+    // Capture toolCallId early for error responses
+    toolCallId = message?.toolCalls?.[0]?.id;
 
     // Create a base logger for this request
     const logger = createLogger({ requestId });
@@ -137,9 +155,17 @@ export async function handler(req: Request): Promise<Response> {
 
       let args;
       try {
-        args = JSON.parse(argsString);
+        // Vapi may send arguments as a string (needs parsing) or as an object (already parsed)
+        args = typeof argsString === "string" ? JSON.parse(argsString) : argsString;
       } catch (e) {
-        return jsonResponse({ result: { success: false, error: "Invalid JSON in tool arguments" } }, 200, requestId);
+        console.error(JSON.stringify({
+          event: "json_parse_failed",
+          requestId,
+          argsType: typeof argsString,
+          argsPreview: String(argsString).slice(0, 300),
+          timestamp: new Date().toISOString(),
+        }));
+        return jsonResponse({ results: [{ toolCallId, result: "Sorry, there was an issue processing that request. Could you try again?" }] }, 200, requestId);
       }
 
       // Validate with Zod — typed args are passed to dispatcher via toolCall
@@ -161,17 +187,38 @@ export async function handler(req: Request): Promise<Response> {
       toolCall.function.parsedArgs = args;
     }
 
-    return await dispatcher.dispatch(message, logger);
+    const response = await dispatcher.dispatch(message, logger);
+
+    // Log the response for debugging
+    const responseBody = await response.clone().text();
+    console.error(JSON.stringify({
+      event: "vapi_webhook_response",
+      requestId,
+      status: response.status,
+      bodyLength: responseBody.length,
+      bodyPreview: responseBody.slice(0, 300),
+      timestamp: new Date().toISOString(),
+    }));
+
+    return response;
 
   } catch (e) {
     const err = e as Error;
+
+    const vapiError = (errorMsg: string) => {
+      if (toolCallId) {
+        // Plain conversational string so the LLM relays it naturally to the caller
+        return jsonResponse({ results: [{ toolCallId, result: errorMsg }] }, 200, requestId);
+      }
+      return jsonResponse({ result: { success: false, error: errorMsg } }, 200, requestId);
+    };
+
     if (err instanceof z.ZodError) {
-      // Return 200 with Vapi-compatible error shape so the AI can relay the error to the caller
-      return jsonResponse({ result: { success: false, error: `Validation failed: ${err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}` } }, 200, requestId);
+      return vapiError(`Validation failed: ${err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
     }
-    
+
     if (err instanceof DomainError) {
-      return jsonResponse({ result: { success: false, error: err.message } }, 200, requestId);
+      return vapiError(err.message);
     }
 
     console.error(JSON.stringify({
@@ -182,6 +229,8 @@ export async function handler(req: Request): Promise<Response> {
       error_stack: err.stack?.split('\n').slice(0, 5).join('\n'),
       timestamp: new Date().toISOString(),
     }));
-    return jsonResponse({ result: { success: false, error: "Internal server error", requestId } }, 200, requestId);
+    return vapiError("Internal server error");
   }
 }
+
+Deno.serve(handler);

@@ -38,5 +38,5 @@ Call the number!
 
 ### Troubleshooting
 - **No response?** Check Supabase Edge Function logs for "Incoming Request" errors.
-- **Latency?** Ensure you are using Groq (Llama 3) and Cartesia in the Vapi Agent settings.
+- **Latency?** Ensure you are using OpenAI GPT-4o-mini, Deepgram Nova-2 (STT), and Vapi Clara voice (TTS) in the Vapi Agent settings.
 - **Booking Failed?** Run `npm test` locally to ensure the Postgres RPC isn't throwing errors.

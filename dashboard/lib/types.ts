@@ -260,3 +260,12 @@ export interface UserFeedback {
   user_name?: string;
   tenant_name?: string;
 }
+
+export interface KnowledgeEntry {
+  id: string;
+  title: string | null;
+  section: string | null;
+  content: string;
+  source: string | null;
+  created_at: string;
+}

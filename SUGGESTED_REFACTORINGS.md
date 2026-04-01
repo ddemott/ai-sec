@@ -57,7 +57,7 @@
 | 1 | Done | 2026-03-24 | AbortController + timeout on getEmbedding (10s) and normalizeForEmbedding (15s) |
 | 2 | Done | 2026-03-24 | All 11 pool.connect() in tenants.ts replaced with withPoolClient() |
 | 3 | Done | 2026-03-24 | Extracted forceLogout() + checkAuthFailure() in api.ts; hooks.ts + SessionContext use it |
-| 4 | Done | 2026-03-24 | All edge function errors now return {result: {success: false, error}} with status 200 |
+| 4 | Done | 2026-03-24 | All edge function responses now use Vapi format: `{ results: [{ toolCallId, result }] }` with status 200. Errors are plain `"ERROR: ..."` strings. |
 | 5 | Done | 2026-03-24 | auth.ts login + register wrapped with withHandler() + withPoolClient() |
 | 6 | Done | 2026-03-24 | Production env validation (fatal on missing DB/JWT/OpenAI/Stripe); edge function warns |
 | 7 | Done | 2026-03-24 | Removed deprecated `loading` prop; standardized on `isLoading` across 12 callers |

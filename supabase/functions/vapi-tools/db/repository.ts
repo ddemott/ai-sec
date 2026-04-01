@@ -3,8 +3,8 @@ import { IRepository } from "../core/interfaces.ts";
 import { Logger, baseLogger } from "../core/logger.ts";
 import type { ResourceCandidate, EmployeeCandidate, ExistingAppointment, TimeWindow } from "../core/scheduling.ts";
 
-// Prefer SUPABASE_DB_URL (internal networking on Supabase) over DATABASE_URL (external pooler)
-const DB_URL = Deno.env.get("SUPABASE_DB_URL") || Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable";
+// Use DATABASE_URL only — SUPABASE_DB_URL is auto-injected and may use internal networking that hangs
+const DB_URL = Deno.env.get("DATABASE_URL") || "postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable";
 
 // Lazy pool — created on first use, not at module load time.
 // This prevents the edge function from hanging on boot if the DB is unreachable.
@@ -21,7 +21,7 @@ function getPool(): Pool {
       event: "db_pool_created",
       db_url: maskedUrl,
       pool_size: POOL_SIZE,
-      source: Deno.env.get("SUPABASE_DB_URL") ? "SUPABASE_DB_URL" : "DATABASE_URL",
+      source: Deno.env.get("DATABASE_URL") ? "DATABASE_URL" : "SUPABASE_DB_URL",
       timestamp: new Date().toISOString(),
     }));
     _pool = new Pool(DB_URL, POOL_SIZE, true);

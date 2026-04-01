@@ -1,14 +1,14 @@
 # SecretaryHQ SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 16 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 21 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
 ## 2. Core System Flow (The "Live" Voice Loop)
 1.  **Inbound Call**: Caller → Telnyx → Voice Orchestrator (Vapi).
 2.  **Warm-up Trigger**: Vapi sends a "Call Started" webhook to eliminate cold-starts.
-3.  **Conversation**: Orchestrator (STT/TTS/VAD) ↔ LLM (Groq/Llama 3).
+3.  **Conversation**: Orchestrator (STT/TTS/VAD) ↔ LLM (OpenAI GPT-4o-mini).
 4.  **Tool Execution**: LLM → **Adapter Layer** (Supabase Edge Function).
 5.  **Business Logic**: Adapter → **Core Service Layer** (TypeScript/Deno).
 6.  **Data Persistence**: Core Service → **Repository Layer** (Postgres RPC).
@@ -25,7 +25,7 @@ The Dashboard provides business owners with transparency and control.
 - **State Management**: `SessionProvider` React Context for auth/session; `useStaticData` hook for shared tenant data.
 - **Auth**: JWT-based authentication (8h expiry) via `/login` endpoint. Auto-logout on 401. Tokens stored in localStorage and sent as `Authorization: Bearer` headers.
 - **Error Handling**: React `ErrorBoundary` wraps all views. Structured JSON logging via `createLogger()` utility.
-- **Testing**: Vitest + React Testing Library (jsdom environment). 369 tests across smoke, appointment, CRM, settings, employee, setup wizard, skill map, scheduler, and component suites.
+- **Testing**: Vitest + React Testing Library (jsdom environment). 313 tests across smoke, appointment, CRM, settings, employee, setup wizard, skill map, scheduler, and component suites.
 
 ### 3.2 Key Views & Features
 - **Business Analytics**: High-level metrics for call volume, booking conversion, and estimated revenue generated.
@@ -53,7 +53,7 @@ The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template,
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 16 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 21 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan).
 
 ### 4.0 Middleware Layer
 Shared middleware lives in `src/middleware.ts`:
@@ -71,7 +71,7 @@ Shared middleware lives in `src/middleware.ts`:
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 482 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, calendar-sync, google-calendar, outlook-calendar, provisioning, normalizer, vapi-agent-config, and index suites. 313 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 795 total. All tests include happy and sad path coverage with 5W diagnostic context.
+- **Coverage**: 791 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, calendar-sync, google-calendar, outlook-calendar, provisioning, normalizer, vapi-agent-config, and index suites. 313 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 1,104 total unit tests + 88 live QA assertions. All tests include happy and sad path coverage with 5W diagnostic context.
 
 ---
 
@@ -100,7 +100,7 @@ The scheduler ensures valid bookings by verifying multiple layers of constraints
 - **Token Refresh**: Automatic refresh with 5-minute buffer; marks calendar inactive if refresh fails.
 - **Service Layer**: `src/services/googleCalendar.ts` wraps `googleapis` — OAuth2, token management, Calendar API CRUD.
 - **Security**: State param is a signed JWT (CSRF protection), tokens never exposed to frontend, best-effort revocation on disconnect.
-- **Outlook**: Deferred — UI button exists but handler returns early.
+- **Outlook**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel. `src/services/outlookCalendar.ts`.
 
 ## 8. Async Integration Layer (n8n)
 - **Post-Call Processing**: Generates summaries and sentiment analysis.

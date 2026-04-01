@@ -233,10 +233,15 @@ export class AISecretaryService {
     logger.info({ tenantId, question }, "Answering company policy question");
 
     // 1. Normalize query to semantic core, then generate embedding (Phase 12E)
-    const normalizedQuestion = normalizeForEmbedding
-      ? await normalizeForEmbedding(question, { context: 'customer phone inquiry' })
-      : question;
-    logger.info({ normalizedQuestion }, "Normalized query for embedding");
+    let normalizedQuestion = question;
+    if (normalizeForEmbedding) {
+      try {
+        normalizedQuestion = await normalizeForEmbedding(question, { context: 'customer phone inquiry' });
+      } catch (err) {
+        logger.warn({ err }, "Normalization failed, falling back to raw question");
+      }
+    }
+    logger.info({ normalizedQuestion }, "Query for embedding");
     const embedding = await getEmbedding(normalizedQuestion);
 
     // 2. Search knowledge base

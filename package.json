@@ -16,10 +16,11 @@
   "dependencies": {
     "@fastify/cors": "^8.5.0",
     "@fastify/multipart": "^8.3.1",
+    "@supabase/supabase-js": "^2.100.1",
     "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.3.1",
-    "fastify": "^4.29.1",
+    "fastify": "^5.8.4",
     "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.3",
     "next": "^16.1.6",

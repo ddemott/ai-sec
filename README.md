@@ -72,7 +72,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 - `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
 - `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
 - `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` — 60 SQL migrations
+- `/supabase/migrations` — 61 SQL migrations
 - `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
 - `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
 - `/docs` — Architecture, plans, decisions, deployment guide, mockups

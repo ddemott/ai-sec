@@ -6,6 +6,14 @@ Found during full code review on March 16, 2026.
 
 ## Critical (Must fix before go-live)
 
+### BUG-059: Timezone bug regression in book_with_scheduling_atomic() — VOICE AI BLOCKER
+- **File**: `supabase/migrations/20260324000000_book_with_scheduling_atomic.sql`
+- **Problem**: The new `book_with_scheduling_atomic()` function (created March 24) reintroduced BUG-001 by using hardcoded `AT TIME ZONE 'UTC'` for shift validation. This is the function used by voice AI for scheduling calls, making phone bookings fail for non-UTC tenants.
+- **Impact**: **CRITICAL** — Voice AI cannot book appointments for tenants in non-UTC timezones. Example: Friday 5 PM Chicago → Saturday 12 AM UTC → wrong day_of_week, shift lookup fails.
+- **Fix**: Use `AT TIME ZONE v_tenant_tz` (loaded from `tenants.timezone`) instead of hardcoded UTC, same as BUG-001 fix.
+- **Status**: FIXED — `supabase/migrations/20260401000000_fix_scheduling_timezone_bug.sql`, applied to production April 1, 2026
+- **Test**: `src/scheduling-timezone-bug.test.ts` (TDD test case)
+
 ### BUG-001: Shift timezone bug in book_appointment_atomic()
 - **File**: `supabase/migrations/20260312000003_update_atomic_with_shifts.sql`
 - **Problem**: Uses `AT TIME ZONE 'UTC'` to extract day-of-week and time for shift checking. If a tenant is in America/Los_Angeles and a customer books at 9 PM local, it converts to 5 AM UTC the next day — wrong day_of_week, wrong time range comparison.
@@ -242,7 +250,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: The n8n calendar sync workflow routes to Google or Outlook, but the Outlook branch has no implementation. Neither branch handles OAuth token refresh.
 - **Impact**: Outlook calendar sync doesn't work. Google sync breaks when access tokens expire.
 - **Fix**: Implement Outlook branch; add token refresh logic before API calls.
-- **Status**: PARTIALLY FIXED — Google Calendar sync reimplemented directly in Fastify backend (`src/services/googleCalendar.ts`, `src/services/calendarSync.ts`) with full OAuth flow, automatic token refresh, and fire-and-forget sync on appointment mutations. Outlook branch remains unimplemented.
+- **Status**: FIXED — Google Calendar sync reimplemented directly in Fastify backend (`src/services/googleCalendar.ts`, `src/services/calendarSync.ts`) with full OAuth flow, automatic token refresh, and fire-and-forget sync on appointment mutations. Outlook Calendar sync also implemented (`src/services/outlookCalendar.ts`) with Microsoft Graph API, OAuth flow, token refresh, and auto-sync on create/update/delete/cancel.
 
 ### BUG-034: notify_n8n_on_appointment trigger is a placeholder
 - **File**: `supabase/migrations/20260228000001_webhooks_and_logs.sql`

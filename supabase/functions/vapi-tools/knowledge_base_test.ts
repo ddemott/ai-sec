@@ -94,6 +94,7 @@ Deno.test({
       const message = {
         type: "tool-calls",
         toolCalls: [{
+          id: "call-policy-1",
           function: {
             name: "get_company_policy_answer",
             arguments: JSON.stringify({
@@ -106,9 +107,10 @@ Deno.test({
 
       const response = await dispatcher.dispatch(message, baseLogger);
       const data = await response.json();
-      
+
       assertEquals(response.status, 200);
-      assertEquals(data.result.includes("9am to 5pm"), true);
+      assertEquals(data.results[0].toolCallId, "call-policy-1");
+      assertEquals(data.results[0].result.includes("9am to 5pm"), true);
     });
 
     await repo.close();

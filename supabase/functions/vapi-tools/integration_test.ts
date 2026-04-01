@@ -38,6 +38,7 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
       message: {
         type: "tool-calls",
         toolCalls: [{
+          id: "call-bad-json",
           function: {
             name: "get_customer_context",
             arguments: "--- NOT JSON ---"
@@ -48,8 +49,11 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
     const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
     const res = await handler(req);
     const data = await res.json();
-    assertEquals(res.status, 400);
-    assertEquals(data.error, "Invalid JSON in arguments");
+    // Returns 200 with Vapi-compatible error (toolCallId + error in result)
+    assertEquals(res.status, 200);
+    assertEquals(data.results[0].toolCallId, "call-bad-json");
+    const result = JSON.parse(data.results[0].result);
+    assertEquals(result.error, "Invalid JSON in tool arguments");
   });
 
   await t.step("Sad Path: Unknown Tool branch", async () => {
@@ -57,6 +61,7 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
       message: {
         type: "tool-calls",
         toolCalls: [{
+          id: "call-unknown",
           function: {
             name: "non_existent_tool",
             arguments: JSON.stringify({ tenant_id: tenantId })
@@ -66,7 +71,10 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
     };
     const req = new Request("https://localhost", { method: "POST", body: JSON.stringify(payload) });
     const res = await handler(req);
-    assertEquals(res.status, 400);
+    const data = await res.json();
+    // Returns 200 with Vapi-compatible error
+    assertEquals(res.status, 200);
+    assertEquals(data.results[0].toolCallId, "call-unknown");
   });
 
   await t.step("Sad Path: Empty Tool Calls array", async () => {
@@ -90,6 +98,7 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
       message: {
         type: "tool-calls",
         toolCalls: [{
+          id: "call-book-1",
           function: {
             name: "book_with_scheduling",
             arguments: JSON.stringify({
@@ -120,8 +129,10 @@ Deno.test("Edge Adapter: Final Coverage Run", async (t) => {
     const data = await res.json();
 
     assertEquals(res.status, 200);
-    assertEquals(data.result.success, true);
-    assertEquals(typeof data.result.appointment_id, "string");
+    assertEquals(data.results[0].toolCallId, "call-book-1");
+    const result = JSON.parse(data.results[0].result);
+    assertEquals(result.success, true);
+    assertEquals(typeof result.appointment_id, "string");
   });
 
   await repo.close();

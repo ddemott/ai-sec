@@ -18,7 +18,7 @@ Our initial focus is on **service businesses** that live and die by their schedu
 - Mobile services (e.g., DynaTire – mobile tire repair).
 - Salons and barbershops.
 - Auto shops and other appointment-based trades.
-- Clinics and professional services (in later phases).
+- Trades and professional services (fitness, food & beverage, and more).
 
 These businesses typically:
 - Miss calls when busy, losing revenue.
@@ -51,7 +51,7 @@ This CRM is the **default** for all tenants. Over time, we may add connectors to
 ### 3.3 Internal Calendar + External Sync
 
 A robust internal calendar model that:
-- Represents resources (stylists, bays, trucks, clinicians, etc.).
+- Represents resources (stylists, bays, trucks, technicians, etc.).
 - Defines working hours and availability rules.
 - Stores all appointments and their statuses.
 - **Excellent test coverage:** All calendar and booking logic is fully verified; all tests pass.

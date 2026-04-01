@@ -400,10 +400,24 @@ export const Api = {
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
     list: (tenantId: string | null) =>
-      apiFetch<Array<{ id: string; title: string; content: string; source: string; created_at: string }>>(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Array<{ id: string; title: string; section: string | null; content: string; source: string; created_at: string }>>(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
 
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
+
+    add: (tenantId: string | null, data: { question: string; answer: string; category?: string }) =>
+      apiMutate<{ success: boolean; id: string }>(`/knowledge/add`, 'POST', {
+        tenant_id: tenantId,
+        ...data,
+        source: 'policy-questionnaire',
+      }),
+
+    update: (id: string, tenantId: string | null, data: { question: string; answer: string; category?: string }) =>
+      apiMutate<{ success: boolean }>(`/knowledge/${id}`, 'PUT', {
+        tenant_id: tenantId,
+        ...data,
+        source: 'policy-questionnaire',
+      }),
 
     ingest: async (tenantId: string | null, file: File) => {
       const formData = new FormData();

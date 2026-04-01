@@ -10,7 +10,7 @@ This is the **management UI** for the SecretaryHQ SaaS. It lets owners and admin
 - Tweak AI persona settings (system prompt, voice, working hours).
 - Manage employee attributes (name, email, phone) and shift schedules.
 
-The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It calls the Fastify backend API (15 route modules under `src/routes/`), which enforces RLS via `withTenantClient()` and reads/writes to the shared Postgres database (Supabase or local Docker). Bookings created by the voice AI tools and the dashboard all hit the same source of truth.
+The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It calls the Fastify backend API (21 route modules under `src/routes/`), which enforces RLS via `withTenantClient()` and reads/writes to the shared Postgres database (Supabase or local Docker). Bookings created by the voice AI tools and the dashboard all hit the same source of truth.
 
 ---
 

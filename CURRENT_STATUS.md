@@ -1,13 +1,13 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-03-26
+**Last updated:** 2026-04-01
 
 ---
 
 ## Where We Are
 
-Phase 13 (Production Readiness) is in progress. The backend is deployed to Railway and live. A phone number has been provisioned via Vapi. The edge functions (voice AI tool handlers) are deployed to Supabase but are currently not responding — Supabase project stuck in "pausing" state (known platform bug, not free tier). Waiting on Supabase support ticket.
+Phase 13 (Production Readiness) is in progress. The backend is deployed to Railway and live. A phone number has been provisioned via Vapi. The edge functions (voice AI tool handlers) are deployed to Supabase and the project is now active (pausing bug resolved as of 2026-03-30).
 
-All 8 design session work items from March 24 are now **complete**. All 24 refactoring items are **complete**. Calendar sync (Google + Outlook) and CRM integrations (Jobber + HubSpot) are **complete** with bidirectional sync and full test coverage.
+All 8 design session work items from March 24 are now **complete**. All 24 refactoring items are **complete**. Calendar sync (Google + Outlook) and CRM integrations (Jobber + HubSpot) are **complete** with bidirectional sync and full test coverage. Voice AI is **working end-to-end** — calls are answered, appointments booked, policy questions answered via RAG. Knowledge base questionnaire is **complete** with 40 policy Q&A pairs.
 
 ---
 
@@ -15,14 +15,18 @@ All 8 design session work items from March 24 are now **complete**. All 24 refac
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 19 route modules, Railway auto-deploy from main |
+| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 21 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 59 migrations applied, FORCE RLS on all tables |
+| **Database** | Live | Supabase Postgres (managed), 61 migrations applied, FORCE RLS on all tables |
 | **Phone provisioning** | Working | `POST /provisioning/activate` creates Vapi assistant + phone number automatically |
-| **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant created, phone assigned |
+| **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant (Clara voice, GPT-4o-mini), phone assigned |
+| **Voice AI (end-to-end)** | Working | Answers calls, books appointments, answers policy questions, rejects invalid bookings naturally |
+| **Edge functions** | Working | Supabase pausing bug resolved 2026-03-30, all 7 tools operational |
+| **Knowledge base** | Working | 40 policy Q&A pairs across 9 categories, document upload (PDF/TXT/DOC/DOCX/MD), auto-save |
+| **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 638 backend + 313 dashboard = 951 passing | All green, zero failures, zero TS errors (strict unused checks) |
+| **Tests** | 791 backend + 313 dashboard = 1,104 passing + 88 QA assertions | All green, zero failures, zero TS errors |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
@@ -32,20 +36,23 @@ All 8 design session work items from March 24 are now **complete**. All 24 refac
 
 ## What's Broken / Blocked
 
-### Edge Functions Not Responding (CRITICAL BLOCKER)
+### ~~Voice AI Scheduling Bug~~ — RESOLVED (2026-04-01)
 
-**Root Cause: Supabase platform bug — project stuck in "pausing" state.**
+**BUG-059**: `book_with_scheduling_atomic()` was using hardcoded UTC timezone for shift validation, causing bookings to fail for non-UTC tenants (e.g., Chicago tenant booking at 5 PM Friday would fail because function checked for Saturday shifts in UTC).
 
-This is a known Supabase issue affecting multiple users. The project's internal state is stuck in a transitional "pausing" state, which prevents the edge function gateway from forwarding HTTP requests. The function boots successfully (69ms) but requests never reach it. The Restart/Pause buttons in the dashboard are greyed out.
+**Fixed**: Applied migration `20260401000000_fix_scheduling_timezone_bug.sql` — now uses tenant's actual timezone from `tenants.timezone` column.
 
-**Status:** Waiting on Supabase support ticket. See `TRIAGE.md` for the full report and evidence.
+**Impact**: Voice AI can now successfully book appointments for tenants in any timezone.
 
-**Known matching issues:**
-- [Project stuck in PAUSING state #44125](https://github.com/supabase/supabase/issues/44125)
-- [Project stuck in "Pausing..." state indefinitely #35136](https://github.com/supabase/supabase/issues/35136)
-- [Discussion #37844](https://github.com/orgs/supabase/discussions/37844)
+**Test**: Created `src/scheduling-timezone-bug.test.ts` to verify fix (TDD approach).
 
-**Resolution:** Supabase support needs to manually reset the project state. Upgrading to Pro tier alone will not fix this.
+### ~~Edge Functions Not Responding~~ — RESOLVED (2026-03-30)
+
+Supabase project is no longer stuck in "pausing" state. Edge functions are reachable and fully operational. See `TRIAGE.md` for historical context.
+
+### Minor Issues (non-blocking)
+- **OpenAI API quota** — Edge functions use GPT-4o-mini for LLM + embeddings. Monitor usage as call volume grows.
+- **Filler phrases** — Voice AI occasionally says "Absolutely!" or "Great!" despite prompt engineering. Iterating on system prompt.
 
 ---
 
@@ -127,22 +134,32 @@ This is a known Supabase issue affecting multiple users. The project's internal 
 
 ## Remaining TODO (Priority Order)
 
-1. ~~**Open Supabase support ticket**~~ — Email sent to support@supabase.com on 2026-03-26
-2. **Verify edge functions work** — test tool calls after Supabase fixes the project state
-3. **Tune voice quality** — speed, endpointing, system prompt
-4. **Deploy dashboard** (Vercel or Railway) — currently local only
-5. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
-6. **Apply new migrations to Supabase** — 20260327000000 (Jobber tables) + 20260327000001 (HubSpot CHECK)
-7. **UI/UX flow improvements** — hands-on testing
-8. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
-9. **Beta testing with DynaTire** — real-world validation
+1. **Deploy dashboard** (Vercel or Railway) — currently local only
+2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
+3. **Apply new migrations to Supabase** — 20260327000000 (Jobber tables) + 20260327000001 (HubSpot CHECK)
+4. **UI/UX flow improvements** — hands-on testing
+5. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
+6. **Beta testing with DynaTire** — real-world validation with live calls
 
-### Done This Session (2026-03-26)
+### Done This Session (2026-03-30)
+- ~~Supabase blocker resolved~~ — Project no longer stuck in "pausing" state
+- ~~Voice AI end-to-end working~~ — 8 critical fixes (tool response format, Zod relaxation, caller ID, timezone, natural errors)
+- ~~LLM switched~~ — Groq/Llama 3.3 → OpenAI GPT-4o-mini (better instruction following)
+- ~~Voice switched~~ — Vapi "Elliot" (male) → Vapi "Clara" (young American female)
+- ~~Vapi assistant configured~~ — Smart endpointing, background denoising, Deepgram keywords, speaking plans
+- ~~Booking validation~~ — Past-time rejection, business hours check, fuzzy service matching, timezone conversion (America/Chicago)
+- ~~Knowledge base questionnaire~~ — 40 policy Q&A pairs across 9 categories, auto-save, document upload, embedding generation
+- ~~DynaTire data cleanup~~ — 1 employee (Mike Rivera), 1 truck, all 5 services assigned, Mon-Fri 8-6
+- ~~System prompt engineering~~ — Name spelling, no phone collection (use caller ID), no filler, natural datetime speech
+- ~~QA test suite~~ — `scripts/qa-live-test.py` — 29 tool calls, 88 assertions, all passing
+- ~~tools.json updated~~ — Added `get_company_policy_answer` and `get_service_catalog` tools
+
+### Done Previous Session (2026-03-26)
 - ~~Outlook calendar sync~~ — Microsoft Graph API, OAuth, full CRUD
 - ~~Jobber CRM integration~~ — Bidirectional GraphQL sync with timestamp merge
 - ~~HubSpot CRM integration~~ — Bidirectional REST sync with meetings + contacts
 - ~~CRM push triggers wired~~ — appointments.ts + customers.ts fire to all connected integrations
-- ~~Comprehensive sad path coverage~~ — 951 total tests with 5W diagnostics
+- ~~Comprehensive sad path coverage~~ — 1,104 total tests with 5W diagnostics
 - ~~30 unused variable warnings cleaned~~ — zero TS errors with strict checks
 - ~~Scheduling diagnostics~~ — `selectAssignments()` returns reason strings ("all 3 bays busy", etc.)
 - ~~All refactoring items complete~~ — 24/24 done (SUGGESTED_REFACTORINGS.md)
@@ -176,4 +193,5 @@ This is a known Supabase issue affecting multiple users. The project's internal 
 | Vapi config | 1 file | 18 | Template validation, required fields |
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
-| **Total** | **40 + 16** | **951** | Happy + sad paths, 5W diagnostics |
+| QA live tests | 1 file | 29 calls / 88 assertions | Live edge function tool calls with DB verification |
+| **Total** | **40 + 16 + 1** | **1,104 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration |
