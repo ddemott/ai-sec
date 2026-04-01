@@ -9,10 +9,17 @@ export type MessageHandler = (message: any, logger: Logger) => Promise<Response>
  * - 11+ digits starting with 1 → prepend +
  * - Already has + → use as-is
  * Returns null if invalid (fewer than 10 digits).
+ * 
+ * FIXED 2026-04-01: Added length validation to prevent "+1" from being accepted
  */
 function normalizePhone(phone: string | undefined | null): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, "");
+  
+  // CRITICAL: Reject if too short (less than 10 digits)
+  // Prevents "+1" or "1" from being treated as valid
+  if (digits.length < 10) return null;
+  
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   if (digits.length >= 10) return phone.startsWith("+") ? phone : `+${digits}`;
@@ -167,6 +174,21 @@ export class Dispatcher {
           // Use phone captured from call-started event, fall back to LLM arg
           // Vapi does NOT send customer info in tool-call messages — only in call-started
           const phoneToUse = this.callerPhone || normalizePhone(args.phone) || args.phone || "";
+          
+          // VALIDATE phone before booking (prevent "+1" or empty phone from being stored)
+          if (!phoneToUse || !isValidPhone(phoneToUse)) {
+            toolLogger.warn({ 
+              callerPhone: this.callerPhone, 
+              argsPhone: args.phone,
+              phoneToUse 
+            }, "❌ Cannot book - no valid phone number available");
+            
+            return this.vapiToolResponse(
+              toolCallId,
+              "I'm sorry, I'm having trouble identifying your phone number. Could you please call back?"
+            );
+          }
+          
           response = await this.service.bookWithScheduling(
             {
               tenant_id: args.tenant_id,
@@ -213,10 +235,25 @@ export class Dispatcher {
     logger.info({ callId: message.call?.id }, "Call started event received");
 
     // Capture caller phone from the call object — this is the ONLY place Vapi sends it
-    const phone = message.call?.customer?.number || message.call?.phoneNumber || "";
-    if (phone) {
-      this.callerPhone = normalizePhone(phone) || phone;
-      logger.info({ callerPhone: this.callerPhone }, "Caller phone captured from call-started");
+    const rawPhone = message.call?.customer?.number || message.call?.phoneNumber || "";
+    const normalized = normalizePhone(rawPhone);
+    
+    logger.info({ 
+      rawPhone, 
+      normalized,
+      customerObject: message.call?.customer,
+      callObject: message.call
+    }, "Phone capture attempt");
+
+    if (normalized) {
+      this.callerPhone = normalized;
+      logger.info({ callerPhone: this.callerPhone }, "✅ Valid caller phone captured from call-started");
+    } else if (rawPhone) {
+      logger.warn({ rawPhone }, "⚠️ Invalid phone format received - phone will be empty in bookings");
+      this.callerPhone = ""; // Clear invalid phone instead of storing "+1"
+    } else {
+      logger.warn("⚠️ No phone number received from Vapi");
+      this.callerPhone = "";
     }
 
     // Warm up DB pool while the greeting plays — eliminates cold start on first tool call
