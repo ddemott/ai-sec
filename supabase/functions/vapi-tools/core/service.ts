@@ -81,9 +81,17 @@ export class AISecretaryService {
       logger.warn({ startTime, endTime }, "End time is not after start time");
       throw new ValidationError("End time must be after start time.");
     }
-    const hasOverlap = await this.repo.checkOverlap(resourceId, tenantId, startTime, endTime, logger);
-    logger.info({ available: !hasOverlap }, "Availability check result");
-    return { result: { available: !hasOverlap } };
+    // BUG-031: Use timezone-aware RPC instead of raw overlap check
+    const result = await this.repo.checkAvailabilityWithTz(tenantId, resourceId, startTime, endTime, logger);
+    logger.info({ available: result.available, timezone: result.tenant_timezone }, "Availability check result");
+    return {
+      result: {
+        available: result.available,
+        tenant_timezone: result.tenant_timezone,
+        local_start: result.local_start,
+        local_end: result.local_end,
+      }
+    };
   }
 
   /**
@@ -346,6 +354,13 @@ export class AISecretaryService {
     return {
       result: `${serviceInfo} On ${dayName}, our hours are ${openHours}. We have openings ${slotsText}. What time works best for you?`
     };
+  }
+
+  /**
+   * Links orphaned call transcripts to customers by matching call_id with appointments.
+   */
+  async linkOrphanedTranscripts(tenantId: string, logger: Logger): Promise<number> {
+    return this.repo.linkOrphanedTranscripts(tenantId, logger);
   }
 
   async getServiceCatalog(tenantId: string, logger: Logger) {

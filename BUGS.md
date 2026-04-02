@@ -240,21 +240,21 @@ Found during full code review on March 16, 2026. Updated April 1, 2026 with voic
 - **Problem**: `customer_id` on `call_transcripts` is nullable with `ON DELETE SET NULL`. If customer lookup fails during a call, the transcript is stored with no customer link.
 - **Impact**: Orphaned transcripts can't be associated with customers later.
 - **Fix**: Add a background job to re-link orphaned transcripts by matching phone/call_id.
-- **Status**: PARTIAL — `link_orphaned_transcripts()` SQL function exists in `supabase/migrations/20260316400000_audit_and_soft_deletes.sql` (joins transcripts to appointments by `call_id` to find the customer). However, no background job, endpoint, or cron calls this function — it is currently dead code. Needs a scheduled trigger or admin endpoint to invoke it.
+- **Status**: FIXED — `link_orphaned_transcripts()` SQL function now called automatically in `dispatcher.ts` `handleCallEnded()` after every call. Also exposed via `IRepository.linkOrphanedTranscripts()` → `AISecretaryService.linkOrphanedTranscripts()`. Includes tenant_id guard and non-fatal error handling so call flow is never disrupted.
 
 ### BUG-031: Customer timezone not respected in availability checks
 - **Files**: `supabase/functions/vapi-tools/core/service.ts`, `supabase/functions/vapi-tools/db/repository.ts`
 - **Problem**: Availability checks don't convert time windows to the customer's timezone. A customer in Pacific time asking for "9 AM" gets UTC 9 AM.
 - **Impact**: Appointments booked at wrong times for customers in non-UTC timezones.
 - **Fix**: Accept timezone in availability requests and convert before querying.
-- **Status**: PARTIAL — Tenant timezone is now used for shift validation (BUG-059 fix). A `check_availability_with_tz()` SQL function exists in `supabase/migrations/20260316600000_customer_tz_and_n8n.sql` accepting `p_customer_tz`. However, the edge function `checkAvailability()` in `service.ts` still calls the basic `checkOverlap()` without fetching or passing customer timezone. The timezone-aware SQL function is available but not wired into the availability check flow.
+- **Status**: FIXED — `service.checkAvailability()` now calls `repo.checkAvailabilityWithTz()` which invokes the `check_availability_with_tz()` SQL RPC. Returns timezone-aware availability with `tenant_timezone`, `local_start`, and `local_end` fields for proper display.
 
 ### BUG-032: call_summaries.embedding likely always NULL
 - **Files**: `supabase/migrations/20260228000001_webhooks_and_logs.sql`, `n8n/post_call_summarizer.json`
 - **Problem**: The n8n post-call summarizer generates a text summary but doesn't call the OpenAI embeddings API to populate the `embedding` vector column.
 - **Impact**: Semantic search over call summaries will return no results.
 - **Fix**: Add an embedding generation step to the n8n workflow after summarization.
-- **Status**: OPEN — Confirmed unfixed. The n8n workflow inserts `summary, tenant_id, customer_id, call_id` but never generates or stores an embedding. No code path in the entire codebase populates `call_summaries.embedding`. Semantic search over call history will not work until this is addressed.
+- **Status**: FIXED — Added "OpenAI: Generate Embedding" node (text-embedding-3-small) to n8n workflow between Summarize and Save steps. Supabase insert now includes the `embedding` column. Workflow chain: Webhook → Summarize → Generate Embedding → Save (with summary + embedding).
 
 ### BUG-033: Calendar sync Outlook branch is empty, no token refresh
 - **Files**: `n8n/calendar_sync.json`, `supabase/migrations/20260312000004_calendar_sync_schema.sql`
@@ -296,14 +296,14 @@ Found during full code review on March 16, 2026. Updated April 1, 2026 with voic
 - **Problem**: DELETE operations are hard deletes with cascading. Deleting a tenant cascades to all their data.
 - **Impact**: Accidental deletion is irreversible. No way to recover or "undo".
 - **Fix**: Add `is_deleted BOOLEAN DEFAULT FALSE` and `deleted_at TIMESTAMPTZ` columns; filter in queries.
-- **Status**: PARTIAL — Schema complete: `supabase/migrations/20260316400000_audit_and_soft_deletes.sql` adds `is_deleted` and `deleted_at` columns to appointments, customers, resources, and employees with partial indexes (`idx_*_active` on `is_deleted = false`). However, only 2 of 20 route files (`employees.ts`, `analytics.ts`) filter by `is_deleted = false`. Most queries still return soft-deleted records. Needs `WHERE is_deleted = false` added to remaining route queries.
+- **Status**: FIXED — Schema complete in migration `20260316400000`. Backend routes filter `is_deleted = false` on appointments, customers, resources, provisioning. Edge function `repository.ts` now filters all 7 queries on soft-deletable tables (findCustomerByPhone, checkOverlap, getSchedulingResources, getSchedulingEmployees, getExistingAppointments, getEmployees, getAvailableSlots). `deleteEmployee()` converted from hard delete to soft delete (UPDATE SET is_deleted = true). Uses `(is_deleted IS NULL OR is_deleted = false)` pattern for backwards compatibility with older NULL records.
 
 ### BUG-039: No accessibility — ARIA labels missing throughout dashboard
 - **Files**: All dashboard view components
 - **Problem**: Interactive elements (buttons, modals, form inputs, navigation) lack `aria-label`, `aria-describedby`, `role`, and other ARIA attributes.
 - **Impact**: Screen readers can't navigate the app; fails WCAG compliance.
 - **Fix**: Add ARIA attributes to all interactive elements, especially modals, navigation, and form controls.
-- **Status**: PARTIAL — Core UI primitives have ARIA support: Modal (`aria-modal`, `aria-labelledby`), Button (`aria-busy`), Input/Select (`aria-invalid`, `aria-describedby`). Scheduler components (5 files) and a handful of views also have `aria-label` attributes. However, only 22 of 81 dashboard components have any ARIA attributes. Most forms, data regions, and interactive areas still lack semantic labeling. Approximately 73% of components need ARIA additions.
+- **Status**: FIXED — All UI primitives now have ARIA: Toast (`aria-live="polite"`, `role="status"/"alert"`, `aria-atomic`), Card (`role="button"` + `tabIndex` + keyboard handling when clickable), FeedbackButton (`aria-label` on trigger/close, `role="radiogroup"` + `role="radio"` + `aria-checked` on star rating, `aria-label` on textarea), CoverageBar (`role="img"` + descriptive `aria-label`, slots `aria-hidden`), OutlookLayout (`role="tablist"` + `role="tab"` + `aria-selected` on mode tabs and sub-tabs, icons `aria-hidden`). Modal, Button, Input, Select already had ARIA from earlier work.
 
 ---
 

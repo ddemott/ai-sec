@@ -283,6 +283,21 @@ export class Dispatcher {
 
   private async handleCallEnded(message: any, logger: Logger): Promise<Response> {
     logger.info({ callId: message.call?.id, reason: message.call?.endedReason }, "Call ended event received");
+
+    // Link any orphaned transcripts to their customers now that the call is complete
+    const tenantId = message.call?.assistantOverrides?.metadata?.tenant_id
+      || message.call?.metadata?.tenant_id;
+    if (tenantId) {
+      try {
+        const linked = await this.service.linkOrphanedTranscripts(tenantId, logger);
+        if (linked > 0) {
+          logger.info({ tenantId, linked }, "Linked orphaned transcripts after call ended");
+        }
+      } catch (err) {
+        logger.error({ err }, "Failed to link orphaned transcripts (non-fatal)");
+      }
+    }
+
     return new Response(null, { status: 200 });
   }
 }

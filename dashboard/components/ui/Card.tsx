@@ -41,9 +41,12 @@ export const Card: React.FC<CardProps> = ({
 
   return (
     <div
-      className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${className}`}
+      className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${onClick ? 'cursor-pointer' : ''} ${className}`}
       style={style ? { ...defaultStyle, ...style } : defaultStyle}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
     >
       {title && (
         <h3 className={`font-bold mb-4 flex items-center text-sm uppercase tracking-widest ${titleColors[variant]}`}>

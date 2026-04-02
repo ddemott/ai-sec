@@ -145,7 +145,7 @@ export class PostgresRepository implements IRepository {
     logger.info({ phone }, "Looking up customer by phone");
     return this.withClient(tenantId, async (c) => {
       const res = await c.queryObject<{ id: string; name: string }>(
-        "SELECT id, name FROM customers WHERE tenant_id = $1 AND phone = $2",
+        "SELECT id, name FROM customers WHERE tenant_id = $1 AND phone = $2 AND (is_deleted IS NULL OR is_deleted = false)",
         [tenantId, phone]
       );
       return res.rows[0] || null;
@@ -192,10 +192,35 @@ export class PostgresRepository implements IRepository {
     logger.info({ resourceId, start, end }, "Checking for overlapping appointments");
     return this.withClient(tenantId, async (c) => {
       const res = await c.queryObject<{ count: string }>(
-        "SELECT count(*) FROM appointments WHERE resource_id = $1 AND status = 'scheduled' AND start_time < $2 AND end_time > $3",
+        "SELECT count(*) FROM appointments WHERE resource_id = $1 AND status = 'scheduled' AND (is_deleted IS NULL OR is_deleted = false) AND start_time < $2 AND end_time > $3",
         [resourceId, end, start]
       );
       return parseInt(res.rows[0].count) > 0;
+    });
+  }
+
+  async checkAvailabilityWithTz(
+    tenantId: string,
+    resourceId: string,
+    startTime: string,
+    endTime: string,
+    logger: Logger,
+  ): Promise<{ available: boolean; tenant_timezone: string; local_start: string; local_end: string }> {
+    logger.info({ tenantId, resourceId, startTime, endTime }, "Checking availability with timezone via RPC");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{
+        available: boolean;
+        tenant_timezone: string;
+        local_start: string;
+        local_end: string;
+      }>(
+        "SELECT * FROM check_availability_with_tz($1, $2, $3::timestamptz, $4::timestamptz)",
+        [tenantId, resourceId, startTime, endTime]
+      );
+      if (!res.rows[0]) {
+        throw new Error("check_availability_with_tz returned no result");
+      }
+      return res.rows[0];
     });
   }
 
@@ -216,7 +241,7 @@ export class PostgresRepository implements IRepository {
          LEFT JOIN service_resource sr ON r.id = sr.resource_id
          LEFT JOIN services s ON sr.service_id = s.id
          LEFT JOIN LATERAL unnest(s.required_resources) cap ON true
-         WHERE r.tenant_id = $1 AND r.is_active = true
+         WHERE r.tenant_id = $1 AND r.is_active = true AND (r.is_deleted IS NULL OR r.is_deleted = false)
          GROUP BY r.id, r.capabilities`,
         [tenant_id],
       );
@@ -231,7 +256,7 @@ export class PostgresRepository implements IRepository {
     logger.info({ tenantId }, "Loading scheduling employees");
     return this.withClient(tenantId, async (c) => {
       const res = await c.queryObject<{ id: string; skills: string[] }>(
-        "SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true",
+        "SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
         [tenantId],
       );
       return res.rows.map((row) => ({
@@ -254,6 +279,7 @@ export class PostgresRepository implements IRepository {
          FROM appointments
          WHERE tenant_id = $1
            AND status = 'scheduled'
+           AND (is_deleted IS NULL OR is_deleted = false)
            AND start_time < $2
            AND end_time > $3`,
         [tenantId, window.to.toISOString(), window.from.toISOString()],
@@ -333,14 +359,17 @@ export class PostgresRepository implements IRepository {
 
   async deleteEmployee(tenantId: string, id: number): Promise<boolean> {
     return this.withClient(tenantId, async (c) => {
-      await c.queryArray("DELETE FROM employees WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
+      await c.queryArray(
+        "UPDATE employees SET is_deleted = true, deleted_at = now() WHERE id = $1 AND tenant_id = $2",
+        [id, tenantId]
+      );
       return true;
     });
   }
 
   async getEmployees(tenantId: string, logger: Logger): Promise<any[]> {
     return this.withClient(tenantId, async (c) => {
-      const res = await c.queryObject("SELECT * FROM employees WHERE tenant_id = $1", [tenantId]);
+      const res = await c.queryObject("SELECT * FROM employees WHERE tenant_id = $1 AND (is_deleted IS NULL OR is_deleted = false)", [tenantId]);
       return res.rows;
     });
   }
@@ -499,6 +528,7 @@ export class PostgresRepository implements IRepository {
       const apptRes = await c.queryObject<{ start_time: string; end_time: string }>(
         `SELECT start_time::text, end_time::text FROM appointments
          WHERE tenant_id = $1 AND status = 'scheduled'
+         AND (is_deleted IS NULL OR is_deleted = false)
          AND start_time::date = $2::date
          ORDER BY start_time`,
         [tenantId, date]
@@ -509,6 +539,19 @@ export class PostgresRepository implements IRepository {
         shifts: shiftRes.rows,
         appointments: apptRes.rows,
       };
+    });
+  }
+
+  async linkOrphanedTranscripts(tenantId: string, logger: Logger): Promise<number> {
+    logger.info({ tenantId }, "Linking orphaned transcripts to customers");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{ link_orphaned_transcripts: number }>(
+        "SELECT link_orphaned_transcripts($1)",
+        [tenantId]
+      );
+      const count = res.rows[0]?.link_orphaned_transcripts ?? 0;
+      logger.info({ tenantId, linkedCount: count }, "Orphaned transcript linking complete");
+      return count;
     });
   }
 

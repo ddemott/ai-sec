@@ -9,6 +9,17 @@ export interface IRepository {
   getRecentSummaries(customerId: string, tenantId: string, logger: Logger, limit?: number): Promise<Array<{ summary: string; created_at: string }>>;
   checkOverlap(resourceId: string, tenantId: string, start: string, end: string, logger: Logger): Promise<boolean>;
   /**
+   * Timezone-aware availability check using check_availability_with_tz() RPC.
+   * Returns availability status plus formatted local times for display.
+   */
+  checkAvailabilityWithTz(
+    tenantId: string,
+    resourceId: string,
+    startTime: string,
+    endTime: string,
+    logger: Logger,
+  ): Promise<{ available: boolean; tenant_timezone: string; local_start: string; local_end: string }>;
+  /**
    * Scheduling primitives for selector-based availability.
    * Initial implementation can be in-memory or stubbed; DB-backed
    * repository will be wired up incrementally.
@@ -118,6 +129,12 @@ export interface IRepository {
     shifts: Array<{ start_time: string; end_time: string }>;
     appointments: Array<{ start_time: string; end_time: string }>;
   }>;
+
+  /**
+   * Links orphaned call transcripts to customers by matching call_id with appointments.
+   * Returns the count of transcripts that were linked.
+   */
+  linkOrphanedTranscripts(tenantId: string, logger: Logger): Promise<number>;
 
   setLogger(logger: Logger): void;
   close(): Promise<void>;

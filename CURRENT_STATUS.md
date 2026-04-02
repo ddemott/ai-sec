@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-04-01
+**Last updated:** 2026-04-01 (evening)
 
 ---
 
@@ -26,7 +26,7 @@ All 8 design session work items from March 24 are now **complete**. All 24 refac
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 1,006 backend + 313 dashboard = 1,319 passing + 88 QA assertions | All green (with DB running), zero TS errors |
+| **Tests** | 1,038 backend + 332 dashboard = 1,370 passing + 88 QA assertions | All green (with DB running), zero TS errors |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
@@ -165,6 +165,11 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 - ~~BUG-064: Generic booking errors~~ — Added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) via migration `20260401000001`
 - ~~OAuth callback refactoring~~ — Created `oauthCallbackFactory.ts` + `tokenManagement.ts` to eliminate duplication across Jobber, HubSpot, Square, ServiceTitan
 - ~~Test expansion~~ — Added scheduling timezone bug test, voice AI fixes test, available slots test, comprehensive bug fix regression tests (rounds 1-5)
+- ~~BUG-030: Orphaned transcripts~~ — `link_orphaned_transcripts()` now called in `dispatcher.handleCallEnded()` after every call
+- ~~BUG-031: Timezone availability~~ — `service.checkAvailability()` now calls `check_availability_with_tz()` RPC for timezone-aware results
+- ~~BUG-032: Call summary embeddings~~ — n8n workflow now generates embeddings (text-embedding-3-small) and stores them in `call_summaries.embedding`
+- ~~BUG-038: Soft delete filtering~~ — All 7 edge function queries on soft-deletable tables now filter `is_deleted`. `deleteEmployee()` converted to soft delete
+- ~~BUG-039: ARIA accessibility~~ — Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs all have proper ARIA attributes
 
 ### Done Previous Session (2026-03-30)
 - ~~Supabase blocker resolved~~ — Project no longer stuck in "pausing" state

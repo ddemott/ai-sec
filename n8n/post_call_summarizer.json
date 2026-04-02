@@ -25,20 +25,31 @@
     },
     {
       "parameters": {
+        "model": "text-embedding-3-small",
+        "input": "={{$json.choices[0].message.content}}"
+      },
+      "name": "OpenAI: Generate Embedding",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
         "operation": "insert",
         "schema": "public",
         "table": "call_summaries",
-        "columns": "summary, tenant_id, customer_id, call_id",
+        "columns": "summary, tenant_id, customer_id, call_id, embedding",
         "values": {
-          "summary": "={{$json.choices[0].message.content}}",
+          "summary": "={{$node[\"OpenAI: Summarize\"].json.choices[0].message.content}}",
           "tenant_id": "={{$node[\"Webhook: Vapi Call Ended\"].json.body.message.call.tenantId}}",
-          "call_id": "={{$node[\"Webhook: Vapi Call Ended\"].json.body.message.call.id}}"
+          "call_id": "={{$node[\"Webhook: Vapi Call Ended\"].json.body.message.call.id}}",
+          "embedding": "={{JSON.stringify($json.data[0].embedding)}}"
         }
       },
       "name": "Supabase: Save Summary",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [500, 300]
+      "position": [700, 300]
     }
   ],
   "connections": {
@@ -46,6 +57,9 @@
       "main": [[{ "node": "OpenAI: Summarize", "type": "main", "index": 0 }]]
     },
     "OpenAI: Summarize": {
+      "main": [[{ "node": "OpenAI: Generate Embedding", "type": "main", "index": 0 }]]
+    },
+    "OpenAI: Generate Embedding": {
       "main": [[{ "node": "Supabase: Save Summary", "type": "main", "index": 0 }]]
     }
   }

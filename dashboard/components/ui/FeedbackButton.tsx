@@ -44,10 +44,11 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
     return (
       <button
         onClick={() => setIsOpen(true)}
+        aria-label="Send feedback"
         className="fixed bottom-20 md:bottom-6 right-6 z-50 hover:opacity-90 text-white pl-3 pr-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
         style={{ backgroundColor: 'var(--accent)' }}
       >
-        <MessageCircle className="w-4 h-4" />
+        <MessageCircle className="w-4 h-4" aria-hidden="true" />
         <span className="text-xs font-medium">Feedback</span>
       </button>
     )
@@ -61,8 +62,8 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
           <p className="text-sm font-bold">Send Feedback</p>
           <p className="text-[10px] opacity-70 truncate max-w-[200px]">{page}</p>
         </div>
-        <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/20 rounded">
-          <X className="w-4 h-4" />
+        <button onClick={() => setIsOpen(false)} aria-label="Close feedback" className="p-1 hover:bg-white/20 rounded">
+          <X className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -71,11 +72,14 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
         {/* Rating */}
         <div>
           <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>How&apos;s this page working for you?</p>
-          <div className="flex gap-1">
+          <div className="flex gap-1" role="radiogroup" aria-label="Rating">
             {[1, 2, 3, 4, 5].map(n => (
               <button
                 key={n}
                 onClick={() => setRating(rating === n ? null : n)}
+                role="radio"
+                aria-checked={rating === n}
+                aria-label={`${n} star${n > 1 ? 's' : ''}`}
                 className="p-1 transition-colors"
               >
                 <Star
@@ -84,6 +88,7 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
                       ? 'fill-yellow-400 text-yellow-400'
                       : 'text-gray-300 dark:text-gray-600'
                   }`}
+                  aria-hidden="true"
                 />
               </button>
             ))}
@@ -95,6 +100,7 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
           value={comment}
           onChange={e => setComment(e.target.value)}
           placeholder="What's working? What's confusing? What would you change?"
+          aria-label="Feedback comment"
           rows={3}
           className="w-full p-2.5 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}

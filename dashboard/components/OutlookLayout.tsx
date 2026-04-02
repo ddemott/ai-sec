@@ -127,27 +127,31 @@ export function OutlookLayout({
           {/* Left: Mode tabs + Sub-tabs */}
           <div className="flex items-center gap-0">
             {/* Front Desk / Back Office toggle */}
-            <div className="flex mr-4">
+            <div className="flex mr-4" role="tablist" aria-label="Navigation mode">
               <button
                 onClick={() => handleModeSwitch('front-desk')}
+                role="tab"
+                aria-selected={currentMode === 'front-desk'}
                 className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
                 style={{
                   color: currentMode === 'front-desk' ? 'var(--accent-soft)' : 'var(--text-muted)',
                   borderBottom: currentMode === 'front-desk' ? '2px solid var(--accent)' : '2px solid transparent',
                 }}
               >
-                <Phone className="w-4 h-4" />
+                <Phone className="w-4 h-4" aria-hidden="true" />
                 Front Desk
               </button>
               <button
                 onClick={() => handleModeSwitch('back-office')}
+                role="tab"
+                aria-selected={currentMode === 'back-office'}
                 className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
                 style={{
                   color: currentMode === 'back-office' ? 'var(--accent-soft)' : 'var(--text-muted)',
                   borderBottom: currentMode === 'back-office' ? '2px solid var(--accent)' : '2px solid transparent',
                 }}
               >
-                <Wrench className="w-4 h-4" />
+                <Wrench className="w-4 h-4" aria-hidden="true" />
                 Back Office
               </button>
             </div>
@@ -162,13 +166,15 @@ export function OutlookLayout({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
                   className="flex items-center gap-1.5 px-3 py-3 text-sm font-medium transition-all"
                   style={{
                     color: activeTab === tab.id ? 'var(--accent-soft)' : 'var(--text-secondary)',
                     borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
                   }}
                 >
-                  <Icon className="w-4 h-4" style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
+                  <Icon className="w-4 h-4" aria-hidden="true" style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
                   <span className="hidden sm:inline">{tab.label}</span>
                 </button>
               )

@@ -86,6 +86,13 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - OpenAI API quota needs monitoring — edge functions use GPT-4o-mini for LLM + embeddings
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering
 
+### April 1, 2026 Remaining Bug Fixes
+- BUG-030: `link_orphaned_transcripts()` now called automatically in `dispatcher.handleCallEnded()` after every call
+- BUG-031: `checkAvailability()` now uses `check_availability_with_tz()` RPC for timezone-aware results
+- BUG-032: n8n workflow now generates embeddings (text-embedding-3-small) and stores in `call_summaries.embedding`
+- BUG-038: All edge function queries on soft-deletable tables filter `is_deleted`. `deleteEmployee()` uses soft delete
+- BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
+
 ## Resolved Issues
 ### March 2026 Code Review
 - 58 bugs identified and resolved across Critical/High/Medium/Low severity
@@ -105,7 +112,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,006 backend tests + 313 dashboard tests = 1,319 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,038 backend tests + 332 dashboard tests = 1,370 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining (Phase 13)
 - ~~Supabase support ticket~~ — Resolved 2026-03-30. Project no longer stuck in "pausing" state.

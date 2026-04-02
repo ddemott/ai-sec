@@ -12,11 +12,10 @@ To maintain ultra-low latency in the voice call, all high-latency external tasks
 1.  **Extract Data:** Get the `call_id` and `transcript` from the payload.
 2.  **LLM Call (GPT-4o-mini):**
     -   *Prompt:* "Summarize this call transcript. Extract: Customer Name, Vehicle Info, Issue, and Tone. Be concise."
-3.  **Update Database:**
-    -   Insert into `call_summaries` table.
-4.  **Vector Embedding:**
-    -   Generate embedding for the summary using OpenAI's `text-embedding-3-small`.
-    -   Update the `embedding` column in `call_summaries`.
+3.  **Vector Embedding:**
+    -   Generate embedding for the summary using OpenAI's `text-embedding-3-small` model.
+4.  **Update Database:**
+    -   Insert into `call_summaries` table with `summary`, `tenant_id`, `call_id`, and `embedding` columns populated.
 5.  **Status Update:** Mark call as "Processed" in the database.
 
 ---
