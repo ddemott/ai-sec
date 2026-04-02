@@ -14,7 +14,7 @@
     "build": "tsc -p ."
   },
   "dependencies": {
-    "@fastify/cors": "^8.5.0",
+    "@fastify/cors": "^10.0.2",
     "@fastify/multipart": "^8.3.1",
     "@supabase/supabase-js": "^2.100.1",
     "@types/jsonwebtoken": "^9.0.10",

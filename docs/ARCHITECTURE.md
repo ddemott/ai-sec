@@ -1,7 +1,7 @@
 # SecretaryHQ SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 21 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 20 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
 ---
 
@@ -53,7 +53,7 @@ The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template,
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 21 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 20 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan).
 
 ### 4.0 Middleware Layer
 Shared middleware lives in `src/middleware.ts`:
@@ -71,7 +71,7 @@ Shared middleware lives in `src/middleware.ts`:
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 791 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, calendar-sync, google-calendar, outlook-calendar, provisioning, normalizer, vapi-agent-config, and index suites. 313 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 1,104 total unit tests + 88 live QA assertions. All tests include happy and sad path coverage with 5W diagnostic context.
+- **Coverage**: 1,031 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, scheduling-timezone, voice-ai-fixes, oauth-callback-factory, token-management, available-slots, bugfix-regression (rounds 1-5), calendar-sync, google-calendar, outlook-calendar, square, servicetitan, provisioning, normalizer, vapi-agent-config, and index suites. 313 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 1,344 total unit tests + 88 live QA assertions. All tests include happy and sad path coverage with 5W diagnostic context.
 
 ---
 
@@ -101,6 +101,21 @@ The scheduler ensures valid bookings by verifying multiple layers of constraints
 - **Service Layer**: `src/services/googleCalendar.ts` wraps `googleapis` — OAuth2, token management, Calendar API CRUD.
 - **Security**: State param is a signed JWT (CSRF protection), tokens never exposed to frontend, best-effort revocation on disconnect.
 - **Outlook**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel. `src/services/outlookCalendar.ts`.
+
+## 7b. CRM Integrations (Bidirectional Sync)
+Four CRM integrations with bidirectional sync using timestamp-based merge (most recent `updated_at` wins per record, COALESCE for non-conflicting fields):
+
+| Provider | Client | Sync | Route | API |
+|----------|--------|------|-------|-----|
+| Jobber | `src/services/jobberClient.ts` | `src/services/jobberSync.ts` | `src/routes/jobber.ts` | GraphQL |
+| HubSpot | `src/services/hubspotClient.ts` | `src/services/hubspotSync.ts` | `src/routes/hubspot.ts` | REST v3 |
+| Square | `src/services/squareClient.ts` | `src/services/squareSync.ts` | `src/routes/square.ts` | REST v2 |
+| ServiceTitan | `src/services/servicetitanClient.ts` | `src/services/servicetitanSync.ts` | `src/routes/servicetitan.ts` | REST v2 |
+
+- **Shared infrastructure**: `src/services/oauthCallbackFactory.ts` (generic OAuth callback handler) + `src/services/tokenManagement.ts` (shared token refresh with 5-min buffer) eliminate duplication across all 4 CRM integrations.
+- **Push triggers**: Appointment create/update/delete/cancel + customer create/update/delete fire to all connected integrations.
+- **Pull triggers**: Webhook receivers per provider + periodic full sync endpoints.
+- **DB tables**: `tenant_integration_settings` (OAuth tokens per provider), `entity_sync_map` (local/external ID mapping with timestamps).
 
 ## 8. Async Integration Layer (n8n)
 - **Post-Call Processing**: Generates summaries and sentiment analysis.

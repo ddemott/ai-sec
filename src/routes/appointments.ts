@@ -20,6 +20,19 @@ const AppointmentCreateSchema = z.object({
   employee_id: z.union([z.string(), z.number()]).optional().nullable(),
 });
 
+const AppointmentUpdateSchema = z.object({
+  tenant_id: z.string().uuid(),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
+  description: z.string().max(1000).optional(),
+  location: z.string().max(500).optional().nullable(),
+  resource_id: z.string().uuid().optional(),
+  employee_id: z.union([z.string(), z.number(), z.null()]).optional(),
+  customer_name: z.string().max(200).optional(),
+  customer_phone: z.string().max(30).optional(),
+  customer_notes: z.string().max(2000).optional(),
+});
+
 export function registerAppointmentRoutes(
   app: any,
   pool: Pool,
@@ -41,14 +54,17 @@ export function registerAppointmentRoutes(
       );
     });
     const result = res.rows[0];
+    if (!result) {
+      return reply.status(500).send({ success: false, error: 'Booking RPC returned no result' });
+    }
     if (result.success) {
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
       // Fire-and-forget sync — never blocks the response
-      syncAppointmentToCalendar(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
-      syncAppointmentToJobber(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
-      syncAppointmentToHubSpot(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
-      syncAppointmentToSquare(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
-      syncAppointmentToServiceTitan(pool, body.tenant_id, result.appointment_id, 'create').catch(() => {});
+      syncAppointmentToCalendar(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
+      syncAppointmentToJobber(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
+      syncAppointmentToHubSpot(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
+      syncAppointmentToSquare(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
+      syncAppointmentToServiceTitan(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
       return reply.send({ success: true, appointment_id: result.appointment_id });
     } else {
       return reply.status(400).send({ success: false, error: result.error_message });
@@ -127,14 +143,14 @@ export function registerAppointmentRoutes(
     if (!tenantId) return;
 
     // Sync delete before removing from DB
-    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
 
     await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM appointments WHERE id = $1', [id]);
+      await client.query('DELETE FROM appointments WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     });
 
     logEvent(req, 'appointment_deleted', { appointmentId: id });
@@ -159,78 +175,91 @@ export function registerAppointmentRoutes(
 
     logEvent(req, 'appointment_canceled', { appointmentId: id });
     // Remove from calendars/CRMs — canceled appointments shouldn't block the slot
-    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(() => {});
-    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(() => {});
+    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
     return reply.send({ success: true });
   }, 'Failed to cancel appointment'));
 
   app.post('/appointments/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as {
-      tenant_id: string; start_time: string; end_time: string; description: string;
-      location: string; resource_id: string; employee_id: string | number | null;
-      customer_name: string; customer_phone: string; customer_notes: string;
-    };
+    const parsed = AppointmentUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
+
+    // Cross-check: body.tenant_id must match the authenticated user's tenant (unless super-admin)
+    const authTenantId = req.auth?.tenant_id;
+    if (authTenantId && authTenantId !== SUPER_ADMIN_TENANT_ID && body.tenant_id !== authTenantId) {
+      return reply.status(403).send({ success: false, error: 'tenant_id does not match authenticated tenant' });
+    }
 
     await withTenantClient(body.tenant_id, async (client) => {
-      // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
-      // on the overloaded update_appointment_customer functions
-      const fields: string[] = [];
-      const values: unknown[] = [];
-      let idx = 1;
+      // Wrap in transaction to ensure atomicity
+      await client.query('BEGIN');
+      try {
+        // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
+        // on the overloaded update_appointment_customer functions
+        const fields: string[] = [];
+        const values: unknown[] = [];
+        let idx = 1;
 
-      if (body.start_time) { fields.push(`start_time = $${idx}`); values.push(body.start_time); idx++; }
-      if (body.end_time) { fields.push(`end_time = $${idx}`); values.push(body.end_time); idx++; }
-      if (body.description !== undefined) { fields.push(`description = $${idx}`); values.push(body.description); idx++; }
-      if (body.location !== undefined) { fields.push(`location = $${idx}`); values.push(body.location || null); idx++; }
-      if (body.resource_id) { fields.push(`resource_id = $${idx}`); values.push(body.resource_id); idx++; }
-      if (body.employee_id !== undefined) {
-        fields.push(`employee_id = $${idx}`);
-        values.push(body.employee_id ? body.employee_id.toString() : null);
-        idx++;
-      }
+        if (body.start_time) { fields.push(`start_time = $${idx}`); values.push(body.start_time); idx++; }
+        if (body.end_time) { fields.push(`end_time = $${idx}`); values.push(body.end_time); idx++; }
+        if (body.description !== undefined) { fields.push(`description = $${idx}`); values.push(body.description); idx++; }
+        if (body.location !== undefined) { fields.push(`location = $${idx}`); values.push(body.location || null); idx++; }
+        if (body.resource_id) { fields.push(`resource_id = $${idx}`); values.push(body.resource_id); idx++; }
+        if (body.employee_id !== undefined) {
+          fields.push(`employee_id = $${idx}`);
+          values.push(body.employee_id ? body.employee_id.toString() : null);
+          idx++;
+        }
 
-      if (fields.length === 0) {
-        return { rows: [{ success: true }] };
-      }
+        if (fields.length > 0) {
+          values.push(id); // WHERE id = $N
+          values.push(body.tenant_id); // AND tenant_id = $N+1
+          await client.query(
+            `UPDATE appointments SET ${fields.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
+            values
+          );
+        }
 
-      values.push(id); // WHERE id = $N
-      values.push(body.tenant_id); // AND tenant_id = $N+1
-      await client.query(
-        `UPDATE appointments SET ${fields.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
-        values
-      );
-
-      // Update customer info if provided
-      if (body.customer_name || body.customer_phone || body.customer_notes) {
-        const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1', [id]);
-        if (appt.rows[0]?.customer_id) {
-          const custFields: string[] = [];
-          const custValues: unknown[] = [];
-          let ci = 1;
-          if (body.customer_name) { custFields.push(`name = $${ci}`); custValues.push(body.customer_name); ci++; }
-          if (body.customer_phone) { custFields.push(`phone = $${ci}`); custValues.push(body.customer_phone); ci++; }
-          if (body.customer_notes !== undefined) { custFields.push(`metadata = jsonb_set(COALESCE(metadata, '{}'), '{notes}', $${ci}::jsonb)`); custValues.push(JSON.stringify(body.customer_notes)); ci++; }
-          if (custFields.length > 0) {
-            custValues.push(appt.rows[0].customer_id);
-            await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE id = $${ci}`, custValues);
+        // Update customer info if provided
+        if (body.customer_name || body.customer_phone || body.customer_notes) {
+          const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1', [id]);
+          if (appt.rows[0]?.customer_id) {
+            const custFields: string[] = [];
+            const custValues: unknown[] = [];
+            let ci = 1;
+            if (body.customer_name) { custFields.push(`name = $${ci}`); custValues.push(body.customer_name); ci++; }
+            if (body.customer_phone) { custFields.push(`phone = $${ci}`); custValues.push(body.customer_phone); ci++; }
+            if (body.customer_notes !== undefined) { custFields.push(`metadata = jsonb_set(COALESCE(metadata, '{}'), '{notes}', $${ci}::jsonb)`); custValues.push(JSON.stringify(body.customer_notes)); ci++; }
+            if (custFields.length > 0) {
+              custValues.push(appt.rows[0].customer_id);
+              custValues.push(body.tenant_id);
+              await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE id = $${ci} AND tenant_id = $${ci + 1}`, custValues);
+            }
           }
         }
-      }
 
-      return { rows: [{ success: true }] };
+        await client.query('COMMIT');
+        return { rows: [{ success: true }] };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
     });
 
     logEvent(req, 'appointment_updated', { appointmentId: id });
     // Sync update to calendars/CRMs
-    syncAppointmentToCalendar(pool, body.tenant_id, id, 'update').catch(() => {});
-    syncAppointmentToJobber(pool, body.tenant_id, id, 'update').catch(() => {});
-    syncAppointmentToHubSpot(pool, body.tenant_id, id, 'update').catch(() => {});
-    syncAppointmentToSquare(pool, body.tenant_id, id, 'update').catch(() => {});
-    syncAppointmentToServiceTitan(pool, body.tenant_id, id, 'update').catch(() => {});
+    syncAppointmentToCalendar(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToJobber(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToHubSpot(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToSquare(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToServiceTitan(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
     return reply.send({ success: true });
   }, 'Failed to update appointment'));
 }

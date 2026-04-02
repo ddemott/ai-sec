@@ -1,6 +1,12 @@
 import type { Pool } from 'pg';
+import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
 import { VapiClient } from '../services/vapiClient';
+
+const ActivateSchema = z.object({
+  tenant_id: z.string().uuid(),
+  area_code: z.string().regex(/^\d{3}$/).optional(),
+});
 
 export function registerProvisioningRoutes(
   app: any,
@@ -14,10 +20,11 @@ export function registerProvisioningRoutes(
       return reply.status(503).send({ success: false, error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
     }
 
-    const { tenant_id, area_code } = req.body as { tenant_id: string; area_code?: string };
-    if (!tenant_id) {
-      return reply.status(400).send({ success: false, error: 'tenant_id is required' });
+    const parsed = ActivateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
+    const { tenant_id, area_code } = parsed.data;
 
     const client = await pool.connect();
     try {
@@ -149,10 +156,11 @@ export function registerProvisioningRoutes(
       return reply.status(503).send({ success: false, error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
     }
 
-    const { tenant_id } = req.body as { tenant_id: string };
-    if (!tenant_id) {
-      return reply.status(400).send({ success: false, error: 'tenant_id is required' });
+    const deactiveParsed = z.object({ tenant_id: z.string().uuid() }).safeParse(req.body);
+    if (!deactiveParsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: deactiveParsed.error.issues });
     }
+    const { tenant_id } = deactiveParsed.data;
 
     const client = await pool.connect();
     try {

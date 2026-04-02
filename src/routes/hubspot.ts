@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as hubspotClient from '../services/hubspotClient';
 import * as hubspotSync from '../services/hubspotSync';
+import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerHubSpotRoutes(
   app: any,
@@ -30,48 +31,11 @@ export function registerHubSpotRoutes(
   }, 'Failed to initiate HubSpot auth'));
 
   // --- HubSpot OAuth: Callback ---
-  app.get('/hubspot/auth/callback', async (req: any, reply: any) => {
-    const { code, state, error: oauthError } = req.query as Record<string, string>;
-    const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
-
-    if (oauthError) {
-      return reply.redirect(`${dashboardUrl}/dashboard?hubspotError=${encodeURIComponent(oauthError)}`);
-    }
-
-    if (!code || !state) {
-      return reply.redirect(`${dashboardUrl}/dashboard?hubspotError=missing_params`);
-    }
-
-    const tenantId = hubspotClient.verifyState(state);
-    if (!tenantId) {
-      return reply.redirect(`${dashboardUrl}/dashboard?hubspotError=invalid_state`);
-    }
-
-    try {
-      const tokens = await hubspotClient.exchangeCodeForTokens(code);
-
-      const client = await pool.connect();
-      try {
-        await client.query(
-          `INSERT INTO tenant_integration_settings
-             (tenant_id, provider, access_token, refresh_token, token_expires_at, is_active)
-           VALUES ($1, 'hubspot', $2, $3, $4, true)
-           ON CONFLICT (tenant_id, provider) DO UPDATE SET
-             access_token = $2, refresh_token = $3, token_expires_at = $4,
-             is_active = true, updated_at = NOW()`,
-          [tenantId, tokens.access_token, tokens.refresh_token, new Date(tokens.expiry_date).toISOString()]
-        );
-      } finally {
-        client.release();
-      }
-
-      app.log.info({ event: 'hubspot_oauth_complete', tenantId }, 'HubSpot connected');
-      return reply.redirect(`${dashboardUrl}/dashboard?hubspotConnected=true`);
-    } catch (err) {
-      app.log.error({ event: 'hubspot_oauth_failed', tenantId, error: (err as Error).message }, 'HubSpot OAuth failed');
-      return reply.redirect(`${dashboardUrl}/dashboard?hubspotError=token_exchange_failed`);
-    }
-  });
+  app.get('/hubspot/auth/callback', createOAuthCallbackHandler(pool, app, {
+    provider: 'hubspot',
+    verifyState: hubspotClient.verifyState,
+    exchangeCodeForTokens: hubspotClient.exchangeCodeForTokens,
+  }));
 
   // --- Get HubSpot settings (strip tokens) ---
   app.get('/hubspot/settings', withHandler(async (req: AppRequest, reply) => {
@@ -119,9 +83,14 @@ export function registerHubSpotRoutes(
     }
 
     // Check timestamp freshness (5 min window)
-    const requestAge = Date.now() - Number(timestamp);
-    if (requestAge > 5 * 60 * 1000) {
-      return reply.status(401).send({ success: false, error: 'Request timestamp too old (replay protection)' });
+    const timestampMs = Number(timestamp);
+    if (!Number.isFinite(timestampMs) || timestampMs <= 0) {
+      return reply.status(400).send({ success: false, error: 'Invalid or missing timestamp header' });
+    }
+    const requestAge = Date.now() - timestampMs;
+    if (requestAge > 5 * 60 * 1000 || requestAge < -30_000) {
+      // Reject requests older than 5 minutes or more than 30s in the future (clock skew tolerance)
+      return reply.status(401).send({ success: false, error: 'Request timestamp too old or too far in the future (replay protection)' });
     }
 
     const config = {

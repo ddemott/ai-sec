@@ -16,10 +16,7 @@ import AppointmentView from './AppointmentView';
 
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
 
-interface SchedulerViewProps {
-}
-
-export default function SchedulerView({}: SchedulerViewProps) {
+export default function SchedulerView() {
   const tenantId = useActiveTenantId();
   const vocab = useVocabulary();
 

@@ -5,7 +5,7 @@ import { withHandler, logEvent, requireTenantId, type AppRequest } from '../midd
 
 const CreateShiftSchema = z.object({
   tenant_id: z.string().uuid(),
-  employee_id: z.string().or(z.number()),
+  employee_id: z.string().uuid(),
   day_of_week: z.number().int().min(0).max(6),
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
@@ -82,9 +82,13 @@ export function registerShiftRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query('DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
     });
+
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ success: false, error: 'Shift not found' });
+    }
 
     logEvent(req, 'shift_deleted', { shiftId: id });
     return reply.send({ success: true });

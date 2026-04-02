@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as servicetitanClient from '../services/servicetitanClient';
 import * as servicetitanSync from '../services/servicetitanSync';
+import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerServiceTitanRoutes(
   app: any,
@@ -30,48 +31,12 @@ export function registerServiceTitanRoutes(
   }, 'Failed to initiate ServiceTitan auth'));
 
   // --- ServiceTitan OAuth: Callback ---
-  app.get('/servicetitan/auth/callback', async (req: any, reply: any) => {
-    const { code, state, error: oauthError, tenant_sid } = req.query as Record<string, string>;
-    const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
-
-    if (oauthError) {
-      return reply.redirect(`${dashboardUrl}/dashboard?servicetitanError=${encodeURIComponent(oauthError)}`);
-    }
-
-    if (!code || !state) {
-      return reply.redirect(`${dashboardUrl}/dashboard?servicetitanError=missing_params`);
-    }
-
-    const tenantId = servicetitanClient.verifyState(state);
-    if (!tenantId) {
-      return reply.redirect(`${dashboardUrl}/dashboard?servicetitanError=invalid_state`);
-    }
-
-    try {
-      const tokens = await servicetitanClient.exchangeCodeForTokens(code);
-
-      const client = await pool.connect();
-      try {
-        await client.query(
-          `INSERT INTO tenant_integration_settings
-             (tenant_id, provider, access_token, refresh_token, token_expires_at, is_active, settings)
-           VALUES ($1, 'servicetitan', $2, $3, $4, true, $5)
-           ON CONFLICT (tenant_id, provider) DO UPDATE SET
-             access_token = $2, refresh_token = $3, token_expires_at = $4,
-             is_active = true, settings = COALESCE($5, tenant_integration_settings.settings), updated_at = NOW()`,
-          [tenantId, tokens.access_token, tokens.refresh_token, new Date(tokens.expiry_date).toISOString(), JSON.stringify({ tenant_sid: tenant_sid || null })]
-        );
-      } finally {
-        client.release();
-      }
-
-      app.log.info({ event: 'servicetitan_oauth_complete', tenantId }, 'ServiceTitan connected');
-      return reply.redirect(`${dashboardUrl}/dashboard?servicetitanConnected=true`);
-    } catch (err) {
-      app.log.error({ event: 'servicetitan_oauth_failed', tenantId, error: (err as Error).message }, 'ServiceTitan OAuth failed');
-      return reply.redirect(`${dashboardUrl}/dashboard?servicetitanError=token_exchange_failed`);
-    }
-  });
+  app.get('/servicetitan/auth/callback', createOAuthCallbackHandler(pool, app, {
+    provider: 'servicetitan',
+    verifyState: servicetitanClient.verifyState,
+    exchangeCodeForTokens: servicetitanClient.exchangeCodeForTokens,
+    buildExtraSettings: (query) => ({ tenant_sid: query.tenant_sid || null }),
+  }));
 
   // --- Get ServiceTitan settings (strip tokens) ---
   app.get('/servicetitan/settings', withHandler(async (req: AppRequest, reply) => {
@@ -108,10 +73,20 @@ export function registerServiceTitanRoutes(
     return reply.send({ success: true });
   }, 'Failed to disconnect ServiceTitan'));
 
-  // --- ServiceTitan webhook receiver (no signature verification — uses IP allowlisting) ---
+  // --- ServiceTitan webhook receiver ---
   app.post('/servicetitan/webhook', async (req: any, reply: any) => {
-    // ServiceTitan uses IP allowlisting instead of signature verification
-    // Accept the payload directly
+    // Verify shared webhook secret (set in ServiceTitan webhook config and SERVICETITAN_WEBHOOK_SECRET env var)
+    const webhookSecret = process.env.SERVICETITAN_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const providedSecret = req.headers['x-servicetitan-webhook-secret'] || req.headers['authorization'];
+      if (!providedSecret || providedSecret.replace('Bearer ', '') !== webhookSecret) {
+        app.log.warn({ event: 'servicetitan_webhook_auth_failed' }, 'ServiceTitan webhook authentication failed');
+        return reply.status(401).send({ success: false, error: 'Unauthorized' });
+      }
+    } else {
+      app.log.warn({ event: 'servicetitan_webhook_no_secret' }, 'SERVICETITAN_WEBHOOK_SECRET not set — webhook authentication disabled');
+    }
+
     const events = Array.isArray(req.body) ? req.body : [req.body];
 
     // Respond immediately

@@ -130,19 +130,42 @@ export function requireTenantId(req: AppRequest, reply: FastifyReply): string | 
   return tenantId;
 }
 
+/**
+ * Guards admin-only routes: returns true if the user is authenticated,
+ * or sends a 401 and returns false.
+ */
+export function requireAuth(req: AppRequest, reply: FastifyReply): boolean {
+  if (!req.auth) {
+    reply.status(401).send({ success: false, error: 'Authentication required' });
+    return false;
+  }
+  return true;
+}
+
 // ── Tenant ID Middleware (Chain of Responsibility) ────────────────────
 
 /** Routes that don't require a tenant_id */
 const TENANT_EXEMPT_ROUTES = [
   '/health', '/login', '/register', '/',
   '/billing/webhook',
+  // OAuth callbacks (redirects from external providers)
   '/calendar/auth/google/callback',
+  '/calendar/auth/outlook/callback',
+  '/hubspot/auth/callback',
+  '/jobber/auth/callback',
+  '/square/auth/callback',
+  '/servicetitan/auth/callback',
+  // CRM webhooks (authenticated via HMAC/signature, not JWT)
+  '/hubspot/webhook',
+  '/square/webhook',
+  '/servicetitan/webhook',
   '/tenants', '/templates', '/templates/full', '/templates/create',
 ];
 
 function isTenantExempt(url: string): boolean {
   const path = url.split('?')[0];
-  return TENANT_EXEMPT_ROUTES.some(r => path === r || path.startsWith('/tenants/'));
+  return TENANT_EXEMPT_ROUTES.some(r => path === r || path.startsWith('/tenants/'))
+    || path.startsWith('/jobber/webhook/'); // Jobber webhook uses tenantId in URL path
 }
 
 /**

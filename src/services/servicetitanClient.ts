@@ -4,6 +4,7 @@ const AUTHORIZE_URL = 'https://auth.servicetitan.io/connect/authorize';
 const TOKEN_URL = 'https://auth.servicetitan.io/connect/token';
 const API_BASE = 'https://api.servicetitan.io';
 const SCOPES = 'customers jobs';
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface TokenSet {
   access_token: string;
@@ -121,6 +122,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`ServiceTitan OAuth code exchange failed: network error reaching ServiceTitan token endpoint — ${networkErr.message}`);
@@ -161,6 +163,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`ServiceTitan token refresh failed: network error — ${networkErr.message}`);
@@ -200,6 +203,7 @@ export async function apiRequest<T = any>(
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`ServiceTitan API ${method} ${path} failed: network error — ${networkErr.message}`);

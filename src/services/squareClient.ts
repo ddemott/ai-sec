@@ -6,6 +6,7 @@ const TOKEN_URL = 'https://connect.squareup.com/oauth2/token';
 const API_BASE = 'https://connect.squareup.com/v2';
 const SCOPES = 'CUSTOMERS_READ CUSTOMERS_WRITE APPOINTMENTS_READ APPOINTMENTS_WRITE';
 const SQUARE_VERSION = '2024-01-18';
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface TokenSet {
   access_token: string;
@@ -119,6 +120,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Square OAuth code exchange failed: network error reaching Square token endpoint — ${networkErr.message}`);
@@ -164,6 +166,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Square token refresh failed: network error — ${networkErr.message}`);
@@ -206,6 +209,7 @@ export async function apiRequest<T = any>(
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Square API ${method} ${path} failed: network error — ${networkErr.message}`);

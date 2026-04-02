@@ -1,18 +1,13 @@
 import type { Pool } from 'pg';
 import * as servicetitan from './servicetitanClient';
-
-interface SyncLogger {
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-  info: (msg: string) => void;
-}
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
 
 function ctx(tenantId: string, entityType: string, action: string) {
-  return `[servicetitan-sync] tenant=${tenantId} entity=${entityType} action=${action}`;
+  return syncCtx('servicetitan', tenantId, entityType, action);
 }
 
 // -----------------------------------------------------------------------
-// Token management
+// Token management (delegates to shared tokenManagement.ts, with extra fields)
 // -----------------------------------------------------------------------
 
 export async function getTokensWithRefresh(
@@ -20,67 +15,27 @@ export async function getTokensWithRefresh(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ accessToken: string; refreshToken: string; appKey: string; tenantSid: string } | null> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
-  const client = await pool.connect();
-  try {
-    const res = await client.query(
-      `SELECT access_token, refresh_token, token_expires_at, is_active, settings
-       FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'servicetitan'`,
-      [tenantId]
-    );
+  const log = logger || { warn: console.warn, error: console.error, info: console.info };
 
-    const settings = res.rows[0];
-    if (!settings) return null;
-    if (!settings.is_active) {
-      log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: integration inactive (user needs to reconnect)`);
-      return null;
-    }
-    if (!settings.access_token || !settings.refresh_token) {
-      log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: missing tokens`);
-      return null;
-    }
-
-    const appKey = process.env.SERVICETITAN_APP_KEY;
-    if (!appKey) {
-      log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: SERVICETITAN_APP_KEY not set`);
-      return null;
-    }
-
-    const tenantSid = settings.settings?.tenant_sid;
-    if (!tenantSid) {
-      log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: tenant_sid not found in settings`);
-      return null;
-    }
-
-    let accessToken = settings.access_token;
-    const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
-
-    // ServiceTitan tokens expire in ~1 hour — refresh if within 5 min buffer
-    if (Date.now() > expiresAt - 5 * 60 * 1000) {
-      try {
-        const refreshed = await servicetitan.refreshAccessToken(settings.refresh_token);
-        accessToken = refreshed.access_token;
-        await client.query(
-          `UPDATE tenant_integration_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
-           WHERE tenant_id = $3 AND provider = 'servicetitan'`,
-          [refreshed.access_token, new Date(refreshed.expiry_date).toISOString(), tenantId]
-        );
-        log.info(`[servicetitan-sync] tenant=${tenantId} — token refreshed`);
-      } catch (err) {
-        await client.query(
-          `UPDATE tenant_integration_settings SET is_active = false, updated_at = NOW()
-           WHERE tenant_id = $1 AND provider = 'servicetitan'`,
-          [tenantId]
-        );
-        log.error(`[servicetitan-sync] tenant=${tenantId} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ServiceTitan OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${err})`);
-        return null;
-      }
-    }
-
-    return { accessToken, refreshToken: settings.refresh_token, appKey, tenantSid };
-  } finally {
-    client.release();
+  const appKey = process.env.SERVICETITAN_APP_KEY;
+  if (!appKey) {
+    log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: SERVICETITAN_APP_KEY not set`);
+    return null;
   }
+
+  const result = await getIntegrationTokens(
+    pool, tenantId, 'servicetitan', servicetitan.refreshAccessToken,
+    TOKEN_BUFFER_MS.STANDARD, logger, 'settings'
+  );
+  if (!result) return null;
+
+  const tenantSid = result.settings?.tenant_sid;
+  if (!tenantSid) {
+    log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: tenant_sid not found in settings`);
+    return null;
+  }
+
+  return { accessToken: result.accessToken, refreshToken: result.refreshToken, appKey, tenantSid };
 }
 
 // -----------------------------------------------------------------------

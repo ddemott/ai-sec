@@ -268,6 +268,86 @@ export class AISecretaryService {
    * Layer 1: Database facts — returns the service catalog for a tenant.
    * No RAG, no hallucination possible. The AI reads these details to callers.
    */
+  /**
+   * Returns available time slots for a specific service on a given date.
+   * Includes service duration/price and human-readable open windows.
+   * The AI uses this to proactively tell callers when they can come in.
+   */
+  async getAvailableSlots(tenantId: string, serviceType: string, date: string, logger: Logger) {
+    logger.info({ tenantId, serviceType, date }, "Computing available slots");
+
+    const data = await this.repo.getAvailableSlots(tenantId, serviceType, date, logger);
+
+    // Format the date for spoken output (e.g., "Wednesday, April 2nd")
+    const dateObj = new Date(date + "T12:00:00");
+    const dayName = dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+    if (!data.service) {
+      logger.warn({ serviceType }, "Service not found in catalog");
+      return { result: `I couldn't find a service matching "${serviceType}" in our catalog. Would you like to hear our list of services?` };
+    }
+
+    const { name: serviceName, duration_minutes, price } = data.service;
+    const serviceInfo = price && Number(price) > 0
+      ? `${serviceName} takes about ${duration_minutes} minutes and costs $${Number(price).toFixed(0)}.`
+      : `${serviceName} takes about ${duration_minutes} minutes.`;
+
+    if (data.shifts.length === 0) {
+      logger.info({ date, dayName }, "No shifts scheduled for this day");
+      return { result: `${serviceInfo} Unfortunately, we don't have anyone scheduled to work on ${dayName}. Would you like to try a different day?` };
+    }
+
+    // Merge overlapping shifts into coverage windows
+    const coverage = mergeIntervals(data.shifts.map(s => ({
+      start: timeToMinutes(s.start_time),
+      end: timeToMinutes(s.end_time),
+    })));
+
+    // Subtract existing appointments
+    const booked = data.appointments.map(a => ({
+      start: dateTimeToMinutes(a.start_time),
+      end: dateTimeToMinutes(a.end_time),
+    }));
+    const open = subtractIntervals(coverage, booked);
+
+    // Filter to slots that can fit the service duration
+    const usable = open.filter(slot => (slot.end - slot.start) >= duration_minutes);
+
+    // Check if requested date is today — filter out past times
+    const now = new Date();
+    const isToday = date === now.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+    const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
+    const futureSlots = isToday
+      ? usable.filter(s => s.end > currentMinutes).map(s => ({
+          start: Math.max(s.start, currentMinutes),
+          end: s.end,
+        })).filter(s => (s.end - s.start) >= duration_minutes)
+      : usable;
+
+    if (futureSlots.length === 0) {
+      logger.info({ date }, "No available slots after filtering");
+      return { result: `${serviceInfo} Unfortunately, we're fully booked on ${dayName}. Would you like to try a different day?` };
+    }
+
+    // Format slots for speech
+    const slotStrings = futureSlots.map(s => {
+      if (s.start === coverage[0]?.start && s.end === coverage[coverage.length - 1]?.end) {
+        return `all day from ${minutesToTime(s.start)} to ${minutesToTime(s.end)}`;
+      }
+      return `${minutesToTime(s.start)} to ${minutesToTime(s.end)}`;
+    });
+
+    const openHours = `${minutesToTime(coverage[0].start)} to ${minutesToTime(coverage[coverage.length - 1].end)}`;
+    const slotsText = slotStrings.length === 1
+      ? slotStrings[0]
+      : slotStrings.slice(0, -1).join(", ") + ", and " + slotStrings[slotStrings.length - 1];
+
+    logger.info({ slotCount: futureSlots.length, serviceName }, "Available slots computed");
+    return {
+      result: `${serviceInfo} On ${dayName}, our hours are ${openHours}. We have openings ${slotsText}. What time works best for you?`
+    };
+  }
+
   async getServiceCatalog(tenantId: string, logger: Logger) {
     logger.info({ tenantId }, "Fetching service catalog");
     const services = await this.repo.getServiceCatalog(tenantId, logger);
@@ -285,4 +365,65 @@ export class AISecretaryService {
     logger.info({ serviceCount: services.length }, "Service catalog returned");
     return { result: formatted };
   }
+}
+
+// ── Interval math helpers for slot computation ───────────────────────
+
+interface Interval { start: number; end: number }
+
+/** Convert "HH:MM" or "HH:MM:SS" time string to minutes since midnight */
+function timeToMinutes(t: string): number {
+  const parts = t.split(":");
+  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+}
+
+/** Convert ISO datetime string to minutes since midnight (in local date context) */
+function dateTimeToMinutes(dt: string): number {
+  const d = new Date(dt);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** Convert minutes since midnight to spoken time (e.g., 780 → "1:00 PM") */
+function minutesToTime(m: number): string {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return min === 0 ? `${hour12} ${period}` : `${hour12}:${String(min).padStart(2, "0")} ${period}`;
+}
+
+/** Merge overlapping/adjacent intervals into non-overlapping coverage blocks */
+function mergeIntervals(intervals: Interval[]): Interval[] {
+  if (intervals.length === 0) return [];
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  const merged: Interval[] = [{ ...sorted[0] }];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    if (sorted[i].start <= last.end) {
+      last.end = Math.max(last.end, sorted[i].end);
+    } else {
+      merged.push({ ...sorted[i] });
+    }
+  }
+  return merged;
+}
+
+/** Subtract booked intervals from coverage, returning remaining open windows */
+function subtractIntervals(coverage: Interval[], booked: Interval[]): Interval[] {
+  let open = [...coverage.map(c => ({ ...c }))];
+  for (const b of booked) {
+    const next: Interval[] = [];
+    for (const o of open) {
+      if (b.end <= o.start || b.start >= o.end) {
+        // No overlap
+        next.push(o);
+      } else {
+        // Overlap — split
+        if (b.start > o.start) next.push({ start: o.start, end: b.start });
+        if (b.end < o.end) next.push({ start: b.end, end: o.end });
+      }
+    }
+    open = next;
+  }
+  return open;
 }

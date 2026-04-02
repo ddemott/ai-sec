@@ -1,6 +1,8 @@
 # Bugs & Issues
 
-Found during full code review on March 16, 2026.
+Found during full code review on March 16, 2026. Updated April 1, 2026 with voice AI fixes and audit of all outstanding bugs.
+
+**Summary**: 64 bugs tracked. 57 FIXED, 2 NOT A BUG, 4 PARTIAL, 1 OPEN.
 
 ---
 
@@ -125,30 +127,35 @@ Found during full code review on March 16, 2026.
 - **Problem**: Services and employees use SERIAL (INTEGER), resources and users use UUID.
 - **Impact**: Inconsistent API patterns, confusing joins, forces polymorphic parsing (BUG-014).
 - **Fix**: Standardize on UUID for all primary keys (breaking change, plan carefully).
+- **Status**: FIXED — `supabase/migrations/20260316500000_id_standardization.sql` migrated services and employees from SERIAL to UUID. Added new UUID columns, migrated all foreign keys (service_employee, service_resource, employee_shifts, appointments), dropped old SERIAL columns, re-established constraints. All entity IDs are now UUID.
 
 ### BUG-016: Scheduling logic duplicated between Node and Deno
 - **Files**: `src/core/scheduling.ts`, `supabase/functions/vapi-tools/core/scheduling.ts`
 - **Problem**: `selectAssignments()` exists in both codebases with different shift-checking implementations.
 - **Impact**: Bug fixes in one don't propagate to the other; behavior can diverge.
 - **Fix**: Consolidate into a shared module or ensure Fastify delegates to the Deno/Postgres path.
+- **Status**: FIXED — Canonical implementation moved to `shared/scheduling.ts`. Deno edge function (`supabase/functions/vapi-tools/core/scheduling.ts`) now re-exports from shared. Old `src/core/scheduling.ts` removed. Additionally, `book_with_scheduling_atomic()` SQL function handles the atomic booking path entirely in PostgreSQL, making JS duplication moot for the main booking flow.
 
 ### BUG-017: Fastify index.ts is an 800+ line monolith
 - **File**: `src/index.ts`
 - **Problem**: All routes, auth, CRUD, booking, analytics, knowledge ingestion in one file. No route modules, no middleware extraction.
 - **Impact**: Hard to maintain, test, and review.
 - **Fix**: Extract route groups into separate modules (routes/appointments.ts, routes/customers.ts, etc.).
+- **Status**: FIXED — `src/index.ts` reduced from 800+ to 319 lines (bootstrap only). All route handlers extracted into 20 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan). Shared middleware extracted to `src/middleware.ts`.
 
 ### BUG-018: BookingService exists but is unused
 - **Files**: `src/services/bookingService.ts`, `src/index.ts`
 - **Problem**: A clean BookingService class was written but Fastify endpoints duplicate the logic inline instead of using it.
 - **Impact**: Wasted abstraction; booking logic is scattered and inconsistent.
 - **Fix**: Wire endpoints to use BookingService, or remove the dead code.
+- **Status**: FIXED — `src/services/bookingService.ts` deleted. Booking logic handled by `book_appointment_atomic()` and `book_with_scheduling_atomic()` PostgreSQL RPCs called directly from route handlers. Removed in commit `86b2871`.
 
 ### BUG-019: Provider pattern wired but never used
 - **Files**: `src/index.ts`, `src/providers/`, `src/core/providers.ts`
 - **Problem**: TelephonyProvider, NotificationProvider, LlmProvider are instantiated but no endpoint ever calls them.
 - **Impact**: Dead code that suggests features that don't work.
 - **Fix**: Wire them into the booking flow or remove.
+- **Status**: FIXED — `src/providers/` directory, `src/core/providers.ts`, and all provider implementations deleted. No references remain in codebase. Removed in commit `86b2871`.
 
 ### BUG-020: No pagination on list endpoints
 - **Files**: `dashboard/lib/api.ts`, `src/index.ts`
@@ -183,6 +190,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: Same OpenAI embedding API call implemented twice with slight differences.
 - **Impact**: Maintenance burden; risk of divergent behavior.
 - **Fix**: Extract to shared utility or accept the duplication given different runtimes (Node vs Deno).
+- **Status**: FIXED — Canonical implementation in `shared/getEmbedding.ts` with `createGetEmbedding()` factory. Both Node backend (`src/index.ts` line 31) and Deno edge function (`supabase/functions/vapi-tools/index.ts` line 7) import from shared. Minor: `scripts/ingest-knowledge.ts` still has its own inline copy (low priority — CLI tool only).
 
 ### BUG-025: Silent mock data fallback in AppointmentView
 - **File**: `dashboard/components/AppointmentView.tsx:160-164`
@@ -232,18 +240,21 @@ Found during full code review on March 16, 2026.
 - **Problem**: `customer_id` on `call_transcripts` is nullable with `ON DELETE SET NULL`. If customer lookup fails during a call, the transcript is stored with no customer link.
 - **Impact**: Orphaned transcripts can't be associated with customers later.
 - **Fix**: Add a background job to re-link orphaned transcripts by matching phone/call_id.
+- **Status**: PARTIAL — `link_orphaned_transcripts()` SQL function exists in `supabase/migrations/20260316400000_audit_and_soft_deletes.sql` (joins transcripts to appointments by `call_id` to find the customer). However, no background job, endpoint, or cron calls this function — it is currently dead code. Needs a scheduled trigger or admin endpoint to invoke it.
 
 ### BUG-031: Customer timezone not respected in availability checks
 - **Files**: `supabase/functions/vapi-tools/core/service.ts`, `supabase/functions/vapi-tools/db/repository.ts`
 - **Problem**: Availability checks don't convert time windows to the customer's timezone. A customer in Pacific time asking for "9 AM" gets UTC 9 AM.
 - **Impact**: Appointments booked at wrong times for customers in non-UTC timezones.
 - **Fix**: Accept timezone in availability requests and convert before querying.
+- **Status**: PARTIAL — Tenant timezone is now used for shift validation (BUG-059 fix). A `check_availability_with_tz()` SQL function exists in `supabase/migrations/20260316600000_customer_tz_and_n8n.sql` accepting `p_customer_tz`. However, the edge function `checkAvailability()` in `service.ts` still calls the basic `checkOverlap()` without fetching or passing customer timezone. The timezone-aware SQL function is available but not wired into the availability check flow.
 
 ### BUG-032: call_summaries.embedding likely always NULL
 - **Files**: `supabase/migrations/20260228000001_webhooks_and_logs.sql`, `n8n/post_call_summarizer.json`
 - **Problem**: The n8n post-call summarizer generates a text summary but doesn't call the OpenAI embeddings API to populate the `embedding` vector column.
 - **Impact**: Semantic search over call summaries will return no results.
 - **Fix**: Add an embedding generation step to the n8n workflow after summarization.
+- **Status**: OPEN — Confirmed unfixed. The n8n workflow inserts `summary, tenant_id, customer_id, call_id` but never generates or stores an embedding. No code path in the entire codebase populates `call_summaries.embedding`. Semantic search over call history will not work until this is addressed.
 
 ### BUG-033: Calendar sync Outlook branch is empty, no token refresh
 - **Files**: `n8n/calendar_sync.json`, `supabase/migrations/20260312000004_calendar_sync_schema.sql`
@@ -257,6 +268,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: The trigger function only does `RAISE NOTICE` — it doesn't actually call the n8n webhook.
 - **Impact**: No async workflows fire on appointment creation (no summaries, no calendar sync, no SMS).
 - **Fix**: Implement the HTTP call via `pg_net` extension, or rely on Supabase Database Webhooks instead.
+- **Status**: FIXED — Migration `supabase/migrations/20260316600000_customer_tz_and_n8n.sql` replaces the placeholder with a real implementation using `pg_net` extension. Looks up tenant's `n8n_webhook_url`, builds JSON payload, sends HTTP POST via `net.http_post()`. Falls back to `RAISE NOTICE` on local dev where `pg_net` isn't available.
 
 ### BUG-035: Promise.all in useStaticData — one failure kills all fetches
 - **File**: `dashboard/lib/hooks.ts`
@@ -277,18 +289,21 @@ Found during full code review on March 16, 2026.
 - **Problem**: No audit trail for who created, modified, or deleted records. No `updated_by`, `created_by`, or change history table.
 - **Impact**: No accountability; impossible to investigate data issues or unauthorized changes.
 - **Fix**: Add audit trigger functions or an `audit_log` table with before/after snapshots.
+- **Status**: FIXED — `supabase/migrations/20260316400000_audit_and_soft_deletes.sql` creates `audit_log` table (id, tenant_id, table_name, record_id, action, old_data JSONB, new_data JSONB, changed_by, created_at) with indexes and RLS. `fn_audit_trigger()` fires on INSERT/UPDATE/DELETE on appointments, customers, and resources. Migration `20260319000003_audit_log_cascade_delete.sql` fixes cascade-delete edge case where audit triggers fail when parent tenant is deleted.
 
 ### BUG-038: No soft deletes on core tables
 - **Files**: All migration files
 - **Problem**: DELETE operations are hard deletes with cascading. Deleting a tenant cascades to all their data.
 - **Impact**: Accidental deletion is irreversible. No way to recover or "undo".
 - **Fix**: Add `is_deleted BOOLEAN DEFAULT FALSE` and `deleted_at TIMESTAMPTZ` columns; filter in queries.
+- **Status**: PARTIAL — Schema complete: `supabase/migrations/20260316400000_audit_and_soft_deletes.sql` adds `is_deleted` and `deleted_at` columns to appointments, customers, resources, and employees with partial indexes (`idx_*_active` on `is_deleted = false`). However, only 2 of 20 route files (`employees.ts`, `analytics.ts`) filter by `is_deleted = false`. Most queries still return soft-deleted records. Needs `WHERE is_deleted = false` added to remaining route queries.
 
 ### BUG-039: No accessibility — ARIA labels missing throughout dashboard
 - **Files**: All dashboard view components
 - **Problem**: Interactive elements (buttons, modals, form inputs, navigation) lack `aria-label`, `aria-describedby`, `role`, and other ARIA attributes.
 - **Impact**: Screen readers can't navigate the app; fails WCAG compliance.
 - **Fix**: Add ARIA attributes to all interactive elements, especially modals, navigation, and form controls.
+- **Status**: PARTIAL — Core UI primitives have ARIA support: Modal (`aria-modal`, `aria-labelledby`), Button (`aria-busy`), Input/Select (`aria-invalid`, `aria-describedby`). Scheduler components (5 files) and a handful of views also have `aria-label` attributes. However, only 22 of 81 dashboard components have any ARIA attributes. Most forms, data regions, and interactive areas still lack semantic labeling. Approximately 73% of components need ARIA additions.
 
 ---
 
@@ -366,6 +381,7 @@ Found during full code review on March 16, 2026.
 - **Problem**: The system prompt contains a hardcoded tenant ID and a static "today's date" string rather than being dynamically generated.
 - **Impact**: Agent config only works for one tenant (DynaTire) and the date becomes stale immediately.
 - **Fix**: Use `agent.template.json` with placeholder substitution at deploy time, or inject via Vapi's server URL dynamic config.
+- **Status**: FIXED — `vapi/agent.template.json` created with Mustache variables (`{{TENANT_NAME}}`, `{{TENANT_ID}}`, `{{CURRENT_DATE}}`, etc.). `src/services/vapiClient.ts` `buildAssistantPayload()` substitutes all variables at provisioning time, including dynamic `CURRENT_DATE` via `new Date().toISOString()`. The old `vapi/agent.json` with hardcoded values is retained as a legacy reference but is not used by the provisioning flow.
 
 ### BUG-050: Knowledge ingestion uses naive chunking
 - **File**: `scripts/ingest-knowledge.ts`
@@ -454,4 +470,18 @@ Found during full code review on March 16, 2026.
 - **Impact**: Booking confirmations don't mention who's doing the service.
 - **Fix**: Updated Vapi assistant system prompt with explicit instructions to extract service type, convert to skill format (lowercase with hyphens), and pass as requiredEmployeeSkills. Added service→skill mapping table in prompt.
 - **Status**: FIXED — Vapi assistant updated via API April 1, 2026 06:12 CDT
+
+### BUG-063: Call hangs up when booking fails — VOICE AI
+- **File**: Vapi assistant system prompt
+- **Problem**: When `book_with_scheduling` returned an error (e.g., no available slots), the AI had no instructions for how to handle it. It would either hang up or give an unhelpful generic response.
+- **Impact**: Poor customer experience — caller gets disconnected instead of offered alternatives.
+- **Fix**: Added error handling instructions to Vapi assistant prompt with specific guidance for each failure scenario (offer alternative times, explain unavailability, etc.).
+- **Status**: FIXED — Vapi assistant updated via API April 1, 2026
+
+### BUG-064: Generic booking error messages — VOICE AI / DATABASE
+- **File**: `supabase/migrations/20260324000000_book_with_scheduling_atomic.sql`
+- **Problem**: All booking failures returned the same generic message: "No available resource/employee combination found for the requested time." The AI couldn't distinguish between a fully booked time slot, no employee with the required skills, or an employee not being scheduled at that time.
+- **Impact**: AI gave the same unhelpful response regardless of the actual problem. No ability to offer relevant alternatives.
+- **Fix**: Added `error_code TEXT` column to `book_with_scheduling_atomic()` return type with diagnostic queries to determine the specific failure reason. Error codes: TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS. Updated edge function interfaces, repository, errors, service, and dispatcher to propagate error codes. Updated Vapi assistant prompt with specific handling instructions per error code.
+- **Status**: FIXED — Migration `20260401000001_specific_booking_errors.sql` applied April 1, 2026. Edge function and Vapi assistant updated.
 

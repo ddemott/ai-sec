@@ -5,6 +5,7 @@ const AUTHORIZE_URL = 'https://api.getjobber.com/api/oauth/authorize';
 const TOKEN_URL = 'https://api.getjobber.com/api/oauth/token';
 const GRAPHQL_URL = 'https://api.getjobber.com/api/graphql';
 const SCOPES = 'read_clients write_clients read_jobs write_jobs read_visits write_visits';
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface TokenSet {
   access_token: string;
@@ -122,6 +123,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Jobber OAuth code exchange failed: network error reaching Jobber token endpoint — ${networkErr.message}`);
@@ -162,6 +164,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Jobber token refresh failed: network error — ${networkErr.message}`);
@@ -198,6 +201,7 @@ export async function graphql<T = any>(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Jobber GraphQL request failed: network error — ${networkErr.message}`);

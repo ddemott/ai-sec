@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as jobberClient from '../services/jobberClient';
 import * as jobberSync from '../services/jobberSync';
+import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerJobberRoutes(
   app: any,
@@ -30,48 +31,11 @@ export function registerJobberRoutes(
   }, 'Failed to initiate Jobber auth'));
 
   // --- Jobber OAuth: Callback (Jobber redirects here) ---
-  app.get('/jobber/auth/callback', async (req: any, reply: any) => {
-    const { code, state, error: oauthError } = req.query as Record<string, string>;
-    const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
-
-    if (oauthError) {
-      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=${encodeURIComponent(oauthError)}`);
-    }
-
-    if (!code || !state) {
-      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=missing_params`);
-    }
-
-    const tenantId = jobberClient.verifyState(state);
-    if (!tenantId) {
-      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=invalid_state`);
-    }
-
-    try {
-      const tokens = await jobberClient.exchangeCodeForTokens(code);
-
-      const client = await pool.connect();
-      try {
-        await client.query(
-          `INSERT INTO tenant_integration_settings
-             (tenant_id, provider, access_token, refresh_token, token_expires_at, is_active)
-           VALUES ($1, 'jobber', $2, $3, $4, true)
-           ON CONFLICT (tenant_id, provider) DO UPDATE SET
-             access_token = $2, refresh_token = $3, token_expires_at = $4,
-             is_active = true, updated_at = NOW()`,
-          [tenantId, tokens.access_token, tokens.refresh_token, new Date(tokens.expiry_date).toISOString()]
-        );
-      } finally {
-        client.release();
-      }
-
-      app.log.info({ event: 'jobber_oauth_complete', tenantId }, 'Jobber connected');
-      return reply.redirect(`${dashboardUrl}/dashboard?jobberConnected=true`);
-    } catch (err) {
-      app.log.error({ event: 'jobber_oauth_failed', tenantId, error: (err as Error).message }, 'Jobber OAuth failed');
-      return reply.redirect(`${dashboardUrl}/dashboard?jobberError=token_exchange_failed`);
-    }
-  });
+  app.get('/jobber/auth/callback', createOAuthCallbackHandler(pool, app, {
+    provider: 'jobber',
+    verifyState: jobberClient.verifyState,
+    exchangeCodeForTokens: jobberClient.exchangeCodeForTokens,
+  }));
 
   // --- Get Jobber integration settings (strip tokens) ---
   app.get('/jobber/settings', withHandler(async (req: AppRequest, reply) => {
@@ -115,8 +79,10 @@ export function registerJobberRoutes(
     const signature = req.headers['x-jobber-hmac-sha256'] as string;
     const rawBody = JSON.stringify(req.body);
 
-    if (!tenantId || !signature) {
-      return reply.status(400).send({ success: false, error: 'Missing tenant ID or signature' });
+    // Validate tenantId is a UUID to prevent injection via URL param
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!tenantId || !UUID_RE.test(tenantId) || !signature) {
+      return reply.status(400).send({ success: false, error: 'Missing or invalid tenant ID or signature' });
     }
 
     // Look up webhook secret for this tenant

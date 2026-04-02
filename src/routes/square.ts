@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as squareClient from '../services/squareClient';
 import * as squareSync from '../services/squareSync';
+import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerSquareRoutes(
   app: any,
@@ -30,48 +31,11 @@ export function registerSquareRoutes(
   }, 'Failed to initiate Square auth'));
 
   // --- Square OAuth: Callback ---
-  app.get('/square/auth/callback', async (req: any, reply: any) => {
-    const { code, state, error: oauthError } = req.query as Record<string, string>;
-    const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
-
-    if (oauthError) {
-      return reply.redirect(`${dashboardUrl}/dashboard?squareError=${encodeURIComponent(oauthError)}`);
-    }
-
-    if (!code || !state) {
-      return reply.redirect(`${dashboardUrl}/dashboard?squareError=missing_params`);
-    }
-
-    const tenantId = squareClient.verifyState(state);
-    if (!tenantId) {
-      return reply.redirect(`${dashboardUrl}/dashboard?squareError=invalid_state`);
-    }
-
-    try {
-      const tokens = await squareClient.exchangeCodeForTokens(code);
-
-      const client = await pool.connect();
-      try {
-        await client.query(
-          `INSERT INTO tenant_integration_settings
-             (tenant_id, provider, access_token, refresh_token, token_expires_at, is_active)
-           VALUES ($1, 'square', $2, $3, $4, true)
-           ON CONFLICT (tenant_id, provider) DO UPDATE SET
-             access_token = $2, refresh_token = $3, token_expires_at = $4,
-             is_active = true, updated_at = NOW()`,
-          [tenantId, tokens.access_token, tokens.refresh_token, new Date(tokens.expiry_date).toISOString()]
-        );
-      } finally {
-        client.release();
-      }
-
-      app.log.info({ event: 'square_oauth_complete', tenantId }, 'Square connected');
-      return reply.redirect(`${dashboardUrl}/dashboard?squareConnected=true`);
-    } catch (err) {
-      app.log.error({ event: 'square_oauth_failed', tenantId, error: (err as Error).message }, 'Square OAuth failed');
-      return reply.redirect(`${dashboardUrl}/dashboard?squareError=token_exchange_failed`);
-    }
-  });
+  app.get('/square/auth/callback', createOAuthCallbackHandler(pool, app, {
+    provider: 'square',
+    verifyState: squareClient.verifyState,
+    exchangeCodeForTokens: squareClient.exchangeCodeForTokens,
+  }));
 
   // --- Get Square settings (strip tokens) ---
   app.get('/square/settings', withHandler(async (req: AppRequest, reply) => {

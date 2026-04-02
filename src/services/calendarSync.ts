@@ -1,14 +1,9 @@
 import type { Pool } from 'pg';
 import * as gcal from './googleCalendar';
 import * as outlook from './outlookCalendar';
+import { type SyncLogger, defaultSyncLogger, TOKEN_BUFFER_MS } from './tokenManagement';
 
 type CalendarProvider = typeof gcal | typeof outlook;
-
-interface SyncLogger {
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-  info: (msg: string) => void;
-}
 
 /** Build a structured log prefix: WHO (tenant) + WHAT (action) + WHERE (appointment) */
 function ctx(tenantId: string, appointmentId: string, action: string) {
@@ -18,6 +13,11 @@ function ctx(tenantId: string, appointmentId: string, action: string) {
 /**
  * Sync an appointment to the tenant's connected external calendar.
  * Non-blocking: sync failures are logged but never fail the appointment operation.
+ *
+ * Note: calendarSync keeps its own single-client pattern because it uses
+ * tenant_calendar_settings (not tenant_integration_settings) and the sync
+ * action queries share the same DB client as the token refresh.
+ * The SyncLogger type and TOKEN_BUFFER_MS constant are shared via tokenManagement.ts.
  */
 export async function syncAppointmentToCalendar(
   pool: Pool,
@@ -26,15 +26,17 @@ export async function syncAppointmentToCalendar(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || defaultSyncLogger;
   const prefix = ctx(tenantId, appointmentId, action);
 
   const client = await pool.connect();
   try {
     // 1. Get calendar settings (direct query, no RLS — backend service context)
+    // FOR UPDATE locks the row to prevent concurrent token refresh races
     const settingsRes = await client.query(
       `SELECT provider, external_calendar_id, access_token, refresh_token, token_expires_at, is_active
-       FROM tenant_calendar_settings WHERE tenant_id = $1`,
+       FROM tenant_calendar_settings WHERE tenant_id = $1
+       FOR UPDATE`,
       [tenantId]
     );
 
@@ -57,10 +59,10 @@ export async function syncAppointmentToCalendar(
     const provider: CalendarProvider = settings.provider === 'outlook' ? outlook : gcal;
     const providerName = settings.provider === 'outlook' ? 'Outlook' : 'Google';
 
-    // 3. Refresh token if expired (5 minute buffer)
+    // 3. Refresh token if expired (uses shared buffer constant)
     let accessToken = settings.access_token;
     const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
-    if (Date.now() > expiresAt - 5 * 60 * 1000) {
+    if (Date.now() > expiresAt - TOKEN_BUFFER_MS.STANDARD) {
       try {
         const refreshed = await provider.refreshAccessToken(settings.refresh_token);
         accessToken = refreshed.access_token;

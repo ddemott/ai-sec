@@ -1,7 +1,7 @@
 # Suggested Refactorings
 
 **Created:** 2026-03-24
-**Last updated:** 2026-03-26
+**Last updated:** 2026-04-01
 
 ---
 
@@ -24,7 +24,7 @@
 
 | # | Item | Area | Severity |
 |---|------|------|----------|
-| 9 | **Add Zod schemas to all routes** — only 3 of 16 routes validate input; rest use `req.body as {...}` casts | Backend | Serious |
+| 9 | **Add Zod schemas to all routes** — only 3 of 20 routes validate input; rest use `req.body as {...}` casts | Backend | Serious |
 | 10 | **Split large components** — AppointmentView (838 lines), SuperAdminDashboard (746), CRMView (560), SetupWizard/index (623) | Dashboard | Serious |
 | 11 | **Remove `overrideTenantId` prop drilling** — passed through 49 components; should use SessionContext's `managedTenantId` instead | Dashboard | Serious |
 | 12 | **Standardize error response format** — backend returns 3+ different error shapes (`{error}`, `{success, error}`, `{success, error, code}`) | Backend | Moderate |

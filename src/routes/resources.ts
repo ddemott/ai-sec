@@ -84,7 +84,8 @@ export function registerResourceRoutes(
       }
       const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
       values.push(id);
-      await client.query(`UPDATE resources SET ${setClause} WHERE id = $${values.length}`, values);
+      values.push(tenantId);
+      await client.query(`UPDATE resources SET ${setClause} WHERE id = $${values.length - 1} AND tenant_id = $${values.length}`, values);
     });
 
     logEvent(req, 'resource_updated', { resourceId: id });

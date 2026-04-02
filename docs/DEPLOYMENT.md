@@ -62,7 +62,7 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 ./scripts/setup-db.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
 ```
 
-This applies all 61 migrations in order and seeds the database with the DynaTire demo tenant.
+This applies all 63 migrations in order and seeds the database with the DynaTire demo tenant.
 
 ### 2.3 Create the api_user Role
 The migrations create an `api_user` role with least-privilege grants. On Supabase, you may need to verify this role exists:
@@ -142,7 +142,7 @@ Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 3. **Health check**: `/health` endpoint
 4. **Restart policy**: `ON_FAILURE` with max 10 retries
 
-**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply the migration `20260323000000_force_rls_single_pool.sql` to Supabase before deploying.
+**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 63 migrations (including `20260323000000_force_rls_single_pool.sql`) to Supabase before deploying.
 
 **Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -178,6 +178,23 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 | `GOOGLE_CLIENT_ID` | No | Google OAuth client ID (for Google Calendar sync) |
 | `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `GOOGLE_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/calendar/auth/google/callback`) |
+| `OUTLOOK_CLIENT_ID` | No | Azure AD app registration (for Outlook Calendar sync) |
+| `OUTLOOK_CLIENT_SECRET` | No | Azure AD app secret |
+| `OUTLOOK_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/calendar/auth/outlook/callback`) |
+| `JOBBER_CLIENT_ID` | No | Jobber developer app (for Jobber CRM sync) |
+| `JOBBER_CLIENT_SECRET` | No | Jobber app secret |
+| `JOBBER_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/jobber/auth/callback`) |
+| `HUBSPOT_CLIENT_ID` | No | HubSpot developer app (for HubSpot CRM sync) |
+| `HUBSPOT_CLIENT_SECRET` | No | HubSpot app secret |
+| `HUBSPOT_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/hubspot/auth/callback`) |
+| `SQUARE_CLIENT_ID` | No | Square developer app (for Square CRM sync) |
+| `SQUARE_CLIENT_SECRET` | No | Square app secret |
+| `SQUARE_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/square/auth/callback`) |
+| `SERVICETITAN_CLIENT_ID` | No | ServiceTitan developer app (for ServiceTitan CRM sync) |
+| `SERVICETITAN_CLIENT_SECRET` | No | ServiceTitan app secret |
+| `SERVICETITAN_APP_KEY` | No | ST-App-Key header for ServiceTitan API |
+| `SERVICETITAN_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/servicetitan/auth/callback`) |
+| `VAPI_API_KEY` | No | Vapi private key (for phone provisioning) |
 
 ---
 

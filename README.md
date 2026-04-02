@@ -58,7 +58,7 @@ Reset the database with 3 realistic businesses:
 ## Architecture at a Glance
 
 - **Voice Pipeline**: Telnyx (telephony) > Vapi (orchestrator, STT/LLM/TTS) > Supabase Edge Function (Deno) > Postgres
-- **Backend**: Fastify with 21 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
+- **Backend**: Fastify with 20 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript, 5 grouped navigation sections
 - **Database**: PostgreSQL + pgvector, Row Level Security for multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n workflows for post-call summaries, SMS notifications
@@ -68,11 +68,11 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Project Structure
 
-- `/src` — Fastify backend (21 route modules under `src/routes/`, middleware layer)
+- `/src` — Fastify backend (20 route modules under `src/routes/`, middleware layer)
 - `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
 - `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
 - `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` — 61 SQL migrations
+- `/supabase/migrations` — 63 SQL migrations
 - `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
 - `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
 - `/docs` — Architecture, plans, decisions, deployment guide, mockups
@@ -100,7 +100,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**1,104 tests passing** (791 backend + 313 dashboard) in ~25 seconds. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**1,344 tests passing** (1,031 backend + 313 dashboard) in ~25 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend
@@ -111,7 +111,38 @@ cd dashboard && npx vitest run
 
 # Edge Functions
 deno task test --no-check
+
+# Live QA (29 tool calls against production Supabase)
+python scripts/qa-live-test.py
 ```
+
+### Coverage
+
+Every route module, service file, and middleware layer has test coverage. Tests are spread across dedicated files (e.g., `square-client.test.ts`) and cross-cutting suites (e.g., `critical-bugs.test.ts`, `crud-routes.test.ts`).
+
+| Area | Test files | Tests |
+|------|-----------|-------|
+| Backend routes (20 modules) | 30+ files | ~600 |
+| Backend services (14 files) | 20+ files | ~300 |
+| Middleware, constants, scheduling | 5 files | ~50 |
+| Dashboard components + views | 16 files | 313 |
+| Edge function (Deno) | 10 files | separate (`deno task test`) |
+| Live QA | 1 file | 29 calls / 88 assertions |
+
+### Test Philosophy
+
+Every test file covers both **happy paths** (expected behavior) and **sad paths** (error conditions). Sad path tests include **5W diagnostic context** so failures are immediately debuggable:
+
+```typescript
+it('should reject country-code-only "+1" (BUG-060 root cause)', () => {
+  // WHO: DynaTire caller | WHAT: Vapi sent only "+1" as phone
+  // WHEN: April 1 2026 test call | WHERE: dispatcher.ts handleCallStarted
+  // WHY: Vapi sometimes sends partial caller ID before full number resolves
+  expect(normalizePhone('+1')).toBeNull();
+});
+```
+
+The 5W comments (Who, What, When, Where, Why) answer: who triggered the bug, what went wrong, when it happened, where in the code it occurs, and why it matters. This makes every test failure self-documenting — you can diagnose the issue from the test output alone without reading through logs or source code.
 
 ## Deployment
 

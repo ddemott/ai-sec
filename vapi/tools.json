@@ -149,5 +149,21 @@
         "required": ["tenant_id"]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_available_slots",
+      "description": "Returns available time slots for a specific service on a given date, including service duration and price. Use this BEFORE booking to tell the caller what times are open and how long the service takes.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tenant_id": { "type": "string" },
+          "service_type": { "type": "string", "description": "The type of service the caller wants (e.g., 'tire rotation', 'oil change')." },
+          "date": { "type": "string", "description": "The date to check availability for, in YYYY-MM-DD format." }
+        },
+        "required": ["tenant_id", "service_type", "date"]
+      }
+    }
   }
 ]

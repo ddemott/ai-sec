@@ -290,9 +290,11 @@ export default function AppointmentView() {
         if (res.success) {
           setIsCreating(false)
           setDraftEvent(null)
+          setSaving(false)
           fetchAppointments(res.appointment_id)
         } else {
             setError(res.error || 'Failed to create appointment')
+            setSaving(false)
         }
     } catch {
       setError('Connection error');
@@ -322,6 +324,7 @@ export default function AppointmentView() {
       }
     } catch (e) {
         console.error(e)
+        setError('Connection error — could not delete appointment')
     }
   }
 

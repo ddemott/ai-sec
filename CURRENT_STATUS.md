@@ -7,7 +7,7 @@
 
 Phase 13 (Production Readiness) is in progress. The backend is deployed to Railway and live. A phone number has been provisioned via Vapi. The edge functions (voice AI tool handlers) are deployed to Supabase and the project is now active (pausing bug resolved as of 2026-03-30).
 
-All 8 design session work items from March 24 are now **complete**. All 24 refactoring items are **complete**. Calendar sync (Google + Outlook) and CRM integrations (Jobber + HubSpot) are **complete** with bidirectional sync and full test coverage. Voice AI is **working end-to-end** — calls are answered, appointments booked, policy questions answered via RAG. Knowledge base questionnaire is **complete** with 40 policy Q&A pairs.
+All 8 design session work items from March 24 are now **complete**. All 24 refactoring items are **complete**. Calendar sync (Google + Outlook) and CRM integrations (Jobber + HubSpot + Square + ServiceTitan) are **complete** with bidirectional sync and full test coverage. Voice AI is **working end-to-end** — calls are answered, appointments booked, policy questions answered via RAG. Knowledge base questionnaire is **complete** with 40 policy Q&A pairs. April 1 bug fixes resolved 6 voice AI issues (BUG-059 through BUG-064) including timezone regression, phone capture, date parsing, employee assignment, error handling, and specific booking error codes.
 
 ---
 
@@ -15,9 +15,9 @@ All 8 design session work items from March 24 are now **complete**. All 24 refac
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 21 route modules, Railway auto-deploy from main |
+| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 20 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 61 migrations applied, FORCE RLS on all tables |
+| **Database** | Live | Supabase Postgres (managed), 63 migrations applied, FORCE RLS on all tables |
 | **Phone provisioning** | Working | `POST /provisioning/activate` creates Vapi assistant + phone number automatically |
 | **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant (Clara voice, GPT-4o-mini), phone assigned |
 | **Voice AI (end-to-end)** | Working | Answers calls, books appointments, answers policy questions, rejects invalid bookings naturally |
@@ -26,7 +26,7 @@ All 8 design session work items from March 24 are now **complete**. All 24 refac
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 791 backend + 313 dashboard = 1,104 passing + 88 QA assertions | All green, zero failures, zero TS errors |
+| **Tests** | 1,031 backend + 313 dashboard = 1,344 passing + 88 QA assertions | All green (with DB running), zero TS errors |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
@@ -70,22 +70,30 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 |----------|------------|-----------|------------|----------|
 | Jobber | `src/services/jobberClient.ts` | `src/services/jobberSync.ts` | `src/routes/jobber.ts` | GraphQL |
 | HubSpot | `src/services/hubspotClient.ts` | `src/services/hubspotSync.ts` | `src/routes/hubspot.ts` | REST v3 |
+| Square | `src/services/squareClient.ts` | `src/services/squareSync.ts` | `src/routes/square.ts` | REST v2 |
+| ServiceTitan | `src/services/servicetitanClient.ts` | `src/services/servicetitanSync.ts` | `src/routes/servicetitan.ts` | REST v2 |
+
+### Shared OAuth/Token Infrastructure
+| File | Purpose |
+|------|---------|
+| `src/services/oauthCallbackFactory.ts` | Generic OAuth callback handler factory — eliminates duplication across 4 CRM integrations |
+| `src/services/tokenManagement.ts` | Shared token refresh logic with 5-min buffer for all OAuth integrations |
 
 ### Push Triggers (fire-and-forget, wired in route handlers)
-| Mutation | Calendar sync | Jobber sync | HubSpot sync |
-|----------|--------------|-------------|--------------|
-| Appointment create | ✓ | ✓ | ✓ |
-| Appointment update | ✓ | ✓ | ✓ |
-| Appointment delete | ✓ | ✓ | ✓ |
-| Appointment cancel | ✓ | ✓ | ✓ |
-| Customer create | — | ✓ | ✓ |
-| Customer update | — | ✓ | ✓ |
-| Customer delete | — | ✓ | ✓ |
+| Mutation | Calendar sync | Jobber sync | HubSpot sync | Square sync | ServiceTitan sync |
+|----------|--------------|-------------|--------------|-------------|-------------------|
+| Appointment create | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Appointment update | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Appointment delete | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Appointment cancel | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Customer create | — | ✓ | ✓ | ✓ | ✓ |
+| Customer update | — | ✓ | ✓ | ✓ | ✓ |
+| Customer delete | — | ✓ | ✓ | ✓ | ✓ |
 
 ### Sync Strategy
 - **Calendar**: Push-only. Calendar is display-only, not source of truth.
 - **CRM**: Bidirectional with timestamp-based merge. Most recent `updated_at` wins per record. Non-conflicting fields merge via COALESCE.
-- **Pull triggers**: Webhook receivers (`POST /jobber/webhook/:tenantId`, `POST /hubspot/webhook`) + periodic full sync (`POST /jobber/sync`, `POST /hubspot/sync`).
+- **Pull triggers**: Webhook receivers (`POST /jobber/webhook/:tenantId`, `POST /hubspot/webhook`, `POST /square/webhook`, `POST /servicetitan/webhook`) + periodic full sync (`POST /{provider}/sync`).
 - **DB tables**: `tenant_integration_settings` (OAuth tokens per provider), `entity_sync_map` (local↔external ID mapping with timestamps).
 
 ---
@@ -121,6 +129,13 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | `HUBSPOT_CLIENT_ID` | **NOT SET** (need HubSpot developer app) |
 | `HUBSPOT_CLIENT_SECRET` | **NOT SET** |
 | `HUBSPOT_CALLBACK_URL` | **NOT SET** (`https://ai-sec-production.up.railway.app/hubspot/auth/callback`) |
+| `SQUARE_CLIENT_ID` | **NOT SET** (need Square developer app) |
+| `SQUARE_CLIENT_SECRET` | **NOT SET** |
+| `SQUARE_CALLBACK_URL` | **NOT SET** (`https://ai-sec-production.up.railway.app/square/auth/callback`) |
+| `SERVICETITAN_CLIENT_ID` | **NOT SET** (need ServiceTitan developer app) |
+| `SERVICETITAN_CLIENT_SECRET` | **NOT SET** |
+| `SERVICETITAN_APP_KEY` | **NOT SET** (ST-App-Key header) |
+| `SERVICETITAN_CALLBACK_URL` | **NOT SET** (`https://ai-sec-production.up.railway.app/servicetitan/auth/callback`) |
 
 ### Supabase Edge Function Secrets — Set
 | Variable | Status |
@@ -136,12 +151,22 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 
 1. **Deploy dashboard** (Vercel or Railway) — currently local only
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
-3. **Apply new migrations to Supabase** — 20260327000000 (Jobber tables) + 20260327000001 (HubSpot CHECK)
+3. ~~Apply new migrations to Supabase~~ — Done. All 63 migrations applied including April 1 timezone fix + specific booking errors
 4. **UI/UX flow improvements** — hands-on testing
 5. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
 6. **Beta testing with DynaTire** — real-world validation with live calls
 
-### Done This Session (2026-03-30)
+### Done This Session (2026-04-01)
+- ~~BUG-059: Timezone regression~~ — `book_with_scheduling_atomic()` used hardcoded UTC for shift validation; now uses tenant timezone. Migration `20260401000000`
+- ~~BUG-060: Phone number incomplete~~ — `normalizePhone()` now rejects < 10 digits (was accepting "+1" as valid)
+- ~~BUG-061: Wrong date booked~~ — Vapi assistant had hardcoded stale date in system prompt; updated with dynamic date handling
+- ~~BUG-062: No employee assigned~~ — AI wasn't passing `requiredEmployeeSkills`; prompt updated with service-to-skill mapping
+- ~~BUG-063: Call hangs up on booking failure~~ — Added error handling instructions to Vapi assistant prompt
+- ~~BUG-064: Generic booking errors~~ — Added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) via migration `20260401000001`
+- ~~OAuth callback refactoring~~ — Created `oauthCallbackFactory.ts` + `tokenManagement.ts` to eliminate duplication across Jobber, HubSpot, Square, ServiceTitan
+- ~~Test expansion~~ — Added scheduling timezone bug test, voice AI fixes test, available slots test, comprehensive bug fix regression tests (rounds 1-5)
+
+### Done Previous Session (2026-03-30)
 - ~~Supabase blocker resolved~~ — Project no longer stuck in "pausing" state
 - ~~Voice AI end-to-end working~~ — 8 critical fixes (tool response format, Zod relaxation, caller ID, timezone, natural errors)
 - ~~LLM switched~~ — Groq/Llama 3.3 → OpenAI GPT-4o-mini (better instruction following)
@@ -158,8 +183,10 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 - ~~Outlook calendar sync~~ — Microsoft Graph API, OAuth, full CRUD
 - ~~Jobber CRM integration~~ — Bidirectional GraphQL sync with timestamp merge
 - ~~HubSpot CRM integration~~ — Bidirectional REST sync with meetings + contacts
-- ~~CRM push triggers wired~~ — appointments.ts + customers.ts fire to all connected integrations
-- ~~Comprehensive sad path coverage~~ — 1,104 total tests with 5W diagnostics
+- ~~Square CRM integration~~ — Bidirectional REST v2 sync with customers + bookings
+- ~~ServiceTitan CRM integration~~ — Bidirectional REST v2 sync with customers + jobs
+- ~~CRM push triggers wired~~ — appointments.ts + customers.ts fire to all connected integrations (4 CRMs + 2 calendars)
+- ~~Comprehensive sad path coverage~~ — 1,344 total tests with 5W diagnostics
 - ~~30 unused variable warnings cleaned~~ — zero TS errors with strict checks
 - ~~Scheduling diagnostics~~ — `selectAssignments()` returns reason strings ("all 3 bays busy", etc.)
 - ~~All refactoring items complete~~ — 24/24 done (SUGGESTED_REFACTORINGS.md)
@@ -187,11 +214,16 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | Calendar sync (Google + Outlook) | 3 files | 102 | OAuth, sync orchestration, happy + sad |
 | Jobber CRM | 3 files | 82 | Client, sync, routes — happy + sad |
 | HubSpot CRM | 3 files | 74 | Client, sync, routes — happy + sad |
+| Square CRM | 3 files | ~70 | Client, sync, routes — happy + sad |
+| ServiceTitan CRM | 3 files | ~70 | Client, sync, routes — happy + sad |
 | Provisioning | 1 file | 39 | Area codes, Vapi errors, rollback, DB states |
-| Scheduling | 1 file | 25 | Diagnostics, edge cases, empty data |
+| Scheduling + timezone | 2 files | 34 | Diagnostics, edge cases, UTC drift, DST transitions, midnight boundary, 5W sad paths |
+| Voice AI fixes | 1 file | 22 | Phone normalization (E.164, partial, garbage), date calc (month/year boundary), skill mapping, error codes — all with 5W |
+| OAuth/token management | 2 files | 20+ | Generic callback factory, token refresh |
 | Normalizer | 1 file | 17 | Timeouts, API errors, unicode |
 | Vapi config | 1 file | 18 | Template validation, required fields |
+| Bug fix regression | 6 files | 80+ | April 1 rounds 1-5, comprehensive, regression |
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
 | QA live tests | 1 file | 29 calls / 88 assertions | Live edge function tool calls with DB verification |
-| **Total** | **40 + 16 + 1** | **1,104 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration |
+| **Total** | **59 + 16 + 1** | **1,344 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration |

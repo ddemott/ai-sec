@@ -31,13 +31,13 @@
 - Full code review resolved 58 bugs across all severity levels
 - JWT auth with expiry and auto-logout, standardized RLS via `withTenantClient()`, Zod validation at all API boundaries
 - DST-safe shift checks, error boundaries, SessionContext, structured logging
-- 624 tests passing (256 backend + 368 dashboard)
+- Tests passing (expanded to 1,344 total by Phase 13)
 
 ### Phase 9: Scale & Polish
 - UUID standardization throughout, shared `scheduling.ts` and `getEmbedding.ts`
 - Dead code cleanup, audit logging with before/after snapshots, soft deletes with partial indexes
 - ARIA accessibility labels, customer timezone support, agent template with Mustache variables
-- Route extraction: 15 focused modules under `src/routes/` with shared middleware layer
+- Route extraction: 20 focused modules under `src/routes/` with shared middleware layer (expanded with CRM integration routes)
 
 ### Phase 10: CRM & Dashboard Enhancements
 - Unified CRM detail view with appointments, call summaries, transcripts, notes, and search
@@ -73,6 +73,10 @@
 - [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow
 - [x] **Live RAG Testing**: Done — Knowledge base questionnaire built (40 questions, 9 categories), POST /knowledge/add, PUT /knowledge/:id
 - [x] **Live Shift Testing**: Done — Business hours validation and past-time rejection verified in production
+- [x] **Scheduling Timezone Fix**: Done (2026-04-01) — BUG-059: `book_with_scheduling_atomic()` timezone regression fixed. Migration `20260401000000` applied to production.
+- [x] **Voice AI Phone/Date/Employee Fixes**: Done (2026-04-01) — BUG-060/061/062: Phone validation, dynamic date prompt, service-to-skill mapping in Vapi assistant.
+- [x] **Booking Error Handling**: Done (2026-04-01) — BUG-063/064: Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) via migration `20260401000001`.
+- [x] **OAuth Callback Refactoring**: Done (2026-04-01) — Generic `oauthCallbackFactory.ts` + shared `tokenManagement.ts` eliminate duplication across 4 CRM integrations.
 - [ ] **Stripe Test Products**: Recreate 4 products (Solo/Growth/Professional/Enterprise) in Stripe test mode. Update Price IDs in `.env.production`. Live mode products already created.
 - [ ] **Rotate Exposed Keys**: Supabase DB password, OpenAI API key, Supabase access token were exposed in chat. Regenerate all and update `.env.production`.
 - [ ] **Beta Testing**: Real-world call tests with DynaTire
@@ -215,7 +219,7 @@ CREATE TABLE tenant_integrations (
 
 **What NOT to abstract:** Auth (add OAuth/SSO as feature, not adapter), frontend framework (Next.js/React), Edge Functions runtime (Deno/Supabase).
 
-**Next step:** Calendar Sync and CRM Sync adapters are done. Next adapter to build would be Embedding Provider or SMS/Notifications.
+**Next step:** Calendar Sync (Google + Outlook) and CRM Sync (Jobber, HubSpot, Square, ServiceTitan) adapters are all done. Shared OAuth/token infrastructure in `oauthCallbackFactory.ts` and `tokenManagement.ts`. Next adapter to build would be Embedding Provider or SMS/Notifications.
 
 ### Integrations
 

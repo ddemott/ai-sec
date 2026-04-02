@@ -1,7 +1,7 @@
 
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { withHandler, withPoolClient, logEvent, type AppRequest } from '../middleware';
+import { withHandler, withPoolClient, logEvent, requireAuth, type AppRequest } from '../middleware';
 
 const CreateTenantSchema = z.object({
   tenant_name: z.string().min(1).max(200),
@@ -48,7 +48,8 @@ const CreateTemplateSchema = z.object({
 });
 
 export function registerTenantRoutes(app: any, pool: Pool) {
-  app.get('/tenants', withHandler(async (_req: AppRequest, reply) => {
+  app.get('/tenants', withHandler(async (req: AppRequest, reply) => {
+    if (!requireAuth(req, reply)) return;
     const res = await withPoolClient(pool, client =>
       client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC')
     );
@@ -56,6 +57,7 @@ export function registerTenantRoutes(app: any, pool: Pool) {
   }, 'Failed to fetch tenants'));
 
   app.delete('/tenants/:id', withHandler(async (req: AppRequest, reply) => {
+    if (!requireAuth(req, reply)) return;
     const { id } = req.params as { id: string };
     await withPoolClient(pool, client =>
       client.query('DELETE FROM tenants WHERE id = $1', [id])
@@ -166,6 +168,7 @@ export function registerTenantRoutes(app: any, pool: Pool) {
 
   // Save tenant sort order (admin drag-and-drop reordering)
   app.post('/tenants/reorder', withHandler(async (req: AppRequest, reply) => {
+    if (!requireAuth(req, reply)) return;
     const { order } = req.body as { order: string[] }; // array of tenant IDs in desired order
     if (!Array.isArray(order) || order.length === 0) {
       return reply.status(400).send({ success: false, error: 'order must be a non-empty array of tenant IDs' });

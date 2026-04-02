@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const VAPI_BASE_URL = 'https://api.vapi.ai';
+const FETCH_TIMEOUT_MS = 15_000;
 
 interface TenantConfig {
   id: string;
@@ -39,6 +40,7 @@ export class VapiClient {
           'Content-Type': 'application/json',
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (networkErr: any) {
       throw new Error(`Vapi API ${method} ${endpoint} failed: network error reaching ${VAPI_BASE_URL} — ${networkErr.message}`);

@@ -1,18 +1,13 @@
 import type { Pool } from 'pg';
 import * as jobber from './jobberClient';
-
-interface SyncLogger {
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-  info: (msg: string) => void;
-}
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
 
 function ctx(tenantId: string, entityType: string, action: string) {
-  return `[jobber-sync] tenant=${tenantId} entity=${entityType} action=${action}`;
+  return syncCtx('jobber', tenantId, entityType, action);
 }
 
 // -----------------------------------------------------------------------
-// Token management (shared by push and pull)
+// Token management (delegates to shared tokenManagement.ts)
 // -----------------------------------------------------------------------
 
 export async function getTokensWithRefresh(
@@ -20,55 +15,7 @@ export async function getTokensWithRefresh(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
-  const client = await pool.connect();
-  try {
-    const res = await client.query(
-      `SELECT access_token, refresh_token, token_expires_at, is_active
-       FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
-      [tenantId]
-    );
-
-    const settings = res.rows[0];
-    if (!settings) return null;
-    if (!settings.is_active) {
-      log.warn(`[jobber-sync] tenant=${tenantId} — skipped: integration inactive (user needs to reconnect)`);
-      return null;
-    }
-    if (!settings.access_token || !settings.refresh_token) {
-      log.warn(`[jobber-sync] tenant=${tenantId} — skipped: missing tokens`);
-      return null;
-    }
-
-    let accessToken = settings.access_token;
-    const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
-
-    // Refresh if within 5 minute buffer
-    if (Date.now() > expiresAt - 5 * 60 * 1000) {
-      try {
-        const refreshed = await jobber.refreshAccessToken(settings.refresh_token);
-        accessToken = refreshed.access_token;
-        await client.query(
-          `UPDATE tenant_integration_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
-           WHERE tenant_id = $3 AND provider = 'jobber'`,
-          [refreshed.access_token, new Date(refreshed.expiry_date).toISOString(), tenantId]
-        );
-        log.info(`[jobber-sync] tenant=${tenantId} — token refreshed`);
-      } catch (err) {
-        await client.query(
-          `UPDATE tenant_integration_settings SET is_active = false, updated_at = NOW()
-           WHERE tenant_id = $1 AND provider = 'jobber'`,
-          [tenantId]
-        );
-        log.error(`[jobber-sync] tenant=${tenantId} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: Jobber OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${err})`);
-        return null;
-      }
-    }
-
-    return { accessToken, refreshToken: settings.refresh_token };
-  } finally {
-    client.release();
-  }
+  return getIntegrationTokens(pool, tenantId, 'jobber', jobber.refreshAccessToken, TOKEN_BUFFER_MS.STANDARD, logger);
 }
 
 // -----------------------------------------------------------------------

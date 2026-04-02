@@ -82,8 +82,8 @@ export function registerServiceRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE id = $6 RETURNING *',
-        [body.name, body.subtitle, body.description, body.duration_minutes, body.price, id]
+        'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE id = $6 AND tenant_id = $7 RETURNING *',
+        [body.name, body.subtitle, body.description, body.duration_minutes, body.price, id, tenantId]
       );
     });
 
@@ -97,10 +97,18 @@ export function registerServiceRoutes(
     if (!tenantId) return;
 
     await withTenantClient(tenantId, async (client) => {
-      // Remove mappings first, then delete the service
-      await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
-      await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
-      await client.query('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+      // Wrap in transaction to ensure atomicity
+      await client.query('BEGIN');
+      try {
+        // Remove mappings first, then delete the service
+        await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
+        await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
+        await client.query('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
     });
 
     logEvent(req, 'service_deleted', { serviceId: id });

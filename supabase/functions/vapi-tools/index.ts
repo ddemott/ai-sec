@@ -90,6 +90,12 @@ const GetServiceCatalogSchema = z.object({
   tenant_id: z.string().uuid()
 });
 
+const GetAvailableSlotsSchema = z.object({
+  tenant_id: z.string().uuid(),
+  service_type: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+});
+
 /** Create a JSON response with correlation headers for tracing */
 function jsonResponse(body: unknown, status: number, requestId: string): Response {
   return new Response(JSON.stringify(body), {
@@ -177,6 +183,7 @@ export async function handler(req: Request): Promise<Response> {
         get_service_catalog: GetServiceCatalogSchema,
         get_scheduling_options: GetSchedulingOptionsSchema,
         book_with_scheduling: BookWithSchedulingSchema,
+        get_available_slots: GetAvailableSlotsSchema,
       };
       const schema = schemas[name];
       if (schema) {

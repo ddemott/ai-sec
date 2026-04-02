@@ -3,12 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   BookOpen, Upload, Trash2, FileText, AlertCircle, CheckCircle2,
-  Search, Loader2, Plus, ChevronDown, ChevronRight, MessageSquare, Save
+  Search, Loader2, ChevronDown, ChevronRight, MessageSquare, Save
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { Card } from './ui/Card'
-import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Badge } from './ui/Badge'
 import { POLICY_CATEGORIES, POLICY_QUESTIONS } from '../lib/policyQuestions'
@@ -34,10 +33,17 @@ function PolicyQuestionField({
   const [value, setValue] = useState(savedAnswer)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idRef = useRef(savedId)
 
   useEffect(() => { setValue(savedAnswer) }, [savedAnswer])
   useEffect(() => { idRef.current = savedId }, [savedId])
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
+    }
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newVal = e.target.value
@@ -52,7 +58,7 @@ function PolicyQuestionField({
       const newId = await onSave(newVal, idRef.current)
       if (newId) idRef.current = newId
       setStatus('saved')
-      setTimeout(() => setStatus('idle'), 2000)
+      fadeTimerRef.current = setTimeout(() => setStatus('idle'), 2000)
     }, 1500)
   }
 
@@ -161,7 +167,7 @@ export default function KnowledgeBaseView() {
       const answers = new Map<string, { id: string; answer: string }>()
       for (const doc of data) {
         if (doc.source === 'policy-questionnaire' && doc.title) {
-          const answerMatch = doc.content.match(/^Q: .+\nA: (.+)$/s)
+          const answerMatch = doc.content.match(/^Q: .+\nA: ([\s\S]+)$/)
           const answer = answerMatch ? answerMatch[1] : doc.content
           answers.set(doc.title, { id: doc.id, answer })
         }

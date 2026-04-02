@@ -51,8 +51,18 @@ export function registerKnowledgeRoutes(
     const tenantId = (data.fields.tenant_id as any)?.value;
     if (!tenantId) return reply.status(400).send({ success: false, error: 'tenant_id is required' });
 
-    const buffer = await data.toBuffer();
+    // Validate file type — only accept text and PDF files
     const filename = data.filename;
+    const allowedExtensions = ['.txt', '.md', '.csv', '.json', '.pdf'];
+    const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
+    if (!allowedExtensions.includes(ext)) {
+      return reply.status(400).send({
+        success: false,
+        error: `Unsupported file type "${ext}". Allowed: ${allowedExtensions.join(', ')}`,
+      });
+    }
+
+    const buffer = await data.toBuffer();
     let text = '';
 
     if (filename.toLowerCase().endsWith('.pdf')) {
@@ -66,7 +76,15 @@ export function registerKnowledgeRoutes(
       return reply.status(400).send({ success: false, error: 'No readable text found in file' });
     }
 
-    const chunks = text.split('\n\n').filter(c => c.trim().length > 20);
+    const MAX_CHUNKS = 500;
+    const allChunks = text.split('\n\n').filter(c => c.trim().length > 20);
+    if (allChunks.length > MAX_CHUNKS) {
+      return reply.status(400).send({
+        success: false,
+        error: `File too large — produced ${allChunks.length} chunks (max ${MAX_CHUNKS}). Please split into smaller files.`,
+      });
+    }
+    const chunks = allChunks;
 
     await withTenantClient(tenantId, async (client) => {
       for (const chunk of chunks) {

@@ -46,7 +46,7 @@ An internal customer relationship layer that:
 - Records communication preferences (SMS, email, call).
 - Provides a unified view of each customer across appointments.
 
-This CRM is the **default** for all tenants. Over time, we may add connectors to sync with external CRMs (e.g., HubSpot, Pipedrive) when needed.
+This CRM is the **default** for all tenants. Bidirectional sync with external CRMs is implemented: Jobber (GraphQL), HubSpot (REST v3), Square (REST v2), and ServiceTitan (REST v2). Timestamp-based merge resolves conflicts.
 
 ### 3.3 Internal Calendar + External Sync
 

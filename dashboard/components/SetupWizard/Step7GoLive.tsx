@@ -89,7 +89,7 @@ export function Step7GoLive({ phoneStatus: initialStatus, inboundPhone: initialP
                   className="max-w-[120px]"
                 />
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  We'll try to get a number with this area code. Leave blank for any available number.
+                  We&apos;ll try to get a number with this area code. Leave blank for any available number.
                 </p>
               </div>
 

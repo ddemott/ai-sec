@@ -4,6 +4,7 @@ const SCOPES = 'Calendars.ReadWrite offline_access';
 const AUTHORIZE_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
 const TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface CalendarEventInput {
   summary: string;
@@ -97,6 +98,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Outlook OAuth code exchange failed: network error reaching Microsoft token endpoint — ${networkErr.message}`);
@@ -138,6 +140,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Outlook token refresh failed: network error reaching Microsoft token endpoint — ${networkErr.message}`);
@@ -184,6 +187,7 @@ async function graphRequest(method: string, path: string, accessToken: string, b
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`Microsoft Graph API ${method} ${path} failed: network error — ${networkErr.message}`);

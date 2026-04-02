@@ -78,8 +78,13 @@ export function registerBillingRoutes(app: any, pool: Pool) {
   }, 'Checkout failed'));
 
   // POST /billing/webhook — handle Stripe webhook events
-  // Keep custom error handling for signature verification
-  app.post('/billing/webhook', async (req: AppRequest, reply) => {
+  // IMPORTANT: Stripe requires the raw request body for signature verification.
+  // Fastify's content-type parser must preserve the raw buffer for this route.
+  app.post('/billing/webhook', {
+    config: {
+      rawBody: true, // Enable raw body preservation for this route
+    },
+  }, async (req: AppRequest, reply) => {
     const stripe = getStripe();
     if (!stripe) {
       return reply.status(503).send({ success: false, error: 'Billing not configured' });
@@ -92,12 +97,16 @@ export function registerBillingRoutes(app: any, pool: Pool) {
 
     let event: Stripe.Event;
     try {
-      const rawBody = (req as any).rawBody || req.body;
-      const bodyStr = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
+      // Access raw body from Fastify's rawBody property (requires rawBody plugin or config)
+      const rawBody = (req as any).rawBody;
+      if (!rawBody) {
+        throw new Error('Raw body not available — ensure Fastify rawBody is configured');
+      }
+      const bodyStr = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
       event = stripe.webhooks.constructEvent(bodyStr, sig as string, STRIPE_WEBHOOK_SECRET);
     } catch (err: any) {
       logError(req, 'stripe_webhook_signature_failed', err);
-      return reply.status(400).send({ success: false, error: 'Invalid signature' });
+      return reply.status(400).send({ success: false, error: 'Invalid webhook signature' });
     }
 
     try {
@@ -213,8 +222,15 @@ export function subscriptionGate(pool: Pool) {
           subscription_status: status,
         });
       }
-    } catch {
-      // Don't block on billing check errors — fail open
+    } catch (err) {
+      // Log billing check errors but fail open to avoid blocking legitimate traffic
+      // TODO: Consider fail-closed for production after monitoring is in place
+      request.log.error({
+        event: 'subscription_gate_error',
+        error_message: (err as Error).message,
+        tenantId,
+        timestamp: new Date().toISOString(),
+      }, `Subscription gate check failed for tenant ${tenantId}`);
     }
   };
 }

@@ -2,6 +2,8 @@
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function registerMappingRoutes(
   app: any,
   _pool: Pool,
@@ -29,6 +31,9 @@ export function registerMappingRoutes(
 
   app.post('/services/:serviceId/employees/:employeeId/assign', withHandler(async (req: AppRequest, reply) => {
     const { serviceId, employeeId } = req.params as any;
+    if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
+      return reply.status(400).send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
+    }
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
@@ -45,6 +50,9 @@ export function registerMappingRoutes(
 
   app.post('/services/:serviceId/employees/:employeeId/unassign', withHandler(async (req: AppRequest, reply) => {
     const { serviceId, employeeId } = req.params as any;
+    if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
+      return reply.status(400).send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
+    }
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
@@ -61,6 +69,9 @@ export function registerMappingRoutes(
 
   app.post('/services/:serviceId/resources/:resourceId/assign', withHandler(async (req: AppRequest, reply) => {
     const { serviceId, resourceId } = req.params as any;
+    if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
+      return reply.status(400).send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
+    }
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
@@ -77,6 +88,9 @@ export function registerMappingRoutes(
 
   app.post('/services/:serviceId/resources/:resourceId/unassign', withHandler(async (req: AppRequest, reply) => {
     const { serviceId, resourceId } = req.params as any;
+    if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
+      return reply.status(400).send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
+    }
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 

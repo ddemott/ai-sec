@@ -5,6 +5,7 @@ const AUTHORIZE_URL = 'https://app.hubspot.com/oauth/authorize';
 const TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
 const API_BASE = 'https://api.hubapi.com';
 const SCOPES = 'crm.objects.contacts.read crm.objects.contacts.write crm.objects.meetings.read crm.objects.meetings.write';
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface TokenSet {
   access_token: string;
@@ -119,6 +120,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`HubSpot OAuth code exchange failed: network error reaching HubSpot token endpoint — ${networkErr.message}`);
@@ -159,6 +161,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`HubSpot token refresh failed: network error — ${networkErr.message}`);
@@ -196,6 +199,7 @@ export async function apiRequest<T = any>(
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (networkErr: any) {
     throw new Error(`HubSpot API ${method} ${path} failed: network error — ${networkErr.message}`);

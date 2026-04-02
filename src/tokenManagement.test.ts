@@ -1,0 +1,264 @@
+/**
+ * Happy + sad path tests for the shared token management module.
+ *
+ * Tests cover:
+ * - getIntegrationTokens: valid tokens, expired token refresh, inactive integration,
+ *   missing tokens, missing row, refresh failure marking inactive, extra columns
+ * - syncCtx: log prefix formatting
+ * - TOKEN_BUFFER_MS: constant values
+ */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  getIntegrationTokens,
+  syncCtx,
+  TOKEN_BUFFER_MS,
+  type SyncLogger,
+} from "./services/tokenManagement";
+
+// ── Mock helpers ─────────────────────────────────────────────────────
+
+function createMockClient() {
+  const queryResponses: Array<{ rows: any[]; rowCount?: number }> = [];
+  const mockClient = {
+    query: vi.fn(async () => queryResponses.shift() || { rows: [], rowCount: 0 }),
+    release: vi.fn(),
+  };
+  return { mockClient, queryResponses };
+}
+
+function createMockPool(mockClient: any) {
+  return { connect: vi.fn(async () => mockClient) } as any;
+}
+
+function makeSilentLogger(): SyncLogger & { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> } {
+  return { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
+}
+
+const TENANT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+function makeTokenRow(overrides: Record<string, any> = {}) {
+  return {
+    access_token: "valid-access-token",
+    refresh_token: "valid-refresh-token",
+    token_expires_at: new Date(Date.now() + 3600_000).toISOString(), // 1h from now
+    is_active: true,
+    ...overrides,
+  };
+}
+
+beforeEach(() => vi.clearAllMocks());
+
+// ═══════════════════════════════════════════════════════════════════════
+// syncCtx
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("syncCtx — log prefix helper", () => {
+  it("happy: formats prefix with provider and tenant", () => {
+    expect(syncCtx("jobber", TENANT_ID)).toBe(`[jobber-sync] tenant=${TENANT_ID}`);
+  });
+
+  it("happy: includes entity and action when provided", () => {
+    expect(syncCtx("hubspot", TENANT_ID, "customer", "create"))
+      .toBe(`[hubspot-sync] tenant=${TENANT_ID} entity=customer action=create`);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// TOKEN_BUFFER_MS
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("TOKEN_BUFFER_MS constants", () => {
+  it("STANDARD is 5 minutes", () => {
+    expect(TOKEN_BUFFER_MS.STANDARD).toBe(5 * 60 * 1000);
+  });
+
+  it("SQUARE is 24 hours", () => {
+    expect(TOKEN_BUFFER_MS.SQUARE).toBe(24 * 60 * 60 * 1000);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// getIntegrationTokens — HAPPY PATHS
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("getIntegrationTokens — happy paths", () => {
+  it("returns valid tokens when not expired", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeTokenRow()] });
+
+    const refreshFn = vi.fn();
+    const result = await getIntegrationTokens(pool, TENANT_ID, "jobber", refreshFn, TOKEN_BUFFER_MS.STANDARD, logger);
+
+    expect(result).not.toBeNull();
+    expect(result!.accessToken).toBe("valid-access-token");
+    expect(result!.refreshToken).toBe("valid-refresh-token");
+    expect(refreshFn).not.toHaveBeenCalled(); // Token not expired, no refresh needed
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes expired token and returns new access token", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    // Token expired 10 minutes ago
+    const expiredRow = makeTokenRow({
+      token_expires_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+    });
+    queryResponses.push({ rows: [expiredRow] });
+    // UPDATE response
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    const refreshFn = vi.fn().mockResolvedValue({
+      access_token: "refreshed-token",
+      expiry_date: Date.now() + 3600_000,
+    });
+
+    const result = await getIntegrationTokens(pool, TENANT_ID, "hubspot", refreshFn, TOKEN_BUFFER_MS.STANDARD, logger);
+
+    expect(result).not.toBeNull();
+    expect(result!.accessToken).toBe("refreshed-token");
+    expect(refreshFn).toHaveBeenCalledWith("valid-refresh-token");
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("token refreshed"));
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("uses custom buffer (e.g., Square 24h) for refresh check", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    // Token expires in 12h — within Square's 24h buffer but outside standard 5min
+    const row = makeTokenRow({
+      token_expires_at: new Date(Date.now() + 12 * 3600_000).toISOString(),
+    });
+    queryResponses.push({ rows: [row] });
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    const refreshFn = vi.fn().mockResolvedValue({
+      access_token: "square-refreshed",
+      expiry_date: Date.now() + 30 * 24 * 3600_000,
+    });
+
+    const result = await getIntegrationTokens(pool, TENANT_ID, "square", refreshFn, TOKEN_BUFFER_MS.SQUARE);
+
+    expect(result).not.toBeNull();
+    expect(result!.accessToken).toBe("square-refreshed");
+    expect(refreshFn).toHaveBeenCalled(); // Should refresh — 12h < 24h buffer
+  });
+
+  it("includes extra columns (e.g., settings) when requested", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeTokenRow({ settings: { tenant_sid: "12345" } })] });
+
+    const result = await getIntegrationTokens(
+      pool, TENANT_ID, "servicetitan", vi.fn(), TOKEN_BUFFER_MS.STANDARD, undefined, "settings"
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.settings).toEqual({ tenant_sid: "12345" });
+
+    // Verify the query included the extra column
+    const queryText = mockClient.query.mock.calls[0][0];
+    expect(queryText).toContain("settings");
+    expect(queryText).toContain("FOR UPDATE");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// getIntegrationTokens — SAD PATHS
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("getIntegrationTokens — sad paths", () => {
+  it("returns null when no integration row exists (WHO: tenant, WHAT: lookup, WHERE: tenant_integration_settings, HOW: no row for provider)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [] }); // No row
+
+    const result = await getIntegrationTokens(pool, TENANT_ID, "jobber", vi.fn());
+
+    expect(result).toBeNull();
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("returns null and logs when integration is inactive (WHO: tenant, WHAT: token check, WHERE: getIntegrationTokens, HOW: is_active=false)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeTokenRow({ is_active: false })] });
+
+    const result = await getIntegrationTokens(pool, TENANT_ID, "hubspot", vi.fn(), TOKEN_BUFFER_MS.STANDARD, logger);
+
+    expect(result).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("integration inactive")
+    );
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("returns null and logs when tokens are missing (WHO: tenant, WHAT: token check, WHERE: getIntegrationTokens, HOW: access_token/refresh_token null)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeTokenRow({ access_token: null, refresh_token: null })] });
+
+    const result = await getIntegrationTokens(pool, TENANT_ID, "square", vi.fn(), TOKEN_BUFFER_MS.STANDARD, logger);
+
+    expect(result).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("missing tokens")
+    );
+  });
+
+  it("marks integration inactive and returns null when refresh fails (WHO: tenant, WHAT: token refresh, WHERE: getIntegrationTokens, WHY: OAuth revoked, HOW: is_active set to false)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    // Expired token
+    queryResponses.push({
+      rows: [makeTokenRow({ token_expires_at: new Date(Date.now() - 60_000).toISOString() })],
+    });
+    // UPDATE is_active = false response
+    queryResponses.push({ rows: [], rowCount: 1 });
+
+    const refreshFn = vi.fn().mockRejectedValue(new Error("OAuth grant revoked"));
+
+    const result = await getIntegrationTokens(pool, TENANT_ID, "jobber", refreshFn, TOKEN_BUFFER_MS.STANDARD, logger);
+
+    expect(result).toBeNull();
+    expect(refreshFn).toHaveBeenCalledOnce();
+
+    // Verify is_active was set to false
+    const updateCall = mockClient.query.mock.calls[1];
+    expect(updateCall[0]).toContain("is_active = false");
+
+    // Verify error was logged with 5W context
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringMatching(/token refresh FAILED.*WHO.*WHAT.*WHY.*HOW.*ERROR/)
+    );
+
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("always releases the DB client even if query throws (WHO: system, WHAT: DB error, WHERE: getIntegrationTokens, HOW: finally block)", async () => {
+    const { mockClient } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    mockClient.query.mockRejectedValueOnce(new Error("Connection lost"));
+
+    await expect(
+      getIntegrationTokens(pool, TENANT_ID, "hubspot", vi.fn())
+    ).rejects.toThrow("Connection lost");
+
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+});

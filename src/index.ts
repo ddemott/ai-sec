@@ -101,6 +101,24 @@ app.register(multipart, {
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+// --- Raw Body Preservation for Stripe Webhooks ---
+// Stripe signature verification requires the raw request body.
+// This content-type parser preserves the raw buffer for webhook routes.
+app.addContentTypeParser(
+  'application/json',
+  { parseAs: 'buffer' },
+  async (req: any, rawBody: Buffer) => {
+    // Store raw body for webhook signature verification
+    req.rawBody = rawBody;
+    // Parse JSON normally
+    try {
+      return JSON.parse(rawBody.toString('utf8'));
+    } catch {
+      throw new Error('Invalid JSON');
+    }
+  }
+);
+
 // --- Database Pool ---
 // Single pool using postgres role. RLS is enforced via FORCE ROW LEVEL SECURITY
 // on all tables + set_tenant_context() GUC. Works on both local Docker and Supabase.
@@ -151,11 +169,25 @@ function verifyToken(token: string): { tenant_id: string; user_id: string; email
   }
 }
 
-const PUBLIC_ROUTES = ['/health', '/login', '/', '/demo', '/billing/webhook', '/calendar/auth/google/callback'];
+const PUBLIC_ROUTES = [
+  '/health', '/login', '/', '/demo',
+  '/billing/webhook',
+  // OAuth callbacks (redirects from external providers — no JWT available)
+  '/calendar/auth/google/callback',
+  '/calendar/auth/outlook/callback',
+  '/hubspot/auth/callback',
+  '/jobber/auth/callback',
+  '/square/auth/callback',
+  '/servicetitan/auth/callback',
+  // CRM webhooks (authenticated via HMAC/signature, not JWT)
+  '/hubspot/webhook',
+  '/square/webhook',
+  '/servicetitan/webhook',
+];
 app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS') return;
   const urlPath = request.url.split('?')[0];
-  if (PUBLIC_ROUTES.includes(urlPath)) return;
+  if (PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/')) return;
 
   const authHeader = request.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

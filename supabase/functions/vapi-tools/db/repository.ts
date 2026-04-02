@@ -94,7 +94,7 @@ export class PostgresRepository implements IRepository {
         const verify = await client.queryObject<{ val: string }>(
           "SELECT current_setting('app.current_tenant_id', true) as val"
         );
-        if (!verify.rows[0]?.val || verify.rows[0].val !== tenantId) {
+        if (!verify.rows[0]?.val || verify.rows[0]?.val !== tenantId) {
           throw new Error(`Failed to set tenant context for ${tenantId}`);
         }
       }
@@ -172,6 +172,7 @@ export class PostgresRepository implements IRepository {
         "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3) RETURNING id",
         [tenantId, phone, name]
       );
+      if (!res.rows[0]) throw new Error("INSERT INTO customers returned no row");
       return res.rows[0].id;
     });
   }
@@ -304,6 +305,7 @@ export class PostgresRepository implements IRepository {
         "INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING id",
         [tenantId, data.name, data.skills]
       );
+      if (!res.rows[0]) throw new Error("INSERT INTO employees returned no row");
       return res.rows[0].id;
     });
   }
@@ -360,6 +362,7 @@ export class PostgresRepository implements IRepository {
         "INSERT INTO services (tenant_id, name, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5) RETURNING id",
         [tenantId, data.name, data.duration_minutes, data.required_skills || [], data.required_resources || []]
       );
+      if (!res.rows[0]) throw new Error("INSERT INTO services returned no row");
       return res.rows[0].id;
     });
   }
@@ -472,6 +475,43 @@ export class PostgresRepository implements IRepository {
     });
   }
 
+  async getAvailableSlots(tenantId: string, serviceType: string, date: string, logger: Logger) {
+    logger.info({ tenantId, serviceType, date }, "Fetching available slots data");
+    return this.withClient(tenantId, async (c) => {
+      // 1. Fuzzy service lookup (matches pattern in book_with_scheduling_atomic)
+      const svcRes = await c.queryObject<{ name: string; duration_minutes: number; price: number | null }>(
+        "SELECT name, duration_minutes, price FROM services WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%' LIMIT 1",
+        [tenantId, serviceType]
+      );
+      const service = svcRes.rows[0] || null;
+
+      // 2. Employee shifts for the day_of_week (0=Sun, 6=Sat)
+      // JS Date.getDay() matches Postgres EXTRACT(DOW)
+      const dayOfWeek = new Date(date + "T12:00:00").getDay();
+      const shiftRes = await c.queryObject<{ start_time: string; end_time: string }>(
+        `SELECT DISTINCT start_time::text, end_time::text
+         FROM employee_shifts WHERE tenant_id = $1 AND day_of_week = $2 AND is_active = true
+         ORDER BY start_time`,
+        [tenantId, dayOfWeek]
+      );
+
+      // 3. Existing appointments for that date
+      const apptRes = await c.queryObject<{ start_time: string; end_time: string }>(
+        `SELECT start_time::text, end_time::text FROM appointments
+         WHERE tenant_id = $1 AND status = 'scheduled'
+         AND start_time::date = $2::date
+         ORDER BY start_time`,
+        [tenantId, date]
+      );
+
+      return {
+        service,
+        shifts: shiftRes.rows,
+        appointments: apptRes.rows,
+      };
+    });
+  }
+
   async searchKnowledgeBase(
     tenantId: string,
     queryEmbedding: number[],
@@ -545,7 +585,11 @@ export class PostgresRepository implements IRepository {
           params.durationMinutes || 30,
         ]
       );
-      return res.rows[0];
+      const result = res.rows[0];
+      if (!result) {
+        throw new Error("book_with_scheduling_atomic returned no result — check RPC exists and arguments are correct");
+      }
+      return result;
     });
   }
 }

@@ -92,7 +92,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
       } else {
         setError(res.error || 'Failed to create your staff profile')
       }
-    } catch (err) {
+    } catch {
       setError('Failed to create your staff profile')
     } finally {
       setSaving(false)

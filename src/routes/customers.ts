@@ -24,6 +24,21 @@ const CustomerCreateSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
+const CustomerUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  phone: z.string().min(1).max(30).optional(),
+  email: z.string().email().optional().nullable(),
+  first_name: z.string().max(100).optional().nullable(),
+  last_name: z.string().max(100).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  address_line2: z.string().max(500).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  postal_code: z.string().max(20).optional().nullable(),
+  timezone: z.string().max(50).optional().nullable(),
+  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
 export function registerCustomerRoutes(
   app: any,
   pool: Pool,
@@ -70,16 +85,20 @@ export function registerCustomerRoutes(
 
     logEvent(req, 'customer_created', { customerId: res.rows[0].id, name: body.name });
     // Fire-and-forget CRM sync
-    syncCustomerToJobber(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
-    syncCustomerToHubSpot(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
-    syncCustomerToSquare(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
-    syncCustomerToServiceTitan(pool, body.tenant_id, res.rows[0].id, 'create').catch(() => {});
+    syncCustomerToJobber(pool, body.tenant_id, res.rows[0].id, 'create').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToHubSpot(pool, body.tenant_id, res.rows[0].id, 'create').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToSquare(pool, body.tenant_id, res.rows[0].id, 'create').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToServiceTitan(pool, body.tenant_id, res.rows[0].id, 'create').catch(e => console.error('[sync]', e?.message || e));
     return reply.send({ success: true, customer: res.rows[0] });
   }, 'Failed to create customer'));
 
   app.put('/customers/:id', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as any;
+    const parsed = CustomerUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
@@ -89,20 +108,20 @@ export function registerCustomerRoutes(
            first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
            address = $6, address_line2 = $7, city = $8, state = $9,
            postal_code = $10, metadata = $11, timezone = $12
-         WHERE id = $13`,
+         WHERE id = $13 AND tenant_id = $14`,
         [body.first_name || null, body.last_name || null, body.name || null,
          body.phone, body.email, body.address, body.address_line2 || null,
          body.city || null, body.state || null, body.postal_code || null,
-         body.metadata || {}, body.timezone || 'America/New_York', id]
+         body.metadata || {}, body.timezone || 'America/New_York', id, tenantId]
       );
     });
 
     logEvent(req, 'customer_updated', { customerId: id });
     // Fire-and-forget CRM sync
-    syncCustomerToJobber(pool, tenantId, id, 'update').catch(() => {});
-    syncCustomerToHubSpot(pool, tenantId, id, 'update').catch(() => {});
-    syncCustomerToSquare(pool, tenantId, id, 'update').catch(() => {});
-    syncCustomerToServiceTitan(pool, tenantId, id, 'update').catch(() => {});
+    syncCustomerToJobber(pool, tenantId, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToHubSpot(pool, tenantId, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToSquare(pool, tenantId, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToServiceTitan(pool, tenantId, id, 'update').catch(e => console.error('[sync]', e?.message || e));
     return reply.send({ success: true });
   }, 'Failed to update customer'));
 
@@ -133,15 +152,16 @@ export function registerCustomerRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
+    // Fire-and-forget CRM sync BEFORE DB delete (so sync can still read customer data if needed)
+    syncCustomerToJobber(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToHubSpot(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToSquare(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncCustomerToServiceTitan(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+
     await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM customers WHERE id = $1', [id]);
+      await client.query('DELETE FROM customers WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     });
 
-    // Fire-and-forget CRM sync (remove sync map entries before DB delete)
-    syncCustomerToJobber(pool, tenantId, id, 'delete').catch(() => {});
-    syncCustomerToHubSpot(pool, tenantId, id, 'delete').catch(() => {});
-    syncCustomerToSquare(pool, tenantId, id, 'delete').catch(() => {});
-    syncCustomerToServiceTitan(pool, tenantId, id, 'delete').catch(() => {});
     logEvent(req, 'customer_deleted', { customerId: id });
     return reply.send({ success: true });
   }, 'Failed to delete customer'));

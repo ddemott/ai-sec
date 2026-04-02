@@ -16,8 +16,11 @@ export function registerAnalyticsRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const startDate = (req.query as any).start_date || new Date().toISOString().split('T')[0];
-    const endDate = (req.query as any).end_date || null;
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const rawStart = (req.query as any).start_date;
+    const rawEnd = (req.query as any).end_date;
+    const startDate = (rawStart && DATE_RE.test(rawStart)) ? rawStart : new Date().toISOString().split('T')[0];
+    const endDate = (rawEnd && DATE_RE.test(rawEnd)) ? rawEnd : null;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
@@ -38,7 +41,8 @@ export function registerAnalyticsRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const dayOfWeek = parseInt((req.query as Record<string, string>).day_of_week || String(new Date().getDay()), 10);
+    const rawDow = parseInt((req.query as Record<string, string>).day_of_week || String(new Date().getDay()), 10);
+    const dayOfWeek = (Number.isNaN(rawDow) || rawDow < 0 || rawDow > 6) ? new Date().getDay() : rawDow;
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(`

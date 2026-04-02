@@ -26,16 +26,14 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const [wizardMode, setWizardMode] = useState<WizardMode>(null)
   const [wizardDismissed, setWizardDismissed] = useState(false)
 
-  // Check for ?trial=true from landing page CTA
-  const [_trialParam] = useState(() => {
+  // Clean ?trial=true from landing page CTA on mount
+  useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('trial') === 'true') {
         window.history.replaceState({}, '', window.location.pathname)
-        return true
       }
     }
-    return false
   })
 
   interface DashboardAppointment { id: string; start_time: string; status: string; description?: string; customer_name?: string }

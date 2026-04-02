@@ -24,7 +24,7 @@ To maintain ultra-low latency in the voice call, all high-latency external tasks
 ## 2. Workflow: External Calendar Sync (Superseded)
 **Status:** Replaced by direct Fastify integration.
 
-Google Calendar sync is now handled directly in the Fastify backend (`src/services/googleCalendar.ts` + `src/services/calendarSync.ts`) rather than through n8n. Appointment mutations trigger fire-and-forget sync to Google Calendar with automatic token refresh. The n8n workflow blueprint (`n8n/calendar_sync.json`) is retained for reference but is no longer the active implementation.
+Calendar sync (Google Calendar + Outlook Calendar) is now handled directly in the Fastify backend (`src/services/googleCalendar.ts`, `src/services/outlookCalendar.ts`, `src/services/calendarSync.ts`) rather than through n8n. Appointment mutations trigger fire-and-forget sync to both Google and Outlook calendars with automatic token refresh. CRM sync (Jobber, HubSpot, Square, ServiceTitan) is also handled directly in the backend with bidirectional sync. The n8n workflow blueprint (`n8n/calendar_sync.json`) is retained for reference but is no longer the active implementation.
 
 See `docs/ARCHITECTURE.md` section 7 for the current architecture.
 

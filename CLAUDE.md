@@ -5,20 +5,20 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (21 route modules under src/routes/) -> Postgres (Railway deployment)
+- **Backend API**: Node.js / Fastify (20 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 21 route modules under src/routes/)
+- `/src` - Fastify backend (slim index.ts entry, 20 route modules under src/routes/)
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan)
-- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts)
+- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts)
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 61 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations)
+- `/supabase/migrations` - 63 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion, `qa-live-test.py` QA suite)
@@ -54,7 +54,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Admin bypass policies on `tenants`, `users`, `business_templates` for cross-tenant operations when no tenant context set
 - Audit trigger (`fn_audit_trigger`) is `SECURITY DEFINER` to bypass RLS for internal logging
 - `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert) + past-time rejection, business hours validation, fuzzy service matching
-- `book_with_scheduling_atomic()` RPC: Production booking RPC deployed to Supabase with natural language error messages
+- `book_with_scheduling_atomic()` RPC: Production booking RPC deployed to Supabase with natural language error messages and specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS)
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
 - Polymorphic assignment: `p_assignment_id` is UUID
 - All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)
@@ -72,7 +72,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - No `overrideTenantId` prop drilling — components read tenant from context directly
 - `useFormState<T>()` hook for generic form state + dirty tracking
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 21 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 20 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
 - All route mutations validated with Zod schemas (auth, tenants, employees, shifts, resources, services, skills, calendar, appointments, customers)
 - All error responses use `{ success: false, error: string, details?: any }` format
 - Production env validation: server refuses to start if DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, or STRIPE_SECRET_KEY are missing
@@ -82,22 +82,30 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Fetch timeouts on all OpenAI API calls (10s embeddings, 15s normalization) via AbortController
 - Graceful shutdown: SIGTERM/SIGINT handlers close Fastify + drain DB pool (required for Railway deploys)
 
-## Known Issues (as of March 2026)
-- Shift timezone bug in book_appointment_atomic (UTC conversion can cause day-of-week mismatch) — mitigated with `AT TIME ZONE`
+## Known Issues (as of April 2026)
 - OpenAI API quota needs monitoring — edge functions use GPT-4o-mini for LLM + embeddings
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering
 
-## Resolved Issues (March 2026 Code Review)
+## Resolved Issues
+### March 2026 Code Review
 - 58 bugs identified and resolved across Critical/High/Medium/Low severity
 - users.email scoped to per-tenant uniqueness (BUG-002)
 - RLS standardized on `app.current_tenant_id` (BUG-006)
 - Dev bypass button removed (BUG-005)
 - handleEditFormChange fixed in CRMView (BUG-004)
-- Fastify monolith broken into 16 route modules with RLS enforcement (BUG-017)
+- Fastify monolith broken into 20 route modules with RLS enforcement (BUG-017)
 - Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016)
 
+### April 1, 2026 Voice AI Bug Fixes
+- BUG-059: Timezone regression in `book_with_scheduling_atomic()` — hardcoded UTC instead of tenant timezone for shift validation. Fixed with migration `20260401000000_fix_scheduling_timezone_bug.sql`
+- BUG-060: Phone number stored as "+1" (incomplete) — `normalizePhone()` now rejects < 10 digits
+- BUG-061: Wrong date booked — Vapi assistant had hardcoded stale date in system prompt, now uses dynamic date
+- BUG-062: No employee assigned — AI wasn't passing `requiredEmployeeSkills` array, prompt updated with service-to-skill mapping
+- BUG-063: Call hangs up on booking failure — added error handling to Vapi assistant prompt
+- BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
+
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 791 backend tests + 313 dashboard tests = 1,104 total passing. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,031 backend tests + 313 dashboard tests = 1,344 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining (Phase 13)
 - ~~Supabase support ticket~~ — Resolved 2026-03-30. Project no longer stuck in "pausing" state.
@@ -113,11 +121,15 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - ~~HubSpot CRM integration~~ — Done. Bidirectional sync, REST API (contacts + meetings), OAuth flow, webhook receiver with v3 signature verification, full sync
 - ~~Square CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + bookings), OAuth flow, HMAC webhook verification, full sync
 - ~~ServiceTitan CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + jobs), OAuth flow, ST-App-Key auth, full sync
-- ~~Comprehensive sad path test coverage~~ — Done. 1,104 total tests (791 backend + 313 dashboard), 5W diagnostics in all error paths
+- ~~Comprehensive sad path test coverage~~ — Done. 1,344 total tests (1,031 backend + 313 dashboard), 5W diagnostics in all error paths
 - ~~Group 3 refactorings (production hardening)~~ — Done. All 24 items complete (see SUGGESTED_REFACTORINGS.md)
 - ~~Knowledge base questionnaire~~ — Done (2026-03-30). 40 policy Q&A pairs across 9 categories, auto-save, document upload, embedding generation.
 - ~~Voice AI fixes~~ — Done (2026-03-30). 8 critical fixes (tool response format, Zod relaxation, caller ID capture, timezone handling, natural error messages).
 - ~~QA test suite~~ — Done (2026-03-30). `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function.
+- ~~Scheduling timezone fix~~ — Done (2026-04-01). BUG-059: `book_with_scheduling_atomic()` timezone regression fixed. Migration applied to production.
+- ~~Voice AI phone/date/employee fixes~~ — Done (2026-04-01). BUG-060/061/062: Phone validation, dynamic date prompt, service-to-skill mapping.
+- ~~Booking error handling~~ — Done (2026-04-01). BUG-063/064: Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, etc.) for better AI responses.
+- ~~OAuth callback refactoring~~ — Done (2026-04-01). Generic `oauthCallbackFactory.ts` + shared `tokenManagement.ts` eliminate duplication across 4 CRM integrations.
 - Database webhooks for n8n triggers
 - Beta testing with DynaTire
 

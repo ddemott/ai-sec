@@ -47,9 +47,13 @@ export function registerSkillRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM tenant_skills WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query('DELETE FROM tenant_skills WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
     });
+
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ success: false, error: 'Skill not found' });
+    }
 
     logEvent(req, 'skill_deleted', { skillId: id });
     return reply.send({ success: true });

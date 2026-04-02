@@ -175,8 +175,10 @@ test('AppointmentView: month navigation moves between months', async () => {
   const monthButtons = await screen.findAllByRole('button', { name: /Month/i })
   fireEvent.click(monthButtons[0])
 
-  // Capture all header labels (e.g., "March 2026")
-  const headersBefore = screen.getAllByText(/March 20\d{2}/)
+  // Capture all header labels using the current month name (e.g., "April 2026")
+  const currentMonth = new Date().toLocaleString('en-US', { month: 'long' })
+  const monthRegex = new RegExp(`${currentMonth} 20\\d{2}`)
+  const headersBefore = screen.getAllByText(monthRegex)
   const beforeLabels = headersBefore.map(h => h.textContent)
 
   // Find the Next button inside the calendar toolbar

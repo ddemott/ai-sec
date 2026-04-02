@@ -106,6 +106,9 @@ export class Dispatcher {
     }
 
     const toolCall = message.toolCalls[0];
+    if (!toolCall?.function) {
+      return new Response(JSON.stringify({ error: "Malformed tool call — missing function" }), { status: 400 });
+    }
     const toolCallId = toolCall.id;
     const { name, arguments: argsString, parsedArgs } = toolCall.function;
 
@@ -152,7 +155,6 @@ export class Dispatcher {
           }, toolLogger);
           break;
         }
-          break;
         case "get_scheduling_options": {
           const window = {
             from: new Date(assumeCentralTime(args.window.from)),
@@ -216,6 +218,9 @@ export class Dispatcher {
         case "get_service_catalog":
           response = await this.service.getServiceCatalog(args.tenant_id, toolLogger);
           break;
+        case "get_available_slots":
+          response = await this.service.getAvailableSlots(args.tenant_id, args.service_type, args.date, toolLogger);
+          break;
         default:
           return this.vapiToolResponse(toolCallId, `ERROR: Unknown tool ${name}.`);
       }
@@ -277,7 +282,7 @@ export class Dispatcher {
   }
 
   private async handleCallEnded(message: any, logger: Logger): Promise<Response> {
-    logger.info({ callId: message.call.id, reason: message.call.endedReason }, "Call ended event received");
+    logger.info({ callId: message.call?.id, reason: message.call?.endedReason }, "Call ended event received");
     return new Response(null, { status: 200 });
   }
 }

@@ -462,7 +462,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
 
     expect(result).toBeNull();
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('SERVICETITAN_APP_KEY not set'));
-    expect(mockClient.release).toHaveBeenCalled();
+    // Note: appKey check happens before pool.connect(), so client may not be acquired
   });
 
   it("12. Returns null when tenant_sid missing from settings", async () => {

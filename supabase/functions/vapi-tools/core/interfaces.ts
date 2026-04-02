@@ -105,6 +105,20 @@ export interface IRepository {
     error_code: string | null;
   }>;
 
+  /**
+   * Returns raw data for computing available slots: service info, shifts for the day, existing appointments.
+   */
+  getAvailableSlots(
+    tenantId: string,
+    serviceType: string,
+    date: string,
+    logger: Logger
+  ): Promise<{
+    service: { name: string; duration_minutes: number; price: number | null } | null;
+    shifts: Array<{ start_time: string; end_time: string }>;
+    appointments: Array<{ start_time: string; end_time: string }>;
+  }>;
+
   setLogger(logger: Logger): void;
   close(): Promise<void>;
 }
