@@ -52,13 +52,13 @@ export function registerCustomerRoutes(
 
     if (tenantId === SUPER_ADMIN_TENANT_ID) {
       const res = await withPoolClient(pool, (client) =>
-        client.query('SELECT * FROM customers ORDER BY name LIMIT $1 OFFSET $2', [limit, offset])
+        client.query('SELECT * FROM customers WHERE is_deleted = false ORDER BY name LIMIT $1 OFFSET $2', [limit, offset])
       );
       return reply.send(res.rows);
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('SELECT * FROM customers WHERE tenant_id = $1 ORDER BY name LIMIT $2 OFFSET $3', [tenantId, limit, offset]);
+      return client.query('SELECT * FROM customers WHERE tenant_id = $1 AND is_deleted = false ORDER BY name LIMIT $2 OFFSET $3', [tenantId, limit, offset]);
     });
     return reply.send(res.rows);
   }, 'Failed to fetch customers'));
@@ -139,7 +139,7 @@ export function registerCustomerRoutes(
          FROM appointments a
          LEFT JOIN resources r ON r.id = a.resource_id
          LEFT JOIN employees e ON e.id = a.employee_id
-         WHERE a.customer_id = $1 AND a.tenant_id = $2
+         WHERE a.customer_id = $1 AND a.tenant_id = $2 AND a.is_deleted = false
          ORDER BY a.start_time DESC`,
         [id, tenantId]
       );

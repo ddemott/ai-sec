@@ -100,7 +100,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**1,344 tests passing** (1,031 backend + 313 dashboard) in ~25 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**1,319 tests passing** (1,006 backend + 313 dashboard) in ~25 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend

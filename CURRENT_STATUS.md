@@ -26,7 +26,7 @@ All 8 design session work items from March 24 are now **complete**. All 24 refac
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
-| **Tests** | 1,031 backend + 313 dashboard = 1,344 passing + 88 QA assertions | All green (with DB running), zero TS errors |
+| **Tests** | 1,006 backend + 313 dashboard = 1,319 passing + 88 QA assertions | All green (with DB running), zero TS errors |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
@@ -186,7 +186,7 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 - ~~Square CRM integration~~ — Bidirectional REST v2 sync with customers + bookings
 - ~~ServiceTitan CRM integration~~ — Bidirectional REST v2 sync with customers + jobs
 - ~~CRM push triggers wired~~ — appointments.ts + customers.ts fire to all connected integrations (4 CRMs + 2 calendars)
-- ~~Comprehensive sad path coverage~~ — 1,344 total tests with 5W diagnostics
+- ~~Comprehensive sad path coverage~~ — 1,319 total tests with 5W diagnostics
 - ~~30 unused variable warnings cleaned~~ — zero TS errors with strict checks
 - ~~Scheduling diagnostics~~ — `selectAssignments()` returns reason strings ("all 3 bays busy", etc.)
 - ~~All refactoring items complete~~ — 24/24 done (SUGGESTED_REFACTORINGS.md)
@@ -226,4 +226,4 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
 | QA live tests | 1 file | 29 calls / 88 assertions | Live edge function tool calls with DB verification |
-| **Total** | **59 + 16 + 1** | **1,344 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration |
+| **Total** | **59 + 16 + 1** | **1,319 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration |

@@ -75,7 +75,7 @@ export function registerProvisioningRoutes(
 
       // Get default resource for this tenant
       const resourceRes = await client.query(
-        'SELECT id FROM resources WHERE tenant_id = $1 ORDER BY created_at ASC LIMIT 1',
+        'SELECT id FROM resources WHERE tenant_id = $1 AND is_deleted = false ORDER BY created_at ASC LIMIT 1',
         [tenant_id]
       );
       const defaultResourceId = resourceRes.rows[0]?.id || tenant_id;

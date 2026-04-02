@@ -42,8 +42,9 @@ export class VapiClient {
         ...(body ? { body: JSON.stringify(body) } : {}),
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-    } catch (networkErr: any) {
-      throw new Error(`Vapi API ${method} ${endpoint} failed: network error reaching ${VAPI_BASE_URL} — ${networkErr.message}`);
+    } catch (networkErr: unknown) {
+      const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+      throw new Error(`Vapi API ${method} ${endpoint} failed: network error reaching ${VAPI_BASE_URL} — ${msg}`);
     }
 
     if (!res.ok) {

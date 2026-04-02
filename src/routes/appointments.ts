@@ -83,7 +83,7 @@ export function registerAppointmentRoutes(
     const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
     // Build WHERE clauses and params dynamically for date filtering
-    const conditions: string[] = [];
+    const conditions: string[] = ['a.is_deleted = false'];
     const params: any[] = [];
     let paramIdx = 1;
 
@@ -229,7 +229,7 @@ export function registerAppointmentRoutes(
 
         // Update customer info if provided
         if (body.customer_name || body.customer_phone || body.customer_notes) {
-          const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1', [id]);
+          const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1 AND is_deleted = false', [id]);
           if (appt.rows[0]?.customer_id) {
             const custFields: string[] = [];
             const custValues: unknown[] = [];

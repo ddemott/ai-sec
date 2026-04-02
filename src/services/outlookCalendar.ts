@@ -100,8 +100,9 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       body: body.toString(),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Outlook OAuth code exchange failed: network error reaching Microsoft token endpoint — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Outlook OAuth code exchange failed: network error reaching Microsoft token endpoint — ${msg}`);
   }
 
   if (!res.ok) {
@@ -142,8 +143,9 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       body: body.toString(),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Outlook token refresh failed: network error reaching Microsoft token endpoint — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Outlook token refresh failed: network error reaching Microsoft token endpoint — ${msg}`);
   }
 
   if (!res.ok) {
@@ -189,8 +191,9 @@ async function graphRequest(method: string, path: string, accessToken: string, b
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Microsoft Graph API ${method} ${path} failed: network error — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Microsoft Graph API ${method} ${path} failed: network error — ${msg}`);
   }
 
   if (!res.ok) {

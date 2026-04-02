@@ -105,7 +105,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,031 backend tests + 313 dashboard tests = 1,344 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,006 backend tests + 313 dashboard tests = 1,319 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining (Phase 13)
 - ~~Supabase support ticket~~ — Resolved 2026-03-30. Project no longer stuck in "pausing" state.
@@ -121,7 +121,7 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - ~~HubSpot CRM integration~~ — Done. Bidirectional sync, REST API (contacts + meetings), OAuth flow, webhook receiver with v3 signature verification, full sync
 - ~~Square CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + bookings), OAuth flow, HMAC webhook verification, full sync
 - ~~ServiceTitan CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + jobs), OAuth flow, ST-App-Key auth, full sync
-- ~~Comprehensive sad path test coverage~~ — Done. 1,344 total tests (1,031 backend + 313 dashboard), 5W diagnostics in all error paths
+- ~~Comprehensive sad path test coverage~~ — Done. 1,319 total tests (1,006 backend + 313 dashboard), 5W diagnostics in all error paths
 - ~~Group 3 refactorings (production hardening)~~ — Done. All 24 items complete (see SUGGESTED_REFACTORINGS.md)
 - ~~Knowledge base questionnaire~~ — Done (2026-03-30). 40 policy Q&A pairs across 9 categories, auto-save, document upload, embedding generation.
 - ~~Voice AI fixes~~ — Done (2026-03-30). 8 critical fixes (tool response format, Zod relaxation, caller ID capture, timezone handling, natural error messages).

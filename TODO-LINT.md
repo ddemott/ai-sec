@@ -105,4 +105,4 @@ Test files use `any` for mock fetch responses. Non-blocking but noisy in ESLint 
 - [x] Fixed unescaped `'` entity in `Step7GoLive.tsx`
 - [x] Fixed ES2018 regex flag `s` in `KnowledgeBaseView.tsx` (replaced with `[\s\S]`)
 - [x] Zero TypeScript errors on both backend and dashboard
-- [x] 1,031 backend tests + 313 dashboard tests = 1,344 all passing
+- [x] 1,006 backend tests + 313 dashboard tests = 1,319 all passing

@@ -124,8 +124,9 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       body: body.toString(),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`ServiceTitan OAuth code exchange failed: network error reaching ServiceTitan token endpoint — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`ServiceTitan OAuth code exchange failed: network error reaching ServiceTitan token endpoint — ${msg}`);
   }
 
   if (!res.ok) {
@@ -165,8 +166,9 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       body: body.toString(),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`ServiceTitan token refresh failed: network error — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`ServiceTitan token refresh failed: network error — ${msg}`);
   }
 
   if (!res.ok) {
@@ -205,8 +207,9 @@ export async function apiRequest<T = any>(
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`ServiceTitan API ${method} ${path} failed: network error — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`ServiceTitan API ${method} ${path} failed: network error — ${msg}`);
   }
 
   if (!res.ok) {

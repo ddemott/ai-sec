@@ -122,8 +122,9 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Square OAuth code exchange failed: network error reaching Square token endpoint — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Square OAuth code exchange failed: network error reaching Square token endpoint — ${msg}`);
   }
 
   if (!res.ok) {
@@ -168,8 +169,9 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Square token refresh failed: network error — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Square token refresh failed: network error — ${msg}`);
   }
 
   if (!res.ok) {
@@ -211,8 +213,9 @@ export async function apiRequest<T = any>(
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Square API ${method} ${path} failed: network error — ${networkErr.message}`);
+  } catch (networkErr: unknown) {
+    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+    throw new Error(`Square API ${method} ${path} failed: network error — ${msg}`);
   }
 
   if (!res.ok) {
@@ -284,7 +287,7 @@ export async function listBookings(accessToken: string, cursor?: string): Promis
 
 export async function createBooking(
   accessToken: string,
-  booking: { start_at: string; customer_id?: string; location_id?: string; appointment_segments?: any[] }
+  booking: { start_at: string; customer_id?: string; location_id?: string; appointment_segments?: Array<{ service_variation_id?: string; team_member_id?: string; duration_minutes?: number }> }
 ): Promise<{ booking: SquareBooking }> {
   return apiRequest('POST', '/bookings', accessToken, { booking });
 }
@@ -292,7 +295,7 @@ export async function createBooking(
 export async function updateBooking(
   accessToken: string,
   bookingId: string,
-  booking: { start_at?: string; customer_id?: string; location_id?: string; appointment_segments?: any[] }
+  booking: { start_at?: string; customer_id?: string; location_id?: string; appointment_segments?: Array<{ service_variation_id?: string; team_member_id?: string; duration_minutes?: number }> }
 ): Promise<{ booking: SquareBooking }> {
   return apiRequest('PUT', `/bookings/${bookingId}`, accessToken, { booking });
 }

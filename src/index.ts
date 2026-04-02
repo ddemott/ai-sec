@@ -107,6 +107,7 @@ app.register(multipart, {
 app.addContentTypeParser(
   'application/json',
   { parseAs: 'buffer' },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify content parser types require raw request access
   async (req: any, rawBody: Buffer) => {
     // Store raw body for webhook signature verification
     req.rawBody = rawBody;

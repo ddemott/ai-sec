@@ -187,7 +187,7 @@ export async function syncAppointmentToSquare(
     const endTime = new Date(appt.end_time);
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
 
-    const bookingData: any = {
+    const bookingData: { start_at: string; appointment_segments: Array<{ duration_minutes: number }>; customer_id?: string } = {
       start_at: startTime.toISOString(),
       appointment_segments: [{ duration_minutes: durationMinutes }],
     };

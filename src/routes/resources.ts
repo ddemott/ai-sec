@@ -31,13 +31,13 @@ export function registerResourceRoutes(
 
     if (isSuperAdmin) {
       return withPoolClient(pool, async (client) => {
-        const res = await client.query('SELECT * FROM resources ORDER BY name');
+        const res = await client.query('SELECT * FROM resources WHERE is_deleted = false ORDER BY name');
         return reply.send(res.rows);
       });
     }
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('SELECT * FROM resources WHERE tenant_id = $1 ORDER BY name', [tenantId]);
+      return client.query('SELECT * FROM resources WHERE tenant_id = $1 AND is_deleted = false ORDER BY name', [tenantId]);
     });
     return reply.send(res.rows);
   }, 'Failed to fetch resources'));

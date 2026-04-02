@@ -31,7 +31,7 @@
 - Full code review resolved 58 bugs across all severity levels
 - JWT auth with expiry and auto-logout, standardized RLS via `withTenantClient()`, Zod validation at all API boundaries
 - DST-safe shift checks, error boundaries, SessionContext, structured logging
-- Tests passing (expanded to 1,344 total by Phase 13)
+- Tests passing (expanded to 1,319 total by Phase 13)
 
 ### Phase 9: Scale & Polish
 - UUID standardization throughout, shared `scheduling.ts` and `getEmbedding.ts`
