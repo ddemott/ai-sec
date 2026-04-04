@@ -8,6 +8,7 @@ export {
   type ResourceCandidate,
   type EmployeeCandidate,
   type Shift,
+  type ShiftOverride,
   type ExistingAppointment,
   type ServiceRequirements,
   type AssignmentOption,

@@ -1,7 +1,7 @@
 import { IRepository } from "./interfaces.ts";
 import { AvailabilityError, ValidationError } from "./errors.ts";
 import { Logger } from "./logger.ts";
-import { selectAssignments, type ServiceRequirements, type TimeWindow, type AssignmentOption, type SchedulingDiagnostics } from "./scheduling.ts";
+import { selectAssignments, type ServiceRequirements, type TimeWindow, type AssignmentOption, type SchedulingDiagnostics, type ShiftOverride } from "./scheduling.ts";
 
 export class AISecretaryService {
   private repo: IRepository;
@@ -117,12 +117,27 @@ export class AISecretaryService {
   ): Promise<{ result: { options: AssignmentOption[]; diagnostics: SchedulingDiagnostics } }> {
     logger.info({ tenantId, requirements, window }, "Computing scheduling options");
 
-    const [resources, employees, shifts, existing] = await Promise.all([
+    // Compute the date string for override lookup
+    const dateStr = window.from.toISOString().substring(0, 10);
+
+    const [resources, employees, shifts, existing, effectiveShifts] = await Promise.all([
       this.repo.getSchedulingResources(tenantId, logger),
       this.repo.getSchedulingEmployees(tenantId, logger),
       this.repo.getEmployeeShifts(tenantId, logger),
       this.repo.getExistingAppointments(tenantId, window, logger),
+      this.repo.getEffectiveShiftsForDate(tenantId, dateStr, logger),
     ]);
+
+    // Convert effective shifts to ShiftOverride format for the scheduling algorithm
+    const shiftOverrides: ShiftOverride[] = effectiveShifts
+      .filter(s => s.is_off || (s.start_time && s.end_time))
+      .map(s => ({
+        employee_id: s.employee_id,
+        shift_date: dateStr,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        is_off: s.is_off,
+      }));
 
     const { options, diagnostics } = selectAssignments({
       requirements,
@@ -130,6 +145,7 @@ export class AISecretaryService {
       resources,
       employees,
       shifts,
+      shiftOverrides,
       existingAppointments: existing,
     });
 

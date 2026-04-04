@@ -23,10 +23,26 @@ function isResourceFree(resourceId, window, existing) {
         return overlaps(window, { from: appt.start, to: appt.end });
     });
 }
-function isEmployeeOnShift(employeeId, window, shifts) {
+function isEmployeeOnShift(employeeId, window, shifts, overrides) {
     const day = window.from.getUTCDay();
     const startStr = window.from.toISOString().substring(11, 16);
     const endStr = window.to.toISOString().substring(11, 16);
+    const dateStr = window.from.toISOString().substring(0, 10);
+    // Check overrides first (date-specific)
+    if (overrides && overrides.length > 0) {
+        const override = overrides.find((o) => o.employee_id.toString() === employeeId && o.shift_date === dateStr);
+        if (override) {
+            // Override exists — if day off, not on shift
+            if (override.is_off)
+                return false;
+            // If override has times, check them
+            if (override.start_time && override.end_time) {
+                return override.start_time <= startStr && override.end_time >= endStr;
+            }
+            return false;
+        }
+    }
+    // Fall back to weekly pattern
     return shifts.some((s) => {
         if (s.employee_id.toString() !== employeeId)
             return false;
@@ -45,6 +61,7 @@ function selectAssignments(args) {
     const { requirements, window: win } = args;
     const employees = args.employees ?? [];
     const shifts = args.shifts ?? [];
+    const overrides = args.shiftOverrides ?? [];
     const existing = args.existingAppointments ?? [];
     const totalResources = args.resources.length;
     // Step 1: Filter resources by capability
@@ -62,7 +79,7 @@ function selectAssignments(args) {
                 skilledEmployees++;
                 const onShift = e.onShift !== undefined
                     ? e.onShift
-                    : (shifts.length > 0 ? isEmployeeOnShift(e.id, win, shifts) : true);
+                    : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);
                 if (onShift) {
                     onShiftEmployees++;
                 }
@@ -76,7 +93,7 @@ function selectAssignments(args) {
             for (const e of employees) {
                 const onShift = e.onShift !== undefined
                     ? e.onShift
-                    : (shifts.length > 0 ? isEmployeeOnShift(e.id, win, shifts) : true);
+                    : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);
                 if (!onShift)
                     continue;
                 if (!hasAll(e.skills, requirements.requiredEmployeeSkills))

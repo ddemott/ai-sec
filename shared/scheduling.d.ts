@@ -24,6 +24,13 @@ export interface Shift {
     start_time: string;
     end_time: string;
 }
+export interface ShiftOverride {
+    employee_id: string;
+    shift_date: string;
+    start_time: string | null;
+    end_time: string | null;
+    is_off: boolean;
+}
 export interface ExistingAppointment {
     resourceId: string;
     start: Date;
@@ -64,5 +71,6 @@ export declare function selectAssignments(args: {
     resources: ResourceCandidate[];
     employees?: EmployeeCandidate[];
     shifts?: Shift[];
+    shiftOverrides?: ShiftOverride[];
     existingAppointments?: ExistingAppointment[];
 }): SelectAssignmentsResult;

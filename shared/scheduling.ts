@@ -29,6 +29,14 @@ export interface Shift {
   end_time: string;   // "HH:MM"
 }
 
+export interface ShiftOverride {
+  employee_id: string;
+  shift_date: string;  // "YYYY-MM-DD"
+  start_time: string | null;
+  end_time: string | null;
+  is_off: boolean;
+}
+
 export interface ExistingAppointment {
   resourceId: string;
   start: Date;
@@ -87,11 +95,30 @@ function isEmployeeOnShift(
   employeeId: string,
   window: TimeWindow,
   shifts: Shift[],
+  overrides?: ShiftOverride[],
 ): boolean {
   const day = window.from.getUTCDay();
   const startStr = window.from.toISOString().substring(11, 16);
   const endStr = window.to.toISOString().substring(11, 16);
+  const dateStr = window.from.toISOString().substring(0, 10);
 
+  // Check overrides first (date-specific)
+  if (overrides && overrides.length > 0) {
+    const override = overrides.find(
+      (o) => o.employee_id.toString() === employeeId && o.shift_date === dateStr
+    );
+    if (override) {
+      // Override exists — if day off, not on shift
+      if (override.is_off) return false;
+      // If override has times, check them
+      if (override.start_time && override.end_time) {
+        return override.start_time <= startStr && override.end_time >= endStr;
+      }
+      return false;
+    }
+  }
+
+  // Fall back to weekly pattern
   return shifts.some((s) => {
     if (s.employee_id.toString() !== employeeId) return false;
     if (s.day_of_week !== day) return false;
@@ -111,11 +138,13 @@ export function selectAssignments(args: {
   resources: ResourceCandidate[];
   employees?: EmployeeCandidate[];
   shifts?: Shift[];
+  shiftOverrides?: ShiftOverride[];
   existingAppointments?: ExistingAppointment[];
 }): SelectAssignmentsResult {
   const { requirements, window: win } = args;
   const employees = args.employees ?? [];
   const shifts = args.shifts ?? [];
+  const overrides = args.shiftOverrides ?? [];
   const existing = args.existingAppointments ?? [];
 
   const totalResources = args.resources.length;
@@ -143,7 +172,7 @@ export function selectAssignments(args: {
         skilledEmployees++;
         const onShift = e.onShift !== undefined
           ? e.onShift
-          : (shifts.length > 0 ? isEmployeeOnShift(e.id, win, shifts) : true);
+          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);
         if (onShift) {
           onShiftEmployees++;
         }
@@ -159,7 +188,7 @@ export function selectAssignments(args: {
       for (const e of employees) {
         const onShift = e.onShift !== undefined
           ? e.onShift
-          : (shifts.length > 0 ? isEmployeeOnShift(e.id, win, shifts) : true);
+          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);
         if (!onShift) continue;
         if (!hasAll(e.skills, requirements.requiredEmployeeSkills)) continue;
         options.push({ resourceId: r.id, employeeId: e.id });
