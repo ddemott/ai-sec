@@ -13,6 +13,7 @@ import { Api } from '../lib/api'
 import { detectTimezone } from '../lib/constants'
 import { formatPhone } from '../lib/phone'
 import { splitFullName } from '../lib/utils'
+import { useFormState } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { Button } from './ui/Button'
 import { CustomerDetailPanel } from './CustomerDetailPanel'
@@ -31,7 +32,7 @@ export default function CRMView() {
   const [isEditing, setIsEditing] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [editForm, setEditForm] = useState({
+  const { form: editForm, setField: handleEditFormChange, setForm: setEditForm } = useFormState({
     first_name: '',
     last_name: '',
     phone: '',
@@ -44,10 +45,6 @@ export default function CRMView() {
     timezone: 'America/New_York',
     notes: ''
   })
-
-  const handleEditFormChange = (field: string, value: string) => {
-    setEditForm(prev => ({ ...prev, [field]: value }))
-  }
 
   useEffect(() => {
     if (tenantId) {

@@ -1,18 +1,21 @@
 'use client'
 
 import React, { useState } from 'react'
-import DashboardHome from '@/components/DashboardHome'
-import SchedulerView from '@/components/SchedulerView'
-import CRMView from '@/components/CRMView'
-import MyTeamView from '@/components/MyTeamView'
-import MyBusinessView from '@/components/MyBusinessView'
-import AIInsightsView from '@/components/AIInsightsView'
-import SettingsView from '@/components/SettingsView'
-import SuperAdminDashboard from '@/components/SuperAdminDashboard'
+import dynamic from 'next/dynamic'
 import LoginView from '@/components/LoginView'
 import { OutlookLayout } from '@/components/OutlookLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useSessionContext } from '@/lib/SessionContext'
+
+// Lazy load tab content — only loads the JS for the active tab
+const DashboardHome = dynamic(() => import('@/components/DashboardHome'), { ssr: false })
+const SchedulerView = dynamic(() => import('@/components/SchedulerView'), { ssr: false })
+const CRMView = dynamic(() => import('@/components/CRMView'), { ssr: false })
+const MyTeamView = dynamic(() => import('@/components/MyTeamView'), { ssr: false })
+const MyBusinessView = dynamic(() => import('@/components/MyBusinessView'), { ssr: false })
+const AIInsightsView = dynamic(() => import('@/components/AIInsightsView'), { ssr: false })
+const SettingsView = dynamic(() => import('@/components/SettingsView'), { ssr: false })
+const SuperAdminDashboard = dynamic(() => import('@/components/SuperAdminDashboard'), { ssr: false })
 
 export type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses'
 

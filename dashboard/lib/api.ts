@@ -170,6 +170,8 @@ function handleFetchError(err: unknown) {
     API_BASE_URL.startsWith('https://localhost')
   ) {
     certRedirectTriggered = true;
+    // Reset after 10 seconds so the user can retry if the redirect didn't help
+    setTimeout(() => { certRedirectTriggered = false; }, 10000);
     // Redirect to backend so the user can accept the self-signed cert
     window.location.href = `${API_BASE_URL}/health?redirect=${encodeURIComponent(window.location.href)}`;
   }
