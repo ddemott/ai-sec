@@ -548,51 +548,81 @@ export class PostgresRepository implements IRepository {
   async getAvailableSlots(tenantId: string, serviceType: string, date: string, logger: Logger) {
     logger.info({ tenantId, serviceType, date }, "Fetching available slots data");
     return this.withClient(tenantId, async (c) => {
-      // 1. Fuzzy service lookup (matches pattern in book_with_scheduling_atomic)
-      const svcRes = await c.queryObject<{ name: string; duration_minutes: number; price: number | null }>(
-        "SELECT name, duration_minutes, price FROM services WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%' LIMIT 1",
-        [tenantId, serviceType]
+      // Single consolidated query: service + effective shifts + appointments
+      // Replaces 3 separate queries + N+1 per-employee loop with one round trip
+      const res = await c.queryObject<{
+        source: string;
+        name: string | null;
+        duration_minutes: number | null;
+        price: number | null;
+        start_time: string | null;
+        end_time: string | null;
+      }>(
+        `WITH svc AS (
+          SELECT name, duration_minutes, price
+          FROM services
+          WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
+          LIMIT 1
+        ),
+        active_employees AS (
+          SELECT id FROM employees
+          WHERE tenant_id = $1 AND is_active = true
+            AND (is_deleted IS NULL OR is_deleted = false)
+        ),
+        effective_shifts AS (
+          -- Override-aware: check shift_overrides first, fall back to employee_shifts pattern
+          SELECT DISTINCT
+            COALESCE(so.start_time, es.start_time)::text AS start_time,
+            COALESCE(so.end_time, es.end_time)::text AS end_time
+          FROM active_employees ae
+          LEFT JOIN shift_overrides so
+            ON so.employee_id = ae.id
+            AND so.tenant_id = $1
+            AND so.shift_date = $3::date
+          LEFT JOIN employee_shifts es
+            ON es.employee_id = ae.id
+            AND es.day_of_week = EXTRACT(DOW FROM $3::date)::integer
+            AND es.is_active = true
+            AND so.id IS NULL
+          WHERE (
+            (so.id IS NOT NULL AND so.is_off = false AND so.start_time IS NOT NULL)
+            OR
+            (so.id IS NULL AND es.id IS NOT NULL)
+          )
+        ),
+        day_appointments AS (
+          SELECT start_time::text, end_time::text
+          FROM appointments
+          WHERE tenant_id = $1 AND status = 'scheduled'
+            AND (is_deleted IS NULL OR is_deleted = false)
+            AND start_time::date = $3::date
+        )
+        -- Return all three result sets tagged by source
+        SELECT 'service' AS source, name, duration_minutes::int, price, NULL AS start_time, NULL AS end_time FROM svc
+        UNION ALL
+        SELECT 'shift' AS source, NULL, NULL, NULL, start_time, end_time FROM effective_shifts
+        UNION ALL
+        SELECT 'appointment' AS source, NULL, NULL, NULL, start_time, end_time FROM day_appointments
+        ORDER BY source, start_time`,
+        [tenantId, serviceType, date]
       );
-      const service = svcRes.rows[0] || null;
 
-      // 2. Employee shifts for this date (override-aware via get_effective_shifts)
-      // Checks shift_overrides first, falls back to employee_shifts pattern
-      const empRes = await c.queryObject<{ id: string }>(
-        "SELECT id::text FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
-        [tenantId]
-      );
-      const shiftRows: Array<{ start_time: string; end_time: string }> = [];
-      for (const emp of empRes.rows) {
-        const effRes = await c.queryObject<{ start_time: string; end_time: string; is_off: boolean }>(
-          "SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
-          [tenantId, emp.id, date]
-        );
-        for (const row of effRes.rows) {
-          if (!row.is_off && row.start_time && row.end_time) {
-            shiftRows.push({ start_time: row.start_time, end_time: row.end_time });
-          }
+      // Parse the tagged results
+      let service: { name: string; duration_minutes: number; price: number | null } | null = null;
+      const shifts: Array<{ start_time: string; end_time: string }> = [];
+      const appointments: Array<{ start_time: string; end_time: string }> = [];
+
+      for (const row of res.rows) {
+        if (row.source === 'service' && row.name) {
+          service = { name: row.name, duration_minutes: row.duration_minutes!, price: row.price };
+        } else if (row.source === 'shift' && row.start_time && row.end_time) {
+          shifts.push({ start_time: row.start_time, end_time: row.end_time });
+        } else if (row.source === 'appointment' && row.start_time && row.end_time) {
+          appointments.push({ start_time: row.start_time, end_time: row.end_time });
         }
       }
-      // Deduplicate and sort
-      const uniqueShifts = new Map<string, { start_time: string; end_time: string }>();
-      for (const s of shiftRows) uniqueShifts.set(`${s.start_time}-${s.end_time}`, s);
-      const shiftRes = { rows: [...uniqueShifts.values()].sort((a, b) => a.start_time.localeCompare(b.start_time)) };
 
-      // 3. Existing appointments for that date
-      const apptRes = await c.queryObject<{ start_time: string; end_time: string }>(
-        `SELECT start_time::text, end_time::text FROM appointments
-         WHERE tenant_id = $1 AND status = 'scheduled'
-         AND (is_deleted IS NULL OR is_deleted = false)
-         AND start_time::date = $2::date
-         ORDER BY start_time`,
-        [tenantId, date]
-      );
-
-      return {
-        service,
-        shifts: shiftRes.rows,
-        appointments: apptRes.rows,
-      };
+      return { service, shifts, appointments };
     });
   }
 
