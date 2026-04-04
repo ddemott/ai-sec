@@ -210,6 +210,7 @@ app.addHook('onRequest', async (request, reply) => {
   const token = authHeader.slice(7);
   const decoded = verifyToken(token);
   if (!decoded) {
+    request.log.warn({ url: request.url, ip: request.ip }, 'JWT verification failed — invalid or expired token');
     return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
   }
 

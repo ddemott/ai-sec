@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,9 +9,12 @@ export const Input: React.FC<InputProps> = ({
   label,
   error,
   className = '',
-  id,
+  id: externalId,
   ...props
 }) => {
+  const autoId = useId();
+  const id = externalId || (label ? autoId : undefined);
+
   return (
     <div className="w-full">
       {label && (
