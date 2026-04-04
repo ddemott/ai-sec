@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { TimeGrid, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH } from './TimeGrid';
 import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
+import { formatHour } from '../../lib/utils';
 
 interface SwimLaneShift { id: string; start_time?: string; end_time?: string }
 interface SwimLaneEmployee { id: string | number; name: string }
@@ -443,9 +444,3 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   );
 };
 
-function formatHour(h: number): string {
-  if (h === 0 || h === 24) return '12am';
-  if (h === 12) return '12pm';
-  if (h < 12) return `${h}am`;
-  return `${h - 12}pm`;
-}

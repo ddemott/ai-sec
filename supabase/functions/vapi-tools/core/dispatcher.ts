@@ -31,19 +31,52 @@ function isValidPhone(phone: string | undefined | null): boolean {
 }
 
 /**
- * If a datetime string has no timezone indicator (Z or +/-offset),
- * assume it's Central Time and append the offset.
- * CDT = -05:00, CST = -06:00. We use -05:00 (CDT) for summer months as a reasonable default.
+ * Returns true if the datetime string already has timezone info (Z or +/-offset).
  */
-function assumeCentralTime(dt: string): string {
+function hasTimezone(dt: string): boolean {
+  return /Z$/i.test(dt) || /[+-]\d{2}:\d{2}$/.test(dt) || /[+-]\d{4}$/.test(dt);
+}
+
+/**
+ * Converts a naive datetime to a timezone-aware one using the tenant's IANA timezone.
+ * If the datetime already has timezone info, returns it unchanged.
+ * Uses Intl.DateTimeFormat to resolve the correct UTC offset (handles DST automatically).
+ */
+function applyTimezone(dt: string, ianaTimezone: string): string {
   if (!dt) return dt;
-  // Already has timezone info
-  if (/Z$/i.test(dt) || /[+-]\d{2}:\d{2}$/.test(dt) || /[+-]\d{4}$/.test(dt)) return dt;
-  // Naive datetime — assume Central Time (CDT -05:00 Mar-Nov, CST -06:00 Nov-Mar)
-  // Parse month to decide offset
-  const match = dt.match(/^\d{4}-(\d{2})/);
-  if (match) {
-    const month = parseInt(match[1]);
+  if (hasTimezone(dt)) return dt;
+
+  // Parse the naive datetime and interpret it in the tenant's timezone
+  // Create a Date treating the string as UTC, then compute the offset for the target timezone
+  const naive = new Date(dt + "Z"); // treat as UTC temporarily
+  if (isNaN(naive.getTime())) return dt;
+
+  // Get the UTC offset for the target timezone at this point in time
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: ianaTimezone,
+      timeZoneName: "shortOffset",
+    });
+    const parts = formatter.formatToParts(naive);
+    const tzPart = parts.find(p => p.type === "timeZoneName");
+    if (tzPart) {
+      // tzPart.value is like "GMT-5" or "GMT+5:30"
+      const match = tzPart.value.match(/GMT([+-]?)(\d{1,2})(?::(\d{2}))?/);
+      if (match) {
+        const sign = match[1] === "-" ? "-" : "+";
+        const hours = match[2].padStart(2, "0");
+        const minutes = (match[3] || "00").padStart(2, "0");
+        return dt + `${sign}${hours}:${minutes}`;
+      }
+    }
+  } catch {
+    // Invalid timezone — fall back to America/Chicago
+  }
+
+  // Fallback: use America/Chicago offset based on month (CDT/CST)
+  const monthMatch = dt.match(/^\d{4}-(\d{2})/);
+  if (monthMatch) {
+    const month = parseInt(monthMatch[1]);
     const offset = (month >= 3 && month <= 10) ? "-05:00" : "-06:00";
     return dt + offset;
   }
@@ -131,6 +164,16 @@ export class Dispatcher {
     }, "Phone number sources");
 
     try {
+      // Resolve tenant timezone for datetime conversions (avoids hardcoded Central Time)
+      let tenantTz = "America/Chicago";
+      if (args.tenant_id && (name === "get_scheduling_options" || name === "book_with_scheduling")) {
+        try {
+          tenantTz = await this.service.getTenantTimezone(args.tenant_id, toolLogger);
+        } catch (e) {
+          toolLogger.warn({ err: e }, "Failed to fetch tenant timezone, falling back to America/Chicago");
+        }
+      }
+
       let response;
       switch (name) {
         case "get_customer_context": {
@@ -157,8 +200,8 @@ export class Dispatcher {
         }
         case "get_scheduling_options": {
           const window = {
-            from: new Date(assumeCentralTime(args.window.from)),
-            to: new Date(assumeCentralTime(args.window.to)),
+            from: new Date(applyTimezone(args.window.from, tenantTz)),
+            to: new Date(applyTimezone(args.window.to, tenantTz)),
           };
           response = await this.service.getSchedulingOptions(
             args.tenant_id,
@@ -170,8 +213,8 @@ export class Dispatcher {
         }
         case "book_with_scheduling": {
           const window = {
-            from: new Date(assumeCentralTime(args.window.from)),
-            to: new Date(assumeCentralTime(args.window.to)),
+            from: new Date(applyTimezone(args.window.from, tenantTz)),
+            to: new Date(applyTimezone(args.window.to, tenantTz)),
           };
           // Use phone captured from call-started event, fall back to LLM arg
           // Vapi does NOT send customer info in tool-call messages — only in call-started

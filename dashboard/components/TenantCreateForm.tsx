@@ -35,7 +35,7 @@ export function TenantCreateForm({ newBusiness, templates, onChange }: TenantCre
             label="Template Type"
             value={newBusiness.business_type}
             onChange={e => onChange({...newBusiness, business_type: e.target.value})}
-            options={templates.map(t => ({ label: t.display_name, value: t.business_type }))}
+            options={[...templates].sort((a, b) => a.display_name.localeCompare(b.display_name)).map(t => ({ label: t.display_name, value: t.business_type }))}
         />
         <div className="pt-4 border-t space-y-4" style={{ borderColor: 'var(--border-soft)' }}>
             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Initial Owner Credentials</h4>

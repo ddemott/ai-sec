@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Api } from '../../lib/api';
+import type { Shift } from '../../lib/types';
 
 export interface SchedulerAppointment {
   id: string;
@@ -31,12 +32,15 @@ interface SchedulerEmployee { id: string | number; name: string }
 interface SchedulerResource { id: string | number; name: string }
 interface SchedulerShift { id: string; employee_id?: string | number; user_id?: string | number; day_of_week: number; start_time?: string; end_time?: string }
 
-export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
+export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[], externalShifts?: Shift[]) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);
-  const [shifts, setShifts] = useState<SchedulerShift[]>([]);
+  const [localShifts, setLocalShifts] = useState<SchedulerShift[]>([]);
   const [loading, setLoading] = useState(false);
 
   const dateStr = toDateString(selectedDate);
+
+  // Use externally provided shifts if available, otherwise use locally fetched ones
+  const shifts: SchedulerShift[] = externalShifts ?? localShifts;
 
   const fetchData = useCallback(async () => {
     if (!tenantId) return;
@@ -47,26 +51,35 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     nextDay.setDate(nextDay.getDate() + 1);
     const endDate = `${toDateString(nextDay)}T00:00:00Z`;
 
-    const [apptRes, shiftRes] = await Promise.allSettled([
+    // Only fetch shifts if not provided externally
+    const fetches: Promise<unknown>[] = [
       Api.appointments.list(tenantId, { startDate, endDate }),
-      Api.shifts.list(tenantId),
-    ]);
+    ];
+    if (!externalShifts) {
+      fetches.push(Api.shifts.list(tenantId));
+    }
 
+    const results = await Promise.allSettled(fetches);
+
+    const apptRes = results[0];
     if (apptRes.status === 'fulfilled' && Array.isArray(apptRes.value)) {
       // Hide canceled appointments from the calendar — they show in CRM history only
-      setAppointments(apptRes.value.filter((a: SchedulerAppointment) => a.status !== 'canceled'));
+      setAppointments((apptRes.value as SchedulerAppointment[]).filter((a) => a.status !== 'canceled'));
     } else {
       setAppointments([]);
     }
 
-    if (shiftRes.status === 'fulfilled' && Array.isArray(shiftRes.value)) {
-      setShifts(shiftRes.value);
-    } else {
-      setShifts([]);
+    if (!externalShifts && results[1]) {
+      const shiftRes = results[1];
+      if (shiftRes.status === 'fulfilled' && Array.isArray(shiftRes.value)) {
+        setLocalShifts(shiftRes.value);
+      } else {
+        setLocalShifts([]);
+      }
     }
 
     setLoading(false);
-  }, [tenantId, dateStr, selectedDate]);
+  }, [tenantId, dateStr, selectedDate, externalShifts]);
 
   useEffect(() => {
     fetchData();

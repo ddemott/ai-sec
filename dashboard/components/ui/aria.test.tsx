@@ -3,7 +3,7 @@
  * Each section has happy + sad paths with 5W diagnostic context.
  */
 
-import { expect, test, describe } from 'vitest'
+import { expect, test, describe, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import React from 'react'

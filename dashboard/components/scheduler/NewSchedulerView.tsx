@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Minus, Plus, RefreshCw, Save, X } from 'lucide-react';
 import { useStaticData } from '../../lib/hooks';
+import { formatHour, shiftTimeToHour, formatShiftTime } from '../../lib/utils';
 import { useActiveTenantId } from '../../lib/SessionContext';
 import { useSchedulerData } from './useSchedulerData';
 import { SchedulerDateNav } from './SchedulerDateNav';
@@ -48,12 +49,6 @@ interface ProfileCardState {
 
 // --- Helpers ---
 
-function formatHour(h: number): string {
-  if (h === 0 || h === 24) return '12am';
-  if (h === 12) return '12pm';
-  return h < 12 ? `${h}am` : `${h - 12}pm`;
-}
-
 function getZoomPercent(colW: number): number {
   return Math.round((colW / DEFAULT_COL_W) * 100);
 }
@@ -64,17 +59,6 @@ function toFractionalHour(isoStr: string): number {
   return d.getHours() + d.getMinutes() / 60;
 }
 
-/** Parse a shift time string (e.g. "08:00:00") to fractional hours */
-function shiftTimeToHour(timeStr: string): number {
-  const parts = timeStr.split(':');
-  return parseInt(parts[0], 10) + parseInt(parts[1] || '0', 10) / 60;
-}
-
-/** Format a shift time string to display (e.g. "08:00:00" -> "8am") */
-function formatShiftTime(timeStr: string): string {
-  const h = Math.floor(shiftTimeToHour(timeStr));
-  return formatHour(h);
-}
 
 /** Get appointment status color classes */
 function getStatusColor(status: string): { bg: string; border: string; text: string } {
@@ -137,7 +121,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   const contextTenantId = useActiveTenantId();
   const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
 
-  const { employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
+  const { employees: allStaff, services, shifts: allShifts, refresh: refreshStaticData } = useStaticData(tenantId);
 
   // Filter out user accounts — only show employees in scheduler
   const baseEmployees = useMemo(
@@ -224,7 +208,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
     appointmentsByEmployee,
     shiftsByEmployee,
     refresh: refreshScheduler,
-  } = useSchedulerData(tenantId, selectedDate, employees, []);
+  } = useSchedulerData(tenantId, selectedDate, employees, [], allShifts);
 
   const handleRefresh = useCallback(() => {
     refreshScheduler();

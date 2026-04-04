@@ -565,7 +565,7 @@ export default function SettingsView() {
                     <div className="font-bold">Jobber Connected</div>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {jobberSettings.last_sync_at
-                        ? `Last synced: ${new Date(jobberSettings.last_sync_at).toLocaleString()}`
+                        ? `Last synced: ${new Date(jobberSettings.last_sync_at).toLocaleString('en-US', { hour12: true })}`
                         : 'Not yet synced'}
                     </div>
                   </div>
@@ -638,7 +638,7 @@ export default function SettingsView() {
                     <div className="font-bold">HubSpot Connected</div>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {hubspotSettings.last_sync_at
-                        ? `Last synced: ${new Date(hubspotSettings.last_sync_at).toLocaleString()}`
+                        ? `Last synced: ${new Date(hubspotSettings.last_sync_at).toLocaleString('en-US', { hour12: true })}`
                         : 'Not yet synced'}
                     </div>
                   </div>
@@ -711,7 +711,7 @@ export default function SettingsView() {
                     <div className="font-bold">Square Connected</div>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {squareSettings.last_sync_at
-                        ? `Last synced: ${new Date(squareSettings.last_sync_at).toLocaleString()}`
+                        ? `Last synced: ${new Date(squareSettings.last_sync_at).toLocaleString('en-US', { hour12: true })}`
                         : 'Not yet synced'}
                     </div>
                   </div>
@@ -784,7 +784,7 @@ export default function SettingsView() {
                     <div className="font-bold">ServiceTitan Connected</div>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {servicetitanSettings.last_sync_at
-                        ? `Last synced: ${new Date(servicetitanSettings.last_sync_at).toLocaleString()}`
+                        ? `Last synced: ${new Date(servicetitanSettings.last_sync_at).toLocaleString('en-US', { hour12: true })}`
                         : 'Not yet synced'}
                     </div>
                   </div>

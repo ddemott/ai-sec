@@ -26,7 +26,7 @@ export default function SchedulerView() {
     { key: 'list', label: 'List', icon: List },
     { key: 'calendar', label: 'Calendar', icon: Calendar },
   ];
-  const { customers, resources, employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
+  const { customers, resources, employees: allStaff, services, shifts, refresh: refreshStaticData } = useStaticData(tenantId);
   // Only show actual employees in the scheduler, not user accounts (owners/admins)
   const employees = useMemo(() =>
     allStaff.filter(e => e.type !== 'user'),
@@ -60,7 +60,7 @@ export default function SchedulerView() {
     appointmentsByResource,
     shiftsByEmployee,
     refresh: refreshScheduler,
-  } = useSchedulerData(tenantId, selectedDate, employees, resources);
+  } = useSchedulerData(tenantId, selectedDate, employees, resources, shifts);
 
   const handleRefresh = useCallback(() => {
     refreshScheduler();

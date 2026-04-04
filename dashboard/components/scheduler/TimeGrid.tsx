@@ -1,15 +1,10 @@
 import React from 'react';
+import { formatHourLabel } from '../../lib/utils';
 
 interface TimeGridProps {
   startHour?: number;
   endHour?: number;
   hourWidth?: number;
-}
-
-function formatHourLabel(hour: number): string {
-  if (hour === 0 || hour === 24) return '12 AM';
-  if (hour === 12) return '12 PM';
-  return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
 }
 
 export const SCHEDULER_START_HOUR = 0;

@@ -237,6 +237,7 @@ export default function ServiceAssignmentView() {
         isOpen={isEditModalOpen && !!selectedService}
         onClose={() => setIsEditModalOpen(false)}
         title={selectedService?.name || 'Edit Service'}
+        disableBackdropClose
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
@@ -345,6 +346,7 @@ export default function ServiceAssignmentView() {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         title={`New Service Wizard - Step ${wizardStep} of 3`}
+        disableBackdropClose
         footer={
           <div className="flex items-center justify-between w-full">
             <Button 

@@ -118,6 +118,26 @@ export interface Shift {
   is_active: boolean;
 }
 
+export interface ShiftOverride {
+  id: string;
+  tenant_id: string;
+  employee_id: string;
+  shift_date: string;  // YYYY-MM-DD
+  start_time: string | null;
+  end_time: string | null;
+  is_off: boolean;
+}
+
+export interface EffectiveShift {
+  shift_date: string;  // YYYY-MM-DD
+  day_of_week: number;
+  start_time: string | null;
+  end_time: string | null;
+  is_override: boolean;
+  is_off: boolean;
+  override_id: string | null;
+}
+
 export interface Skill {
   id: string;
   tenant_id: string;

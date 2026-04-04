@@ -3,6 +3,7 @@ import { X, Clock, User } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
+import { formatTime24to12, formatTimeFromISO } from '../../lib/utils';
 
 interface FocusShift { start_time?: string; end_time?: string }
 
@@ -15,16 +16,6 @@ interface EmployeeDayFocusPanelProps {
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
 }
 
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
-
-function formatShiftTime(time: string): string {
-  const [h, m] = time.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
 
 export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
   isOpen,
@@ -96,7 +87,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
               {shifts.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                   <Clock className="w-3.5 h-3.5 text-gray-400" />
-                  {formatShiftTime(s.start_time ?? '00:00')} — {formatShiftTime(s.end_time ?? '00:00')}
+                  {formatTime24to12(s.start_time ?? '00:00')} — {formatTime24to12(s.end_time ?? '00:00')}
                 </div>
               ))}
             </div>
@@ -118,8 +109,8 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
                   data-testid={`focus-item-${appt.id}`}
                 >
                   <div className="flex-shrink-0">
-                    <div className="text-xs font-bold text-gray-900 dark:text-gray-100">{formatTime(appt.start_time)}</div>
-                    <div className="text-[10px] text-gray-400">{formatTime(appt.end_time)}</div>
+                    <div className="text-xs font-bold text-gray-900 dark:text-gray-100">{formatTimeFromISO(appt.start_time)}</div>
+                    <div className="text-[10px] text-gray-400">{formatTimeFromISO(appt.end_time)}</div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">

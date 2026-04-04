@@ -75,14 +75,13 @@ describe('Bug Fix Regressions', () => {
       const customerId = await createCustomer(client, tenantId, 'Jane Smith', '+15551234567');
 
       const apptRes = await client.query(
-        `SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [tenantId, resourceId, customerId,
-         '2026-04-15 10:00:00', '2026-04-15 11:00:00',
-         'Oil change', 'test', null, null]
+        `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description)
+         VALUES ($1, $2, $3, '2026-04-15 10:00:00', '2026-04-15 11:00:00', 'Oil change') RETURNING id`,
+        [tenantId, resourceId, customerId]
       );
-      const appointmentId = apptRes.rows[0].appointment_id;
+      const appointmentId = apptRes.rows[0].id;
 
-      await client.query('BEGIN');
+      await client.query('SAVEPOINT bug3_test');
       try {
         await client.query(
           'UPDATE appointments SET description = $1 WHERE id = $2',
@@ -95,10 +94,9 @@ describe('Bug Fix Regressions', () => {
           [null, customerId] // phone is NOT NULL, this should fail
         );
 
-        await client.query('COMMIT');
         expect.fail('Should have thrown an error');
       } catch {
-        await client.query('ROLLBACK');
+        await client.query('ROLLBACK TO SAVEPOINT bug3_test');
 
         // Verify the appointment description was NOT updated (rollback worked)
         const checkAppt = await client.query(
@@ -116,12 +114,11 @@ describe('Bug Fix Regressions', () => {
       const customerId = await createCustomer(client, tenantId, 'Bob Johnson', '+15559876543');
 
       const apptRes = await client.query(
-        `SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [tenantId, resourceId, customerId,
-         '2026-04-16 14:00:00', '2026-04-16 15:00:00',
-         'Tire rotation', 'test', null, null]
+        `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description)
+         VALUES ($1, $2, $3, '2026-04-16 14:00:00', '2026-04-16 15:00:00', 'Tire rotation') RETURNING id`,
+        [tenantId, resourceId, customerId]
       );
-      const appointmentId = apptRes.rows[0].appointment_id;
+      const appointmentId = apptRes.rows[0].id;
 
       await client.query('BEGIN');
       try {
@@ -159,18 +156,18 @@ describe('Bug Fix Regressions', () => {
         [tenantId, serviceId, employeeId]
       );
 
-      await client.query('BEGIN');
+      await client.query('SAVEPOINT bug11_test');
       try {
         await client.query('DELETE FROM service_employee WHERE service_id = $1', [serviceId]);
         throw new Error('Simulated failure');
       } catch {
-        await client.query('ROLLBACK');
+        await client.query('ROLLBACK TO SAVEPOINT bug11_test');
 
         const checkService = await client.query('SELECT id FROM services WHERE id = $1', [serviceId]);
         expect(checkService.rows).toHaveLength(1);
 
         const checkMapping = await client.query(
-          'SELECT id FROM service_employee WHERE service_id = $1',
+          'SELECT service_id, employee_id FROM service_employee WHERE service_id = $1',
           [serviceId]
         );
         expect(checkMapping.rows).toHaveLength(1);
@@ -201,8 +198,8 @@ describe('Bug Fix Regressions', () => {
         await client.query('COMMIT');
 
         const checkService = await client.query('SELECT id FROM services WHERE id = $1', [serviceId]);
-        const checkEmpMapping = await client.query('SELECT id FROM service_employee WHERE service_id = $1', [serviceId]);
-        const checkResMapping = await client.query('SELECT id FROM service_resource WHERE service_id = $1', [serviceId]);
+        const checkEmpMapping = await client.query('SELECT service_id, employee_id FROM service_employee WHERE service_id = $1', [serviceId]);
+        const checkResMapping = await client.query('SELECT service_id, resource_id FROM service_resource WHERE service_id = $1', [serviceId]);
         expect(checkService.rows).toHaveLength(0);
         expect(checkEmpMapping.rows).toHaveLength(0);
         expect(checkResMapping.rows).toHaveLength(0);

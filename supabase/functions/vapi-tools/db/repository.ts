@@ -374,6 +374,18 @@ export class PostgresRepository implements IRepository {
     });
   }
 
+  async getTenantTimezone(tenantId: string, logger: Logger): Promise<string> {
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{ timezone: string }>(
+        "SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE id = $1",
+        [tenantId]
+      );
+      const tz = res.rows[0]?.timezone || "America/Chicago";
+      logger.info({ tenantId, timezone: tz }, "Resolved tenant timezone");
+      return tz;
+    });
+  }
+
   async getEmployeeShifts(tenantId: string, logger: Logger): Promise<Array<{ employee_id: number; day_of_week: number; start_time: string; end_time: string }>> {
     return this.withClient(tenantId, async (c) => {
       const res = await c.queryObject<{ employee_id: number; day_of_week: number; start_time: string; end_time: string }>(

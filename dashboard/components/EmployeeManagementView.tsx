@@ -237,6 +237,7 @@ export default function EmployeeManagementView() {
         isOpen={isEditModalOpen && !!selectedEmployee}
         onClose={() => setIsEditModalOpen(false)}
         title={selectedEmployee?.name || ''}
+        disableBackdropClose
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Clock, AlertTriangle, User, Wrench } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
+import { formatTimeFromISO } from '../../lib/utils';
 
 interface SchedulerEmployee { id: string | number; name: string }
 interface SchedulerResource { id: string | number; name: string }
@@ -13,10 +14,6 @@ interface AppointmentListViewProps {
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
 }
 
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
 
 function getGapMinutes(endStr: string, startStr: string): number {
   return (new Date(startStr).getTime() - new Date(endStr).getTime()) / 60000;
@@ -81,8 +78,8 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
             >
               {/* Time */}
               <div className="w-24 flex-shrink-0">
-                <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatTime(appt.start_time)}</div>
-                <div className="text-xs text-gray-400 dark:text-gray-500">{formatTime(appt.end_time)}</div>
+                <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatTimeFromISO(appt.start_time)}</div>
+                <div className="text-xs text-gray-400 dark:text-gray-500">{formatTimeFromISO(appt.end_time)}</div>
               </div>
 
               {/* Details */}

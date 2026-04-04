@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import { Pool, PoolClient } from 'pg';
 import fs from 'node:fs';
@@ -92,9 +94,19 @@ app.addHook('onRequest', async (request, reply) => {
   }
 });
 
+app.register(helmet, {
+  contentSecurityPolicy: false, // CSP managed by frontend framework
+});
+
 app.register(cors, {
-  origin: true,
+  origin: process.env.CORS_ORIGIN || true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+});
+
+app.register(rateLimit, {
+  max: 100,
+  timeWindow: '1 minute',
+  allowList: ['127.0.0.1', '::1'],
 });
 
 app.register(multipart, {

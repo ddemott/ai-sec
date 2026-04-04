@@ -288,6 +288,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Launch New Business"
+        disableBackdropClose
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
@@ -401,6 +402,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
         isOpen={isDeleteModalOpen}
         onClose={() => { setIsDeleteModalOpen(false); setDeleteConfirmText(''); }}
         title="Delete Business"
+        disableBackdropClose
         footer={
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => { setIsDeleteModalOpen(false); setDeleteConfirmText(''); }}>

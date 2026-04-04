@@ -99,6 +99,14 @@ export async function createService(client: Client, tenantId: string, name: stri
     return res.rows[0].id;
 }
 
+export async function createCustomer(client: Client, tenantId: string, name: string, phone: string): Promise<string> {
+    const res = await client.query(
+        "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3) RETURNING id",
+        [tenantId, phone, name]
+    );
+    return res.rows[0].id;
+}
+
 export async function createCustomerFull(client: Client, tenantId: string, phone: string, name: string, email?: string): Promise<string> {
     const res = await client.query(
         "INSERT INTO customers (tenant_id, phone, name, email) VALUES ($1, $2, $3, $4) RETURNING id",

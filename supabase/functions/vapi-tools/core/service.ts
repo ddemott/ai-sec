@@ -21,6 +21,14 @@ export class AISecretaryService {
   }
 
   /**
+   * Returns the IANA timezone for a tenant (e.g. "America/Chicago").
+   * Falls back to America/Chicago if not set.
+   */
+  async getTenantTimezone(tenantId: string, logger: Logger): Promise<string> {
+    return this.repo.getTenantTimezone(tenantId, logger);
+  }
+
+  /**
    * Enhanced context lookup that detects the tenant based on the inbound phone number
    * if tenantId is not provided.
    */

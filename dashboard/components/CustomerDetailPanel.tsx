@@ -253,7 +253,7 @@ export function CustomerDetailPanel({
                             <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
                             <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <Clock className="w-3 h-3 mr-1" />
-                              {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </p>
                             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                               {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
@@ -288,7 +288,7 @@ export function CustomerDetailPanel({
                             <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
                             <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
                               <Clock className="w-3 h-3 mr-1" />
-                              {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </p>
                             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                               {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}

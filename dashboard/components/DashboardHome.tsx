@@ -246,7 +246,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                   )}
                 </div>
                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {new Date(appt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  {new Date(appt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                 </span>
               </div>
             ))}

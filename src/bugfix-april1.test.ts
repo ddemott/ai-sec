@@ -221,8 +221,8 @@ describe("Tenant-scoped DELETE/UPDATE queries", () => {
     const custB = await createCustomer(client, tenantB, "Bob", "+15550003333");
 
     const apptRes = await client.query(
-      `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, source)
-       VALUES ($1, $2, $3, NOW() + interval '1 day', NOW() + interval '1 day 1 hour', 'Test', 'test')
+      `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description)
+       VALUES ($1, $2, $3, NOW() + interval '1 day', NOW() + interval '1 day 1 hour', 'Test')
        RETURNING id`,
       [tenantB, resB, custB]
     );

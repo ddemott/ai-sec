@@ -246,6 +246,7 @@ export default function ResourceManagerView() {
         isOpen={isEditModalOpen && !!selectedResource}
         onClose={() => setIsEditModalOpen(false)}
         title={selectedResource?.name || vocab.resource_label}
+        disableBackdropClose
         footer={
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>

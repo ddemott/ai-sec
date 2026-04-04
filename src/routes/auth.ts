@@ -21,7 +21,7 @@ export function registerAuthRoutes(
   pool: Pool,
   generateToken: (payload: { tenant_id: string; user_id: string; email: string }) => string
 ) {
-  app.post('/login', withHandler(async (req: AppRequest, reply) => {
+  app.post('/login', { config: { rateLimit: { max: 5, timeWindow: '5 minutes' } } }, withHandler(async (req: AppRequest, reply) => {
     const parsed = LoginSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid email or password format' });

@@ -18,15 +18,36 @@ function normalizePhone(phone: string | undefined | null): string | null {
   return null;
 }
 
-// Date assumption function (from dispatcher.ts)
-function assumeCentralTime(dt: string): string {
+// Timezone application function (from dispatcher.ts)
+function hasTimezone(dt: string): boolean {
+  return /Z$/i.test(dt) || /[+-]\d{2}:\d{2}$/.test(dt) || /[+-]\d{4}$/.test(dt);
+}
+
+function applyTimezone(dt: string, ianaTimezone: string): string {
   if (!dt) return dt;
-  // Already has timezone info
-  if (/Z$/i.test(dt) || /[+-]\d{2}:\d{2}$/.test(dt) || /[+-]\d{4}$/.test(dt)) return dt;
-  // Naive datetime — assume Central Time (CDT -05:00 Mar-Nov, CST -06:00 Nov-Mar)
-  const match = dt.match(/^\d{4}-(\d{2})/);
-  if (match) {
-    const month = parseInt(match[1]);
+  if (hasTimezone(dt)) return dt;
+  const naive = new Date(dt + "Z");
+  if (isNaN(naive.getTime())) return dt;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: ianaTimezone,
+      timeZoneName: "shortOffset",
+    });
+    const parts = formatter.formatToParts(naive);
+    const tzPart = parts.find(p => p.type === "timeZoneName");
+    if (tzPart) {
+      const match = tzPart.value.match(/GMT([+-]?)(\d{1,2})(?::(\d{2}))?/);
+      if (match) {
+        const sign = match[1] === "-" ? "-" : "+";
+        const hours = match[2].padStart(2, "0");
+        const minutes = (match[3] || "00").padStart(2, "0");
+        return dt + `${sign}${hours}:${minutes}`;
+      }
+    }
+  } catch { /* fallback below */ }
+  const monthMatch = dt.match(/^\d{4}-(\d{2})/);
+  if (monthMatch) {
+    const month = parseInt(monthMatch[1]);
     const offset = (month >= 3 && month <= 10) ? "-05:00" : "-06:00";
     return dt + offset;
   }
@@ -68,14 +89,20 @@ Deno.test("Date parsing - Issue 2", () => {
   console.log("Difference:", new Date(expected).getTime() - new Date(wrong).getTime(), "ms");
 });
 
-Deno.test("Timezone assumption - Central Time", () => {
-  // April is CDT (-05:00)
-  assertEquals(assumeCentralTime("2026-04-02T14:00:00"), "2026-04-02T14:00:00-05:00");
-  
-  // December is CST (-06:00)
-  assertEquals(assumeCentralTime("2026-12-15T14:00:00"), "2026-12-15T14:00:00-06:00");
-  
+Deno.test("Timezone application - tenant-aware", () => {
+  // Central Time (America/Chicago) — April is CDT (-05:00)
+  assertEquals(applyTimezone("2026-04-02T14:00:00", "America/Chicago"), "2026-04-02T14:00:00-05:00");
+
+  // Central Time — December is CST (-06:00)
+  assertEquals(applyTimezone("2026-12-15T14:00:00", "America/Chicago"), "2026-12-15T14:00:00-06:00");
+
+  // Eastern Time (America/New_York) — April is EDT (-04:00)
+  assertEquals(applyTimezone("2026-04-02T14:00:00", "America/New_York"), "2026-04-02T14:00:00-04:00");
+
+  // Pacific Time (America/Los_Angeles) — April is PDT (-07:00)
+  assertEquals(applyTimezone("2026-04-02T14:00:00", "America/Los_Angeles"), "2026-04-02T14:00:00-07:00");
+
   // Already has timezone - don't modify
-  assertEquals(assumeCentralTime("2026-04-02T14:00:00Z"), "2026-04-02T14:00:00Z");
-  assertEquals(assumeCentralTime("2026-04-02T14:00:00-05:00"), "2026-04-02T14:00:00-05:00");
+  assertEquals(applyTimezone("2026-04-02T14:00:00Z", "America/Chicago"), "2026-04-02T14:00:00Z");
+  assertEquals(applyTimezone("2026-04-02T14:00:00-05:00", "America/New_York"), "2026-04-02T14:00:00-05:00");
 });

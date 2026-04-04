@@ -187,7 +187,7 @@ describe("book_with_scheduling_atomic()", () => {
             });
 
             expect(result.success).toBe(false);
-            expect(result.error_message).toContain('No available');
+            expect(result.error_code).toBe('NO_SKILLED_EMPLOYEE');
         });
 
         it("skips employee not on shift", async () => {
@@ -208,7 +208,7 @@ describe("book_with_scheduling_atomic()", () => {
             });
 
             expect(result.success).toBe(false);
-            expect(result.error_message).toContain('No available');
+            expect(result.error_code).toBe('EMPLOYEE_NOT_SCHEDULED');
         });
 
         it("picks first available when multiple options exist", async () => {

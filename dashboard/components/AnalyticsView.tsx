@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useActiveTenantId } from '../lib/SessionContext'
+import { formatHour } from '../lib/utils'
 
 /**
  * Analytics — Rebuilt March 2026
@@ -323,8 +324,3 @@ function MetricCard({ icon: Icon, title, subtitle, placeholder, children }: {
   )
 }
 
-function formatHour(h: number): string {
-  if (h === 0) return '12am'
-  if (h === 12) return '12pm'
-  return h > 12 ? `${h - 12}pm` : `${h}am`
-}
