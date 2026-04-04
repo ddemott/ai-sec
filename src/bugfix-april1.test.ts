@@ -295,23 +295,23 @@ describe("CustomerUpdateSchema validation", () => {
 
 // ── 6. Sync error logging ────────────────────────────────────────────
 
-describe("Sync error logging (not silent swallowing)", () => {
-  it("appointments.ts uses console.error in catch, not empty catch", async () => {
+describe("Sync uses orchestrator with structured logging", () => {
+  it("appointments.ts uses syncAppointmentToAll with req.log", async () => {
     const fs = await import("fs");
     const src = fs.readFileSync("src/routes/appointments.ts", "utf8");
 
-    // Should NOT have `.catch(() => {})`
+    expect(src).toContain("syncAppointmentToAll");
+    expect(src).toContain("req.log");
     expect(src).not.toContain(".catch(() => {})");
-    // Should have logging
-    expect(src).toContain(".catch(e => console.error('[sync]'");
   });
 
-  it("customers.ts uses console.error in catch, not empty catch", async () => {
+  it("customers.ts uses syncCustomerToAll with req.log", async () => {
     const fs = await import("fs");
     const src = fs.readFileSync("src/routes/customers.ts", "utf8");
 
+    expect(src).toContain("syncCustomerToAll");
+    expect(src).toContain("req.log");
     expect(src).not.toContain(".catch(() => {})");
-    expect(src).toContain(".catch(e => console.error('[sync]'");
   });
 });
 

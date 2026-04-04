@@ -607,16 +607,18 @@ describe("requireAuth middleware", () => {
 describe("Source code correctness checks", () => {
   const fs = require("fs");
 
-  it("sync error handlers log instead of swallowing (appointments.ts)", () => {
+  it("sync uses orchestrator with structured logging (appointments.ts)", () => {
     const src = fs.readFileSync("src/routes/appointments.ts", "utf8");
+    expect(src).toContain("syncAppointmentToAll");
+    expect(src).toContain("req.log");
     expect(src).not.toContain(".catch(() => {})");
-    expect(src).toContain(".catch(e => console.error('[sync]'");
   });
 
-  it("sync error handlers log instead of swallowing (customers.ts)", () => {
+  it("sync uses orchestrator with structured logging (customers.ts)", () => {
     const src = fs.readFileSync("src/routes/customers.ts", "utf8");
+    expect(src).toContain("syncCustomerToAll");
+    expect(src).toContain("req.log");
     expect(src).not.toContain(".catch(() => {})");
-    expect(src).toContain(".catch(e => console.error('[sync]'");
   });
 
   it("Stripe webhook does not leak err.message", () => {

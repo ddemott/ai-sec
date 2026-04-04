@@ -422,7 +422,9 @@
     "packageJson": {
       "dependencies": [
         "npm:@fastify/cors@^10.0.2",
+        "npm:@fastify/helmet@^13.0.2",
         "npm:@fastify/multipart@^9.4.0",
+        "npm:@fastify/rate-limit@^10.3.0",
         "npm:@supabase/supabase-js@^2.100.1",
         "npm:@testing-library/react@^16.3.2",
         "npm:@types/bcrypt@6",

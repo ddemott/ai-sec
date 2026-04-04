@@ -3,11 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
-import { syncAppointmentToCalendar } from '../services/calendarSync';
-import { syncAppointmentToJobber } from '../services/jobberSync';
-import { syncAppointmentToHubSpot } from '../services/hubspotSync';
-import { syncAppointmentToSquare } from '../services/squareSync';
-import { syncAppointmentToServiceTitan } from '../services/servicetitanSync';
+import { syncAppointmentToAll } from '../services/syncOrchestrator';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -59,12 +55,7 @@ export function registerAppointmentRoutes(
     }
     if (result.success) {
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
-      // Fire-and-forget sync — never blocks the response
-      syncAppointmentToCalendar(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
-      syncAppointmentToJobber(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
-      syncAppointmentToHubSpot(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
-      syncAppointmentToSquare(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
-      syncAppointmentToServiceTitan(pool, body.tenant_id, result.appointment_id, 'create').catch(e => console.error('[sync]', e?.message || e));
+      syncAppointmentToAll(pool, body.tenant_id, result.appointment_id, 'create', req.log);
       return reply.send({ success: true, appointment_id: result.appointment_id });
     } else {
       return reply.status(400).send({ success: false, error: result.error_message });
@@ -143,11 +134,7 @@ export function registerAppointmentRoutes(
     if (!tenantId) return;
 
     // Sync delete before removing from DB
-    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToAll(pool, tenantId, id, 'delete', req.log);
 
     await withTenantClient(tenantId, async (client) => {
       await client.query('DELETE FROM appointments WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
@@ -175,11 +162,7 @@ export function registerAppointmentRoutes(
 
     logEvent(req, 'appointment_canceled', { appointmentId: id });
     // Remove from calendars/CRMs — canceled appointments shouldn't block the slot
-    syncAppointmentToCalendar(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToJobber(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToHubSpot(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToSquare(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToServiceTitan(pool, tenantId, id, 'delete').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToAll(pool, tenantId, id, 'delete', req.log);
     return reply.send({ success: true });
   }, 'Failed to cancel appointment'));
 
@@ -255,11 +238,7 @@ export function registerAppointmentRoutes(
 
     logEvent(req, 'appointment_updated', { appointmentId: id });
     // Sync update to calendars/CRMs
-    syncAppointmentToCalendar(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToJobber(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToHubSpot(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToSquare(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
-    syncAppointmentToServiceTitan(pool, body.tenant_id, id, 'update').catch(e => console.error('[sync]', e?.message || e));
+    syncAppointmentToAll(pool, body.tenant_id, id, 'update', req.log);
     return reply.send({ success: true });
   }, 'Failed to update appointment'));
 }

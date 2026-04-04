@@ -454,8 +454,13 @@ export const Api = {
       formData.append('file', file);
       if (tenantId) formData.append('tenant_id', tenantId);
 
+      const token = getLocalStorageItem('authToken');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(`${API_BASE_URL}/knowledge/ingest`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 

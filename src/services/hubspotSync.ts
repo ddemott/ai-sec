@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import * as hubspot from './hubspotClient';
 import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
+import { splitName, joinName } from './nameUtils';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('hubspot', tenantId, entityType, action);
@@ -390,13 +391,3 @@ export async function fullSync(
 // Helpers
 // -----------------------------------------------------------------------
 
-function splitName(name: string | null): { firstName: string; lastName: string } {
-  if (!name) return { firstName: '', lastName: '' };
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
-  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
-}
-
-function joinName(firstName?: string | null, lastName?: string | null): string {
-  return [firstName, lastName].filter(Boolean).join(' ') || 'Customer';
-}
