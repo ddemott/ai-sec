@@ -66,6 +66,74 @@ export function forceLogout() {
 }
 
 /**
+ * Decode JWT payload without verification (client-side expiry check only).
+ */
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if the current token is within 10 minutes of expiry and refresh it proactively.
+ * Prevents users from being forcibly logged out mid-session.
+ */
+let refreshInProgress: Promise<void> | null = null;
+const TOKEN_REFRESH_BUFFER_MS = 10 * 60 * 1000; // 10 minutes before expiry
+
+async function ensureTokenFresh(): Promise<void> {
+  const token = getLocalStorageItem('authToken');
+  if (!token) return;
+
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return;
+
+  const expiresAt = payload.exp * 1000;
+  const now = Date.now();
+
+  // If more than 10 minutes until expiry, token is fresh
+  if (expiresAt - now > TOKEN_REFRESH_BUFFER_MS) return;
+
+  // If already expired, force logout
+  if (now >= expiresAt) {
+    forceLogout();
+    return;
+  }
+
+  // Token is about to expire — refresh it
+  if (refreshInProgress) return refreshInProgress;
+
+  refreshInProgress = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.token) {
+          localStorage.setItem('authToken', data.token);
+        }
+      }
+    } catch {
+      // Refresh failed — token will expire naturally, then 401 triggers logout
+    } finally {
+      refreshInProgress = null;
+    }
+  })();
+
+  return refreshInProgress;
+}
+
+/**
  * Check response for auth failures (401, tenant-not-found 404) and force logout if needed.
  * Returns an error message string if logout was triggered, or null if response is fine.
  */
@@ -111,6 +179,7 @@ function handleFetchError(err: unknown) {
  * Generic Fetcher
  */
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
+  await ensureTokenFresh();
   let url = `${API_BASE_URL}${endpoint}`;
   if (params) {
     const searchParams = new URLSearchParams(params);
@@ -143,6 +212,7 @@ async function apiMutate<T>(
   method: 'POST' | 'PUT' | 'DELETE',
   body?: Record<string, unknown>
 ): Promise<{ success: boolean; error?: string } & T> {
+  await ensureTokenFresh();
   const url = `${API_BASE_URL}${endpoint}`;
 
   let response: Response;

@@ -50,6 +50,7 @@ export interface IRepository {
   getEmployees(tenantId: string, logger: Logger): Promise<any[]>;
   getTenantTimezone(tenantId: string, logger: Logger): Promise<string>;
   getEmployeeShifts(tenantId: string, logger: Logger): Promise<Array<{ employee_id: number; day_of_week: number; start_time: string; end_time: string }>>;
+  getEffectiveShiftsForDate(tenantId: string, date: string, logger: Logger): Promise<Array<{ employee_id: string; start_time: string; end_time: string; is_off: boolean }>>;
   
   createService(tenantId: string, data: { name: string; duration_minutes: number; required_skills?: string[]; required_resources?: string[] }): Promise<number>;
   updateService(tenantId: string, id: number, data: { name?: string; duration_minutes?: number; required_skills?: string[]; required_resources?: string[] }): Promise<boolean>;

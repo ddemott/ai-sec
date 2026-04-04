@@ -396,6 +396,35 @@ export class PostgresRepository implements IRepository {
     });
   }
 
+  async getEffectiveShiftsForDate(tenantId: string, date: string, logger: Logger): Promise<Array<{ employee_id: string; start_time: string; end_time: string; is_off: boolean }>> {
+    logger.info({ tenantId, date }, "Fetching effective shifts for date (overrides + patterns)");
+    return this.withClient(tenantId, async (c) => {
+      // Use get_effective_shifts RPC for each active employee on this date
+      // Query all employees, then get their effective shift for the single date
+      const empRes = await c.queryObject<{ id: string }>(
+        "SELECT id::text FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
+        [tenantId]
+      );
+
+      const results: Array<{ employee_id: string; start_time: string; end_time: string; is_off: boolean }> = [];
+      for (const emp of empRes.rows) {
+        const shiftRes = await c.queryObject<{ start_time: string; end_time: string; is_off: boolean }>(
+          "SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+          [tenantId, emp.id, date]
+        );
+        for (const row of shiftRes.rows) {
+          results.push({
+            employee_id: emp.id,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            is_off: row.is_off,
+          });
+        }
+      }
+      return results;
+    });
+  }
+
   // --- Service CRUD ---
   async createService(tenantId: string, data: { name: string; duration_minutes: number; required_skills?: string[]; required_resources?: string[] }): Promise<number> {
     return this.withClient(tenantId, async (c) => {
@@ -526,15 +555,28 @@ export class PostgresRepository implements IRepository {
       );
       const service = svcRes.rows[0] || null;
 
-      // 2. Employee shifts for the day_of_week (0=Sun, 6=Sat)
-      // JS Date.getDay() matches Postgres EXTRACT(DOW)
-      const dayOfWeek = new Date(date + "T12:00:00").getDay();
-      const shiftRes = await c.queryObject<{ start_time: string; end_time: string }>(
-        `SELECT DISTINCT start_time::text, end_time::text
-         FROM employee_shifts WHERE tenant_id = $1 AND day_of_week = $2 AND is_active = true
-         ORDER BY start_time`,
-        [tenantId, dayOfWeek]
+      // 2. Employee shifts for this date (override-aware via get_effective_shifts)
+      // Checks shift_overrides first, falls back to employee_shifts pattern
+      const empRes = await c.queryObject<{ id: string }>(
+        "SELECT id::text FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
+        [tenantId]
       );
+      const shiftRows: Array<{ start_time: string; end_time: string }> = [];
+      for (const emp of empRes.rows) {
+        const effRes = await c.queryObject<{ start_time: string; end_time: string; is_off: boolean }>(
+          "SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+          [tenantId, emp.id, date]
+        );
+        for (const row of effRes.rows) {
+          if (!row.is_off && row.start_time && row.end_time) {
+            shiftRows.push({ start_time: row.start_time, end_time: row.end_time });
+          }
+        }
+      }
+      // Deduplicate and sort
+      const uniqueShifts = new Map<string, { start_time: string; end_time: string }>();
+      for (const s of shiftRows) uniqueShifts.set(`${s.start_time}-${s.end_time}`, s);
+      const shiftRes = { rows: [...uniqueShifts.values()].sort((a, b) => a.start_time.localeCompare(b.start_time)) };
 
       // 3. Existing appointments for that date
       const apptRes = await c.queryObject<{ start_time: string; end_time: string }>(

@@ -113,4 +113,18 @@ export function registerAuthRoutes(
       token,
     });
   }, 'Registration failed'));
+
+  // POST /auth/refresh - Refresh JWT token (requires valid existing token)
+  app.post('/auth/refresh', withHandler(async (req: AppRequest, reply) => {
+    if (!req.auth) {
+      return reply.status(401).send({ success: false, error: 'Authentication required' });
+    }
+    // Issue a fresh token with the same payload
+    const token = generateToken({
+      tenant_id: req.auth.tenant_id,
+      user_id: req.auth.user_id,
+      email: req.auth.email,
+    });
+    return reply.send({ success: true, token });
+  }, 'Token refresh failed'));
 }
