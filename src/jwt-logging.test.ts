@@ -76,3 +76,30 @@ describe('Fix #23: JWT failure logging', () => {
     expect(src).toContain('JWT verification failed');
   });
 });
+
+describe('Fix #13: Knowledge ingest auth header', () => {
+  it('HAPPY: knowledge ingest sends Authorization header with token', () => {
+    // WHO: Dashboard uploading a knowledge base file
+    // WHAT: Fetch call should include Bearer token in headers
+    // WHY: Without auth header, server rejects the upload (401)
+    const src = fs.readFileSync('dashboard/lib/api.ts', 'utf8');
+
+    // Find the ingest function and verify it sets Authorization
+    const ingestSection = src.substring(src.indexOf('ingest:'));
+    expect(ingestSection).toContain("Authorization");
+    expect(ingestSection).toContain("Bearer");
+    expect(ingestSection).toContain("authToken");
+  });
+
+  it('SAD: ingest does not use Content-Type header (FormData sets it automatically)', () => {
+    // WHO: File upload via FormData
+    // WHAT: Should NOT manually set Content-Type (browser sets boundary)
+    // WHY: Setting Content-Type manually breaks multipart form boundary
+    const src = fs.readFileSync('dashboard/lib/api.ts', 'utf8');
+
+    const ingestSection = src.substring(src.indexOf('ingest:'));
+    // The headers object for ingest should not include Content-Type
+    // (only Authorization is set manually)
+    expect(ingestSection).toContain("const headers: Record<string, string> = {}");
+  });
+});

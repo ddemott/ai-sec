@@ -190,4 +190,40 @@ describe('Fix #25: Form label associations', () => {
     const input = screen.getByLabelText('Name');
     expect(input).not.toHaveAttribute('aria-invalid');
   });
+
+  test('HAPPY: Select shows error with aria-invalid and aria-describedby', () => {
+    // WHO: Users with validation error on a select field
+    // WHAT: Select should announce error state to screen readers
+    // WHY: Same WCAG requirement as Input — error identification
+    render(
+      <Select
+        label="State"
+        id="state-field"
+        error="State is required"
+        options={[{ label: 'NY', value: 'NY' }, { label: 'CA', value: 'CA' }]}
+      />
+    );
+
+    const select = screen.getByLabelText('State');
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveAttribute('aria-describedby', 'state-field-error');
+
+    const errorMsg = screen.getByRole('alert');
+    expect(errorMsg).toHaveTextContent('State is required');
+  });
+
+  test('SAD: Select without error has no aria-invalid', () => {
+    // WHO: Users with valid select state
+    // WHAT: Should not have aria-invalid when there's no error
+    // WHY: Consistent with Input behavior
+    render(
+      <Select
+        label="Color"
+        options={[{ label: 'Red', value: 'red' }]}
+      />
+    );
+
+    const select = screen.getByLabelText('Color');
+    expect(select).not.toHaveAttribute('aria-invalid');
+  });
 });

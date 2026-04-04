@@ -32,7 +32,7 @@ export default function CRMView() {
   const [isEditing, setIsEditing] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [saving, setSaving] = useState(false)
-  const { form: editForm, setField: handleEditFormChange, setForm: setEditForm } = useFormState({
+  const { form: editForm, setField, setForm: setEditForm } = useFormState({
     first_name: '',
     last_name: '',
     phone: '',
@@ -45,6 +45,7 @@ export default function CRMView() {
     timezone: 'America/New_York',
     notes: ''
   })
+  const handleEditFormChange = (field: string, value: string) => setField(field as keyof typeof editForm, value)
 
   useEffect(() => {
     if (tenantId) {

@@ -66,12 +66,12 @@ function AppointmentViewInner() {
   const {
     selectedAppointment, setSelectedAppointment,
     isCreating, setIsCreating,
-    isEditing, setIsEditing,
+    setIsEditing,
     showDetailOnMobile, setShowDetailOnMobile,
-    saving, setSaving,
-    error, setError,
+    setSaving,
+    setError,
     form, setForm,
-    showConfirmModal, setShowConfirmModal,
+    setShowConfirmModal,
   } = useAppointmentDetail();
 
   // Appointments state
