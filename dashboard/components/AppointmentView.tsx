@@ -20,6 +20,7 @@ import { parse, startOfWeek, getDay } from 'date-fns'
 
 import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
+import { AppointmentDetailProvider, useAppointmentDetail } from '../lib/AppointmentDetailContext';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -51,9 +52,27 @@ interface DnDEventArgs {
 }
 
 export default function AppointmentView() {
+  return (
+    <AppointmentDetailProvider>
+      <AppointmentViewInner />
+    </AppointmentDetailProvider>
+  )
+}
+
+function AppointmentViewInner() {
   const tenantId = useActiveTenantId();
   const { customers, resources, employees } = useStaticData(tenantId);
   const vocab = useVocabulary();
+  const {
+    selectedAppointment, setSelectedAppointment,
+    isCreating, setIsCreating,
+    isEditing, setIsEditing,
+    showDetailOnMobile, setShowDetailOnMobile,
+    saving, setSaving,
+    error, setError,
+    form, setForm,
+    showConfirmModal, setShowConfirmModal,
+  } = useAppointmentDetail();
 
   // Appointments state
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -77,28 +96,8 @@ export default function AppointmentView() {
     const [loading, setLoading] = useState<boolean>(false);
     // Mock data state
     const [usingMockData, setUsingMockData] = useState<boolean>(false);
-    // Mobile detail pane state
-    const [showDetailOnMobile, setShowDetailOnMobile] = useState<boolean>(false);
-    // Creation/editing state
-    const [isCreating, setIsCreating] = useState<boolean>(false);
-    // Appointment selection state
-    const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
     // Draft event state for calendar block
     const [, setDraftEvent] = useState<{ start: Date; end: Date } | null>(null);
-    // Form state
-    const [form, setForm] = useState({
-      customer_id: '',
-      resource_id: '',
-      employee_id: '' as string | number,
-      description: '',
-      start_time: '',
-      end_time: '',
-      location: '',
-      customer_first_name: '',
-      customer_last_name: '',
-      customer_phone: '',
-      customer_notes: ''
-    });
     // Utility function for base times
     function getServiceBaseTimes(appointment: Appointment): { start: Date; end: Date } {
       return {
@@ -111,8 +110,6 @@ export default function AppointmentView() {
   const [calendarView, setCalendarView] = useState<CalendarViewType>('month');
   // Store original appointment for cancel/undo
   const [originalAppointment, setOriginalAppointment] = useState<Appointment | null>(null);
-  // Track saving state for update button
-  const [saving, setSaving] = useState(false);
   // Calendar date state
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   // Zoom: step in minutes per slot (smaller = more zoomed in)
@@ -124,12 +121,6 @@ export default function AppointmentView() {
   const calendarMin = new Date(2000, 0, 1, 0, 0, 0);
   const calendarMax = new Date(2000, 0, 1, 23, 59, 59);
   const calendarScrollTo = new Date(2000, 0, 1, 7, 0, 0);
-  // Editing state
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  // Error state
-  const [error, setError] = useState<string>("");
-  // Confirm modal state
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
 
   const findCustomerById = (id: string) => customers.find(c => c.id === id)
 
@@ -522,21 +513,12 @@ export default function AppointmentView() {
         />
 
         <AppointmentDetailPanel
-          selectedAppointment={selectedAppointment}
-          isCreating={isCreating}
-          isEditing={isEditing}
-          showDetailOnMobile={showDetailOnMobile}
-          saving={saving}
-          error={error}
-          form={form}
-          showConfirmModal={showConfirmModal}
           customers={customers}
           resources={resources}
           employees={employees}
           vocab={vocab}
           getServiceBaseTimes={getServiceBaseTimes}
           findCustomerById={findCustomerById}
-          onFormChange={setForm}
           onEdit={() => {
             if (selectedAppointment) {
               setOriginalAppointment(selectedAppointment)

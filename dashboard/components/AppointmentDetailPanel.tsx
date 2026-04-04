@@ -1,5 +1,4 @@
 import React from 'react';
-import { Appointment } from '../lib/types';
 import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -21,37 +20,16 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCustomerAddress } from '../lib/utils';
-
-interface AppointmentForm {
-  customer_id: string;
-  resource_id: string;
-  employee_id: string | number;
-  description: string;
-  start_time: string;
-  end_time: string;
-  location: string;
-  customer_first_name: string;
-  customer_last_name: string;
-  customer_phone: string;
-  customer_notes: string;
-}
+import { useAppointmentDetail } from '../lib/AppointmentDetailContext';
+import type { Appointment } from '../lib/types';
 
 interface AppointmentDetailPanelProps {
-  selectedAppointment: Appointment | null;
-  isCreating: boolean;
-  isEditing: boolean;
-  showDetailOnMobile: boolean;
-  saving: boolean;
-  error: string;
-  form: AppointmentForm;
-  showConfirmModal: boolean;
   customers: { id: string; name: string; phone: string; tenant_id?: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string }[];
   resources: { id: string; name: string }[];
   employees: { id: string | number; name: string; type?: string }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };
   findCustomerById: (id: string) => { id: string; name: string; phone: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string } | undefined;
-  onFormChange: (form: AppointmentForm) => void;
   onEdit: () => void;
   onCancelEdit: () => void;
   onDelete: () => void;
@@ -63,21 +41,12 @@ interface AppointmentDetailPanelProps {
 }
 
 export function AppointmentDetailPanel({
-  selectedAppointment,
-  isCreating,
-  isEditing,
-  showDetailOnMobile,
-  saving,
-  error,
-  form,
-  showConfirmModal,
   customers,
   resources,
   employees,
   vocab,
   getServiceBaseTimes,
   findCustomerById,
-  onFormChange,
   onEdit,
   onCancelEdit,
   onDelete,
@@ -87,6 +56,13 @@ export function AppointmentDetailPanel({
   onConfirmUpdate,
   onCloseMobile,
 }: AppointmentDetailPanelProps) {
+  const {
+    selectedAppointment, isCreating, isEditing, showDetailOnMobile,
+    saving, error, form, showConfirmModal, setForm,
+  } = useAppointmentDetail()
+
+  const onFormChange = (f: typeof form) => setForm(f)
+
   return (
     <section className={`flex-1 flex flex-col overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`} style={{ backgroundColor: 'var(--bg-surface)' }}>
       {(selectedAppointment || isCreating) ? (
