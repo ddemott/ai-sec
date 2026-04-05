@@ -14,11 +14,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 ## Key Directories
 - `/src` - Fastify backend (slim index.ts entry, 20 route modules under src/routes/)
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan)
-- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts)
+- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts)
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 63 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors)
+- `/supabase/migrations` - 67 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, shift_overrides, night shifts)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion, `qa-live-test.py` QA suite)
@@ -54,7 +54,9 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Admin bypass policies on `tenants`, `users`, `business_templates` for cross-tenant operations when no tenant context set
 - Audit trigger (`fn_audit_trigger`) is `SECURITY DEFINER` to bypass RLS for internal logging
 - `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert) + past-time rejection, business hours validation, fuzzy service matching
-- `book_with_scheduling_atomic()` RPC: Production booking RPC deployed to Supabase with natural language error messages and specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS)
+- `book_with_scheduling_atomic()` RPC: Production booking RPC with shift_overrides support (checks overrides first, falls back to patterns), night shift support (cross-midnight), specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS)
+- `shift_overrides` table: date-specific employee schedules (replaces weekly patterns in UI). Both Working Hours and Front Desk scheduler read from this table. API: `GET/POST /shifts/overrides`
+- `employee_shifts` table: weekly patterns (day_of_week 0-6) — still exists for booking RPC fallback but NOT used by dashboard UI. UI uses date-based scheduling only.
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
 - Polymorphic assignment: `p_assignment_id` is UUID
 - All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)
@@ -112,7 +114,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,038 backend tests + 332 dashboard tests = 1,370 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,118 backend tests + 347 dashboard tests + 3 edge function tests = 1,468 total passing (with DB running). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors. Architecture review complete (32 items, all resolved — see `docs/ARCHITECTURE_REVIEW_20260403.md`).
 
 ### Remaining (Phase 13)
 - ~~Supabase support ticket~~ — Resolved 2026-03-30. Project no longer stuck in "pausing" state.

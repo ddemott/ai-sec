@@ -1,13 +1,63 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-04-01 (evening)
+**Last updated:** 2026-04-05
 
 ---
 
 ## Where We Are
 
-Phase 13 (Production Readiness) is in progress. The backend is deployed to Railway and live. A phone number has been provisioned via Vapi. The edge functions (voice AI tool handlers) are deployed to Supabase and the project is now active (pausing bug resolved as of 2026-03-30).
+Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone provisioned. Voice AI working end-to-end.
 
-All 8 design session work items from March 24 are now **complete**. All 24 refactoring items are **complete**. Calendar sync (Google + Outlook) and CRM integrations (Jobber + HubSpot + Square + ServiceTitan) are **complete** with bidirectional sync and full test coverage. Voice AI is **working end-to-end** — calls are answered, appointments booked, policy questions answered via RAG. Knowledge base questionnaire is **complete** with 40 policy Q&A pairs. April 1 bug fixes resolved 6 voice AI issues (BUG-059 through BUG-064) including timezone regression, phone capture, date parsing, employee assignment, error handling, and specific booking error codes.
+### April 3-4 Session: Architecture Review + Scheduling Overhaul
+
+**Architecture review completed** — 32 items across Critical/High/Medium all resolved. See `docs/ARCHITECTURE_REVIEW_20260403.md` for full report. Key changes:
+- Rate limiting (`@fastify/rate-limit`) + security headers (`@fastify/helmet`) added
+- CORS restricted via `CORS_ORIGIN` env var
+- Token refresh endpoint (`POST /auth/refresh`) + client-side auto-refresh (10min before expiry)
+- Sync orchestrator (`src/services/syncOrchestrator.ts`) replaces 35 scattered fire-and-forget calls
+- SettingsView split: 1,008 → 467 lines (extracted `CRMIntegrationCard.tsx`)
+- SetupWizard split: 584 → 203 lines (extracted `useWizardCrud.ts`)
+- Night shift support (cross-midnight time comparison)
+- `check_availability_with_tz()` now checks employee shift coverage + overrides
+- `getAvailableSlots()` consolidated from 13 DB round trips to 1
+- Modal focus trap, form label auto-ids (`useId()`), lazy loading for dashboard tabs
+
+**Scheduling simplified** — User rejected pattern+override model as too complex:
+- **New model**: date-based only. Click a day → set times → save. No weekly patterns.
+- Data lives in `shift_overrides` table (renamed in API to `Api.shifts.schedule.*`)
+- Both Working Hours and Front Desk scheduler read from same table
+- Default times: 8:00 AM - 5:00 PM
+- `employee_shifts` (weekly patterns) still exists in DB but no longer used by UI
+
+### Active Bug: Front Desk Shift Bars Not Rendering
+- Working Hours view shows shifts correctly for Bella Salon
+- Front Desk scheduler does NOT display shift bars despite data being in API
+- Debug `console.log` added to `NewSchedulerView.tsx` (~line 213) — need browser console output
+- `useSchedulerData` fetches `Api.shifts.schedule.list()` → filters by date → maps to `shiftsByEmployee`
+- API confirmed returning correct data. Display issue only.
+
+### Other UI Work Done
+- Landing page `public/index.html`: added "Log in" button (was missing entirely)
+- Skill map connection lines: brightened opacity and colors for dark themes
+- Modal: fixed focus trap stealing keystrokes (useEffect now stable on `[isOpen]` only)
+
+## What's Left
+
+### Immediate (pick up here)
+1. **Fix Front Desk shift bars** — debug console.log is in place, need browser output
+2. **Remove debug console.log** from NewSchedulerView after fixing
+3. **Verify modal focus fix** — typing in skill modal should work now
+
+### Phase 13 Remaining
+- **Deploy dashboard to Railway** — code ready, blocked by Railway incident April 2
+- **Set `DASHBOARD_URL`** on backend — needs dashboard deployed
+- **UI/UX flow improvements** — ongoing
+- **Database webhooks for n8n** — ops task, triggers exist
+- **Beta testing with DynaTire** — needs dashboard deployed
+
+### Test Count
+- **1,468 tests passing, 0 failures** (as of last full run before scheduling changes)
+- 1,118 backend + 347 dashboard + 3 edge function
+- Some test files may need updating after scheduling simplification
 
 ---
 
