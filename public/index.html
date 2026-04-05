@@ -85,6 +85,13 @@ nav {
   cursor: pointer; transition: all 0.2s; text-decoration: none;
 }
 .btn-ghost:hover { border-color: rgba(255,255,255,0.22); color: var(--text); }
+.btn-login {
+  padding: 8px 18px; border: 1px solid var(--border-md);
+  background: transparent; color: var(--text);
+  border-radius: 8px; font-family: var(--ff-body); font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; text-decoration: none;
+}
+.btn-login:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.06); }
 .btn-primary {
   padding: 9px 20px; background: var(--blue);
   border: none; border-radius: 8px; color: #fff;
@@ -603,7 +610,7 @@ footer {
     <li><a href="#businesses">Industries</a></li>
   </ul>
   <div class="nav-cta">
-    <a href="/demo" class="btn-ghost">Try demo</a>
+    <a href="{{DASHBOARD_URL}}" class="btn-login">Log in</a>
     <a href="{{DASHBOARD_URL}}?trial=true" class="btn-primary">
       Start free trial
     </a>

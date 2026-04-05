@@ -158,13 +158,13 @@ export default function SkillMapConnections({
                   isHovered
                     ? '#ef4444'
                     : path.isBroken
-                      ? '#f59e0b'
+                      ? '#fbbf24'
                       : path.isHighlighted
-                        ? '#3b82f6'
+                        ? '#60a5fa'
                         : '#93c5fd'
                 }
-                strokeWidth={isHovered ? 3 : path.isHighlighted ? 2.5 : 1.5}
-                strokeOpacity={isActive ? (path.isHighlighted || isHovered ? 1 : 0.4) : 0.1}
+                strokeWidth={isHovered ? 3 : path.isHighlighted ? 2.5 : 2}
+                strokeOpacity={isActive ? (path.isHighlighted || isHovered ? 1 : 0.7) : 0.15}
                 strokeDasharray={path.isBroken ? '4 4' : undefined}
                 style={{
                   ...(path.isBroken ? { animation: 'none', strokeDashoffset: 0 } : {}),

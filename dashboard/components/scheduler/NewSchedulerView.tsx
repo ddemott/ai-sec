@@ -121,7 +121,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   const contextTenantId = useActiveTenantId();
   const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
 
-  const { employees: allStaff, services, shifts: allShifts, refresh: refreshStaticData } = useStaticData(tenantId);
+  const { employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
 
   // Filter out user accounts — only show employees in scheduler
   const baseEmployees = useMemo(
@@ -208,7 +208,13 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
     appointmentsByEmployee,
     shiftsByEmployee,
     refresh: refreshScheduler,
-  } = useSchedulerData(tenantId, selectedDate, employees, [], allShifts);
+  } = useSchedulerData(tenantId, selectedDate, employees, []);
+
+  // DEBUG: trace shift data
+  console.log('[Scheduler] employees:', employees.length, 'shiftsByEmployee keys:', [...shiftsByEmployee.keys()]);
+  for (const [empId, shifts] of shiftsByEmployee.entries()) {
+    if (shifts.length > 0) console.log('[Scheduler] shifts for', empId, ':', shifts);
+  }
 
   const handleRefresh = useCallback(() => {
     refreshScheduler();
@@ -788,8 +794,8 @@ function ShiftBar({ shifts, colW, rowHeight }: ShiftBarProps) {
               width: Math.max(width, 4),
               top: 3,
               bottom: 3,
-              background: 'var(--accent-muted, rgba(59,130,246,0.1))',
-              border: '1px solid var(--border-soft, #333)',
+              background: 'var(--accent-muted, rgba(59,130,246,0.25))',
+              border: '1px solid var(--accent, rgba(59,130,246,0.4))',
             }}
             data-testid={`shift-bar-${i}`}
           >

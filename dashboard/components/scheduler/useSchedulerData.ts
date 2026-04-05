@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Api } from '../../lib/api';
-import type { Shift } from '../../lib/types';
+import type { ShiftOverride } from '../../lib/types';
 
 export interface SchedulerAppointment {
   id: string;
@@ -24,23 +24,16 @@ function toDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getDayOfWeek(date: Date): number {
-  return date.getDay(); // 0=Sun,1=Mon,...6=Sat
-}
-
 interface SchedulerEmployee { id: string | number; name: string }
 interface SchedulerResource { id: string | number; name: string }
-interface SchedulerShift { id: string; employee_id?: string | number; user_id?: string | number; day_of_week: number; start_time?: string; end_time?: string }
+interface SchedulerShift { employee_id?: string | number; start_time?: string; end_time?: string }
 
-export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[], externalShifts?: Shift[]) {
+export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);
-  const [localShifts, setLocalShifts] = useState<SchedulerShift[]>([]);
+  const [allShifts, setAllShifts] = useState<ShiftOverride[]>([]);
   const [loading, setLoading] = useState(false);
 
   const dateStr = toDateString(selectedDate);
-
-  // Use externally provided shifts if available, otherwise use locally fetched ones
-  const shifts: SchedulerShift[] = externalShifts ?? localShifts;
 
   const fetchData = useCallback(async () => {
     if (!tenantId) return;
@@ -51,48 +44,35 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     nextDay.setDate(nextDay.getDate() + 1);
     const endDate = `${toDateString(nextDay)}T00:00:00Z`;
 
-    // Only fetch shifts if not provided externally
-    const fetches: Promise<unknown>[] = [
-      Api.appointments.list(tenantId, { startDate, endDate }),
-    ];
-    if (!externalShifts) {
-      fetches.push(Api.shifts.list(tenantId));
-    }
+    try {
+      // Fetch appointments + ALL scheduled shifts for the tenant
+      const [apptRes, shiftRes] = await Promise.all([
+        Api.appointments.list(tenantId, { startDate, endDate }).catch(() => []),
+        Api.shifts.schedule.list(tenantId).catch(() => []),
+      ]);
 
-    const results = await Promise.allSettled(fetches);
-
-    const apptRes = results[0];
-    if (apptRes.status === 'fulfilled' && Array.isArray(apptRes.value)) {
-      // Hide canceled appointments from the calendar — they show in CRM history only
-      setAppointments((apptRes.value as SchedulerAppointment[]).filter((a) => a.status !== 'canceled'));
-    } else {
+      setAppointments(
+        (Array.isArray(apptRes) ? apptRes : [])
+          .filter((a: SchedulerAppointment) => a.status !== 'canceled')
+      );
+      setAllShifts(Array.isArray(shiftRes) ? shiftRes : []);
+    } catch {
       setAppointments([]);
-    }
-
-    if (!externalShifts && results[1]) {
-      const shiftRes = results[1];
-      if (shiftRes.status === 'fulfilled' && Array.isArray(shiftRes.value)) {
-        setLocalShifts(shiftRes.value);
-      } else {
-        setLocalShifts([]);
-      }
+      setAllShifts([]);
     }
 
     setLoading(false);
-  }, [tenantId, dateStr, selectedDate, externalShifts]);
+  }, [tenantId, dateStr, selectedDate]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  const dayOfWeek = getDayOfWeek(selectedDate);
 
   const appointmentsByEmployee = useMemo(() => {
     const map = new Map<string, SchedulerAppointment[]>();
     for (const emp of employees) {
       map.set(String(emp.id), []);
     }
-    // Add "unassigned" bucket
     map.set('unassigned', []);
     for (const appt of appointments) {
       const key = appt.employee_id ? String(appt.employee_id) : 'unassigned';
@@ -100,7 +80,6 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
       if (list) {
         list.push(appt);
       } else {
-        // Employee not in current list (maybe deleted), put in unassigned
         const unassigned = map.get('unassigned')!;
         unassigned.push(appt);
       }
@@ -125,28 +104,29 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     return map;
   }, [appointments, resources]);
 
+  // Filter shifts to the selected date, group by employee
   const shiftsByEmployee = useMemo(() => {
     const map = new Map<string, SchedulerShift[]>();
     for (const emp of employees) {
       map.set(String(emp.id), []);
     }
-    for (const shift of shifts) {
-      const empId = shift.employee_id != null ? String(shift.employee_id) : (shift.user_id ? String(shift.user_id) : null);
-      if (!empId) continue;
-      if (shift.day_of_week !== dayOfWeek) continue;
+    for (const shift of allShifts) {
+      if (shift.is_off || !shift.start_time || !shift.end_time) continue;
+      // Match shift_date to selected date (shift_date comes as ISO timestamp)
+      const shiftDate = shift.shift_date.substring(0, 10);
+      if (shiftDate !== dateStr) continue;
+      const empId = String(shift.employee_id);
       const list = map.get(empId);
       if (list) {
-        list.push(shift);
-      } else {
-        map.set(empId, [shift]);
+        list.push({ employee_id: empId, start_time: shift.start_time, end_time: shift.end_time });
       }
     }
     return map;
-  }, [shifts, employees, dayOfWeek]);
+  }, [allShifts, employees, dateStr]);
 
   return {
     appointments,
-    shifts,
+    shifts: allShifts,
     loading,
     appointmentsByEmployee,
     appointmentsByResource,

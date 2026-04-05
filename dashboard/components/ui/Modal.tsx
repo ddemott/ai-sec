@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -20,64 +20,61 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  // Focus trap: cycle through focusable elements inside the modal
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-      return;
-    }
-
-    if (e.key !== 'Tab' || !modalRef.current) return;
-
-    const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable.length === 0) return;
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-
-    if (e.shiftKey) {
-      if (document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      }
-    } else {
-      if (document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }, [onClose]);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (isOpen) {
-      // Save current focus to restore later
-      previousFocusRef.current = document.activeElement as HTMLElement;
-      document.body.style.overflow = 'hidden';
-      document.addEventListener('keydown', handleKeyDown);
+    if (!isOpen) return;
 
-      // Focus the first focusable element in the modal
-      requestAnimationFrame(() => {
-        if (modalRef.current) {
-          const first = modalRef.current.querySelector<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          );
-          first?.focus();
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    document.body.style.overflow = 'hidden';
+
+    // Focus first input (or first focusable) on open
+    requestAnimationFrame(() => {
+      if (modalRef.current) {
+        const first = modalRef.current.querySelector<HTMLElement>(
+          'input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])'
+        );
+        first?.focus();
+      }
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab' || !modalRef.current) return;
+
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
         }
-      });
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
 
-      return () => {
-        document.body.style.overflow = 'unset';
-        document.removeEventListener('keydown', handleKeyDown);
-        // Restore focus when modal closes
-        previousFocusRef.current?.focus();
-      };
-    } else {
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
       document.body.style.overflow = 'unset';
-    }
-  }, [isOpen, handleKeyDown]);
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

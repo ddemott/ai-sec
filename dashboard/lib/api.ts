@@ -380,11 +380,11 @@ export const Api = {
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/shifts/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
 
-    overrides: {
+    schedule: {
       list: (tenantId: string | null) =>
         apiFetch<ShiftOverride[]>(`/shifts/overrides`, tenantId ? { tenant_id: tenantId } : undefined),
 
-      effective: (tenantId: string | null, employeeId: string, startDate: string, endDate: string) =>
+      forDate: (tenantId: string | null, employeeId: string, startDate: string, endDate: string) =>
         apiFetch<EffectiveShift[]>(`/shifts/overrides`, {
           ...(tenantId ? { tenant_id: tenantId } : {}),
           employee_id: employeeId,
@@ -392,13 +392,10 @@ export const Api = {
           end_date: endDate,
         }),
 
-      create: (tenantId: string | null, data: Partial<ShiftOverride>) =>
+      save: (tenantId: string | null, data: Partial<ShiftOverride>) =>
         apiMutate<{ override: ShiftOverride }>(`/shifts/overrides/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-      update: (id: string, tenantId: string | null, data: Partial<ShiftOverride>) =>
-        apiMutate<{ override: ShiftOverride }>(`/shifts/overrides/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
-
-      delete: (id: string, tenantId: string | null) =>
+      remove: (id: string, tenantId: string | null) =>
         apiMutate(`/shifts/overrides/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
     },
 
