@@ -2,7 +2,17 @@
 
 Found during full code review on March 16, 2026. Updated April 1, 2026 with voice AI fixes and audit of all outstanding bugs.
 
-**Summary**: 64 bugs tracked. 57 FIXED, 2 NOT A BUG, 4 PARTIAL, 1 OPEN.
+**Summary**: 72 bugs tracked. 70 FIXED, 2 NOT A BUG, 1 OPEN (BUG-072).
+
+### April 3-4, 2026 Architecture Review Fixes (BUG-065 through BUG-072)
+- BUG-065: Booking RPC shift_override is_off bypass — FIXED (migration 20260403000001)
+- BUG-066: check_coverage_gaps() ignored shift_overrides — FIXED (migration 20260403000001)
+- BUG-067: Edge function hardcoded Central Time for all tenants — FIXED (dispatcher.ts applyTimezone)
+- BUG-068: RLS admin bypass policy too permissive on shift_overrides — FIXED (migration 20260403000001)
+- BUG-069: No rate limiting on API — FIXED (@fastify/rate-limit, 5 login attempts/5min)
+- BUG-070: No security headers — FIXED (@fastify/helmet)
+- BUG-071: Night shifts (23:00-02:00) fail time comparison — FIXED (migration 20260404000000)
+- BUG-072: Front Desk scheduler shift bars not rendering — OPEN (data confirmed in API, display issue in NewSchedulerView, debug console.log in place)
 
 ---
 
