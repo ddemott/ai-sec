@@ -72,8 +72,9 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 - `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
 - `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
 - `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` — 63 SQL migrations
-- `/shared` — Cross-runtime code (getEmbedding, scheduling, normalizer)
+- `/src/services` — Service layer (sync orchestrator, CRM clients, calendar, Vapi, token management)
+- `/supabase/migrations` — 67 SQL migrations
+- `/shared` — Cross-runtime code (getEmbedding, scheduling with shift override support, normalizer)
 - `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
 - `/docs` — Architecture, plans, decisions, deployment guide, mockups
 
@@ -81,7 +82,8 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 - **Database**: PostgreSQL + pgvector (Docker, port 5433). All IDs are UUID.
 - **Multi-tenancy**: Row Level Security on all tables. `withTenantClient()` enforces RLS.
-- **Auth**: JWT (8h expiry), bcrypt password hashing, auto-logout on stale sessions.
+- **Auth**: JWT (8h expiry), bcrypt password hashing, auto-logout on stale sessions, token refresh endpoint.
+- **Security**: @fastify/helmet (security headers), @fastify/rate-limit (100 req/min global, 5/5min on login), CORS restricted via CORS_ORIGIN env var.
 - **Input Validation**: Zod schemas at API boundaries; CHECK constraints on JSONB metadata.
 - **Least-Privilege DB**: `api_user` role has explicit per-table grants (not `ALL PRIVILEGES`).
 - **Test Isolation**: Dedicated `test_db` with savepoint-based isolation.
@@ -100,7 +102,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**1,319 tests passing** (1,006 backend + 313 dashboard) in ~25 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**1,468 tests passing** (1,118 backend + 347 dashboard + 3 edge function) in ~55 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend
@@ -123,9 +125,10 @@ Every route module, service file, and middleware layer has test coverage. Tests 
 | Area | Test files | Tests |
 |------|-----------|-------|
 | Backend routes (20 modules) | 30+ files | ~600 |
-| Backend services (14 files) | 20+ files | ~300 |
+| Backend services (16 files) | 22+ files | ~350 |
+| Architecture review fixes | 10 files | 93 |
 | Middleware, constants, scheduling | 5 files | ~50 |
-| Dashboard components + views | 16 files | 313 |
+| Dashboard components + views | 18 files | 347 |
 | Edge function (Deno) | 10 files | separate (`deno task test`) |
 | Live QA | 1 file | 29 calls / 88 assertions |
 
