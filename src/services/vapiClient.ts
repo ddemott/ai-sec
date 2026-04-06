@@ -27,7 +27,10 @@ export class VapiClient {
   constructor(
     private apiKey: string,
     private serverUrl: string,
-    private serverUrlSecret: string
+    private serverUrlSecret: string,
+    private backendUrl: string = '',
+    private xaiTtsSecret: string = '',
+    private xaiTtsVoice: string = 'ara'
   ) {}
 
   private async request<T>(method: string, endpoint: string, body?: unknown): Promise<T> {
@@ -122,10 +125,22 @@ export class VapiClient {
       payload.model.tools = tools;
     }
 
-    // Override voice to use Vapi's built-in voices (no external credentials needed)
-    // Cartesia/ElevenLabs/PlayHT require their API keys configured in Vapi dashboard
-    // Vapi's own voices (provider: 'vapi') work out of the box
-    payload.voice = { provider: 'vapi', voiceId: 'Elliot' };
+    // Use xAI Grok TTS via custom-voice proxy if configured, otherwise fall back to Vapi built-in
+    if (this.backendUrl && this.xaiTtsSecret) {
+      payload.voice = {
+        provider: 'custom-voice',
+        server: {
+          url: `${this.backendUrl}/tts/synthesize`,
+          secret: this.xaiTtsSecret,
+          timeoutSeconds: 15,
+        },
+        fallbackPlan: {
+          voices: [{ provider: 'vapi', voiceId: 'Elliot' }],
+        },
+      };
+    } else {
+      payload.voice = { provider: 'vapi', voiceId: 'Elliot' };
+    }
 
     return payload;
   }

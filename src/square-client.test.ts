@@ -41,7 +41,7 @@ afterAll(() => {
 function setSquareEnv() {
   process.env.SQUARE_CLIENT_ID = "test-client-id";
   process.env.SQUARE_CLIENT_SECRET = "test-client-secret";
-  process.env.SQUARE_CALLBACK_URL = "http://localhost:3000/square/auth/callback";
+  process.env.SQUARE_CALLBACK_URL = "http://localhost:4001/square/auth/callback";
   process.env.JWT_SECRET = JWT_SECRET;
 }
 
@@ -98,7 +98,7 @@ describe("getAuthUrl", () => {
     expect(parsed.searchParams.get("client_id")).toBe("test-client-id");
     expect(parsed.searchParams.get("response_type")).toBe("code");
     expect(parsed.searchParams.get("redirect_uri")).toBe(
-      "http://localhost:3000/square/auth/callback"
+      "http://localhost:4001/square/auth/callback"
     );
     expect(parsed.searchParams.get("scope")).toContain("CUSTOMERS_READ");
     expect(parsed.searchParams.get("scope")).toContain("CUSTOMERS_WRITE");

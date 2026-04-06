@@ -68,8 +68,8 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=success`,
-      cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:3001'}?billing=cancel`,
+      success_url: `${process.env.DASHBOARD_URL || 'https://localhost:4000'}?billing=success`,
+      cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:4000'}?billing=cancel`,
       metadata: { tenant_id, plan },
     });
 

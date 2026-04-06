@@ -635,7 +635,7 @@ const LANDING_HTML = `
           Start free — 14 days
           <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
-        <a href="https://localhost:3000/demo" class="hero-link">
+        <a href="https://localhost:4001/demo" class="hero-link">
           Try the interactive demo
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 15l5-3-5-3v6z" fill="currentColor" stroke="none"/></svg>
         </a>

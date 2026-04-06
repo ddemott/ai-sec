@@ -13,7 +13,7 @@ This installs dependencies, starts the database, applies all migrations, and see
 
 ### 2. Trust the Backend Certificate
 The backend uses HTTPS with self-signed certificates:
-- Visit: [https://localhost:3000/health](https://localhost:3000/health)
+- Visit: [https://localhost:4001/health](https://localhost:4001/health)
 - Click **Advanced** > **Proceed to localhost (unsafe)**
 - You should see `{"status":"ok"}`
 
@@ -21,8 +21,8 @@ The backend uses HTTPS with self-signed certificates:
 ```bash
 npm start
 ```
-- **Dashboard:** [https://localhost:3001](https://localhost:3001)
-- **Backend API:** [https://localhost:3000](https://localhost:3000)
+- **Dashboard:** [https://localhost:4000](https://localhost:4000)
+- **Backend API:** [https://localhost:4001](https://localhost:4001)
 
 ### 4. Sign In
 - **Email:** `admin@secretaryhq.com`
@@ -87,7 +87,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 - **Input Validation**: Zod schemas at API boundaries; CHECK constraints on JSONB metadata.
 - **Least-Privilege DB**: `api_user` role has explicit per-table grants (not `ALL PRIVILEGES`).
 - **Test Isolation**: Dedicated `test_db` with savepoint-based isolation.
-- **Ports**: Backend (3000), Dashboard (3001), Postgres (5433).
+- **Ports**: Backend (4001), Dashboard (4000), Postgres (5433).
 
 ## Database Management
 

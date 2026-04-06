@@ -69,7 +69,7 @@ afterAll(() => {
 function setGoogleEnv() {
   process.env.GOOGLE_CLIENT_ID = "test-client-id";
   process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
-  process.env.GOOGLE_CALLBACK_URL = "http://localhost:3000/calendar/callback";
+  process.env.GOOGLE_CALLBACK_URL = "http://localhost:4001/calendar/callback";
   process.env.JWT_SECRET = JWT_SECRET;
 }
 

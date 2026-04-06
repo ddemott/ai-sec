@@ -41,7 +41,7 @@ afterAll(() => {
 function setServiceTitanEnv() {
   process.env.SERVICETITAN_CLIENT_ID = "test-client-id";
   process.env.SERVICETITAN_CLIENT_SECRET = "test-client-secret";
-  process.env.SERVICETITAN_CALLBACK_URL = "http://localhost:3000/servicetitan/auth/callback";
+  process.env.SERVICETITAN_CALLBACK_URL = "http://localhost:4001/servicetitan/auth/callback";
   process.env.SERVICETITAN_APP_KEY = APP_KEY;
   process.env.JWT_SECRET = JWT_SECRET;
 }
@@ -106,7 +106,7 @@ describe("getAuthUrl", () => {
     expect(parsed.searchParams.get("client_id")).toBe("test-client-id");
     expect(parsed.searchParams.get("response_type")).toBe("code");
     expect(parsed.searchParams.get("redirect_uri")).toBe(
-      "http://localhost:3000/servicetitan/auth/callback"
+      "http://localhost:4001/servicetitan/auth/callback"
     );
     expect(parsed.searchParams.get("scope")).toContain("customers");
     expect(parsed.searchParams.get("scope")).toContain("jobs");

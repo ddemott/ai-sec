@@ -141,7 +141,7 @@ test('AppointmentView: can modify and save an appointment', async () => {
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(`https://localhost:3000/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
+      expect.stringContaining(`https://localhost:4001/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
       expect.objectContaining({ method: 'POST' })
     )
   })

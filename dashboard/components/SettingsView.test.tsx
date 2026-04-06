@@ -184,7 +184,7 @@ describe('SettingsView: Calendar Section', () => {
       writable: true,
       value: {
         ...originalLocation,
-        href: 'http://localhost:3001/dashboard?calendarError=access_denied',
+        href: 'http://localhost:4000/dashboard?calendarError=access_denied',
         search: '?calendarError=access_denied',
         pathname: '/dashboard',
       },
@@ -224,7 +224,7 @@ describe('SettingsView: Calendar Section', () => {
       writable: true,
       value: {
         ...originalLocation,
-        href: 'http://localhost:3001/dashboard?calendarConnected=true',
+        href: 'http://localhost:4000/dashboard?calendarConnected=true',
         search: '?calendarConnected=true',
         pathname: '/dashboard',
       },

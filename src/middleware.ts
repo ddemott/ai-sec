@@ -159,6 +159,8 @@ const TENANT_EXEMPT_ROUTES = [
   '/hubspot/webhook',
   '/square/webhook',
   '/servicetitan/webhook',
+  // TTS proxy (no tenant context — called by Vapi)
+  '/tts/synthesize',
   '/tenants', '/templates', '/templates/full', '/templates/create',
 ];
 

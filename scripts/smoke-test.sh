@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Examples:
 #   ./scripts/smoke-test.sh https://your-backend.railway.app
-#   ./scripts/smoke-test.sh https://localhost:3000 admin@secretaryhq.com password
+#   ./scripts/smoke-test.sh https://localhost:4001 admin@secretaryhq.com password
 #
 # Uses env vars ADMIN_EMAIL and ADMIN_PASSWORD as fallbacks.
 

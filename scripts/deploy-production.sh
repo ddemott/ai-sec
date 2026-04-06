@@ -110,7 +110,7 @@ export VAPI_SERVER_URL_SECRET JWT_SECRET JWT_EXPIRY="${JWT_EXPIRY:-8h}"
 export STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_SOLO_PRICE_ID STRIPE_GROWTH_PRICE_ID
 export NEXT_PUBLIC_API_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD
 export NODE_ENV="${NODE_ENV:-production}"
-export PORT="${PORT:-3000}"
+export PORT="${PORT:-4001}"
 
 # ---------------------------------------------------------------------------
 # 2. Check required tools

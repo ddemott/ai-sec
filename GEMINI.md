@@ -25,7 +25,7 @@ Multi-tenant AI receptionist SaaS for service businesses. An AI answers phone ca
 
 ```bash
 npm run bootstrap    # Install deps, start DB, apply migrations, seed
-npm start            # Backend (https://localhost:3000) + Dashboard (https://localhost:3001)
+npm start            # Backend (https://localhost:4001) + Dashboard (https://localhost:4000)
 npm test             # Backend tests (1,118 tests)
 cd dashboard && npx vitest run  # Dashboard tests (347 tests)
 ```
@@ -35,7 +35,7 @@ Login: `admin@secretaryhq.com` / `password`
 ## Architecture Overview
 
 ### Request Flow
-1. Browser → Next.js dashboard (port 3001) → Fastify API (port 3000) → PostgreSQL
+1. Browser → Next.js dashboard (port 4000) → Fastify API (port 4001) → PostgreSQL
 2. Phone call → Telnyx → Vapi → Edge Function → PostgreSQL → Vapi → caller
 
 ### Multi-Tenancy

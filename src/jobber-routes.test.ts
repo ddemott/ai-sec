@@ -29,7 +29,7 @@ import * as jobberSync from './services/jobberSync';
 
 // --- Constants ---
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-const DASHBOARD_URL = 'https://localhost:3001';
+const DASHBOARD_URL = 'https://localhost:4000';
 const WEBHOOK_SECRET = 'whsec_test_secret_123';
 
 // --- Mock helpers ---

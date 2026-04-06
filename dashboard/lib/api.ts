@@ -9,8 +9,8 @@ import type {
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   (typeof window !== 'undefined'
-    ? 'https://localhost:3000'
-    : 'https://localhost:3000');
+    ? 'https://localhost:4001'
+    : 'https://localhost:4001');
 
 export const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 

@@ -167,14 +167,14 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 | `JWT_SECRET` | Yes | Secret for signing JWT tokens (change from default!) |
 | `JWT_EXPIRY` | No | Token expiry duration (default: `8h`) |
 | `NODE_ENV` | Yes | Set to `production` |
-| `PORT` | No | Server port (default: `3000`) |
+| `PORT` | No | Server port (default: `4001`) |
 | `STRIPE_SECRET_KEY` | Yes | Stripe API key (test or live) |
 | `STRIPE_WEBHOOK_SECRET` | Yes | Stripe webhook signing secret (create after deploy) |
 | `STRIPE_SOLO_PRICE_ID` | Yes | Stripe price ID for Solo plan |
 | `STRIPE_GROWTH_PRICE_ID` | Yes | Stripe price ID for Growth plan |
 | `STRIPE_PRO_PRICE_ID` | Yes | Stripe price ID for Pro plan |
 | `STRIPE_ENTERPRISE_PRICE_ID` | No | Stripe price ID for Enterprise plan |
-| `DASHBOARD_URL` | No | Dashboard URL for Stripe checkout redirects (default: `https://localhost:3001`) |
+| `DASHBOARD_URL` | No | Dashboard URL for Stripe checkout redirects (default: `https://localhost:4000`) |
 | `GOOGLE_CLIENT_ID` | No | Google OAuth client ID (for Google Calendar sync) |
 | `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `GOOGLE_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/calendar/auth/google/callback`) |

@@ -206,7 +206,7 @@ else
   log ""
   log "=== Option D: Docker (any host) ==="
   log "  docker build -t ai-sec-backend ."
-  log "  docker run -p 3000:3000 --env-file .env.production ai-sec-backend"
+  log "  docker run -p 4001:4001 --env-file .env.production ai-sec-backend"
   log ""
   log "=== Required environment variables ==="
   for var in $ENV_VARS_LIST; do

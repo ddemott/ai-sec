@@ -29,6 +29,7 @@ import { registerJobberRoutes } from './routes/jobber';
 import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
 import { registerServiceTitanRoutes } from './routes/servicetitan';
+import { registerTtsRoutes } from './routes/tts';
 import { VapiClient } from './services/vapiClient';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
@@ -44,6 +45,10 @@ const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 const VAPI_API_KEY = process.env.VAPI_API_KEY || '';
 const VAPI_SERVER_URL = process.env.VAPI_SERVER_URL || 'https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools';
 const VAPI_SERVER_URL_SECRET = process.env.VAPI_SERVER_URL_SECRET || '';
+const XAI_API_KEY = process.env.XAI_API_KEY || '';
+const XAI_TTS_SECRET = process.env.XAI_TTS_SECRET || '';
+const XAI_TTS_VOICE = process.env.XAI_TTS_VOICE || 'ara';
+const BACKEND_URL = process.env.BACKEND_URL || '';
 
 if (isProduction) {
   const missing: string[] = [];
@@ -59,6 +64,9 @@ if (isProduction) {
   if (!VAPI_API_KEY) console.warn('WARNING: VAPI_API_KEY not set — phone provisioning disabled');
   if (!VAPI_SERVER_URL_SECRET) console.warn('WARNING: VAPI_SERVER_URL_SECRET not set — webhook auth disabled');
   if (!process.env.GOOGLE_CLIENT_ID) console.warn('WARNING: GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
+  if (!XAI_API_KEY) console.warn('WARNING: XAI_API_KEY not set — Grok TTS proxy disabled');
+  if (XAI_API_KEY && !XAI_TTS_SECRET) console.warn('WARNING: XAI_TTS_SECRET not set — TTS proxy has no auth');
+  if (XAI_API_KEY && !BACKEND_URL) console.warn('WARNING: BACKEND_URL not set — Vapi custom-voice cannot reach TTS proxy');
 }
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
@@ -196,6 +204,8 @@ const PUBLIC_ROUTES = [
   '/hubspot/webhook',
   '/square/webhook',
   '/servicetitan/webhook',
+  // TTS proxy (authenticated via shared secret, not JWT)
+  '/tts/synthesize',
 ];
 app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS') return;
@@ -245,7 +255,7 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
 
 app.get('/', async (_req, reply) => {
   const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'index.html');
-  const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:3001';
+  const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
   const html = fs.readFileSync(htmlPath, 'utf-8')
     .replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
   reply.type('text/html').send(html);
@@ -294,17 +304,18 @@ registerVocabularyRoutes(app, pool, withTenantClient);
 registerBillingRoutes(app, pool);
 
 const vapiClient = VAPI_API_KEY
-  ? new VapiClient(VAPI_API_KEY, VAPI_SERVER_URL, VAPI_SERVER_URL_SECRET)
+  ? new VapiClient(VAPI_API_KEY, VAPI_SERVER_URL, VAPI_SERVER_URL_SECRET, BACKEND_URL, XAI_TTS_SECRET, XAI_TTS_VOICE)
   : null;
 registerProvisioningRoutes(app, pool, vapiClient);
 registerJobberRoutes(app, pool, withTenantClient);
 registerHubSpotRoutes(app, pool, withTenantClient);
 registerSquareRoutes(app, pool, withTenantClient);
 registerServiceTitanRoutes(app, pool, withTenantClient);
+registerTtsRoutes(app, XAI_API_KEY, XAI_TTS_SECRET, XAI_TTS_VOICE);
 
 // --- Start Server ---
 
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 4001);
 
 app
   .listen({ port, host: '0.0.0.0' })

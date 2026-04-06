@@ -219,7 +219,7 @@ export default function ServiceAssignmentView() {
             <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Wrench className="w-3 h-3 mr-2 text-blue-500" />
-                <span style={{ color: 'var(--text-muted)' }}>{vocab.resource_plural}: </span>
+                <span className="text-gray-400">{vocab.resource_plural}: </span>
                 <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.id).length} assigned</span>
               </div>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">

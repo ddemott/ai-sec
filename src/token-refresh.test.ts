@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
-const API_BASE = 'https://localhost:3000';
+const API_BASE = 'https://localhost:4001';
 
 // Helper to make fetch ignore self-signed certs
 async function apiFetch(path: string, options: RequestInit = {}) {

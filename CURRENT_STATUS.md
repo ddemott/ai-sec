@@ -75,7 +75,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 | **Knowledge base** | Working | 40 policy Q&A pairs across 9 categories, document upload (PDF/TXT/DOC/DOCX/MD), auto-save |
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
-| **Local dev** | Working | `npm start` runs backend (3000) + dashboard (3001), dotenv loads `.env` |
+| **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
 | **Tests** | 1,038 backend + 332 dashboard = 1,370 passing + 88 QA assertions | All green (with DB running), zero TS errors |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

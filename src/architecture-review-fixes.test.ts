@@ -264,7 +264,7 @@ describe('Fix #5: Rate limiting', () => {
     // WHAT: Standard requests within rate limit should succeed
     // WHERE: /health endpoint (public, no auth)
     // WHY: Rate limiting should not block normal traffic
-    const res = await fetch('https://localhost:3000/health', {
+    const res = await fetch('https://localhost:4001/health', {
       // @ts-expect-error Node fetch rejectUnauthorized
       agent: undefined,
     }).catch(() => null);

@@ -38,7 +38,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Development
 - Bootstrap: `npm run bootstrap` (installs deps, starts DB, applies migrations, seeds)
-- Start: `npm start` (Dashboard: https://localhost:3001, Backend: https://localhost:3000)
+- Start: `npm start` (Dashboard: https://localhost:4000, Backend: https://localhost:4001)
 - Test backend: `npm test`
 - Test dashboard: `cd dashboard && npm test`
 - Test edge functions: `deno task test --no-check`

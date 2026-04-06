@@ -19,7 +19,7 @@ The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It ca
 - Node.js and npm.
 - A running Supabase project with this repo's migrations applied.
 - Environment variables configured in `.env.local`:
-	- `NEXT_PUBLIC_API_BASE_URL` (defaults to `https://localhost:3000`)
+	- `NEXT_PUBLIC_API_BASE_URL` (defaults to `https://localhost:4001`)
 
 ---
 
@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-Then open [http://localhost:3001](http://localhost:3001) to access the dashboard.
+Then open [http://localhost:4000](http://localhost:4000) to access the dashboard.
 
 You should see:
 - A multi-tenant appointment view (list/calendar).

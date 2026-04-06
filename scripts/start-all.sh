@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Kill any process using port 3000 (backend)
-PORT=3000
+# Kill any process using port 4001 (backend)
+PORT=4001
 PID=$(lsof -ti :$PORT || true)
 if [ ! -z "$PID" ]; then
   echo "Killing process on port $PORT (PID: $PID)"
@@ -11,8 +11,8 @@ else
   echo "No process found on port $PORT"
 fi
 
-# Kill any process using port 3001 (dashboard)
-PORT_DASH=3001
+# Kill any process using port 4000 (dashboard)
+PORT_DASH=4000
 PID_DASH=$(lsof -ti :$PORT_DASH || true)
 if [ ! -z "$PID_DASH" ]; then
   echo "Killing process on port $PORT_DASH (PID: $PID_DASH)"
@@ -55,12 +55,12 @@ fi
 
 # 2. Start services concurrently
 setsid node dist/src/index.js > backend.log 2>&1 &
-echo "Backend server started on port 3000 (dist/src/index.js)"
+echo "Backend server started on port 4001 (dist/src/index.js)"
 (cd dashboard && setsid npm run dev > ../dashboard.log 2>&1 &)
-echo "Dashboard server started on port 3001 (dashboard/server.js)"
+echo "Dashboard server started on port 4000 (dashboard/server.js)"
 
 # Show status
 sleep 5
 echo "--- Server Status ---"
-lsof -i :3000
-lsof -i :3001
+lsof -i :4001
+lsof -i :4000

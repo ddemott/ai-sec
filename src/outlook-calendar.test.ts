@@ -34,7 +34,7 @@ afterAll(() => {
 function setOutlookEnv() {
   process.env.OUTLOOK_CLIENT_ID = "test-client-id";
   process.env.OUTLOOK_CLIENT_SECRET = "test-client-secret";
-  process.env.OUTLOOK_CALLBACK_URL = "http://localhost:3000/calendar/auth/outlook/callback";
+  process.env.OUTLOOK_CALLBACK_URL = "http://localhost:4001/calendar/auth/outlook/callback";
   process.env.JWT_SECRET = JWT_SECRET;
 }
 
@@ -90,7 +90,7 @@ describe("getAuthUrl", () => {
     const parsed = new URL(url);
     expect(parsed.searchParams.get("client_id")).toBe("test-client-id");
     expect(parsed.searchParams.get("response_type")).toBe("code");
-    expect(parsed.searchParams.get("redirect_uri")).toBe("http://localhost:3000/calendar/auth/outlook/callback");
+    expect(parsed.searchParams.get("redirect_uri")).toBe("http://localhost:4001/calendar/auth/outlook/callback");
     expect(parsed.searchParams.get("scope")).toContain("Calendars.ReadWrite");
     expect(parsed.searchParams.get("scope")).toContain("offline_access");
     expect(parsed.searchParams.get("prompt")).toBe("consent");

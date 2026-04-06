@@ -134,7 +134,7 @@ export function OutlookLayout({
                 aria-selected={currentMode === 'front-desk'}
                 className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
                 style={{
-                  color: currentMode === 'front-desk' ? 'var(--accent-soft)' : 'var(--text-muted)',
+                  color: currentMode === 'front-desk' ? 'var(--accent-soft)' : 'var(--text-secondary)',
                   borderBottom: currentMode === 'front-desk' ? '2px solid var(--accent)' : '2px solid transparent',
                 }}
               >
@@ -147,7 +147,7 @@ export function OutlookLayout({
                 aria-selected={currentMode === 'back-office'}
                 className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
                 style={{
-                  color: currentMode === 'back-office' ? 'var(--accent-soft)' : 'var(--text-muted)',
+                  color: currentMode === 'back-office' ? 'var(--accent-soft)' : 'var(--text-secondary)',
                   borderBottom: currentMode === 'back-office' ? '2px solid var(--accent)' : '2px solid transparent',
                 }}
               >
