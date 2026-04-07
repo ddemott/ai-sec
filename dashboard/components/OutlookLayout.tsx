@@ -17,6 +17,7 @@ import {
   UserCog,
 } from 'lucide-react'
 import { Api } from '../lib/api'
+import { FolderTab, FolderTabBar } from './ui/FolderTabs'
 import { useTheme, THEMES } from '@/lib/ThemeContext'
 import { useSessionContext } from '@/lib/SessionContext'
 import { FeedbackButton } from './ui/FeedbackButton'
@@ -121,112 +122,62 @@ export function OutlookLayout({
         </header>
       )}
 
-      {/* TOP NAVIGATION BAR */}
-      <div className="shrink-0 border-b transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
-        <div className="flex items-center justify-between px-4">
-          {/* Left: Mode tabs + Sub-tabs */}
-          <div className="flex items-center gap-0">
-            {/* Front Desk / Back Office toggle */}
-            <div className="flex mr-4" role="tablist" aria-label="Navigation mode">
-              <button
-                onClick={() => handleModeSwitch('front-desk')}
-                role="tab"
-                aria-selected={currentMode === 'front-desk'}
-                className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
-                style={{
-                  color: currentMode === 'front-desk' ? 'var(--accent-soft)' : 'var(--text-secondary)',
-                  borderBottom: currentMode === 'front-desk' ? '2px solid var(--accent)' : '2px solid transparent',
-                }}
-              >
-                <Phone className="w-4 h-4" aria-hidden="true" />
-                Front Desk
-              </button>
-              <button
-                onClick={() => handleModeSwitch('back-office')}
-                role="tab"
-                aria-selected={currentMode === 'back-office'}
-                className="flex items-center gap-1.5 px-4 py-3 text-sm font-bold transition-all"
-                style={{
-                  color: currentMode === 'back-office' ? 'var(--accent-soft)' : 'var(--text-secondary)',
-                  borderBottom: currentMode === 'back-office' ? '2px solid var(--accent)' : '2px solid transparent',
-                }}
-              >
-                <Wrench className="w-4 h-4" aria-hidden="true" />
-                Back Office
-              </button>
-            </div>
-
-            {/* Divider */}
-            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mr-4" />
-
-            {/* Sub-tabs for current mode */}
-            {subTabs.map(tab => {
-              const Icon = tab.icon
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  className="flex items-center gap-1.5 px-3 py-3 text-sm font-medium transition-all"
-                  style={{
-                    color: activeTab === tab.id ? 'var(--accent-soft)' : 'var(--text-secondary)',
-                    borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-                  }}
-                >
-                  <Icon className="w-4 h-4" aria-hidden="true" style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Right: utility buttons */}
-          <div className="flex items-center gap-1">
-            {isAdmin && (
-              <button
-                title="All Businesses"
-                onClick={() => setActiveTab('all-businesses')}
-                className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-              >
-                <Globe className="w-4 h-4" />
-              </button>
-            )}
-            <select
-              value={theme}
-              onChange={e => setTheme(e.target.value as typeof theme)}
-              title={`Theme: ${themeInfo.name}`}
-              className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
-              style={{
-                backgroundColor: 'var(--bg-raised)',
-                borderColor: 'var(--border-soft)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border-soft)',
-                fontFamily: 'var(--font-body)',
-              }}
-            >
-              {THEMES.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+      {/* PRIMARY NAVIGATION BAR — Mode tabs + utility buttons */}
+      <FolderTabBar size="lg" ariaLabel="Navigation mode" right={
+        <>
+          {isAdmin && (
             <button
-              title={`User: ${userName || 'Profile'}`}
-              className="p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+              title="All Businesses"
+              onClick={() => setActiveTab('all-businesses')}
+              className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
-              <User className="w-4 h-4" />
+              <Globe className="w-4 h-4" />
             </button>
-            {onLogout && (
-              <button
-                title="Logout"
-                onClick={onLogout}
-                className="p-2 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+          )}
+          <select
+            value={theme}
+            onChange={e => setTheme(e.target.value as typeof theme)}
+            title={`Theme: ${themeInfo.name}`}
+            className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
+            style={{
+              backgroundColor: 'var(--bg-raised)',
+              borderColor: 'var(--border-soft)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-soft)',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            {THEMES.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <button
+            title={`User: ${userName || 'Profile'}`}
+            className="p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+          >
+            <User className="w-4 h-4" />
+          </button>
+          {onLogout && (
+            <button
+              title="Logout"
+              onClick={onLogout}
+              className="p-2 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
+        </>
+      }>
+        <FolderTab label="Front Desk" icon={Phone} size="lg" isActive={currentMode === 'front-desk'} onClick={() => handleModeSwitch('front-desk')} />
+        <FolderTab label="Back Office" icon={Wrench} size="lg" isActive={currentMode === 'back-office'} onClick={() => handleModeSwitch('back-office')} />
+      </FolderTabBar>
+
+      {/* SECONDARY NAVIGATION — Sub-tabs for current mode */}
+      <FolderTabBar size="md" ariaLabel="Section navigation">
+        {subTabs.map(tab => (
+          <FolderTab key={tab.id} label={tab.label} icon={tab.icon} size="md" isActive={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
+        ))}
+      </FolderTabBar>
 
       {/* CONTENT AREA */}
       <div role="main" className="flex-1 flex overflow-hidden">

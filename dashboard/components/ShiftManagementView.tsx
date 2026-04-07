@@ -18,6 +18,7 @@ import { useVocabulary } from '@/lib/VocabularyContext'
 import type { EffectiveShift } from '../lib/types'
 import { Button } from './ui/Button'
 import { Modal } from './ui/Modal'
+import { TimeInput } from './ui/TimeInput'
 
 // Timeline constants
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -182,6 +183,20 @@ export default function ShiftManagementView() {
     }
   }
 
+  async function handleClearDay(dateStr: string) {
+    if (!selectedEmployeeId || !tenantId) return
+    try {
+      await Api.shifts.schedule.save(tenantId, {
+        employee_id: selectedEmployeeId,
+        shift_date: dateStr,
+        is_off: true,
+      })
+      fetchShifts()
+    } catch {
+      alert('Failed to clear schedule')
+    }
+  }
+
   const handleZoomIn = useCallback(() => setColW(prev => Math.min(prev + ZOOM_STEP, MAX_COL_W)), [])
   const handleZoomOut = useCallback(() => setColW(prev => Math.max(prev - ZOOM_STEP, MIN_COL_W)), [])
   const activeEmployees = useMemo(() => employees.filter(e => e.type === 'employee'), [employees])
@@ -297,11 +312,9 @@ export default function ShiftManagementView() {
                                 {formatTime24to12(shift.start_time!.substring(0, 5))} – {formatTime24to12(shift.end_time!.substring(0, 5))}
                               </span>
                             )}
-                            {shift.override_id && (
-                              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete(shift.override_id!) }} className="p-0.5 rounded bg-white/20 hover:bg-red-500/80 transition-colors" title="Remove"><Trash2 className="w-3 h-3 text-white" /></button>
-                              </div>
-                            )}
+                            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                              <button onClick={(e) => { e.stopPropagation(); shift.override_id ? handleDelete(shift.override_id) : handleClearDay(day.dateStr) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
+                            </div>
                           </div>
                         )}
 
@@ -334,7 +347,14 @@ export default function ShiftManagementView() {
 
       {/* Schedule editor modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDate ? `Schedule for ${editingDate}` : 'Schedule'} disableBackdropClose
-        footer={<div className="flex gap-2"><Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button variant="primary" onClick={handleSave}>{editingShiftId ? 'Update' : 'Save'}</Button></div>}>
+        footer={<div className="flex gap-2">
+          {editingDate && shiftForDate(editingDate) && !shiftForDate(editingDate)?.is_off && (
+            <Button variant="ghost" onClick={() => { editingShiftId ? handleDelete(editingShiftId) : handleClearDay(editingDate); setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
+          )}
+          <div className="flex-1" />
+          <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}>{editingShiftId ? 'Update' : 'Save'}</Button>
+        </div>}>
         <div className="space-y-4">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={modalForm.is_off} onChange={e => setModalForm({ ...modalForm, is_off: e.target.checked })} className="rounded" />
@@ -342,14 +362,8 @@ export default function ShiftManagementView() {
           </label>
           {!modalForm.is_off && (
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Start Time</label>
-                <input type="time" className="w-full border-none rounded-xl p-3 text-sm font-bold" style={{ backgroundColor: 'var(--bg-raised)' }} value={modalForm.start_time} onChange={e => setModalForm({ ...modalForm, start_time: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">End Time</label>
-                <input type="time" className="w-full border-none rounded-xl p-3 text-sm font-bold" style={{ backgroundColor: 'var(--bg-raised)' }} value={modalForm.end_time} onChange={e => setModalForm({ ...modalForm, end_time: e.target.value })} />
-              </div>
+              <TimeInput label="Start Time" value={modalForm.start_time} onChange={v => setModalForm({ ...modalForm, start_time: v })} />
+              <TimeInput label="End Time" value={modalForm.end_time} onChange={v => setModalForm({ ...modalForm, end_time: v })} />
             </div>
           )}
         </div>

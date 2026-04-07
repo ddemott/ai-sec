@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { Wand2 } from 'lucide-react'
+import { FolderTab, FolderTabBar } from './ui/FolderTabs'
 import ServiceAssignmentView from './ServiceAssignmentView'
 import ResourceManagerView from './ResourceManagerView'
 import KnowledgeBaseView from './KnowledgeBaseView'
@@ -37,31 +38,20 @@ export default function MyBusinessView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <nav className="flex items-center border-b px-4 shrink-0" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+      <FolderTabBar size="sm" ariaLabel="Business sections" right={
+        <button
+          onClick={handleOpenWizard}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+          style={{ color: 'var(--accent-soft)' }}
+        >
+          <Wand2 className="w-3.5 h-3.5" />
+          Setup Assistant
+        </button>
+      }>
         {SUB_TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            className="px-4 py-3 text-sm font-medium transition-colors"
-            style={{
-              color: activeSubTab === tab.id ? 'var(--accent-soft)' : 'var(--text-secondary)',
-              borderBottom: activeSubTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-            }}
-          >
-            {tab.label}
-          </button>
+          <FolderTab key={tab.id} label={tab.label} size="sm" isActive={activeSubTab === tab.id} onClick={() => setActiveSubTab(tab.id)} />
         ))}
-        <div className="ml-auto">
-          <button
-            onClick={handleOpenWizard}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-            style={{ color: 'var(--accent-soft)' }}
-          >
-            <Wand2 className="w-3.5 h-3.5" />
-            Setup Assistant
-          </button>
-        </div>
-      </nav>
+      </FolderTabBar>
       <div className="flex-1 overflow-hidden">
         {activeSubTab === 'services' && <ServiceAssignmentView />}
         {activeSubTab === 'resources' && <ResourceManagerView />}
