@@ -4,10 +4,11 @@ import React, { useState, useEffect } from 'react'
 import { Calendar, Users, Clock, Wrench, ChevronRight, Wand2, ArrowRight } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext'
-import { useVocabulary } from '@/lib/VocabularyContext'
+import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
+import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import type { Tab } from '../app/dashboard/page'
@@ -20,10 +21,12 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const tenantId = useActiveTenantId()
   const { userName } = useSessionContext()
   const vocab = useVocabulary()
+  const refreshVocabulary = useVocabularyRefresh()
 
-  // Wizard state
+  // Wizard state: null → mode chooser, 'solo'/'team' → business picker, then wizard
   type WizardMode = 'solo' | 'team' | null
   const [wizardMode, setWizardMode] = useState<WizardMode>(null)
+  const [businessTypeReady, setBusinessTypeReady] = useState(false)
   const [wizardDismissed, setWizardDismissed] = useState(false)
 
   // Clean ?trial=true from landing page CTA on mount
@@ -36,17 +39,20 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     }
   })
 
-  interface DashboardAppointment { id: string; start_time: string; status: string; description?: string; customer_name?: string }
-  interface DashboardEmployee { id: string; name: string; type?: string; is_active: boolean }
+  interface DashboardAppointment {
+    id: string; start_time: string; end_time?: string; status: string; description?: string; customer_name?: string;
+    employee_id?: string | number | null;
+    customers?: { name?: string; first_name?: string; last_name?: string; phone?: string };
+    resources?: { name?: string };
+  }
+  interface DashboardEmployee { id: string; name: string; first_name?: string | null; last_name?: string | null; type?: string; is_active: boolean }
   interface DashboardService { id: string | number; name: string }
   interface DashboardResource { id: string; name: string }
-  interface CoverageItem { service_id: string | number; service_name: string; coverage_status: string; covered_hours?: number; total_open_hours?: number }
 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([])
   const [employees, setEmployees] = useState<DashboardEmployee[]>([])
   const [services, setServices] = useState<DashboardService[]>([])
   const [resources, setResources] = useState<DashboardResource[]>([])
-  const [coverage, setCoverage] = useState<CoverageItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -59,29 +65,29 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     setLoading(true)
     try {
       const today = new Date().toISOString().split('T')[0]
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
       const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
 
-      const [appts, emps, svcs, res, cov] = await Promise.all([
-        Api.appointments.list(tenantId, { startDate: today, endDate: tomorrow }).catch(() => []),
+      const [appts, emps, svcs, res] = await Promise.all([
+        Api.appointments.list(tenantId, { startDate: today, endDate: weekEnd }).catch(() => []),
         Api.employees.list(tenantId).catch(() => []),
         Api.services.list(tenantId).catch(() => []),
         Api.resources.list(tenantId).catch(() => []),
-        Api.coverage.check(tenantId!, today, weekEnd).catch(() => []),
       ])
 
       setAppointments(Array.isArray(appts) ? appts : [])
       setEmployees(Array.isArray(emps) ? emps.filter((e: DashboardEmployee) => e.type === 'employee' && e.is_active) : [])
       setServices(Array.isArray(svcs) ? svcs : [])
       setResources(Array.isArray(res) ? res : [])
-      setCoverage(Array.isArray(cov) ? cov : [])
     } catch (err) {
       console.error('Dashboard load error', err)
     }
     setLoading(false)
   }
 
-  const todayAppointments = appointments.filter((a) => a.status === 'scheduled')
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayAppointments = appointments
+    .filter((a) => a.status === 'scheduled' && a.start_time.startsWith(todayStr))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -90,8 +96,30 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   function handleCloseWizard() {
     setWizardMode(null)
+    setBusinessTypeReady(false)
     setWizardDismissed(true)
     loadData() // refresh counts after wizard completes
+  }
+
+  async function handleBusinessTypeSelected(businessType: string) {
+    if (!tenantId) return
+    try {
+      // Fetch the full template to apply its settings
+      const templates = await Api.templates.listFull()
+      const tpl = (templates || []).find(t => t.business_type === businessType)
+      // Update tenant config with template values
+      await Api.tenants.updateConfig(tenantId, {
+        business_type: businessType,
+        system_prompt: tpl?.system_prompt_template || undefined,
+        voice_id: tpl?.voice_id || undefined,
+        first_message: tpl?.first_message || undefined,
+      })
+      refreshVocabulary()
+      setBusinessTypeReady(true)
+    } catch {
+      // Still proceed — worst case they get default vocabulary
+      setBusinessTypeReady(true)
+    }
   }
 
   // Auto-show wizard chooser for new tenants that need setup
@@ -146,117 +174,104 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* WIZARD — auto-opens for new tenants, mode chooser first */}
+      {/* WIZARD — auto-opens for new tenants: mode chooser → business type → wizard */}
       {showWizardChooser && (
         <WizardModeChooser
           onChoose={(mode) => setWizardMode(mode)}
           onClose={() => setWizardDismissed(true)}
         />
       )}
-      {wizardMode === 'solo' && (
+      {wizardMode && !businessTypeReady && (
+        <BusinessTypePicker
+          onSelect={handleBusinessTypeSelected}
+          onBack={() => setWizardMode(null)}
+          onClose={handleCloseWizard}
+        />
+      )}
+      {wizardMode === 'solo' && businessTypeReady && (
         <SoloWizard isOpen={true} onClose={handleCloseWizard} />
       )}
-      {wizardMode === 'team' && (
+      {wizardMode === 'team' && businessTypeReady && (
         <SetupWizard isOpen={true} onClose={handleCloseWizard} />
       )}
 
-      {/* STAT CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          icon={Calendar}
-          label={`Today's ${vocab.booking_label}s`}
-          value={todayAppointments.length}
-          onClick={() => onNavigate?.('schedule')}
-        />
-        <StatCard
-          icon={Users}
-          label={`${vocab.employee_plural}`}
-          value={employees.length}
-          onClick={() => onNavigate?.('my-team')}
-        />
-        <StatCard
-          icon={Wrench}
-          label="Services"
-          value={services.length}
-          onClick={() => onNavigate?.('my-business')}
-        />
-        <StatCard
-          icon={Calendar}
-          label={`${vocab.resource_plural}`}
-          value={resources.length}
-          onClick={() => onNavigate?.('my-business')}
-        />
-      </div>
-
-      {/* SERVICE COVERAGE — neutral data, no judgment */}
-      {coverage.length > 0 && (
-        <Card>
-          <h2 className="font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Calendar className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
-            This Week&apos;s Coverage
-          </h2>
-          <div className="space-y-2">
-            {coverage.map((c) => (
-              <div key={c.service_id} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
-                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{c.service_name}</span>
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {c.covered_hours}/{c.total_open_hours} hrs covered
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* TODAY'S APPOINTMENTS */}
+      {/* TODAY'S SCHEDULE */}
       <Card>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Clock className="w-4 h-4 text-blue-500" />
-            Today&apos;s {vocab.booking_label}s
+            <Clock className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
+            Today&apos;s Schedule
           </h2>
           <button
             onClick={() => onNavigate?.('schedule')}
             className="text-xs hover:underline flex items-center gap-1"
             style={{ color: 'var(--accent-soft)' }}
           >
-            View schedule <ChevronRight className="w-3 h-3" />
+            Full schedule <ChevronRight className="w-3 h-3" />
           </button>
         </div>
         {todayAppointments.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
-            No {vocab.booking_label.toLowerCase()}s scheduled for today.
+          <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+            Nothing booked for today.
           </p>
         ) : (
-          <div className="space-y-2">
-            {todayAppointments.slice(0, 8).map((appt) => (
-              <div
-                key={appt.id}
-                className="flex items-center justify-between p-2.5 rounded-lg border"
-                style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
-              >
-                <div>
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {appt.description || vocab.booking_label}
-                  </span>
-                  {appt.customer_name && (
-                    <span className="text-xs ml-2" style={{ color: 'var(--text-secondary)' }}>
-                      — {appt.customer_name}
-                    </span>
-                  )}
+          <div className="space-y-1.5">
+            {todayAppointments.map((appt) => {
+              const startTime = new Date(appt.start_time)
+              const endTime = appt.end_time ? new Date(appt.end_time) : null
+              const customerName = appt.customers
+                ? [appt.customers.first_name, appt.customers.last_name].filter(Boolean).join(' ') || appt.customers.name
+                : appt.customer_name
+              return (
+                <div
+                  key={appt.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border"
+                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+                >
+                  <div className="text-right" style={{ minWidth: '5.5rem' }}>
+                    <div className="text-sm font-bold" style={{ color: 'var(--accent-soft)' }}>
+                      {startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </div>
+                    {endTime && (
+                      <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        to {endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-px h-8 rounded" style={{ backgroundColor: 'var(--accent)' }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {appt.description || vocab.booking_label}
+                    </div>
+                    <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {customerName || 'Walk-in'}
+                      {appt.resources?.name && ` · ${appt.resources.name}`}
+                    </div>
+                  </div>
                 </div>
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {new Date(appt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                </span>
-              </div>
-            ))}
-            {todayAppointments.length > 8 && (
-              <p className="text-xs text-gray-400 text-center pt-1">
-                +{todayAppointments.length - 8} more
+              )
+            })}
+            {todayAppointments.length > 10 && (
+              <p className="text-xs text-center pt-1" style={{ color: 'var(--text-muted)' }}>
+                +{todayAppointments.length - 10} more
               </p>
             )}
           </div>
         )}
+      </Card>
+
+      {/* THIS WEEK — day by day with appointment counts and who's working */}
+      <Card>
+        <h2 className="font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+          <Calendar className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
+          This Week
+        </h2>
+        <WeekView
+          tenantId={tenantId}
+          employees={employees}
+          vocab={vocab}
+          onNavigate={onNavigate}
+        />
       </Card>
 
       {/* QUICK ACTIONS */}
@@ -264,14 +279,14 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         <QuickAction
           icon={Calendar}
           label={`View Schedule`}
-          description={`See today's ${vocab.booking_label.toLowerCase()}s`}
+          description={`Open the full scheduler`}
           onClick={() => onNavigate?.('schedule')}
         />
         <QuickAction
           icon={Users}
-          label="Manage Team"
-          description={`${vocab.employee_plural}, shifts, and skills`}
-          onClick={() => onNavigate?.('my-team')}
+          label={employees.length <= 1 ? 'My Business' : 'Manage Team'}
+          description={employees.length <= 1 ? 'Services and availability' : `${vocab.employee_plural}, shifts, and skills`}
+          onClick={() => onNavigate?.(employees.length <= 1 ? 'my-business' : 'my-team')}
         />
         <QuickAction
           icon={Wrench}
@@ -284,22 +299,162 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   )
 }
 
-function StatCard({ icon: Icon, label, value, onClick }: {
-  icon: React.ElementType
-  label: string
-  value: number
-  onClick?: () => void
+function WeekView({ tenantId, employees, vocab, onNavigate }: {
+  tenantId: string | null
+  employees: { id: string; name: string; first_name?: string | null; last_name?: string | null }[]
+  vocab: { booking_label: string; employee_label: string }
+  onNavigate?: (tab: Tab) => void
 }) {
+  const [weekAppts, setWeekAppts] = useState<{ date: string; count: number; appts: { time: string; desc: string; employee?: string }[] }[]>([])
+  const [weekShifts, setWeekShifts] = useState<Record<string, { name: string; start: string; end: string; isOff: boolean }[]>>({})
+
+  useEffect(() => {
+    if (!tenantId) return
+    loadWeekData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId])
+
+  async function loadWeekData() {
+    const today = new Date()
+    const days: string[] = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today)
+      d.setDate(d.getDate() + i)
+      days.push(d.toISOString().split('T')[0])
+    }
+
+    // Fetch appointments for the week
+    const weekEnd = days[6]
+    try {
+      const appts = await Api.appointments.list(tenantId, { startDate: days[0], endDate: new Date(new Date(weekEnd).getTime() + 86400000).toISOString().split('T')[0] })
+      const apptList = Array.isArray(appts) ? appts.filter((a: any) => a.status === 'scheduled') : []
+
+      const byDay = days.map(date => {
+        const dayAppts = apptList
+          .filter((a: any) => a.start_time.startsWith(date))
+          .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time))
+        return {
+          date,
+          count: dayAppts.length,
+          appts: dayAppts.slice(0, 4).map((a: any) => {
+            const empName = a.employee_id && employees.find(e => e.id === String(a.employee_id))
+            return {
+              time: new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+              desc: a.description || vocab.booking_label,
+              employee: empName ? (empName.first_name || empName.name) : undefined,
+            }
+          }),
+        }
+      })
+      setWeekAppts(byDay)
+    } catch {
+      // Silent fail — week view is supplementary
+    }
+
+    // Fetch shifts for each employee
+    if (employees.length > 0 && employees.length <= 10) {
+      const shiftMap: Record<string, { name: string; start: string; end: string; isOff: boolean }[]> = {}
+      try {
+        const shiftPromises = employees.map(emp =>
+          Api.shifts.schedule.forDate(tenantId, emp.id, days[0], days[6])
+            .then(shifts => ({ empId: emp.id, empName: emp.first_name || emp.name, shifts }))
+            .catch(() => ({ empId: emp.id, empName: emp.first_name || emp.name, shifts: [] }))
+        )
+        const results = await Promise.all(shiftPromises)
+        for (const { empName, shifts } of results) {
+          for (const shift of shifts) {
+            const dateKey = shift.shift_date
+            if (!shiftMap[dateKey]) shiftMap[dateKey] = []
+            shiftMap[dateKey].push({
+              name: empName,
+              start: shift.start_time || '',
+              end: shift.end_time || '',
+              isOff: shift.is_off,
+            })
+          }
+        }
+        setWeekShifts(shiftMap)
+      } catch {
+        // Silent fail
+      }
+    }
+  }
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  function formatShiftTime(t: string) {
+    if (!t) return ''
+    const [h, m] = t.split(':').map(Number)
+    const ampm = h >= 12 ? 'p' : 'a'
+    const hour = h % 12 || 12
+    return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`
+  }
+
+  if (weekAppts.length === 0) return null
+
   return (
-    <button
-      onClick={onClick}
-      className="p-4 rounded-xl border transition-colors text-left"
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-    >
-      <Icon className="w-5 h-5 mb-2" style={{ color: 'var(--accent-soft)' }} />
-      <div className="text-2xl font-display" style={{ color: 'var(--text-primary)' }}>{value}</div>
-      <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{label}</div>
-    </button>
+    <div className="grid grid-cols-7 gap-2">
+      {weekAppts.map((day) => {
+        const date = new Date(day.date + 'T12:00:00')
+        const dayName = DAY_NAMES[date.getDay()]
+        const dayNum = date.getDate()
+        const isToday = day.date === new Date().toISOString().split('T')[0]
+        const dayShifts = weekShifts[day.date] || []
+        const workingStaff = dayShifts.filter(s => !s.isOff)
+
+        return (
+          <button
+            key={day.date}
+            onClick={() => onNavigate?.('schedule')}
+            className="rounded-xl p-2.5 border text-left transition-colors"
+            style={{
+              borderColor: isToday ? 'var(--accent)' : 'var(--border-soft)',
+              backgroundColor: isToday ? 'var(--accent-muted)' : 'var(--bg-surface)',
+            }}
+          >
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{dayName}</span>
+              <span className="text-lg font-bold" style={{ color: isToday ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{dayNum}</span>
+            </div>
+
+            {/* Appointment count */}
+            {day.count > 0 ? (
+              <div className="text-xs font-medium mb-1" style={{ color: 'var(--accent-soft)' }}>
+                {day.count} {day.count === 1 ? vocab.booking_label.toLowerCase() : `${vocab.booking_label.toLowerCase()}s`}
+              </div>
+            ) : (
+              <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>
+                No bookings
+              </div>
+            )}
+
+            {/* First few appointments */}
+            {day.appts.slice(0, 2).map((a, i) => (
+              <div key={i} className="text-[10px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                {a.time} {a.desc}
+              </div>
+            ))}
+            {day.count > 2 && (
+              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>+{day.count - 2} more</div>
+            )}
+
+            {/* Who's working */}
+            {workingStaff.length > 0 && employees.length > 1 && (
+              <div className="mt-1.5 pt-1.5 border-t" style={{ borderColor: 'var(--border-soft)' }}>
+                {workingStaff.slice(0, 2).map((s, i) => (
+                  <div key={i} className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+                    {s.name} {formatShiftTime(s.start)}–{formatShiftTime(s.end)}
+                  </div>
+                ))}
+                {workingStaff.length > 2 && (
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>+{workingStaff.length - 2} more</div>
+                )}
+              </div>
+            )}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

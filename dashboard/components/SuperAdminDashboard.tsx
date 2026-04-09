@@ -81,7 +81,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newBusiness, setNewBusiness] = useState({
     tenant_name: '',
-    business_type: 'mobile-tire',
+    business_type: '',
     owner_first_name: '',
     owner_last_name: '',
     owner_email: '',
@@ -261,7 +261,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
             setIsCreateModalOpen(false)
             setNewBusiness({
                 tenant_name: '',
-                business_type: 'mobile-tire',
+                business_type: '',
             owner_first_name: '',
             owner_last_name: '',
                 owner_email: '',

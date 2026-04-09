@@ -15,9 +15,12 @@ const MyTeamView = dynamic(() => import('@/components/MyTeamView'), { ssr: false
 const MyBusinessView = dynamic(() => import('@/components/MyBusinessView'), { ssr: false })
 const AIInsightsView = dynamic(() => import('@/components/AIInsightsView'), { ssr: false })
 const SettingsView = dynamic(() => import('@/components/SettingsView'), { ssr: false })
+const ProfileView = dynamic(() => import('@/components/ProfileView'), { ssr: false })
+const BusinessSettingsView = dynamic(() => import('@/components/BusinessSettingsView'), { ssr: false })
 const SuperAdminDashboard = dynamic(() => import('@/components/SuperAdminDashboard'), { ssr: false })
+const VoiceCallsView = dynamic(() => import('@/components/VoiceCallsView'), { ssr: false })
 
-export type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses'
+export type Tab = 'dashboard' | 'schedule' | 'customers' | 'calls' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses' | 'profile' | 'business-settings'
 
 export default function DashboardPage() {
   const {
@@ -75,10 +78,13 @@ export default function DashboardPage() {
         {activeTab === 'dashboard' && <DashboardHome onNavigate={setActiveTab} />}
         {activeTab === 'schedule' && <SchedulerView />}
         {activeTab === 'customers' && <CRMView />}
+        {activeTab === 'calls' && <VoiceCallsView />}
         {activeTab === 'my-team' && <MyTeamView />}
         {activeTab === 'my-business' && <MyBusinessView />}
         {activeTab === 'ai-insights' && <AIInsightsView />}
         {activeTab === 'settings' && <SettingsView />}
+        {activeTab === 'profile' && <ProfileView />}
+        {activeTab === 'business-settings' && <BusinessSettingsView />}
       </ErrorBoundary>
     </OutlookLayout>
   )

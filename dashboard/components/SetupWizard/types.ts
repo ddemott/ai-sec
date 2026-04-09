@@ -43,19 +43,13 @@ export interface WizardMapping {
 export interface CoverageItem {
   service_id: string | number
   service_name: string
-  coverage_status: string
-  duration_minutes?: number
+  check_date?: string
+  gap_hours?: number[]
+  covered_hours?: number[]
   total_open_hours?: number
-  covered_hours?: number
-  gap_hours?: number
-  has_qualified_staff?: boolean
-  has_capable_resource?: boolean
-  qualified_employee_count?: number
-  capable_resource_count?: number
-  gap_details?: Array<{ date: string; day_name: string; gap_start: string; gap_end: string }>
-  has_employees?: boolean
-  has_resources?: boolean
-  has_shifts?: boolean
+  coverage_pct?: number
+  status?: string
+  details?: Record<string, unknown>
 }
 
 export interface WizardService {

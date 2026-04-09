@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   ChevronRight,
   ChevronLeft,
@@ -8,6 +8,7 @@ import {
   X,
   Wand2,
 } from 'lucide-react'
+import { Api } from '../../lib/api'
 import { useStaticData } from '../../lib/hooks'
 import { useActiveTenantId } from '../../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
@@ -47,14 +48,41 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     return () => { document.body.style.overflow = 'unset' }
   }, [isOpen])
 
+  const seedingRef = useRef(false)
+
   // Reset on open
   useEffect(() => {
     if (isOpen) {
       setStep(1)
       crud.resetAll()
+      seedingRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
+
+  // Auto-seed example services from the business template when no services exist
+  useEffect(() => {
+    if (!isOpen || !tenantId || loading || seedingRef.current || services.length > 0) return
+    seedingRef.current = true
+    seedFromTemplate()
+    async function seedFromTemplate() {
+      try {
+        const [config, templates] = await Promise.all([
+          Api.tenants.getConfig(tenantId!),
+          Api.templates.listFull(),
+        ])
+        const tpl = (templates || []).find(t => t.business_type === config?.business_type)
+        if (!tpl?.example_services?.length) return
+        for (const name of tpl.example_services) {
+          await Api.services.create(tenantId!, { name, duration_minutes: 30 })
+        }
+        await refresh()
+      } catch {
+        // Non-critical — user can still add services manually
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, tenantId, loading, services.length])
 
   const goNext = () => setStep(s => Math.min(s + 1, 7) as WizardStep)
   const goBack = () => setStep(s => Math.max(s - 1, 1) as WizardStep)

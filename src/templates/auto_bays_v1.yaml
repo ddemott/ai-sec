@@ -1,0 +1,37 @@
+id: auto_bays_v1
+name: "Auto Shop (Service Bays)"
+version: "1.0.0"
+description: "Resource-based scheduling for auto repair shops"
+schema:
+  customer:
+    attributes:
+      - key: vehicle_make
+        type: string
+        label: Vehicle Make
+        required: true
+      - key: vehicle_model
+        type: string
+        label: Vehicle Model
+        required: true
+      - key: license_plate
+        type: string
+        label: License Plate
+  appointment:
+    attributes:
+      - key: mileage
+        type: number
+        label: Current Mileage
+  lead:
+    attributes: []
+ai:
+  systemPromptModifier: "You are a helpful service advisor for an auto repair shop. When booking appointments, you are assigning a specific Service Bay (Resource) to the vehicle. Ensure you ask for the vehicle Make and Model."
+  tools: []
+ui:
+  theme: "slate"
+  terminology:
+    staff: "Service Bay"
+    service: "Repair Service"
+    customer: "Vehicle Owner"
+    appointment: "Service Appointment"
+workflows:
+  booking: "resource_based"

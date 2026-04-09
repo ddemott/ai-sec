@@ -8,12 +8,13 @@ const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'
 interface SessionState {
   tenantId: string | null
   userName: string | null
+  userEmail: string | null
   isAdmin: boolean
   managedTenantId: string | null
   managedTenantName: string | null
   loading: boolean
   tenantsVersion: number
-  login: (data: { tenant_id: string; user_name: string }) => void
+  login: (data: { tenant_id: string; user_name: string; user_email?: string }) => void
   logout: () => void
   selectManagedTenant: (id: string, name: string) => void
   notifyTenantsChanged: () => void
@@ -24,6 +25,7 @@ const SessionContext = createContext<SessionState | null>(null)
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [tenantId, setTenantId] = useState<string | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [managedTenantId, setManagedTenantId] = useState<string | null>(null)
   const [managedTenantName, setManagedTenantName] = useState<string | null>(null)
@@ -33,10 +35,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedTenantId = localStorage.getItem('tenantId')
     const storedUserName = localStorage.getItem('userName')
+    const storedUserEmail = localStorage.getItem('userEmail')
 
     if (storedTenantId) {
       setTenantId(storedTenantId)
       setUserName(storedUserName)
+      setUserEmail(storedUserEmail)
       const isSuper = storedTenantId === SUPER_ADMIN_TENANT_ID
       setIsAdmin(isSuper)
       if (isSuper) {
@@ -53,9 +57,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }, [])
 
-  const login = useCallback((data: { tenant_id: string; user_name: string }) => {
+  const login = useCallback((data: { tenant_id: string; user_name: string; user_email?: string }) => {
     setTenantId(data.tenant_id)
     setUserName(data.user_name)
+    setUserEmail(data.user_email ?? localStorage.getItem('userEmail'))
     const isSuper = data.tenant_id === SUPER_ADMIN_TENANT_ID
     setIsAdmin(isSuper)
     if (!isSuper) {
@@ -68,6 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setManagedTenantId(null)
     setManagedTenantName(null)
     setUserName(null)
+    setUserEmail(null)
     setIsAdmin(false)
     apiForceLogout()
   }, [])
@@ -87,6 +93,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionContext.Provider value={{
       tenantId,
       userName,
+      userEmail,
       isAdmin,
       managedTenantId,
       managedTenantName,

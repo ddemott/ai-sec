@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Quick YAML syntax check (Super‑Linter)
+        uses: github/super-linter@v4
+        env:
+          # only run YAML checks to keep this step fast and focused
+          VALIDATE_YAML: 'true'
+          # reduce scope so super-linter doesn't run other linters here
+          FILTER_REGEX_INCLUDE: "\\.(yml|yaml)$"
+          # ensure the action can post results
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        with:
+          # limit to YAML files in the repo (keeps run time small)
+          args: '--config-file ./.github/superlinter.yml || true'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Verify pnpm workspace files (fail fast)
+        run: |
+          echo "Workspace root files:"
+          ls -la
+          echo "---- pnpm-workspace.yaml ----"
+          if [ ! -f pnpm-workspace.yaml ]; then
+            echo "ERROR: pnpm-workspace.yaml not found in repo root" >&2
+            exit 1
+          fi
+          sed -n '1,200p' pnpm-workspace.yaml || true
+          echo "---- root package.json (partial) ----"
+          node -e "console.log(require('./package.json')?.name || '<no-root-package>')" || true
+      - name: Install dependencies (workspace)
+        run: pnpm -w install --frozen-lockfile
+      - name: Check formatting (Prettier)
+        run: pnpm -s format:check
+      - name: Lint
+        run: pnpm -s lint
+      - name: Run tests
+        run: pnpm -s test:ci

@@ -190,46 +190,67 @@ describe('BUG-039: CoverageBar ARIA', () => {
   })
 })
 
-// ── OutlookLayout tabs ───────────────────────────────────────────────
+// ── FolderTabs (used by OutlookLayout) ──────────────────────────────
 
-describe('BUG-039: OutlookLayout tab ARIA', () => {
-  test('mode tabs have role="tablist" and role="tab" with aria-selected', async () => {
-    const fs = await import('fs')
-    const path = await import('path')
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'OutlookLayout.tsx'),
-      'utf-8'
-    )
-    expect(source).toContain('role="tablist"')
-    expect(source).toContain('aria-label="Navigation mode"')
-    expect(source).toContain('role="tab"')
-    expect(source).toContain('aria-selected')
-    // WHO: screen reader / keyboard users | WHAT: tab navigation pattern
-    // WHEN: using dashboard | WHERE: OutlookLayout nav bar
-    // WHY: Front Desk/Back Office toggle is semantically a tab set
+describe('BUG-039: FolderTabs ARIA', () => {
+  describe('Happy Paths', () => {
+    test('FolderTabBar has role="tablist" with aria-label', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const source = fs.readFileSync(
+        path.join(__dirname, 'FolderTabs.tsx'),
+        'utf-8'
+      )
+      expect(source).toContain('role="tablist"')
+      expect(source).toContain('aria-label={ariaLabel}')
+      // WHO: screen reader / keyboard users | WHAT: tab navigation pattern
+      // WHEN: using dashboard | WHERE: FolderTabBar component
+      // WHY: Front Desk/Back Office toggle is semantically a tab set
+    })
+
+    test('FolderTab has role="tab" with aria-selected', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const source = fs.readFileSync(
+        path.join(__dirname, 'FolderTabs.tsx'),
+        'utf-8'
+      )
+      expect(source).toContain('role="tab"')
+      expect(source).toContain('aria-selected={isActive}')
+      // WHO: screen reader | WHAT: individual tab role
+      // WHEN: navigating tabs | WHERE: FolderTab button
+      // WHY: each tab needs role and selected state for AT
+    })
+
+    test('tab icons are aria-hidden', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const source = fs.readFileSync(
+        path.join(__dirname, 'FolderTabs.tsx'),
+        'utf-8'
+      )
+      expect(source).toContain('aria-hidden="true"')
+      // WHO: screen reader | WHAT: hides decorative icons
+      // WHEN: rendering tabs | WHERE: FolderTab icon
+      // WHY: icons are decorative, label text conveys meaning
+    })
   })
 
-  test('sub-tabs also have role="tab" with aria-selected', async () => {
-    const fs = await import('fs')
-    const path = await import('path')
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'OutlookLayout.tsx'),
-      'utf-8'
-    )
-    // Count role="tab" occurrences — should have at least 3
-    // (2 mode tabs + sub-tabs use role="tab")
-    const tabRoles = (source.match(/role="tab"/g) || []).length
-    expect(tabRoles).toBeGreaterThanOrEqual(3)
-  })
-
-  test('tab icons are aria-hidden', async () => {
-    const fs = await import('fs')
-    const path = await import('path')
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'OutlookLayout.tsx'),
-      'utf-8'
-    )
-    const ariaHiddenCount = (source.match(/aria-hidden="true"/g) || []).length
-    expect(ariaHiddenCount).toBeGreaterThanOrEqual(3)
+  describe('Sad Paths', () => {
+    test('OutlookLayout uses FolderTabs for accessibility', async () => {
+      const fs = await import('fs')
+      const path = await import('path')
+      const source = fs.readFileSync(
+        path.join(__dirname, '..', 'OutlookLayout.tsx'),
+        'utf-8'
+      )
+      // Verify OutlookLayout imports and uses the accessible FolderTabs components
+      expect(source).toContain("import { FolderTab, FolderTabBar } from './ui/FolderTabs'")
+      expect(source).toContain('<FolderTabBar')
+      expect(source).toContain('<FolderTab')
+      // WHO: developers | WHAT: ensures OutlookLayout uses accessible components
+      // WHEN: refactoring navigation | WHERE: OutlookLayout.tsx
+      // WHY: if someone removes FolderTabs import, this test fails to catch regression
+    })
   })
 })

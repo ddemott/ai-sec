@@ -20,11 +20,17 @@ const DEFAULTS: Vocabulary = {
   booking_label: 'Appointment',
 }
 
-const VocabularyContext = createContext<Vocabulary>(DEFAULTS)
+interface VocabularyContextValue {
+  vocab: Vocabulary
+  refreshVocabulary: () => void
+}
+
+const VocabularyContext = createContext<VocabularyContextValue>({ vocab: DEFAULTS, refreshVocabulary: () => {} })
 
 export function VocabularyProvider({ children }: { children: ReactNode }) {
   const { tenantId, managedTenantId } = useSessionContext()
   const [vocab, setVocab] = useState<Vocabulary>(DEFAULTS)
+  const [version, setVersion] = useState(0)
 
   // Use managedTenantId for super-admin, tenantId for regular users
   const effectiveTenantId = managedTenantId || tenantId
@@ -52,15 +58,23 @@ export function VocabularyProvider({ children }: { children: ReactNode }) {
     })
 
     return () => { cancelled = true }
-  }, [effectiveTenantId])
+  }, [effectiveTenantId, version])
+
+  function refreshVocabulary() {
+    setVersion(v => v + 1)
+  }
 
   return (
-    <VocabularyContext.Provider value={vocab}>
+    <VocabularyContext.Provider value={{ vocab, refreshVocabulary }}>
       {children}
     </VocabularyContext.Provider>
   )
 }
 
 export function useVocabulary(): Vocabulary {
-  return useContext(VocabularyContext)
+  return useContext(VocabularyContext).vocab
+}
+
+export function useVocabularyRefresh(): () => void {
+  return useContext(VocabularyContext).refreshVocabulary
 }

@@ -27,15 +27,6 @@ export function registerResourceRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
-
-    if (isSuperAdmin) {
-      return withPoolClient(pool, async (client) => {
-        const res = await client.query('SELECT * FROM resources WHERE is_deleted = false ORDER BY name');
-        return reply.send(res.rows);
-      });
-    }
-
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query('SELECT * FROM resources WHERE tenant_id = $1 AND is_deleted = false ORDER BY name', [tenantId]);
     });
@@ -91,4 +82,24 @@ export function registerResourceRoutes(
     logEvent(req, 'resource_updated', { resourceId: id });
     return reply.send({ success: true });
   }, 'Failed to update resource'));
+
+  app.delete('/resources/:id/delete', withHandler(async (req: AppRequest, reply) => {
+    const { id } = req.params as { id: string };
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
+        `UPDATE resources SET is_deleted = true, deleted_at = NOW(), is_active = false
+         WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+        [id, tenantId]
+      );
+    });
+    if (res.rows.length === 0) {
+      return reply.status(404).send({ success: false, error: 'Resource not found' });
+    }
+
+    logEvent(req, 'resource_deleted', { resourceId: id });
+    return reply.send({ success: true });
+  }, 'Failed to delete resource'));
 }

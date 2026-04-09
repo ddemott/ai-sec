@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { ChevronRight, ChevronLeft, X, Wand2 } from 'lucide-react'
 import { Api } from '../../lib/api'
 import { useStaticData } from '../../lib/hooks'
@@ -41,6 +41,8 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   const [finalized, setFinalized] = useState(false)
   const [coverageData, setCoverageData] = useState<CoverageItem[]>([])
 
+  const seedingRef = useRef(false)
+
   const ownerName = userName || 'Owner'
   const resourceName = vocab.resource_label === 'Resource' ? 'Main Station' : vocab.resource_label + ' 1'
 
@@ -55,8 +57,33 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
       setCoverageData([])
       setOwnerEmployeeId(null)
       setShifts([])
+      seedingRef.current = false
     }
   }, [isOpen])
+
+  // Auto-seed example services from the business template when no services exist
+  useEffect(() => {
+    if (!isOpen || !tenantId || loading || seedingRef.current || services.length > 0) return
+    seedingRef.current = true
+    seedFromTemplate()
+    async function seedFromTemplate() {
+      try {
+        const [config, templates] = await Promise.all([
+          Api.tenants.getConfig(tenantId!),
+          Api.templates.listFull(),
+        ])
+        const tpl = (templates || []).find(t => t.business_type === config?.business_type)
+        if (!tpl?.example_services?.length) return
+        for (const name of tpl.example_services) {
+          await Api.services.create(tenantId!, { name, duration_minutes: 30 })
+        }
+        await refresh()
+      } catch {
+        // Non-critical — user can still add services manually
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, tenantId, loading, services.length])
 
   // When moving to Step 2, ensure owner employee exists and load shifts
   useEffect(() => {
@@ -138,8 +165,13 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   async function handleDeleteService(id: string | number) {
     if (!tenantId) return
     setSaving(true)
+    setError(null)
     try {
-      await Api.services.delete(String(id), tenantId)
+      const result = await Api.services.delete(String(id), tenantId)
+      if (!result.success) {
+        setError(result.error || 'Failed to delete service')
+        return
+      }
       await refresh()
     } catch {
       setError('Failed to delete service')
@@ -181,6 +213,63 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
       await loadShifts(ownerEmployeeId!)
     } catch {
       setError('Failed to update shift time')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Apply one day's hours to all weekdays (Mon-Fri = 1-5)
+  async function handleApplyToWeekdays(sourceDow: number) {
+    if (!ownerEmployeeId || !tenantId) return
+    const source = shifts.find(s => s.day_of_week === sourceDow)
+    if (!source) return
+    const startTime = source.start_time?.slice(0, 5) || '08:00'
+    const endTime = source.end_time?.slice(0, 5) || '17:00'
+    setSaving(true)
+    setError(null)
+    try {
+      for (const dow of [1, 2, 3, 4, 5]) {
+        if (dow === sourceDow) continue
+        const existing = shifts.find(s => s.day_of_week === dow)
+        if (existing) {
+          await Api.shifts.update(String(existing.id), tenantId, { start_time: startTime, end_time: endTime })
+        } else {
+          await Api.shifts.create(tenantId, { employee_id: ownerEmployeeId, day_of_week: dow, start_time: startTime, end_time: endTime })
+        }
+      }
+      await loadShifts(ownerEmployeeId)
+    } catch {
+      setError('Failed to apply hours to weekdays')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Copy one day's hours to all days below it
+  async function handleCopyDown(sourceDow: number) {
+    if (!ownerEmployeeId || !tenantId) return
+    const source = shifts.find(s => s.day_of_week === sourceDow)
+    if (!source) return
+    const startTime = source.start_time?.slice(0, 5) || '08:00'
+    const endTime = source.end_time?.slice(0, 5) || '17:00'
+    setSaving(true)
+    setError(null)
+    try {
+      // Days are ordered Mon(1)..Sat(6),Sun(0) in the UI — copy to all after source
+      const dayOrder = [1, 2, 3, 4, 5, 6, 0]
+      const sourceIdx = dayOrder.indexOf(sourceDow)
+      for (let i = sourceIdx + 1; i < dayOrder.length; i++) {
+        const dow = dayOrder[i]
+        const existing = shifts.find(s => s.day_of_week === dow)
+        if (existing) {
+          await Api.shifts.update(String(existing.id), tenantId, { start_time: startTime, end_time: endTime })
+        } else {
+          await Api.shifts.create(tenantId, { employee_id: ownerEmployeeId, day_of_week: dow, start_time: startTime, end_time: endTime })
+        }
+      }
+      await loadShifts(ownerEmployeeId)
+    } catch {
+      setError('Failed to copy hours')
     } finally {
       setSaving(false)
     }
@@ -296,6 +385,8 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
               error={error}
               onToggleDay={handleToggleDay}
               onUpdateTime={handleUpdateTime}
+              onApplyToWeekdays={handleApplyToWeekdays}
+              onCopyDown={handleCopyDown}
             />
           )}
 

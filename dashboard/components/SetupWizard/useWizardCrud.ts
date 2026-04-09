@@ -125,8 +125,12 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
   }
 
   async function deleteService(id: string | number) {
-    if (!tenantId) return; setSaving(true)
-    try { await Api.services.delete(String(id), tenantId); await refresh() }
+    if (!tenantId) return; setSaving(true); setError(null)
+    try {
+      const result = await Api.services.delete(String(id), tenantId)
+      if (!result.success) { setError(result.error || 'Failed to delete service'); return }
+      await refresh()
+    }
     catch (err: unknown) { setError(err instanceof Error ? err.message : String(err) || 'Failed to delete service') }
     finally { setSaving(false) }
   }

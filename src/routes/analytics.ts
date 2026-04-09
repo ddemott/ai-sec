@@ -24,11 +24,8 @@ export function registerAnalyticsRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        `SELECT service_id, service_name, duration_minutes, coverage_status,
-                total_open_hours, covered_hours, gap_hours,
-                has_qualified_staff, has_capable_resource,
-                qualified_employee_count, capable_resource_count,
-                gap_details
+        `SELECT service_id, service_name, check_date, gap_hours, covered_hours,
+                total_open_hours, coverage_pct, status, details
          FROM check_coverage_gaps($1, $2::DATE, $3::DATE)`,
         [tenantId, startDate, endDate]
       );

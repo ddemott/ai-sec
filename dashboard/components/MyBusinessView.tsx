@@ -9,14 +9,19 @@ import KnowledgeBaseView from './KnowledgeBaseView'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
-import { useVocabulary } from '@/lib/VocabularyContext'
+import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
+import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
+import { useActiveTenantId } from '@/lib/SessionContext'
+import { Api } from '../lib/api'
 
 type SubTab = 'services' | 'resources' | 'knowledge'
 type WizardMode = 'solo' | 'team' | null
 
 export default function MyBusinessView() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('services')
+  const tenantId = useActiveTenantId()
   const vocab = useVocabulary()
+  const refreshVocabulary = useVocabularyRefresh()
 
   const SUB_TABS: { id: SubTab; label: string }[] = [
     { id: 'services', label: 'Services' },
@@ -25,15 +30,36 @@ export default function MyBusinessView() {
   ]
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardMode, setWizardMode] = useState<WizardMode>(null)
+  const [businessTypeReady, setBusinessTypeReady] = useState(false)
 
   function handleOpenWizard() {
     setWizardOpen(true)
     setWizardMode(null)
+    setBusinessTypeReady(false)
   }
 
   function handleCloseWizard() {
     setWizardOpen(false)
     setWizardMode(null)
+    setBusinessTypeReady(false)
+  }
+
+  async function handleBusinessTypeSelected(businessType: string) {
+    if (!tenantId) return
+    try {
+      const templates = await Api.templates.listFull()
+      const tpl = (templates || []).find(t => t.business_type === businessType)
+      await Api.tenants.updateConfig(tenantId, {
+        business_type: businessType,
+        system_prompt: tpl?.system_prompt_template || undefined,
+        voice_id: tpl?.voice_id || undefined,
+        first_message: tpl?.first_message || undefined,
+      })
+      refreshVocabulary()
+      setBusinessTypeReady(true)
+    } catch {
+      setBusinessTypeReady(true)
+    }
   }
 
   return (
@@ -58,17 +84,24 @@ export default function MyBusinessView() {
         {activeSubTab === 'knowledge' && <KnowledgeBaseView />}
       </div>
 
-      {/* Wizard flow: mode chooser → solo or team wizard */}
+      {/* Wizard flow: mode chooser → business type → wizard */}
       {wizardOpen && !wizardMode && (
         <WizardModeChooser
           onChoose={setWizardMode}
           onClose={handleCloseWizard}
         />
       )}
-      {wizardMode === 'solo' && (
+      {wizardMode && !businessTypeReady && (
+        <BusinessTypePicker
+          onSelect={handleBusinessTypeSelected}
+          onBack={() => setWizardMode(null)}
+          onClose={handleCloseWizard}
+        />
+      )}
+      {wizardMode === 'solo' && businessTypeReady && (
         <SoloWizard isOpen={true} onClose={handleCloseWizard} />
       )}
-      {wizardMode === 'team' && (
+      {wizardMode === 'team' && businessTypeReady && (
         <SetupWizard isOpen={true} onClose={handleCloseWizard} />
       )}
     </div>

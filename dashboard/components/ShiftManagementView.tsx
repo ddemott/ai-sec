@@ -84,6 +84,13 @@ export default function ShiftManagementView() {
   const hasAutoScrolled = useRef(false)
   const totalGridWidth = 24 * colW
 
+  // Auto-select first employee when list loads
+  useEffect(() => {
+    if (!selectedEmployeeId && employees.length > 0) {
+      setSelectedEmployeeId(employees[0].id)
+    }
+  }, [employees, selectedEmployeeId])
+
   // Fetch scheduled shifts when employee or week changes
   useEffect(() => {
     if (!selectedEmployeeId || !tenantId) { setScheduledShifts([]); return }

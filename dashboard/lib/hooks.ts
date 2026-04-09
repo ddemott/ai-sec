@@ -43,11 +43,14 @@ export function useStaticData(tenantIdOverride?: string | null) {
   const [services, setServices] = useState<Service[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!tenantId) return;
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);

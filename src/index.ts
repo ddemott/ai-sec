@@ -32,7 +32,10 @@ import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { registerTtsRoutes } from './routes/tts';
 import { registerVoiceRoutes } from './routes/voice';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';
+import { registerCommunicationRoutes } from './routes/communications';
+import { registerReminderRoutes } from './routes/reminders';
 import { VapiClient } from './services/vapiClient';
+import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { tenantMiddleware } from './middleware';
@@ -316,6 +319,14 @@ registerServiceTitanRoutes(app, pool, withTenantClient);
 registerTtsRoutes(app, XAI_API_KEY, XAI_TTS_SECRET, XAI_TTS_VOICE);
 registerVoiceRoutes(app, pool, withTenantClient);
 registerVersionHistoryRoutes(app, pool, withTenantClient);
+registerCommunicationRoutes(app, pool, withTenantClient);
+registerReminderRoutes(app, pool, withTenantClient);
+
+// --- Start Reminder Scheduler ---
+// Only start in production or if explicitly enabled
+if (isProduction || process.env.ENABLE_REMINDER_SCHEDULER === 'true') {
+  startReminderScheduler();
+}
 
 // --- Start Server ---
 
@@ -341,6 +352,7 @@ app
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
+    stopReminderScheduler();
     await app.close();
     await pool.end();
     process.exit(0);

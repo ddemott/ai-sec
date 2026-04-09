@@ -22,7 +22,7 @@ import { useTheme, THEMES } from '@/lib/ThemeContext'
 import { useSessionContext } from '@/lib/SessionContext'
 import { FeedbackButton } from './ui/FeedbackButton'
 
-type Tab = 'dashboard' | 'schedule' | 'customers' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses';
+type Tab = 'dashboard' | 'schedule' | 'customers' | 'calls' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses' | 'profile' | 'business-settings';
 
 type TopMode = 'front-desk' | 'back-office';
 
@@ -42,17 +42,18 @@ const FRONT_DESK_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { id: 'schedule', label: 'Schedule', icon: Calendar },
   { id: 'customers', label: 'Customers', icon: Users },
+  { id: 'calls', label: 'Calls', icon: Phone },
 ]
 
 const BACK_OFFICE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'my-business', label: 'Services & Resources', icon: Wrench },
   { id: 'my-team', label: 'Staff & Shifts', icon: UserCog },
   { id: 'ai-insights', label: 'AI & Knowledge', icon: Bot },
-  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 function getMode(tab: Tab): TopMode {
-  if (['dashboard', 'schedule', 'customers'].includes(tab)) return 'front-desk'
+  if (['dashboard', 'schedule', 'customers', 'calls'].includes(tab)) return 'front-desk'
+  if (['profile', 'business-settings'].includes(tab)) return 'back-office'
   return 'back-office'
 }
 
@@ -70,7 +71,9 @@ export function OutlookLayout({
   const { theme, setTheme, themeInfo } = useTheme()
   const [allTenants, setAllTenants] = useState<{ id: string; name: string; business_type: string }[]>([])
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const tenantBtnRef = useRef<HTMLButtonElement>(null)
+  const profileBtnRef = useRef<HTMLButtonElement>(null)
 
   const { tenantsVersion } = useSessionContext()
 
@@ -99,7 +102,10 @@ export function OutlookLayout({
 
       {/* ADMIN HEADER (super-admin only) */}
       {isAdmin && managedTenantName && (
-        <header className="bg-blue-600 text-white px-6 py-2 flex items-center justify-between shadow-sm shrink-0">
+        <header
+          className="px-6 py-2 flex items-center justify-between shadow-sm shrink-0 transition-colors duration-200"
+          style={{ backgroundColor: 'var(--accent)', color: 'var(--bg-base)' }}
+        >
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4" />
             <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Admin Mode</span>
@@ -107,7 +113,8 @@ export function OutlookLayout({
             <button
               ref={tenantBtnRef}
               onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
-              className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-lg border border-white/10 hover:bg-white/20 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1 rounded-lg transition-all cursor-pointer"
+              style={{ backgroundColor: 'rgba(0,0,0,0.15)', border: '1px solid rgba(0,0,0,0.1)' }}
             >
               <span className="text-sm font-bold truncate max-w-[200px]">{managedTenantName}</span>
               <ChevronRight className="w-3 h-3 transition-transform rotate-90" />
@@ -115,7 +122,8 @@ export function OutlookLayout({
           </div>
           <button
             onClick={() => setActiveTab('all-businesses')}
-            className="text-[10px] font-bold uppercase tracking-widest bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all"
+            className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full transition-all"
+            style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
           >
             Configure Businesses
           </button>
@@ -152,20 +160,17 @@ export function OutlookLayout({
             ))}
           </select>
           <button
+            ref={profileBtnRef}
             title={`User: ${userName || 'Profile'}`}
-            className="p-2 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+            onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+            className={`p-2 rounded-md transition-all ${
+              profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
+                ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+            }`}
           >
             <User className="w-4 h-4" />
           </button>
-          {onLogout && (
-            <button
-              title="Logout"
-              onClick={onLogout}
-              className="p-2 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          )}
         </>
       }>
         <FolderTab label="Front Desk" icon={Phone} size="lg" isActive={currentMode === 'front-desk'} onClick={() => handleModeSwitch('front-desk')} />
@@ -254,6 +259,60 @@ export function OutlookLayout({
               </button>
             ))}
           </div>
+        </div>
+      </>
+    )}
+
+    {/* Profile dropdown menu */}
+    {profileMenuOpen && (
+      <>
+        <div className="fixed inset-0 z-[99]" onClick={() => setProfileMenuOpen(false)} />
+        <div
+          className="fixed z-[100] w-56 rounded-xl shadow-2xl border overflow-hidden"
+          style={{
+            backgroundColor: 'var(--bg-raised)',
+            borderColor: 'var(--border-soft)',
+            top: profileBtnRef.current ? profileBtnRef.current.getBoundingClientRect().bottom + 4 : 0,
+            right: 16,
+          }}
+        >
+          {/* User info header */}
+          <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{userName || 'User'}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Signed in</div>
+          </div>
+          {/* Menu items */}
+          <div className="py-1">
+            <button
+              onClick={() => { setActiveTab('profile'); setProfileMenuOpen(false) }}
+              className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
+              style={{ color: 'var(--text-primary)', backgroundColor: activeTab === 'profile' ? 'var(--accent-muted)' : 'transparent' }}
+            >
+              <User className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              My Profile
+            </button>
+            <button
+              onClick={() => { setActiveTab('business-settings'); setProfileMenuOpen(false) }}
+              className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
+              style={{ color: 'var(--text-primary)', backgroundColor: activeTab === 'business-settings' ? 'var(--accent-muted)' : 'transparent' }}
+            >
+              <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              Business Settings
+            </button>
+          </div>
+          {/* Logout */}
+          {onLogout && (
+            <div className="border-t py-1" style={{ borderColor: 'var(--border-soft)' }}>
+              <button
+                onClick={() => { setProfileMenuOpen(false); onLogout() }}
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors"
+                style={{ color: 'var(--red)' }}
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
       </>
     )}

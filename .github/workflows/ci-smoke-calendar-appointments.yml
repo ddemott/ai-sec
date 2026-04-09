@@ -1,0 +1,85 @@
+name: "CI - calendar & appointment smoke"
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    name: Calendar & Appointment smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ai_secretary
+          POSTGRES_PASSWORD: ai_secretary
+          POSTGRES_DB: ai_secretary
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ai_secretary -d ai_secretary -h localhost" 
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -U ai_secretary -d ai_secretary && break || sleep 1
+          done
+        env:
+          PGPASSWORD: ai_secretary
+
+      - name: Export DATABASE_URL
+        run: echo "DATABASE_URL=postgres://ai_secretary:ai_secretary@localhost:5432/ai_secretary" >> $GITHUB_ENV
+
+      - name: Apply migrations (smoke)
+        run: node scripts/run-migrations.cjs
+
+      - name: Run calendar + appointment smoke tests
+        run: pnpm -s test __tests__/services/database/appointments.test.ts __tests__/calendar.test.ts --run --reporter=dot
+
+      - name: Upload vitest junit (when available)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-junit
+          path: test-results/*.xml
+
+      - name: Print DB diagnostics on failure
+        if: failure()
+        run: |
+          echo "--- pg tables ---"
+          PGPASSWORD=ai_secretary psql -h localhost -U ai_secretary -d ai_secretary -c "\dt+ public.*"
+          echo "--- information_schema columns (appointments) ---"
+          PGPASSWORD=ai_secretary psql -h localhost -U ai_secretary -d ai_secretary -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='appointments' ORDER BY ordinal_position;"
+          echo "--- recent pg logs (container) ---"
+          docker logs --since 1m $(docker ps --filter ancestor=postgres:15 -q) || true
+
+      - name: Dump information_schema and upload on failure
+        if: failure()
+        env:
+          PGPASSWORD: ai_secretary
+        run: |
+          psql "postgres://ai_secretary:ai_secretary@localhost:5432/ai_secretary" -c "\copy (SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position) TO STDOUT WITH CSV" > information_schema.csv || true
+      - name: Upload information_schema artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: information_schema
+          path: information_schema.csv

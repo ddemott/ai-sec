@@ -45,13 +45,13 @@ export function SoloStepReview({
               <div key={item.service_id} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700 dark:text-gray-300">{item.service_name}</span>
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  item.coverage_status === 'full'
+                  item.coverage_pct >= 100
                     ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
-                    : item.coverage_status === 'partial'
+                    : item.coverage_pct > 0
                     ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400'
                     : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
                 }`}>
-                  {item.coverage_status}
+                  {item.status}
                 </span>
               </div>
             ))}

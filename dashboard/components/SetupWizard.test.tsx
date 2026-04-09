@@ -582,8 +582,8 @@ vi.mock('@/lib/SessionContext', () => ({
         return Promise.resolve({
           ok: true,
           json: async () => [
-            { service_id: 1, service_name: 'Oil Change', coverage_status: 'full' },
-            { service_id: 2, service_name: 'Brakes', coverage_status: 'no_staff' },
+            { service_id: 1, service_name: 'Oil Change', coverage_pct: 100, status: 'full' },
+            { service_id: 2, service_name: 'Brakes', coverage_pct: 0, status: 'uncovered' },
           ],
         })
       }
@@ -597,7 +597,7 @@ vi.mock('@/lib/SessionContext', () => ({
 
     await waitFor(() => {
       expect(screen.getByText('Full Coverage')).toBeInTheDocument()
-      expect(screen.getByText('No Staff')).toBeInTheDocument()
+      expect(screen.getByText('Uncovered')).toBeInTheDocument()
     })
   })
 
@@ -613,7 +613,7 @@ vi.mock('@/lib/SessionContext', () => ({
         return Promise.resolve({
           ok: true,
           json: async () => [
-            { service_id: 1, service_name: 'Oil Change', coverage_status: 'full' },
+            { service_id: 1, service_name: 'Oil Change', coverage_pct: 100, status: 'full' },
           ],
         })
       }
@@ -641,7 +641,7 @@ vi.mock('@/lib/SessionContext', () => ({
         return Promise.resolve({
           ok: true,
           json: async () => [
-            { service_id: 1, service_name: 'Brakes', coverage_status: 'partial' },
+            { service_id: 1, service_name: 'Brakes', coverage_pct: 50, status: 'partial' },
           ],
         })
       }

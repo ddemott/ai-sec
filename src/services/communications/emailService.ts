@@ -1,0 +1,166 @@
+import nodemailer from 'nodemailer';
+import type { TenantConfigService } from '../tenants/index.js';
+import type { ConsentService } from '../consentService.js';
+import type { EmailMessage, CommunicationResult } from './types.js';
+import { EmailTemplateService, type EmailTemplateData } from './emailTemplates.js';
+
+export class EmailService {
+  private transporter: nodemailer.Transporter;
+  private templateService: EmailTemplateService;
+
+  constructor(
+    private configService: TenantConfigService,
+    private consentService?: ConsentService,
+  ) {
+    // Initialize email transporter - skip in test environment
+    if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      // Create a mock transporter for testing
+      this.transporter = {
+        sendMail: async () => ({ messageId: 'test-message-id' }),
+      } as any;
+    } else {
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+    }
+
+    this.templateService = new EmailTemplateService(configService);
+  }
+
+  /**
+   * Send an email message with consent checking
+   */
+  async sendEmail(tenantId: string, message: EmailMessage): Promise<CommunicationResult> {
+    try {
+      const tenantConfig = await this.configService.getTenantConfig(tenantId);
+      if (!tenantConfig) {
+        throw new Error(`Tenant '${tenantId}' configuration not found`);
+      }
+
+      // Check consent before sending email
+      if (this.consentService) {
+        const consentCheck = await this.consentService.canReceiveCommunications(
+          tenantId,
+          message.to, // email address
+          undefined, // no phone for email
+        );
+
+        if (!consentCheck.canReceiveEmail) {
+          console.log(`⚠️ Email not sent to ${message.to} - no consent for tenant ${tenantId}`);
+          return {
+            success: false,
+            error: 'Customer has not consented to email communications',
+          };
+        }
+      }
+
+      // Prepare email content
+      let subject = message.subject;
+      let text = message.text;
+      let html = message.html;
+
+      // Apply template if specified
+      if (message.template) {
+        const templateResult = await this.applyTemplate(message.template, {
+          ...message.templateData,
+          tenantId,
+        });
+        subject = templateResult.subject || subject;
+        text = templateResult.text || text;
+        html = templateResult.html || html;
+      }
+
+      const businessName = await this.configService.getBusinessName(tenantId);
+      const mailOptions = {
+        from: `"${businessName}" <${process.env.EMAIL_USER}>`,
+        to: message.to,
+        subject,
+        text,
+        html,
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+
+      console.log(`✅ Email sent to ${message.to} for tenant ${tenantId}`);
+
+      return {
+        success: true,
+        messageId: result.messageId,
+      };
+    } catch (error: any) {
+      console.error('❌ Error sending email:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Apply email template with enhanced professional templates
+   */
+  public async applyTemplate(
+    template: string,
+    data: Record<string, any>,
+  ): Promise<{
+    subject?: string;
+    text?: string;
+    html?: string;
+  }> {
+    // Get tenant configuration for business branding
+    const businessName = await this.configService.getBusinessName(data.tenantId);
+    const notificationPrefs = await this.configService.getNotificationPreferences(data.tenantId);
+
+    const templateData: EmailTemplateData = {
+      customerName: data.customerName || 'Valued Customer',
+      serviceName: data.serviceName || 'Service',
+      staffName: data.staffName || 'Our Team',
+      dateTime: data.dateTime || 'TBD',
+      duration: data.duration || 60,
+      businessName: businessName,
+      businessPhone: notificationPrefs.contactInfo?.phone,
+      businessEmail: notificationPrefs.contactInfo?.email,
+      businessAddress: undefined, // Not currently stored
+      notes: data.notes,
+      reason: data.reason,
+      hoursUntil: data.hoursUntil,
+      logoUrl: undefined, // Not currently stored
+      primaryColor: undefined, // Not currently stored
+      secondaryColor: undefined, // Not currently stored
+    };
+
+    switch (template) {
+      case 'appointment-confirmation':
+        return this.templateService.generateAppointmentConfirmation(templateData);
+
+      case 'appointment-reminder':
+        return this.templateService.generateAppointmentReminder({
+          ...templateData,
+          hoursUntil: data.hoursUntil || 24,
+        });
+
+      case 'appointment-cancellation':
+        return this.templateService.generateAppointmentCancellation(templateData);
+
+      case 'welcome':
+        return this.templateService.generateWelcomeEmail({
+          businessName,
+          businessPhone: notificationPrefs.contactInfo?.phone,
+          businessEmail: notificationPrefs.contactInfo?.email,
+          businessAddress: undefined,
+        });
+
+      default:
+        // Fallback to basic template for unknown templates
+        return {
+          subject: data.subject || 'Message from AI Secretary',
+          text: data.message || 'You have a message from AI Secretary',
+          html: `<p>${data.message || 'You have a message from AI Secretary'}</p>`,
+        };
+    }
+  }
+}

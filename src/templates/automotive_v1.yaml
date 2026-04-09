@@ -1,0 +1,29 @@
+id: "automotive_v1"
+name: "Auto Repair Shop"
+version: "1.0.0"
+schema:
+  customer:
+    attributes:
+      - { key: "vehicle_make", type: "string", label: "Vehicle Make", required: true }
+      - { key: "vehicle_model", type: "string", label: "Vehicle Model", required: true }
+      - { key: "vehicle_year", type: "number", label: "Year" }
+      - { key: "vin", type: "string", label: "VIN" }
+  appointment:
+    attributes:
+      - { key: "mileage", type: "number", label: "Current Mileage" }
+      - { key: "drop_off", type: "boolean", label: "Will drop off vehicle?" }
+  lead:
+    attributes:
+      - { key: "symptoms", type: "string", label: "What is the vehicle doing?" }
+ai:
+  systemPromptModifier: "You are a professional service advisor. Be precise, focus on safety, and use clear automotive terminology."
+  tools: ["vin_lookup", "check_availability", "book_appointment"]
+ui:
+  theme: "industrial_blue"
+  terminology:
+    staff: "Technician"
+    service: "Repair Job"
+    customer: "Vehicle Owner"
+    appointment: "Service Slot"
+workflows:
+  booking: "requires_approval"

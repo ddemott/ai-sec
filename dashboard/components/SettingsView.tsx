@@ -118,7 +118,6 @@ export default function SettingsView() {
     try {
       const data = await Api.templates.list()
       setTemplates(data)
-      if (data.length > 0) setForm(f => ({ ...f, business_type: data[0].business_type }))
     } catch {
       console.error("Failed to fetch templates")
     }
@@ -164,7 +163,7 @@ export default function SettingsView() {
         setSuccess(true)
         setForm({
           tenant_name: '',
-          business_type: templates[0]?.business_type || '',
+          business_type: '',
           owner_first_name: '',
           owner_last_name: '',
           owner_email: '',
@@ -394,7 +393,10 @@ export default function SettingsView() {
                   required
                   value={form.business_type}
                   onChange={e => setForm({...form, business_type: e.target.value})}
-                  options={templates.map(t => ({ label: t.display_name, value: t.business_type }))}
+                  options={[
+                    { label: 'Select a template...', value: '' },
+                    ...templates.map(t => ({ label: t.display_name, value: t.business_type }))
+                  ]}
                 />
               </div>
             </Card>

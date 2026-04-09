@@ -1,0 +1,117 @@
+import type { DatabaseService } from '../../database/index.js';
+import type { Appointment } from '../../types/index.js';
+import type { ReminderSchedule, ReminderData } from './types.js';
+
+export class ReminderRepository {
+  constructor(private db: DatabaseService) {}
+
+  /**
+   * Save a reminder schedule to the database
+   */
+  async saveReminder(reminderData: ReminderData): Promise<string> {
+    const reminder: Omit<ReminderSchedule, 'id'> = {
+      ...reminderData,
+      status: 'scheduled',
+    };
+
+    const savedReminder = await this.db.createReminderSchedule(reminder);
+    return savedReminder.id.toString();
+  }
+
+  /**
+   * Get appointment details by ID and tenant
+   */
+  async getAppointmentDetails(
+    appointmentId: string,
+    _tenantId: string,
+  ): Promise<Appointment | null> {
+    const appointment = await this.db.getAppointmentById(appointmentId);
+    if (!appointment) return null;
+
+    // Transform from camelCase (AppointmentForReminder) to snake_case (Appointment)
+    return {
+      id: appointment.id,
+      tenant_id: appointment.tenantId,
+      customer_id: appointment.customerId,
+      customer_name: appointment.customerName,
+      customer_email: appointment.customerEmail,
+      customer_phone: appointment.customerPhone,
+      service_id: appointment.serviceId,
+      service_name: appointment.serviceName,
+      employee_id: appointment.staffId,
+      staff_name: appointment.staffName,
+      start_time: appointment.dateTime,
+      end_time: appointment.dateTime, // Not available from AppointmentForReminder
+      date_time: appointment.dateTime,
+      duration: appointment.duration,
+      status: appointment.status,
+      notes: appointment.notes,
+      cancelled_at: appointment.cancelledAt,
+      cancel_reason: appointment.cancelReason,
+      created_at: appointment.createdAt,
+      updated_at: appointment.updatedAt,
+    };
+  }
+
+  /**
+   * Update reminder status
+   */
+  async updateReminderStatus(
+    reminderId: string,
+    status: ReminderSchedule['status'],
+    error?: string,
+  ): Promise<void> {
+    const updateData: Partial<ReminderSchedule> = { status };
+    if (error) {
+      updateData.error = error;
+    }
+    if (status === 'sent') {
+      updateData.sent_at = new Date().toISOString();
+    }
+    await this.db.updateReminderSchedule(reminderId, updateData);
+  }
+
+  /**
+   * Get all scheduled reminders for a tenant
+   */
+  async getScheduledReminders(tenantId: number): Promise<ReminderSchedule[]> {
+    return await this.db.getReminderSchedulesByTenant(tenantId, 'scheduled');
+  }
+
+  /**
+   * Get a specific reminder by ID
+   */
+  async getReminder(reminderId: string): Promise<ReminderSchedule | null> {
+    return await this.db.getReminderSchedule(reminderId);
+  }
+
+  /**
+   * Cancel reminders for an appointment
+   */
+  async cancelAppointmentReminders(appointmentId: string, tenantId: string): Promise<void> {
+    const reminders = await this.db.getReminderSchedulesByAppointment(
+      appointmentId,
+      parseInt(tenantId, 10),
+    );
+    if (!reminders) return;
+
+    for (const reminder of reminders) {
+      if (reminder.status === 'scheduled') {
+        await this.db.updateReminderSchedule(reminder.id.toString(), { status: 'cancelled' });
+      }
+    }
+  }
+
+  /**
+   * Reschedule reminders for an appointment
+   */
+  async rescheduleAppointmentReminders(
+    appointmentId: string,
+    tenantId: string,
+    _newDateTime: string,
+  ): Promise<void> {
+    // This is a complex operation that would need to be implemented
+    // For now, we'll cancel existing reminders and let the scheduler create new ones
+    await this.cancelAppointmentReminders(appointmentId, tenantId);
+  }
+}

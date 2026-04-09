@@ -26,8 +26,10 @@
     "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.3",
     "next": "^16.1.6",
+    "nodemailer": "^8.0.5",
     "pdf-parse": "^2.4.5",
     "stripe": "^20.4.1",
+    "twilio": "^5.13.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -35,6 +37,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.15",
+    "@types/nodemailer": "^8.0.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.16.0",
     "@types/testing-library__react": "^10.0.1",

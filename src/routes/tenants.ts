@@ -91,7 +91,7 @@ export function registerTenantRoutes(app: any, pool: Pool) {
     const { id } = req.params as { id: string };
     const res = await withPoolClient(pool, client =>
       client.query(
-        'SELECT id, name, business_type, system_prompt, voice_id, first_message FROM tenants WHERE id = $1',
+        'SELECT id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone FROM tenants WHERE id = $1',
         [id]
       )
     );
@@ -191,14 +191,14 @@ export function registerTenantRoutes(app: any, pool: Pool) {
 
   app.get('/templates', withHandler(async (_req: AppRequest, reply) => {
     const res = await withPoolClient(pool, client =>
-      client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY sort_order, display_name')
+      client.query('SELECT business_type, display_name, category, sort_order FROM business_templates ORDER BY display_name')
     );
     return reply.send(res.rows);
   }, 'Failed to fetch templates'));
 
   app.get('/templates/full', withHandler(async (_req: AppRequest, reply) => {
     const res = await withPoolClient(pool, client =>
-      client.query('SELECT * FROM business_templates ORDER BY sort_order, display_name')
+      client.query('SELECT * FROM business_templates ORDER BY display_name')
     );
     return reply.send(res.rows);
   }, 'Failed to fetch full templates'));

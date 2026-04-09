@@ -47,20 +47,22 @@ export function Step1Services({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1 ml-2">
+              <div className="flex items-center gap-1 ml-2 shrink-0">
                 <button
-                  onClick={() => onEdit(svc)}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onEdit(svc) }}
                   className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
                   title="Edit"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  <Pencil className="w-3.5 h-3.5 pointer-events-none" />
                 </button>
                 <button
-                  onClick={() => onDelete(svc.id)}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDelete(svc.id) }}
                   className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                   title="Delete"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
                 </button>
               </div>
             </div>
@@ -71,6 +73,11 @@ export function Step1Services({
             </p>
           )}
         </div>
+      )}
+
+      {/* Error display */}
+      {error && !editingService && (
+        <p className="text-xs text-red-600 dark:text-red-400 mb-2">{error}</p>
       )}
 
       {/* Add/Edit form */}

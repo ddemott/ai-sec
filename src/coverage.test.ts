@@ -89,6 +89,45 @@ describe("Coverage Gap Detection", () => {
     // The updated check_coverage_gaps() returns per-service-per-date rows with:
     // service_id, service_name, check_date, gap_hours[], covered_hours[], total_open_hours, coverage_pct, status, details
 
+    it("should return columns matching the backend route SELECT contract", async () => {
+        // WHO: Backend GET /coverage route selects specific columns from check_coverage_gaps()
+        // WHAT: RPC must return all 9 expected columns so the route query doesn't fail
+        // WHY: A column mismatch caused 'Failed to check coverage gaps' errors in production
+        if (!dbAvailable) return;
+
+        const svcId = await seedService("Contract Test", 30);
+        await seedEmployee("Contract Worker", [], [1], '08:00', '17:00', [svcId]);
+
+        // Run the exact same SELECT the backend route uses
+        const res = await client.query(
+            `SELECT service_id, service_name, check_date, gap_hours, covered_hours,
+                    total_open_hours, coverage_pct, status, details
+             FROM check_coverage_gaps($1, '2026-03-16'::DATE, '2026-03-22'::DATE)`,
+            [tenantId]
+        );
+
+        expect(res.rows.length).toBeGreaterThan(0);
+
+        // Verify every expected column is present and has the right type
+        const row = res.rows[0];
+        expect(row).toHaveProperty('service_id');
+        expect(row).toHaveProperty('service_name');
+        expect(row).toHaveProperty('check_date');
+        expect(row).toHaveProperty('gap_hours');
+        expect(row).toHaveProperty('covered_hours');
+        expect(row).toHaveProperty('total_open_hours');
+        expect(row).toHaveProperty('coverage_pct');
+        expect(row).toHaveProperty('status');
+        expect(row).toHaveProperty('details');
+
+        // Type checks
+        expect(typeof row.service_name).toBe('string');
+        expect(Array.isArray(row.gap_hours)).toBe(true);
+        expect(Array.isArray(row.covered_hours)).toBe(true);
+        expect(typeof row.total_open_hours).toBe('number');
+        expect(['full', 'partial', 'gap', 'closed']).toContain(row.status);
+    });
+
     it("should return 'closed' for dates when service has no employees on shift", async () => {
         // WHO: A service with no employees assigned
         // WHAT: check_coverage_gaps should show closed (no open hours)
