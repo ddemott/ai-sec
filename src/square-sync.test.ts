@@ -94,12 +94,21 @@ function createMockClient() {
   const mockClient = {
     query: vi.fn(async (text: string, params?: any[]) => {
       queries.push({ text, params: params || [] });
+      // Handle session variable queries (version tracking context) - these don't consume from queue
+      if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
+        return { rows: [], rowCount: 0 };
+      }
       return queryResponses.shift() || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
   };
 
-  return { mockClient, queries, queryResponses };
+  // Helper to get non-session-variable queries (for test assertions)
+  const getDataQueries = () => mockClient.query.mock.calls.filter(
+    (call: any[]) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET')
+  );
+
+  return { mockClient, queries, queryResponses, getDataQueries };
 }
 
 function createMockPool(mockClient: any) {
@@ -123,7 +132,7 @@ beforeEach(() => {
 // =============================================
 
 describe("Square Sync — Push Happy Paths", () => {
-  it("1. syncCustomerToSquare creates customer + inserts sync map entry", async () => {
+  it("PUSH-CREATE: When tenant pushes new customer to Square, system creates customer via API and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -164,7 +173,7 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(SQUARE_CUSTOMER_ID);
   });
 
-  it("2. syncCustomerToSquare updates existing customer", async () => {
+  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing Square customer using stored external_id to maintain data consistency across systems", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -201,7 +210,7 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("3. syncCustomerToSquare delete removes sync map entry", async () => {
+  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling Square API, preserving Square data while breaking the link", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -220,7 +229,7 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("4. syncAppointmentToSquare creates booking", async () => {
+  it("PUSH-APPOINTMENT: When tenant creates appointment, system creates Square booking linked to the customer so point-of-sale system shows scheduled appointments", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -259,7 +268,7 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("5. syncAppointmentToSquare auto-syncs customer first if not yet synced", async () => {
+  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates booking, ensuring referential integrity in Square", async () => {
     const queries: MockQuery[] = [];
     const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
 
@@ -333,7 +342,7 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to Square as booking'));
   });
 
-  it("6. syncAppointmentToSquare delete cancels booking + updates sync map", async () => {
+  it("PUSH-APPOINTMENT-DELETE: When tenant cancels appointment, system cancels Square booking via API and updates sync_map status so POS reflects cancellation", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -364,8 +373,8 @@ describe("Square Sync — Push Happy Paths", () => {
 // =============================================
 
 describe("Square Sync — Pull Happy Paths", () => {
-  it("7. pullSquareCustomer creates new local customer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-CREATE: When Square customer has no local match (by sync_map or phone), system creates new customer locally so POS customers appear in scheduling system", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -386,14 +395,14 @@ describe("Square Sync — Pull Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query
-    const insertCall = mockClient.query.mock.calls[2];
+    const insertCall = getDataQueries()[2];
     expect(insertCall[0]).toContain('INSERT INTO customers');
     expect(insertCall[1]).toContain('Jane Smith');
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("8. pullSquareCustomer merges when remote is newer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-REMOTE-WINS: When Square customer matches local customer by phone and Square data is newer, system updates local record to keep most recent data from POS", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -415,13 +424,13 @@ describe("Square Sync — Pull Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged Square customer into existing customer'));
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
-    // Verify UPDATE was issued
-    const updateCall = mockClient.query.mock.calls[2];
-    expect(updateCall[0]).toContain('UPDATE customers');
+    // Verify UPDATE was issued (getDataQueries filters out session variable queries)
+    const dataQueries = getDataQueries();
+    expect(dataQueries[2][0]).toContain('UPDATE customers');
   });
 
-  it("9. pullSquareCustomer keeps local when local is newer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-LOCAL-WINS: When Square customer matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -438,8 +447,9 @@ describe("Square Sync — Pull Happy Paths", () => {
     await pullSquareCustomer(pool, TENANT_ID, customerData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('local was newer'));
-    // Should NOT have issued UPDATE — only 3 queries: sync map check, phone check, sync map insert
-    expect(mockClient.query).toHaveBeenCalledTimes(3);
+    // Should NOT have issued UPDATE — only 3 data queries: sync map check, phone check, sync map insert
+    // (excludes session variable queries for version tracking)
+    expect(getDataQueries()).toHaveLength(3);
   });
 });
 
@@ -448,7 +458,7 @@ describe("Square Sync — Pull Happy Paths", () => {
 // =============================================
 
 describe("Square Sync — Sad Paths", () => {
-  it("10. Returns null when no settings", async () => {
+  it("NO-SETTINGS: When tenant has no Square integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -461,7 +471,7 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("11. Returns null when inactive", async () => {
+  it("INACTIVE-INTEGRATION: When tenant's Square integration is marked inactive (is_active=false), system returns null and logs warning so disabled integrations don't attempt API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -474,7 +484,7 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("12. Marks inactive on token refresh failure", async () => {
+  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Square authorization), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -502,7 +512,7 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("13. Customer not found — skips push", async () => {
+  it("CUSTOMER-NOT-FOUND: When sync triggered for customer_id that doesn't exist in local DB (e.g., race condition or stale event), system logs warning and skips push to avoid creating orphan Square records", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -519,7 +529,7 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("14. pullSquareCustomer skips customer with no phone", async () => {
+  it("NO-PHONE-SKIP: When Square customer has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -531,8 +541,8 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("15. pullSquareCustomer skips already-synced version", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("ALREADY-SYNCED: When Square customer's updatedAt matches sync_map.remote_updated_at, system skips processing to avoid redundant DB writes and improve sync performance", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     const sameTimestamp = '2026-03-25T14:00:00Z';
@@ -547,12 +557,12 @@ describe("Square Sync — Sad Paths", () => {
     await pullSquareCustomer(pool, TENANT_ID, customerData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
-    // Only 1 query: the sync map check
-    expect(mockClient.query).toHaveBeenCalledTimes(1);
+    // Only 1 data query: the sync map check (excludes session variable queries)
+    expect(getDataQueries()).toHaveLength(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("16. Client always released on error", async () => {
+  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -567,7 +577,7 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("17. fullSync handles pagination errors gracefully", async () => {
+  it("PAGINATION-ERROR: When Square API returns error during customer list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 

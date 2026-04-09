@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import * as hubspot from './hubspotClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, setSyncContext, clearSyncContext } from './tokenManagement';
 import { splitName, joinName } from './nameUtils';
 
 function ctx(tenantId: string, entityType: string, action: string) {
@@ -237,6 +237,9 @@ export async function pullHubSpotContact(
 
   const client = await pool.connect();
   try {
+    // Set version tracking context so changes are recorded as coming from HubSpot
+    await setSyncContext(client, 'hubspot', 'sync-hubspot');
+
     const hubspotId = contactData.id;
     const props = contactData.properties;
     const remoteUpdatedAt = props.lastmodifieddate || new Date().toISOString();
@@ -327,6 +330,7 @@ export async function pullHubSpotContact(
       );
     }
   } finally {
+    await clearSyncContext(client);
     client.release();
   }
 }

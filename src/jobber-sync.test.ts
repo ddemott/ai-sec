@@ -117,12 +117,21 @@ function createMockClient() {
   const mockClient = {
     query: vi.fn(async (text: string, params?: any[]) => {
       queries.push({ text, params: params || [] });
+      // Handle session variable queries (version tracking context) - these don't consume from queue
+      if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
+        return { rows: [], rowCount: 0 };
+      }
       return queryResponses.shift() || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
   };
 
-  return { mockClient, queries, queryResponses };
+  // Helper to get non-session-variable queries (for test assertions)
+  const getDataQueries = () => mockClient.query.mock.calls.filter(
+    (call: any[]) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET')
+  );
+
+  return { mockClient, queries, queryResponses, getDataQueries };
 }
 
 function createMockPool(mockClient: any) {
@@ -146,7 +155,7 @@ beforeEach(() => {
 // =============================================
 
 describe("Jobber Sync — Push Happy Paths", () => {
-  it("1. syncCustomerToJobber creates Jobber client + inserts sync map entry", async () => {
+  it("PUSH-CREATE: When tenant pushes new customer to Jobber, system creates client via GraphQL and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -184,7 +193,7 @@ describe("Jobber Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(JOBBER_CLIENT_ID);
   });
 
-  it("2. syncCustomerToJobber updates existing Jobber client", async () => {
+  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing Jobber client using stored external_id to maintain data consistency across systems", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -222,7 +231,7 @@ describe("Jobber Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("3. syncCustomerToJobber delete removes sync map entry", async () => {
+  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling Jobber API, preserving Jobber data while breaking the link", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -240,7 +249,7 @@ describe("Jobber Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("4. syncAppointmentToJobber creates Jobber job+visit + inserts sync map", async () => {
+  it("PUSH-APPOINTMENT: When tenant creates appointment, system creates Jobber job with visit attached to the customer's client so field service team sees scheduled work", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -287,7 +296,7 @@ describe("Jobber Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("5. syncAppointmentToJobber auto-pushes customer if not yet synced", async () => {
+  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates job, ensuring referential integrity in Jobber", async () => {
     // This test needs TWO pool.connect() calls: one for getTokensWithRefresh (inside
     // syncCustomerToJobber which is called recursively), and two for the main flows.
     // Since syncCustomerToJobber is called recursively, it goes through getTokensWithRefresh
@@ -377,8 +386,8 @@ describe("Jobber Sync — Push Happy Paths", () => {
 // =============================================
 
 describe("Jobber Sync — Pull Happy Paths", () => {
-  it("6. pullJobberClient creates new local customer from Jobber data", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-CREATE: When Jobber client has no local match (by sync_map or phone), system creates new customer locally so field service leads appear in scheduling system", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -399,14 +408,14 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query
-    const insertCall = mockClient.query.mock.calls[2];
+    const insertCall = getDataQueries()[2];
     expect(insertCall[0]).toContain('INSERT INTO customers');
     expect(insertCall[1]).toContain('Jane Smith');
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("7. pullJobberClient matches existing customer by phone, merges (remote newer)", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-REMOTE-WINS: When Jobber client matches local customer by phone and Jobber data is newer, system updates local record to keep most recent data from authoritative source", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -429,12 +438,12 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued
-    const updateCall = mockClient.query.mock.calls[2];
+    const updateCall = getDataQueries()[2];
     expect(updateCall[0]).toContain('UPDATE customers');
   });
 
-  it("8. pullJobberClient matches existing customer by phone, keeps local (local newer)", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-LOCAL-WINS: When Jobber client matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -451,11 +460,11 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     await pullJobberClient(pool, TENANT_ID, jobberData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('local was newer, kept local values'));
-    // Should NOT have issued UPDATE
-    expect(mockClient.query.mock.calls.length).toBe(3); // sync map check, phone check, sync map insert
+    // Should NOT have issued UPDATE (only sync map check, phone check, sync map insert)
+    expect(getDataQueries().length).toBe(3);
   });
 
-  it("9. pullJobberClient updates existing synced customer (remote newer)", async () => {
+  it("PULL-UPDATE-SYNCED: When already-synced Jobber client has newer data than local record, system updates local customer to reflect latest changes from field service system", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -481,8 +490,8 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
   });
 
-  it("10. pullJobberClient skips update (already synced this version)", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-SKIP-UNCHANGED: When Jobber client's updatedAt matches sync_map.remote_updated_at, system skips processing to avoid redundant DB writes and improve sync performance", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     const sameTimestamp = '2026-03-25T14:00:00Z';
@@ -497,8 +506,8 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     await pullJobberClient(pool, TENANT_ID, jobberData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
-    // Only 1 query: the sync map check
-    expect(mockClient.query).toHaveBeenCalledTimes(1);
+    // Only 1 data query: the sync map check (excludes session variable queries)
+    expect(getDataQueries().length).toBe(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 });
@@ -508,7 +517,7 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 // =============================================
 
 describe("Jobber Sync — Sad Paths", () => {
-  it("11. Returns silently when no integration settings exist", async () => {
+  it("NO-SETTINGS: When tenant has no Jobber integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -521,7 +530,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("12. Returns silently when integration is inactive", async () => {
+  it("INACTIVE-INTEGRATION: When tenant's Jobber integration is marked inactive (is_active=false), system returns null and logs warning so disabled integrations don't attempt API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -534,7 +543,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("13. Returns silently when tokens are missing", async () => {
+  it("MISSING-TOKENS: When tenant's Jobber integration has null access/refresh tokens (incomplete OAuth), system returns null and logs warning to prevent API calls with invalid credentials", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -547,7 +556,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("14. Marks integration inactive when token refresh fails", async () => {
+  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access in Jobber), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -575,7 +584,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("15. Customer not found in DB — skips push", async () => {
+  it("CUSTOMER-NOT-FOUND: When sync triggered for customer_id that doesn't exist in local DB (e.g., race condition or stale event), system logs warning and skips push to avoid creating orphan Jobber records", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -592,7 +601,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("16. Jobber clientCreate returns userErrors — logs error", async () => {
+  it("GRAPHQL-USER-ERRORS: When Jobber GraphQL mutation returns userErrors array (e.g., invalid phone format), system logs the specific error messages so admins can diagnose data quality issues", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -621,7 +630,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("17. pullJobberClient skips client with no phone number", async () => {
+  it("NO-PHONE-SKIP: When Jobber client has no phone numbers, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -633,7 +642,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("18. pullJobberVisit skips visit with no associated client", async () => {
+  it("VISIT-NO-CLIENT: When Jobber visit has no associated client (orphan job), pull skips it because appointments require a customer for booking and communication", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -645,7 +654,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("19. pullJobberVisit skips when no local resources exist", async () => {
+  it("NO-RESOURCES: When tenant has no active resources configured, visit pull skips because appointments require a resource (technician/bay) for scheduling", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -661,7 +670,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("20. Client always released (finally block) even when query throws", async () => {
+  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 

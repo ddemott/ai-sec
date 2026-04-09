@@ -95,12 +95,21 @@ function createMockClient() {
   const mockClient = {
     query: vi.fn(async (text: string, params?: any[]) => {
       queries.push({ text, params: params || [] });
+      // Handle session variable queries (version tracking context) - these don't consume from queue
+      if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
+        return { rows: [], rowCount: 0 };
+      }
       return queryResponses.shift() || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
   };
 
-  return { mockClient, queries, queryResponses };
+  // Helper to get non-session-variable queries (for test assertions)
+  const getDataQueries = () => mockClient.query.mock.calls.filter(
+    (call: any[]) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET')
+  );
+
+  return { mockClient, queries, queryResponses, getDataQueries };
 }
 
 function createMockPool(mockClient: any) {
@@ -124,8 +133,8 @@ beforeEach(() => {
 // =============================================
 
 describe("HubSpot Sync — Push Happy Paths", () => {
-  it("1. syncCustomerToHubSpot creates contact + inserts sync map entry", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PUSH-CREATE: When tenant pushes new customer to HubSpot, system creates contact in HubSpot and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // getTokensWithRefresh: integration settings (token not expired)
@@ -156,12 +165,13 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to HubSpot'));
 
     // Verify sync map INSERT was called with correct external_id
-    const insertQuery = mockClient.query.mock.calls[3];
+    const dataQueries = getDataQueries();
+    const insertQuery = dataQueries[3];
     expect(insertQuery[0]).toContain('INSERT INTO entity_sync_map');
     expect(insertQuery[1]).toContain(HUBSPOT_CONTACT_ID);
   });
 
-  it("2. syncCustomerToHubSpot updates existing contact", async () => {
+  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing HubSpot contact using stored external_id to maintain data consistency across systems", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -194,7 +204,7 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("3. syncCustomerToHubSpot delete removes sync map entry", async () => {
+  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling HubSpot API, preserving HubSpot data while breaking the link", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -213,7 +223,7 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("4. syncAppointmentToHubSpot creates meeting + associates with contact", async () => {
+  it("PUSH-APPOINTMENT: When tenant creates appointment, system creates HubSpot meeting and associates it with the customer's contact so sales team sees scheduled work", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -257,7 +267,7 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("5. syncAppointmentToHubSpot auto-syncs customer first if not yet synced", async () => {
+  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates meeting, ensuring referential integrity in HubSpot", async () => {
     const queries: MockQuery[] = [];
     const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
 
@@ -333,8 +343,8 @@ describe("HubSpot Sync — Push Happy Paths", () => {
 // =============================================
 
 describe("HubSpot Sync — Pull Happy Paths", () => {
-  it("6. pullHubSpotContact creates new local customer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-CREATE: When HubSpot contact has no local match (by sync_map or phone), system creates new customer locally so CRM leads appear in scheduling system", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -354,15 +364,16 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from HubSpot contact'));
     expect(mockClient.release).toHaveBeenCalled();
 
-    // Verify the INSERT customers query
-    const insertCall = mockClient.query.mock.calls[2];
+    // Verify the INSERT customers query (getDataQueries filters out session variable queries)
+    const dataQueries = getDataQueries();
+    const insertCall = dataQueries[2];
     expect(insertCall[0]).toContain('INSERT INTO customers');
     expect(insertCall[1]).toContain('Jane Smith');
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("7. pullHubSpotContact merges when remote is newer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-REMOTE-WINS: When HubSpot contact matches local customer by phone and HubSpot data is newer, system updates local record to keep most recent data from authoritative source", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -384,13 +395,13 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged HubSpot contact into existing customer'));
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
-    // Verify UPDATE was issued
-    const updateCall = mockClient.query.mock.calls[2];
-    expect(updateCall[0]).toContain('UPDATE customers');
+    // Verify UPDATE was issued (getDataQueries filters out session variable queries)
+    const dataQueries = getDataQueries();
+    expect(dataQueries[2][0]).toContain('UPDATE customers');
   });
 
-  it("8. pullHubSpotContact keeps local when local is newer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-LOCAL-WINS: When HubSpot contact matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -407,8 +418,8 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     await pullHubSpotContact(pool, TENANT_ID, contactData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('local was newer'));
-    // Should NOT have issued UPDATE — only 3 queries: sync map check, phone check, sync map insert
-    expect(mockClient.query).toHaveBeenCalledTimes(3);
+    // Should NOT have issued UPDATE — only 3 data queries (excludes session variable queries)
+    expect(getDataQueries()).toHaveLength(3);
   });
 });
 
@@ -417,7 +428,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 // =============================================
 
 describe("HubSpot Sync — Sad Paths", () => {
-  it("9. Returns null when no settings", async () => {
+  it("NO-SETTINGS: When tenant has no HubSpot integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -430,7 +441,7 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("10. Returns null when inactive", async () => {
+  it("INACTIVE-INTEGRATION: When tenant's HubSpot integration is marked inactive (is_active=false), system returns null and logs warning so disabled integrations don't attempt API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -443,7 +454,7 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("11. Marks inactive on token refresh failure", async () => {
+  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -471,7 +482,7 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("12. Customer not found — skips push", async () => {
+  it("CUSTOMER-NOT-FOUND: When sync triggered for customer_id that doesn't exist in local DB (e.g., race condition or stale event), system logs warning and skips push to avoid creating orphan HubSpot records", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -488,7 +499,7 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("13. pullHubSpotContact skips contact with no phone", async () => {
+  it("NO-PHONE-SKIP: When HubSpot contact has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -500,8 +511,8 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("14. pullHubSpotContact skips already-synced version", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("ALREADY-SYNCED: When HubSpot contact's lastmodifieddate matches sync_map.remote_updated_at, system skips processing to avoid redundant DB writes and improve sync performance", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     const sameTimestamp = '2026-03-25T14:00:00Z';
@@ -516,12 +527,12 @@ describe("HubSpot Sync — Sad Paths", () => {
     await pullHubSpotContact(pool, TENANT_ID, contactData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
-    // Only 1 query: the sync map check
-    expect(mockClient.query).toHaveBeenCalledTimes(1);
+    // Only 1 data query: the sync map check (excludes session variable queries)
+    expect(getDataQueries()).toHaveLength(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("15. Client always released on error", async () => {
+  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -536,7 +547,7 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("16. fullSync handles pagination errors gracefully", async () => {
+  it("PAGINATION-ERROR: When HubSpot API returns error during contact list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 

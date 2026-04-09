@@ -96,12 +96,21 @@ function createMockClient() {
   const mockClient = {
     query: vi.fn(async (text: string, params?: any[]) => {
       queries.push({ text, params: params || [] });
+      // Handle session variable queries (version tracking context) - these don't consume from queue
+      if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
+        return { rows: [], rowCount: 0 };
+      }
       return queryResponses.shift() || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
   };
 
-  return { mockClient, queries, queryResponses };
+  // Helper to get non-session-variable queries (for test assertions)
+  const getDataQueries = () => mockClient.query.mock.calls.filter(
+    (call: any[]) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET')
+  );
+
+  return { mockClient, queries, queryResponses, getDataQueries };
 }
 
 function createMockPool(mockClient: any) {
@@ -129,7 +138,7 @@ beforeEach(() => {
 // =============================================
 
 describe("ServiceTitan Sync — Push Happy Paths", () => {
-  it("1. syncCustomerToServiceTitan creates customer + inserts sync map entry", async () => {
+  it("PUSH-CREATE: When tenant pushes new customer to ServiceTitan, system creates customer via API and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -169,7 +178,7 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(String(ST_CUSTOMER_ID));
   });
 
-  it("2. syncCustomerToServiceTitan updates existing customer", async () => {
+  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing ServiceTitan customer using stored external_id to maintain data consistency across systems", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -205,7 +214,7 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("3. syncCustomerToServiceTitan delete removes sync map entry", async () => {
+  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling ServiceTitan API, preserving ServiceTitan data while breaking the link", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -224,7 +233,7 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("4. syncAppointmentToServiceTitan creates job", async () => {
+  it("PUSH-APPOINTMENT: When tenant creates appointment, system creates ServiceTitan job linked to the customer so field service dispatch system shows scheduled work", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -265,7 +274,7 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("5. syncAppointmentToServiceTitan auto-syncs customer first if not yet synced", async () => {
+  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates job, ensuring referential integrity in ServiceTitan", async () => {
     const queries: MockQuery[] = [];
     const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
 
@@ -341,8 +350,8 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
 // =============================================
 
 describe("ServiceTitan Sync — Pull Happy Paths", () => {
-  it("6. pullServiceTitanCustomer creates new local customer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-CREATE: When ServiceTitan customer has no local match (by sync_map or phone), system creates new customer locally so field service leads appear in scheduling system", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -363,14 +372,14 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query
-    const insertCall = mockClient.query.mock.calls[2];
+    const insertCall = getDataQueries()[2];
     expect(insertCall[0]).toContain('INSERT INTO customers');
     expect(insertCall[1]).toContain('Jane Smith');
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("7. pullServiceTitanCustomer merges when remote is newer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-REMOTE-WINS: When ServiceTitan customer matches local customer by phone and ServiceTitan data is newer, system updates local record to keep most recent data from dispatch system", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -393,12 +402,12 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued
-    const updateCall = mockClient.query.mock.calls[2];
+    const updateCall = getDataQueries()[2];
     expect(updateCall[0]).toContain('UPDATE customers');
   });
 
-  it("8. pullServiceTitanCustomer keeps local when local is newer", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("PULL-MERGE-LOCAL-WINS: When ServiceTitan customer matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // check sync map — no existing mapping
@@ -415,8 +424,8 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     await pullServiceTitanCustomer(pool, TENANT_ID, customerData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('local was newer'));
-    // Should NOT have issued UPDATE — only 3 queries: sync map check, phone check, sync map insert
-    expect(mockClient.query).toHaveBeenCalledTimes(3);
+    // Should NOT have issued UPDATE — only 3 data queries: sync map check, phone check, sync map insert
+    expect(getDataQueries().length).toBe(3);
   });
 });
 
@@ -425,7 +434,7 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
 // =============================================
 
 describe("ServiceTitan Sync — Sad Paths", () => {
-  it("9. Returns null when no settings", async () => {
+  it("NO-SETTINGS: When tenant has no ServiceTitan integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -438,7 +447,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("10. Returns null when inactive", async () => {
+  it("INACTIVE-INTEGRATION: When tenant's ServiceTitan integration is marked inactive (is_active=false), system returns null and logs warning so disabled integrations don't attempt API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -451,7 +460,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("11. Returns null when SERVICETITAN_APP_KEY is not set", async () => {
+  it("MISSING-APP-KEY: When SERVICETITAN_APP_KEY environment variable is not configured, system returns null and logs error because API authentication requires the app key", async () => {
     delete process.env.SERVICETITAN_APP_KEY;
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
@@ -465,7 +474,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     // Note: appKey check happens before pool.connect(), so client may not be acquired
   });
 
-  it("12. Returns null when tenant_sid missing from settings", async () => {
+  it("MISSING-TENANT-SID: When integration settings lack tenant_sid (ServiceTitan tenant identifier), system returns null because API calls require the tenant context", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -478,7 +487,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("13. Marks inactive on token refresh failure", async () => {
+  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked ServiceTitan authorization), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -506,7 +515,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("14. Customer not found — skips push", async () => {
+  it("CUSTOMER-NOT-FOUND: When sync triggered for customer_id that doesn't exist in local DB (e.g., race condition or stale event), system logs warning and skips push to avoid creating orphan ServiceTitan records", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -523,7 +532,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("15. pullServiceTitanCustomer skips customer with no phone", async () => {
+  it("NO-PHONE-SKIP: When ServiceTitan customer has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -535,8 +544,8 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("16. pullServiceTitanCustomer skips already-synced version", async () => {
-    const { mockClient, queryResponses } = createMockClient();
+  it("ALREADY-SYNCED: When ServiceTitan customer's modifiedOn matches sync_map.remote_updated_at, system skips processing to avoid redundant DB writes and improve sync performance", async () => {
+    const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     const sameTimestamp = '2026-03-25T14:00:00Z';
@@ -551,12 +560,12 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     await pullServiceTitanCustomer(pool, TENANT_ID, customerData, silentLogger);
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
-    // Only 1 query: the sync map check
-    expect(mockClient.query).toHaveBeenCalledTimes(1);
+    // Only 1 data query: the sync map check (excludes session variable queries)
+    expect(getDataQueries().length).toBe(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("17. Client always released on error", async () => {
+  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -571,7 +580,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("18. fullSync handles pagination errors gracefully", async () => {
+  it("PAGINATION-ERROR: When ServiceTitan API returns error during customer/job list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 

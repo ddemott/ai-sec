@@ -139,6 +139,100 @@ export async function getIntegrationTokens(
 }
 
 /**
+ * Valid change sources for version tracking.
+ * These values are stored in record_versions.change_source
+ */
+export type ChangeSource =
+  | 'local'
+  | 'hubspot'
+  | 'jobber'
+  | 'square'
+  | 'servicetitan'
+  | 'voice_call'
+  | 'system'
+  | 'google_calendar'
+  | 'outlook_calendar';
+
+/**
+ * Sets PostgreSQL session variables for version tracking.
+ *
+ * The auto_version_trigger in the database reads these values:
+ * - app.change_source: identifies the CRM/system making the change
+ * - app.changed_by: identifies the user or process (e.g., "sync-hubspot")
+ *
+ * This function must be called on each connection before making changes
+ * that should be tracked with a specific source.
+ *
+ * @param client - Database client (from pool.connect())
+ * @param changeSource - The source of the change (e.g., 'hubspot', 'jobber')
+ * @param changedBy - Optional identifier for who/what made the change
+ *
+ * @example
+ * ```typescript
+ * const client = await pool.connect();
+ * try {
+ *   await setSyncContext(client, 'hubspot', 'sync-hubspot');
+ *   // All subsequent changes will have change_source='hubspot'
+ *   await client.query('UPDATE customers SET name = $1 WHERE id = $2', [name, id]);
+ * } finally {
+ *   await clearSyncContext(client);
+ *   client.release();
+ * }
+ * ```
+ */
+export async function setSyncContext(
+  client: { query: (sql: string) => Promise<unknown> },
+  changeSource: ChangeSource,
+  changedBy?: string
+): Promise<void> {
+  await client.query(`SET LOCAL app.change_source = '${changeSource}'`);
+  if (changedBy) {
+    await client.query(`SET LOCAL app.changed_by = '${changedBy}'`);
+  }
+}
+
+/**
+ * Clears the sync context session variables.
+ * Should be called when done with sync operations (before releasing connection).
+ */
+export async function clearSyncContext(
+  client: { query: (sql: string) => Promise<unknown> }
+): Promise<void> {
+  await client.query(`RESET app.change_source`);
+  await client.query(`RESET app.changed_by`);
+}
+
+/**
+ * Wraps a sync operation with proper version tracking context.
+ * Automatically sets and clears the context around the operation.
+ *
+ * @param client - Database client
+ * @param changeSource - The source of the change
+ * @param changedBy - Optional identifier for who made the change
+ * @param operation - Async function to execute with the context set
+ *
+ * @example
+ * ```typescript
+ * await withSyncContext(client, 'hubspot', 'sync-hubspot', async () => {
+ *   await client.query('INSERT INTO customers ...');
+ * });
+ * ```
+ */
+export async function withSyncContext<T>(
+  client: { query: (sql: string) => Promise<unknown> },
+  changeSource: ChangeSource,
+  changedBy: string | undefined,
+  operation: () => Promise<T>
+): Promise<T> {
+  await setSyncContext(client, changeSource, changedBy);
+  try {
+    return await operation();
+  } finally {
+    await clearSyncContext(client);
+  }
+}
+
+/**
  * Token refresh for calendar settings (tenant_calendar_settings table).
  * Separate from integration settings because calendars use a different table.
  */

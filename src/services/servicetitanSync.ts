@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import * as servicetitan from './servicetitanClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, setSyncContext, clearSyncContext } from './tokenManagement';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('servicetitan', tenantId, entityType, action);
@@ -263,6 +263,9 @@ export async function pullServiceTitanCustomer(
 
   const client = await pool.connect();
   try {
+    // Set version tracking context so changes are recorded as coming from ServiceTitan
+    await setSyncContext(client, 'servicetitan', 'sync-servicetitan');
+
     const stId = String(customerData.id);
     const remoteUpdatedAt = customerData.modifiedOn || new Date().toISOString();
 
@@ -352,6 +355,7 @@ export async function pullServiceTitanCustomer(
       );
     }
   } finally {
+    await clearSyncContext(client);
     client.release();
   }
 }
@@ -368,6 +372,9 @@ export async function pullServiceTitanJob(
 
   const client = await pool.connect();
   try {
+    // Set version tracking context so changes are recorded as coming from ServiceTitan
+    await setSyncContext(client, 'servicetitan', 'sync-servicetitan');
+
     const stId = String(jobData.id);
     const remoteUpdatedAt = jobData.modifiedOn || new Date().toISOString();
 
@@ -435,6 +442,7 @@ export async function pullServiceTitanJob(
       log.info(`${prefix} — updated local appointment from ServiceTitan job (servicetitanId=${stId} localId=${localId})`);
     }
   } finally {
+    await clearSyncContext(client);
     client.release();
   }
 }

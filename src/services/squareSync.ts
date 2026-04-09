@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import * as square from './squareClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, setSyncContext, clearSyncContext } from './tokenManagement';
 import { splitName, joinName } from './nameUtils';
 
 function ctx(tenantId: string, entityType: string, action: string) {
@@ -238,6 +238,9 @@ export async function pullSquareCustomer(
 
   const client = await pool.connect();
   try {
+    // Set version tracking context so changes are recorded as coming from Square
+    await setSyncContext(client, 'square', 'sync-square');
+
     const squareId = customerData.id;
     const remoteUpdatedAt = customerData.updated_at || new Date().toISOString();
 
@@ -327,6 +330,7 @@ export async function pullSquareCustomer(
       );
     }
   } finally {
+    await clearSyncContext(client);
     client.release();
   }
 }
@@ -343,6 +347,9 @@ export async function pullSquareBooking(
 
   const client = await pool.connect();
   try {
+    // Set version tracking context so changes are recorded as coming from Square
+    await setSyncContext(client, 'square', 'sync-square');
+
     const squareId = bookingData.id;
     const remoteUpdatedAt = bookingData.updated_at || new Date().toISOString();
 
@@ -417,6 +424,7 @@ export async function pullSquareBooking(
       log.info(`${prefix} — updated local appointment from Square (squareId=${squareId} localId=${localId})`);
     }
   } finally {
+    await clearSyncContext(client);
     client.release();
   }
 }
