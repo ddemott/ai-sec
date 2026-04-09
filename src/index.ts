@@ -30,6 +30,8 @@ import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
 import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { registerTtsRoutes } from './routes/tts';
+import { registerVoiceRoutes } from './routes/voice';
+import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { VapiClient } from './services/vapiClient';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
@@ -312,6 +314,8 @@ registerHubSpotRoutes(app, pool, withTenantClient);
 registerSquareRoutes(app, pool, withTenantClient);
 registerServiceTitanRoutes(app, pool, withTenantClient);
 registerTtsRoutes(app, XAI_API_KEY, XAI_TTS_SECRET, XAI_TTS_VOICE);
+registerVoiceRoutes(app, pool, withTenantClient);
+registerVersionHistoryRoutes(app, pool, withTenantClient);
 
 // --- Start Server ---
 

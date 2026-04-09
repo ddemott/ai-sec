@@ -4,6 +4,9 @@ import type {
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
   CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
   CallSummary, JobberSettings, JobberSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
+  VoiceSession, VoiceSessionDisplay, CustomerContext,
+  RecordHistoryResponse, DeletedRecordsResponse, RecordRestorePreview, RecentChangesResponse,
+  VersionedTable, ChangeSource, RecordVersion, VersionComparison,
 } from './types'
 
 export const API_BASE_URL =
@@ -217,11 +220,14 @@ async function apiMutate<T>(
   await ensureTokenFresh();
   const url = `${API_BASE_URL}${endpoint}`;
 
+  const headers = getHeaders();
+  if (!body) delete headers['Content-Type'];
+
   let response: Response;
   try {
     response = await fetch(url, {
       method,
-      headers: getHeaders(),
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err) {
@@ -633,5 +639,139 @@ export const Api = {
 
     getSyncStatus: (tenantId: string | null) =>
       apiFetch<JobberSyncStatus>(`/servicetitan/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- VOICE CRM (Call Context) ---
+  voice: {
+    // Get active calls for dashboard
+    getActiveCalls: (tenantId: string | null) =>
+      apiFetch<{ calls: VoiceSessionDisplay[]; total: number }>(`/voice/active`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    // Get call history with optional filters
+    getHistory: (tenantId: string | null, opts?: { customer_id?: string; status?: string; limit?: number; offset?: number }) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (opts?.customer_id) params.customer_id = opts.customer_id;
+      if (opts?.status) params.status = opts.status;
+      if (opts?.limit) params.limit = String(opts.limit);
+      if (opts?.offset) params.offset = String(opts.offset);
+      return apiFetch<{ calls: VoiceSession[]; total: number; has_more: boolean }>(`/voice/history`, Object.keys(params).length > 0 ? params : undefined);
+    },
+
+    // Get a specific voice session
+    getSession: (tenantId: string | null, callId: string) =>
+      apiFetch<VoiceSession>(`/voice/session/${callId}`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    // Get customer context (for viewing customer profile enrichment)
+    getCustomerContext: (tenantId: string | null, customerId: string) =>
+      apiFetch<CustomerContext>(`/voice/customer/${customerId}/context`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    // Get call history for a specific customer
+    getCustomerCalls: (tenantId: string | null, customerId: string, limit?: number) =>
+      apiFetch<{ calls: VoiceSession[] }>(`/voice/customer/${customerId}/calls`, {
+        ...(tenantId ? { tenant_id: tenantId } : {}),
+        ...(limit ? { limit: String(limit) } : {}),
+      }),
+
+    // Add a note to a customer
+    addCustomerNote: (tenantId: string | null, data: { customer_id: string; note: string; note_type?: string; call_id?: string }) =>
+      apiMutate<{ success: boolean }>(`/voice/customer/note`, 'POST', { tenant_id: tenantId, ...data }),
+
+    // Get customer context by phone (used during active calls)
+    getContextByPhone: (tenantId: string | null, phone: string) =>
+      apiFetch<CustomerContext>(`/voice/context/${encodeURIComponent(phone)}`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
+  // --- Version History API ---
+  versionHistory: {
+    // Get full history for a record
+    getHistory: (tenantId: string | null, table: VersionedTable, recordId: string) =>
+      apiFetch<RecordHistoryResponse>(`/records/${table}/${recordId}/history`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    // Get a specific version
+    getVersion: (tenantId: string | null, table: VersionedTable, recordId: string, versionNumber: number) =>
+      apiFetch<RecordVersion>(`/records/${table}/${recordId}/version/${versionNumber}`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    // Compare two versions
+    compareVersions: (tenantId: string | null, table: VersionedTable, recordId: string, versionA: number, versionB: number) =>
+      apiFetch<{ record_id: string; table_name: string; version_a: number; version_b: number; differences: VersionComparison[] }>(
+        `/records/${table}/${recordId}/compare/${versionA}/${versionB}`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
+
+    // Get restore preview (all fields with historical values)
+    getRestorePreview: (tenantId: string | null, table: VersionedTable, recordId: string) =>
+      apiFetch<RecordRestorePreview>(`/records/${table}/${recordId}/restore-preview`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    // Restore specific fields from a version
+    restoreFields: (
+      tenantId: string | null,
+      table: VersionedTable,
+      recordId: string,
+      data: { source_version: number; fields: string[]; restored_by?: string; change_source?: ChangeSource }
+    ) => apiMutate<{ success: boolean; data: Record<string, unknown>; message: string }>(
+      `/records/${table}/${recordId}/restore-fields`,
+      'POST',
+      { tenant_id: tenantId, ...data }
+    ),
+
+    // Soft delete a record
+    softDelete: (
+      tenantId: string | null,
+      table: VersionedTable,
+      recordId: string,
+      data?: { deleted_by?: string; change_source?: ChangeSource }
+    ) => apiMutate<{ success: boolean; message: string }>(
+      `/records/${table}/${recordId}/soft-delete`,
+      'POST',
+      { tenant_id: tenantId, ...(data || {}) }
+    ),
+
+    // Restore a soft-deleted record
+    restoreDeleted: (
+      tenantId: string | null,
+      table: VersionedTable,
+      recordId: string,
+      data?: { restored_by?: string; change_source?: ChangeSource }
+    ) => apiMutate<{ success: boolean; message: string }>(
+      `/records/${table}/${recordId}/restore`,
+      'POST',
+      { tenant_id: tenantId, ...(data || {}) }
+    ),
+
+    // Get deleted records for a table
+    getDeleted: (tenantId: string | null, table: VersionedTable, opts?: { limit?: number; offset?: number }) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (opts?.limit) params.limit = String(opts.limit);
+      if (opts?.offset) params.offset = String(opts.offset);
+      return apiFetch<DeletedRecordsResponse>(`/records/${table}/deleted`, Object.keys(params).length > 0 ? params : undefined);
+    },
+
+    // Copy fields from one record to another
+    copyFields: (
+      tenantId: string | null,
+      table: VersionedTable,
+      data: { source_record_id: string; target_record_id: string; fields: string[]; copied_by?: string; change_source?: ChangeSource }
+    ) => apiMutate<{ success: boolean; data: Record<string, unknown>; message: string }>(
+      `/records/${table}/copy-fields`,
+      'POST',
+      { tenant_id: tenantId, ...data }
+    ),
+
+    // Get recent changes across all tables
+    getRecentChanges: (
+      tenantId: string | null,
+      opts?: { limit?: number; offset?: number; table?: VersionedTable; change_type?: string; change_source?: ChangeSource }
+    ) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (opts?.limit) params.limit = String(opts.limit);
+      if (opts?.offset) params.offset = String(opts.offset);
+      if (opts?.table) params.table = opts.table;
+      if (opts?.change_type) params.change_type = opts.change_type;
+      if (opts?.change_source) params.change_source = opts.change_source;
+      return apiFetch<RecentChangesResponse>(`/records/recent-changes`, Object.keys(params).length > 0 ? params : undefined);
+    },
   },
 };

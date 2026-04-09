@@ -52,6 +52,8 @@ export interface Tenant {
   system_prompt: string;
   voice_id: string;
   first_message: string;
+  team_size?: number;
+  timezone?: string;
 }
 
 export interface BusinessTemplate {
@@ -238,16 +240,13 @@ export interface Vocabulary {
 export interface CoverageItem {
   service_id: string;
   service_name: string;
-  duration_minutes: number;
-  coverage_status: 'full' | 'partial' | 'uncovered' | 'no_staff' | 'no_resource';
+  check_date: string;
+  gap_hours: number[];
+  covered_hours: number[];
   total_open_hours: number;
-  covered_hours: number;
-  gap_hours: number;
-  has_qualified_staff: boolean;
-  has_capable_resource: boolean;
-  qualified_employee_count: number;
-  capable_resource_count: number;
-  gap_details: Array<{ date: string; day_name: string; gap_start: string; gap_end: string }>;
+  coverage_pct: number;
+  status: string;
+  details: Record<string, unknown>;
 }
 
 export interface StaffingEntry {
@@ -288,4 +287,206 @@ export interface KnowledgeEntry {
   content: string;
   source: string | null;
   created_at: string;
+}
+
+// --- VOICE CRM TYPES ---
+
+export interface CustomerNote {
+  id: string;
+  text: string;
+  type: 'general' | 'call' | 'preference' | 'important';
+  call_id?: string;
+  created_at: string;
+}
+
+export interface AppointmentSummary {
+  id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  description: string | null;
+  resource_name: string | null;
+  employee_name: string | null;
+}
+
+export interface AppointmentHistory {
+  total: number;
+  completed: number;
+  cancelled: number;
+  last_appointment: AppointmentSummary | null;
+  upcoming_appointments: AppointmentSummary[];
+}
+
+export interface CustomerContext {
+  is_known_customer: boolean;
+  customer: {
+    id: string;
+    name: string | null;
+    phone: string;
+    email: string | null;
+    address: string | null;
+    created_at: string;
+  } | null;
+  appointment_history: AppointmentHistory;
+  notes: CustomerNote[];
+  preferences: Record<string, unknown>;
+  tags: string[];
+  member_since?: string;
+  session_id?: string;
+}
+
+export type VoiceSessionStatus = 'active' | 'completed' | 'failed' | 'transferred';
+
+export type VoiceSessionOutcome =
+  | 'appointment_booked'
+  | 'appointment_rescheduled'
+  | 'appointment_cancelled'
+  | 'info_provided'
+  | 'transferred'
+  | 'voicemail'
+  | 'abandoned'
+  | 'other';
+
+export interface VoiceSession {
+  id: string;
+  tenant_id: string;
+  call_id: string;
+  caller_phone: string;
+  customer_id: string | null;
+  customer_context: CustomerContext;
+  status: VoiceSessionStatus;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  transcript: string | null;
+  summary: string | null;
+  outcome: VoiceSessionOutcome | null;
+  appointment_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  customer_name?: string | null;
+}
+
+export interface VoiceSessionDisplay {
+  id: string;
+  call_id: string;
+  caller_phone: string;
+  customer_name: string | null;
+  customer_id: string | null;
+  status: VoiceSessionStatus;
+  started_at: string;
+  duration_seconds: number | null;
+  outcome: VoiceSessionOutcome | null;
+  is_known_customer: boolean;
+}
+
+// --- VERSION HISTORY TYPES ---
+
+export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | 'merge';
+
+export type ChangeSource =
+  | 'local'
+  | 'hubspot'
+  | 'jobber'
+  | 'square'
+  | 'servicetitan'
+  | 'voice_call'
+  | 'system'
+  | 'api';
+
+export type VersionedTable =
+  | 'customers'
+  | 'appointments'
+  | 'voice_sessions'
+  | 'employees'
+  | 'services'
+  | 'resources';
+
+export interface RecordVersion {
+  id: string;
+  tenant_id: string;
+  table_name: VersionedTable;
+  record_id: string;
+  version_number: number;
+  data: Record<string, unknown>;
+  changed_fields: string[];
+  previous_values: Record<string, unknown>;
+  change_type: ChangeType;
+  change_source: ChangeSource;
+  changed_by: string | null;
+  change_summary: string | null;
+  changed_at: string;
+}
+
+export interface RecordHistoryResponse {
+  record_id: string;
+  table_name: VersionedTable;
+  current_version: number;
+  versions: RecordVersion[];
+  is_deleted: boolean;
+  deleted_at: string | null;
+  deleted_by: string | null;
+}
+
+export interface DeletedRecord {
+  id: string;
+  tenant_id: string;
+  table_name: VersionedTable;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  deleted_at: string;
+  deleted_by: string | null;
+  version_count: number;
+  last_data: Record<string, unknown>;
+}
+
+export interface DeletedRecordsResponse {
+  records: DeletedRecord[];
+  total: number;
+}
+
+export interface FieldRestoreOption {
+  field: string;
+  current_value: unknown;
+  versions: Array<{
+    version_number: number;
+    value: unknown;
+    changed_at: string;
+    change_source: ChangeSource;
+  }>;
+}
+
+export interface RecordRestorePreview {
+  record_id: string;
+  table_name: VersionedTable;
+  fields: FieldRestoreOption[];
+}
+
+export interface RecentChange {
+  id: string;
+  tenant_id: string;
+  table_name: VersionedTable;
+  record_id: string;
+  version_number: number;
+  change_type: ChangeType;
+  change_source: ChangeSource;
+  changed_by: string | null;
+  change_summary: string | null;
+  changed_at: string;
+  record_name: string | null;
+  record_phone: string | null;
+}
+
+export interface RecentChangesResponse {
+  changes: RecentChange[];
+  total: number;
+}
+
+export interface VersionComparison {
+  field_name: string;
+  value_a: unknown;
+  value_b: unknown;
 }
