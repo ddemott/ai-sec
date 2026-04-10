@@ -195,8 +195,8 @@ test.describe.serial('Full Functional Audit', () => {
       logIssue('CALLS', 'Voice Calls view did not load');
     }
 
-    // Call History section
-    const history = page.locator('text=Call History');
+    // Call History section (includes count, e.g., "Call History (0)")
+    const history = page.locator('text=/Call History/');
     if (!await history.isVisible({ timeout: 3000 }).catch(() => false)) {
       logIssue('CALLS', 'Call History section not visible');
     }
@@ -222,22 +222,22 @@ test.describe.serial('Full Functional Audit', () => {
 
     await page.waitForTimeout(1000);
 
-    // Should show services section
-    const services = page.locator('text=/Service|My Services/i').first();
+    // Should show service catalog heading
+    const services = page.locator('text=/Service Catalog|SERVICE CATALOG/i').first();
     if (!await services.isVisible({ timeout: 10000 }).catch(() => false)) {
-      logIssue('SERVICES', 'Services section did not load');
+      logIssue('SERVICES', 'Service Catalog section did not load');
     }
 
-    // Add service button
-    const addSvc = page.locator('text=/Add.*service|Add.*Service/i').first();
-    if (!await addSvc.isVisible({ timeout: 3000 }).catch(() => false)) {
-      logIssue('SERVICES', 'Add service button not visible');
+    // Service Wizard link
+    const wizard = page.locator('text=/Service Wizard|Setup Wizard/i').first();
+    if (!await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
+      logIssue('SERVICES', 'Service Wizard link not visible');
     }
 
-    // Resources section
-    const resources = page.locator('text=/Resource|Bay|Station/i').first();
-    if (!await resources.isVisible({ timeout: 3000 }).catch(() => false)) {
-      logIssue('SERVICES', 'Resources section not visible');
+    // Verify at least one service card is visible (or empty state)
+    const serviceCard = page.locator('text=/Follow-Up Call|In-Person Meeting|Phone Consultation|No services/i').first();
+    if (!await serviceCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+      logIssue('SERVICES', 'No service cards or empty state visible');
     }
   });
 
