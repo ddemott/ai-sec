@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Minus, Plus, RefreshCw, Save, X, Users } from 'lucide-react';
 import { useStaticData } from '../../lib/hooks';
+import { Api } from '../../lib/api';
 import { formatHour, shiftTimeToHour, formatShiftTime, formatTime24to12 } from '../../lib/utils';
+import type { ServiceMapping } from '../../lib/types';
 import { useActiveTenantId } from '../../lib/SessionContext';
 import { useSchedulerData } from './useSchedulerData';
 import { SchedulerDateNav } from './SchedulerDateNav';
@@ -83,17 +85,9 @@ function findServiceName(description: string, services: Service[]): string {
   return svc?.name || description || '';
 }
 
-/** Build a consistent color map from skill names to colors */
-function buildSkillColorMap(employees: Employee[]): Map<string, string> {
-  const allSkills = new Set<string>();
-  for (const emp of employees) {
-    if (emp.skills) {
-      for (const skill of emp.skills) {
-        allSkills.add(skill);
-      }
-    }
-  }
-  const sorted = Array.from(allSkills).sort();
+/** Build a consistent color map from service/skill names to colors */
+function buildSkillColorMap(allSkillNames: string[]): Map<string, string> {
+  const sorted = Array.from(new Set(allSkillNames)).sort();
   const map = new Map<string, string>();
   sorted.forEach((skill, i) => {
     map.set(skill, SKILL_COLORS[i % SKILL_COLORS.length]);
@@ -128,6 +122,28 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
 
   const { employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
+
+  // Fetch service-employee mappings to derive skills (single source of truth)
+  const [empMappings, setEmpMappings] = useState<ServiceMapping[]>([]);
+  useEffect(() => {
+    if (!tenantId) return;
+    Api.mappings.listServiceEmployee(tenantId).then(m => setEmpMappings(Array.isArray(m) ? m : [])).catch(() => {});
+  }, [tenantId]);
+
+  // Build skills per employee from mappings + service names
+  const employeeSkillsMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const m of empMappings) {
+      const empId = String(m.employee_id);
+      const svc = services.find(s => String(s.id) === String(m.service_id));
+      if (svc) {
+        const list = map.get(empId) || [];
+        list.push(svc.name);
+        map.set(empId, list);
+      }
+    }
+    return map;
+  }, [empMappings, services]);
 
   // Filter out user accounts — only show employees in scheduler
   const baseEmployees = useMemo(
@@ -245,7 +261,12 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   }, [refreshScheduler, refreshStaticData]);
 
   // --- Skill color map (Item #5) ---
-  const skillColorMap = useMemo(() => buildSkillColorMap(employees), [employees]);
+  // Build skill color map from all assigned service names
+  const skillColorMap = useMemo(() => {
+    const allNames: string[] = [];
+    for (const names of employeeSkillsMap.values()) allNames.push(...names);
+    return buildSkillColorMap(allNames);
+  }, [employeeSkillsMap]);
 
   // --- Refs for scroll sync ---
   const staffPanelRef = useRef<HTMLDivElement>(null);
@@ -389,9 +410,9 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // --- Compute row heights for skills mode (Item #5) ---
   const getRowHeight = useCallback((emp: Employee): number => {
     if (viewMode !== 'skills') return ROW_HEIGHT;
-    const skillCount = emp.skills?.length || 0;
+    const skillCount = employeeSkillsMap.get(String(emp.id))?.length || 0;
     return Math.max(SKILL_ROW_MIN_HEIGHT, Math.min(skillCount * SKILL_BAR_HEIGHT + 10, 200));
-  }, [viewMode]);
+  }, [viewMode, employeeSkillsMap]);
 
   // --- Compute grid width ---
   const totalGridWidth = 24 * colW;
@@ -763,6 +784,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                     {viewMode === 'skills' && (
                       <SkillBars
                         employee={emp}
+                        employeeSkills={employeeSkillsMap.get(empId) || []}
                         shifts={shiftsByEmployee.get(empId) || []}
                         colW={colW}
                         skillColorMap={skillColorMap}
@@ -888,6 +910,7 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
 
 interface SkillBarsProps {
   employee: Employee;
+  employeeSkills: string[];
   shifts: { start_time?: string; end_time?: string }[];
   colW: number;
   skillColorMap: Map<string, string>;
@@ -895,8 +918,8 @@ interface SkillBarsProps {
   closeHour: number;
 }
 
-function SkillBars({ employee, shifts, colW, skillColorMap, openHour, closeHour }: SkillBarsProps) {
-  const skills = employee.skills || [];
+function SkillBars({ employee, employeeSkills, shifts, colW, skillColorMap, openHour, closeHour }: SkillBarsProps) {
+  const skills = employeeSkills;
   if (skills.length === 0) return null;
 
   // Determine shift hours (fallback to business hours)

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 // Mock the hooks and API before importing the component
@@ -113,6 +113,20 @@ function buildDefaultSchedulerData() {
 
 vi.mock('../../lib/hooks', () => ({
   useStaticData: () => mockStaticDataOverride || buildDefaultStaticData(),
+}));
+
+// Mock Api for service-employee mappings (used by Skills mode)
+vi.mock('../../lib/api', () => ({
+  Api: {
+    mappings: {
+      listServiceEmployee: vi.fn().mockResolvedValue([
+        { service_id: 'svc-1', employee_id: 'emp-1' }, // Mike → Oil Change
+        { service_id: 'svc-2', employee_id: 'emp-1' }, // Mike → Tire Rotation
+        { service_id: 'svc-2', employee_id: 'emp-2' }, // Carlos → Tire Rotation
+        { service_id: 'svc-1', employee_id: 'emp-2' }, // Carlos → Oil Change (as "Balancing" equivalent)
+      ]),
+    },
+  },
 }));
 
 vi.mock('../../lib/SessionContext', () => ({
@@ -500,15 +514,18 @@ describe('NewSchedulerView', () => {
       expect(skillsBtn.style.background).toContain('var(--accent');
     });
 
-    test('skills mode shows skill bars for employees with skills', () => {
+    test('skills mode shows skill bars for employees with skills', async () => {
       render(<NewSchedulerView />);
       fireEvent.click(screen.getByTestId('view-mode-skills'));
-      // Mike has 2 skills
-      expect(screen.getByTestId('skill-bar-emp-1-0')).toBeInTheDocument();
-      expect(screen.getByTestId('skill-bar-emp-1-1')).toBeInTheDocument();
-      // Carlos has 2 skills
-      expect(screen.getByTestId('skill-bar-emp-2-0')).toBeInTheDocument();
-      expect(screen.getByTestId('skill-bar-emp-2-1')).toBeInTheDocument();
+      // Wait for mappings to load (async fetch)
+      await waitFor(() => {
+        // Mike has 2 service assignments
+        expect(screen.getByTestId('skill-bar-emp-1-0')).toBeInTheDocument();
+        expect(screen.getByTestId('skill-bar-emp-1-1')).toBeInTheDocument();
+        // Carlos has 2 service assignments
+        expect(screen.getByTestId('skill-bar-emp-2-0')).toBeInTheDocument();
+        expect(screen.getByTestId('skill-bar-emp-2-1')).toBeInTheDocument();
+      });
     });
 
     test('skills mode hides appointment blocks', () => {
