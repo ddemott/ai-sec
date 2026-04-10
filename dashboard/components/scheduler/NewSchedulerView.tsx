@@ -117,9 +117,13 @@ function GripDots() {
 export interface NewSchedulerViewProps {
   /** Override tenant ID (defaults to active tenant from context) */
   tenantId?: string | null;
+  /** View tabs from parent SchedulerView (Staff, Resources, List, Calendar) */
+  viewTabs?: { key: string; label: string; icon: React.ElementType }[];
+  activeView?: string;
+  onViewChange?: (key: string) => void;
 }
 
-export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedulerViewProps) {
+export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, activeView, onViewChange }: NewSchedulerViewProps) {
   const contextTenantId = useActiveTenantId();
   const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
 
@@ -402,15 +406,43 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
           background: 'var(--bg-surface, #1a1a1a)',
         }}
       >
-        <h1
-          className="font-display text-2xl tracking-wide uppercase"
-          style={{
-            fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
-            color: 'var(--text-primary, #fff)',
-          }}
-        >
-          Schedule
-        </h1>
+        <div className="flex items-center gap-3">
+          {/* View switcher tabs (from parent SchedulerView) */}
+          {viewTabs && onViewChange && (
+            <div className="flex items-center gap-1" data-testid="scheduler-view-tabs">
+              {viewTabs.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => onViewChange(key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                    activeView === key
+                      ? 'text-white'
+                      : 'hover:brightness-125'
+                  }`}
+                  style={{
+                    background: activeView === key ? 'var(--accent, #3b82f6)' : 'transparent',
+                    color: activeView === key ? '#fff' : 'var(--text-secondary)',
+                  }}
+                  data-testid={`view-tab-${key}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {!viewTabs && (
+          <h1
+            className="font-display text-2xl tracking-wide uppercase"
+            style={{
+              fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
+              color: 'var(--text-primary, #fff)',
+            }}
+          >
+            Schedule
+          </h1>
+          )}
+        </div>
 
         <div className="flex items-center gap-3">
           <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />

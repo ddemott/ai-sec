@@ -111,11 +111,11 @@ export default function SchedulerView() {
     );
   }
 
-  // Staff tab: use the new redesigned scheduler
+  // Staff tab: use the new redesigned scheduler (with view tab bar)
   if (activeView === 'staff') {
     return (
       <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
-        <NewSchedulerView />
+        <NewSchedulerView viewTabs={viewTabs} activeView={activeView} onViewChange={(key) => setActiveView(key as SchedulerViewTab)} />
       </div>
     );
   }
