@@ -210,12 +210,6 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
     refresh: refreshScheduler,
   } = useSchedulerData(tenantId, selectedDate, employees, []);
 
-  // DEBUG: trace shift data
-  console.log('[Scheduler] employees:', employees.length, 'shiftsByEmployee keys:', [...shiftsByEmployee.keys()]);
-  for (const [empId, shifts] of shiftsByEmployee.entries()) {
-    if (shifts.length > 0) console.log('[Scheduler] shifts for', empId, ':', shifts);
-  }
-
   const handleRefresh = useCallback(() => {
     refreshScheduler();
     refreshStaticData();
@@ -788,25 +782,25 @@ function ShiftBar({ shifts, colW, rowHeight }: ShiftBarProps) {
         return (
           <div
             key={i}
-            className="absolute rounded-sm"
+            className="absolute rounded-md"
             style={{
               left,
               width: Math.max(width, 4),
-              top: 3,
-              bottom: 3,
-              background: 'var(--accent-muted, rgba(59,130,246,0.25))',
-              border: '1px solid var(--accent, rgba(59,130,246,0.4))',
+              top: 4,
+              bottom: 4,
+              background: 'var(--accent, #3b82f6)',
+              opacity: 0.85,
+              zIndex: 1,
             }}
             data-testid={`shift-bar-${i}`}
           >
-            {/* Shift time label at left edge */}
+            {/* Shift time label */}
             {width > 80 && (
               <span
-                className="absolute left-1.5 top-0.5 text-[10px] font-medium"
+                className="absolute inset-0 flex items-center px-2 text-[10px] font-bold text-white truncate"
                 style={{
-                  color: 'var(--text-muted, #888)',
                   fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
-                  lineHeight: `${rowHeight - 8}px`,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                 }}
               >
                 {formatHour(Math.floor(startH))} – {formatHour(Math.floor(endH))}

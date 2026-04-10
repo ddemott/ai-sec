@@ -1,6 +1,6 @@
 import { normalizePhone } from './phone'
 import type {
-  Appointment, Customer, Resource, Employee, Service, Shift, ShiftOverride, EffectiveShift, Skill,
+  Appointment, Customer, Resource, Employee, Service, Shift, ShiftOverride, EffectiveShift, BulkEffectiveShift, Skill,
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
   CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
   CallSummary, JobberSettings, JobberSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
@@ -394,6 +394,14 @@ export const Api = {
         apiFetch<EffectiveShift[]>(`/shifts/overrides`, {
           ...(tenantId ? { tenant_id: tenantId } : {}),
           employee_id: employeeId,
+          start_date: startDate,
+          end_date: endDate,
+        }),
+
+      /** Bulk: effective shifts for ALL employees on a date range (scheduler) */
+      bulkForDate: (tenantId: string | null, startDate: string, endDate: string) =>
+        apiFetch<BulkEffectiveShift[]>(`/shifts/overrides`, {
+          ...(tenantId ? { tenant_id: tenantId } : {}),
           start_date: startDate,
           end_date: endDate,
         }),

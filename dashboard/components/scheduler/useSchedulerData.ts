@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Api } from '../../lib/api';
-import type { ShiftOverride } from '../../lib/types';
+import type { BulkEffectiveShift } from '../../lib/types';
 
 export interface SchedulerAppointment {
   id: string;
@@ -30,7 +30,7 @@ interface SchedulerShift { employee_id?: string | number; start_time?: string; e
 
 export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);
-  const [allShifts, setAllShifts] = useState<ShiftOverride[]>([]);
+  const [allShifts, setAllShifts] = useState<BulkEffectiveShift[]>([]);
   const [loading, setLoading] = useState(false);
 
   const dateStr = toDateString(selectedDate);
@@ -45,10 +45,10 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     const endDate = `${toDateString(nextDay)}T00:00:00Z`;
 
     try {
-      // Fetch appointments + ALL scheduled shifts for the tenant
+      // Fetch appointments + effective shifts for selected date
       const [apptRes, shiftRes] = await Promise.all([
         Api.appointments.list(tenantId, { startDate, endDate }).catch(() => []),
-        Api.shifts.schedule.list(tenantId).catch(() => []),
+        Api.shifts.schedule.bulkForDate(tenantId, dateStr, dateStr).catch(() => []),
       ]);
 
       setAppointments(
@@ -104,7 +104,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     return map;
   }, [appointments, resources]);
 
-  // Filter shifts to the selected date, group by employee
+  // Group effective shifts by employee (already filtered by date from bulk RPC)
   const shiftsByEmployee = useMemo(() => {
     const map = new Map<string, SchedulerShift[]>();
     for (const emp of employees) {
@@ -112,9 +112,6 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     }
     for (const shift of allShifts) {
       if (shift.is_off || !shift.start_time || !shift.end_time) continue;
-      // Match shift_date to selected date (shift_date comes as ISO timestamp)
-      const shiftDate = shift.shift_date.substring(0, 10);
-      if (shiftDate !== dateStr) continue;
       const empId = String(shift.employee_id);
       const list = map.get(empId);
       if (list) {
@@ -122,7 +119,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
       }
     }
     return map;
-  }, [allShifts, employees, dateStr]);
+  }, [allShifts, employees]);
 
   return {
     appointments,

@@ -125,11 +125,22 @@ export function registerShiftRoutes(
     const { employee_id, start_date, end_date } = req.query as Record<string, string>;
 
     if (employee_id && start_date && end_date) {
-      // Use the RPC for merged view
+      // Use the RPC for merged view (single employee)
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
           'SELECT * FROM get_effective_shifts($1, $2, $3::DATE, $4::DATE)',
           [tenantId, employee_id, start_date, end_date]
+        );
+      });
+      return reply.send(res.rows);
+    }
+
+    if (start_date && end_date) {
+      // Bulk effective shifts for ALL employees (used by scheduler)
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          'SELECT * FROM get_effective_shifts_bulk($1, $2::DATE, $3::DATE)',
+          [tenantId, start_date, end_date]
         );
       });
       return reply.send(res.rows);

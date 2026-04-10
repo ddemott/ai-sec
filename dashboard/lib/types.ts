@@ -140,6 +140,10 @@ export interface EffectiveShift {
   override_id: string | null;
 }
 
+export interface BulkEffectiveShift extends EffectiveShift {
+  employee_id: string;
+}
+
 export interface Skill {
   id: string;
   tenant_id: string;
