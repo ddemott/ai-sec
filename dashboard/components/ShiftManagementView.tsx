@@ -19,6 +19,7 @@ import type { EffectiveShift } from '../lib/types'
 import { Button } from './ui/Button'
 import { Modal } from './ui/Modal'
 import { TimeInput } from './ui/TimeInput'
+import { showToast } from './ui/Toast'
 
 // Timeline constants
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -165,6 +166,16 @@ export default function ShiftManagementView() {
 
   async function handleSave() {
     if (!selectedEmployeeId || !tenantId || !editingDate) return
+    if (!modalForm.is_off) {
+      if (!modalForm.start_time || !modalForm.end_time) {
+        showToast('Start and end times are required', 'error')
+        return
+      }
+      if (modalForm.start_time >= modalForm.end_time) {
+        showToast('End time must be after start time', 'error')
+        return
+      }
+    }
     try {
       await Api.shifts.schedule.save(tenantId, {
         employee_id: selectedEmployeeId,
@@ -176,7 +187,7 @@ export default function ShiftManagementView() {
       setIsModalOpen(false)
       fetchShifts()
     } catch {
-      alert('Failed to save schedule')
+      showToast('Failed to save schedule', 'error')
     }
   }
 
@@ -186,7 +197,7 @@ export default function ShiftManagementView() {
       await Api.shifts.schedule.remove(shiftId, tenantId)
       fetchShifts()
     } catch {
-      alert('Failed to remove schedule')
+      showToast('Failed to remove schedule', 'error')
     }
   }
 
@@ -200,7 +211,7 @@ export default function ShiftManagementView() {
       })
       fetchShifts()
     } catch {
-      alert('Failed to clear schedule')
+      showToast('Failed to clear schedule', 'error')
     }
   }
 

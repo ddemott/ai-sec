@@ -13,6 +13,7 @@ import { useStaticData } from '../../lib/hooks'
 import { useActiveTenantId } from '../../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Button } from '../ui/Button'
+import { showToast } from '../ui/Toast'
 import { WizardStepContent } from './WizardStepContent'
 import { useWizardCrud } from './useWizardCrud'
 import type { WizardStep, WizardService, WizardResource, WizardEmployee, SetupWizardProps } from './types'
@@ -84,15 +85,30 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tenantId, loading, services.length])
 
-  const goNext = () => setStep(s => Math.min(s + 1, 7) as WizardStep)
-  const goBack = () => setStep(s => Math.max(s - 1, 1) as WizardStep)
-  const goToStep = (s: WizardStep) => setStep(s)
-
-  if (!isOpen) return null
-
   const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ id: s.id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
   const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ id: r.id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
   const activeEmployees: WizardEmployee[] = employees.filter(e => !e.is_deleted && e.is_active !== false).map(e => ({ id: e.id, name: e.name, first_name: e.first_name ?? undefined, last_name: e.last_name ?? undefined, email: e.email ?? undefined, phone: e.phone ?? undefined, type: e.type, is_active: e.is_active }))
+
+  const canAdvanceTo = (target: WizardStep): boolean => {
+    if (target <= step) return true // backward always allowed
+    if (target >= 2 && activeServices.length === 0) return false
+    if (target >= 4 && activeEmployees.length === 0) return false
+    if (target >= 5 && (activeEmployees.length === 0 || activeServices.length === 0)) return false
+    return true
+  }
+
+  const goNext = () => {
+    const next = Math.min(step + 1, 7) as WizardStep
+    if (canAdvanceTo(next)) setStep(next)
+    else showToast('Complete this step before continuing', 'warning')
+  }
+  const goBack = () => setStep(s => Math.max(s - 1, 1) as WizardStep)
+  const goToStep = (s: WizardStep) => {
+    if (canAdvanceTo(s)) setStep(s)
+    else showToast('Complete earlier steps first', 'warning')
+  }
+
+  if (!isOpen) return null
 
   return (
     <div
@@ -129,11 +145,14 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
               <button
                 key={s}
                 onClick={() => goToStep(s)}
+                disabled={!canAdvanceTo(s) && s > step}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                   s === step
                     ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
                     : s < step
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-pointer'
+                    : !canAdvanceTo(s)
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
                 }`}
               >

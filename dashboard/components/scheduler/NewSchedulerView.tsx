@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Minus, Plus, RefreshCw, Save, X } from 'lucide-react';
 import { useStaticData } from '../../lib/hooks';
-import { formatHour, shiftTimeToHour, formatShiftTime } from '../../lib/utils';
+import { formatHour, shiftTimeToHour, formatShiftTime, formatTime24to12 } from '../../lib/utils';
 import { useActiveTenantId } from '../../lib/SessionContext';
 import { useSchedulerData } from './useSchedulerData';
 import { SchedulerDateNav } from './SchedulerDateNav';
@@ -55,7 +55,9 @@ function getZoomPercent(colW: number): number {
 
 /** Parse an ISO datetime to fractional hours (e.g. 9:30 -> 9.5) */
 function toFractionalHour(isoStr: string): number {
+  if (!isoStr) return 0;
   const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return 0;
   return d.getHours() + d.getMinutes() / 60;
 }
 
@@ -153,6 +155,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   });
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [orderDirty, setOrderDirty] = useState(false);
+
+  // Warn before leaving with unsaved reorder
+  useEffect(() => {
+    if (!orderDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [orderDirty]);
 
   // Sync staff order with baseEmployees when they change
   useEffect(() => {
@@ -373,7 +383,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
       <div
         className="px-4 py-3 flex items-center justify-between gap-4 flex-wrap"
         style={{
-          borderBottom: '1px solid var(--border-soft, #333)',
+          borderBottom: '1px solid var(--border-soft)',
           background: 'var(--bg-surface, #1a1a1a)',
         }}
       >
@@ -502,14 +512,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
         {/* Left: fixed staff names panel */}
         <div
           className="flex flex-col shrink-0"
-          style={{ width: STAFF_PANEL_WIDTH, borderRight: '1px solid var(--border-soft, #333)' }}
+          style={{ width: STAFF_PANEL_WIDTH, borderRight: '1px solid var(--border-soft)' }}
         >
           {/* Top-left corner (aligns with hour header) */}
           <div
             className="shrink-0"
             style={{
               height: HEADER_HEIGHT,
-              borderBottom: '1px solid var(--border-soft, #333)',
+              borderBottom: '1px solid var(--border-soft)',
               background: 'var(--bg-surface, #1a1a1a)',
             }}
           />
@@ -533,7 +543,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                   className="flex items-center px-1.5 cursor-pointer transition-all"
                   style={{
                     height: rowH,
-                    borderBottom: '1px solid var(--border-soft, #333)',
+                    borderBottom: '1px solid var(--border-soft)',
                     color: 'var(--text-primary, #fff)',
                     opacity: dragIndex === idx ? 0.5 : 1,
                     transform: dragIndex === idx ? 'scale(1.02)' : 'none',
@@ -573,7 +583,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                 className="flex items-center px-3"
                 style={{
                   height: ROW_HEIGHT,
-                  borderBottom: '1px solid var(--border-soft, #333)',
+                  borderBottom: '1px solid var(--border-soft)',
                   color: 'var(--text-muted, #888)',
                   fontStyle: 'italic',
                 }}
@@ -595,7 +605,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
             className="shrink-0 overflow-hidden"
             style={{
               height: HEADER_HEIGHT,
-              borderBottom: '1px solid var(--border-soft, #333)',
+              borderBottom: '1px solid var(--border-soft)',
               background: 'var(--bg-surface, #1a1a1a)',
             }}
             data-testid="hour-header"
@@ -606,14 +616,13 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                 return (
                   <div
                     key={h}
-                    className="text-center text-xs font-bold shrink-0 flex items-center justify-center select-none"
+                    className="text-center text-[10px] font-bold shrink-0 flex items-center justify-center select-none"
                     style={{
                       width: colW,
                       height: HEADER_HEIGHT,
                       color: 'var(--text-muted, #888)',
-                      fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
-                      background: isOutsideBusiness ? 'rgba(0,0,0,0.28)' : 'transparent',
-                      borderRight: '1px solid var(--border-soft, #333)',
+                      background: isOutsideBusiness ? 'rgba(0,0,0,0.2)' : 'transparent',
+                      borderRight: '1px solid var(--border-soft)',
                     }}
                     data-testid={`hour-cell-${h}`}
                   >
@@ -642,7 +651,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                     className="relative"
                     style={{
                       height: rowH,
-                      borderBottom: '1px solid var(--border-soft, #333)',
+                      borderBottom: '1px solid var(--border-soft)',
                     }}
                     data-testid={`scheduler-row-${empId}`}
                   >
@@ -657,8 +666,8 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                             style={{
                               width: colW,
                               height: rowH,
-                              background: isOutsideBusiness ? 'rgba(0,0,0,0.28)' : 'transparent',
-                              borderRight: '1px solid var(--border-soft, #333)',
+                              background: isOutsideBusiness ? 'rgba(0,0,0,0.15)' : 'transparent',
+                              borderRight: '1px solid var(--border-soft)',
                             }}
                             data-testid={`slot-${empId}-${h}`}
                           />
@@ -672,7 +681,6 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                         <ShiftBar
                           shifts={shiftsByEmployee.get(empId) || []}
                           colW={colW}
-                          rowHeight={rowH}
                         />
                         {empAppointments.map((appt) => (
                           <AppointmentBlockNew
@@ -706,7 +714,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                   className="relative"
                   style={{
                     height: ROW_HEIGHT,
-                    borderBottom: '1px solid var(--border-soft, #333)',
+                    borderBottom: '1px solid var(--border-soft)',
                   }}
                   data-testid="scheduler-row-unassigned"
                 >
@@ -720,8 +728,8 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
                           style={{
                             width: colW,
                             height: ROW_HEIGHT,
-                            background: isOutsideBusiness ? 'rgba(0,0,0,0.28)' : 'transparent',
-                            borderRight: '1px solid var(--border-soft, #333)',
+                            background: isOutsideBusiness ? 'rgba(0,0,0,0.15)' : 'transparent',
+                            borderRight: '1px solid var(--border-soft)',
                           }}
                         />
                       );
@@ -764,10 +772,9 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
 interface ShiftBarProps {
   shifts: { start_time?: string; end_time?: string }[];
   colW: number;
-  rowHeight: number;
 }
 
-function ShiftBar({ shifts, colW, rowHeight }: ShiftBarProps) {
+function ShiftBar({ shifts, colW }: ShiftBarProps) {
   if (shifts.length === 0) return null;
 
   return (
@@ -782,28 +789,25 @@ function ShiftBar({ shifts, colW, rowHeight }: ShiftBarProps) {
         return (
           <div
             key={i}
-            className="absolute rounded-md"
+            className="absolute rounded-md transition-all hover:brightness-110"
             style={{
               left,
-              width: Math.max(width, 4),
-              top: 4,
-              bottom: 4,
+              width: Math.max(width, 8),
+              top: 6,
+              bottom: 6,
               background: 'var(--accent, #3b82f6)',
               opacity: 0.85,
-              zIndex: 1,
+              zIndex: 2,
             }}
+            title={`${formatTime24to12(shift.start_time.substring(0, 5))} - ${formatTime24to12(shift.end_time.substring(0, 5))}`}
             data-testid={`shift-bar-${i}`}
           >
-            {/* Shift time label */}
-            {width > 80 && (
+            {width > 90 && (
               <span
-                className="absolute inset-0 flex items-center px-2 text-[10px] font-bold text-white truncate"
-                style={{
-                  fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
-                  textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                }}
+                className="absolute inset-0 flex items-center px-2 text-[11px] font-bold text-white truncate"
+                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
               >
-                {formatHour(Math.floor(startH))} – {formatHour(Math.floor(endH))}
+                {formatTime24to12(shift.start_time.substring(0, 5))} – {formatTime24to12(shift.end_time.substring(0, 5))}
               </span>
             )}
           </div>

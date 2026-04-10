@@ -32,12 +32,14 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);
   const [allShifts, setAllShifts] = useState<BulkEffectiveShift[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const dateStr = toDateString(selectedDate);
 
   const fetchData = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
+    setError(null);
 
     const startDate = `${dateStr}T00:00:00Z`;
     const nextDay = new Date(selectedDate);
@@ -59,6 +61,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     } catch {
       setAppointments([]);
       setAllShifts([]);
+      setError('Failed to load schedule data');
     }
 
     setLoading(false);
@@ -125,6 +128,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
     appointments,
     shifts: allShifts,
     loading,
+    error,
     appointmentsByEmployee,
     appointmentsByResource,
     shiftsByEmployee,

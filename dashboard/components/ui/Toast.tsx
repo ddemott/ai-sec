@@ -9,6 +9,14 @@ interface ToastMessage {
   type: ToastType
 }
 
+const MAX_TOASTS = 5
+const DURATIONS: Record<ToastType, number> = {
+  success: 3000,
+  info: 3000,
+  warning: 5000,
+  error: 5000,
+}
+
 let toastId = 0
 let addToastFn: ((message: string, type: ToastType) => void) | null = null
 
@@ -34,12 +42,19 @@ const COLORS: Record<ToastType, string> = {
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
+  const removeToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }, [])
+
   const addToast = useCallback((message: string, type: ToastType) => {
     const id = ++toastId
-    setToasts(prev => [...prev, { id, message, type }])
+    setToasts(prev => {
+      const next = [...prev, { id, message, type }]
+      return next.length > MAX_TOASTS ? next.slice(-MAX_TOASTS) : next
+    })
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
-    }, 3000)
+    }, DURATIONS[type])
   }, [])
 
   useEffect(() => {
@@ -60,7 +75,14 @@ export function ToastContainer() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-in slide-in-from-bottom-2 fade-in ${COLORS[toast.type]}`}
           >
             <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-            {toast.message}
+            <span className="flex-1">{toast.message}</span>
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="ml-2 p-0.5 rounded hover:bg-white/20 transition-colors shrink-0"
+              aria-label="Dismiss notification"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )
       })}

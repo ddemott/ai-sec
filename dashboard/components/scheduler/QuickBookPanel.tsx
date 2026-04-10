@@ -95,6 +95,20 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       setError('Customer and resource are required');
       return;
     }
+    if (!startTime || !endTime) {
+      setError('Start and end times are required');
+      return;
+    }
+    const startDt = new Date(startTime);
+    const endDt = new Date(endTime);
+    if (isNaN(startDt.getTime()) || isNaN(endDt.getTime())) {
+      setError('Invalid date/time');
+      return;
+    }
+    if (endDt <= startDt) {
+      setError('End time must be after start time');
+      return;
+    }
     setSaving(true);
     setError('');
 
@@ -232,7 +246,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           className="w-full py-3"
           onClick={handleBook}
           isLoading={saving}
-          disabled={!customerId || !resourceId}
+          disabled={!customerId || !resourceId || !startTime || !endTime}
           data-testid="quick-book-confirm"
         >
           <Zap className="w-4 h-4 mr-2" />

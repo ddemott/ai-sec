@@ -31,7 +31,7 @@ function PolicyQuestionField({
   onSave: (answer: string, existingId: string | null) => Promise<string | null>
 }) {
   const [value, setValue] = useState(savedAnswer)
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idRef = useRef(savedId)
@@ -55,10 +55,15 @@ function PolicyQuestionField({
 
     timerRef.current = setTimeout(async () => {
       setStatus('saving')
-      const newId = await onSave(newVal, idRef.current)
-      if (newId) idRef.current = newId
-      setStatus('saved')
-      fadeTimerRef.current = setTimeout(() => setStatus('idle'), 2000)
+      try {
+        const newId = await onSave(newVal, idRef.current)
+        if (newId) idRef.current = newId
+        setStatus('saved')
+        fadeTimerRef.current = setTimeout(() => setStatus('idle'), 2000)
+      } catch {
+        setStatus('error')
+        fadeTimerRef.current = setTimeout(() => setStatus('idle'), 4000)
+      }
     }, 1500)
   }
 
@@ -83,6 +88,7 @@ function PolicyQuestionField({
         <div className="absolute top-2 right-2">
           {status === 'saving' && <Loader2 className="w-4 h-4 animate-spin text-orange-500" />}
           {status === 'saved' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+          {status === 'error' && <span className="flex items-center gap-1 text-[10px] font-bold text-red-500"><AlertCircle className="w-3.5 h-3.5" />Save failed</span>}
           {status === 'idle' && savedId && <Save className="w-3.5 h-3.5 text-gray-400 opacity-40" />}
         </div>
       </div>

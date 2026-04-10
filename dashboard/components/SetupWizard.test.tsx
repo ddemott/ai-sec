@@ -4,13 +4,20 @@ import '@testing-library/jest-dom'
 import React from 'react'
 import SetupWizard from './SetupWizard'
 
-// Mock fetch for API calls
+// Seed data so wizard step guards allow navigation
+const MOCK_SERVICES = [{ id: '1', name: 'Oil Change', duration_minutes: 30, price: 50 }]
+const MOCK_EMPLOYEES = [{ id: '1', name: 'Mike', type: 'employee', is_active: true }]
+
+// Mock fetch for API calls — return services/employees so step guards pass
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
-  ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => [],
+  ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
+    const path = typeof url === 'string' ? url : ''
+    let data: unknown[] = []
+    if (path.includes('/services')) data = MOCK_SERVICES
+    else if (path.includes('/employees')) data = MOCK_EMPLOYEES
+    return Promise.resolve({ ok: true, json: async () => data })
   })
 })
 

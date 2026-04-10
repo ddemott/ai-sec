@@ -210,12 +210,12 @@ describe('NewSchedulerView', () => {
       // Hour 6 is outside business hours (before 8am)
       const earlyHour = screen.getByTestId('hour-cell-6');
       expect(earlyHour.style.background).toContain('rgba(0');
-      expect(earlyHour.style.background).toContain('0.28)');
+      expect(earlyHour.style.background).toContain('0.15)');
 
       // Hour 20 is outside business hours (after 5pm)
       const lateHour = screen.getByTestId('hour-cell-20');
       expect(lateHour.style.background).toContain('rgba(0');
-      expect(lateHour.style.background).toContain('0.28)');
+      expect(lateHour.style.background).toContain('0.15)');
     });
 
     test('hours inside business hours have transparent background', () => {
@@ -229,7 +229,7 @@ describe('NewSchedulerView', () => {
       // A slot outside business hours
       const earlySlot = screen.getByTestId('slot-emp-1-5');
       expect(earlySlot.style.background).toContain('rgba(0');
-      expect(earlySlot.style.background).toContain('0.28)');
+      expect(earlySlot.style.background).toContain('0.15)');
 
       // A slot inside business hours
       const businessSlot = screen.getByTestId('slot-emp-1-10');
@@ -292,11 +292,11 @@ describe('NewSchedulerView', () => {
       expect(row1.querySelector('[data-testid="shift-bar-0"]')).toBeInTheDocument();
     });
 
-    test('shift bars use accent-muted background', () => {
+    test('shift bars use solid accent background', () => {
       render(<NewSchedulerView />);
       const row1 = screen.getByTestId('scheduler-row-emp-1');
       const bar = row1.querySelector('[data-testid="shift-bar-0"]') as HTMLElement;
-      expect(bar.style.background).toContain('var(--accent-muted');
+      expect(bar.style.background).toContain('var(--accent');
     });
 
     test('shift bars are hidden in Skills mode', () => {

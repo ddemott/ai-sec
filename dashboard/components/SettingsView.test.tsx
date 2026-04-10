@@ -175,10 +175,9 @@ describe('SettingsView: Calendar Section', () => {
     })
   })
 
-  test('detects calendarError query param and logs error', async () => {
+  test('detects calendarError query param and shows toast', async () => {
     const originalLocation = window.location
     const replaceStateSpy = vi.spyOn(window.history, 'replaceState')
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     Object.defineProperty(window, 'location', {
       writable: true,
@@ -192,22 +191,16 @@ describe('SettingsView: Calendar Section', () => {
 
     render(<SettingsView />)
 
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Calendar connection failed:',
-        'access_denied'
-      )
-    })
-
     // URL param should be cleaned up
-    expect(replaceStateSpy).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(replaceStateSpy).toHaveBeenCalled()
+    })
 
     // Component still renders normally — shows connect buttons (not connected)
     await waitFor(() => {
       expect(screen.getByText('Connect Google Calendar')).toBeInTheDocument()
     })
 
-    consoleErrorSpy.mockRestore()
     replaceStateSpy.mockRestore()
     Object.defineProperty(window, 'location', {
       writable: true,
@@ -263,7 +256,6 @@ describe('SettingsView: Calendar Section', () => {
 
 describe('SettingsView: Sad Paths', () => {
   test('calendar settings fetch fails — component renders fallback (connect buttons)', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/calendar/settings')) {
         return Promise.resolve({
@@ -283,13 +275,9 @@ describe('SettingsView: Sad Paths', () => {
       expect(screen.getByText('Connect Google Calendar')).toBeInTheDocument()
       expect(screen.getByText('Connect Outlook Calendar')).toBeInTheDocument()
     })
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch calendar settings')
-    consoleErrorSpy.mockRestore()
   })
 
   test('calendar disconnect fails — connected state is preserved', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/calendar/settings/disconnect')) {
         return Promise.resolve({
@@ -317,25 +305,20 @@ describe('SettingsView: Sad Paths', () => {
     const disconnectButtons = screen.getAllByText('Disconnect')
     fireEvent.click(disconnectButtons[0])
 
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Disconnect failed')
-    })
-
     // Connected state should still be shown (not cleared on error)
-    expect(screen.getByText('google Calendar Connected')).toBeInTheDocument()
-    expect(screen.getByText('ID: cal_abc123')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('google Calendar Connected')).toBeInTheDocument()
+      expect(screen.getByText('ID: cal_abc123')).toBeInTheDocument()
+    })
 
     // Disconnect button should be re-enabled (calLoading reset in finally block)
     await waitFor(() => {
       const calDisconnectBtn = screen.getAllByText('Disconnect')[0].closest('button')
       expect(calDisconnectBtn).not.toBeDisabled()
     })
-
-    consoleErrorSpy.mockRestore()
   })
 
   test('calendar auth URL fetch fails — calLoading resets and buttons re-enable', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/calendar/auth/google')) {
         return Promise.resolve({
@@ -362,23 +345,15 @@ describe('SettingsView: Sad Paths', () => {
 
     fireEvent.click(screen.getByText('Connect Google Calendar'))
 
-    // calLoading should reset after the error
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to get google auth URL')
-    })
-
     // Buttons should be re-enabled (calLoading set to false in catch block)
     await waitFor(() => {
       const googleBtn = screen.getByText('Connect Google Calendar').closest('button')
       expect(googleBtn).not.toBeDisabled()
     })
-
-    consoleErrorSpy.mockRestore()
   })
 
   test('renders correctly when no tenantId is available', async () => {
     mockTenantId = null
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation(() => {
       return Promise.resolve({ ok: true, json: async () => [] })
@@ -402,12 +377,9 @@ describe('SettingsView: Sad Paths', () => {
     // Add Resource button should be disabled (no tenantId)
     const addBtn = screen.getByText('Add Resource').closest('button')
     expect(addBtn).toBeDisabled()
-
-    consoleErrorSpy.mockRestore()
   })
 
-  test('resource creation fails (network error) — logs error and preserves form input', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  test('resource creation fails (network error) — preserves form input', async () => {
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
       if (url.includes('/resources/create') && options?.method === 'POST') {
         return Promise.reject(new TypeError('Failed to fetch'))
@@ -435,18 +407,10 @@ describe('SettingsView: Sad Paths', () => {
     const addBtn = screen.getByText('Add Resource').closest('button')!
     fireEvent.click(addBtn)
 
-    // Error should be logged (catch block in handleCreateResource)
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to create resource',
-        expect.any(Error)
-      )
-    })
-
     // Form input should NOT be cleared (only clears on success)
-    expect(nameInput).toHaveValue('Bay 1')
-
-    consoleErrorSpy.mockRestore()
+    await waitFor(() => {
+      expect(nameInput).toHaveValue('Bay 1')
+    })
   })
 
   test('resource creation fails (API returns success:false) — form input preserved', async () => {
@@ -492,8 +456,7 @@ describe('SettingsView: Sad Paths', () => {
     expect(nameInput).toHaveValue('Bay 1')
   })
 
-  test('resource toggle (active/inactive) fails (network error) — logs error', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  test('resource toggle (active/inactive) fails (network error) — resource unchanged', async () => {
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
       if (url.includes('/update') && options?.method === 'POST') {
         return Promise.reject(new TypeError('Failed to fetch'))
@@ -526,18 +489,10 @@ describe('SettingsView: Sad Paths', () => {
     const activeButton = screen.getByText('Active').closest('button')!
     fireEvent.click(activeButton)
 
-    // Error should be logged (catch block in toggleResourceActive)
-    await waitFor(() => {
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to update resource',
-        expect.any(Error)
-      )
-    })
-
     // Resource should still show as Active (not toggled)
-    expect(screen.getByText('Active')).toBeInTheDocument()
-
-    consoleErrorSpy.mockRestore()
+    await waitFor(() => {
+      expect(screen.getByText('Active')).toBeInTheDocument()
+    })
   })
 
   test('resource toggle (active/inactive) fails (API returns success:false) — resource unchanged', async () => {

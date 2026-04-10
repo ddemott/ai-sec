@@ -22,6 +22,7 @@ import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Badge } from './ui/Badge'
+import { showToast } from './ui/Toast'
 
 export default function SettingsView() {
   const tenantId = useActiveTenantId()
@@ -70,7 +71,7 @@ export default function SettingsView() {
       window.history.replaceState({}, '', url.pathname)
     }
     if (params.get('calendarError')) {
-      console.error('Calendar connection failed:', params.get('calendarError'))
+      showToast('Calendar connection failed', 'error')
       const url = new URL(window.location.href)
       url.searchParams.delete('calendarError')
       window.history.replaceState({}, '', url.pathname)
@@ -84,7 +85,7 @@ export default function SettingsView() {
       const data = await Api.calendar.getSettings(tenantId)
       setCalendarSettings(data)
     } catch {
-      console.error("Failed to fetch calendar settings")
+      showToast('Failed to load calendar settings', 'error')
     }
   }
 
@@ -95,7 +96,7 @@ export default function SettingsView() {
       // Redirect browser to provider's consent screen
       window.location.href = res.url
     } catch {
-      console.error(`Failed to get ${provider} auth URL`)
+      showToast(`Failed to connect ${provider} calendar`, 'error')
       setCalLoading(false)
     }
   }
@@ -108,7 +109,7 @@ export default function SettingsView() {
         setCalendarSettings(null)
       }
     } catch {
-      console.error("Disconnect failed")
+      showToast('Failed to disconnect calendar', 'error')
     } finally {
       setCalLoading(false)
     }
@@ -119,7 +120,7 @@ export default function SettingsView() {
       const data = await Api.templates.list()
       setTemplates(data)
     } catch {
-      console.error("Failed to fetch templates")
+      showToast('Failed to load templates', 'error')
     }
   }
 
