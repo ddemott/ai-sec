@@ -2,6 +2,37 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import React from 'react'
+
+// Mock SessionContext
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: any) => children,
+}))
+
+// Mock VocabularyContext
+vi.mock('@/lib/VocabularyContext', () => ({
+  useVocabulary: () => ({
+    resource_label: 'Resource',
+    resource_plural: 'Resources',
+    employee_label: 'Employee',
+    employee_plural: 'Employees',
+    booking_label: 'Appointment',
+  }),
+}))
+
 import SetupWizard from './SetupWizard'
 
 // Seed data so wizard step guards allow navigation
@@ -406,6 +437,9 @@ describe('SetupWizard: Step 4 Shifts', () => {
 
   test('shows employee selector and schedule grid with data', async () => {
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/services')) {
+        return Promise.resolve({ ok: true, json: async () => MOCK_SERVICES })
+      }
       if (url.includes('/employees')) {
         return Promise.resolve({
           ok: true,
@@ -565,26 +599,6 @@ describe('SetupWizard: Step 6 Review', () => {
   })
 
   test('shows coverage badges from API data', async () => {
-
-// Mock SessionContext for useActiveTenantId
-vi.mock('@/lib/SessionContext', () => ({
-  useSessionContext: () => ({
-    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-    userName: 'Test User',
-    isAdmin: false,
-    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-    managedTenantName: 'DynaTire',
-    loading: false,
-    login: vi.fn(),
-    logout: vi.fn(),
-    selectManagedTenant: vi.fn(),
-    tenantsVersion: 0,
-    notifyTenantsChanged: vi.fn(),
-  }),
-  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: any) => children,
-}))
-
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
@@ -594,6 +608,9 @@ vi.mock('@/lib/SessionContext', () => ({
             { id: 2, name: 'Brakes' },
           ],
         })
+      }
+      if (url.includes('/employees')) {
+        return Promise.resolve({ ok: true, json: async () => MOCK_EMPLOYEES })
       }
       if (url.includes('/coverage')) {
         return Promise.resolve({
@@ -626,6 +643,9 @@ vi.mock('@/lib/SessionContext', () => ({
           json: async () => [{ id: 1, name: 'Oil Change' }],
         })
       }
+      if (url.includes('/employees')) {
+        return Promise.resolve({ ok: true, json: async () => MOCK_EMPLOYEES })
+      }
       if (url.includes('/coverage')) {
         return Promise.resolve({
           ok: true,
@@ -654,6 +674,9 @@ vi.mock('@/lib/SessionContext', () => ({
           json: async () => [{ id: 1, name: 'Brakes' }],
         })
       }
+      if (url.includes('/employees')) {
+        return Promise.resolve({ ok: true, json: async () => MOCK_EMPLOYEES })
+      }
       if (url.includes('/coverage')) {
         return Promise.resolve({
           ok: true,
@@ -675,6 +698,11 @@ vi.mock('@/lib/SessionContext', () => ({
   })
 
   test('shows "No services configured" when empty', async () => {
+    // Override to return empty services (step guard allows during loading)
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    })
     goToStep6()
     await waitFor(() => {
       expect(screen.getByText('No services configured yet.')).toBeInTheDocument()
@@ -1275,6 +1303,11 @@ describe('SetupWizard: Sad Paths — Empty Lists Handled Gracefully', () => {
   })
 
   test('step 6 (review) shows "No services configured" with empty data', async () => {
+    // Override to return empty data (step guard allows during loading)
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    })
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
 
