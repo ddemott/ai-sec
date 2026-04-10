@@ -252,9 +252,13 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
               )
             })}
             {todayAppointments.length > 10 && (
-              <p className="text-xs text-center pt-1" style={{ color: 'var(--text-muted)' }}>
-                +{todayAppointments.length - 10} more
-              </p>
+              <button
+                className="text-xs text-center pt-1 w-full hover:underline cursor-pointer"
+                style={{ color: 'var(--accent)' }}
+                onClick={() => onNavigate?.('schedule')}
+              >
+                +{todayAppointments.length - 10} more — view schedule
+              </button>
             )}
           </div>
         )}

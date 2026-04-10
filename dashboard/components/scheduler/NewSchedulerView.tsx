@@ -208,10 +208,6 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   // --- Profile card state (Item #4) ---
   const [profileCard, setProfileCard] = useState<ProfileCardState | null>(null);
 
-  // Business hours (hardcoded default for now)
-  const openHour = DEFAULT_OPEN_HOUR;
-  const closeHour = DEFAULT_CLOSE_HOUR;
-
   const {
     appointments,
     loading,
@@ -219,6 +215,25 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
     shiftsByEmployee,
     refresh: refreshScheduler,
   } = useSchedulerData(tenantId, selectedDate, employees, []);
+
+  // Derive business hours from shift data, fallback to defaults
+  const { openHour, closeHour } = useMemo(() => {
+    let earliest = DEFAULT_OPEN_HOUR;
+    let latest = DEFAULT_CLOSE_HOUR;
+    for (const shifts of shiftsByEmployee.values()) {
+      for (const s of shifts) {
+        if (s.start_time) {
+          const h = shiftTimeToHour(String(s.start_time));
+          if (h < earliest) earliest = Math.floor(h);
+        }
+        if (s.end_time) {
+          const h = shiftTimeToHour(String(s.end_time));
+          if (h > latest) latest = Math.ceil(h);
+        }
+      }
+    }
+    return { openHour: earliest, closeHour: latest };
+  }, [shiftsByEmployee]);
 
   const handleRefresh = useCallback(() => {
     refreshScheduler();

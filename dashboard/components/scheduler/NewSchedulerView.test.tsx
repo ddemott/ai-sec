@@ -672,6 +672,7 @@ describe('NewSchedulerView', () => {
           appointmentsByEmployee: new Map(),
           appointmentsByResource: new Map(),
           shiftsByEmployee: new Map(),
+          error: null,
           refresh: mockRefreshScheduler,
         };
 
@@ -720,6 +721,7 @@ describe('NewSchedulerView', () => {
           appointmentsByEmployee: buildApptMap(),
           appointmentsByResource: new Map(),
           shiftsByEmployee: new Map(), // no shifts for any employee
+          error: null,
           refresh: mockRefreshScheduler,
         };
 
@@ -818,6 +820,7 @@ describe('NewSchedulerView', () => {
           appointmentsByEmployee: new Map(),
           appointmentsByResource: new Map(),
           shiftsByEmployee: new Map(),
+          error: null,
           refresh: mockRefreshScheduler,
         };
 
@@ -842,6 +845,7 @@ describe('NewSchedulerView', () => {
           appointmentsByEmployee: new Map(),
           appointmentsByResource: new Map(),
           shiftsByEmployee: new Map(),
+          error: null,
           refresh: mockRefreshScheduler,
         };
 

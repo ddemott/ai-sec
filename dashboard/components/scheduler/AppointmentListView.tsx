@@ -100,13 +100,13 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
                 {employee && (
                   <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <User className="w-3.5 h-3.5" />
-                    <span className="truncate max-w-[100px]">{employee.name}</span>
+                    <span className="truncate max-w-[100px]" title={employee.name}>{employee.name}</span>
                   </div>
                 )}
                 {resource && (
                   <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <Wrench className="w-3.5 h-3.5" />
-                    <span className="truncate max-w-[100px]">{resource.name}</span>
+                    <span className="truncate max-w-[100px]" title={resource.name}>{resource.name}</span>
                   </div>
                 )}
               </div>

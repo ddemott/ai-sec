@@ -106,6 +106,7 @@ export function StaffProfileCard({
           <div
             className="text-sm font-bold truncate"
             style={{ color: 'var(--text-primary, #fff)' }}
+            title={employee.name}
             data-testid="staff-card-name"
           >
             {employee.name}

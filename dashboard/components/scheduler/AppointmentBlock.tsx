@@ -53,16 +53,23 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
     SCHEDULER_START_HOUR,
     SCHEDULER_END_HOUR
   );
-  const color = colorClass || getEmployeeColor(appointment.employee_id != null ? String(appointment.employee_id) : null);
   const customerName = appointment.customers?.name || 'Unknown';
   const isCanceled = appointment.status === 'canceled';
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    completed: { bg: 'var(--green, #22c55e)', text: '#fff' },
+    scheduled: { bg: colorClass ? '' : 'var(--accent, #3b82f6)', text: '#fff' },
+    canceled: { bg: 'var(--text-muted, #666)', text: '#fff' },
+  };
+  const sc = statusColors[appointment.status] || statusColors.scheduled;
 
   return (
     <div
-      className={`absolute top-1 bottom-1 rounded px-1.5 py-0.5 text-white text-xs font-bold truncate cursor-pointer hover:opacity-90 transition-opacity ${color} ${isCanceled ? 'opacity-40 line-through' : ''}`}
+      className={`absolute top-1 bottom-1 rounded px-1.5 py-0.5 text-xs font-bold truncate cursor-pointer hover:opacity-90 transition-opacity ${colorClass || ''} ${isCanceled ? 'opacity-40 line-through' : ''}`}
       style={{
         left: `${left * 100}%`,
         width: `${width * 100}%`,
+        background: sc.bg || undefined,
+        color: sc.text,
       }}
       onClick={() => onClick?.(appointment)}
       title={`${customerName} — ${appointment.description}`}
