@@ -112,6 +112,7 @@ describe('CRM Unified View - Search', () => {
     // Bob still appears in the detail header, so we check Alice is gone entirely.
     expect(screen.queryByText('Alice Johnson')).toBeNull()
     expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
+    // WHO: tenant user | WHAT: search customers by name | WHEN: customer list loaded | WHERE: CRMView search | WHY: quickly find specific customer without scrolling
   })
 
   test('should filter by phone number', async () => {
@@ -127,6 +128,7 @@ describe('CRM Unified View - Search', () => {
 
     // Alice's phone matches, Bob's doesn't — but Bob still appears in detail header
     expect(screen.getByText('Alice Johnson')).toBeDefined()
+    // WHO: tenant user | WHAT: search customers by phone | WHEN: customer list loaded | WHERE: CRMView search | WHY: find customer by phone when name is unknown
   })
 
   test('should show all customers when search is cleared', async () => {
@@ -168,6 +170,7 @@ vi.mock('@/lib/SessionContext', () => ({
     fireEvent.change(searchInput, { target: { value: '' } })
     expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
     expect(screen.getByText('Alice Johnson')).toBeDefined()
+    // WHO: tenant user | WHAT: clear search filter | WHEN: after filtering customers | WHERE: CRMView search | WHY: restore full customer list after narrowing results
   })
 })
 
@@ -185,6 +188,7 @@ describe('CRM Unified View - Upcoming Appointments', () => {
     await waitFor(() => {
       expect(screen.getByText('Oil Change')).toBeDefined()
     })
+    // WHO: tenant user | WHAT: view upcoming appointments | WHEN: customer selected | WHERE: CRMView detail panel | WHY: see what is scheduled next for this customer
   })
 
   test('should show resource and employee name on appointment cards', async () => {
@@ -198,6 +202,7 @@ describe('CRM Unified View - Upcoming Appointments', () => {
     // Service Truck 1 appears on multiple cards, so use getAllByText
     expect(screen.getAllByText(/Service Truck 1/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Mike Tech/).length).toBeGreaterThan(0)
+    // WHO: tenant user | WHAT: view resource and employee on appointment | WHEN: appointments loaded | WHERE: CRMView appointment cards | WHY: know which staff and resource are assigned to each job
   })
 
   test('should show cancel button on upcoming appointments', async () => {
@@ -211,6 +216,7 @@ describe('CRM Unified View - Upcoming Appointments', () => {
     // Should have a cancel button
     const cancelButtons = screen.getAllByLabelText(/cancel appointment/i)
     expect(cancelButtons.length).toBeGreaterThan(0)
+    // WHO: tenant user | WHAT: see cancel action on upcoming appointment | WHEN: future appointment displayed | WHERE: CRMView appointment cards | WHY: allow quick cancellation without navigating away
   })
 })
 
@@ -222,6 +228,7 @@ describe('CRM Unified View - Appointment History', () => {
     await waitFor(() => {
       expect(screen.getByText('Appointment History')).toBeDefined()
     })
+    // WHO: tenant user | WHAT: view appointment history section | WHEN: customer selected | WHERE: CRMView detail panel | WHY: review past service interactions for context
   })
 
   test('should show completed and canceled appointments in history', async () => {
@@ -232,6 +239,7 @@ describe('CRM Unified View - Appointment History', () => {
       expect(screen.getByText('Tire Rotation')).toBeDefined()
       expect(screen.getByText('Brake Inspection')).toBeDefined()
     })
+    // WHO: tenant user | WHAT: view completed and canceled appointments | WHEN: customer has past appointments | WHERE: CRMView history section | WHY: see full service history including cancellations
   })
 
   test('should show status badges on past appointments', async () => {
@@ -242,6 +250,7 @@ describe('CRM Unified View - Appointment History', () => {
       expect(screen.getByText('Completed')).toBeDefined()
       expect(screen.getByText('Canceled')).toBeDefined()
     })
+    // WHO: tenant user | WHAT: view status badges on past appointments | WHEN: history loaded | WHERE: CRMView history section | WHY: distinguish completed jobs from canceled ones at a glance
   })
 })
 
@@ -257,6 +266,7 @@ describe('CRM Unified View - AI Call History', () => {
     await waitFor(() => {
       expect(screen.getByText(/Bob called to ask about pricing/)).toBeDefined()
     })
+    // WHO: tenant user | WHAT: view AI call summaries | WHEN: customer selected with call history | WHERE: CRMView call history section | WHY: review what the AI discussed with the customer
   })
 })
 
@@ -286,6 +296,7 @@ describe('CRM Unified View - Cancel Appointment Flow', () => {
       const cancelCall = calls.find((c: any) => c[0].includes('/appointments/') && c[0].includes('/cancel'))
       expect(cancelCall).toBeDefined()
     })
+    // WHO: tenant user | WHAT: cancel an upcoming appointment | WHEN: appointment is in the future | WHERE: CRMView appointment card | WHY: allow front-desk staff to cancel on behalf of customer
   })
 })
 
@@ -297,6 +308,7 @@ describe('CRM Unified View - Empty States', () => {
     await waitFor(() => {
       expect(screen.getByText(/no upcoming appointments/i)).toBeDefined()
     })
+    // WHO: tenant user | WHAT: see empty upcoming appointments state | WHEN: customer has no future bookings | WHERE: CRMView detail panel | WHY: confirm no upcoming work rather than showing blank space
   })
 
   test('should show message when no appointment history', async () => {
@@ -306,5 +318,6 @@ describe('CRM Unified View - Empty States', () => {
     await waitFor(() => {
       expect(screen.getByText(/no past appointments/i)).toBeDefined()
     })
+    // WHO: tenant user | WHAT: see empty appointment history state | WHEN: customer is new with no past visits | WHERE: CRMView history section | WHY: clearly indicate no prior service history exists
   })
 })

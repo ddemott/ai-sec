@@ -49,6 +49,7 @@ describe('SchedulerDateNav', () => {
     const date = new Date(2026, 2, 19); // March 19, 2026
     render(<SchedulerDateNav selectedDate={date} onDateChange={() => {}} />);
     expect(screen.getByTestId('scheduler-date-display')).toHaveTextContent('March 19, 2026');
+    // WHO: receptionist | WHAT: view selected date | WHEN: scheduler loads | WHERE: SchedulerDateNav | WHY: wrong date display causes bookings on wrong day
   });
 
   test('calls onDateChange with previous day on prev click', () => {
@@ -59,6 +60,7 @@ describe('SchedulerDateNav', () => {
     expect(onChange).toHaveBeenCalledWith(expect.any(Date));
     const newDate = onChange.mock.calls[0][0] as Date;
     expect(newDate.getDate()).toBe(18);
+    // WHO: receptionist | WHAT: navigate to previous day | WHEN: prev arrow clicked | WHERE: SchedulerDateNav | WHY: broken nav traps user on one day, cannot review past schedule
   });
 
   test('calls onDateChange with next day on next click', () => {
@@ -68,6 +70,7 @@ describe('SchedulerDateNav', () => {
     fireEvent.click(screen.getByLabelText('Next day'));
     const newDate = onChange.mock.calls[0][0] as Date;
     expect(newDate.getDate()).toBe(20);
+    // WHO: receptionist | WHAT: navigate to next day | WHEN: next arrow clicked | WHERE: SchedulerDateNav | WHY: cannot plan tomorrow's schedule if forward nav fails
   });
 
   test('Today button navigates to today', () => {
@@ -78,6 +81,7 @@ describe('SchedulerDateNav', () => {
     const newDate = onChange.mock.calls[0][0] as Date;
     const today = new Date();
     expect(newDate.getDate()).toBe(today.getDate());
+    // WHO: receptionist | WHAT: jump to today | WHEN: Today button clicked after browsing other dates | WHERE: SchedulerDateNav | WHY: user gets lost in past/future dates and cannot return to current day
   });
 });
 
@@ -89,6 +93,7 @@ describe('TimeGrid', () => {
     expect(screen.getByText('7 AM')).toBeInTheDocument();
     expect(screen.getByText('8 AM')).toBeInTheDocument();
     expect(screen.getByText('9 AM')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: view custom hour range | WHEN: scheduler renders with startHour/endHour props | WHERE: TimeGrid | WHY: missing hour labels make it impossible to place appointments at correct times
   });
 
   test('renders default hours (7am to 8pm)', () => {
@@ -96,12 +101,14 @@ describe('TimeGrid', () => {
     expect(screen.getByText('7 AM')).toBeInTheDocument();
     expect(screen.getByText('12 PM')).toBeInTheDocument();
     expect(screen.getByText('7 PM')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: view default business hours grid | WHEN: no custom hours specified | WHERE: TimeGrid | WHY: default grid must cover full business day or early/late appointments are invisible
   });
 
   test('formatHourLabel handles noon and midnight', () => {
     expect(formatHourLabel(0)).toBe('12 AM');
     expect(formatHourLabel(12)).toBe('12 PM');
     expect(formatHourLabel(15)).toBe('3 PM');
+    // WHO: receptionist | WHAT: read AM/PM labels for edge-case hours | WHEN: grid renders noon or midnight columns | WHERE: TimeGrid (formatHourLabel) | WHY: wrong label at noon/midnight causes 12-hour confusion and misbooked times
   });
 });
 
@@ -116,6 +123,7 @@ describe('AppointmentBlock', () => {
       </div>
     );
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: see customer name on appointment block | WHEN: appointment renders in swimlane | WHERE: AppointmentBlock | WHY: unnamed blocks force receptionist to click each one to identify customers
   });
 
   test('applies canceled styling', () => {
@@ -128,6 +136,7 @@ describe('AppointmentBlock', () => {
     const block = screen.getByTestId('appointment-block-appt-1');
     expect(block.className).toContain('opacity-40');
     expect(block.className).toContain('line-through');
+    // WHO: receptionist | WHAT: visually distinguish canceled appointments | WHEN: appointment status is canceled | WHERE: AppointmentBlock | WHY: without visual diff, staff may prepare for canceled appointments wasting time and resources
   });
 
   test('calls onClick when clicked', () => {
@@ -140,10 +149,12 @@ describe('AppointmentBlock', () => {
     );
     fireEvent.click(screen.getByText('Alice Smith'));
     expect(onClick).toHaveBeenCalledWith(appt);
+    // WHO: receptionist | WHAT: click appointment to view details | WHEN: appointment block clicked | WHERE: AppointmentBlock | WHY: unclickable blocks prevent viewing or editing appointment details
   });
 
   test('getEmployeeColor returns gray for null employee', () => {
     expect(getEmployeeColor(null)).toBe('bg-gray-400');
+    // WHO: receptionist | WHAT: see neutral color for unassigned appointments | WHEN: employee_id is null | WHERE: AppointmentBlock (getEmployeeColor) | WHY: crash or missing color on unassigned blocks hides walk-in appointments
   });
 
   test('getTimeSpan calculates correct position', () => {
@@ -156,6 +167,7 @@ describe('AppointmentBlock', () => {
     expect(left).toBeCloseTo(2 / 13, 1);
     // 1 hour out of 13-hour range, so width ≈ 0.077
     expect(width).toBeCloseTo(1 / 13, 1);
+    // WHO: receptionist | WHAT: see appointment block at correct horizontal position | WHEN: appointment has start/end times | WHERE: AppointmentBlock (getTimeSpan) | WHY: wrong positioning makes appointments appear at wrong times, causing scheduling confusion
   });
 });
 
@@ -182,6 +194,7 @@ describe('StaffSwimLaneView', () => {
     expect(screen.getByTestId('swimlane-row-2')).toBeInTheDocument();
     expect(screen.getByText('Mike Jones')).toBeInTheDocument();
     expect(screen.getByText('Steve Lee')).toBeInTheDocument();
+    // WHO: admin | WHAT: see all staff in swimlane rows | WHEN: scheduler loads with employees | WHERE: StaffSwimLaneView | WHY: missing employee rows hide their appointments and shifts entirely
   });
 
   test('renders unassigned row when there are unassigned appointments', () => {
@@ -200,6 +213,7 @@ describe('StaffSwimLaneView', () => {
     );
     expect(screen.getByTestId('swimlane-row-unassigned')).toBeInTheDocument();
     expect(screen.getByText('Unassigned')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: see unassigned appointments row | WHEN: appointments exist without employee_id | WHERE: StaffSwimLaneView | WHY: unassigned bookings (e.g., voice AI walk-ins) become invisible without this row
   });
 
   test('calls onEmployeeClick when employee label is clicked', () => {
@@ -220,6 +234,7 @@ describe('StaffSwimLaneView', () => {
     );
     fireEvent.click(screen.getByText('Mike Jones'));
     expect(onEmployeeClick).toHaveBeenCalledWith(employees[0]);
+    // WHO: admin | WHAT: click employee name to open day focus | WHEN: employee label clicked | WHERE: StaffSwimLaneView | WHY: without this, admin cannot drill into individual staff utilization or reassign work
   });
 
   test('clicking on-shift cell initiates move (no onSlotClick — replaced with shift move)', () => {
@@ -246,6 +261,7 @@ describe('StaffSwimLaneView', () => {
     fireEvent.mouseUp(slot);
     // No resize called because shift didn't actually move
     expect(onShiftResize).not.toHaveBeenCalled();
+    // WHO: admin | WHAT: click-release on existing shift cell without dragging | WHEN: mouseDown+mouseUp on same on-shift slot | WHERE: StaffSwimLaneView | WHY: accidental clicks should not resize shifts, preventing unintended schedule changes
   });
 
   test('calls onShiftDrag when clicking on off-shift (hatched) cell', () => {
@@ -270,6 +286,7 @@ describe('StaffSwimLaneView', () => {
     fireEvent.mouseDown(screen.getByTestId('slot-1-8'));
     fireEvent.mouseUp(screen.getByTestId('slot-1-8'));
     expect(onShiftDrag).toHaveBeenCalledWith('1', 8, 9);
+    // WHO: admin | WHAT: create new shift by clicking off-shift cell | WHEN: click on hatched (unscheduled) time slot | WHERE: StaffSwimLaneView | WHY: allows quick shift creation without opening a separate form
   });
 });
 
@@ -287,6 +304,7 @@ describe('ResourceColumnsView', () => {
       />
     );
     expect(screen.getByTestId('resource-columns-empty')).toBeInTheDocument();
+    // WHO: admin | WHAT: see empty state when no resources configured | WHEN: tenant has zero resources | WHERE: ResourceColumnsView | WHY: blank screen without empty state confuses new users during onboarding
   });
 
   test('renders a column for each resource', () => {
@@ -304,6 +322,7 @@ describe('ResourceColumnsView', () => {
     );
     expect(screen.getByText('Bay 1')).toBeInTheDocument();
     expect(screen.getByText('Bay 2')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: see all resource columns | WHEN: resources exist for tenant | WHERE: ResourceColumnsView | WHY: missing columns hide resource availability, leading to double-bookings
   });
 
   test('shows appointment in the correct resource column', () => {
@@ -321,6 +340,7 @@ describe('ResourceColumnsView', () => {
       />
     );
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: see appointment under correct resource | WHEN: appointment has resource_id | WHERE: ResourceColumnsView | WHY: appointment in wrong column causes staff to prepare wrong bay/station
   });
 });
 
@@ -336,6 +356,7 @@ describe('AppointmentListView', () => {
       />
     );
     expect(screen.getByTestId('appointment-list-empty')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: see empty state for no appointments | WHEN: day has zero bookings | WHERE: AppointmentListView | WHY: blank list without messaging makes receptionist think data failed to load
   });
 
   test('renders appointments in chronological order', () => {
@@ -354,6 +375,7 @@ describe('AppointmentListView', () => {
     const items = screen.getAllByText(/Alice|Bob/);
     expect(items[0]).toHaveTextContent('Alice');
     expect(items[1]).toHaveTextContent('Bob');
+    // WHO: receptionist | WHAT: view appointments sorted by time | WHEN: multiple appointments on same day | WHERE: AppointmentListView | WHY: out-of-order list causes receptionist to miss upcoming appointments or prep in wrong sequence
   });
 
   test('shows gap warning for gaps > 1 hour', () => {
@@ -371,6 +393,7 @@ describe('AppointmentListView', () => {
     );
     expect(screen.getByTestId('gap-warning-1')).toBeInTheDocument();
     expect(screen.getByTestId('gap-warning-1')).toHaveTextContent('3h 0m gap');
+    // WHO: admin | WHAT: see gap warnings between appointments | WHEN: gap exceeds 1 hour | WHERE: AppointmentListView | WHY: hidden gaps mean lost revenue opportunities that admin cannot identify and fill
   });
 
   test('hides canceled appointments', () => {
@@ -388,6 +411,7 @@ describe('AppointmentListView', () => {
     );
     expect(screen.queryByText('Canceled Guy')).not.toBeInTheDocument();
     expect(screen.getByText('Active Alice')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: filter out canceled appointments from list | WHEN: mix of active and canceled bookings | WHERE: AppointmentListView | WHY: showing canceled items clutters the list and may cause staff to prepare for no-shows
   });
 
   test('calls onAppointmentClick when item is clicked', () => {
@@ -404,6 +428,7 @@ describe('AppointmentListView', () => {
     );
     fireEvent.click(screen.getByTestId('list-item-appt-1'));
     expect(onClick).toHaveBeenCalledWith(appt);
+    // WHO: receptionist | WHAT: click appointment in list to view details | WHEN: list item clicked | WHERE: AppointmentListView | WHY: unclickable list items prevent viewing customer info or editing the booking
   });
 });
 
@@ -421,6 +446,7 @@ describe('EmployeeDayFocusPanel', () => {
       />
     );
     expect(container.innerHTML).toBe('');
+    // WHO: receptionist | WHAT: hide focus panel when closed | WHEN: isOpen is false | WHERE: EmployeeDayFocusPanel | WHY: rendering closed panel wastes screen space and confuses layout
   });
 
   test('renders employee name when open', () => {
@@ -434,6 +460,7 @@ describe('EmployeeDayFocusPanel', () => {
       />
     );
     expect(screen.getByText('Mike Jones')).toBeInTheDocument();
+    // WHO: admin | WHAT: see employee name in focus panel | WHEN: panel opened for a specific employee | WHERE: EmployeeDayFocusPanel | WHY: without name, admin cannot confirm which employee's schedule they are reviewing
   });
 
   test('shows appointment count and utilization stats', () => {
@@ -455,6 +482,7 @@ describe('EmployeeDayFocusPanel', () => {
     expect(screen.getByTestId('focus-appointment-count')).toHaveTextContent('2');
     expect(screen.getByTestId('focus-booked-hours')).toHaveTextContent('2.0h');
     expect(screen.getByTestId('focus-utilization')).toHaveTextContent('25%');
+    // WHO: admin | WHAT: view utilization stats (count, hours, percentage) | WHEN: employee has appointments and shifts | WHERE: EmployeeDayFocusPanel | WHY: wrong utilization math leads admin to over- or under-staff shifts
   });
 
   test('calls onClose when X is clicked', () => {
@@ -470,6 +498,7 @@ describe('EmployeeDayFocusPanel', () => {
     );
     fireEvent.click(screen.getByLabelText('Close focus panel'));
     expect(onClose).toHaveBeenCalled();
+    // WHO: admin | WHAT: close focus panel via X button | WHEN: admin done reviewing employee | WHERE: EmployeeDayFocusPanel | WHY: unclosable panel blocks scheduler view and forces page reload
   });
 });
 
@@ -490,6 +519,7 @@ describe('QuickBookPanel', () => {
       />
     );
     expect(container.innerHTML).toBe('');
+    // WHO: receptionist | WHAT: hide quick book panel when closed | WHEN: isOpen is false | WHERE: QuickBookPanel | WHY: visible closed panel overlaps scheduler and wastes screen real estate
   });
 
   test('renders Quick Book heading when open', () => {
@@ -506,6 +536,7 @@ describe('QuickBookPanel', () => {
       />
     );
     expect(screen.getByText('Quick Book')).toBeInTheDocument();
+    // WHO: receptionist | WHAT: see Quick Book heading when panel opens | WHEN: panel opened from scheduler | WHERE: QuickBookPanel | WHY: missing heading leaves receptionist unsure which panel action they triggered
   });
 
   test('calls onClose when X is clicked', () => {
@@ -524,6 +555,7 @@ describe('QuickBookPanel', () => {
     );
     fireEvent.click(screen.getByLabelText('Close quick book'));
     expect(onClose).toHaveBeenCalled();
+    // WHO: receptionist | WHAT: close quick book panel via X button | WHEN: receptionist cancels booking | WHERE: QuickBookPanel | WHY: unclosable panel blocks the scheduler and forces page reload to dismiss
   });
 
   test('Book Now button is disabled when no customer selected', () => {
@@ -541,5 +573,6 @@ describe('QuickBookPanel', () => {
     );
     const btn = screen.getByTestId('quick-book-confirm');
     expect(btn).toBeDisabled();
+    // WHO: receptionist | WHAT: prevent booking without customer | WHEN: no customer selected in form | WHERE: QuickBookPanel | WHY: submitting without customer creates orphaned appointments with no contact info
   });
 });
