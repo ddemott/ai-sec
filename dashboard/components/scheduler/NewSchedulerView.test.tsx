@@ -453,13 +453,16 @@ describe('NewSchedulerView', () => {
       expect(shift).toHaveTextContent('4pm');
     });
 
-    test('profile card shows skills list', () => {
+    test('profile card shows skills list', async () => {
       render(<NewSchedulerView />);
       fireEvent.click(screen.getByTestId('staff-name-emp-1'));
       expect(screen.getByTestId('staff-card-skills-label')).toHaveTextContent('Skills');
-      const skillsList = screen.getByTestId('staff-card-skills-list');
-      expect(skillsList).toBeInTheDocument();
-      expect(skillsList.querySelectorAll('li')).toHaveLength(2);
+      // Skills come from async mappings fetch
+      await waitFor(() => {
+        const skillsList = screen.getByTestId('staff-card-skills-list');
+        expect(skillsList).toBeInTheDocument();
+        expect(skillsList.querySelectorAll('li')).toHaveLength(2);
+      });
     });
 
     test('clicking same staff name again closes the card', () => {

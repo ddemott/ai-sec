@@ -848,6 +848,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
           todayHours={profileCardData.todayHours}
           shiftStart={profileCardData.shiftStart}
           shiftEnd={profileCardData.shiftEnd}
+          skills={employeeSkillsMap.get(profileCard.employeeId) || []}
           anchorRect={profileCard.anchorRect}
           onClose={handleProfileCardClose}
         />

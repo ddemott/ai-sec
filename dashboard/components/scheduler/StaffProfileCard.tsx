@@ -12,6 +12,8 @@ export interface StaffProfileCardProps {
   shiftStart: string | null;
   /** Shift end time string (e.g. "4pm") or null if no shift */
   shiftEnd: string | null;
+  /** Skills derived from service-employee mappings (single source of truth) */
+  skills?: string[];
   /** Anchor element rect for positioning */
   anchorRect: DOMRect;
   /** Called when user clicks outside the card */
@@ -23,6 +25,7 @@ export function StaffProfileCard({
   todayApptCount,
   todayHours,
   shiftStart,
+  skills,
   shiftEnd,
   anchorRect,
   onClose,
@@ -155,9 +158,9 @@ export function StaffProfileCard({
         >
           Skills
         </div>
-        {employee.skills && employee.skills.length > 0 ? (
+        {skills && skills.length > 0 ? (
           <ul className="flex flex-col gap-0.5" data-testid="staff-card-skills-list">
-            {employee.skills.map((skill, i) => (
+            {skills.map((skill, i) => (
               <li
                 key={i}
                 className="text-xs pl-3"
