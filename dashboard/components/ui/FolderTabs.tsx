@@ -126,7 +126,7 @@ export const FolderTabBar: React.FC<FolderTabBarProps> = ({
     >
       <div className="flex items-center justify-between px-4">
         <div
-          className="flex items-end gap-0 pt-1 overflow-x-auto no-scrollbar"
+          className="flex items-end gap-0 pt-1"
           role="tablist"
           aria-label={ariaLabel}
           style={{ paddingTop: size === 'lg' ? '8px' : '4px' }}

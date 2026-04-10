@@ -6,6 +6,14 @@
   .text-balance {
     text-wrap: balance;
   }
+  /* Hide scrollbar but keep scroll functionality */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* ===== THEME SYSTEM — CSS Custom Properties ===== */
