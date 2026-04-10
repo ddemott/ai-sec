@@ -124,6 +124,11 @@ describe('SetupWizard: Navigation', () => {
 
 describe('SetupWizard: Step 1 Services', () => {
   test('shows empty state when no services exist', async () => {
+    // Override mock to return empty services
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    })
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     await waitFor(() => {
       expect(screen.getByText('No services yet. Add your first service to get started.')).toBeInTheDocument()
@@ -305,6 +310,11 @@ describe('SetupWizard: Step 3 Employees', () => {
   })
 
   test('shows empty state when no employees exist', async () => {
+    // Override mock to return empty employees
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/services')) return Promise.resolve({ ok: true, json: async () => MOCK_SERVICES })
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
     goToStep3()
     await waitFor(() => {
       expect(screen.getByText('No employees yet. Add your first team member.')).toBeInTheDocument()

@@ -166,6 +166,18 @@ describe('SettingsView: Calendar Section', () => {
     const disconnectButtons = screen.getAllByText('Disconnect')
     fireEvent.click(disconnectButtons[0])
 
+    // Confirm in the modal
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    // Click the Disconnect button inside the modal (not the trigger button)
+    const modal = screen.getByRole('dialog')
+    const confirmBtn = modal.querySelector('button')
+    // Find the danger/confirm button (last button in footer)
+    const allBtns = modal.querySelectorAll('button')
+    const disconnectBtn = Array.from(allBtns).find(b => b.textContent === 'Disconnect')!
+    fireEvent.click(disconnectBtn)
+
     await waitFor(() => {
       const disconnectCall = mockFetch.mock.calls.find(
         (call: any[]) =>

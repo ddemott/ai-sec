@@ -11,6 +11,8 @@ import { Card } from './ui/Card'
 import { Input } from './ui/Input'
 import { Badge } from './ui/Badge'
 import { POLICY_CATEGORIES, POLICY_QUESTIONS } from '../lib/policyQuestions'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
 import type { KnowledgeEntry } from '../lib/types'
 
 type Tab = 'questionnaire' | 'documents' | 'entries'
@@ -161,6 +163,7 @@ export default function KnowledgeBaseView() {
   const [savedAnswers, setSavedAnswers] = useState<Map<string, { id: string; answer: string }>>(new Map())
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { state: confirmState, confirm, close: closeConfirm } = useConfirm()
 
   const fetchDocs = useCallback(async () => {
     if (!tenantId) return
@@ -229,8 +232,19 @@ export default function KnowledgeBaseView() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this knowledge entry? The AI will no longer have access to this information.')) return
+  function handleDelete(id: string) {
+    confirm({
+      title: 'Delete Knowledge Entry',
+      message: 'Delete this entry? The AI will no longer have access to this information.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm()
+        doDelete(id)
+      },
+    })
+  }
+
+  async function doDelete(id: string) {
     try {
       await Api.knowledge.delete(id, tenantId)
       setDocs(docs.filter(d => d.id !== id))
@@ -441,6 +455,7 @@ export default function KnowledgeBaseView() {
           </>
         )}
       </div>
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   )
 }

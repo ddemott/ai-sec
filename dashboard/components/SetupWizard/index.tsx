@@ -91,6 +91,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
 
   const canAdvanceTo = (target: WizardStep): boolean => {
     if (target <= step) return true // backward always allowed
+    if (loading) return true // don't block while data is loading
     if (target >= 2 && activeServices.length === 0) return false
     if (target >= 4 && activeEmployees.length === 0) return false
     if (target >= 5 && (activeEmployees.length === 0 || activeServices.length === 0)) return false

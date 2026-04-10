@@ -20,6 +20,8 @@ import { Button } from './ui/Button'
 import { Modal } from './ui/Modal'
 import { TimeInput } from './ui/TimeInput'
 import { showToast } from './ui/Toast'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
 
 // Timeline constants
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -71,6 +73,7 @@ export default function ShiftManagementView() {
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()))
   const [scheduledShifts, setScheduledShifts] = useState<EffectiveShift[]>([])
   const [loadingShifts, setLoadingShifts] = useState(false)
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -331,7 +334,7 @@ export default function ShiftManagementView() {
                               </span>
                             )}
                             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); shift.override_id ? handleDelete(shift.override_id) : handleClearDay(day.dateStr) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); shift.override_id ? handleDelete(shift.override_id) : handleClearDay(day.dateStr) } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
                             </div>
                           </div>
                         )}
@@ -386,6 +389,7 @@ export default function ShiftManagementView() {
           )}
         </div>
       </Modal>
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
 
     </div>
   )

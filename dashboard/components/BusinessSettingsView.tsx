@@ -23,6 +23,8 @@ import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Badge } from './ui/Badge'
 import type { Service, EffectiveShift } from '../lib/types'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
 
 export default function BusinessSettingsView() {
   const tenantId = useActiveTenantId()
@@ -37,6 +39,7 @@ export default function BusinessSettingsView() {
   const [newService, setNewService] = useState({ name: '', description: '', duration_minutes: 30 })
   const [addingService, setAddingService] = useState(false)
   const [savingService, setSavingService] = useState(false)
+  const { state: confirmState, confirm, close: closeConfirm } = useConfirm()
   const [serviceError, setServiceError] = useState<string | null>(null)
 
   // Availability
@@ -228,14 +231,22 @@ export default function BusinessSettingsView() {
     }
   }
 
-  async function handleDeleteService(id: string, name: string) {
-    if (!tenantId || !confirm(`Remove "${name}" from your services?`)) return
-    try {
-      await Api.services.delete(id, tenantId)
-      refreshResources()
-    } catch {
-      console.error('Failed to delete service')
-    }
+  function handleDeleteService(id: string, name: string) {
+    if (!tenantId) return
+    confirm({
+      title: 'Remove Service',
+      message: `Remove "${name}" from your services? Existing appointments using this service will not be affected.`,
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        closeConfirm()
+        try {
+          await Api.services.delete(id, tenantId)
+          refreshResources()
+        } catch {
+          console.error('Failed to delete service')
+        }
+      },
+    })
   }
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -591,6 +602,7 @@ export default function BusinessSettingsView() {
             </div>
           </Card>
         )}
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
       </div>
     </div>
   )

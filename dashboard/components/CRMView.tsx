@@ -17,6 +17,8 @@ import { useFormState } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { Button } from './ui/Button'
 import { CustomerDetailPanel } from './CustomerDetailPanel'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
 
 export default function CRMView() {
   const tenantId = useActiveTenantId();
@@ -27,6 +29,7 @@ export default function CRMView() {
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
   const [customerAppointments, setCustomerAppointments] = useState<{ id: string; start_time: string; end_time: string; status: string; description: string; resource_name?: string; employee_name?: string; location?: string }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const { state: confirmState, confirm, close: closeConfirm } = useConfirm()
 
   // States
   const [isEditing, setIsEditing] = useState(false)
@@ -133,16 +136,23 @@ export default function CRMView() {
     }
   }
 
-  async function handleCancelAppointment(appointmentId: string) {
-    if (!confirm('Are you sure you want to cancel this appointment?')) return
-    try {
-      const res = await Api.appointments.cancel(appointmentId, tenantId)
-      if (res.success && selectedCustomer) {
-        fetchCustomerAppointments(selectedCustomer.id)
-      }
-    } catch (e) {
-      console.error(e)
-    }
+  function handleCancelAppointment(appointmentId: string) {
+    confirm({
+      title: 'Cancel Appointment',
+      message: 'Are you sure you want to cancel this appointment?',
+      confirmLabel: 'Cancel Appointment',
+      onConfirm: async () => {
+        closeConfirm()
+        try {
+          const res = await Api.appointments.cancel(appointmentId, tenantId)
+          if (res.success && selectedCustomer) {
+            fetchCustomerAppointments(selectedCustomer.id)
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      },
+    })
   }
 
   const upcomingAppointments = useMemo(() =>
@@ -226,19 +236,25 @@ export default function CRMView() {
     setSaving(false)
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!selectedCustomer) return
-    if (!confirm(`Are you sure you want to delete ${selectedCustomer.name}? This cannot be undone.`)) return
-
-    try {
-      const res = await Api.customers.delete(selectedCustomer.id)
-      if (res.success) {
-          setSelectedCustomer(null)
-          fetchCustomers()
-      }
-    } catch (e) {
-        console.error(e)
-    }
+    confirm({
+      title: 'Delete Customer',
+      message: `Are you sure you want to delete ${selectedCustomer.name}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm()
+        try {
+          const res = await Api.customers.delete(selectedCustomer.id)
+          if (res.success) {
+            setSelectedCustomer(null)
+            fetchCustomers()
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      },
+    })
   }
 
   const startNewCustomer = () => {
@@ -282,6 +298,12 @@ export default function CRMView() {
           </div>
         </header>
         <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+          {filteredCustomers.length === 0 && !loading && (
+            <div className="p-8 text-center" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm font-medium">{searchQuery ? `No customers match "${searchQuery}"` : 'No customers yet'}</p>
+              {!searchQuery && <p className="text-xs mt-1 opacity-60">Add your first customer to get started.</p>}
+            </div>
+          )}
           {filteredCustomers.map((c) => (
             <div
               key={c.id}
@@ -325,6 +347,7 @@ export default function CRMView() {
         onCancelAppointment={handleCancelAppointment}
         onCloseMobile={() => { setShowDetailOnMobile(false); setIsCreating(false); }}
       />
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   )
 }

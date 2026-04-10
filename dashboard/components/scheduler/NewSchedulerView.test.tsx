@@ -103,6 +103,7 @@ function buildDefaultSchedulerData() {
     appointments: mockAppointments,
     shifts: mockShifts,
     loading: false,
+    error: null,
     appointmentsByEmployee: buildApptMap(),
     appointmentsByResource: new Map(),
     shiftsByEmployee: buildShiftsByEmployee(),
@@ -207,15 +208,15 @@ describe('NewSchedulerView', () => {
   describe('Business hours shading', () => {
     test('hours outside business hours (8-17) have dark background', () => {
       render(<NewSchedulerView />);
-      // Hour 6 is outside business hours (before 8am)
+      // Hour 6 is outside business hours (before 8am) — header uses 0.2 opacity
       const earlyHour = screen.getByTestId('hour-cell-6');
       expect(earlyHour.style.background).toContain('rgba(0');
-      expect(earlyHour.style.background).toContain('0.15)');
+      expect(earlyHour.style.background).toContain('0.2)');
 
       // Hour 20 is outside business hours (after 5pm)
       const lateHour = screen.getByTestId('hour-cell-20');
       expect(lateHour.style.background).toContain('rgba(0');
-      expect(lateHour.style.background).toContain('0.15)');
+      expect(lateHour.style.background).toContain('0.2)');
     });
 
     test('hours inside business hours have transparent background', () => {
@@ -676,7 +677,9 @@ describe('NewSchedulerView', () => {
 
         render(<NewSchedulerView />);
         expect(screen.getByTestId('new-scheduler-view')).toBeInTheDocument();
-        expect(screen.getByTestId('scheduler-grid')).toBeInTheDocument();
+        // Shows empty state instead of grid
+        expect(screen.getByTestId('scheduler-empty')).toBeInTheDocument();
+        expect(screen.getByText('No staff to display')).toBeInTheDocument();
         // No staff rows rendered
         expect(screen.queryByTestId('staff-name-emp-1')).not.toBeInTheDocument();
         expect(screen.queryByTestId('staff-name-emp-2')).not.toBeInTheDocument();

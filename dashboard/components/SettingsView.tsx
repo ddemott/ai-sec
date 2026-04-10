@@ -23,6 +23,8 @@ import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Badge } from './ui/Badge'
 import { showToast } from './ui/Toast'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
 
 export default function SettingsView() {
   const tenantId = useActiveTenantId()
@@ -39,6 +41,7 @@ export default function SettingsView() {
   // Calendar State
   const [calendarSettings, setCalendarSettings] = useState<{ provider: string; external_calendar_id: string } | null>(null)
   const [calLoading, setCalLoading] = useState(false)
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   // Form State for onboarding
   const [form, setForm] = useState({
@@ -101,18 +104,27 @@ export default function SettingsView() {
     }
   }
 
-  async function handleDisconnectCalendar() {
-    setCalLoading(true)
-    try {
-      const res = await Api.calendar.disconnect(tenantId)
-      if (res.success) {
-        setCalendarSettings(null)
-      }
-    } catch {
-      showToast('Failed to disconnect calendar', 'error')
-    } finally {
-      setCalLoading(false)
-    }
+  function handleDisconnectCalendar() {
+    confirmAction({
+      title: 'Disconnect Calendar',
+      message: 'Disconnect your calendar? Appointments will no longer sync automatically.',
+      confirmLabel: 'Disconnect',
+      confirmVariant: 'warning',
+      onConfirm: async () => {
+        closeConfirm()
+        setCalLoading(true)
+        try {
+          const res = await Api.calendar.disconnect(tenantId)
+          if (res.success) {
+            setCalendarSettings(null)
+          }
+        } catch {
+          showToast('Failed to disconnect calendar', 'error')
+        } finally {
+          setCalLoading(false)
+        }
+      },
+    })
   }
 
   async function fetchTemplates() {
@@ -340,6 +352,7 @@ export default function SettingsView() {
             </div>
           </Card>
         </div>
+        <ConfirmModal {...confirmState} onClose={closeConfirm} />
       </div>
     )
   }
@@ -464,6 +477,7 @@ export default function SettingsView() {
           </Button>
         </form>
       </div>
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   )
 }

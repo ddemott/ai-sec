@@ -269,12 +269,16 @@ describe('CRM Unified View - Cancel Appointment Flow', () => {
       expect(screen.getByText('Oil Change')).toBeDefined()
     })
 
-    // Mock window.confirm
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
-
-    // Click cancel on the upcoming appointment
+    // Click cancel on the upcoming appointment — opens confirmation modal
     const cancelButton = screen.getAllByLabelText(/cancel appointment/i)[0]
     fireEvent.click(cancelButton)
+
+    // Confirm in the modal — click the button (not the title)
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeDefined()
+    })
+    const confirmBtn = screen.getAllByText('Cancel Appointment').find(el => el.tagName === 'BUTTON')!
+    fireEvent.click(confirmBtn)
 
     // Should have called the cancel endpoint
     await waitFor(() => {

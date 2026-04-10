@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Minus, Plus, RefreshCw, Save, X } from 'lucide-react';
+import { Minus, Plus, RefreshCw, Save, X, Users } from 'lucide-react';
 import { useStaticData } from '../../lib/hooks';
 import { formatHour, shiftTimeToHour, formatShiftTime, formatTime24to12 } from '../../lib/utils';
 import { useActiveTenantId } from '../../lib/SessionContext';
@@ -507,7 +507,17 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
         </div>
       </div>
 
+      {/* Empty state when no employees */}
+      {!loading && employees.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3" style={{ background: 'var(--bg-base, #111)', color: 'var(--text-muted)' }} data-testid="scheduler-empty">
+          <Users className="w-10 h-10 opacity-30" />
+          <p className="text-sm font-medium">No staff to display</p>
+          <p className="text-xs opacity-60">Add employees in Staff &amp; Shifts to see the schedule.</p>
+        </div>
+      )}
+
       {/* Main scheduler body */}
+      {employees.length > 0 && (
       <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--bg-base, #111)' }}>
         {/* Left: fixed staff names panel */}
         <div
@@ -636,9 +646,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
           {/* Scrollable grid area */}
           <div
             ref={gridContainerRef}
-            className="flex-1 overflow-auto"
+            className="flex-1 overflow-auto relative"
             data-testid="scheduler-grid"
           >
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: 'rgba(0,0,0,0.15)' }} data-testid="scheduler-loading">
+                <RefreshCw className="w-5 h-5 animate-spin" style={{ color: 'var(--text-secondary)' }} />
+              </div>
+            )}
             <div style={{ width: totalGridWidth, minHeight: '100%' }}>
               {employees.map((emp) => {
                 const empId = String(emp.id);
@@ -750,6 +765,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
           </div>
         </div>
       </div>
+      )}
 
       {/* Staff Profile Card (Item #4) */}
       {profileCard && profileCardEmployee && profileCardData && (
