@@ -30,20 +30,25 @@ export function StaffProfileCard({
   const vocab = useVocabulary();
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Dismiss on outside click
+  // Dismiss on outside click or Escape key
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
-    // Delay listener to avoid catching the click that opened the card
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    // Delay click listener to avoid catching the click that opened the card
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick);
     }, 0);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
 

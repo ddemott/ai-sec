@@ -72,7 +72,12 @@ export const Modal: React.FC<ModalProps> = ({
     return () => {
       document.body.style.overflow = 'unset';
       document.removeEventListener('keydown', handleKeyDown);
-      previousFocusRef.current?.focus();
+      // Restore focus — fallback if trigger element was removed (e.g. after delete)
+      if (previousFocusRef.current && document.body.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus();
+      } else {
+        (document.querySelector<HTMLElement>('[role="main"], main, [data-testid]') ?? document.body).focus();
+      }
     };
   }, [isOpen]);
 

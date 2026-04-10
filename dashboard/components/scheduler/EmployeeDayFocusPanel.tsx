@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Clock, User } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import { shiftTimeToHour } from '../../lib/utils';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { formatTime24to12, formatTimeFromISO } from '../../lib/utils';
 
@@ -39,9 +40,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
 
   const totalShiftHours = shifts.reduce((sum, s) => {
     if (!s.start_time || !s.end_time) return sum;
-    const [sh] = s.start_time.split(':').map(Number);
-    const [eh] = s.end_time.split(':').map(Number);
-    return sum + (eh - sh);
+    return sum + (shiftTimeToHour(s.end_time) - shiftTimeToHour(s.start_time));
   }, 0);
 
   const utilization = totalShiftHours > 0 ? Math.round((totalBookedHours / totalShiftHours) * 100) : 0;

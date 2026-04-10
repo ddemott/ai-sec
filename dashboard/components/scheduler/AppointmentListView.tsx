@@ -72,8 +72,11 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
           <React.Fragment key={appt.id}>
             {gapWarning}
             <div
-              className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition"
+              role="button"
+              tabIndex={0}
+              className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
               onClick={() => onAppointmentClick?.(appt)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAppointmentClick?.(appt); } }}
               data-testid={`list-item-${appt.id}`}
             >
               {/* Time */}

@@ -546,11 +546,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
               return (
                 <div
                   key={String(emp.id)}
+                  role="button"
+                  tabIndex={0}
                   draggable
                   onDragStart={() => handleDragStart(idx)}
                   onDragOver={(e) => handleDragOver(e, idx)}
                   onDragEnd={handleDragEnd}
-                  className="flex items-center px-1.5 cursor-pointer transition-all"
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStaffNameClick(String(emp.id), e as unknown as React.MouseEvent); } }}
+                  className="flex items-center px-1.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
                   style={{
                     height: rowH,
                     borderBottom: '1px solid var(--border-soft)',

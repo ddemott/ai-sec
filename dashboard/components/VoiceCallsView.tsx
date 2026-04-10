@@ -141,14 +141,15 @@ export default function VoiceCallsView() {
   return (
     <div className="flex h-full">
       {/* Left Panel: Call List */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white">
+      <div className="w-80 border-r flex flex-col" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b" style={{ borderColor: 'var(--border-soft)' }}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">Voice Calls</h2>
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Voice Calls</h2>
             <button
               onClick={handleRefresh}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
               title="Refresh"
             >
               <RefreshCw className="w-4 h-4" />
@@ -158,18 +159,18 @@ export default function VoiceCallsView() {
 
         {/* Active Calls Section */}
         {activeCalls.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-4 py-2 bg-green-50">
-              <h3 className="text-sm font-medium text-green-800 flex items-center gap-2">
+          <div className="border-b" style={{ borderColor: 'var(--border-soft)' }}>
+            <div className="px-4 py-2" style={{ backgroundColor: 'rgba(34,197,94,0.1)' }}>
+              <h3 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--green, #22c55e)' }}>
                 <Phone className="w-4 h-4 animate-pulse" />
                 Active Calls ({activeCalls.length})
               </h3>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y">
               {activeCalls.map(call => (
                 <div
                   key={call.id}
-                  className="p-3 hover:bg-green-50 cursor-pointer transition-colors"
+                  className="p-3 hover:brightness-110 cursor-pointer transition-colors"
                   onClick={() => {
                     // Fetch full session details
                     Api.voice.getSession(tenantId, call.call_id).then(session => {
@@ -180,7 +181,7 @@ export default function VoiceCallsView() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      <span className="font-medium text-gray-900">
+                      <span className="font-medium text-[var(--text-primary)]">
                         {call.customer_name || formatPhone(call.caller_phone)}
                       </span>
                     </div>
@@ -199,7 +200,7 @@ export default function VoiceCallsView() {
 
         {/* Call History */}
         <div className="flex-1 overflow-y-auto">
-          <div className="px-4 py-2 bg-gray-50 sticky top-0">
+          <div className="px-4 py-2 sticky top-0" style={{ backgroundColor: 'var(--bg-raised)' }}>
             <h3 className="text-sm font-medium text-gray-600">
               Call History ({total})
             </h3>
@@ -215,17 +216,17 @@ export default function VoiceCallsView() {
               <p className="text-sm">No call history</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y">
               {callHistory.map(call => (
                 <div
                   key={call.id}
-                  className={`p-3 hover:bg-gray-50 cursor-pointer transition-colors ${
+                  className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
                     selectedCall?.id === call.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''
                   }`}
                   onClick={() => setSelectedCall(call)}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-gray-900 text-sm">
+                    <span className="font-medium text-[var(--text-primary)] text-sm">
                       {call.customer_name || call.customer_context?.customer?.name || formatPhone(call.caller_phone)}
                     </span>
                     <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -270,14 +271,14 @@ export default function VoiceCallsView() {
       </div>
 
       {/* Right Panel: Call Details */}
-      <div className="flex-1 bg-gray-50 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--bg-base)' }}>
         {selectedCall ? (
           <div className="p-6">
             {/* Call Header */}
-            <div className="bg-white rounded-lg shadow-sm p-6 mb-4">
+            <div className="rounded-lg shadow-sm p-6 mb-4" style={{ backgroundColor: 'var(--bg-surface)' }}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
+                  <h2 className="text-xl font-semibold text-[var(--text-primary)]">
                     {customerContext?.customer?.name || formatPhone(selectedCall.caller_phone)}
                   </h2>
                   <p className="text-gray-500">{formatPhone(selectedCall.caller_phone)}</p>
@@ -324,8 +325,8 @@ export default function VoiceCallsView() {
 
             {/* Customer Context */}
             {customerContext && (
-              <div className="bg-white rounded-lg shadow-sm p-6 mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <div className="rounded-lg shadow-sm p-6 mb-4" style={{ backgroundColor: 'var(--bg-surface)' }}>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <User className="w-5 h-5" />
                   Customer Context
                 </h3>
@@ -350,16 +351,16 @@ export default function VoiceCallsView() {
 
                     {/* Appointment History */}
                     <div className="border-t pt-4">
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                      <h4 className="font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
                         Appointment History
                       </h4>
                       <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div className="bg-gray-50 rounded p-3 text-center">
-                          <p className="text-2xl font-bold text-gray-900">{customerContext.appointment_history.total}</p>
+                        <div className="rounded p-3 text-center">
+                          <p className="text-2xl font-bold text-[var(--text-primary)]">{customerContext.appointment_history.total}</p>
                           <p className="text-gray-500 text-xs">Total</p>
                         </div>
-                        <div className="bg-green-50 rounded p-3 text-center">
+                        <div className="rounded p-3 text-center">
                           <p className="text-2xl font-bold text-green-700">{customerContext.appointment_history.completed}</p>
                           <p className="text-gray-500 text-xs">Completed</p>
                         </div>
@@ -391,7 +392,7 @@ export default function VoiceCallsView() {
                     {/* Notes */}
                     {customerContext.notes.length > 0 && (
                       <div className="border-t pt-4">
-                        <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                        <h4 className="font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
                           <MessageSquare className="w-4 h-4" />
                           Notes
                         </h4>
@@ -411,10 +412,10 @@ export default function VoiceCallsView() {
                     {/* Tags */}
                     {customerContext.tags.length > 0 && (
                       <div className="border-t pt-4">
-                        <h4 className="font-medium text-gray-900 mb-2">Tags</h4>
+                        <h4 className="font-medium text-[var(--text-primary)] mb-2">Tags</h4>
                         <div className="flex flex-wrap gap-2">
                           {customerContext.tags.map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-gray-100 rounded text-sm">
+                            <span key={tag} className="px-2 py-1 rounded text-sm">
                               {tag}
                             </span>
                           ))}
@@ -433,9 +434,9 @@ export default function VoiceCallsView() {
 
             {/* Transcript */}
             {selectedCall.transcript && (
-              <div className="bg-white rounded-lg shadow-sm p-6 mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Transcript</h3>
-                <div className="bg-gray-50 rounded p-4 text-sm whitespace-pre-wrap">
+              <div className="rounded-lg shadow-sm p-6 mb-4" style={{ backgroundColor: 'var(--bg-surface)' }}>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Transcript</h3>
+                <div className="rounded p-4 text-sm whitespace-pre-wrap">
                   {selectedCall.transcript}
                 </div>
               </div>
@@ -443,8 +444,8 @@ export default function VoiceCallsView() {
 
             {/* Summary */}
             {selectedCall.summary && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Call Summary</h3>
+              <div className="rounded-lg shadow-sm p-6" style={{ backgroundColor: 'var(--bg-surface)' }}>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Call Summary</h3>
                 <p className="text-gray-700">{selectedCall.summary}</p>
               </div>
             )}
