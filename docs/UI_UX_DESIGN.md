@@ -362,3 +362,19 @@ UI labels adapt per business type via 3-tier fallback:
 - **Mobile-first** — bottom nav on mobile, sidebar on desktop
 - **No new dependencies** — use what's already installed
 - **Existing UI primitives** — Button, Card, Input, Select, Modal, Badge in `components/ui/`
+
+---
+
+## April 2026 UI/UX Audit
+
+A comprehensive code review audit was conducted on April 9-10, 2026. 35 issues were identified and all resolved:
+- 7 Critical (validation, error feedback, crash prevention)
+- 13 High (accessibility, confirmations, mobile, theming)
+- 15 Medium (polish, consistency, navigation)
+
+Key new components added:
+- `ConfirmModal` + `useConfirm()` hook — replaces all browser `confirm()` calls
+- Toast improvements — dismissable, duration by type, stacking limit
+- `TimeInput` — label association via useId(), error prop, theme-aware colorScheme
+
+Playwright e2e testing validates all critical fixes and a 12-step functional audit across every major view.

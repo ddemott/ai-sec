@@ -1,11 +1,38 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-04-05
+**Last updated:** 2026-04-10
 
 ---
 
 ## Where We Are
 
 Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone provisioned. Voice AI working end-to-end.
+
+### April 9-10 Session: UI/UX Audit + Shift Bar Fix
+
+**Front Desk shift bars fixed** — Root cause: scheduler called `Api.shifts.schedule.list()` (raw overrides only), missing employees with weekly patterns. Fixed with:
+- New `get_effective_shifts_bulk()` RPC for single-query all-employee shift lookup
+- Both `get_effective_shifts()` and `get_effective_shifts_bulk()` now date-based only (no weekly pattern fallback)
+- Shift bar styling matched between Front Desk and Working Hours (solid blue, white labels)
+
+**Full UI/UX audit completed** — 35 items across Critical (7), High (13), Medium (15), all resolved:
+- Wizard step guards prevent skipping ahead without data
+- Toast system: dismissable, configurable duration, max 5 visible
+- All `confirm()` calls replaced with styled ConfirmModal
+- Time validation in shift editor and QuickBook panel
+- Keyboard accessibility (role/tabIndex/onKeyDown) on interactive elements
+- Mobile responsive QuickBookPanel, scrollable mobile nav
+- VoiceCallsView theme compliance (CSS variables replace hardcoded colors)
+- Tab state synced to URL query params (?tab=schedule)
+- Loading spinner on auth check (was blank white screen)
+- Empty states for scheduler (no staff) and CRM (no results)
+- Staff view now shows view tab bar (Staff/Resources/List/Calendar)
+
+**Playwright e2e testing added**:
+- 7 critical fix tests (toast, validation, NaN guard, unsaved changes warning)
+- 12-step functional audit (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav)
+- All tests pass with 0 issues
+
+**5W diagnostic compliance**: All 465 dashboard tests now have WHO/WHAT/WHEN/WHERE/WHY comments. 12 new sad path tests added to previously non-compliant files.
 
 ### April 3-4 Session: Architecture Review + Scheduling Overhaul
 
@@ -28,13 +55,6 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 - Default times: 8:00 AM - 5:00 PM
 - `employee_shifts` (weekly patterns) still exists in DB but no longer used by UI
 
-### Active Bug: Front Desk Shift Bars Not Rendering
-- Working Hours view shows shifts correctly for Bella Salon
-- Front Desk scheduler does NOT display shift bars despite data being in API
-- Debug `console.log` added to `NewSchedulerView.tsx` (~line 213) — need browser console output
-- `useSchedulerData` fetches `Api.shifts.schedule.list()` → filters by date → maps to `shiftsByEmployee`
-- API confirmed returning correct data. Display issue only.
-
 ### Other UI Work Done
 - Landing page `public/index.html`: added "Log in" button (was missing entirely)
 - Skill map connection lines: brightened opacity and colors for dark themes
@@ -42,22 +62,18 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 
 ## What's Left
 
-### Immediate (pick up here)
-1. **Fix Front Desk shift bars** — debug console.log is in place, need browser output
-2. **Remove debug console.log** from NewSchedulerView after fixing
-3. **Verify modal focus fix** — typing in skill modal should work now
-
 ### Phase 13 Remaining
 - **Deploy dashboard to Railway** — code ready, blocked by Railway incident April 2
 - **Set `DASHBOARD_URL`** on backend — needs dashboard deployed
-- **UI/UX flow improvements** — ongoing
+- ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit, 35 items resolved)
 - **Database webhooks for n8n** — ops task, triggers exist
 - **Beta testing with DynaTire** — needs dashboard deployed
 
 ### Test Count
-- **1,468 tests passing, 0 failures** (as of last full run before scheduling changes)
-- 1,118 backend + 347 dashboard + 3 edge function
-- Some test files may need updating after scheduling simplification
+- **1,586 tests passing, 0 failures**
+- 1,118 backend + 465 dashboard + 3 edge function
+- 19 Playwright e2e tests (7 critical + 12 functional audit)
+- 29 live QA tool calls (88 assertions)
 
 ---
 
@@ -76,7 +92,8 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,038 backend + 332 dashboard = 1,370 passing + 88 QA assertions | All green (with DB running), zero TS errors |
+| **Tests** | 1,118 backend + 465 dashboard = 1,586 passing + 88 QA assertions | All green (with DB running), zero TS errors |
+| **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
@@ -202,7 +219,7 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 1. **Deploy dashboard** (Vercel or Railway) — currently local only
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
 3. ~~Apply new migrations to Supabase~~ — Done. All 63 migrations applied including April 1 timezone fix + specific booking errors
-4. **UI/UX flow improvements** — hands-on testing
+4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit, 35 items resolved)
 5. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
 6. **Beta testing with DynaTire** — real-world validation with live calls
 

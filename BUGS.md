@@ -1,8 +1,49 @@
 # Bugs & Issues
 
-Found during full code review on March 16, 2026. Updated April 1, 2026 with voice AI fixes and audit of all outstanding bugs.
+Found during full code review on March 16, 2026. Updated April 9, 2026 with UI/UX audit.
 
-**Summary**: 72 bugs tracked. 70 FIXED, 2 NOT A BUG, 1 OPEN (BUG-072).
+**Summary**: 72 bugs tracked + 35 UX issues. 70 FIXED, 2 NOT A BUG, 35 UX RESOLVED, 1 OPEN (BUG-072).
+
+### April 9-10, 2026: UI/UX Audit (35 items resolved)
+
+Full dashboard UI/UX audit conducted via code review. 35 issues identified across Critical (7), High (13), and Medium (15) severity. All resolved.
+
+**Critical fixes:**
+- Wizard step guards (can no longer skip ahead without data)
+- Toast system (dismissable, configurable duration, max 5 stacking)
+- Error feedback (replaced silent catches with showToast across 4 components)
+- Unsaved changes warning (beforeunload on dirty reorder)
+- QuickBook + shift time validation (end must be after start)
+- NaN crash guard on empty appointment times
+
+**High fixes:**
+- Loading overlay on scheduler grid
+- All `confirm()` calls replaced with styled ConfirmModal + useConfirm hook
+- Calendar disconnect confirmation
+- Empty states (scheduler, CRM search)
+- TimeInput label association + error prop
+- Modal focus restoration fallback
+- Keyboard accessibility (role/tabIndex on staff rows, appointment list)
+- Mobile responsive QuickBookPanel
+- StaffProfileCard Escape dismiss
+- Select arrow visibility in dark mode
+- VoiceCallsView CSS variable compliance
+- EmployeeDayFocusPanel shift calc bug (minutes ignored)
+
+**Medium fixes:**
+- Truncated name tooltips
+- Business hours derived from shift data
+- Tab state in URL (?tab=schedule)
+- Loading spinner (was blank white)
+- Consistent appointment status colors
+- CRM search empty state
+- Dashboard "+X more" clickable
+- VoiceCallsView outcome filter + load count
+- Mobile nav scrollable
+- Skills row height capped
+- Wizard auto-seed logging
+- Card/FolderTabs focus rings
+- "Staff & Shifts" clickable link
 
 ### April 3-4, 2026 Architecture Review Fixes (BUG-065 through BUG-072)
 - BUG-065: Booking RPC shift_override is_off bypass — FIXED (migration 20260403000001)

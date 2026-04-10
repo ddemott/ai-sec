@@ -47,7 +47,7 @@ Reset the database with 3 realistic businesses:
 - **Two-Layer Knowledge**: Database tool calls for facts (pricing, availability, booking) with zero hallucination. RAG over uploaded PDFs for policies (cancellation, service area, payment terms).
 - **Atomic Booking**: Checks availability and books appointments instantly while respecting staff shifts, expertise, and resource capabilities. DST-safe, race-condition-proof.
 - **Multi-Tenant Dashboard**: Owners manage staff, resources, services, AI persona, and knowledge base. Vocabulary adapts to business type (Bays/Technicians for tire shops, Chairs/Stylists for salons).
-- **Scheduler**: Staff swimlane view, resource columns view, appointment list view. Quick book panel for walk-ins. Employee day focus with utilisation stats.
+- **Scheduler**: Staff swimlane view, resource columns view, appointment list view, calendar sub-view. View tabs accessible from all views. Quick book panel for walk-ins. Employee day focus with utilisation stats.
 - **CRM**: Searchable customer profiles with appointment history, call summaries, transcripts, and internal notes.
 - **Coverage Visibility**: Coverage gaps are visible throughout the UI — scheduler, services list, skill map, and setup wizard.
 - **Analytics**: Call volume, booking conversion, and estimated revenue tracking.
@@ -102,7 +102,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ## Testing
 
-**1,468 tests passing** (1,118 backend + 347 dashboard + 3 edge function) in ~55 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
+**1,586 tests passing** (1,118 backend + 465 dashboard + 3 edge function) in ~55 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
 
 ```bash
 # Backend
@@ -116,6 +116,9 @@ deno task test --no-check
 
 # Live QA (29 tool calls against production Supabase)
 python scripts/qa-live-test.py
+
+# E2e (Playwright — 19 tests against live dashboard)
+cd dashboard && npx playwright test
 ```
 
 ### Coverage
@@ -128,7 +131,7 @@ Every route module, service file, and middleware layer has test coverage. Tests 
 | Backend services (16 files) | 22+ files | ~350 |
 | Architecture review fixes | 10 files | 93 |
 | Middleware, constants, scheduling | 5 files | ~50 |
-| Dashboard components + views | 18 files | 347 |
+| Dashboard components + views | 22 files | 465 |
 | Edge function (Deno) | 10 files | separate (`deno task test`) |
 | Live QA | 1 file | 29 calls / 88 assertions |
 
@@ -170,4 +173,5 @@ See `docs/DEPLOYMENT.md` for the detailed step-by-step guide.
 - **Two-layer knowledge** — database facts (zero hallucination) + RAG for policies
 - **Contextual feedback** — in-app feedback button on every page
 - **Theme system** — 8 themes with CSS custom properties
+- **Playwright e2e test suite** — 19 tests covering critical fixes and functional audit
 - **Stripe billing** — subscription gate with 3 plan tiers

@@ -77,6 +77,11 @@
 - [x] **Voice AI Phone/Date/Employee Fixes**: Done (2026-04-01) — BUG-060/061/062: Phone validation, dynamic date prompt, service-to-skill mapping in Vapi assistant.
 - [x] **Booking Error Handling**: Done (2026-04-01) — BUG-063/064: Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) via migration `20260401000001`.
 - [x] **OAuth Callback Refactoring**: Done (2026-04-01) — Generic `oauthCallbackFactory.ts` + shared `tokenManagement.ts` eliminate duplication across 4 CRM integrations.
+- [x] **UI/UX Audit**: Done (2026-04-09) — 35 issues identified and resolved across Critical (7), High (13), Medium (15). ConfirmModal + useConfirm hook, Toast improvements, wizard step guards, keyboard accessibility, mobile responsiveness.
+- [x] **Playwright E2E Testing**: Done (2026-04-09) — 19 Playwright tests covering 12-step functional audit across every major view.
+- [x] **Front Desk Shift Bars**: Done (2026-04-09) — BUG-072 resolved, shift bars rendering correctly in NewSchedulerView.
+- [x] **Scheduler View Tabs**: Done (2026-04-09) — Staff view now includes scheduler sub-tabs.
+- [x] **5W Diagnostic Compliance**: Done (2026-04-09) — All 465 dashboard tests include 5W diagnostic context.
 - [ ] **Stripe Test Products**: Recreate 4 products (Solo/Growth/Professional/Enterprise) in Stripe test mode. Update Price IDs in `.env.production`. Live mode products already created.
 - [ ] **Rotate Exposed Keys**: Supabase DB password, OpenAI API key, Supabase access token were exposed in chat. Regenerate all and update `.env.production`.
 - [ ] **Beta Testing**: Real-world call tests with DynaTire
