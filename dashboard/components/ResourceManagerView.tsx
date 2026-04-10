@@ -159,7 +159,7 @@ export default function ResourceManagerView() {
     <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8">
         <div className="flex items-center mb-6">
-          <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
+          <div className="p-2 rounded-lg mr-4" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
             <Wrench className="w-6 h-6" />
           </div>
           <div>
@@ -210,11 +210,11 @@ export default function ResourceManagerView() {
               setEditForm({ name: res.name, description: res.description || '', is_active: res.is_active !== false });
               setIsEditModalOpen(true); 
             }}
-            className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
+            className="cursor-pointer hover:shadow-xl transition-all group"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 rounded-2xl shadow-sm" style={{ backgroundColor: 'var(--bg-raised)' }}>
-                <Wrench className="w-6 h-6 group-hover:text-blue-500 transition-colors" style={{ color: 'var(--text-muted)' }} />
+                <Wrench className="w-6 h-6 transition-colors" style={{ color: 'var(--text-muted)' }} />
               </div>
               <Badge variant={res.is_active !== false ? 'success' : 'secondary'}>
                 {res.is_active !== false ? 'Active' : 'Inactive'}
@@ -278,7 +278,8 @@ export default function ResourceManagerView() {
                   role="switch"
                   aria-checked={editForm.is_active}
                   onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? '' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  style={editForm.is_active ? { backgroundColor: 'var(--accent)' } : undefined}
                 >
                   <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
@@ -298,8 +299,8 @@ export default function ResourceManagerView() {
                   <button 
                     key={service.id}
                     onClick={() => selectedResource && toggleServiceMapping(service.id, selectedResource.id)}
-                    className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-md' : ''}`}
-                    style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
+                    className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-md' : ''}`}
+                    style={isMapped ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                   >
                     {service.name}
                     {isMapped ? <CheckCircle2 className="w-5 h-5 text-white" /> : <PlusCircle className="w-5 h-5 opacity-30" />}

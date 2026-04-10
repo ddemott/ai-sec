@@ -102,7 +102,7 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
           placeholder="What's working? What's confusing? What would you change?"
           aria-label="Feedback comment"
           rows={3}
-          className="w-full p-2.5 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full p-2.5 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-[var(--accent-glow)] focus:border-[var(--accent)] resize-none"
           style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
         />
 

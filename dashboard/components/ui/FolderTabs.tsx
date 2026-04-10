@@ -76,7 +76,7 @@ export const FolderTab: React.FC<FolderTabProps> = ({
       onClick={onClick}
       role="tab"
       aria-selected={isActive}
-      className="flex items-center gap-1.5 transition-all relative focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset outline-none"
+      className="flex items-center gap-1.5 transition-all relative focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset outline-none"
       style={{
         color: isActive ? 'var(--accent-soft)' : 'var(--text-muted)',
         backgroundColor: isActive ? 'var(--bg-raised)' : 'var(--bg-base)',

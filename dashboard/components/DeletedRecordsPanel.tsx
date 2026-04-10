@@ -169,7 +169,7 @@ export function DeletedRecordsPanel({
       <div className="p-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--accent)' }} />
           </div>
         ) : error ? (
           <div className="text-red-600 text-center py-8">{error}</div>
@@ -223,7 +223,10 @@ export function DeletedRecordsPanel({
                     </button>
                     <button
                       onClick={() => openCopyModal(record)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg"
+                      className="p-2 rounded-lg transition-colors"
+                      style={{ color: 'var(--accent-soft)' }}
+                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }}
+                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = '' }}
                       title="Copy fields to another record"
                     >
                       <Copy className="w-4 h-4" />
@@ -313,7 +316,7 @@ export function DeletedRecordsPanel({
                           type="checkbox"
                           checked={selectedFields.has(key)}
                           onChange={() => toggleField(key)}
-                          className="text-blue-600"
+                          style={{ accentColor: 'var(--accent)' }}
                         />
                         <div className="flex-1">
                           <div className="font-medium text-sm text-gray-900 dark:text-white">{key}</div>
@@ -337,7 +340,10 @@ export function DeletedRecordsPanel({
               <button
                 onClick={handleCopyFields}
                 disabled={!selectedTarget || selectedFields.size === 0 || copying}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+                style={{ backgroundColor: 'var(--accent)' }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '0.9' }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '' }}
               >
                 {copying ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />

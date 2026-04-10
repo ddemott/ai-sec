@@ -180,7 +180,7 @@ export default function SkillMatrixView() {
               <tr key={`${entity.type}-${entity.id}`} className={idx % 2 === 0 ? 'bg-white/50 dark:bg-white/5' : ''}>
                 <td className="p-4 border-b sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
                   <div className="flex items-center">
-                    <div className={`p-1.5 rounded-lg mr-3 ${entity.type === 'employee' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+                    <div className={`p-1.5 rounded-lg mr-3 ${entity.type === 'employee' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : ''}`} style={entity.type === 'resource' ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}>
                       {entity.type === 'employee' ? <Users className="w-3 h-3" /> : <Wrench className="w-3 h-3" />}
                     </div>
                     <div>
@@ -203,7 +203,8 @@ export default function SkillMatrixView() {
                       <button
                         disabled={saving}
                         onClick={() => toggleMapping(entity.type, entity.id, service.id)}
-                        className={`w-full h-full p-4 flex items-center justify-center transition-all ${isMapped ? 'bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400' : 'text-gray-300 dark:text-gray-800 hover:text-gray-400 dark:hover:text-gray-700'}`}
+                        className={`w-full h-full p-4 flex items-center justify-center transition-all ${isMapped ? '' : 'text-gray-300 dark:text-gray-800 hover:text-gray-400 dark:hover:text-gray-700'}`}
+                        style={isMapped ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
                       >
                         {isMapped ? <Check className="w-5 h-5 stroke-[3]" /> : <X className="w-4 h-4 opacity-30" />}
                       </button>
@@ -222,7 +223,7 @@ export default function SkillMatrixView() {
             <div className="w-3 h-3 rounded-full bg-green-500 mr-2" /> {vocab.employee_label}
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-blue-500 mr-2" /> {vocab.resource_label}
+            <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: 'var(--accent)' }} /> {vocab.resource_label}
           </div>
         </div>
         <p>Tip: Toggling a cell instantly updates the AI&apos;s scheduling logic.</p>

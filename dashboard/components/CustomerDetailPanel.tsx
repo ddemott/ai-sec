@@ -228,8 +228,8 @@ export function CustomerDetailPanel({
                         rows={4}
                         value={editForm.notes}
                         onChange={(e) => onEditFormChange('notes', e.target.value)}
-                        className="w-full p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 transition"
-                        style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
+                        className="w-full p-2.5 rounded-xl text-sm outline-none focus:ring-2 transition"
+                        style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
                         placeholder="Add private notes the AI should consider..."
                       />
                     </div>

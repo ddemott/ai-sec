@@ -121,7 +121,7 @@ export default function AIConfigView() {
     <div className="flex flex-1 flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="p-4 md:p-8 flex items-center justify-between sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex items-center">
-          <div className="bg-blue-600 p-2 rounded-lg mr-4 shadow-md text-white">
+          <div className="p-2 rounded-lg mr-4 shadow-md text-white" style={{ backgroundColor: 'var(--accent)' }}>
             <Settings className="w-6 h-6" />
           </div>
           <div>
@@ -145,7 +145,7 @@ export default function AIConfigView() {
         {/* Template Browsing Section */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
-            <LayoutTemplate className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+            <LayoutTemplate className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
             Business Type Templates
           </h2>
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -162,11 +162,9 @@ export default function AIConfigView() {
                     <button
                       key={t.business_type}
                       onClick={() => setPreviewTemplate(t)}
-                      className={`p-3 border rounded-xl text-sm font-medium transition text-left group ${
-                        isActive ? 'border-blue-500' : ''
-                      }`}
+                      className={`p-3 border rounded-xl text-sm font-medium transition text-left group`}
                       style={isActive
-                        ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent-soft)' }
+                        ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)', color: 'var(--accent-soft)', borderColor: 'var(--accent)' }
                         : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }
                       }
                     >
@@ -175,7 +173,7 @@ export default function AIConfigView() {
                         <Eye className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
                       </div>
                       {isActive && (
-                        <span className="text-[10px] text-blue-500 dark:text-blue-400 flex items-center gap-1 mt-1">
+                        <span className="text-[10px] flex items-center gap-1 mt-1" style={{ color: 'var(--accent-soft)' }}>
                           <Check className="w-3 h-3" /> Current
                         </span>
                       )}
@@ -191,14 +189,14 @@ export default function AIConfigView() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
-              <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+              <MessageSquare className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
               System Instructions (The &quot;Brain&quot;)
             </h2>
             <span className="text-xs font-medium px-2 py-1 rounded" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-raised)' }}>Advanced</span>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 p-4 rounded-xl flex items-start">
-            <Info className="w-5 h-5 text-blue-500 dark:text-blue-400 mr-3 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+          <div className="border p-4 rounded-xl flex items-start" style={{ backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent-muted)' }}>
+            <Info className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-soft)' }} />
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--accent-soft)' }}>
               This prompt defines your AI&apos;s personality. Tell it what to say, what to avoid, and how to handle specific situations. The AI will follow these rules on every call.
             </p>
           </div>
@@ -209,7 +207,7 @@ export default function AIConfigView() {
               setConfig(prev => prev ? {...prev, system_prompt: e.target.value} : null);
               setDirty(true);
             }}
-            className="w-full p-4 border rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 focus:ring-blue-500 outline-none shadow-inner font-mono"
+            className="w-full p-4 border rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 outline-none shadow-inner font-mono"
             style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }}
             placeholder="Ex: You are a helpful assistant for DynaTire. Be professional and concise..."
           />
@@ -218,7 +216,7 @@ export default function AIConfigView() {
         {/* First Message Section */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
-            <MessageSquare className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+            <MessageSquare className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
             First Message (Greeting)
           </h2>
           <Input
@@ -234,7 +232,7 @@ export default function AIConfigView() {
         {/* Voice Selection Section */}
         <section className="space-y-4">
           <h2 className="text-lg font-bold flex items-center" style={{ color: 'var(--text-primary)' }}>
-            <Mic className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+            <Mic className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
             Voice Identity
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -250,13 +248,14 @@ export default function AIConfigView() {
                   setConfig(prev => prev ? {...prev, voice_id: voice.id} : null);
                   setDirty(true);
                 }}
-                className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'border-blue-500 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}
+                className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'ring-1' : ''}`}
+                style={config?.voice_id === voice.id ? { borderColor: 'var(--accent)', ['--tw-ring-color' as string]: 'var(--accent)' } : undefined}
               >
                 <div>
                   <p className="font-bold">{voice.name}</p>
                   <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{voice.desc}</p>
                 </div>
-                <div className={`w-4 h-4 rounded-full border-2 ${config?.voice_id === voice.id ? 'bg-blue-600 border-blue-600' : ''}`} style={config?.voice_id === voice.id ? {} : { borderColor: 'var(--border-soft)' }} />
+                <div className={`w-4 h-4 rounded-full border-2`} style={config?.voice_id === voice.id ? { backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' } : { borderColor: 'var(--border-soft)' }} />
               </Card>
             ))}
           </div>
@@ -325,7 +324,7 @@ export default function AIConfigView() {
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Suggested Services</p>
                 <div className="flex flex-wrap gap-1.5">
                   {previewTemplate.example_services.map((svc, i) => (
-                    <span key={i} className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-full">{svc}</span>
+                    <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>{svc}</span>
                   ))}
                 </div>
               </div>

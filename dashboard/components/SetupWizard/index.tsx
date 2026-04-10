@@ -126,7 +126,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
         {/* Header */}
         <header className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <Wand2 className="w-5 h-5 text-blue-500" />
+            <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <h2 id="wizard-title" className="text-lg font-bold text-gray-900 dark:text-gray-100">
               Setup Assistant
             </h2>
@@ -150,13 +150,14 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
                 disabled={!canAdvanceTo(s) && s > step}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                   s === step
-                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                    ? ''
                     : s < step
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-pointer'
                     : !canAdvanceTo(s)
                     ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
                 }`}
+                style={s === step ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
               >
                 {s < step ? (
                   <Check className="w-3 h-3" />

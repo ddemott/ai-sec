@@ -199,11 +199,11 @@ export default function EmployeeManagementView() {
               });
               setIsEditModalOpen(true);
             }}
-            className="cursor-pointer hover:border-blue-500/50 hover:shadow-xl transition-all group"
+            className="cursor-pointer hover:shadow-xl transition-all group"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 rounded-2xl shadow-sm border" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
-                <Users className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                <Users className="w-6 h-6 text-gray-400 group-hover:opacity-80 transition-colors" />
               </div>
               <Badge variant={emp.is_active ? 'success' : 'secondary'}>
                 {emp.is_active ? 'Active' : 'On Leave'}
@@ -285,7 +285,8 @@ export default function EmployeeManagementView() {
                   role="switch"
                   aria-checked={editForm.is_active}
                   onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? '' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  style={editForm.is_active ? { backgroundColor: 'var(--accent)' } : undefined}
                 >
                   <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
@@ -304,8 +305,8 @@ export default function EmployeeManagementView() {
                     <button 
                       key={service.id}
                       onClick={() => toggleService(service.id, selectedEmployee.id)}
-                      className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'bg-blue-600 text-white shadow-lg' : ''}`}
-                      style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
+                      className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-lg' : ''}`}
+                      style={isMapped ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                     >
                       {service.name}
                       {isMapped ? <CheckCircle2 className="w-5 h-5 text-white" /> : <PlusCircle className="w-5 h-5 opacity-30" />}

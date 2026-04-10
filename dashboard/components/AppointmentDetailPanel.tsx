@@ -194,10 +194,11 @@ export function AppointmentDetailPanel({
                                       label="Description / Service"
                                       value={form.description}
                                       onChange={e => onFormChange({...form, description: e.target.value})}
-                                      className="bg-blue-800 dark:bg-blue-900 border-blue-700 dark:border-blue-800 text-lg font-medium italic text-white"
+                                      className="text-lg font-medium italic text-white"
+                                      style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }}
                                       placeholder="e.g. Oil Change"
                                   />
-                                  <p className="text-sm text-blue-200 dark:text-blue-400 leading-relaxed italic opacity-80">
+                                  <p className="text-sm leading-relaxed italic opacity-80" style={{ color: 'var(--accent-soft)' }}>
                                       Editing this will update the core service description the AI uses for future reference.
                                   </p>
                               </div>

@@ -44,7 +44,7 @@ export function Step7GoLive({ phoneStatus: initialStatus, inboundPhone: initialP
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <Rocket className="w-5 h-5 text-blue-500" />
+          <Rocket className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
           Go Live
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

@@ -51,7 +51,10 @@ export function Step1Services({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onEdit(svc) }}
-                  className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                  className="p-1.5 text-gray-400 transition-colors"
+                  style={{ }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-soft)' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '' }}
                   title="Edit"
                 >
                   <Pencil className="w-3.5 h-3.5 pointer-events-none" />
@@ -82,7 +85,7 @@ export function Step1Services({
 
       {/* Add/Edit form */}
       {editingService ? (
-        <div className="rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 space-y-3">
+        <div className="rounded-xl border-2 p-4 space-y-3" style={{ borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }}>
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {editingServiceId ? 'Edit Service' : 'New Service'}
           </div>
@@ -119,7 +122,9 @@ export function Step1Services({
       ) : (
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-500 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 transition-colors"
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.color = 'var(--accent-soft)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.color = '' }}
         >
           <Plus className="w-4 h-4" />
           Add a service

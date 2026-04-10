@@ -56,7 +56,7 @@ function getOutcomeLabel(outcome: string | null): string {
 function getOutcomeColor(outcome: string | null): string {
   const colors: Record<string, string> = {
     appointment_booked: 'bg-green-100 text-green-800',
-    appointment_rescheduled: 'bg-blue-100 text-blue-800',
+    appointment_rescheduled: 'bg-sky-100 text-sky-800',
     appointment_cancelled: 'bg-red-100 text-red-800',
     info_provided: 'bg-gray-100 text-gray-800',
     transferred: 'bg-yellow-100 text-yellow-800',
@@ -235,8 +235,9 @@ export default function VoiceCallsView() {
                 <div
                   key={call.id}
                   className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
-                    selectedCall?.id === call.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''
+                    selectedCall?.id === call.id ? 'border-l-2' : ''
                   }`}
+                  style={selectedCall?.id === call.id ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' } : undefined}
                   onClick={() => setSelectedCall(call)}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -260,7 +261,7 @@ export default function VoiceCallsView() {
                   </div>
                   {call.customer_context?.is_known_customer && (
                     <div className="mt-1">
-                      <span className="text-xs text-blue-600">
+                      <span className="text-xs" style={{ color: 'var(--accent-soft)' }}>
                         {call.customer_context.appointment_history.total} appointments
                       </span>
                     </div>
@@ -273,7 +274,8 @@ export default function VoiceCallsView() {
                   <button
                     onClick={handleLoadMore}
                     disabled={historyLoading}
-                    className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400"
+                    className="w-full py-2 text-sm disabled:text-gray-400"
+                    style={{ color: 'var(--accent-soft)' }}
                   >
                     {historyLoading ? 'Loading...' : `Load more (${callHistory.length} of ${total})`}
                   </button>
@@ -390,7 +392,7 @@ export default function VoiceCallsView() {
                           <h5 className="text-sm font-medium text-gray-700 mb-2">Upcoming</h5>
                           <div className="space-y-2">
                             {customerContext.appointment_history.upcoming_appointments.map(apt => (
-                              <div key={apt.id} className="bg-blue-50 rounded p-2 text-sm">
+                              <div key={apt.id} className="rounded p-2 text-sm" style={{ backgroundColor: 'var(--accent-muted)' }}>
                                 <p className="font-medium">
                                   {new Date(apt.start_time).toLocaleDateString()} at{' '}
                                   {new Date(apt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

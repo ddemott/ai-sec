@@ -28,7 +28,7 @@ export const Select: React.FC<SelectProps> = ({
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={error && id ? `${id}-error` : undefined}
-        className={`w-full p-2.5 border rounded-lg outline-none text-sm font-bold transition focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none bg-[length:20px_20px] bg-[right_10px_center] bg-no-repeat pr-10 ${error ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : ''} ${className}`}
+        className={`w-full p-2.5 border rounded-lg outline-none text-sm font-bold transition focus:ring-2 appearance-none bg-[length:20px_20px] bg-[right_10px_center] bg-no-repeat pr-10 ${error ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'focus:ring-[var(--accent-glow)] focus:border-[var(--accent)]'} ${className}`}
         style={{
           backgroundColor: 'var(--input-bg)',
           borderColor: error ? undefined : 'var(--border)',

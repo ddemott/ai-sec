@@ -144,12 +144,12 @@ export default function SkillManagementView() {
 
       <Card variant="info" className="mt-10">
         <div className="flex gap-4">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg h-fit text-blue-600">
+          <div className="p-2 rounded-lg h-fit" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
             <Award className="w-5 h-5" />
           </div>
           <div>
             <h4 className="font-bold mb-1">Why manage skills centrally?</h4>
-            <p className="text-xs leading-relaxed text-blue-800 dark:text-blue-300/80">
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--accent-soft)' }}>
               Defining skills here ensures consistency across your team and physical bays. 
               Once a skill is defined, you can assign it to <strong>Staff</strong> (People) and <strong>Resources</strong> (Places). 
               The AI will only book appointments where both the Person and the Place share the required skills for the service.

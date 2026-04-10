@@ -137,7 +137,8 @@ export function OutlookLayout({
             <button
               title="All Businesses"
               onClick={() => setActiveTab('all-businesses')}
-              className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
             >
               <Globe className="w-4 h-4" />
             </button>
@@ -165,9 +166,14 @@ export function OutlookLayout({
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
             className={`p-2 rounded-md transition-all ${
               profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
-                ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                ? ''
                 : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
             }`}
+            style={
+              profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
+                ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }
+                : undefined
+            }
           >
             <User className="w-4 h-4" />
           </button>
@@ -199,9 +205,10 @@ export function OutlookLayout({
             onClick={() => handleModeSwitch('front-desk')}
             className={`flex-1 py-2 text-xs font-bold text-center transition-all ${
               currentMode === 'front-desk'
-                ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                ? ''
                 : 'text-gray-400'
             }`}
+            style={currentMode === 'front-desk' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
           >
             Front Desk
           </button>
@@ -209,9 +216,10 @@ export function OutlookLayout({
             onClick={() => handleModeSwitch('back-office')}
             className={`flex-1 py-2 text-xs font-bold text-center transition-all ${
               currentMode === 'back-office'
-                ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                ? ''
                 : 'text-gray-400'
             }`}
+            style={currentMode === 'back-office' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
           >
             Back Office
           </button>
@@ -224,7 +232,8 @@ export function OutlookLayout({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === tab.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+                className={`flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === tab.id ? '' : 'text-gray-500'}`}
+                style={activeTab === tab.id ? { color: 'var(--accent-soft)' } : undefined}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-[9px] mt-0.5 font-medium">{tab.label}</span>
@@ -254,7 +263,8 @@ export function OutlookLayout({
               <button
                 key={t.id}
                 onClick={() => { if (onSelectTenant) onSelectTenant(t.id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('dashboard'); }}
-                className={`w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex flex-col transition-colors border-b border-gray-50 dark:border-gray-800/50 ${managedTenantId === t.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                className="w-full text-left px-4 py-3 flex flex-col transition-colors border-b border-gray-50 dark:border-gray-800/50 hover:brightness-125"
+                style={{ backgroundColor: managedTenantId === t.id ? 'var(--accent-muted)' : undefined }}
               >
                 <span className="text-sm font-bold">{t.name}</span>
                 <span className="text-[10px] opacity-50 uppercase tracking-tighter">{t.business_type}</span>

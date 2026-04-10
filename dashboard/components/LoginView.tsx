@@ -54,7 +54,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             <Bot className="w-10 h-10" />
           </div>
           <h1 className="text-2xl font-display tracking-tight">Secretary HQ Portal</h1>
-          <p className="text-blue-100 text-sm mt-1">Multi-Tenant Management Console</p>
+          <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>Multi-Tenant Management Console</p>
         </div>
 
         <div className="p-8">
@@ -76,8 +76,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
+                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
+                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
                   placeholder="admin@business.com"
                 />
               </div>
@@ -94,8 +94,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
+                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
+                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />

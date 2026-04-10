@@ -44,9 +44,10 @@ export function Step4Shifts({
                   onClick={() => onSelectEmployee(isSelected ? null : String(emp.id))}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     isSelected
-                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-2 ring-blue-400'
+                      ? 'ring-2'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
+                  style={isSelected ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)', boxShadow: '0 0 0 2px var(--accent-soft)' } : undefined}
                 >
                   {emp.first_name || emp.name} {emp.last_name || ''}
                   {empShiftCount > 0 && (

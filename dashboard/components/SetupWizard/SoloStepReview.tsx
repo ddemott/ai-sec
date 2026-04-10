@@ -88,9 +88,9 @@ export function SoloStepReview({
         </div>
 
         {/* What will be created */}
-        <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-          <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">What we&apos;ll set up for you:</p>
-          <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1">
+        <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }}>
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--accent-soft)' }}>What we&apos;ll set up for you:</p>
+          <ul className="text-sm space-y-1" style={{ color: 'var(--accent-soft)' }}>
             <li>Create your staff profile ({ownerName})</li>
             <li>Create a default work station ({resourceName})</li>
             <li>Assign all {services.length} service{services.length !== 1 ? 's' : ''} to you</li>

@@ -600,8 +600,9 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                   onDragOver={(e) => handleDragOver(e, idx)}
                   onDragEnd={handleDragEnd}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStaffNameClick(String(emp.id), e as unknown as React.MouseEvent); } }}
-                  className="flex items-center px-1.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                  className="flex items-center px-1.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-inset"
                   style={{
+                    ['--tw-ring-color' as string]: 'var(--accent)',
                     height: rowH,
                     borderBottom: '1px solid var(--border-soft)',
                     color: 'var(--text-primary, #fff)',

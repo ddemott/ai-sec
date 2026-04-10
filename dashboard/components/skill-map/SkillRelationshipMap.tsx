@@ -178,7 +178,8 @@ export default function SkillRelationshipMap() {
           <SkillMapColumn
             title={vocab.resource_plural}
             icon={Cog}
-            iconColor="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+            iconColor=""
+            iconStyle={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
             count={resourceNodes.length}
           >
             {resourceNodes.map(node => (
@@ -211,7 +212,7 @@ export default function SkillRelationshipMap() {
       <footer className="mt-4 flex items-center justify-between text-xs font-medium shrink-0 px-2 pt-3 border-t" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-4">
           <div className="flex items-center">
-            <div className="w-6 h-0.5 bg-blue-400 mr-2 rounded" /> Connected
+            <div className="w-6 h-0.5 mr-2 rounded" style={{ backgroundColor: 'var(--accent-soft)' }} /> Connected
           </div>
           <div className="flex items-center">
             <div className="w-6 h-0.5 bg-amber-400 mr-2 rounded border-dashed" style={{ borderTop: '2px dashed #f59e0b', height: 0, background: 'none' }} /> Broken chain

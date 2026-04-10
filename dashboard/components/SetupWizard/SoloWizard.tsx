@@ -328,7 +328,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <h2 className="text-lg font-bold">Solo Setup</h2>
           </div>
           <button onClick={onClose} className="p-1 transition" style={{ color: 'var(--text-secondary)' }}>
@@ -344,11 +344,12 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
               onClick={() => !finalized && s <= step && setStep(s)}
               className={`flex-1 text-xs font-medium py-1.5 rounded-lg transition-colors ${
                 s === step
-                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                  ? ''
                   : s < step
                   ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
               }`}
+              style={s === step ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
             >
               {STEP_LABELS[s]}
             </button>

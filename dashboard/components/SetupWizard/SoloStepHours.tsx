@@ -71,9 +71,10 @@ export function SoloStepHours({ shifts, loading, saving, error, onToggleDay, onU
                 <div
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-colors duration-500 ${
                     isFlashing
-                      ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                      ? ''
                       : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]'
                   }`}
+                  style={isFlashing ? { borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
                 >
                   {/* Day toggle */}
                   <button
@@ -116,7 +117,9 @@ export function SoloStepHours({ shifts, loading, saving, error, onToggleDay, onU
                         <button
                           onClick={() => handleCopyDown(dow)}
                           disabled={saving}
-                          className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                          className="p-1.5 text-gray-400 transition-colors"
+                          onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-soft)' }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '' }}
                           title="Copy to days below"
                         >
                           <ArrowDownToLine className="w-3.5 h-3.5" />
@@ -139,7 +142,8 @@ export function SoloStepHours({ shifts, loading, saving, error, onToggleDay, onU
                   <button
                     onClick={() => handleApplyWeekdays(dow)}
                     disabled={saving}
-                    className="flex items-center gap-1.5 ml-16 mt-1 mb-1 text-xs text-blue-500 hover:text-blue-400 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 ml-16 mt-1 mb-1 text-xs transition-colors disabled:opacity-50"
+                    style={{ color: 'var(--accent-soft)' }}
                   >
                     <CopyCheck className="w-3 h-3" />
                     Apply to all weekdays

@@ -173,7 +173,7 @@ export default function ServiceAssignmentView() {
     <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center">
-          <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
+          <div className="p-2 rounded-lg mr-4" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
             <Settings className="w-6 h-6" />
           </div>
           <div>
@@ -201,7 +201,7 @@ export default function ServiceAssignmentView() {
         {services.map(service => (
           <Card 
             key={service.id} 
-            className="relative group cursor-pointer hover:border-blue-500/50 transition-all"
+            className="relative group cursor-pointer transition-all"
             onClick={() => {
               setSelectedService(service);
               setEditForm({ name: service.name, description: service.description, duration_minutes: service.duration_minutes, price: service.price ?? undefined });
@@ -218,7 +218,7 @@ export default function ServiceAssignmentView() {
 
             <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
-                <Wrench className="w-3 h-3 mr-2 text-blue-500" />
+                <Wrench className="w-3 h-3 mr-2" style={{ color: 'var(--accent-soft)' }} />
                 <span className="text-gray-400">{vocab.resource_plural}: </span>
                 <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.id).length} assigned</span>
               </div>
@@ -260,7 +260,7 @@ export default function ServiceAssignmentView() {
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1 tracking-widest">Description</label>
                 <textarea 
-                  className="w-full p-3 border rounded-xl text-sm h-20 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 border rounded-xl text-sm h-20 outline-none focus:ring-2"
                   style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
                   value={editForm.description}
                   onChange={e => setEditForm({ ...editForm, description: e.target.value })}
@@ -298,8 +298,8 @@ export default function ServiceAssignmentView() {
                       <button 
                         key={res.id}
                         onClick={() => selectedService && toggleResourceMapping(selectedService.id, res.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-blue-600 text-white border-blue-600' : ''}`}
-                        style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all`}
+                        style={isMapped ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
                         {res.name}
                       </button>
@@ -391,7 +391,7 @@ export default function ServiceAssignmentView() {
                 <div>
                   <label className="block text-xs font-bold uppercase mb-1 ml-1" style={{ color: 'var(--text-muted)' }}>Description</label>
                   <textarea 
-                    className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-24 text-sm"
+                    className="w-full p-3 border rounded-xl focus:ring-2 outline-none h-24 text-sm"
                     style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
                     placeholder="What is included in this service?"
                     value={wizardData.description}
@@ -419,16 +419,17 @@ export default function ServiceAssignmentView() {
                   <Card 
                     key={res.id}
                     onClick={() => setSelectedResourceIds(prev => prev.includes(res.id) ? prev.filter(id => id !== res.id) : [...prev, res.id])}
-                    className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.id) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.id) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    style={selectedResourceIds.includes(res.id) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
                   >
                     <div className="font-bold">{res.name}</div>
                     <div className="text-xs text-gray-500 line-clamp-1">{res.description || 'No description'}</div>
                   </Card>
                 ))}
               </div>
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl flex items-start">
-                <Info className="w-5 h-5 text-blue-500 mr-3 shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+              <div className="p-4 rounded-2xl flex items-start" style={{ backgroundColor: 'var(--accent-muted)' }}>
+                <Info className="w-5 h-5 mr-3 shrink-0 mt-0.5" style={{ color: 'var(--accent-soft)' }} />
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--accent-soft)' }}>
                   Selecting specific {vocab.resource_plural.toLowerCase()} ensures the AI only books this service where the necessary tools or space are available.
                 </p>
               </div>
@@ -446,7 +447,8 @@ export default function ServiceAssignmentView() {
                   <Card 
                     key={emp.id}
                     onClick={() => setSelectedEmployeeIds(prev => prev.includes(emp.id.toString()) ? prev.filter(id => id !== emp.id.toString()) : [...prev, emp.id.toString()])}
-                    className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.id.toString()) ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.id.toString()) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    style={selectedEmployeeIds.includes(emp.id.toString()) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
                   >
                     <div className="font-bold">{emp.name}</div>
                     <div className="text-xs text-gray-500 line-clamp-1">Qualified for mapped services</div>

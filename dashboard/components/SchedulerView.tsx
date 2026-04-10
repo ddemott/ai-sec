@@ -95,9 +95,10 @@ export default function SchedulerView() {
                 onClick={() => setActiveView(key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
                   activeView === key
-                    ? 'bg-blue-600 text-white'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
+                style={activeView === key ? { backgroundColor: 'var(--accent)' } : undefined}
                 data-testid={`view-tab-${key}`}
               >
                 <Icon className="w-4 h-4" />
@@ -132,9 +133,10 @@ export default function SchedulerView() {
               onClick={() => setActiveView(key)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
                 activeView === key
-                  ? 'bg-blue-600 text-white'
+                  ? 'text-white'
                   : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
+              style={activeView === key ? { backgroundColor: 'var(--accent)' } : undefined}
               data-testid={`view-tab-${key}`}
             >
               <Icon className="w-4 h-4" />

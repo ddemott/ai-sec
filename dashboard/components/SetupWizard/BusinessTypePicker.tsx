@@ -52,7 +52,7 @@ export function BusinessTypePicker({ onSelect, onClose, onBack }: BusinessTypePi
         {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <h2 className="text-lg font-bold">What kind of business?</h2>
           </div>
           <button onClick={onClose} className="p-1 transition" style={{ color: 'var(--text-secondary)' }}>
@@ -106,8 +106,10 @@ export function BusinessTypePicker({ onSelect, onClose, onBack }: BusinessTypePi
                           <button
                             key={t.business_type}
                             onClick={() => onSelect(t.business_type)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 group"
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors group"
                             style={{ color: 'var(--text-primary)' }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--accent-muted)'; e.currentTarget.style.color = 'var(--accent-soft)' }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-primary)' }}
                           >
                             <span className="flex-1 text-left">{t.display_name}</span>
                             <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />

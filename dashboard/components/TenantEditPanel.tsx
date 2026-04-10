@@ -320,7 +320,7 @@ export function TenantEditPanel({
                           rows={10}
                           value={form.system_prompt || ''}
                           onChange={e => onFormChange({...form, system_prompt: e.target.value})}
-                          className="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono shadow-inner transition"
+                          className="w-full p-4 border rounded-xl outline-none focus:ring-2 text-sm font-mono shadow-inner transition"
                           style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
                       />
                   ) : (

@@ -87,10 +87,10 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
     }
   }
 
-  const colorMap: Record<string, { bg: string; text: string; avatar: string }> = {
+  const colorMap: Record<string, { bg: string; text: string; avatar: string; style?: { bg: React.CSSProperties; text: React.CSSProperties; avatar: React.CSSProperties } }> = {
     green: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', avatar: 'bg-green-500' },
     orange: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-600 dark:text-orange-400', avatar: 'bg-orange-500' },
-    blue: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', avatar: 'bg-blue-500' },
+    blue: { bg: '', text: '', avatar: '', style: { bg: { backgroundColor: 'var(--accent-muted)' }, text: { color: 'var(--accent-soft)' }, avatar: { backgroundColor: 'var(--accent)' } } },
     purple: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400', avatar: 'bg-purple-500' },
   }
   const colors = colorMap[provider.color] || colorMap.blue
@@ -99,7 +99,7 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
     <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
-          <div className={`${colors.bg} p-2 rounded-lg mr-4 ${colors.text}`}>
+          <div className={`${colors.bg} p-2 rounded-lg mr-4 ${colors.text}`} style={colors.style ? { ...colors.style.bg, ...colors.style.text } : undefined}>
             <Link2 className="w-5 h-5" />
           </div>
           <div>
@@ -124,7 +124,7 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
             className="flex items-center justify-center gap-3 p-4 border rounded-2xl hover:border-green-500 transition-all font-bold group w-full"
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
           >
-            <div className={`w-8 h-8 ${colors.bg} rounded-lg flex items-center justify-center ${colors.text} font-bold`}>
+            <div className={`w-8 h-8 ${colors.bg} rounded-lg flex items-center justify-center ${colors.text} font-bold`} style={colors.style ? { ...colors.style.bg, ...colors.style.text } : undefined}>
               {provider.icon}
             </div>
             <span>Connect {provider.name}</span>
@@ -134,7 +134,7 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
       ) : (
         <div className="p-4 border rounded-2xl flex items-center justify-between" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
           <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${colors.avatar}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${colors.avatar}`} style={colors.style?.avatar}>
               {provider.icon}
             </div>
             <div>

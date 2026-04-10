@@ -231,7 +231,7 @@ export default function ShiftManagementView() {
       <header className="mb-4 shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg mr-4 text-blue-600 dark:text-blue-400">
+            <div className="p-2 rounded-lg mr-4" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
               <Clock className="w-6 h-6" />
             </div>
             <div>
@@ -249,8 +249,8 @@ export default function ShiftManagementView() {
               <button
                 key={emp.id}
                 onClick={() => { setSelectedEmployeeId(emp.id); hasAutoScrolled.current = false }}
-                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.id ? 'bg-blue-600 text-white shadow-lg scale-105' : ''}`}
-                style={selectedEmployeeId === emp.id ? {} : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.id ? 'text-white shadow-lg scale-105' : ''}`}
+                style={selectedEmployeeId === emp.id ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
               >
                 {emp.name}
               </button>

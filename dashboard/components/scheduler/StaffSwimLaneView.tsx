@@ -222,31 +222,33 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
       <div
         className={`flex border-b transition-colors ${
           isSelected
-            ? 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/10'
+            ? ''
             : 'border-gray-100 dark:border-gray-800'
         }`}
-        style={{ minWidth: totalWidth }}
+        style={isSelected ? { minWidth: totalWidth, borderColor: 'var(--accent-muted)', backgroundColor: 'color-mix(in srgb, var(--accent-muted) 30%, transparent)' } : { minWidth: totalWidth }}
         data-testid={`swimlane-row-${empId}`}
       >
         {/* Employee label */}
         <div
           className={`p-2 border-r flex items-center gap-2 shrink-0 transition-colors ${
             isSelected
-              ? 'border-blue-200 dark:border-blue-800 bg-blue-100/50 dark:bg-blue-900/20'
+              ? ''
               : 'border-gray-200 dark:border-gray-800'
-          } ${!isUnassigned ? 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/20' : ''}`}
-          style={{ width: LABEL_WIDTH }}
+          } ${!isUnassigned ? 'cursor-pointer' : ''}`}
+          style={isSelected ? { width: LABEL_WIDTH, borderColor: 'var(--accent-muted)', backgroundColor: 'var(--accent-muted)' } : { width: LABEL_WIDTH }}
+          onMouseEnter={!isUnassigned ? (e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }) : undefined}
+          onMouseLeave={!isUnassigned ? (e => { if (!isSelected) e.currentTarget.style.backgroundColor = '' }) : undefined}
           onClick={() => {
             setSelectedLane(prev => prev === empId ? null : empId);
             onClick?.();
           }}
         >
-          <div className={`w-3 h-3 rounded-full ${colorClass} ${isSelected ? 'ring-2 ring-blue-400' : ''}`} />
+          <div className={`w-3 h-3 rounded-full ${colorClass} ${isSelected ? 'ring-2' : ''}`} style={isSelected ? { ['--tw-ring-color' as string]: 'var(--accent-soft)' } : undefined} />
           <span className={`text-sm font-bold truncate ${
             isUnassigned ? 'text-gray-500 dark:text-gray-400 italic'
-            : isSelected ? 'text-blue-700 dark:text-blue-300'
+            : isSelected ? ''
             : 'text-gray-900 dark:text-gray-100'
-          }`}>
+          }`} style={isSelected && !isUnassigned ? { color: 'var(--accent-soft)' } : undefined}>
             {empName}
           </span>
         </div>
@@ -267,7 +269,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                     : onShift
                     ? 'bg-white dark:bg-[#1a1a1a]'
                     : 'off-shift-hatching'
-                } ${!isUnassigned && !isDragging ? (onShift ? 'hover:bg-blue-50/50 dark:hover:bg-blue-950/10 cursor-crosshair' : 'cursor-cell') : ''}`}
+                } ${!isUnassigned && !isDragging ? (onShift ? 'cursor-crosshair' : 'cursor-cell') : ''}`}
                 style={{ width: hourWidth }}
                 onMouseDown={(e) => {
                   if (!isUnassigned) {

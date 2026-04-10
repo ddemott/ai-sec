@@ -19,7 +19,7 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
         {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <h2 className="text-lg font-bold">How is your business set up?</h2>
           </div>
           <button onClick={onClose} className="p-1 transition" style={{ color: 'var(--text-secondary)' }}>
@@ -31,10 +31,13 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
         <div className="p-6 grid grid-cols-2 gap-4">
           <button
             onClick={() => onChoose('solo')}
-            className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
+            className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all group"
+            style={{ ['--hover-border' as string]: 'var(--accent-soft)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.backgroundColor = '' }}
           >
-            <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <User className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+            <div className="w-14 h-14 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--accent-muted)' }}>
+              <User className="w-7 h-7" style={{ color: 'var(--accent-soft)' }} />
             </div>
             <div className="text-center">
               <p className="font-semibold text-gray-900 dark:text-gray-100">Just me</p>
@@ -46,7 +49,9 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
 
           <button
             onClick={() => onChoose('team')}
-            className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
+            className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all group"
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.backgroundColor = '' }}
           >
             <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users className="w-7 h-7 text-green-600 dark:text-green-400" />

@@ -29,8 +29,8 @@ const typeConfig = {
   },
   resource: {
     icon: Cog,
-    bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-    textColor: 'text-blue-600 dark:text-blue-400',
+    bgColor: '',
+    textColor: '',
   },
 }
 
@@ -49,7 +49,7 @@ export default function SkillMapNode({
   const dimmed = isLinking
     ? (!isLinkSource && !isLinkTarget ? 'opacity-30' : '')
     : (!isHighlighted && !isSelected ? 'opacity-40' : '')
-  const selectedRing = isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+  const selectedRing = isSelected ? 'ring-2' : ''
   const linkSourceRing = isLinkSource ? 'ring-2 ring-emerald-500 dark:ring-emerald-400' : ''
   const linkTargetStyle = isLinkTarget
     ? 'ring-2 ring-dashed ring-emerald-400 dark:ring-emerald-500 animate-pulse cursor-crosshair'
@@ -64,8 +64,9 @@ export default function SkillMapNode({
       className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200
         bg-white dark:bg-[#1a1a1a] hover:shadow-md
         ${brokenBorder} ${selectedRing} ${linkSourceRing} ${linkTargetStyle} ${dimmed}`}
+      style={isSelected ? { ['--tw-ring-color' as string]: 'var(--accent-soft)' } : undefined}
     >
-      <div className={`p-1.5 rounded-lg shrink-0 ${config.bgColor} ${config.textColor}`}>
+      <div className={`p-1.5 rounded-lg shrink-0 ${config.bgColor} ${config.textColor}`} style={node.type === 'resource' ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}>
         <Icon className="w-3.5 h-3.5" />
       </div>
       <div className="flex-1 min-w-0">

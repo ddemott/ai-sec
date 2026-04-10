@@ -57,7 +57,7 @@ function getChangeTypeIcon(type: ChangeType) {
 function getChangeTypeColor(type: ChangeType): string {
   const colors: Record<ChangeType, string> = {
     create: 'text-green-600 bg-green-50',
-    update: 'text-blue-600 bg-blue-50',
+    update: 'text-[var(--accent-soft)] bg-[var(--accent-muted)]',
     delete: 'text-red-600 bg-red-50',
     restore: 'text-purple-600 bg-purple-50',
     sync: 'text-orange-600 bg-orange-50',
@@ -225,7 +225,7 @@ export function RecordHistoryModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <History className="w-5 h-5 text-blue-600" />
+            <History className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {mode === 'history' ? 'Version History' : 'Restore Fields'}
@@ -242,7 +242,7 @@ export function RecordHistoryModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--accent)' }} />
             </div>
           ) : error ? (
             <div className="text-red-600 text-center py-8">{error}</div>
@@ -280,7 +280,10 @@ export function RecordHistoryModal({
                 <div className="flex justify-end">
                   <button
                     onClick={loadRestorePreview}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                    className="px-4 py-2 text-white rounded-lg flex items-center gap-2"
+                    style={{ backgroundColor: 'var(--accent)' }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.9' }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '' }}
                   >
                     <RotateCcw className="w-4 h-4" />
                     Restore Fields from History
@@ -403,16 +406,17 @@ export function RecordHistoryModal({
                           key={v.version_number}
                           className={`flex items-center gap-3 p-2 rounded cursor-pointer ${
                             selectedFields[fieldOption.field] === v.version_number
-                              ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800'
+                              ? 'border'
                               : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
+                          style={selectedFields[fieldOption.field] === v.version_number ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent-soft)' } : undefined}
                         >
                           <input
                             type="radio"
                             name={`field-${fieldOption.field}`}
                             checked={selectedFields[fieldOption.field] === v.version_number}
                             onChange={() => selectFieldVersion(fieldOption.field, v.version_number)}
-                            className="text-blue-600"
+                            style={{ accentColor: 'var(--accent)' }}
                           />
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
@@ -449,7 +453,10 @@ export function RecordHistoryModal({
               <button
                 onClick={handleRestore}
                 disabled={restoring}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+                style={{ backgroundColor: 'var(--accent)' }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '0.9' }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '' }}
               >
                 {restoring ? (
                   <>

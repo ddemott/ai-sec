@@ -36,7 +36,7 @@ const COLORS: Record<ToastType, string> = {
   success: 'bg-green-600 text-white',
   error: 'bg-red-600 text-white',
   warning: 'bg-yellow-500 text-white',
-  info: 'bg-blue-600 text-white',
+  info: 'text-white',
 }
 
 export function ToastContainer() {
@@ -73,6 +73,7 @@ export function ToastContainer() {
             key={toast.id}
             role={toast.type === 'error' ? 'alert' : 'status'}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-in slide-in-from-bottom-2 fade-in ${COLORS[toast.type]}`}
+            style={toast.type === 'info' ? { backgroundColor: 'var(--accent)' } : undefined}
           >
             <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="flex-1">{toast.message}</span>

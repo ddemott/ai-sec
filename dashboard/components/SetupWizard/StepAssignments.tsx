@@ -93,9 +93,10 @@ export function Step5Assignments({
                           disabled={saving}
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                             assigned
-                              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400'
+                              ? ''
                               : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                           }`}
+                          style={assigned ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
                         >
                           {res.name}
                         </button>
