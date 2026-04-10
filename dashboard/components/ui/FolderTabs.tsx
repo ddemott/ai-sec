@@ -76,7 +76,7 @@ export const FolderTab: React.FC<FolderTabProps> = ({
       onClick={onClick}
       role="tab"
       aria-selected={isActive}
-      className="flex items-center gap-1.5 transition-all relative"
+      className="flex items-center gap-1.5 transition-all relative focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset outline-none"
       style={{
         color: isActive ? 'var(--accent-soft)' : 'var(--text-muted)',
         backgroundColor: isActive ? 'var(--bg-raised)' : 'var(--bg-base)',
@@ -126,7 +126,7 @@ export const FolderTabBar: React.FC<FolderTabBarProps> = ({
     >
       <div className="flex items-center justify-between px-4">
         <div
-          className="flex items-end gap-0 pt-1"
+          className="flex items-end gap-0 pt-1 overflow-x-auto no-scrollbar"
           role="tablist"
           aria-label={ariaLabel}
           style={{ paddingTop: size === 'lg' ? '8px' : '4px' }}

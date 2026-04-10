@@ -180,7 +180,9 @@ export function OutlookLayout({
       {/* SECONDARY NAVIGATION — Sub-tabs for current mode */}
       <FolderTabBar size="md" ariaLabel="Section navigation">
         {subTabs.map(tab => (
-          <FolderTab key={tab.id} label={tab.label} icon={tab.icon} size="md" isActive={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
+          <span key={tab.id} data-tab-id={tab.id}>
+            <FolderTab label={tab.label} icon={tab.icon} size="md" isActive={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
+          </span>
         ))}
       </FolderTabBar>
 
@@ -214,15 +216,15 @@ export function OutlookLayout({
             Back Office
           </button>
         </div>
-        {/* Sub-tabs */}
-        <div className="flex h-14">
+        {/* Sub-tabs — scrollable to show all tabs on mobile */}
+        <div className="flex h-14 overflow-x-auto no-scrollbar">
           {subTabs.map(tab => {
             const Icon = tab.icon
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex flex-col items-center justify-center ${activeTab === tab.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+                className={`flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === tab.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-[9px] mt-0.5 font-medium">{tab.label}</span>

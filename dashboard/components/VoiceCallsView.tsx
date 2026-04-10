@@ -76,6 +76,7 @@ export default function VoiceCallsView() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
+  const [outcomeFilter, setOutcomeFilter] = useState<string>('all')
 
   useEffect(() => {
     if (tenantId) {
@@ -200,10 +201,23 @@ export default function VoiceCallsView() {
 
         {/* Call History */}
         <div className="flex-1 overflow-y-auto">
-          <div className="px-4 py-2 sticky top-0" style={{ backgroundColor: 'var(--bg-raised)' }}>
-            <h3 className="text-sm font-medium text-gray-600">
+          <div className="px-4 py-2 sticky top-0 flex items-center justify-between gap-2" style={{ backgroundColor: 'var(--bg-raised)' }}>
+            <h3 className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
               Call History ({total})
             </h3>
+            <select
+              value={outcomeFilter}
+              onChange={e => setOutcomeFilter(e.target.value)}
+              className="text-xs border rounded px-1.5 py-1"
+              style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
+            >
+              <option value="all">All outcomes</option>
+              <option value="appointment_booked">Booked</option>
+              <option value="info_provided">Info provided</option>
+              <option value="transferred">Transferred</option>
+              <option value="voicemail">Voicemail</option>
+              <option value="abandoned">Abandoned</option>
+            </select>
           </div>
 
           {loading ? (
@@ -217,7 +231,7 @@ export default function VoiceCallsView() {
             </div>
           ) : (
             <div className="divide-y">
-              {callHistory.map(call => (
+              {callHistory.filter(c => outcomeFilter === 'all' || c.outcome === outcomeFilter).map(call => (
                 <div
                   key={call.id}
                   className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
@@ -261,7 +275,7 @@ export default function VoiceCallsView() {
                     disabled={historyLoading}
                     className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400"
                   >
-                    {historyLoading ? 'Loading...' : 'Load more'}
+                    {historyLoading ? 'Loading...' : `Load more (${callHistory.length} of ${total})`}
                   </button>
                 </div>
               )}

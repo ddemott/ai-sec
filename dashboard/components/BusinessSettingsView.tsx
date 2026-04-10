@@ -414,14 +414,14 @@ export default function BusinessSettingsView() {
               </div>
               <div>
                 <h2 className="text-lg font-bold">My Availability</h2>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>When clients can book you. Edit your schedule in Staff & Shifts.</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>When clients can book you. Edit your schedule in <button onClick={() => { const el = document.querySelector('[data-tab-id="my-team"]') as HTMLElement; el?.click(); }} className="underline font-bold" style={{ color: 'var(--accent)' }}>Staff &amp; Shifts</button>.</p>
               </div>
             </div>
 
             {shiftsLoading ? (
               <div className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading schedule...</div>
             ) : shifts.length === 0 ? (
-              <div className="text-sm" style={{ color: 'var(--text-muted)' }}>No schedule set yet. Set your hours in Staff & Shifts.</div>
+              <div className="text-sm" style={{ color: 'var(--text-muted)' }}>No schedule set yet. Set your hours in <button onClick={() => { const el = document.querySelector('[data-tab-id="my-team"]') as HTMLElement; el?.click(); }} className="underline font-bold" style={{ color: 'var(--accent)' }}>Staff &amp; Shifts</button>.</div>
             ) : (
               <div className="grid grid-cols-7 gap-2">
                 {shifts.map((shift, i) => {

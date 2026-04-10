@@ -324,7 +324,7 @@ describe('VoiceCallsView', () => {
       mockCallHistory.mockResolvedValue({ calls: [mockCall], total: 25, has_more: true })
       render(<VoiceCallsView />)
       await waitFor(() => {
-        expect(screen.getByText('Load more')).toBeInTheDocument()
+        expect(screen.getByText(/Load more/)).toBeInTheDocument()
       })
     })
 
@@ -339,7 +339,7 @@ describe('VoiceCallsView', () => {
         expect(screen.getAllByText('John Smith').length).toBeGreaterThanOrEqual(1)
       })
 
-      fireEvent.click(screen.getByText('Load more'))
+      fireEvent.click(screen.getByText(/Load more/))
 
       await waitFor(() => {
         expect(screen.getAllByText('Alice Brown').length).toBeGreaterThanOrEqual(1)

@@ -41,7 +41,7 @@ export const Card: React.FC<CardProps> = ({
 
   return (
     <div
-      className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${onClick ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2' : ''} ${className}`}
       style={style ? { ...defaultStyle, ...style } : defaultStyle}
       onClick={onClick}
       role={onClick ? 'button' : undefined}

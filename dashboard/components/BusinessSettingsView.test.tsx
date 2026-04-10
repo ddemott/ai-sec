@@ -571,7 +571,7 @@ describe('BusinessSettingsView', () => {
 
       render(<BusinessSettingsView />)
       await waitFor(() => {
-        expect(screen.getByText('No schedule set yet. Set your hours in Staff & Shifts.')).toBeInTheDocument()
+        expect(screen.getByText(/No schedule set yet/)).toBeInTheDocument()
       })
       // WHO: solo users | WHAT: empty schedule state
       // WHEN: no shifts | WHERE: availability section

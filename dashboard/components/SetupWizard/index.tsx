@@ -78,8 +78,9 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
           await Api.services.create(tenantId!, { name, duration_minutes: 30 })
         }
         await refresh()
-      } catch {
+      } catch (err) {
         // Non-critical — user can still add services manually
+        console.warn('Auto-seed from template failed:', err)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

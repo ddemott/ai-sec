@@ -386,7 +386,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp }: NewSchedule
   const getRowHeight = useCallback((emp: Employee): number => {
     if (viewMode !== 'skills') return ROW_HEIGHT;
     const skillCount = emp.skills?.length || 0;
-    return Math.max(SKILL_ROW_MIN_HEIGHT, skillCount * SKILL_BAR_HEIGHT + 10);
+    return Math.max(SKILL_ROW_MIN_HEIGHT, Math.min(skillCount * SKILL_BAR_HEIGHT + 10, 200));
   }, [viewMode]);
 
   // --- Compute grid width ---
