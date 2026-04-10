@@ -38,6 +38,7 @@ describe('BUG-003: AppointmentView draftEvent state', () => {
     // If draftEvent was undefined, the component would crash on setDraftEvent calls
     // The fact that it renders at all proves the fix works
     expect(await screen.findByText(/Appointments/i)).toBeInTheDocument();
+    // WHO: receptionist | WHAT: renders AppointmentView | WHEN: initial load | WHERE: AppointmentView | WHY: draftEvent state must be defined or component crashes on any booking action
   });
 
   test('New Appointment button exists and can be clicked without error', async () => {
@@ -53,6 +54,7 @@ describe('BUG-003: AppointmentView draftEvent state', () => {
       // Should not throw — proves setDraftEvent is defined
       expect(() => fireEvent.click(newBtn)).not.toThrow();
     }
+    // WHO: receptionist | WHAT: clicks New Appointment button | WHEN: appointment list is loaded | WHERE: AppointmentView | WHY: setDraftEvent must exist or clicking New crashes the booking workflow
   });
 });
 
@@ -91,6 +93,7 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
     render(<CRMView />);
     // CRMView header says "Customers"
     expect(await screen.findByText(/Customers/i)).toBeInTheDocument();
+    // WHO: business owner | WHAT: renders CRMView | WHEN: initial load with customer data | WHERE: CRMView | WHY: missing handleEditFormChange would crash the entire customer management page
   });
 
   test('customer list shows loaded customers', async () => {
@@ -105,6 +108,7 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
     // which uses handleEditFormChange. If the function is missing, this path errors.
     const aliceElements = screen.getAllByText(/Alice Test/i);
     expect(() => fireEvent.click(aliceElements[0])).not.toThrow();
+    // WHO: business owner | WHAT: clicks customer to open edit form | WHEN: customer list is populated | WHERE: CRMView | WHY: handleEditFormChange must be wired or editing a customer record crashes
   });
 });
 
@@ -126,6 +130,7 @@ describe('BUG-005: No dev bypass button in production code', () => {
     expect(devButton).toBeNull();
     expect(bypassButton).toBeNull();
     expect(superAdminButton).toBeNull();
+    // WHO: unauthenticated visitor | WHAT: inspects login page for bypass buttons | WHEN: login page renders | WHERE: LoginView | WHY: dev bypass would let anyone skip authentication in production
   });
 
   test('LoginView should only have the login form submit button', () => {
@@ -141,6 +146,7 @@ describe('BUG-005: No dev bypass button in production code', () => {
       btn => btn.textContent?.match(/Sign In|Log In|Login/i)
     );
     expect(submitButtons.length).toBe(1);
+    // WHO: unauthenticated visitor | WHAT: verifies only one sign-in button exists | WHEN: login page renders | WHERE: LoginView | WHY: extra buttons could confuse users or expose unauthorized access paths
   });
 });
 
@@ -190,6 +196,7 @@ describe('BUG-010: ErrorBoundary component', () => {
       </ErrorBoundary>
     );
     expect(screen.getByText('Hello World')).toBeInTheDocument();
+    // WHO: any user | WHAT: renders children normally | WHEN: no errors thrown | WHERE: ErrorBoundary | WHY: boundary must be transparent when children work correctly
   });
 
   test('catches error and shows fallback UI', () => {
@@ -202,6 +209,7 @@ describe('BUG-010: ErrorBoundary component', () => {
     expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
     expect(screen.getByText(/Test component error/i)).toBeInTheDocument();
     expect(screen.getByText(/Try Again/i)).toBeInTheDocument();
+    // WHO: any user | WHAT: sees error fallback UI | WHEN: child component throws | WHERE: ErrorBoundary | WHY: unhandled crash would show a white screen instead of actionable error message
   });
 
   test('Try Again button is clickable and resets hasError state', () => {
@@ -221,6 +229,7 @@ describe('BUG-010: ErrorBoundary component', () => {
     // Clicking it should not throw — it resets hasError internally
     // (The child may re-throw, but the ErrorBoundary catches it again)
     expect(() => fireEvent.click(tryAgainBtn)).not.toThrow();
+    // WHO: any user | WHAT: clicks Try Again after crash | WHEN: error boundary is showing fallback | WHERE: ErrorBoundary | WHY: users need a recovery path instead of being stuck on error screen
   });
 
   test('renders custom fallback when provided', () => {
@@ -231,6 +240,7 @@ describe('BUG-010: ErrorBoundary component', () => {
     );
 
     expect(screen.getByText('Custom fallback')).toBeInTheDocument();
+    // WHO: developer | WHAT: provides custom fallback JSX | WHEN: child throws with custom fallback prop | WHERE: ErrorBoundary | WHY: different views may need context-specific error messaging
   });
 
   // Restore console.error
@@ -285,5 +295,6 @@ describe('BUG-012: LoginView stores JWT token', () => {
     expect(localStorageMock.getItem('authToken')).toBe('eyJhbGciOiJIUzI1NiJ9.test.signature');
     expect(localStorageMock.getItem('tenantId')).toBe('f234e471-0e60-4163-86c9-93cfd9338e3a');
     expect(localStorageMock.getItem('userName')).toBe('Test User');
+    // WHO: unauthenticated visitor | WHAT: submits valid credentials | WHEN: login form submitted | WHERE: LoginView | WHY: JWT token must persist to localStorage or user loses session on page refresh
   });
 });

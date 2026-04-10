@@ -95,6 +95,7 @@ vi.mock('@/lib/SessionContext', () => ({
 }))
 
   await screen.findByText(/Resource 1/i)
+  // WHO: business owner | WHAT: views resources list and creation form | WHEN: initial settings page load | WHERE: SettingsView | WHY: owners must see existing resources and the form to add new ones for capacity management
 })
 
 test('SettingsView (owner): can add a new resource', async () => {
@@ -114,6 +115,7 @@ test('SettingsView (owner): can add a new resource', async () => {
   await waitFor(() => {
     expect(screen.getByText(/Resource 2/i)).toBeTruthy()
   })
+  // WHO: business owner | WHAT: creates a new resource | WHEN: name and description filled, Add clicked | WHERE: SettingsView | WHY: owners need to add bays/stations/chairs to match their physical capacity
 })
 
 test('SettingsView (owner): can toggle resource active state', async () => {
@@ -126,4 +128,5 @@ test('SettingsView (owner): can toggle resource active state', async () => {
     // After toggle, button text should indicate inactive state
     expect(screen.getByRole('button', { name: /Inactive/i })).toBeTruthy()
   })
+  // WHO: business owner | WHAT: toggles resource active/inactive | WHEN: resource exists and toggle clicked | WHERE: SettingsView | WHY: deactivating a resource prevents bookings against it without deleting history
 })

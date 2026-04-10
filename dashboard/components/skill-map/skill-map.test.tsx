@@ -117,6 +117,7 @@ describe('useSkillMapData', () => {
       expect(empNames).toContain('Bob')
       expect(empNames).not.toContain('Admin')
       expect(result.current.employeeNodes).toHaveLength(2)
+      // WHO: business owner | WHAT: view skill map | WHEN: employees include user-type accounts | WHERE: useSkillMapData | WHY: user-type accounts shown on map would confuse owner and clutter the UI
     })
   })
 
@@ -128,6 +129,7 @@ describe('useSkillMapData', () => {
       expect(names).toContain('Oil Change')
       expect(names).toContain('Tire Rotation')
       expect(names).toContain('Brake Service')
+      // WHO: business owner | WHAT: view service nodes | WHEN: services exist in tenant | WHERE: useSkillMapData | WHY: missing service nodes mean owner cannot see or manage skill assignments
     })
   })
 
@@ -136,6 +138,7 @@ describe('useSkillMapData', () => {
     await waitFor(() => {
       const leftConns = result.current.connections.filter(c => c.side === 'left')
       expect(leftConns).toHaveLength(3) // Alice->Oil, Alice->Tire, Bob->Tire
+      // WHO: business owner | WHAT: view employee-service links | WHEN: employee-service mappings exist | WHERE: useSkillMapData | WHY: missing left-side connections hide which staff can perform which services
     })
   })
 
@@ -144,6 +147,7 @@ describe('useSkillMapData', () => {
     await waitFor(() => {
       const rightConns = result.current.connections.filter(c => c.side === 'right')
       expect(rightConns).toHaveLength(3) // Oil->Bay1, Oil->Bay2, Tire->Bay1
+      // WHO: business owner | WHAT: view service-resource links | WHEN: resource mappings exist | WHERE: useSkillMapData | WHY: missing right-side connections hide which bays/equipment are available for each service
     })
   })
 
@@ -152,6 +156,7 @@ describe('useSkillMapData', () => {
     await waitFor(() => {
       expect(result.current.coverageBySkill['skill-svc-uuid-1']).toBe('full') // Oil Change
       expect(result.current.coverageBySkill['skill-svc-uuid-2']).toBe('full') // Tire Rotation
+      // WHO: business owner | WHAT: check coverage status | WHEN: service has both employee and resource | WHERE: useSkillMapData | WHY: incorrect coverage status misleads owner into thinking a service needs attention when it does not
     })
   })
 
@@ -159,6 +164,7 @@ describe('useSkillMapData', () => {
     const { result } = renderHook(() => useSkillMapData(mockEmployees, mockResources, mockServices, 'test-tenant'))
     await waitFor(() => {
       expect(result.current.coverageBySkill['skill-svc-uuid-3']).toBe('uncovered') // Brake Service
+      // WHO: business owner | WHAT: detect uncovered service | WHEN: service has no employee or resource links | WHERE: useSkillMapData | WHY: failing to flag uncovered services means voice AI will accept bookings that cannot be fulfilled
     })
   })
 
@@ -167,6 +173,7 @@ describe('useSkillMapData', () => {
     await waitFor(() => {
       expect(result.current.brokenChains.some(b => b.skillName === 'Brake Service')).toBe(true)
       expect(result.current.brokenChains.some(b => b.skillName === 'Oil Change')).toBe(false)
+      // WHO: business owner | WHAT: identify broken chains | WHEN: service lacks staff or resource | WHERE: useSkillMapData | WHY: undetected broken chains leave services unbookable without any visible warning
     })
   })
 
@@ -187,6 +194,7 @@ describe('useSkillMapData', () => {
     expect(result.current.highlightedNodeIds.has('res-res-uuid-1')).toBe(true)
     // Bob not highlighted
     expect(result.current.highlightedNodeIds.has('emp-emp-uuid-2')).toBe(false)
+    // WHO: business owner | WHAT: click employee to highlight chain | WHEN: employee node selected | WHERE: useSkillMapData | WHY: wrong highlight paths confuse owner about which services and resources relate to a staff member
   })
 })
 
@@ -201,6 +209,7 @@ describe('SkillMapNode', () => {
       <SkillMapNode node={baseNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
     )
     expect(screen.getByText('Alice')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view employee node | WHEN: skill map renders | WHERE: SkillMapNode | WHY: missing employee name makes the map unreadable and unusable
   })
 
   test('renders service node with coverage badge', () => {
@@ -209,6 +218,7 @@ describe('SkillMapNode', () => {
       <SkillMapNode node={svcNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
     )
     expect(screen.getByText('Full Coverage')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view coverage badge on service | WHEN: service has full coverage | WHERE: SkillMapNode | WHY: missing badge hides coverage status so owner cannot tell if a service is bookable
   })
 
   test('renders resource node', () => {
@@ -217,6 +227,7 @@ describe('SkillMapNode', () => {
       <SkillMapNode node={resNode} isHighlighted={true} isSelected={false} isBroken={false} onClick={vi.fn()} />
     )
     expect(screen.getByText('Bay 1')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view resource node | WHEN: skill map renders | WHERE: SkillMapNode | WHY: missing resource name prevents owner from identifying which bay or equipment is mapped
   })
 
   test('shows Fix button on broken service node', () => {
@@ -228,6 +239,7 @@ describe('SkillMapNode', () => {
     expect(screen.getByTestId('fix-skill-x')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('fix-skill-x'))
     expect(onFix).toHaveBeenCalled()
+    // WHO: business owner | WHAT: click fix on broken service | WHEN: service has no staff or resource | WHERE: SkillMapNode | WHY: missing fix button leaves owner with no quick way to resolve coverage gaps
   })
 })
 
@@ -245,6 +257,7 @@ describe('SkillMapColumn', () => {
     )
     expect(screen.getByText('Employees')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view column header | WHEN: skill map loads | WHERE: SkillMapColumn | WHY: missing title or count makes it unclear what category of items the column represents
   })
 
   test('renders children', () => {
@@ -256,6 +269,7 @@ describe('SkillMapColumn', () => {
     )
     expect(screen.getByTestId('child-1')).toBeInTheDocument()
     expect(screen.getByTestId('child-2')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view column contents | WHEN: nodes exist in column | WHERE: SkillMapColumn | WHY: child nodes not rendering means employees, services, or resources are invisible on the map
   })
 })
 
@@ -274,6 +288,7 @@ describe('SkillMapConnections', () => {
       />
     )
     expect(screen.getByTestId('skill-map-svg')).toBeInTheDocument()
+    // WHO: business owner | WHAT: render connection lines | WHEN: skill map loads | WHERE: SkillMapConnections | WHY: missing SVG element means no visual lines between nodes so relationships are invisible
   })
 })
 
@@ -287,6 +302,7 @@ describe('SkillRelationshipMap', () => {
       expect(screen.getByText('Employees')).toBeInTheDocument()
       expect(screen.getByText('Services')).toBeInTheDocument()
       expect(screen.getByText('Resources')).toBeInTheDocument()
+      // WHO: business owner | WHAT: view three-column layout | WHEN: skill map page loads | WHERE: SkillRelationshipMap | WHY: missing columns break the entire map layout and prevent any skill management
     })
   })
 
@@ -297,6 +313,7 @@ describe('SkillRelationshipMap', () => {
       expect(screen.getByText('Bob')).toBeInTheDocument()
       expect(screen.getByText('Bay 1')).toBeInTheDocument()
       expect(screen.getByText('Bay 2')).toBeInTheDocument()
+      // WHO: business owner | WHAT: view staff and resource names | WHEN: data loaded from API | WHERE: SkillRelationshipMap | WHY: missing names make the map meaningless since owner cannot identify who or what is mapped
     })
   })
 
@@ -306,6 +323,7 @@ describe('SkillRelationshipMap', () => {
       expect(screen.getByText('Oil Change')).toBeInTheDocument()
       expect(screen.getByText('Tire Rotation')).toBeInTheDocument()
       expect(screen.getByText('Brake Service')).toBeInTheDocument()
+      // WHO: business owner | WHAT: view service names in map | WHEN: services exist in tenant | WHERE: SkillRelationshipMap | WHY: missing service names prevent owner from connecting staff and resources to the right services
     })
   })
 })
@@ -343,6 +361,7 @@ describe('completeLinking', () => {
 
     expect(Api.mappings.assignServiceEmployee).toHaveBeenCalledWith('svc-uuid-1', 'emp-uuid-2', 'test-tenant')
     expect(result.current.linking).toBeNull()
+    // WHO: business owner | WHAT: link employee to service by clicking | WHEN: dragging from employee to service node | WHERE: useSkillMapData completeLinking | WHY: failed assignment means staff cannot be booked for that service via voice AI
   })
 
   test('assigns resource to service via mapping API', async () => {
@@ -364,6 +383,7 @@ describe('completeLinking', () => {
     })
 
     expect(Api.mappings.assignServiceResource).toHaveBeenCalledWith('svc-uuid-2', 'res-uuid-2', 'test-tenant')
+    // WHO: business owner | WHAT: link resource to service by clicking | WHEN: dragging from resource to service node | WHERE: useSkillMapData completeLinking | WHY: failed assignment means resource is unavailable for bookings on that service
   })
 
   test('does not duplicate existing assignment', async () => {
@@ -383,6 +403,7 @@ describe('completeLinking', () => {
 
     // assignServiceEmployee should NOT be called because mapping already exists
     expect(Api.mappings.assignServiceEmployee).not.toHaveBeenCalled()
+    // WHO: business owner | WHAT: re-link already assigned employee | WHEN: mapping already exists | WHERE: useSkillMapData completeLinking | WHY: duplicate API calls would create redundant DB rows and confuse coverage calculations
   })
 
   test('cancelling linking clears state', async () => {
@@ -399,6 +420,7 @@ describe('completeLinking', () => {
 
     act(() => { result.current.cancelLinking() })
     expect(result.current.linking).toBeNull()
+    // WHO: business owner | WHAT: cancel a link operation | WHEN: owner changes mind mid-link | WHERE: useSkillMapData cancelLinking | WHY: stuck linking state would block all further interactions on the skill map
   })
 
   test('linking from service shows employees and resources as valid targets', async () => {
@@ -418,6 +440,7 @@ describe('completeLinking', () => {
     expect(result.current.validLinkTargets.has('emp-emp-uuid-2')).toBe(true)
     expect(result.current.validLinkTargets.has('res-res-uuid-1')).toBe(true)
     expect(result.current.validLinkTargets.has('res-res-uuid-2')).toBe(true)
+    // WHO: business owner | WHAT: start link from service node | WHEN: clicking on a service to assign staff or resources | WHERE: useSkillMapData startLinking | WHY: wrong valid targets prevent owner from assigning the correct employees or resources
   })
 })
 
@@ -448,6 +471,7 @@ describe('disconnectConnection', () => {
     })
 
     expect(Api.mappings.unassignServiceEmployee).toHaveBeenCalledWith('svc-uuid-1', 'emp-uuid-1', 'test-tenant')
+    // WHO: business owner | WHAT: disconnect employee from service | WHEN: clicking to remove an assignment | WHERE: useSkillMapData disconnectConnection | WHY: failed unassign leaves a stale mapping so voice AI keeps booking that employee for the service
   })
 
   test('unassigns resource from service via mapping API', async () => {
@@ -471,6 +495,7 @@ describe('disconnectConnection', () => {
     })
 
     expect(Api.mappings.unassignServiceResource).toHaveBeenCalledWith('svc-uuid-1', 'res-uuid-1', 'test-tenant')
+    // WHO: business owner | WHAT: disconnect resource from service | WHEN: clicking to remove a resource mapping | WHERE: useSkillMapData disconnectConnection | WHY: failed unassign keeps a resource tied to a service it should no longer serve
   })
 })
 
@@ -509,6 +534,7 @@ describe('SkillMapFixPanel', () => {
     // All resources should be eligible
     expect(screen.getByText('+ Bay 1')).toBeInTheDocument()
     expect(screen.getByText('+ Bay 2')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view fix panel options | WHEN: broken service selected for repair | WHERE: SkillMapFixPanel | WHY: missing eligible options prevent owner from resolving coverage gaps
   })
 
   test('calls mapping API when assigning employee to service', async () => {
@@ -531,6 +557,7 @@ describe('SkillMapFixPanel', () => {
     })
     expect(Api.mappings.assignServiceEmployee).toHaveBeenCalledWith('svc-uuid-3', 'emp-uuid-1', 'test-tenant')
     expect(onFixed).toHaveBeenCalled()
+    // WHO: business owner | WHAT: assign employee from fix panel | WHEN: clicking employee name in fix panel | WHERE: SkillMapFixPanel | WHY: failed assignment leaves the service without staff so callers get booking errors
   })
 
   test('calls mapping API when assigning resource to service', async () => {
@@ -553,6 +580,7 @@ describe('SkillMapFixPanel', () => {
     })
     expect(Api.mappings.assignServiceResource).toHaveBeenCalledWith('svc-uuid-3', 'res-uuid-1', 'test-tenant')
     expect(onFixed).toHaveBeenCalled()
+    // WHO: business owner | WHAT: assign resource from fix panel | WHEN: clicking resource name in fix panel | WHERE: SkillMapFixPanel | WHY: failed assignment leaves the service without a bay/room so bookings cannot be fulfilled
   })
 
   test('excludes already-assigned employees from eligible list', () => {
@@ -580,5 +608,6 @@ describe('SkillMapFixPanel', () => {
     expect(screen.queryByText('+ Alice')).not.toBeInTheDocument()
     // Bob is NOT assigned to Oil Change — should appear
     expect(screen.getByText('+ Bob')).toBeInTheDocument()
+    // WHO: business owner | WHAT: view only unassigned employees in fix panel | WHEN: service already has some staff | WHERE: SkillMapFixPanel | WHY: showing already-assigned employees would cause duplicate mappings and confuse the owner
   })
 })
