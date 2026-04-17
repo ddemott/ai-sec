@@ -5,17 +5,18 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 ## Architecture
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (21 route modules under src/routes/) -> Postgres (Railway deployment)
+- **Backend API**: Node.js / Fastify (25 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 21 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan)
-- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts, jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts)
-- `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, logEvent/logWarning)
+- `/src` - Fastify backend (slim index.ts entry, 25 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, tts)
+- `/src/routes/routeHelpers.ts` - Shared route utilities (sendValidationError, sendNotFound, sendSuccess, sendConflict, assertRowAffected, requireValidUUID, parseDateRange, parsePagination)
+- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts [splitName/joinName/slugify/buildDisplayName], jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts [withSyncContext])
+- `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
 - `/supabase/migrations` - 68 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, shift_overrides, night shifts, get_effective_shifts_bulk)
@@ -77,9 +78,12 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - No `overrideTenantId` prop drilling — components read tenant from context directly
 - `useFormState<T>()` hook for generic form state + dirty tracking
 - Deno service layer: Service -> Dispatcher -> Repository pattern
-- Fastify: slim index.ts registers 21 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Fastify: slim index.ts registers 25 route modules; all tenant-scoped routes use `withTenantClient()` for RLS
+- Shared route helpers in `src/routes/routeHelpers.ts`: `sendValidationError()`, `sendNotFound()`, `sendSuccess()`, `sendConflict()`, `assertRowAffected()`, `requireValidUUID()`, `parseDateRange()`, `parsePagination()`
 - All route mutations validated with Zod schemas (auth, tenants, employees, shifts, resources, services, skills, calendar, appointments, customers)
+- All mutation routes use `assertRowAffected()` guard — zero-row UPDATE/DELETE returns 404, never silent success
 - All error responses use `{ success: false, error: string, details?: any }` format
+- Name utilities in `src/services/nameUtils.ts`: `splitName()`, `joinName()`, `slugify()`, `buildDisplayName()`
 - Production env validation: server refuses to start if DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, or STRIPE_SECRET_KEY are missing
 - Edge function tool responses use Vapi format: `{ results: [{ toolCallId, result }] }` with status 200
 - Edge function errors return plain `"ERROR: ..."` strings (not nested JSON) so the LLM can relay them naturally
@@ -104,6 +108,12 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
 
 ## Resolved Issues
+### April 12, 2026 Improvement Hardening
+- Employee update route missing `AND tenant_id` in WHERE clause — cross-tenant employee updates were possible. Fixed by adding tenant_id scoping + assertRowAffected guard.
+- Zero-row mutation guards added to employees, customers, appointments, tenants, knowledge, resources, services routes — all previously returned `{ success: true }` when UPDATE/DELETE affected 0 rows (silent no-op).
+- Shared route helpers extracted to `src/routes/routeHelpers.ts` — eliminates duplicated validation/error/pagination boilerplate across 25 route modules.
+- `nameUtils.ts` extended with `slugify()` (skill/service name normalization) and `buildDisplayName()` (employee name composition).
+
 ### March 2026 Code Review
 - 58 bugs identified and resolved across Critical/High/Medium/Low severity
 - users.email scoped to per-tenant uniqueness (BUG-002)
@@ -149,6 +159,7 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - ~~Voice AI phone/date/employee fixes~~ — Done (2026-04-01). BUG-060/061/062: Phone validation, dynamic date prompt, service-to-skill mapping.
 - ~~Booking error handling~~ — Done (2026-04-01). BUG-063/064: Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, etc.) for better AI responses.
 - ~~OAuth callback refactoring~~ — Done (2026-04-01). Generic `oauthCallbackFactory.ts` + shared `tokenManagement.ts` eliminate duplication across 4 CRM integrations.
+- **Improvement hardening (Phase 13B)** — In progress (2026-04-12). 109 tasks in IMPROVEMENT_IDEAS.md across 10 phases. Shared route helpers (routeHelpers.ts), zero-row mutation guards on all routes, employee tenant-scoping bug fixed, nameUtils extended with slugify/buildDisplayName. See IMPROVEMENT_IDEAS.md for full backlog.
 - Database webhooks for n8n triggers
 - Beta testing with DynaTire
 
