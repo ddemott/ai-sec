@@ -1,143 +1,164 @@
-# SecretaryHQ SaaS
+# Secretary HQ
 
-A multi-tenant AI reception platform for service businesses (tire shops, salons, auto repair, fitness studios, and more). An AI receptionist answers inbound calls 24/7, books appointments, answers policy questions via RAG, and syncs with the owner's dashboard — no missed calls.
+**AI receptionist for service businesses.** Answers calls 24/7, books appointments, answers policy questions, and syncs everything to the owner's dashboard. No missed calls, no hold music, no voicemail.
+
+Built for tire shops, salons, auto repair, fitness studios, trades, and food & beverage businesses.
+
+---
+
+## Status
+
+| | |
+|---|---|
+| **Phase** | 13 — Production Readiness |
+| **Backend** | Live on Railway (`ai-sec-production.up.railway.app`) |
+| **Dashboard** | Local dev (deployment pending) |
+| **Voice AI** | Working end-to-end (Vapi + Clara voice, migrating to LiveKit) |
+| **Phone** | Provisioned (DynaTire demo tenant) |
+| **Tests** | 1,958 passing (1,493 backend + 465 dashboard), zero TypeScript errors |
+| **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
+
+See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
+
+---
+
+## What It Does
+
+- **Voice AI Reception** — Answers inbound calls with a low-latency, human-like voice. Greets callers, identifies intent, books appointments, answers policy questions, and handles rejections naturally.
+- **Atomic Booking** — Checks staff shifts, expertise, resource capabilities, and timeslot availability in a single database transaction. DST-safe, race-condition-proof, with specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED).
+- **Two-Layer Knowledge** — Database tool calls for facts (pricing, availability) with zero hallucination. RAG over uploaded documents (PDF/TXT/DOC/DOCX/MD) for policies (cancellation, service area, payment terms).
+- **Multi-Tenant Dashboard** — Owners manage staff, resources, services, shifts, AI persona, and knowledge base. Vocabulary adapts per business type (Bays/Technicians for tire shops, Chairs/Stylists for salons).
+- **Scheduler** — Staff swimlane view (24hr, zoom), resource columns, appointment list, calendar sub-view. Quick book panel for walk-ins. Employee day focus with utilisation stats.
+- **CRM** — Searchable customer profiles with appointment history, call summaries, transcripts, and internal notes.
+- **Calendar Sync** — Google Calendar and Outlook Calendar OAuth integration. Appointments auto-sync on create, update, delete, and cancel.
+- **CRM Integrations** — Bidirectional sync with Jobber (GraphQL), HubSpot (REST v3), Square (REST v2), and ServiceTitan (REST v2). OAuth flows, webhook receivers, timestamp-based conflict resolution.
+- **Coverage Visibility** — Gaps shown across scheduler, services list, skill map, and setup wizard.
+- **Analytics** — Busiest hours, return rate, and no-show patterns from booking data.
+- **Billing** — Stripe Checkout with subscription gate (Solo $129/mo, Growth $279/mo).
+
+---
+
+## Architecture
+
+```
+Inbound Call
+    |
+Telnyx (telephony) --> Vapi (STT/LLM/TTS) --> Supabase Edge Function (Deno)
+                                                        |
+                                                   PostgreSQL + pgvector
+                                                   (RLS multi-tenancy)
+                                                        |
+                                            Fastify API (25 route modules)
+                                                        |
+                                            Next.js 14 Dashboard
+```
+
+| Layer | Tech |
+|-------|------|
+| **Voice** | Vapi (Clara voice), Telnyx, OpenAI GPT-4o-mini, Deepgram Nova-2 |
+| **Backend** | Fastify 4.x, 25 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
+| **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
+| **Database** | PostgreSQL + pgvector, 72 migrations, Row Level Security, atomic booking RPCs |
+| **Edge Functions** | Deno, Supabase Edge Functions, 7 voice AI tools |
+| **Async** | n8n workflows (post-call summaries, calendar sync, SMS) |
+| **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
+| **Security** | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS |
+
+See `docs/ARCHITECTURE.md` for the full technical deep-dive.
+
+---
 
 ## Quick Start
 
-### 1. Bootstrap the Environment
-Ensure Docker is running, then:
+### Prerequisites
+- Node.js 20+
+- Docker (for local PostgreSQL)
+- npm
+
+### 1. Bootstrap
 ```bash
 npm run bootstrap
 ```
-This installs dependencies, starts the database, applies all migrations, and seeds initial data.
+Installs dependencies, starts the database, applies all 72 migrations, and seeds initial data.
 
 ### 2. Trust the Backend Certificate
 The backend uses HTTPS with self-signed certificates:
-- Visit: [https://localhost:4001/health](https://localhost:4001/health)
-- Click **Advanced** > **Proceed to localhost (unsafe)**
+- Visit [https://localhost:4001/health](https://localhost:4001/health)
+- Click **Advanced** > **Proceed to localhost**
 - You should see `{"status":"ok"}`
 
-### 3. Start the Stack
+### 3. Start
 ```bash
 npm start
 ```
-- **Dashboard:** [https://localhost:4000](https://localhost:4000)
-- **Backend API:** [https://localhost:4001](https://localhost:4001)
+| Service | URL |
+|---------|-----|
+| Dashboard | https://localhost:4000 |
+| Backend API | https://localhost:4001 |
 
 ### 4. Sign In
-- **Email:** `admin@secretaryhq.com`
-- **Password:** `password`
+
+Default credentials are created by the seed script. See `supabase/seed.sql` for details.
 
 ### 5. Load Demo Data (optional)
-Reset the database with 3 realistic businesses:
 ```bash
 ./scripts/reset-and-seed.sh
 ```
 
-| Email | Business | Password |
-|-------|----------|----------|
-| `admin@secretaryhq.com` | Super Admin | `password` |
-| `admin@dynatire.com` | DynaTire (tire shop) | `password` |
-| `bella@bellashair.com` | Bella's Hair Studio (salon) | `password` |
-| `owner@quickfixauto.com` | QuickFix Auto Repair | `password` |
-
-## What It Does
-
-- **Voice AI Reception**: Answers inbound calls with a low-latency, human-like voice via Vapi. Greets callers, identifies intent, and handles the conversation end-to-end.
-- **Two-Layer Knowledge**: Database tool calls for facts (pricing, availability, booking) with zero hallucination. RAG over uploaded PDFs for policies (cancellation, service area, payment terms).
-- **Atomic Booking**: Checks availability and books appointments instantly while respecting staff shifts, expertise, and resource capabilities. DST-safe, race-condition-proof.
-- **Multi-Tenant Dashboard**: Owners manage staff, resources, services, AI persona, and knowledge base. Vocabulary adapts to business type (Bays/Technicians for tire shops, Chairs/Stylists for salons).
-- **Scheduler**: Staff swimlane view, resource columns view, appointment list view, calendar sub-view. View tabs accessible from all views. Quick book panel for walk-ins. Employee day focus with utilisation stats.
-- **CRM**: Searchable customer profiles with appointment history, call summaries, transcripts, and internal notes.
-- **Coverage Visibility**: Coverage gaps are visible throughout the UI — scheduler, services list, skill map, and setup wizard.
-- **Analytics**: Call volume, booking conversion, and estimated revenue tracking.
-- **Calendar Sync**: Google Calendar and Outlook Calendar OAuth integration — appointments automatically sync on create, update, delete, and cancel.
-- **CRM Integrations**: Bidirectional sync with Jobber, HubSpot, Square, and ServiceTitan. OAuth flows, webhook receivers, timestamp-based conflict resolution. Push triggers fire on every appointment and customer mutation.
-- **Async Automation**: Post-call summarization and sentiment analysis via n8n workflows.
-
-## Architecture at a Glance
-
-- **Voice Pipeline**: Telnyx (telephony) > Vapi (orchestrator, STT/LLM/TTS) > Supabase Edge Function (Deno) > Postgres
-- **Backend**: Fastify with 20 route modules under `src/routes/`, JWT auth, RLS enforcement via `withTenantClient()`
-- **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript, 5 grouped navigation sections
-- **Database**: PostgreSQL + pgvector, Row Level Security for multi-tenancy, atomic booking RPCs
-- **Async Workers**: n8n workflows for post-call summaries, SMS notifications
-- **Billing**: Stripe Checkout with subscription gate middleware (Solo $129/mo, Growth $279/mo, Professional $449/mo)
-
-See `docs/ARCHITECTURE.md` for the full technical deep-dive.
+---
 
 ## Project Structure
 
-- `/src` — Fastify backend (20 route modules under `src/routes/`, middleware layer)
-- `/src/middleware.ts` — withHandler decorator, tenant middleware, structured logging
-- `/dashboard` — Next.js 14 frontend (Front Desk / Back Office two-tab navigation)
-- `/supabase/functions/vapi-tools` — Deno Edge Functions (voice AI tool handlers)
-- `/src/services` — Service layer (sync orchestrator, CRM clients, calendar, Vapi, token management)
-- `/supabase/migrations` — 67 SQL migrations
-- `/shared` — Cross-runtime code (getEmbedding, scheduling with shift override support, normalizer)
-- `/scripts` — Automation (bootstrap, deploy, reset-seed, preflight, smoke tests)
-- `/docs` — Architecture, plans, decisions, deployment guide, mockups
-
-## Infrastructure
-
-- **Database**: PostgreSQL + pgvector (Docker, port 5433). All IDs are UUID.
-- **Multi-tenancy**: Row Level Security on all tables. `withTenantClient()` enforces RLS.
-- **Auth**: JWT (8h expiry), bcrypt password hashing, auto-logout on stale sessions, token refresh endpoint.
-- **Security**: @fastify/helmet (security headers), @fastify/rate-limit (100 req/min global, 5/5min on login), CORS restricted via CORS_ORIGIN env var.
-- **Input Validation**: Zod schemas at API boundaries; CHECK constraints on JSONB metadata.
-- **Least-Privilege DB**: `api_user` role has explicit per-table grants (not `ALL PRIVILEGES`).
-- **Test Isolation**: Dedicated `test_db` with savepoint-based isolation.
-- **Ports**: Backend (4001), Dashboard (4000), Postgres (5433).
-
-## Database Management
-
-```bash
-# Re-apply migrations + seed
-./scripts/setup-db.sh
-
-# Cloud deployment (with preflight check)
-./scripts/preflight-cloud.sh "postgres://user:pass@host:5432/dbname"
-./scripts/setup-db.sh "postgres://user:pass@host:5432/dbname"
 ```
+/
+├── src/                    Fastify backend
+│   ├── index.ts            Entry point (25 route registrations)
+│   ├── middleware.ts        withHandler, tenant middleware, structured logging
+│   ├── routes/             25 route modules + shared routeHelpers.ts
+│   ├── services/           CRM sync, calendar sync, token management, Vapi client
+│   └── database/           DatabaseService interface + Postgres implementation
+├── dashboard/              Next.js 14 frontend
+│   ├── components/         60+ components (scheduler, CRM, settings, wizard)
+│   ├── lib/                API client, hooks, types, SessionContext
+│   └── e2e/                Playwright tests
+├── supabase/
+│   ├── functions/vapi-tools/  Deno Edge Functions (voice AI tool handlers)
+│   ├── migrations/            72 SQL migrations
+│   └── seed.sql               Platform admin + DynaTire demo tenant
+├── shared/                 Cross-runtime code (embeddings, scheduling)
+├── scripts/                Automation (bootstrap, deploy, reset, QA)
+├── docs/                   Architecture, plans, deployment, design, TODO
+├── vapi/                   Vapi agent config and tool definitions
+└── n8n/                    Workflow blueprints
+```
+
+---
 
 ## Testing
 
-**1,586 tests passing** (1,118 backend + 465 dashboard + 3 edge function) in ~55 seconds, plus 88 live QA assertions against the production edge function. Savepoint-based isolation — each test rolls back, no TRUNCATE overhead. 12 shared test helpers in `src/test-utils.ts`.
-
 ```bash
-# Backend
-npm test
-
-# Dashboard
-cd dashboard && npx vitest run
-
-# Edge Functions
-deno task test --no-check
-
-# Live QA (29 tool calls against production Supabase)
-python scripts/qa-live-test.py
-
-# E2e (Playwright — 19 tests against live dashboard)
-cd dashboard && npx playwright test
+npm test                              # Backend (1,493 tests)
+cd dashboard && npx vitest run        # Dashboard (465 tests)
+deno task test --no-check             # Edge functions
+cd dashboard && npx playwright test   # E2e (19 Playwright tests)
+python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)
 ```
 
 ### Coverage
 
-Every route module, service file, and middleware layer has test coverage. Tests are spread across dedicated files (e.g., `square-client.test.ts`) and cross-cutting suites (e.g., `critical-bugs.test.ts`, `crud-routes.test.ts`).
-
-| Area | Test files | Tests |
-|------|-----------|-------|
-| Backend routes (20 modules) | 30+ files | ~600 |
-| Backend services (16 files) | 22+ files | ~350 |
-| Architecture review fixes | 10 files | 93 |
-| Middleware, constants, scheduling | 5 files | ~50 |
-| Dashboard components + views | 22 files | 465 |
-| Edge function (Deno) | 10 files | separate (`deno task test`) |
-| Live QA | 1 file | 29 calls / 88 assertions |
+| Area | Tests |
+|------|-------|
+| Backend routes (25 modules) | ~700 |
+| Backend services (16 files) | ~450 |
+| Middleware, scheduling, constants | ~100 |
+| CRM sync (4 providers + shared helpers) | ~240 |
+| Dashboard components + views | 465 |
+| Playwright e2e | 19 |
+| Live QA (production edge function) | 29 calls / 88 assertions |
 
 ### Test Philosophy
 
-Every test file covers both **happy paths** (expected behavior) and **sad paths** (error conditions). Sad path tests include **5W diagnostic context** so failures are immediately debuggable:
+Every test covers both happy and sad paths. Sad paths include **5W diagnostic context** (Who, What, When, Where, Why) so failures are immediately debuggable:
 
 ```typescript
 it('should reject country-code-only "+1" (BUG-060 root cause)', () => {
@@ -148,30 +169,69 @@ it('should reject country-code-only "+1" (BUG-060 root cause)', () => {
 });
 ```
 
-The 5W comments (Who, What, When, Where, Why) answer: who triggered the bug, what went wrong, when it happened, where in the code it occurs, and why it matters. This makes every test failure self-documenting — you can diagnose the issue from the test output alone without reading through logs or source code.
+---
+
+## Infrastructure
+
+| Concern | Implementation |
+|---------|---------------|
+| **Multi-tenancy** | Row Level Security on all tables, `FORCE ROW LEVEL SECURITY` enforced |
+| **Auth** | JWT (8h expiry), bcrypt, auto-logout on 401, token refresh endpoint |
+| **Security** | Helmet headers, rate limiting (100 req/min, 5/5min on login), CORS |
+| **Validation** | Zod schemas at API boundaries, CHECK constraints on JSONB |
+| **Deadlock prevention** | Pool timeouts (statement 30s, lock 10s, idle-txn 60s), sequential test execution |
+| **Mutation safety** | `assertRowAffected()` guard on all UPDATE/DELETE — zero-row ops return 404 |
+| **CRM sync** | Shared `syncMapHelpers.ts`, timestamp-based merge, `withSyncContext()` for version tracking |
+
+---
 
 ## Deployment
 
-```bash
-# 1. Copy and fill in environment variables
-cp .env.production.example .env.production
+Backend is live on Railway. Dashboard deployment pending.
 
-# 2. Run the full deployment
+```bash
+cp .env.production.example .env.production   # Fill in env vars
 ./scripts/deploy-production.sh .env.production
 ```
 
-See `docs/DEPLOYMENT.md` for the detailed step-by-step guide.
+See `docs/DEPLOYMENT.md` for the step-by-step guide.
+
+---
 
 ## Key Features
 
-- **29 business types** across 6 categories with per-type vocabulary
-- **Outlook-style scheduler** with three view modes and quick booking
-- **Service Staffing Map** — per-service, per-hour employee availability heatmap
-- **Unified CRM** — customer detail with appointments, call history, notes
-- **Skill Relationship Map** — interactive 3-column employee > service > resource view
-- **7-step setup wizard** — repeatable, re-enterable, with live coverage feedback and phone activation
-- **Two-layer knowledge** — database facts (zero hallucination) + RAG for policies
-- **Contextual feedback** — in-app feedback button on every page
-- **Theme system** — 8 themes with CSS custom properties
-- **Playwright e2e test suite** — 19 tests covering critical fixes and functional audit
-- **Stripe billing** — subscription gate with 3 plan tiers
+| Feature | Details |
+|---------|---------|
+| 29 business types | 6 categories with per-type vocabulary |
+| Scheduler | Staff swimlanes, resource columns, list view, calendar, quick book |
+| Skill relationship map | Interactive 3-column employee > service > resource view |
+| 7-step setup wizard | Repeatable, re-enterable, live coverage feedback, phone activation |
+| 8 themes | Light, dark, midnight, nord, sunset, forest, high-contrast, solarized |
+| Stripe billing | Solo ($129/mo) + Growth ($279/mo), subscription gate |
+| Calendar sync | Google + Outlook, OAuth, auto-sync on all mutations |
+| CRM integrations | Jobber + HubSpot + Square + ServiceTitan, bidirectional sync |
+| Knowledge base | 40 policy Q&A pairs, document upload, RAG via pgvector |
+| Contextual feedback | In-app feedback button on every page |
+| Playwright e2e | 19 tests covering critical fixes and functional audit |
+
+---
+
+## Documentation
+
+| Doc | Purpose |
+|-----|---------|
+| `CLAUDE.md` | Developer conventions, code patterns, project context |
+| `docs/TODO.md` | Unified task list — all remaining work |
+| `docs/ARCHITECTURE.md` | Full technical architecture deep-dive |
+| `docs/DEPLOYMENT.md` | Step-by-step deployment guide |
+| `docs/CURRENT_STATUS.md` | Living work journal — what's working, what's broken |
+| `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions |
+| `docs/UI_UX_DESIGN.md` | Interaction design + UX principles |
+| `docs/PLAN.md` | Roadmap (phases 1-13+) |
+| `docs/BUGS.md` | Historical bug tracker (72 bugs + 35 UX items) |
+
+---
+
+## License
+
+Proprietary. All rights reserved.
