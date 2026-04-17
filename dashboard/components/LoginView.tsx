@@ -49,7 +49,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}>
         
         {/* Header/Logo */}
-        <div className="p-8 flex flex-col items-center text-white" style={{ backgroundColor: 'var(--accent)' }}>
+        <div className="p-8 flex flex-col items-center" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
           <div className="bg-white/20 p-3 rounded-xl mb-4 backdrop-blur-sm">
             <Bot className="w-10 h-10" />
           </div>

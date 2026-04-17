@@ -4,7 +4,7 @@ import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR } from './TimeGrid';
 
 interface AppointmentBlockProps {
   appointment: SchedulerAppointment;
-  onClick?: (appointment: SchedulerAppointment) => void;
+  onClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
   colorClass?: string;
   hourWidth?: number;
 }
@@ -71,7 +71,7 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
         background: sc.bg || undefined,
         color: sc.text,
       }}
-      onClick={() => onClick?.(appointment)}
+      onClick={(e) => onClick?.(appointment, e)}
       title={`${customerName} — ${appointment.description}`}
       data-testid={`appointment-block-${appointment.id}`}
     >

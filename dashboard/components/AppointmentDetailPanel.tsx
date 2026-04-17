@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -27,6 +27,7 @@ interface AppointmentDetailPanelProps {
   customers: { id: string; name: string; phone: string; tenant_id?: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string }[];
   resources: { id: string; name: string }[];
   employees: { id: string | number; name: string; type?: string }[];
+  services: { id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };
   findCustomerById: (id: string) => { id: string; name: string; phone: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string } | undefined;
@@ -44,6 +45,7 @@ export function AppointmentDetailPanel({
   customers,
   resources,
   employees,
+  services,
   vocab,
   getServiceBaseTimes,
   findCustomerById,
@@ -62,6 +64,22 @@ export function AppointmentDetailPanel({
   } = useAppointmentDetail()
 
   const onFormChange = (f: typeof form) => setForm(f)
+
+  // Auto-calculate end time when service or start time changes
+  useEffect(() => {
+    if (!form.description || !form.start_time) return;
+    const svc = services.find(s => s.name === form.description);
+    if (svc && svc.duration_minutes) {
+      const start = new Date(form.start_time);
+      if (isNaN(start.getTime())) return;
+      const end = new Date(start.getTime() + svc.duration_minutes * 60000);
+      const offset = end.getTimezoneOffset() * 60000;
+      const endStr = new Date(end.getTime() - offset).toISOString().slice(0, 16);
+      if (form.end_time !== endStr) {
+        setForm(prev => ({ ...prev, end_time: endStr }));
+      }
+    }
+  }, [form.description, form.start_time, services, form.end_time, setForm]);
 
   return (
     <section className={`flex-1 flex flex-col overflow-y-auto fixed inset-0 z-20 md:relative md:z-0 ${(showDetailOnMobile || isCreating) ? 'flex' : 'hidden md:flex'}`} style={{ backgroundColor: 'var(--bg-surface)' }}>
@@ -124,12 +142,14 @@ export function AppointmentDetailPanel({
                                       <Input
                                           type="datetime-local"
                                           label="Start Time"
+                                          step="60"
                                           value={form.start_time}
                                           onChange={e => onFormChange({...form, start_time: e.target.value})}
                                       />
                                       <Input
                                           type="datetime-local"
                                           label="End Time"
+                                          step="60"
                                           value={form.end_time}
                                           onChange={e => onFormChange({...form, end_time: e.target.value})}
                                       />
@@ -188,19 +208,17 @@ export function AppointmentDetailPanel({
                       </div>
 
                       <div className="space-y-6">
-                          <Card title="Secretary HQ Summary" variant="dark">
+                          <Card title="Summary" variant="dark">
                               <div className="space-y-4">
-                                  <Input
-                                      label="Description / Service"
+                                  <Select
+                                      label="Service"
                                       value={form.description}
                                       onChange={e => onFormChange({...form, description: e.target.value})}
-                                      className="text-lg font-medium italic text-white"
-                                      style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }}
-                                      placeholder="e.g. Oil Change"
+                                      options={[
+                                        { label: 'Walk-in (no service)', value: '' },
+                                        ...services.map(s => ({ label: `${s.name} (${s.duration_minutes}min)`, value: s.name })),
+                                      ]}
                                   />
-                                  <p className="text-sm leading-relaxed italic opacity-80" style={{ color: 'var(--accent-soft)' }}>
-                                      Editing this will update the core service description the AI uses for future reference.
-                                  </p>
                               </div>
                           </Card>
 
@@ -286,7 +304,7 @@ export function AppointmentDetailPanel({
                               </div>
                           </Card>
                       </div>
-                      <Card title="Secretary HQ Summary" variant="dark">
+                      <Card title="Summary" variant="dark">
                           <p className="text-lg leading-relaxed font-medium italic">
                               {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
                           </p>

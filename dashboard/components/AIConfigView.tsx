@@ -121,7 +121,7 @@ export default function AIConfigView() {
     <div className="flex flex-1 flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="p-4 md:p-8 flex items-center justify-between sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex items-center">
-          <div className="p-2 rounded-lg mr-4 shadow-md text-white" style={{ backgroundColor: 'var(--accent)' }}>
+          <div className="p-2 rounded-lg mr-4 shadow-md" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
             <Settings className="w-6 h-6" />
           </div>
           <div>

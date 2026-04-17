@@ -9,6 +9,7 @@ import {
   Minus,
   ChevronLeft,
   ChevronRight,
+  Copy,
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { formatTime24to12, formatHour, shiftTimeToHour } from '../lib/utils'
@@ -218,6 +219,37 @@ export default function ShiftManagementView() {
     }
   }
 
+  const [copying, setCopying] = useState(false)
+
+  function handleCopyToNextWeek() {
+    if (!selectedEmployeeId || !tenantId) return
+    const hasAnyShift = scheduledShifts.some(s => !s.is_off && s.start_time && s.end_time)
+    if (!hasAnyShift) {
+      showToast('No shifts to copy — schedule at least one day first', 'warning')
+      return
+    }
+    const nextWeekStart = new Date(weekStart)
+    nextWeekStart.setDate(nextWeekStart.getDate() + 7)
+    confirmAction({
+      title: 'Copy Week Forward',
+      message: `Copy this week's schedule to ${formatWeekLabel(nextWeekStart)}? Any existing shifts that week will be overwritten.`,
+      confirmLabel: 'Copy',
+      confirmVariant: 'primary',
+      onConfirm: async () => {
+        closeConfirm()
+        setCopying(true)
+        try {
+          const result = await Api.shifts.copyWeek(tenantId!, selectedEmployeeId!, toDateStr(weekStart), toDateStr(nextWeekStart))
+          showToast(`Copied ${result.copied} shift${result.copied === 1 ? '' : 's'} to next week`, 'success')
+        } catch {
+          showToast('Failed to copy shifts', 'error')
+        } finally {
+          setCopying(false)
+        }
+      },
+    })
+  }
+
   const handleZoomIn = useCallback(() => setColW(prev => Math.min(prev + ZOOM_STEP, MAX_COL_W)), [])
   const handleZoomOut = useCallback(() => setColW(prev => Math.max(prev - ZOOM_STEP, MIN_COL_W)), [])
   const activeEmployees = useMemo(() => employees.filter(e => e.type === 'employee'), [employees])
@@ -267,6 +299,10 @@ export default function ShiftManagementView() {
               <span className="text-sm font-bold min-w-[200px] text-center">{formatWeekLabel(weekStart)}</span>
               <button onClick={nextWeek} className="p-1.5 rounded-lg transition-colors" style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-raised)' }}><ChevronRight className="w-4 h-4" /></button>
               <button onClick={goToday} className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors" style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-raised)' }}>Today</button>
+              <button onClick={handleCopyToNextWeek} disabled={copying || loadingShifts} className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-40" style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-raised)' }} title="Copy this week's schedule to next week">
+                <Copy className="w-3.5 h-3.5" />
+                {copying ? 'Copying...' : 'Copy to Next Week'}
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-soft)' }}>

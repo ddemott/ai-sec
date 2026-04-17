@@ -80,7 +80,7 @@ export function TenantEditPanel({
     <>
       <header className="p-4 md:p-8 border-b flex items-center justify-between sticky top-0 z-10 transition-colors duration-200" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
         <div className="flex items-center">
-          <div className="p-2 rounded-lg mr-4 shadow-md text-white" style={{ backgroundColor: 'var(--accent)' }}>
+          <div className="p-2 rounded-lg mr-4 shadow-md" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
             <Building2 className="w-6 h-6" />
           </div>
           <div>

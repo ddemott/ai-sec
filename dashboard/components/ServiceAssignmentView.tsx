@@ -299,7 +299,7 @@ export default function ServiceAssignmentView() {
                         key={res.id}
                         onClick={() => selectedService && toggleResourceMapping(selectedService.id, res.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all`}
-                        style={isMapped ? { backgroundColor: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
+                        style={isMapped ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)', borderColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
                         {res.name}
                       </button>

@@ -10,7 +10,7 @@ interface ResourceColumnsViewProps {
   appointmentsByResource: Map<string, SchedulerAppointment[]>;
   shiftsByEmployee: Map<string, { start_time?: string; end_time?: string }[]>;
   employees: { id: string | number; name: string }[];
-  onAppointmentClick?: (appointment: SchedulerAppointment) => void;
+  onAppointmentClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
   hourWidth?: number;
 }
 

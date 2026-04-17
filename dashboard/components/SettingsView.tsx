@@ -260,7 +260,7 @@ export default function SettingsView() {
             ) : (
               <div className="p-4 border rounded-2xl flex items-center justify-between" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${calendarSettings.provider === 'google' ? 'bg-red-500' : ''}`} style={calendarSettings.provider !== 'google' ? { backgroundColor: 'var(--accent)' } : undefined}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${calendarSettings.provider === 'google' ? 'bg-red-500 text-white' : ''}`} style={calendarSettings.provider !== 'google' ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}>
                     {calendarSettings.provider === 'google' ? 'G' : 'O'}
                   </div>
                   <div>
@@ -364,7 +364,7 @@ export default function SettingsView() {
   return (
     <div className="flex-1 flex flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="p-4 md:p-8 sticky top-0 z-10 flex items-center" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
-        <div className="p-2 rounded-lg mr-4 shadow-md text-white" style={{ backgroundColor: 'var(--accent)' }}>
+        <div className="p-2 rounded-lg mr-4 shadow-md" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
           <ShieldCheck className="w-6 h-6" />
         </div>
         <div>

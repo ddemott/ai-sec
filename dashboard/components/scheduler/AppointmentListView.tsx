@@ -11,7 +11,7 @@ interface AppointmentListViewProps {
   appointments: SchedulerAppointment[];
   employees: SchedulerEmployee[];
   resources: SchedulerResource[];
-  onAppointmentClick?: (appointment: SchedulerAppointment) => void;
+  onAppointmentClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
 }
 
 
@@ -76,8 +76,8 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
               tabIndex={0}
               className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 transition focus-visible:ring-2 focus-visible:ring-inset"
               style={{ ['--tw-ring-color' as string]: 'var(--accent)' }}
-              onClick={() => onAppointmentClick?.(appt)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAppointmentClick?.(appt); } }}
+              onClick={(e) => onAppointmentClick?.(appt, e)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAppointmentClick?.(appt, e as unknown as React.MouseEvent); } }}
               data-testid={`list-item-${appt.id}`}
             >
               {/* Time */}

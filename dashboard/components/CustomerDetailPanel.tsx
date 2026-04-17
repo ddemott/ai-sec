@@ -114,7 +114,7 @@ export function CustomerDetailPanel({
                   <ChevronLeft className="w-6 h-6" />
               </button>
               <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center text-white text-xl md:text-2xl font-bold" style={{ backgroundColor: 'var(--accent)' }}>
+                  <div className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
                   {isCreating ? '+' : (selectedCustomer?.name?.charAt(0) || '?')}
                   </div>
                   <div>

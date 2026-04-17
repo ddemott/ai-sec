@@ -508,7 +508,7 @@ export default function BusinessSettingsView() {
           ) : (
             <div className="p-4 border rounded-2xl flex items-center justify-between" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
               <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${calendarSettings.provider === 'google' ? 'bg-red-500' : ''}`} style={calendarSettings.provider !== 'google' ? { backgroundColor: 'var(--accent)' } : undefined}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${calendarSettings.provider === 'google' ? 'bg-red-500 text-white' : ''}`} style={calendarSettings.provider !== 'google' ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}>
                   {calendarSettings.provider === 'google' ? 'G' : 'O'}
                 </div>
                 <div>

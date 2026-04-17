@@ -45,8 +45,8 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
       <button
         onClick={() => setIsOpen(true)}
         aria-label="Send feedback"
-        className="fixed bottom-20 md:bottom-6 right-6 z-50 hover:opacity-90 text-white pl-3 pr-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
-        style={{ backgroundColor: 'var(--accent)' }}
+        className="fixed bottom-20 md:bottom-6 right-6 z-50 hover:opacity-90 pl-3 pr-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105 flex items-center gap-2"
+        style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text, #fff)' }}
       >
         <MessageCircle className="w-4 h-4" aria-hidden="true" />
         <span className="text-xs font-medium">Feedback</span>
@@ -57,7 +57,7 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
   return (
     <div className="fixed bottom-20 md:bottom-6 right-6 z-50 w-80 rounded-xl shadow-2xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 text-white" style={{ backgroundColor: 'var(--accent)' }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text, #fff)' }}>
         <div>
           <p className="text-sm font-bold">Send Feedback</p>
           <p className="text-[10px] opacity-70 truncate max-w-[200px]">{page}</p>

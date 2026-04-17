@@ -14,7 +14,7 @@ interface EmployeeDayFocusPanelProps {
   employee: { id: string | number; name: string } | null;
   appointments: SchedulerAppointment[];
   shifts: FocusShift[];
-  onAppointmentClick?: (appointment: SchedulerAppointment) => void;
+  onAppointmentClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
 }
 
 
@@ -104,7 +104,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
                 <div
                   key={appt.id}
                   className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-[#222] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                  onClick={() => onAppointmentClick?.(appt)}
+                  onClick={(e) => onAppointmentClick?.(appt, e)}
                   data-testid={`focus-item-${appt.id}`}
                 >
                   <div className="flex-shrink-0">

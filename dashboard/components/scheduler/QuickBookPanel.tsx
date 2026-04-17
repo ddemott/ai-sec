@@ -229,12 +229,14 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           <Input
             type="datetime-local"
             label="Start"
+            step="60"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
           />
           <Input
             type="datetime-local"
             label="End"
+            step="60"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
           />

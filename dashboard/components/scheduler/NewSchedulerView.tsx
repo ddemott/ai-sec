@@ -8,6 +8,7 @@ import { useActiveTenantId } from '../../lib/SessionContext';
 import { useSchedulerData } from './useSchedulerData';
 import { SchedulerDateNav } from './SchedulerDateNav';
 import { StaffProfileCard } from './StaffProfileCard';
+import { AppointmentPopover } from './AppointmentPopover';
 import type { SchedulerAppointment } from './useSchedulerData';
 import type { Service, Employee } from '../../lib/types';
 
@@ -142,6 +143,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
         map.set(empId, list);
       }
     }
+    // Sort skills alphabetically so ordering is consistent across employees
+    for (const [key, list] of map) {
+      map.set(key, list.sort());
+    }
     return map;
   }, [empMappings, services]);
 
@@ -227,6 +232,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
   // --- Profile card state (Item #4) ---
   const [profileCard, setProfileCard] = useState<ProfileCardState | null>(null);
+  const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
 
   const {
     appointments,
@@ -341,6 +347,19 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     setProfileCard(null);
   }, []);
 
+  // --- Appointment click -> open popover ---
+  const handleAppointmentClick = useCallback((appointment: SchedulerAppointment, e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setApptPopover(prev =>
+      prev?.appointment.id === appointment.id ? null : { appointment, anchorRect: rect }
+    );
+    setProfileCard(null); // close profile card if open
+  }, []);
+
+  const handleApptPopoverClose = useCallback(() => {
+    setApptPopover(null);
+  }, []);
+
   // --- Drag-to-reorder handlers (Item #6) ---
   const handleDragStart = useCallback((index: number) => {
     setDragIndex(index);
@@ -436,13 +455,11 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                   key={key}
                   onClick={() => onViewChange(key)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
-                    activeView === key
-                      ? 'text-white'
-                      : 'hover:brightness-125'
+                    activeView !== key ? 'hover:brightness-125' : ''
                   }`}
                   style={{
                     background: activeView === key ? 'var(--accent, #3b82f6)' : 'transparent',
-                    color: activeView === key ? '#fff' : 'var(--text-secondary)',
+                    color: activeView === key ? 'var(--primary-text, #fff)' : 'var(--text-secondary)',
                   }}
                   data-testid={`view-tab-${key}`}
                 >
@@ -479,7 +496,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               className="px-3 py-1.5 text-xs font-bold transition-colors"
               style={{
                 background: viewMode === 'hours' ? 'var(--accent, #3b82f6)' : 'transparent',
-                color: viewMode === 'hours' ? '#fff' : 'var(--text-secondary, #aaa)',
+                color: viewMode === 'hours' ? 'var(--primary-text, #fff)' : 'var(--text-secondary, #aaa)',
               }}
               data-testid="view-mode-hours"
             >
@@ -490,7 +507,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               className="px-3 py-1.5 text-xs font-bold transition-colors"
               style={{
                 background: viewMode === 'skills' ? 'var(--accent, #3b82f6)' : 'transparent',
-                color: viewMode === 'skills' ? '#fff' : 'var(--text-secondary, #aaa)',
+                color: viewMode === 'skills' ? 'var(--primary-text, #fff)' : 'var(--text-secondary, #aaa)',
               }}
               data-testid="view-mode-skills"
             >
@@ -775,6 +792,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                             appointment={appt}
                             colW={colW}
                             services={services}
+                            onClick={handleAppointmentClick}
                           />
                         ))}
                       </>
@@ -853,6 +871,21 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
           onClose={handleProfileCardClose}
         />
       )}
+
+      {/* Appointment popover */}
+      {apptPopover && (
+        <AppointmentPopover
+          appointment={apptPopover.appointment}
+          employeeName={
+            apptPopover.appointment.employee_id
+              ? employees.find(e => String(e.id) === String(apptPopover.appointment.employee_id))?.name || null
+              : null
+          }
+          resourceName={apptPopover.appointment.resources?.name || null}
+          anchorRect={apptPopover.anchorRect}
+          onClose={handleApptPopoverClose}
+        />
+      )}
     </div>
   );
 }
@@ -894,8 +927,8 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
           >
             {width > 90 && (
               <span
-                className="absolute inset-0 flex items-center px-2 text-[11px] font-bold text-white truncate"
-                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
+                className="absolute inset-0 flex items-center px-2 text-[11px] font-bold truncate"
+                style={{ color: 'var(--primary-text)', textShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
               >
                 {formatTime24to12(shift.start_time.substring(0, 5))} – {formatTime24to12(shift.end_time.substring(0, 5))}
               </span>
@@ -979,9 +1012,10 @@ interface AppointmentBlockNewProps {
   appointment: SchedulerAppointment;
   colW: number;
   services: Service[];
+  onClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
 }
 
-function AppointmentBlockNew({ appointment, colW, services }: AppointmentBlockNewProps) {
+function AppointmentBlockNew({ appointment, colW, services, onClick }: AppointmentBlockNewProps) {
   const startH = toFractionalHour(appointment.start_time);
   const endH = toFractionalHour(appointment.end_time);
   const duration = Math.max(endH - startH, 0.25); // min 15 min visual
@@ -1008,6 +1042,7 @@ function AppointmentBlockNew({ appointment, colW, services }: AppointmentBlockNe
         fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
       }}
       title={`${customerName} — ${serviceName}`}
+      onClick={(e) => onClick?.(appointment, e)}
       data-testid={`appt-block-${appointment.id}`}
     >
       <span className="block truncate leading-tight">{customerName}</span>

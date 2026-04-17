@@ -43,7 +43,7 @@ export const Card: React.FC<CardProps> = ({
     variant === 'info'
       ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }
       : variant === 'dark'
-        ? { backgroundColor: 'var(--accent)', color: '#fff' }
+        ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
         : undefined
 
   return (

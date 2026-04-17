@@ -11,6 +11,7 @@ import { AppointmentListView } from './scheduler/AppointmentListView';
 import { QuickBookPanel } from './scheduler/QuickBookPanel';
 import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
 import NewSchedulerView from './scheduler/NewSchedulerView';
+import { AppointmentPopover } from './scheduler/AppointmentPopover';
 import { Button } from './ui/Button';
 import AppointmentView from './AppointmentView';
 
@@ -67,11 +68,14 @@ export default function SchedulerView() {
     refreshStaticData();
   }, [refreshScheduler, refreshStaticData]);
 
+  const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
+
   const handleAppointmentClick = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    (_appt: SchedulerAppointment) => {
-      // For now, clicking an appointment in scheduler views is a no-op
-      // The Calendar tab handles full appointment editing
+    (appt: SchedulerAppointment, e: React.MouseEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setApptPopover(prev =>
+        prev?.appointment.id === appt.id ? null : { appointment: appt, anchorRect: rect }
+      );
     }, []);
 
   const handleQuickBooked = useCallback(() => {
@@ -94,11 +98,11 @@ export default function SchedulerView() {
                 key={key}
                 onClick={() => setActiveView(key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
-                  activeView === key
-                    ? 'text-white'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  activeView !== key
+                    ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    : ''
                 }`}
-                style={activeView === key ? { backgroundColor: 'var(--accent)' } : undefined}
+                style={activeView === key ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}
                 data-testid={`view-tab-${key}`}
               >
                 <Icon className="w-4 h-4" />
@@ -132,11 +136,11 @@ export default function SchedulerView() {
               key={key}
               onClick={() => setActiveView(key)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
-                activeView === key
-                  ? 'text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                activeView !== key
+                  ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  : ''
               }`}
-              style={activeView === key ? { backgroundColor: 'var(--accent)' } : undefined}
+              style={activeView === key ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}
               data-testid={`view-tab-${key}`}
             >
               <Icon className="w-4 h-4" />
@@ -220,6 +224,21 @@ export default function SchedulerView() {
         shifts={focusEmployee ? (shiftsByEmployee.get(String(focusEmployee.id)) || []) : []}
         onAppointmentClick={handleAppointmentClick}
       />
+
+      {/* Appointment popover */}
+      {apptPopover && (
+        <AppointmentPopover
+          appointment={apptPopover.appointment}
+          employeeName={
+            apptPopover.appointment.employee_id
+              ? employees.find(e => String(e.id) === String(apptPopover.appointment.employee_id))?.name || null
+              : null
+          }
+          resourceName={apptPopover.appointment.resources?.name || null}
+          anchorRect={apptPopover.anchorRect}
+          onClose={() => setApptPopover(null)}
+        />
+      )}
     </div>
   );
 }

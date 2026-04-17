@@ -61,7 +61,7 @@ export default function AppointmentView() {
 
 function AppointmentViewInner() {
   const tenantId = useActiveTenantId();
-  const { customers, resources, employees } = useStaticData(tenantId);
+  const { customers, resources, employees, services } = useStaticData(tenantId);
   const vocab = useVocabulary();
   const {
     selectedAppointment, setSelectedAppointment,
@@ -516,6 +516,7 @@ function AppointmentViewInner() {
           customers={customers}
           resources={resources}
           employees={employees}
+          services={services}
           vocab={vocab}
           getServiceBaseTimes={getServiceBaseTimes}
           findCustomerById={findCustomerById}
