@@ -183,7 +183,7 @@ export function registerVoiceRoutes(
 
     const session = await withTenantClient(tenantId, async (client) => {
       const result = await client.query<VoiceSession>(
-        `SELECT * FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2`,
+        `SELECT * FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2 AND is_deleted = false`,
         [tenantId, callId]
       );
       return result.rows[0] || null;
@@ -356,7 +356,7 @@ export function registerVoiceRoutes(
     const calls = await withTenantClient(tenantId, async (client) => {
       const result = await client.query<VoiceSession>(
         `SELECT * FROM voice_sessions
-        WHERE tenant_id = $1 AND customer_id = $2
+        WHERE tenant_id = $1 AND customer_id = $2 AND is_deleted = false
         ORDER BY started_at DESC
         LIMIT $3`,
         [tenantId, customerId, limit]

@@ -36,7 +36,7 @@ export function registerServiceRoutes(
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
         `SELECT id, name, subtitle, description, duration_minutes, price
-         FROM services WHERE tenant_id = $1 ORDER BY name ASC`,
+         FROM services WHERE tenant_id = $1 AND is_deleted = false ORDER BY name ASC`,
         [tenantId]
       );
     });
@@ -48,7 +48,7 @@ export function registerServiceRoutes(
     if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('SELECT * FROM services WHERE tenant_id = $1 ORDER BY name ASC', [tenantId]);
+      return client.query('SELECT * FROM services WHERE tenant_id = $1 AND is_deleted = false ORDER BY name ASC', [tenantId]);
     });
     return reply.send(res.rows);
   }, 'Failed to fetch services'));
