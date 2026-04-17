@@ -89,16 +89,16 @@ export interface DatabaseService {
   // Consent operations
   createConsentRecord(data: Omit<ConsentRecord, 'id'>): Promise<ConsentRecord>;
   getConsentRecordsByCustomer(
-    tenantId: number,
+    tenantId: string,
     customerEmail?: string,
     customerPhone?: string
   ): Promise<ConsentRecord[]>;
-  getConsentRecordsByTenant(tenantId: number): Promise<ConsentRecord[]>;
+  getConsentRecordsByTenant(tenantId: string): Promise<ConsentRecord[]>;
   updateConsentRecord(id: number, data: Partial<ConsentRecord>): Promise<ConsentRecord | null>;
 
   // Opt-out operations
   createOptOutRecord(data: Omit<OptOutRecord, 'id'>): Promise<OptOutRecord>;
-  getOptOutRecordsByTenant(tenantId: number): Promise<OptOutRecord[]>;
+  getOptOutRecordsByTenant(tenantId: string): Promise<OptOutRecord[]>;
 }
 
 // ── PostgresDatabaseService Implementation ───────────────────────────
@@ -311,7 +311,7 @@ export class PostgresDatabaseService implements DatabaseService {
   }
 
   async getConsentRecordsByCustomer(
-    tenantId: number,
+    tenantId: string,
     customerEmail?: string,
     customerPhone?: string
   ): Promise<ConsentRecord[]> {
@@ -337,7 +337,7 @@ export class PostgresDatabaseService implements DatabaseService {
     });
   }
 
-  async getConsentRecordsByTenant(tenantId: number): Promise<ConsentRecord[]> {
+  async getConsentRecordsByTenant(tenantId: string): Promise<ConsentRecord[]> {
     return this.withTenantClient(tenantId, async (client) => {
       const result = await client.query(
         'SELECT * FROM consent_records WHERE tenant_id = $1 ORDER BY consent_date DESC',
@@ -425,7 +425,7 @@ export class PostgresDatabaseService implements DatabaseService {
     });
   }
 
-  async getOptOutRecordsByTenant(tenantId: number): Promise<OptOutRecord[]> {
+  async getOptOutRecordsByTenant(tenantId: string): Promise<OptOutRecord[]> {
     return this.withTenantClient(tenantId, async (client) => {
       const result = await client.query(
         `SELECT

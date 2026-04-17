@@ -192,7 +192,7 @@ export function registerCommunicationRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const consents = await consentService.getConsentRecords(parseInt(tenantId, 10) || 0);
+    const consents = await consentService.getConsentRecords(tenantId);
 
     return reply.send({
       success: true,
@@ -217,8 +217,8 @@ export function registerCommunicationRoutes(
     }
 
     const consent = await consentService.recordConsent({
-      tenant_id: parseInt(tenantId, 10) || 0,
-      customer_id: parsed.data.customer_id ? parseInt(parsed.data.customer_id, 10) : undefined,
+      tenant_id: tenantId,
+      customer_id: parsed.data.customer_id || undefined,
       customer_email: parsed.data.customer_email,
       customer_phone: parsed.data.customer_phone,
       consent_type: parsed.data.consent_type,
@@ -252,7 +252,7 @@ export function registerCommunicationRoutes(
     }
 
     const optOut = await consentService.processOptOutCommand(
-      parseInt(tenantId, 10) || 0,
+      tenantId,
       parsed.data.command,
       parsed.data.customer_phone,
       parsed.data.customer_email,
@@ -280,7 +280,7 @@ export function registerCommunicationRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const optOuts = await consentService.getOptOutRecords(parseInt(tenantId, 10) || 0);
+    const optOuts = await consentService.getOptOutRecords(tenantId);
 
     return reply.send({
       success: true,

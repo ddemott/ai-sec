@@ -8,16 +8,8 @@ export class ConsentService {
    * Record customer consent for communications
    */
   async recordConsent(consentData: Omit<ConsentRecord, 'id'>): Promise<ConsentRecord> {
-    const rawTenantId = consentData.tenant_id ?? (consentData as any).tenantId;
-    const tenantId = typeof rawTenantId === 'string' ? parseInt(rawTenantId, 10) : rawTenantId;
-
     const consent: Omit<ConsentRecord, 'id'> = {
       ...consentData,
-      tenant_id: tenantId,
-      customer_id:
-        consentData.customer_id !== undefined && typeof consentData.customer_id === 'string'
-          ? parseInt(consentData.customer_id, 10)
-          : consentData.customer_id,
     };
 
     // Store in database
@@ -35,7 +27,7 @@ export class ConsentService {
    * Check if customer has given consent for a specific communication type
    */
   async checkConsent(
-    tenantId: number,
+    tenantId: string,
     customerEmail?: string,
     customerPhone?: string,
     consentType: 'email' | 'sms' = 'email',
@@ -73,7 +65,7 @@ export class ConsentService {
    * Revoke customer consent
    */
   async revokeConsent(
-    tenantId: number,
+    tenantId: string,
     customerEmail?: string,
     customerPhone?: string,
     consentType: 'email' | 'sms' | 'both' = 'both',
@@ -132,17 +124,12 @@ export class ConsentService {
    * Record an opt-out request (STOP, UNSUBSCRIBE, etc.)
    */
   async recordOptOut(optOutData: Omit<OptOutRecord, 'id'>): Promise<OptOutRecord> {
-    // Ensure tenantId is a number (handle both camelCase and snake_case for input resilience)
-    const rawTenantId = optOutData.tenantId ?? (optOutData as any).tenant_id;
-    const tenantId = Number(rawTenantId);
-
-    if (Number.isNaN(tenantId)) {
-      throw new Error('tenantId must be a valid number');
+    if (!optOutData.tenantId) {
+      throw new Error('tenantId is required');
     }
 
-    // Ensure camelCase format for repository
     const camelCaseData: Omit<OptOutRecord, 'id'> = {
-      tenantId,
+      tenantId: optOutData.tenantId,
       customerEmail: optOutData.customerEmail ?? (optOutData as any).customer_email,
       customerPhone: optOutData.customerPhone ?? (optOutData as any).customer_phone,
       optOutType: optOutData.optOutType ?? (optOutData as any).opt_out_type,
@@ -186,7 +173,7 @@ export class ConsentService {
    * Process STOP/UNSUBSCRIBE commands from SMS or email
    */
   async processOptOutCommand(
-    tenantId: number,
+    tenantId: string,
     command: string,
     customerPhone?: string,
     customerEmail?: string,
@@ -216,14 +203,14 @@ export class ConsentService {
   /**
    * Get all consent records for a tenant
    */
-  async getConsentRecords(tenantId: number): Promise<ConsentRecord[]> {
+  async getConsentRecords(tenantId: string): Promise<ConsentRecord[]> {
     return await this.db.getConsentRecordsByTenant(tenantId);
   }
 
   /**
    * Get opt-out records for a tenant
    */
-  async getOptOutRecords(tenantId: number): Promise<OptOutRecord[]> {
+  async getOptOutRecords(tenantId: string): Promise<OptOutRecord[]> {
     return await this.db.getOptOutRecordsByTenant(tenantId);
   }
 
@@ -231,7 +218,7 @@ export class ConsentService {
    * Check if a customer can receive communications
    */
   async canReceiveCommunications(
-    tenantId: number | string,
+    tenantId: string,
     customerEmail?: string,
     customerPhone?: string,
   ): Promise<{
@@ -239,12 +226,11 @@ export class ConsentService {
     canReceiveSMS: boolean;
     hasConsent: boolean;
   }> {
-    const numTenantId = typeof tenantId === 'string' ? parseInt(tenantId, 10) || 0 : tenantId;
     const canReceiveEmail = customerEmail
-      ? await this.checkConsent(numTenantId, customerEmail, undefined, 'email')
+      ? await this.checkConsent(tenantId, customerEmail, undefined, 'email')
       : false;
     const canReceiveSMS = customerPhone
-      ? await this.checkConsent(numTenantId, undefined, customerPhone, 'sms')
+      ? await this.checkConsent(tenantId, undefined, customerPhone, 'sms')
       : false;
 
     return {

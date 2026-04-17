@@ -17,8 +17,8 @@ export * from './voiceCrm.js';
  */
 export interface ConsentRecord {
   id: number;
-  tenant_id: number;
-  customer_id?: number;
+  tenant_id: string;
+  customer_id?: string;
   customer_email?: string;
   customer_phone?: string;
   consent_type: 'email' | 'sms' | 'both';
@@ -39,7 +39,7 @@ export interface ConsentRecord {
  */
 export interface OptOutRecord {
   id?: number;
-  tenantId: number;
+  tenantId: string;
   customerEmail?: string;
   customerPhone?: string;
   optOutType: 'email' | 'sms' | 'both';

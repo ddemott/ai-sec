@@ -32,13 +32,12 @@ describe('ConsentService', () => {
       const service = new ConsentService(mockDb as any);
 
       const result = await service.recordConsent({
-        tenant_id: 1,
+        tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         customer_email: 'test@example.com',
         consent_type: 'email',
         consent_given: true,
         consent_date: new Date().toISOString(),
         consent_method: 'web',
-        consent_purpose: 'appointment reminders',
       });
 
       expect(result).toBeDefined();
@@ -46,23 +45,22 @@ describe('ConsentService', () => {
       expect(mockDb.createConsentRecord).toHaveBeenCalled();
     });
 
-    it('should handle tenantId as string and convert to number', async () => {
+    it('should pass tenant_id as UUID string', async () => {
       const { ConsentService } = await import('./consentService');
       const mockDb = createMockDb();
       const service = new ConsentService(mockDb as any);
 
       await service.recordConsent({
-        tenant_id: '1' as any, // String instead of number
+        tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         customer_email: 'test@example.com',
         consent_type: 'sms',
         consent_given: true,
         consent_date: new Date().toISOString(),
         consent_method: 'phone',
-        consent_purpose: 'sms reminders',
       });
 
       const call = mockDb.createConsentRecord.mock.calls[0][0];
-      expect(call.tenant_id).toBe(1);
+      expect(call.tenant_id).toBe('f234e471-0e60-4163-86c9-93cfd9338e3a');
     });
   });
 
@@ -230,7 +228,7 @@ describe('ConsentService', () => {
       const service = new ConsentService(mockDb as any);
 
       const result = await service.recordOptOut({
-        tenantId: 1,
+        tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         customerPhone: '+15551234567',
         optOutType: 'sms',
         optOutDate: new Date().toISOString(),
@@ -250,7 +248,7 @@ describe('ConsentService', () => {
       const service = new ConsentService(mockDb as any);
 
       await service.recordOptOut({
-        tenant_id: 1,
+        tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         customer_phone: '+15551234567',
         opt_out_type: 'sms',
         opt_out_method: 'stop',
