@@ -40,6 +40,14 @@ export async function setupBasicTenant(client: Client) {
 // beforeAll: clearDB + setupBasicTenant (once per file)
 // beforeEach: SAVEPOINT (instant)
 // afterEach: ROLLBACK TO SAVEPOINT (instant — undoes test changes)
+//
+// Deadlock prevention principles applied here:
+// 1. CONSISTENT LOCK ORDERING — tests using clearDB() TRUNCATE all tables in one statement
+//    with CASCADE, avoiding partial-lock states that cause circular waits.
+// 2. SHORT TRANSACTIONS — savepoint/rollback pattern keeps test transactions brief.
+// 3. TIMEOUT PROTECTION — lock_timeout set on connections to fail fast on contested locks.
+// 4. SEQUENTIAL EXECUTION — vitest.config.ts sets fileParallelism:false so test files
+//    never compete for table locks across parallel threads.
 
 export async function beginTestTransaction(client: Client) {
     await client.query("BEGIN");
@@ -47,7 +55,15 @@ export async function beginTestTransaction(client: Client) {
 }
 
 export async function rollbackTestTransaction(client: Client) {
-    await client.query("ROLLBACK");
+    // Try ROLLBACK TO SAVEPOINT first (preserves the outer transaction for next test).
+    // Falls back to bare ROLLBACK for tests that manage their own BEGIN/COMMIT internally
+    // and call rollbackTestTransaction without a matching beginTestTransaction.
+    try {
+        await client.query("ROLLBACK TO SAVEPOINT test_start");
+    } catch {
+        // No savepoint active — fall back to bare ROLLBACK (ends any open transaction)
+        try { await client.query("ROLLBACK"); } catch { /* no transaction — safe to ignore */ }
+    }
 }
 
 // ── Data creation helpers ─────────────────────────────────────────────

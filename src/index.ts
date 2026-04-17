@@ -150,15 +150,30 @@ app.addContentTypeParser(
 // on all tables + set_tenant_context() GUC. Works on both local Docker and Supabase.
 
 const isLocal = process.env.DATABASE_URL?.includes('localhost') || !process.env.DATABASE_URL;
+
+// Deadlock prevention: statement_timeout kills runaway queries, lock_timeout prevents
+// indefinite waits for row/table locks, idle_in_transaction_session_timeout closes
+// abandoned transactions that hold locks. Without these, a single deadlocked connection
+// can exhaust the pool (default 10 connections) and block all other requests.
+const POOL_TIMEOUTS = {
+  statement_timeout: '30000',                    // 30s — kill queries that run too long
+  lock_timeout: '10000',                         // 10s — fail fast if a lock is contested
+  idle_in_transaction_session_timeout: '60000',   // 60s — close idle transactions holding locks
+};
+
 const pool = isLocal ? new Pool({
   user: 'postgres',
   host: 'localhost',
   database: 'postgres',
   password: 'postgres',
   port: 5433,
+  max: 10,
+  options: `-c statement_timeout=${POOL_TIMEOUTS.statement_timeout} -c lock_timeout=${POOL_TIMEOUTS.lock_timeout} -c idle_in_transaction_session_timeout=${POOL_TIMEOUTS.idle_in_transaction_session_timeout}`,
 }) : new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  max: 10,
+  options: `-c statement_timeout=${POOL_TIMEOUTS.statement_timeout} -c lock_timeout=${POOL_TIMEOUTS.lock_timeout} -c idle_in_transaction_session_timeout=${POOL_TIMEOUTS.idle_in_transaction_session_timeout}`,
 });
 
 async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
