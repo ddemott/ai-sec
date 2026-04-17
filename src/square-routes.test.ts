@@ -121,6 +121,11 @@ beforeEach(() => {
 
 describe('Square Routes — Happy Paths', () => {
   it('1. GET /square/auth returns OAuth URL when configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect Square" button
+    // WHAT: Square env vars are set (SQUARE_APP_ID, SQUARE_APP_SECRET), request includes tenant_id
+    // WHEN: GET /square/auth?tenant_id=...
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth handler
+    // WHY: Without this, clicking "Connect Square" would fail silently — user cannot link their Square account for customer/booking sync
     vi.mocked(squareClient.isSquareEnabled).mockReturnValue(true);
     vi.mocked(squareClient.getAuthUrl).mockReturnValue('https://connect.squareup.com/oauth2/authorize?client_id=test');
 
@@ -136,6 +141,11 @@ describe('Square Routes — Happy Paths', () => {
   });
 
   it('2. GET /square/auth/callback exchanges code, redirects with ?squareConnected=true', async () => {
+    // WHO: Square OAuth server — redirects user back after granting access
+    // WHAT: Callback URL contains valid code + JWT state param, token exchange succeeds, tokens stored in tenant_integration_settings
+    // WHEN: GET /square/auth/callback?code=...&state=... (OAuth redirect)
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth/callback handler via oauthCallbackFactory
+    // WHY: Without this, the OAuth flow completes on Square's side but tokens never persist — user appears connected but all Square API calls fail with 401
     vi.mocked(squareClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(squareClient.exchangeCodeForTokens).mockResolvedValue({
       access_token: 'access-123',
@@ -160,6 +170,11 @@ describe('Square Routes — Happy Paths', () => {
   });
 
   it('3. GET /square/settings returns settings', async () => {
+    // WHO: Dashboard integration card — polls connection status on CRM settings page load
+    // WHAT: tenant_integration_settings row exists, response strips access_token/refresh_token before returning
+    // WHEN: GET /square/settings?tenant_id=...
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/settings handler
+    // WHY: Without token stripping, OAuth tokens leak to the browser — a XSS attack could steal them and impersonate the tenant on Square's API
     const settingsRow = {
       tenant_id: TENANT_ID,
       provider: 'square',
@@ -186,6 +201,11 @@ describe('Square Routes — Happy Paths', () => {
   });
 
   it('4. POST /square/settings/disconnect deletes settings + sync map', async () => {
+    // WHO: Dashboard user — clicks "Disconnect Square" button on CRM integration card
+    // WHAT: Deletes tenant_integration_settings row AND all entity_sync_map rows for this tenant+provider
+    // WHEN: POST /square/settings/disconnect?tenant_id=...
+    // WHERE: src/routes/square.ts registerSquareRoutes — POST /square/settings/disconnect handler
+    // WHY: Without deleting sync map entries, reconnecting Square later would cause duplicate customers — stale external_id mappings conflict with fresh Square data
     // DELETE from tenant_integration_settings
     queryResponses.push({ rows: [], rowCount: 1 });
     // DELETE from entity_sync_map
@@ -209,6 +229,11 @@ describe('Square Routes — Happy Paths', () => {
   });
 
   it('5. POST /square/webhook processes valid event', async () => {
+    // WHO: Square webhook server — fires customer.created event when a customer is created in Square
+    // WHAT: Valid HMAC signature, tenant lookup by merchant_id succeeds, customer fetched and synced to local DB
+    // WHEN: POST /square/webhook with x-square-hmacsha256-signature header and customer.created payload
+    // WHERE: src/routes/square.ts registerSquareRoutes — POST /square/webhook handler
+    // WHY: Without this, new customers created in Square would never appear in SecretaryHQ — bidirectional sync breaks and the voice AI has stale customer data
     const webhookBody = {
       type: 'customer.created',
       merchant_id: 'M123',
@@ -252,6 +277,11 @@ describe('Square Routes — Happy Paths', () => {
   });
 
   it('6. POST /square/sync triggers fullSync', async () => {
+    // WHO: Dashboard user — clicks "Sync Now" button on Square integration card
+    // WHAT: fullSync pulls all customers and bookings from Square REST v2 API, returns count of synced entities
+    // WHEN: POST /square/sync?tenant_id=...
+    // WHERE: src/routes/square.ts registerSquareRoutes — POST /square/sync handler calling squareSync.fullSync
+    // WHY: Without this, users have no way to trigger a full data pull — initial setup after connecting Square would show zero synced records
     vi.mocked(squareSync.fullSync).mockResolvedValue({
       customersSynced: 15,
       appointmentsSynced: 8,
@@ -272,6 +302,11 @@ describe('Square Routes — Happy Paths', () => {
   });
 
   it('7. GET /square/sync/status returns counts', async () => {
+    // WHO: Dashboard integration card — polls sync status to show progress badges (synced/pending/error counts)
+    // WHAT: Aggregates entity_sync_map rows by entity_type and sync_status, joins with last_sync_at from settings
+    // WHEN: GET /square/sync/status?tenant_id=...
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/sync/status handler
+    // WHY: Without this, the Square integration card shows no sync progress — user cannot tell if sync worked, how many records failed, or when last sync ran
     // settings query
     queryResponses.push({ rows: [{ last_sync_at: '2026-03-25T12:00:00Z' }] });
     // counts query
@@ -305,6 +340,11 @@ describe('Square Routes — Happy Paths', () => {
 
 describe('Square Routes — Sad Paths', () => {
   it('8. GET /square/auth returns 503 when not configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect Square" but server lacks SQUARE_APP_ID/SECRET env vars
+    // WHAT: isSquareEnabled returns false because required env vars are missing in production
+    // WHEN: GET /square/auth?tenant_id=... when Square env vars not set
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth guard check
+    // WHY: Without a clear 503, the dashboard would show a cryptic error instead of "Square integration not configured" — admin wouldn't know to set env vars
     vi.mocked(squareClient.isSquareEnabled).mockReturnValue(false);
 
     const res = await app.inject({
@@ -319,6 +359,11 @@ describe('Square Routes — Sad Paths', () => {
   });
 
   it('9. GET /square/auth/callback redirects with error on missing params', async () => {
+    // WHO: Malformed OAuth redirect or direct browser navigation to callback URL without params
+    // WHAT: Callback URL has neither code nor state nor error query params
+    // WHEN: GET /square/auth/callback (no query params)
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth/callback missing params guard
+    // WHY: Without this guard, the handler would crash on undefined code/state — user sees a 500 error page instead of being redirected to dashboard with an error toast
     const res = await app.inject({
       method: 'GET',
       url: '/square/auth/callback',
@@ -329,6 +374,11 @@ describe('Square Routes — Sad Paths', () => {
   });
 
   it('10. GET /square/auth/callback redirects with error on bad state', async () => {
+    // WHO: Attacker or expired session — callback arrives with tampered/expired JWT state
+    // WHAT: verifyState returns null because the state JWT is invalid, expired, or forged
+    // WHEN: GET /square/auth/callback?code=...&state=bad-jwt
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth/callback state verification
+    // WHY: Without this, a CSRF attack could link an attacker's Square account to a victim's tenant — state validation prevents OAuth session fixation
     vi.mocked(squareClient.verifyState).mockReturnValue(null);
 
     const res = await app.inject({
@@ -341,6 +391,11 @@ describe('Square Routes — Sad Paths', () => {
   });
 
   it('11. GET /square/auth/callback redirects on token exchange failure', async () => {
+    // WHO: Square OAuth server — token exchange fails (expired code, Square API outage, network error)
+    // WHAT: verifyState succeeds but exchangeCodeForTokens throws — Square rejected the authorization code
+    // WHEN: GET /square/auth/callback?code=...&state=... when Square's token endpoint is down
+    // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth/callback token exchange try/catch
+    // WHY: Without catching this, a Square outage during OAuth would show a raw 500 error — user sees broken page instead of "connection failed, try again"
     vi.mocked(squareClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(squareClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
 
@@ -354,6 +409,11 @@ describe('Square Routes — Sad Paths', () => {
   });
 
   it('12. POST /square/webhook 400 on missing signature', async () => {
+    // WHO: Unknown caller — sends POST to webhook endpoint without HMAC signature header
+    // WHAT: Request has no x-square-hmacsha256-signature header, fails before any verification
+    // WHEN: POST /square/webhook without signature header
+    // WHERE: src/routes/square.ts registerSquareRoutes — POST /square/webhook signature presence check
+    // WHY: Without rejecting unsigned requests, an attacker could inject fake customer/booking events — corrupting any tenant's customer database
     const res = await app.inject({
       method: 'POST',
       url: '/square/webhook',
@@ -368,6 +428,11 @@ describe('Square Routes — Sad Paths', () => {
   });
 
   it('13. POST /square/webhook 401 on invalid signature', async () => {
+    // WHO: Attacker or corrupted request — sends webhook with wrong/forged HMAC signature
+    // WHAT: Signature header present but verifyWebhookSignature returns false — HMAC doesn't match
+    // WHEN: POST /square/webhook with x-square-hmacsha256-signature that doesn't match computed HMAC
+    // WHERE: src/routes/square.ts registerSquareRoutes — POST /square/webhook HMAC verification
+    // WHY: Without HMAC validation, anyone who knows the webhook URL could inject fake events — corrupting the tenant's customer and booking data
     vi.mocked(squareClient.verifyWebhookSignature).mockReturnValue(false);
 
     const res = await app.inject({
@@ -386,6 +451,11 @@ describe('Square Routes — Sad Paths', () => {
   });
 
   it('14. POST /square/webhook 500 when signature key not configured', async () => {
+    // WHO: Square webhook server — fires event but SQUARE_WEBHOOK_SIGNATURE_KEY env var is missing from production
+    // WHAT: Signature header present but server cannot verify because the shared secret env var is not set
+    // WHEN: POST /square/webhook when SQUARE_WEBHOOK_SIGNATURE_KEY is undefined in process.env
+    // WHERE: src/routes/square.ts registerSquareRoutes — POST /square/webhook signature key check
+    // WHY: Without this check, verifyWebhookSignature would use undefined as the key — either always passing (security hole) or always failing (all webhooks rejected silently)
     const savedKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
     delete process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
 

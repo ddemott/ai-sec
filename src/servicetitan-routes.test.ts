@@ -119,6 +119,11 @@ beforeEach(() => {
 
 describe('ServiceTitan Routes — Happy Paths', () => {
   it('1. GET /servicetitan/auth returns OAuth URL when configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect ServiceTitan" button
+    // WHAT: ServiceTitan env vars are set (ST_CLIENT_ID, ST_CLIENT_SECRET, ST_APP_KEY), request includes tenant_id
+    // WHEN: GET /servicetitan/auth?tenant_id=...
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth handler
+    // WHY: Without this, clicking "Connect ServiceTitan" would fail silently — user cannot link their ST account for customer/job sync
     vi.mocked(servicetitanClient.isServiceTitanEnabled).mockReturnValue(true);
     vi.mocked(servicetitanClient.getAuthUrl).mockReturnValue('https://auth.servicetitan.io/connect/authorize?client_id=test');
 
@@ -134,6 +139,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
   });
 
   it('2. GET /servicetitan/auth/callback exchanges code, stores tenantSid, redirects with ?servicetitanConnected=true', async () => {
+    // WHO: ServiceTitan OAuth server — redirects user back after granting access, includes tenant_sid query param
+    // WHAT: Callback has code + state + tenant_sid, tokens stored in tenant_integration_settings with tenant_sid in settings JSONB
+    // WHEN: GET /servicetitan/auth/callback?code=...&state=...&tenant_sid=999888777 (OAuth redirect)
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth/callback handler via oauthCallbackFactory
+    // WHY: Without storing tenant_sid, all ServiceTitan API calls would fail — ST requires tenant_sid header for every REST v2 request, breaking customer/job sync entirely
     vi.mocked(servicetitanClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(servicetitanClient.exchangeCodeForTokens).mockResolvedValue({
       access_token: 'access-123',
@@ -163,6 +173,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
   });
 
   it('3. GET /servicetitan/settings returns settings', async () => {
+    // WHO: Dashboard integration card — polls connection status on CRM settings page load
+    // WHAT: tenant_integration_settings row exists, response strips access_token/refresh_token before returning
+    // WHEN: GET /servicetitan/settings?tenant_id=...
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/settings handler
+    // WHY: Without token stripping, OAuth tokens and ST-App-Key would leak to the browser — a XSS attack could steal them and impersonate the tenant on ServiceTitan's API
     const settingsRow = {
       tenant_id: TENANT_ID,
       provider: 'servicetitan',
@@ -189,6 +204,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
   });
 
   it('4. POST /servicetitan/settings/disconnect deletes settings + sync map', async () => {
+    // WHO: Dashboard user — clicks "Disconnect ServiceTitan" button on CRM integration card
+    // WHAT: Deletes tenant_integration_settings row AND all entity_sync_map rows for this tenant+provider
+    // WHEN: POST /servicetitan/settings/disconnect?tenant_id=...
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — POST /servicetitan/settings/disconnect handler
+    // WHY: Without deleting sync map entries, reconnecting ST later would cause duplicate customers — stale external_id mappings conflict with fresh ServiceTitan data
     // DELETE from tenant_integration_settings
     queryResponses.push({ rows: [], rowCount: 1 });
     // DELETE from entity_sync_map
@@ -212,6 +232,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
   });
 
   it('5. POST /servicetitan/webhook accepts payload without signature check', async () => {
+    // WHO: ServiceTitan webhook server — fires customer.created event (ST webhooks have no HMAC signing)
+    // WHAT: Payload contains event array with tenantId (ST's tenant_sid), tenant lookup succeeds, customer synced to local DB
+    // WHEN: POST /servicetitan/webhook with customer.created event payload
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — POST /servicetitan/webhook handler
+    // WHY: Without this, new customers created in ServiceTitan would never appear in SecretaryHQ — bidirectional sync breaks and the voice AI has stale customer data
     const webhookBody = [
       { eventType: 'customer.created', data: { id: 12345, name: 'Test', phoneNumber: '555-1234' }, tenantId: '999888777' },
     ];
@@ -241,6 +266,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
   });
 
   it('6. POST /servicetitan/sync triggers fullSync', async () => {
+    // WHO: Dashboard user — clicks "Sync Now" button on ServiceTitan integration card
+    // WHAT: fullSync pulls all customers and jobs from ServiceTitan REST v2 API, returns count of synced entities
+    // WHEN: POST /servicetitan/sync?tenant_id=...
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — POST /servicetitan/sync handler calling servicetitanSync.fullSync
+    // WHY: Without this, users have no way to trigger a full data pull — initial setup after connecting ServiceTitan would show zero synced records
     vi.mocked(servicetitanSync.fullSync).mockResolvedValue({
       customersSynced: 15,
       appointmentsSynced: 8,
@@ -261,6 +291,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
   });
 
   it('7. GET /servicetitan/sync/status returns counts', async () => {
+    // WHO: Dashboard integration card — polls sync status to show progress badges (synced/pending/error counts)
+    // WHAT: Aggregates entity_sync_map rows by entity_type and sync_status, joins with last_sync_at from settings
+    // WHEN: GET /servicetitan/sync/status?tenant_id=...
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/sync/status handler
+    // WHY: Without this, the ServiceTitan integration card shows no sync progress — user cannot tell if sync worked, how many records failed, or when last sync ran
     // settings query
     queryResponses.push({ rows: [{ last_sync_at: '2026-03-25T12:00:00Z' }] });
     // counts query
@@ -294,6 +329,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
 
 describe('ServiceTitan Routes — Sad Paths', () => {
   it('8. GET /servicetitan/auth returns 503 when not configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect ServiceTitan" but server lacks ST_CLIENT_ID/SECRET env vars
+    // WHAT: isServiceTitanEnabled returns false because required env vars are missing in production
+    // WHEN: GET /servicetitan/auth?tenant_id=... when ServiceTitan env vars not set
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth guard check
+    // WHY: Without a clear 503, the dashboard would show a cryptic error instead of "ServiceTitan integration not configured" — admin wouldn't know to set env vars
     vi.mocked(servicetitanClient.isServiceTitanEnabled).mockReturnValue(false);
 
     const res = await app.inject({
@@ -308,6 +348,11 @@ describe('ServiceTitan Routes — Sad Paths', () => {
   });
 
   it('9. GET /servicetitan/auth/callback redirects with error on missing params', async () => {
+    // WHO: Malformed OAuth redirect or direct browser navigation to callback URL without params
+    // WHAT: Callback URL has neither code nor state nor error query params
+    // WHEN: GET /servicetitan/auth/callback (no query params)
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth/callback missing params guard
+    // WHY: Without this guard, the handler would crash on undefined code/state — user sees a 500 error page instead of being redirected to dashboard with an error toast
     const res = await app.inject({
       method: 'GET',
       url: '/servicetitan/auth/callback',
@@ -318,6 +363,11 @@ describe('ServiceTitan Routes — Sad Paths', () => {
   });
 
   it('10. GET /servicetitan/auth/callback redirects with error on bad state', async () => {
+    // WHO: Attacker or expired session — callback arrives with tampered/expired JWT state
+    // WHAT: verifyState returns null because the state JWT is invalid, expired, or forged
+    // WHEN: GET /servicetitan/auth/callback?code=...&state=bad-jwt
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth/callback state verification
+    // WHY: Without this, a CSRF attack could link an attacker's ServiceTitan account to a victim's tenant — state validation prevents OAuth session fixation
     vi.mocked(servicetitanClient.verifyState).mockReturnValue(null);
 
     const res = await app.inject({
@@ -330,6 +380,11 @@ describe('ServiceTitan Routes — Sad Paths', () => {
   });
 
   it('11. GET /servicetitan/auth/callback redirects on token exchange failure', async () => {
+    // WHO: ServiceTitan OAuth server — token exchange fails (expired code, ST API outage, network error)
+    // WHAT: verifyState succeeds but exchangeCodeForTokens throws — ServiceTitan rejected the authorization code
+    // WHEN: GET /servicetitan/auth/callback?code=...&state=... when ST's token endpoint is down
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth/callback token exchange try/catch
+    // WHY: Without catching this, a ServiceTitan outage during OAuth would show a raw 500 error — user sees broken page instead of "connection failed, try again"
     vi.mocked(servicetitanClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(servicetitanClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
 
@@ -343,6 +398,11 @@ describe('ServiceTitan Routes — Sad Paths', () => {
   });
 
   it('12. GET /servicetitan/settings returns null when not connected', async () => {
+    // WHO: Dashboard integration card — checks if ServiceTitan is connected for a tenant that hasn't set up ST yet
+    // WHAT: No tenant_integration_settings row exists for this tenant+provider, DB returns empty rows
+    // WHEN: GET /servicetitan/settings?tenant_id=... (tenant has never connected ServiceTitan)
+    // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/settings handler, empty result branch
+    // WHY: Without returning null, the dashboard would crash trying to read properties of undefined — the "Connect ServiceTitan" button wouldn't render
     queryResponses.push({ rows: [] });
 
     const res = await app.inject({

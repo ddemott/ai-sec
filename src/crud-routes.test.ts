@@ -43,6 +43,11 @@ describe("CRUD Routes - Database Level", () => {
 
     describe("Employees", () => {
         it("should list employees for a tenant", async () => {
+            // WHO: dashboard user viewing the employee list sidebar
+            // WHAT: two employees inserted, query returns them ordered by name ASC
+            // WHEN: GET /employees on the Staff management view
+            // WHERE: employees table, tenant-scoped SELECT query
+            // WHY: without this, the Staff sidebar in the dashboard would be empty or show wrong order
             if (!dbAvailable) return;
 
             await client.query(
@@ -68,6 +73,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should create employee with first_name, last_name, email, phone", async () => {
+            // WHO: dashboard user adding a new employee via Staff form
+            // WHAT: employee with all fields — first_name, last_name, email, phone, skills array
+            // WHEN: POST /employees from the Staff detail panel
+            // WHERE: employees table INSERT
+            // WHY: without this, the Add Employee form would silently fail or lose field data
             if (!dbAvailable) return;
 
             const firstName = "Mike";
@@ -89,6 +99,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should update employee name and skills", async () => {
+            // WHO: dashboard user editing an employee's name and skills
+            // WHAT: UPDATE with COALESCE to preserve unchanged fields
+            // WHEN: PUT /employees/:id from the Staff detail panel
+            // WHERE: employees table UPDATE with COALESCE pattern
+            // WHY: without COALESCE, partial updates would null out unset fields
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
@@ -115,6 +130,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should isolate employees by tenant", async () => {
+            // WHO: two separate tenant owners viewing their respective employee lists
+            // WHAT: each tenant sees only their own employees, not the other tenant's
+            // WHEN: GET /employees filtered by tenant_id
+            // WHERE: employees table, tenant-scoped SELECT query
+            // WHY: without tenant isolation, Salon B would see Auto Shop A's mechanics in their staff list
             if (!dbAvailable) return;
 
             // Create a second tenant
@@ -139,6 +159,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should list employees unioned with users", async () => {
+            // WHO: dashboard showing combined staff list (employees + user accounts)
+            // WHAT: UNION ALL query combines employees table and users table into one list
+            // WHEN: GET /employees with include_users flag on the Staff view
+            // WHERE: employees + users tables via UNION ALL query
+            // WHY: without the union, dashboard users (owners) wouldn't appear in the schedulable staff list
             if (!dbAvailable) return;
 
             await client.query(
@@ -174,6 +199,11 @@ describe("CRUD Routes - Database Level", () => {
 
     describe("Resources", () => {
         it("should list resources for a tenant", async () => {
+            // WHO: dashboard user viewing the resource list in Back Office
+            // WHAT: query returns resources for the tenant including the default "Truck 1"
+            // WHEN: GET /resources on the Resources management view
+            // WHERE: resources table, tenant-scoped SELECT query
+            // WHY: without this, the Resources sidebar would be empty and scheduling would have no bays/stations
             if (!dbAvailable) return;
 
             // setupBasicTenant already creates 'Truck 1'
@@ -189,6 +219,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should create resource with name and description", async () => {
+            // WHO: dashboard user adding a new bay/station via Resources form
+            // WHAT: resource with name "Bay 2" and description, defaults is_active=true
+            // WHEN: POST /resources from the Resources detail panel
+            // WHERE: resources table INSERT
+            // WHY: without this, adding new bays in the dashboard would fail silently
             if (!dbAvailable) return;
 
             const res = await client.query(
@@ -203,6 +238,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should update resource name and description", async () => {
+            // WHO: dashboard user renaming a resource in the detail panel
+            // WHAT: UPDATE resource name and description by ID
+            // WHEN: PUT /resources/:id from the Resources detail panel
+            // WHERE: resources table UPDATE
+            // WHY: without this, editing resource names in the dashboard would have no effect
             if (!dbAvailable) return;
 
             // Use the resource created by setupBasicTenant
@@ -220,6 +260,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should soft-deactivate resource via is_active flag", async () => {
+            // WHO: dashboard user deactivating a bay that's temporarily out of service
+            // WHAT: UPDATE is_active to false (soft deactivate, not hard delete)
+            // WHEN: toggle active/inactive on the Resources detail panel
+            // WHERE: resources table UPDATE is_active
+            // WHY: without soft-deactivate, removing a bay would require hard delete and lose history
             if (!dbAvailable) return;
 
             await client.query(
@@ -239,6 +284,11 @@ describe("CRUD Routes - Database Level", () => {
 
     describe("Services", () => {
         it("should list services for a tenant ordered by name", async () => {
+            // WHO: dashboard user viewing the service catalog in Back Office
+            // WHAT: two services inserted, returned ordered alphabetically by name
+            // WHEN: GET /services on the Services management view
+            // WHERE: services table, tenant-scoped SELECT ORDER BY name ASC
+            // WHY: without this, the Services sidebar would be empty or show services in random order
             if (!dbAvailable) return;
 
             await client.query(
@@ -261,6 +311,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should create service with name, duration_minutes, and price", async () => {
+            // WHO: dashboard user adding a new service via Services form
+            // WHAT: service with all fields — name, description, duration, skills, resources, price
+            // WHEN: POST /services from the Services detail panel
+            // WHERE: services table INSERT
+            // WHY: without this, the voice AI would have no services to offer callers for booking
             if (!dbAvailable) return;
 
             const res = await client.query(
@@ -276,6 +331,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should update service", async () => {
+            // WHO: dashboard user editing a service's name, description, duration, and price
+            // WHAT: UPDATE with COALESCE pattern to preserve unchanged fields
+            // WHEN: PUT /services/:id from the Services detail panel
+            // WHERE: services table UPDATE with COALESCE
+            // WHY: without this, editing services in the dashboard would null out unset fields
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
@@ -296,6 +356,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should delete service with no mappings", async () => {
+            // WHO: dashboard user deleting an unmapped service from the catalog
+            // WHAT: DELETE service that has zero employee/resource mappings
+            // WHEN: DELETE /services/:id after confirming no dependencies
+            // WHERE: services table DELETE, service_resource + service_employee checked first
+            // WHY: without the mapping check, deleting mapped services would orphan assignments
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
@@ -318,6 +383,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should prevent delete when service has mappings (application-level check)", async () => {
+            // WHO: dashboard user attempting to delete a service that has employee assignments
+            // WHAT: service with an active employee mapping — count > 0 blocks deletion
+            // WHEN: DELETE /services/:id when mappings exist (route returns 409)
+            // WHERE: service_employee + service_resource mapping count check
+            // WHY: without this guard, deleting a mapped service would break the Skill Relationship Map and booking
             if (!dbAvailable) return;
 
             const svcId = await createService(client, tenantId, "Mapped Svc", 30);
@@ -344,6 +414,11 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should create employee shift", async () => {
+            // WHO: dashboard user adding a shift via Working Hours view
+            // WHAT: INSERT shift for Monday (day 1) 09:00-17:00, defaults is_active=true
+            // WHEN: POST /shifts from the Working Hours detail panel
+            // WHERE: employee_shifts table INSERT
+            // WHY: without shifts, the scheduler shows no staff availability and booking RPC rejects all times
             if (!dbAvailable) return;
 
             const res = await client.query(

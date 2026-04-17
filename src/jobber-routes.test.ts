@@ -126,6 +126,11 @@ beforeEach(() => {
 describe('Jobber Routes — Happy Paths', () => {
   // 1. GET /jobber/auth returns { url } when configured
   it('1. GET /jobber/auth returns OAuth URL when configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect Jobber" button
+    // WHAT: Jobber env vars are set (JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET), request includes tenant_id
+    // WHEN: GET /jobber/auth with valid tenant_id query param
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth handler
+    // WHY: Without this, clicking "Connect Jobber" in the CRM integration card would fail silently — user sees no OAuth popup and cannot link their Jobber account
     vi.mocked(jobberClient.isJobberEnabled).mockReturnValue(true);
     vi.mocked(jobberClient.getAuthUrl).mockReturnValue('https://api.getjobber.com/api/oauth/authorize?client_id=test');
 
@@ -142,6 +147,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 2. GET /jobber/auth/callback exchanges code, stores tokens, redirects
   it('2. GET /jobber/auth/callback exchanges code, stores tokens, redirects to dashboard', async () => {
+    // WHO: Jobber OAuth server — redirects user back after granting access
+    // WHAT: Callback URL contains valid code + JWT state param, token exchange succeeds, tokens stored in tenant_integration_settings
+    // WHEN: GET /jobber/auth/callback?code=...&state=... (OAuth redirect)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback handler via oauthCallbackFactory
+    // WHY: Without this, the OAuth flow completes on Jobber's side but tokens never persist — user appears connected but all Jobber API calls fail with 401
     vi.mocked(jobberClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(jobberClient.exchangeCodeForTokens).mockResolvedValue({
       access_token: 'access-123',
@@ -167,6 +177,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 3. GET /jobber/auth/callback redirects with ?jobberError when OAuth error param present
   it('3. GET /jobber/auth/callback redirects with jobberError when OAuth error param present', async () => {
+    // WHO: Jobber OAuth server — user denied access or Jobber returned an OAuth error
+    // WHAT: Callback URL contains ?error=access_denied (user clicked "Deny" on Jobber consent screen)
+    // WHEN: GET /jobber/auth/callback?error=access_denied
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback error branch
+    // WHY: Without this, denying Jobber access would show a blank error page instead of redirecting to dashboard with a toast notification explaining the denial
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/auth/callback?error=access_denied',
@@ -178,6 +193,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 4. GET /jobber/auth/callback redirects with ?jobberError=invalid_state for bad state
   it('4. GET /jobber/auth/callback redirects with jobberError=invalid_state for bad state', async () => {
+    // WHO: Attacker or expired session — callback arrives with tampered/expired JWT state
+    // WHAT: verifyState returns null because the state JWT is invalid, expired, or forged
+    // WHEN: GET /jobber/auth/callback?code=...&state=bad-jwt
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback state verification
+    // WHY: Without this, a CSRF attack could link an attacker's Jobber account to a victim's tenant — state validation prevents OAuth session fixation
     vi.mocked(jobberClient.verifyState).mockReturnValue(null);
 
     const res = await app.inject({
@@ -191,6 +211,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 5. GET /jobber/settings returns settings without tokens
   it('5. GET /jobber/settings returns settings without tokens', async () => {
+    // WHO: Dashboard integration card — polls connection status on CRM settings page load
+    // WHAT: tenant_integration_settings row exists for this tenant+provider, response strips access_token/refresh_token
+    // WHEN: GET /jobber/settings?tenant_id=...
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/settings handler
+    // WHY: Without token stripping, OAuth tokens would leak to the browser — a XSS attack could steal them and impersonate the tenant on Jobber's API
     const settingsRow = {
       tenant_id: TENANT_ID,
       provider: 'jobber',
@@ -218,6 +243,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 6. GET /jobber/settings returns null when no settings
   it('6. GET /jobber/settings returns null when no settings exist', async () => {
+    // WHO: Dashboard integration card — checks if Jobber is connected for a tenant that hasn't set up Jobber yet
+    // WHAT: No tenant_integration_settings row exists for this tenant+provider, DB returns empty rows
+    // WHEN: GET /jobber/settings?tenant_id=... (tenant has never connected Jobber)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/settings handler, empty result branch
+    // WHY: Without returning null, the dashboard would crash trying to read properties of undefined — the "Connect Jobber" button wouldn't render
     queryResponses.push({ rows: [] });
 
     const res = await app.inject({
@@ -232,6 +262,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 7. POST /jobber/settings/disconnect deletes settings and sync map
   it('7. POST /jobber/settings/disconnect deletes settings and sync map', async () => {
+    // WHO: Dashboard user — clicks "Disconnect Jobber" button on CRM integration card
+    // WHAT: Deletes tenant_integration_settings row AND all entity_sync_map rows for this tenant+provider
+    // WHEN: POST /jobber/settings/disconnect?tenant_id=...
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/settings/disconnect handler
+    // WHY: Without deleting sync map entries, reconnecting Jobber later would cause duplicate customers — stale external_id mappings would conflict with fresh Jobber data
     // DELETE from tenant_integration_settings
     queryResponses.push({ rows: [], rowCount: 1 });
     // DELETE from entity_sync_map
@@ -256,6 +291,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 8. POST /jobber/webhook/:tenantId processes valid webhook with correct HMAC
   it('8. POST /jobber/webhook/:tenantId processes valid webhook with correct HMAC', async () => {
+    // WHO: Jobber webhook server — fires CLIENT_CREATE event when a client is created in Jobber
+    // WHAT: Valid HMAC signature, active integration exists, webhook fetches client via GraphQL and syncs to local DB
+    // WHEN: POST /jobber/webhook/:tenantId with x-jobber-hmac-sha256 header
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/webhook/:tenantId handler
+    // WHY: Without this, new clients created in Jobber would never appear in SecretaryHQ — bidirectional sync breaks and the receptionist AI has stale customer data
     const webhookBody = { topic: 'CLIENT_CREATE', webHookEvent: { itemId: 'Z2lkOi8v123' } };
     const rawBody = JSON.stringify(webhookBody);
     const signature = computeHmac(rawBody, WEBHOOK_SECRET);
@@ -289,6 +329,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 9. POST /jobber/sync triggers fullSync and returns counts
   it('9. POST /jobber/sync triggers fullSync and returns counts', async () => {
+    // WHO: Dashboard user — clicks "Sync Now" button on Jobber integration card
+    // WHAT: fullSync pulls all customers and appointments from Jobber GraphQL API, returns count of synced entities
+    // WHEN: POST /jobber/sync?tenant_id=...
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/sync handler calling jobberSync.fullSync
+    // WHY: Without this, users have no way to manually trigger a full data pull — initial setup after connecting Jobber would show zero synced records
     vi.mocked(jobberSync.fullSync).mockResolvedValue({
       customers_synced: 15,
       appointments_synced: 8,
@@ -309,6 +354,11 @@ describe('Jobber Routes — Happy Paths', () => {
 
   // 10. GET /jobber/sync/status returns aggregated counts
   it('10. GET /jobber/sync/status returns aggregated counts', async () => {
+    // WHO: Dashboard integration card — polls sync status to show progress badges (synced/pending/error counts)
+    // WHAT: Aggregates entity_sync_map rows by entity_type and sync_status, joins with last_sync_at from settings
+    // WHEN: GET /jobber/sync/status?tenant_id=...
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/sync/status handler
+    // WHY: Without this, the Jobber integration card shows no sync progress — user cannot tell if sync worked, how many records failed, or when the last sync ran
     // settings query
     queryResponses.push({ rows: [{ last_sync_at: '2026-03-25T12:00:00Z' }] });
     // counts query
@@ -343,6 +393,11 @@ describe('Jobber Routes — Happy Paths', () => {
 describe('Jobber Routes — Sad Paths', () => {
   // 11. GET /jobber/auth returns 503 when not configured
   it('11. GET /jobber/auth returns 503 when Jobber is not configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect Jobber" but server lacks JOBBER_CLIENT_ID/SECRET env vars
+    // WHAT: isJobberEnabled returns false because required env vars are missing in production
+    // WHEN: GET /jobber/auth?tenant_id=... when Jobber env vars not set
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth guard check
+    // WHY: Without a clear 503, the dashboard would show a cryptic error instead of "Jobber integration not configured" — admin wouldn't know to set env vars
     vi.mocked(jobberClient.isJobberEnabled).mockReturnValue(false);
 
     const res = await app.inject({
@@ -358,6 +413,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
   // 12. GET /jobber/auth/callback redirects with ?jobberError=missing_params when no code/state
   it('12. GET /jobber/auth/callback redirects with jobberError=missing_params when no code/state', async () => {
+    // WHO: Malformed OAuth redirect or direct browser navigation to callback URL without params
+    // WHAT: Callback URL has neither code nor state nor error query params
+    // WHEN: GET /jobber/auth/callback (no query params)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback missing params guard
+    // WHY: Without this guard, the handler would crash on undefined code/state — user sees a 500 error page instead of being redirected to dashboard with an error toast
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/auth/callback',
@@ -369,6 +429,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
   // 13. GET /jobber/auth/callback redirects with ?jobberError=token_exchange_failed on exchange error
   it('13. GET /jobber/auth/callback redirects with jobberError=token_exchange_failed on exchange error', async () => {
+    // WHO: Jobber OAuth server — token exchange fails (expired code, Jobber API outage, network error)
+    // WHAT: verifyState succeeds but exchangeCodeForTokens throws — Jobber rejected the authorization code
+    // WHEN: GET /jobber/auth/callback?code=...&state=... when Jobber's token endpoint is down
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback token exchange try/catch
+    // WHY: Without catching this, a Jobber outage during OAuth would show a raw 500 error — user would think SecretaryHQ is broken instead of seeing "connection failed, try again"
     vi.mocked(jobberClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(jobberClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
 
@@ -383,6 +448,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
   // 14. POST /jobber/webhook/:tenantId returns 400 when missing signature
   it('14. POST /jobber/webhook/:tenantId returns 400 when missing signature', async () => {
+    // WHO: Unknown caller — sends POST to webhook endpoint without HMAC signature header
+    // WHAT: Request has no x-jobber-hmac-sha256 header, fails before any DB lookup
+    // WHEN: POST /jobber/webhook/:tenantId without signature header
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/webhook/:tenantId signature presence check
+    // WHY: Without rejecting unsigned requests early, an attacker could inject fake webhook events to create/modify customers in any tenant's database
     const res = await app.inject({
       method: 'POST',
       url: `/jobber/webhook/${TENANT_ID}`,
@@ -398,6 +468,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
   // 15. POST /jobber/webhook/:tenantId returns 404 when no active integration
   it('15. POST /jobber/webhook/:tenantId returns 404 when no active integration', async () => {
+    // WHO: Jobber webhook server — fires event for a tenant that has since disconnected Jobber
+    // WHAT: DB lookup for webhook_secret returns empty rows — no active integration for this tenant
+    // WHEN: POST /jobber/webhook/:tenantId after tenant has disconnected Jobber
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/webhook/:tenantId integration lookup
+    // WHY: Without this, stale webhooks from Jobber after disconnection would crash on null webhook_secret — the error would pollute logs and mask real issues
     // DB returns no rows (no active integration)
     queryResponses.push({ rows: [] });
 
@@ -417,6 +492,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
   // 16. POST /jobber/webhook/:tenantId returns 401 when HMAC signature is invalid
   it('16. POST /jobber/webhook/:tenantId returns 401 when HMAC signature is invalid', async () => {
+    // WHO: Attacker or corrupted request — sends webhook with wrong/forged HMAC signature
+    // WHAT: Integration exists and webhook_secret is found, but HMAC verification fails against the provided signature
+    // WHEN: POST /jobber/webhook/:tenantId with x-jobber-hmac-sha256 that doesn't match computed HMAC
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/webhook/:tenantId HMAC verification
+    // WHY: Without HMAC validation, anyone who knows the webhook URL could inject fake client/job events — corrupting the tenant's customer database
     // DB returns webhook_secret
     queryResponses.push({ rows: [{ webhook_secret: WEBHOOK_SECRET }] });
 
@@ -438,6 +518,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
   // 17. POST /jobber/webhook/:tenantId returns 200 for no-op events (missing topic/itemId)
   it('17. POST /jobber/webhook/:tenantId returns 200 no-op for events missing topic or itemId', async () => {
+    // WHO: Jobber webhook server — sends a health check or non-actionable event type (no topic/itemId)
+    // WHAT: Payload passes HMAC verification but lacks topic or webHookEvent.itemId fields
+    // WHEN: POST /jobber/webhook/:tenantId with valid signature but no actionable event data
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/webhook/:tenantId event dispatch logic
+    // WHY: Without gracefully handling no-op events, Jobber's health check pings would trigger token refresh and GraphQL calls that fail — wasting API quota and logging false errors
     const webhookBody = { someField: 'value' }; // no topic, no webHookEvent
     const rawBody = JSON.stringify(webhookBody);
     const signature = computeHmac(rawBody, WEBHOOK_SECRET);
@@ -467,6 +552,11 @@ describe('Jobber Routes — Sad Paths', () => {
 
 describe('Jobber Routes — Edge Cases', () => {
   it('GET /jobber/auth returns 400 when tenant_id is missing', async () => {
+    // WHO: Dashboard integration card — API call made without tenant context (bug in frontend)
+    // WHAT: Request has no tenant_id query param, tenantMiddleware doesn't inject tenantId
+    // WHEN: GET /jobber/auth (missing tenant_id)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth tenant_id guard
+    // WHY: Without this guard, getAuthUrl would receive undefined tenant — the state JWT would have no tenant claim, making the callback unable to store tokens for the right tenant
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/auth',
@@ -479,6 +569,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('GET /jobber/settings returns 400 when tenant_id is missing', async () => {
+    // WHO: Dashboard integration card — settings fetch without tenant context (frontend bug or direct API call)
+    // WHAT: Request has no tenant_id, route guard rejects before DB query
+    // WHEN: GET /jobber/settings (missing tenant_id)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/settings tenant_id guard
+    // WHY: Without this guard, the DB query would run without RLS context — potentially leaking another tenant's Jobber connection status
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/settings',
@@ -488,6 +583,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('POST /jobber/settings/disconnect returns 400 when tenant_id is missing', async () => {
+    // WHO: Dashboard integration card — disconnect request without tenant context
+    // WHAT: Request has no tenant_id, route guard rejects before DELETE queries
+    // WHEN: POST /jobber/settings/disconnect (missing tenant_id)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/settings/disconnect tenant_id guard
+    // WHY: Without this guard, the DELETE would run without tenant scoping — potentially disconnecting another tenant's Jobber integration
     const res = await app.inject({
       method: 'POST',
       url: '/jobber/settings/disconnect',
@@ -497,6 +597,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('POST /jobber/sync returns 400 when tenant_id is missing', async () => {
+    // WHO: Dashboard integration card — "Sync Now" clicked without tenant context
+    // WHAT: Request has no tenant_id, route guard rejects before triggering fullSync
+    // WHEN: POST /jobber/sync (missing tenant_id)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/sync tenant_id guard
+    // WHY: Without this guard, fullSync would run with undefined tenant — syncing data into no tenant or the wrong tenant, corrupting multi-tenant isolation
     const res = await app.inject({
       method: 'POST',
       url: '/jobber/sync',
@@ -506,6 +611,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('GET /jobber/sync/status returns 400 when tenant_id is missing', async () => {
+    // WHO: Dashboard integration card — sync status poll without tenant context
+    // WHAT: Request has no tenant_id, route guard rejects before DB aggregation query
+    // WHEN: GET /jobber/sync/status (missing tenant_id)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/sync/status tenant_id guard
+    // WHY: Without this guard, the aggregation query would return cross-tenant sync counts — leaking how many records other tenants have synced
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/sync/status',
@@ -515,6 +625,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('GET /jobber/auth returns 500 when getAuthUrl returns null', async () => {
+    // WHO: Dashboard integration card — Jobber is enabled but URL generation fails (misconfigured redirect URI)
+    // WHAT: isJobberEnabled returns true but getAuthUrl returns null — env vars exist but are malformed
+    // WHEN: GET /jobber/auth?tenant_id=... when getAuthUrl cannot build a valid OAuth URL
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth null URL check
+    // WHY: Without this, the dashboard would receive { url: null } and try to redirect to "null" — user sees a blank page instead of an actionable error message
     vi.mocked(jobberClient.isJobberEnabled).mockReturnValue(true);
     vi.mocked(jobberClient.getAuthUrl).mockReturnValue(null);
 
@@ -530,6 +645,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('GET /jobber/sync/status returns null last_sync_at when no settings exist', async () => {
+    // WHO: Dashboard integration card — polls sync status for a tenant that connected then disconnected Jobber
+    // WHAT: No settings row exists and no sync map entries — all counts default to zero, last_sync_at is null
+    // WHEN: GET /jobber/sync/status?tenant_id=... when tenant has no Jobber integration
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/sync/status empty state handling
+    // WHY: Without defaulting to zero/null, the dashboard would show undefined counts or crash — the sync status card needs safe defaults to render "No data yet"
     // settings query — no rows
     queryResponses.push({ rows: [] });
     // counts query — no rows
@@ -550,6 +670,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('POST /jobber/sync returns 500 when fullSync throws', async () => {
+    // WHO: Dashboard user — clicks "Sync Now" but Jobber API is down or tokens expired beyond refresh
+    // WHAT: fullSync throws an unrecoverable error (network timeout, invalid token, Jobber 500)
+    // WHEN: POST /jobber/sync?tenant_id=... when Jobber's API is unreachable
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/sync error catch
+    // WHY: Without catching this, an unhandled rejection would crash the Fastify process — other tenants' requests would fail until the server restarts
     vi.mocked(jobberSync.fullSync).mockRejectedValue(new Error('Sync engine crashed'));
 
     const res = await app.inject({
@@ -564,6 +689,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('GET /jobber/auth/callback with only code (no state) redirects with missing_params', async () => {
+    // WHO: Malformed OAuth redirect — Jobber sends code but state param was stripped (proxy/firewall issue)
+    // WHAT: Callback has code but no state — cannot determine which tenant to store tokens for
+    // WHEN: GET /jobber/auth/callback?code=some-code (missing state)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback params validation
+    // WHY: Without rejecting this, the handler would call verifyState(undefined) — either crashing or storing tokens for a null tenant, breaking the integration
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/auth/callback?code=some-code',
@@ -574,6 +704,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('GET /jobber/auth/callback with only state (no code) redirects with missing_params', async () => {
+    // WHO: Malformed OAuth redirect — state present but authorization code was stripped or never issued
+    // WHAT: Callback has state but no code — cannot exchange for tokens without an authorization code
+    // WHEN: GET /jobber/auth/callback?state=some-state (missing code)
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback params validation
+    // WHY: Without rejecting this, exchangeCodeForTokens would be called with undefined code — Jobber API returns a cryptic error instead of the user seeing a clean "connection failed" message
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/auth/callback?state=some-state',
@@ -584,6 +719,11 @@ describe('Jobber Routes — Edge Cases', () => {
   });
 
   it('Webhook with topic but no itemId returns 200 no-op', async () => {
+    // WHO: Jobber webhook server — sends CLIENT_CREATE event but webHookEvent object is missing itemId field
+    // WHAT: Payload has valid topic and passes HMAC but webHookEvent.itemId is undefined — no entity to look up
+    // WHEN: POST /jobber/webhook/:tenantId with topic but empty webHookEvent object
+    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/webhook/:tenantId event dispatch logic
+    // WHY: Without this guard, the GraphQL query would be called with undefined ID — returning null client data and causing pullJobberClient to crash on null properties
     const webhookBody = { topic: 'CLIENT_CREATE', webHookEvent: {} }; // no itemId
     const rawBody = JSON.stringify(webhookBody);
     const signature = computeHmac(rawBody, WEBHOOK_SECRET);

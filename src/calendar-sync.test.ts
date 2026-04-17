@@ -99,6 +99,11 @@ beforeEach(() => {
 
 describe("Calendar Sync — Happy Paths", () => {
   it("GOOGLE-CREATE: When tenant creates appointment with Google Calendar connected, system creates calendar event so customer receives invite and appointment shows on provider's calendar", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() with Google provider
+    // WHAT: tenant creates a new appointment while Google Calendar OAuth is active
+    // WHEN: appointment create action triggers calendar sync
+    // WHERE: calendarSync.ts -> googleCalendar.ts createEvent() -> appointment_sync_map INSERT
+    // WHY: without this, new appointments won't appear on the provider's Google Calendar, breaking the two-way calendar promise
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -137,6 +142,11 @@ describe("Calendar Sync — Happy Paths", () => {
   });
 
   it("GOOGLE-UPDATE: When tenant updates appointment that was previously synced, system updates Google Calendar event using stored event_id to keep calendar in sync with scheduling changes", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() with Google provider
+    // WHAT: tenant reschedules or modifies an existing appointment that was previously synced
+    // WHEN: appointment update action triggers calendar sync with existing sync_map entry
+    // WHERE: calendarSync.ts -> appointment_sync_map lookup -> googleCalendar.ts updateEvent()
+    // WHY: without this, rescheduled appointments show stale times on Google Calendar, causing customer no-shows
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -173,6 +183,11 @@ describe("Calendar Sync — Happy Paths", () => {
   });
 
   it("GOOGLE-DELETE: When tenant deletes appointment, system deletes Google Calendar event so cancelled appointments don't appear on provider's calendar", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() with Google provider
+    // WHAT: tenant cancels/deletes an appointment that was previously synced to Google Calendar
+    // WHEN: appointment delete action triggers calendar sync with existing sync_map entry
+    // WHERE: calendarSync.ts -> appointment_sync_map lookup -> googleCalendar.ts deleteEvent() -> sync_map DELETE
+    // WHY: without this, cancelled appointments remain on Google Calendar, causing confusion and wasted customer time
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -205,6 +220,11 @@ describe("Calendar Sync — Happy Paths", () => {
   });
 
   it("GOOGLE-TOKEN-REFRESH: When Google OAuth token is expired, system refreshes it before syncing to ensure uninterrupted calendar integration", async () => {
+    // WHO: calendarSync.ts token refresh logic for Google provider
+    // WHAT: Google OAuth access_token has expired (token_expires_at in the past)
+    // WHEN: any sync action detects expired token before making Google Calendar API call
+    // WHERE: calendarSync.ts -> googleCalendar.ts refreshAccessToken() -> tenant_calendar_settings UPDATE
+    // WHY: without proactive refresh, every calendar sync fails with 401 after token expires (1h default), breaking sync silently
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -250,6 +270,11 @@ describe("Calendar Sync — Happy Paths", () => {
   });
 
   it("GOOGLE-UPDATE-FALLBACK: When update triggered for appointment with no sync_map entry (e.g., calendar connected after appointment created), system creates new event instead of failing", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() update->create fallback
+    // WHAT: appointment update triggered but no sync_map entry exists (calendar connected after appointment was created)
+    // WHEN: update action finds empty sync_map lookup and recursively calls create
+    // WHERE: calendarSync.ts update path -> sync_map miss -> recursive create path
+    // WHY: without fallback, appointments created before calendar connection would never sync, leaving gaps in the provider's calendar
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -286,6 +311,11 @@ describe("Calendar Sync — Happy Paths", () => {
   });
 
   it("EVENT-PAYLOAD: When creating calendar event, system builds correct payload with summary (service + customer), description, and ISO timestamps so event displays properly in Google Calendar", async () => {
+    // WHO: calendarSync.ts event payload builder
+    // WHAT: appointment with full details (description, customer, phone, resource, service, location, timestamps)
+    // WHEN: create action builds the event object before calling Google Calendar API
+    // WHERE: calendarSync.ts event construction logic -> googleCalendar.ts createEvent()
+    // WHY: malformed payloads cause events to display without titles, wrong times, or missing contact info on Google Calendar
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -322,6 +352,11 @@ describe("Calendar Sync — Happy Paths", () => {
   });
 
   it("EVENT-SUMMARY-FALLBACK: When appointment has no description, system uses 'Appointment' as summary fallback so calendar events always have a readable title", async () => {
+    // WHO: calendarSync.ts event payload builder
+    // WHAT: appointment has null description (e.g., booked via voice AI without specifying service)
+    // WHEN: create action builds event summary from appointment description
+    // WHERE: calendarSync.ts summary construction -> fallback to 'Appointment'
+    // WHY: without fallback, calendar events display blank/null titles, making them unreadable on Google Calendar
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -347,6 +382,11 @@ describe("Calendar Sync — Happy Paths", () => {
 
 describe("Calendar Sync — Sad Paths", () => {
   it("NO-SETTINGS: When tenant has no calendar integration configured, sync returns silently allowing appointment operations to complete without calendar errors", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() settings check
+    // WHAT: tenant_calendar_settings query returns no rows (no calendar integration configured)
+    // WHEN: any sync action starts and checks for calendar settings
+    // WHERE: calendarSync.ts -> settings query -> early return
+    // WHY: without silent return, every appointment CRUD for tenants without calendar integration would throw, blocking core functionality
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -362,6 +402,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("INACTIVE-CALENDAR: When tenant's calendar integration is marked inactive (is_active=false), system skips sync so disabled calendars don't receive events", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() active check
+    // WHAT: tenant_calendar_settings has is_active=false (disabled after failed token refresh or manual disconnect)
+    // WHEN: any sync action checks is_active flag after loading settings
+    // WHERE: calendarSync.ts -> settings.is_active check -> early return
+    // WHY: without this check, system would attempt API calls with revoked tokens, generating 401 errors and unnecessary load
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -374,6 +419,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("UNSUPPORTED-PROVIDER: When calendar provider is not 'google' or 'outlook', system logs warning and skips sync to handle misconfigured integrations gracefully", async () => {
+    // WHO: calendarSync.ts provider dispatch logic
+    // WHAT: tenant_calendar_settings has unknown provider value (e.g., 'icloud' from bad DB migration or API misuse)
+    // WHEN: sync action dispatches based on provider string after settings validation
+    // WHERE: calendarSync.ts -> provider switch/if block -> unrecognized provider path
+    // WHY: without graceful handling, unsupported providers would cause unhandled errors crashing the sync and blocking appointment operations
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -386,6 +436,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("MISSING-ACCESS-TOKEN: When calendar integration has no access_token (incomplete OAuth), system skips sync to prevent API calls with invalid credentials", async () => {
+    // WHO: calendarSync.ts token validation logic
+    // WHAT: tenant_calendar_settings has null access_token (OAuth flow started but not completed)
+    // WHEN: sync action validates tokens before attempting API call
+    // WHERE: calendarSync.ts -> access_token null check -> early return
+    // WHY: without this guard, null access_token would cause Google/Outlook API calls to fail with cryptic auth errors
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -398,6 +453,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("MISSING-REFRESH-TOKEN: When calendar integration has no refresh_token (incomplete OAuth), system skips sync because token refresh would fail", async () => {
+    // WHO: calendarSync.ts token validation logic
+    // WHAT: tenant_calendar_settings has null refresh_token (OAuth flow incomplete or refresh_token revoked)
+    // WHEN: sync action validates tokens before attempting API call
+    // WHERE: calendarSync.ts -> refresh_token null check -> early return
+    // WHY: without this guard, expired access_token cannot be refreshed, causing persistent sync failures until OAuth is re-done
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -410,6 +470,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Google authorization), system marks calendar inactive in DB to prevent repeated failed API calls", async () => {
+    // WHO: calendarSync.ts token refresh error handler for Google provider
+    // WHAT: Google OAuth refresh_token is revoked or invalidated by user
+    // WHEN: token refresh attempt throws error during sync operation
+    // WHERE: calendarSync.ts -> refreshAccessToken() catch -> UPDATE is_active=false
+    // WHY: without deactivation, every subsequent appointment operation would retry the failed refresh, wasting resources and delaying responses
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -444,6 +509,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("DELETE-NO-SYNC-MAP: When delete triggered for appointment with no sync_map entry (never synced to calendar), system skips API call and logs info since there's nothing to delete", async () => {
+    // WHO: calendarSync.ts delete path sync_map check
+    // WHAT: appointment delete triggered but no sync_map entry exists (appointment was created before calendar was connected)
+    // WHEN: delete action queries appointment_sync_map and finds no matching row
+    // WHERE: calendarSync.ts -> sync_map lookup -> empty result -> skip API call
+    // WHY: without this check, system would attempt to delete a non-existent Google Calendar event, causing unnecessary 404 errors
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -462,6 +532,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("DELETE-API-ERROR: When Google Calendar delete fails (e.g., event already deleted manually), system logs warning but doesn't throw so appointment deletion completes", async () => {
+    // WHO: calendarSync.ts delete path error handler for Google provider
+    // WHAT: Google Calendar deleteEvent() throws (event already deleted manually by user in Google Calendar)
+    // WHEN: delete action attempts to remove calendar event and receives API error
+    // WHERE: calendarSync.ts -> googleCalendar.ts deleteEvent() catch -> sync_map cleanup continues
+    // WHY: without error swallowing, appointment deletion would fail whenever a user manually deletes the calendar event first
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -491,6 +566,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("FIRE-AND-FORGET: When calendar API call fails during sync, system logs error but doesn't throw so appointment CRUD operations complete regardless of calendar status", async () => {
+    // WHO: calendarSync.ts error resilience for Google provider create path
+    // WHAT: Google Calendar API returns 500 during event creation
+    // WHEN: createEvent() throws after appointment details are fetched
+    // WHERE: calendarSync.ts -> googleCalendar.ts createEvent() -> error propagation -> finally release
+    // WHY: calendar sync must never block appointment CRUD; pool client must always be released to prevent connection pool exhaustion
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -520,6 +600,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+    // WHO: calendarSync.ts finally block DB client cleanup
+    // WHAT: initial DB query (settings lookup) throws connection error
+    // WHEN: pool.connect() succeeds but first query fails (e.g., network partition)
+    // WHERE: calendarSync.ts -> try/finally -> mockClient.release()
+    // WHY: without finally-block release, each failed sync leaks a DB connection, eventually exhausting the pool and crashing the server
     const mockClient = {
       query: vi.fn().mockRejectedValue(new Error('Connection reset')),
       release: vi.fn(),
@@ -537,6 +622,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("PROACTIVE-REFRESH: When token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync", async () => {
+    // WHO: calendarSync.ts proactive token refresh logic
+    // WHAT: Google OAuth token expires in 3 minutes (within the 5-minute safety buffer)
+    // WHEN: sync action checks token_expires_at against Date.now() + buffer before API call
+    // WHERE: calendarSync.ts -> expiry check with 5min buffer -> refreshAccessToken()
+    // WHY: without proactive refresh, tokens expiring mid-operation cause partial sync failures (event created but sync_map not updated)
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -564,6 +654,11 @@ describe("Calendar Sync — Sad Paths", () => {
   });
 
   it("NULL-EXPIRY-REFRESH: When token_expires_at is null (legacy data), system treats token as expired and refreshes to ensure valid credentials", async () => {
+    // WHO: calendarSync.ts null expiry handling logic
+    // WHAT: tenant_calendar_settings has null token_expires_at (legacy row or migration gap)
+    // WHEN: sync action parses token_expires_at and gets 0/NaN, treating it as expired
+    // WHERE: calendarSync.ts -> expiry parse -> null coalesces to 0 -> triggers refresh
+    // WHY: without null handling, legacy rows would use potentially expired tokens, causing silent sync failures
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -606,6 +701,11 @@ function makeOutlookSettings(overrides: Record<string, any> = {}) {
 
 describe("Calendar Sync — Outlook Happy Paths", () => {
   it("OUTLOOK-CREATE: When tenant creates appointment with Outlook Calendar connected, system creates calendar event via Microsoft Graph API so appointment shows in Outlook", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() with Outlook provider
+    // WHAT: tenant creates a new appointment while Outlook Calendar OAuth is active
+    // WHEN: appointment create action triggers calendar sync and provider is 'outlook'
+    // WHERE: calendarSync.ts -> outlookCalendar.ts createEvent() -> appointment_sync_map INSERT
+    // WHY: without this, new appointments won't appear in the provider's Outlook Calendar, breaking the calendar integration
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -640,6 +740,11 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
   });
 
   it("OUTLOOK-UPDATE: When tenant updates appointment synced to Outlook, system updates calendar event using stored event_id to keep Outlook in sync with scheduling changes", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() with Outlook provider
+    // WHAT: tenant reschedules an existing appointment that was previously synced to Outlook
+    // WHEN: appointment update action triggers sync with existing sync_map entry for Outlook
+    // WHERE: calendarSync.ts -> sync_map lookup -> outlookCalendar.ts updateEvent()
+    // WHY: without this, rescheduled appointments show stale times in Outlook, causing customer confusion
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -667,6 +772,11 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
   });
 
   it("OUTLOOK-DELETE: When tenant deletes appointment synced to Outlook, system deletes calendar event via Graph API so cancelled appointments don't appear in Outlook", async () => {
+    // WHO: calendarSync.ts syncAppointmentToCalendar() with Outlook provider
+    // WHAT: tenant cancels/deletes an appointment previously synced to Outlook
+    // WHEN: appointment delete action triggers sync with existing sync_map entry for Outlook
+    // WHERE: calendarSync.ts -> sync_map lookup -> outlookCalendar.ts deleteEvent() -> sync_map DELETE
+    // WHY: without this, cancelled appointments remain in Outlook Calendar, causing wasted customer time
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -694,6 +804,11 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
   });
 
   it("OUTLOOK-TOKEN-REFRESH: When Outlook OAuth token is expired, system refreshes via Microsoft identity platform before syncing to ensure uninterrupted calendar integration", async () => {
+    // WHO: calendarSync.ts token refresh logic for Outlook provider
+    // WHAT: Outlook OAuth access_token has expired (token_expires_at in the past)
+    // WHEN: sync action detects expired token and calls outlookCalendar.refreshAccessToken()
+    // WHERE: calendarSync.ts -> provider='outlook' -> outlookCalendar.ts refreshAccessToken() -> token UPDATE
+    // WHY: without refresh, every Outlook sync fails with 401 after token expires, breaking calendar integration silently
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -727,6 +842,11 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
   });
 
   it("OUTLOOK-UPDATE-FALLBACK: When update triggered for Outlook appointment with no sync_map entry (e.g., calendar connected after appointment created), system creates new event instead of failing", async () => {
+    // WHO: calendarSync.ts update->create fallback for Outlook provider
+    // WHAT: appointment update triggered but no sync_map entry exists for Outlook
+    // WHEN: update action finds empty sync_map lookup and recursively calls create
+    // WHERE: calendarSync.ts update path -> sync_map miss -> recursive create -> outlookCalendar.ts createEvent()
+    // WHY: without fallback, appointments created before Outlook connection would never sync to the provider's calendar
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -758,6 +878,11 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
 
 describe("Calendar Sync — Outlook Sad Paths", () => {
   it("OUTLOOK-REFRESH-FAILURE: When Outlook OAuth token refresh fails (e.g., user revoked Microsoft authorization), system marks calendar inactive to prevent repeated failed API calls", async () => {
+    // WHO: calendarSync.ts token refresh error handler for Outlook provider
+    // WHAT: Microsoft identity platform rejects refresh_token (user revoked app access)
+    // WHEN: token refresh attempt throws error during Outlook sync operation
+    // WHERE: calendarSync.ts -> outlookCalendar.ts refreshAccessToken() catch -> UPDATE is_active=false
+    // WHY: without deactivation, every subsequent sync retries the failed refresh, wasting resources and logging noise
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -788,6 +913,11 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
   });
 
   it("OUTLOOK-DELETE-NO-MAP: When Outlook delete triggered for appointment with no sync_map entry (never synced), system skips API call since there's nothing to delete", async () => {
+    // WHO: calendarSync.ts delete path sync_map check for Outlook provider
+    // WHAT: appointment delete triggered but no sync_map entry exists (never synced to Outlook)
+    // WHEN: delete action queries appointment_sync_map and finds no matching row
+    // WHERE: calendarSync.ts -> sync_map lookup -> empty result -> skip Outlook API call
+    // WHY: without this check, system would attempt to delete a non-existent Outlook event, causing unnecessary Graph API 404 errors
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -802,6 +932,11 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
   });
 
   it("OUTLOOK-DELETE-API-ERROR: When Graph API delete fails (e.g., event already deleted manually), system logs warning but doesn't throw so appointment deletion completes", async () => {
+    // WHO: calendarSync.ts delete path error handler for Outlook provider
+    // WHAT: Microsoft Graph API deleteEvent() throws (event already deleted manually by user in Outlook)
+    // WHEN: delete action attempts to remove Outlook event and receives API error
+    // WHERE: calendarSync.ts -> outlookCalendar.ts deleteEvent() catch -> sync_map cleanup continues
+    // WHY: without error swallowing, appointment deletion would fail whenever a user manually deletes the Outlook event first
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -827,6 +962,11 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
   });
 
   it("OUTLOOK-FIRE-AND-FORGET: When Outlook API call fails during sync, system logs error but doesn't throw so appointment CRUD operations complete regardless of calendar status", async () => {
+    // WHO: calendarSync.ts error resilience for Outlook provider create path
+    // WHAT: Microsoft Graph API returns 500 during event creation
+    // WHEN: createEvent() throws after appointment details are fetched
+    // WHERE: calendarSync.ts -> outlookCalendar.ts createEvent() -> error propagation -> finally release
+    // WHY: calendar sync must never block appointment CRUD; pool client must always be released to prevent connection pool exhaustion
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -845,6 +985,11 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
   });
 
   it("OUTLOOK-APPOINTMENT-NOT-FOUND: When Outlook create triggered for appointment_id that doesn't exist in DB (e.g., race condition), system skips sync to avoid creating orphan calendar events", async () => {
+    // WHO: calendarSync.ts create path appointment lookup for Outlook provider
+    // WHAT: appointment_id does not exist in DB (race condition: deleted between CRUD and sync)
+    // WHEN: create action queries appointment details and gets empty result
+    // WHERE: calendarSync.ts -> appointment query -> empty rows -> skip Outlook API call
+    // WHY: without this guard, orphan calendar events would be created in Outlook with no corresponding local appointment
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -859,6 +1004,11 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
   });
 
   it("OUTLOOK-UPDATE-NOT-FOUND: When Outlook update triggered for appointment_id that doesn't exist in DB (e.g., deleted before sync), system skips sync gracefully", async () => {
+    // WHO: calendarSync.ts update path appointment lookup for Outlook provider
+    // WHAT: appointment_id does not exist in DB (deleted between update trigger and sync execution)
+    // WHEN: update action has sync_map entry but appointment query returns empty
+    // WHERE: calendarSync.ts -> sync_map found -> appointment query -> empty rows -> skip Outlook API call
+    // WHY: without this guard, update would fail trying to build event payload from null appointment data
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -874,6 +1024,11 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
   });
 
   it("OUTLOOK-PROACTIVE-REFRESH: When Outlook token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync", async () => {
+    // WHO: calendarSync.ts proactive token refresh logic for Outlook provider
+    // WHAT: Outlook OAuth token expires in 3 minutes (within the 5-minute safety buffer)
+    // WHEN: sync action checks token_expires_at against Date.now() + buffer before Graph API call
+    // WHERE: calendarSync.ts -> expiry check with 5min buffer -> outlookCalendar.ts refreshAccessToken()
+    // WHY: without proactive refresh, tokens expiring mid-operation cause partial sync failures with Outlook Graph API
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 

@@ -121,6 +121,11 @@ beforeEach(() => {
 
 describe('HubSpot Routes — Happy Paths', () => {
   it('1. GET /hubspot/auth returns OAuth URL when configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect HubSpot" button
+    // WHAT: HubSpot env vars are set (HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET), request includes tenant_id
+    // WHEN: GET /hubspot/auth?tenant_id=...
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth handler
+    // WHY: Without this, clicking "Connect HubSpot" would fail silently — user cannot link their HubSpot account for contact/meeting sync
     vi.mocked(hubspotClient.isHubSpotEnabled).mockReturnValue(true);
     vi.mocked(hubspotClient.getAuthUrl).mockReturnValue('https://app.hubspot.com/oauth/authorize?client_id=test');
 
@@ -136,6 +141,11 @@ describe('HubSpot Routes — Happy Paths', () => {
   });
 
   it('2. GET /hubspot/auth/callback exchanges code, redirects with ?hubspotConnected=true', async () => {
+    // WHO: HubSpot OAuth server — redirects user back after granting access
+    // WHAT: Callback URL contains valid code + JWT state param, token exchange succeeds, tokens stored in tenant_integration_settings
+    // WHEN: GET /hubspot/auth/callback?code=...&state=... (OAuth redirect)
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth/callback handler via oauthCallbackFactory
+    // WHY: Without this, the OAuth flow completes on HubSpot's side but tokens never persist — user appears connected but all HubSpot API calls fail with 401
     vi.mocked(hubspotClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(hubspotClient.exchangeCodeForTokens).mockResolvedValue({
       access_token: 'access-123',
@@ -160,6 +170,11 @@ describe('HubSpot Routes — Happy Paths', () => {
   });
 
   it('3. GET /hubspot/settings returns settings', async () => {
+    // WHO: Dashboard integration card — polls connection status on CRM settings page load
+    // WHAT: tenant_integration_settings row exists, response strips access_token/refresh_token before returning
+    // WHEN: GET /hubspot/settings?tenant_id=...
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/settings handler
+    // WHY: Without token stripping, OAuth tokens leak to the browser — a XSS attack could steal them and impersonate the tenant on HubSpot's API
     const settingsRow = {
       tenant_id: TENANT_ID,
       provider: 'hubspot',
@@ -186,6 +201,11 @@ describe('HubSpot Routes — Happy Paths', () => {
   });
 
   it('4. POST /hubspot/settings/disconnect deletes settings + sync map', async () => {
+    // WHO: Dashboard user — clicks "Disconnect HubSpot" button on CRM integration card
+    // WHAT: Deletes tenant_integration_settings row AND all entity_sync_map rows for this tenant+provider
+    // WHEN: POST /hubspot/settings/disconnect?tenant_id=...
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — POST /hubspot/settings/disconnect handler
+    // WHY: Without deleting sync map entries, reconnecting HubSpot later would cause duplicate contacts — stale external_id mappings conflict with fresh HubSpot data
     // DELETE from tenant_integration_settings
     queryResponses.push({ rows: [], rowCount: 1 });
     // DELETE from entity_sync_map
@@ -209,6 +229,11 @@ describe('HubSpot Routes — Happy Paths', () => {
   });
 
   it('5. POST /hubspot/webhook processes valid event', async () => {
+    // WHO: HubSpot webhook server — fires contact.creation event when a contact is created in HubSpot
+    // WHAT: Valid v3 signature + fresh timestamp, tenant lookup by portalId succeeds, contact fetched and synced to local DB
+    // WHEN: POST /hubspot/webhook with x-hubspot-signature-v3 and x-hubspot-request-timestamp headers
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — POST /hubspot/webhook handler
+    // WHY: Without this, new contacts created in HubSpot would never appear in SecretaryHQ — bidirectional sync breaks and the voice AI has stale customer data
     const now = Date.now();
     const webhookBody = [
       { subscriptionType: 'contact.creation', objectId: '12345', portalId: '99999' },
@@ -249,6 +274,11 @@ describe('HubSpot Routes — Happy Paths', () => {
   });
 
   it('6. POST /hubspot/sync triggers fullSync', async () => {
+    // WHO: Dashboard user — clicks "Sync Now" button on HubSpot integration card
+    // WHAT: fullSync pulls all contacts and meetings from HubSpot REST v3 API, returns count of synced entities
+    // WHEN: POST /hubspot/sync?tenant_id=...
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — POST /hubspot/sync handler calling hubspotSync.fullSync
+    // WHY: Without this, users have no way to trigger a full data pull — initial setup after connecting HubSpot would show zero synced records
     vi.mocked(hubspotSync.fullSync).mockResolvedValue({
       contactsSynced: 15,
       meetingsSynced: 8,
@@ -269,6 +299,11 @@ describe('HubSpot Routes — Happy Paths', () => {
   });
 
   it('7. GET /hubspot/sync/status returns counts', async () => {
+    // WHO: Dashboard integration card — polls sync status to show progress badges (synced/pending/error counts)
+    // WHAT: Aggregates entity_sync_map rows by entity_type and sync_status, joins with last_sync_at from settings
+    // WHEN: GET /hubspot/sync/status?tenant_id=...
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/sync/status handler
+    // WHY: Without this, the HubSpot integration card shows no sync progress — user cannot tell if sync worked, how many records failed, or when last sync ran
     // settings query
     queryResponses.push({ rows: [{ last_sync_at: '2026-03-25T12:00:00Z' }] });
     // counts query
@@ -302,6 +337,11 @@ describe('HubSpot Routes — Happy Paths', () => {
 
 describe('HubSpot Routes — Sad Paths', () => {
   it('8. GET /hubspot/auth returns 503 when not configured', async () => {
+    // WHO: Dashboard integration card — user clicks "Connect HubSpot" but server lacks HUBSPOT_CLIENT_ID/SECRET env vars
+    // WHAT: isHubSpotEnabled returns false because required env vars are missing in production
+    // WHEN: GET /hubspot/auth?tenant_id=... when HubSpot env vars not set
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth guard check
+    // WHY: Without a clear 503, the dashboard would show a cryptic error instead of "HubSpot integration not configured" — admin wouldn't know to set env vars
     vi.mocked(hubspotClient.isHubSpotEnabled).mockReturnValue(false);
 
     const res = await app.inject({
@@ -316,6 +356,11 @@ describe('HubSpot Routes — Sad Paths', () => {
   });
 
   it('9. GET /hubspot/auth/callback redirects with error on missing params', async () => {
+    // WHO: Malformed OAuth redirect or direct browser navigation to callback URL without params
+    // WHAT: Callback URL has neither code nor state nor error query params
+    // WHEN: GET /hubspot/auth/callback (no query params)
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth/callback missing params guard
+    // WHY: Without this guard, the handler would crash on undefined code/state — user sees a 500 error page instead of being redirected to dashboard with an error toast
     const res = await app.inject({
       method: 'GET',
       url: '/hubspot/auth/callback',
@@ -326,6 +371,11 @@ describe('HubSpot Routes — Sad Paths', () => {
   });
 
   it('10. GET /hubspot/auth/callback redirects with error on bad state', async () => {
+    // WHO: Attacker or expired session — callback arrives with tampered/expired JWT state
+    // WHAT: verifyState returns null because the state JWT is invalid, expired, or forged
+    // WHEN: GET /hubspot/auth/callback?code=...&state=bad-jwt
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth/callback state verification
+    // WHY: Without this, a CSRF attack could link an attacker's HubSpot account to a victim's tenant — state validation prevents OAuth session fixation
     vi.mocked(hubspotClient.verifyState).mockReturnValue(null);
 
     const res = await app.inject({
@@ -338,6 +388,11 @@ describe('HubSpot Routes — Sad Paths', () => {
   });
 
   it('11. GET /hubspot/auth/callback redirects on token exchange failure', async () => {
+    // WHO: HubSpot OAuth server — token exchange fails (expired code, HubSpot API outage, network error)
+    // WHAT: verifyState succeeds but exchangeCodeForTokens throws — HubSpot rejected the authorization code
+    // WHEN: GET /hubspot/auth/callback?code=...&state=... when HubSpot's token endpoint is down
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth/callback token exchange try/catch
+    // WHY: Without catching this, a HubSpot outage during OAuth would show a raw 500 error — user sees broken page instead of "connection failed, try again"
     vi.mocked(hubspotClient.verifyState).mockReturnValue(TENANT_ID);
     vi.mocked(hubspotClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
 
@@ -351,6 +406,11 @@ describe('HubSpot Routes — Sad Paths', () => {
   });
 
   it('12. POST /hubspot/webhook 400 on missing signature', async () => {
+    // WHO: Unknown caller — sends POST to webhook endpoint without HubSpot v3 signature headers
+    // WHAT: Request has no x-hubspot-signature-v3 or x-hubspot-request-timestamp headers
+    // WHEN: POST /hubspot/webhook without signature headers
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — POST /hubspot/webhook signature presence check
+    // WHY: Without rejecting unsigned requests, an attacker could inject fake contact events — corrupting any tenant's customer database
     const res = await app.inject({
       method: 'POST',
       url: '/hubspot/webhook',
@@ -365,6 +425,11 @@ describe('HubSpot Routes — Sad Paths', () => {
   });
 
   it('13. POST /hubspot/webhook 401 on stale timestamp', async () => {
+    // WHO: Replay attacker — resends a previously captured webhook request with an old timestamp
+    // WHAT: x-hubspot-request-timestamp is more than 5 minutes old, indicating a potential replay attack
+    // WHEN: POST /hubspot/webhook with stale timestamp (10 min ago)
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — POST /hubspot/webhook timestamp freshness check
+    // WHY: Without timestamp validation, a captured webhook could be replayed hours later to re-trigger sync — potentially overwriting newer data with stale values
     const staleTimestamp = String(Date.now() - 10 * 60 * 1000); // 10 min ago
 
     const res = await app.inject({
@@ -384,6 +449,11 @@ describe('HubSpot Routes — Sad Paths', () => {
   });
 
   it('14. POST /hubspot/webhook 401 on invalid signature', async () => {
+    // WHO: Attacker or corrupted request — sends webhook with wrong/forged v3 signature
+    // WHAT: Timestamp is fresh but verifyWebhookSignature returns false — HMAC doesn't match HUBSPOT_CLIENT_SECRET
+    // WHEN: POST /hubspot/webhook with x-hubspot-signature-v3 that doesn't match computed HMAC
+    // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — POST /hubspot/webhook v3 signature verification
+    // WHY: Without HMAC validation, anyone who knows the webhook URL could inject fake contact/meeting events — corrupting the tenant's customer database
     const now = Date.now();
 
     vi.mocked(hubspotClient.verifyWebhookSignature).mockReturnValue(false);

@@ -43,29 +43,54 @@ function setOutlookEnv() {
 // ---------------------------------------------------------------------------
 describe("isOutlookCalendarEnabled", () => {
   it("returns true when all env vars are set", () => {
+    // WHO: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHAT: all three Outlook OAuth env vars are present (CLIENT_ID, CLIENT_SECRET, CALLBACK_URL)
+    // WHEN: server startup or feature flag check for Outlook Calendar availability
+    // WHERE: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHY: without this check, dashboard would show Outlook connect buttons even when server can't handle Microsoft OAuth
     setOutlookEnv();
     expect(isOutlookCalendarEnabled()).toBe(true);
   });
 
   it("returns false when OUTLOOK_CLIENT_ID is missing", () => {
+    // WHO: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHAT: OUTLOOK_CLIENT_ID env var is missing while others are set
+    // WHEN: server startup with incomplete Microsoft OAuth configuration
+    // WHERE: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHY: partial config would cause OAuth to fail at Microsoft login; better to disable the feature entirely
     setOutlookEnv();
     delete process.env.OUTLOOK_CLIENT_ID;
     expect(isOutlookCalendarEnabled()).toBe(false);
   });
 
   it("returns false when OUTLOOK_CLIENT_SECRET is missing", () => {
+    // WHO: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHAT: OUTLOOK_CLIENT_SECRET env var is missing while others are set
+    // WHEN: server startup with incomplete Microsoft OAuth configuration
+    // WHERE: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHY: partial config would cause token exchange to fail with 401 from Microsoft identity platform
     setOutlookEnv();
     delete process.env.OUTLOOK_CLIENT_SECRET;
     expect(isOutlookCalendarEnabled()).toBe(false);
   });
 
   it("returns false when OUTLOOK_CALLBACK_URL is missing", () => {
+    // WHO: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHAT: OUTLOOK_CALLBACK_URL env var is missing while others are set
+    // WHEN: server startup with incomplete Microsoft OAuth configuration
+    // WHERE: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHY: without callback URL, OAuth redirect would go nowhere, stranding user after Microsoft consent
     setOutlookEnv();
     delete process.env.OUTLOOK_CALLBACK_URL;
     expect(isOutlookCalendarEnabled()).toBe(false);
   });
 
   it("returns false when all Outlook env vars are missing", () => {
+    // WHO: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHAT: none of the Outlook OAuth env vars are set (deployment without Outlook integration)
+    // WHEN: server startup on deployment without Outlook Calendar integration
+    // WHERE: outlookCalendar.ts isOutlookCalendarEnabled()
+    // WHY: ensures tenants without Outlook config don't see broken connect buttons or trigger OAuth errors
     delete process.env.OUTLOOK_CLIENT_ID;
     delete process.env.OUTLOOK_CLIENT_SECRET;
     delete process.env.OUTLOOK_CALLBACK_URL;
@@ -78,6 +103,11 @@ describe("isOutlookCalendarEnabled", () => {
 // ---------------------------------------------------------------------------
 describe("getAuthUrl", () => {
   it("returns a URL string when configured", () => {
+    // WHO: outlookCalendar.ts getAuthUrl()
+    // WHAT: Outlook OAuth is fully configured and tenant requests auth URL
+    // WHEN: dashboard user clicks "Connect Outlook Calendar" button
+    // WHERE: outlookCalendar.ts getAuthUrl() -> URL construction with Microsoft identity platform
+    // WHY: without valid URL generation, users cannot initiate Outlook Calendar OAuth flow
     setOutlookEnv();
     const url = getAuthUrl(TENANT_ID);
     expect(url).not.toBeNull();
@@ -85,6 +115,11 @@ describe("getAuthUrl", () => {
   });
 
   it("includes correct query params", () => {
+    // WHO: outlookCalendar.ts getAuthUrl() query parameter construction
+    // WHAT: OAuth URL includes client_id, response_type, redirect_uri, scope (Calendars.ReadWrite + offline_access), prompt
+    // WHEN: generating Microsoft OAuth URL for tenant calendar connection
+    // WHERE: outlookCalendar.ts getAuthUrl() -> URLSearchParams construction
+    // WHY: wrong scope means no calendar access; wrong redirect_uri means OAuth callback fails; missing offline_access means no refresh_token
     setOutlookEnv();
     const url = getAuthUrl(TENANT_ID)!;
     const parsed = new URL(url);

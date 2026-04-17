@@ -1,7 +1,321 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, clearDB, createTenant, createUser, hashPassword } from "./test-utils";
 import { Client } from "pg";
 import bcrypt from "bcrypt";
+
+// ═══════════════════════════════════════════════════════════════════════
+// Route-level tests for registerAuthRoutes (/login, /register, /auth/refresh)
+// These test the actual Fastify route handler logic, not just DB queries.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Mock bcrypt for route handler tests (the DB-level tests below use real bcrypt)
+const mockBcryptCompare = vi.fn();
+const mockBcryptHash = vi.fn();
+
+function createMockReply() {
+  const reply: any = {
+    statusCode: 200,
+    body: null,
+    status(code: number) { reply.statusCode = code; return reply; },
+    send(data: any) { reply.body = data; return reply; },
+  };
+  return reply;
+}
+
+function createMockRequest(body: any = {}, auth?: any) {
+  return {
+    body, auth,
+    log: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), child: vi.fn().mockReturnThis() },
+    url: '/test', method: 'POST',
+  } as any;
+}
+
+const TEST_TOKEN = 'jwt.test.token';
+const TENANT_ID_MOCK = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const USER_ID_MOCK = '11111111-2222-3333-4444-555555555555';
+
+interface RouteCapture { method: string; path: string; handler: any; opts?: any; }
+
+function captureRoutes() {
+  const routes: RouteCapture[] = [];
+  const app = {
+    post: vi.fn((path: string, ...args: any[]) => {
+      const handler = args[args.length - 1];
+      const opts = args.length > 1 ? args[0] : undefined;
+      routes.push({ method: 'POST', path, handler, opts });
+    }),
+  };
+  return { app, routes };
+}
+
+function findRoute(routes: RouteCapture[], path: string) {
+  return routes.find(r => r.path === path)!;
+}
+
+function createMockPoolClient() {
+  const queryResponses: Array<{ rows: any[]; rowCount?: number }> = [];
+  const client = {
+    query: vi.fn(async () => queryResponses.shift() || { rows: [], rowCount: 0 }),
+    release: vi.fn(),
+  };
+  return { client, queryResponses };
+}
+
+function createMockPool(mockClient: any) {
+  return { connect: vi.fn(async () => mockClient) } as any;
+}
+
+describe("Auth Routes — Handler-Level", () => {
+  let registerAuthRoutes: any;
+  const generateToken = vi.fn().mockReturnValue(TEST_TOKEN);
+
+  beforeAll(async () => {
+    // Dynamic import to allow bcrypt mock to take effect
+    const mod = await import("./routes/auth");
+    registerAuthRoutes = mod.registerAuthRoutes;
+  });
+
+  beforeEach(() => vi.clearAllMocks());
+
+  // ── /login ──────────────────────────────────────────────────────────
+
+  describe("POST /login handler", () => {
+    it("returns token on valid credentials (WHO: user | WHAT: email+password → JWT | WHERE: /login handler | WHY: successful auth grants session)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      queryResponses.push({ rows: [{
+        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        email: 'test@example.com', password_hash: '$hash', full_name: 'Test User',
+      }] });
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'test@example.com', password: 'pass123' });
+      const reply = createMockReply();
+
+      // bcrypt.compare is called via dynamic import inside the handler
+      // We can't easily mock it, but we can verify the flow with real bcrypt
+      // So let's use a real hash
+      const realHash = await bcrypt.hash('pass123', 10);
+      queryResponses.length = 0;
+      queryResponses.push({ rows: [{
+        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
+      }] });
+
+      await route.handler(req, reply);
+
+      expect(reply.body.success).toBe(true);
+      expect(reply.body.token).toBe(TEST_TOKEN);
+      expect(reply.body.tenant_id).toBe(TENANT_ID_MOCK);
+      expect(reply.body.user_id).toBe(USER_ID_MOCK);
+      expect(reply.body.user_name).toBe('Test User');
+      expect(generateToken).toHaveBeenCalledWith({
+        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@example.com',
+      });
+    });
+
+    it("returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)", async () => {
+      const { client } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'not-email', password: 'pass' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(400);
+      expect(reply.body.success).toBe(false);
+    });
+
+    it("returns 401 when user not found (WHO: unknown email | WHAT: no DB row | WHERE: /login | WHY: generic error prevents email enumeration)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'nobody@test.com', password: 'pass123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(401);
+      expect(reply.body.error).toBe('Invalid email or password');
+    });
+
+    it("returns 401 on wrong password (WHO: user | WHAT: bcrypt compare fails | WHERE: /login | WHY: generic error doesn't reveal valid emails)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const realHash = await bcrypt.hash('correctpass', 10);
+      queryResponses.push({ rows: [{
+        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
+      }] });
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'test@example.com', password: 'wrongpass' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(401);
+      expect(generateToken).not.toHaveBeenCalled();
+    });
+
+    it("has rate limit of 5 per 5 minutes (WHO: system | WHAT: brute-force protection | WHERE: /login opts | WHY: prevents credential stuffing)", () => {
+      const pool = createMockPool({});
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/login');
+      expect(route.opts).toEqual({
+        config: { rateLimit: { max: 5, timeWindow: '5 minutes' } },
+      });
+    });
+  });
+
+  // ── /register ───────────────────────────────────────────────────────
+
+  describe("POST /register handler", () => {
+    it("returns 400 on missing fields (WHO: incomplete form | WHAT: Zod rejects | WHERE: /register | WHY: prevents partial tenant creation)", async () => {
+      const { client } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/register');
+      const req = createMockRequest({ email: 'a@b.com' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(400);
+      expect(reply.body.error).toBe('Validation failed');
+    });
+
+    it("returns 400 on short password (WHO: new user | WHAT: password < 6 chars | WHERE: /register | WHY: minimum password strength)", async () => {
+      const { client } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/register');
+      const req = createMockRequest({
+        business_name: 'Shop', business_type: 'salon',
+        owner_name: 'Test', email: 'a@b.com', password: '12345',
+      });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(400);
+    });
+
+    it("returns 409 on duplicate email (WHO: returning user | WHAT: email exists in users table | WHERE: /register | WHY: prevents duplicate accounts)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      // BEGIN
+      queryResponses.push({ rows: [] });
+      // Check existing user — FOUND
+      queryResponses.push({ rows: [{ id: 'existing' }] });
+      // ROLLBACK
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/register');
+      const req = createMockRequest({
+        business_name: 'Shop', business_type: 'salon',
+        owner_name: 'Owner', email: 'dupe@test.com', password: 'secure123',
+      });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(409);
+      expect(reply.body.error).toContain('already exists');
+    });
+
+    it("creates tenant+user and returns 201 (WHO: new business | WHAT: full registration | WHERE: /register | WHY: self-service onboarding)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      // BEGIN
+      queryResponses.push({ rows: [] });
+      // Check existing — none
+      queryResponses.push({ rows: [] });
+      // INSERT tenant
+      queryResponses.push({ rows: [{ id: TENANT_ID_MOCK }] });
+      // INSERT user
+      queryResponses.push({ rows: [{ id: USER_ID_MOCK, full_name: 'Dale' }] });
+      // COMMIT
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/register');
+      const req = createMockRequest({
+        business_name: 'DynaTire', business_type: 'mobile-tire',
+        owner_name: 'Dale', email: 'dale@test.com', password: 'secure123',
+      });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(201);
+      expect(reply.body.success).toBe(true);
+      expect(reply.body.tenant_id).toBe(TENANT_ID_MOCK);
+      expect(reply.body.token).toBe(TEST_TOKEN);
+    });
+  });
+
+  // ── /auth/refresh ───────────────────────────────────────────────────
+
+  describe("POST /auth/refresh handler", () => {
+    it("returns fresh token when authenticated (WHO: logged-in user | WHAT: new JWT from existing auth | WHERE: /auth/refresh | WHY: extend session)", async () => {
+      const pool = createMockPool({});
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/auth/refresh');
+      const req = createMockRequest({}, {
+        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@test.com',
+      });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body).toEqual({ success: true, token: TEST_TOKEN });
+    });
+
+    it("returns 401 when not authenticated (WHO: expired JWT | WHAT: no auth context | WHERE: /auth/refresh | WHY: can't refresh without valid session)", async () => {
+      const pool = createMockPool({});
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/auth/refresh');
+      const req = createMockRequest({});
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(401);
+      expect(reply.body.error).toBe('Authentication required');
+    });
+  });
+});
 
 describe("Auth - Database Level", () => {
     let client: Client;

@@ -262,3 +262,223 @@ describe("getIntegrationTokens — sad paths", () => {
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// getCalendarTokens — HAPPY PATHS
+// ═══════════════════════════════════════════════════════════════════════
+
+import { getCalendarTokens, setSyncContext, clearSyncContext, withSyncContext } from "./services/tokenManagement";
+
+function makeCalendarRow(overrides: Record<string, any> = {}) {
+  return {
+    provider: "google",
+    external_calendar_id: "cal-123@google.com",
+    access_token: "cal-access-token",
+    refresh_token: "cal-refresh-token",
+    token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    is_active: true,
+    ...overrides,
+  };
+}
+
+describe("getCalendarTokens — happy paths", () => {
+  it("returns tokens and calendarId when not expired (WHO: calendar sync | WHAT: valid tokens from tenant_calendar_settings | WHERE: getCalendarTokens | WHY: needed to push/pull calendar events)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeCalendarRow()] });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google", logger);
+
+    expect(result).not.toBeNull();
+    expect(result!.accessToken).toBe("cal-access-token");
+    expect(result!.refreshToken).toBe("cal-refresh-token");
+    expect(result!.calendarId).toBe("cal-123@google.com");
+    expect(result!.provider).toBe("google");
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes expired calendar token (WHO: calendar sync | WHAT: expired token triggers refresh → new access_token stored | WHERE: getCalendarTokens | WHY: prevents 401 from Google/Outlook API)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeCalendarRow({
+      token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+    })] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE response
+
+    const refreshFn = vi.fn().mockResolvedValue({
+      access_token: "refreshed-cal-token",
+      expiry_date: Date.now() + 3600_000,
+    });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, refreshFn, "Google", logger);
+
+    expect(result!.accessToken).toBe("refreshed-cal-token");
+    expect(refreshFn).toHaveBeenCalledWith("cal-refresh-token");
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Google token refreshed"));
+  });
+
+  it("supports Outlook provider (WHO: Outlook calendar sync | WHAT: provider='outlook' accepted | WHERE: getCalendarTokens | WHY: both Google and Outlook are valid providers)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [makeCalendarRow({ provider: "outlook" })] });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Outlook");
+    expect(result!.provider).toBe("outlook");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// getCalendarTokens — SAD PATHS
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("getCalendarTokens — sad paths", () => {
+  it("returns null when no calendar settings row (WHO: tenant without calendar | WHAT: no row in tenant_calendar_settings | WHERE: getCalendarTokens | WHY: tenants don't have to connect calendar)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    queryResponses.push({ rows: [] });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google");
+    expect(result).toBeNull();
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("returns null when calendar inactive (WHO: disabled calendar | WHAT: is_active=false | WHERE: getCalendarTokens | WHY: user disconnected calendar from dashboard)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeCalendarRow({ is_active: false })] });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google", logger);
+    expect(result).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("calendar marked inactive"));
+  });
+
+  it("returns null when provider is unsupported (WHO: misconfigured tenant | WHAT: provider is not google/outlook | WHERE: getCalendarTokens | WHY: only 2 calendar providers supported)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeCalendarRow({ provider: "yahoo" })] });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Yahoo", logger);
+    expect(result).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("not supported"));
+  });
+
+  it("returns null when tokens missing (WHO: incomplete OAuth | WHAT: access_token null | WHERE: getCalendarTokens | WHY: OAuth flow was interrupted before tokens were stored)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeCalendarRow({ access_token: null })] });
+
+    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google", logger);
+    expect(result).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("missing tokens"));
+  });
+
+  it("marks calendar inactive on refresh failure (WHO: revoked OAuth | WHAT: refresh throws → is_active=false | WHERE: getCalendarTokens | WHY: prevents repeated failed refresh attempts)", async () => {
+    const { mockClient, queryResponses } = createMockClient();
+    const pool = createMockPool(mockClient);
+    const logger = makeSilentLogger();
+
+    queryResponses.push({ rows: [makeCalendarRow({
+      token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+    })] });
+    queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE is_active=false
+
+    const refreshFn = vi.fn().mockRejectedValue(new Error("OAuth revoked"));
+
+    const result = await getCalendarTokens(pool, TENANT_ID, refreshFn, "Google", logger);
+    expect(result).toBeNull();
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("token refresh FAILED"));
+
+    const updateCall = mockClient.query.mock.calls[1];
+    expect(updateCall[0]).toContain("is_active = false");
+  });
+
+  it("always releases client even on query error (WHO: system | WHAT: pool client released | WHERE: getCalendarTokens finally | WHY: prevents pool exhaustion)", async () => {
+    const { mockClient } = createMockClient();
+    const pool = createMockPool(mockClient);
+
+    mockClient.query.mockRejectedValueOnce(new Error("DB down"));
+
+    await expect(getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google")).rejects.toThrow("DB down");
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// setSyncContext / clearSyncContext / withSyncContext
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("setSyncContext", () => {
+  it("sets change_source session variable (WHO: sync service | WHAT: SET LOCAL app.change_source | WHERE: setSyncContext | WHY: version tracking records which CRM made the change)", async () => {
+    const client = { query: vi.fn() };
+    await setSyncContext(client, "hubspot");
+
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'hubspot'");
+  });
+
+  it("sets changed_by when provided (WHO: sync service | WHAT: SET LOCAL app.changed_by | WHERE: setSyncContext | WHY: tracks which sync process made the change for audit)", async () => {
+    const client = { query: vi.fn() };
+    await setSyncContext(client, "jobber", "sync-jobber");
+
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'jobber'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.changed_by = 'sync-jobber'");
+  });
+
+  it("skips changed_by when not provided (WHO: sync service | WHAT: only change_source set | WHERE: setSyncContext | WHY: changed_by is optional)", async () => {
+    const client = { query: vi.fn() };
+    await setSyncContext(client, "square");
+
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("clearSyncContext", () => {
+  it("resets both session variables (WHO: sync service | WHAT: RESET app.change_source + app.changed_by | WHERE: clearSyncContext | WHY: prevents context leak to next query on same connection)", async () => {
+    const client = { query: vi.fn() };
+    await clearSyncContext(client);
+
+    expect(client.query).toHaveBeenCalledWith("RESET app.change_source");
+    expect(client.query).toHaveBeenCalledWith("RESET app.changed_by");
+  });
+});
+
+describe("withSyncContext", () => {
+  it("wraps operation with set+clear context (WHO: sync service | WHAT: set → operation → clear | WHERE: withSyncContext | WHY: ensures context is always cleaned up even on error)", async () => {
+    const client = { query: vi.fn() };
+    const result = await withSyncContext(client, "servicetitan", "sync-st", async () => "done");
+
+    expect(result).toBe("done");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'servicetitan'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.changed_by = 'sync-st'");
+    expect(client.query).toHaveBeenCalledWith("RESET app.change_source");
+    expect(client.query).toHaveBeenCalledWith("RESET app.changed_by");
+  });
+
+  it("clears context even when operation throws (WHO: sync service | WHAT: error in operation → context still cleared | WHERE: withSyncContext finally | WHY: leaked context would attribute subsequent writes to wrong source)", async () => {
+    const client = { query: vi.fn() };
+
+    await expect(
+      withSyncContext(client, "hubspot", "sync-hubspot", async () => { throw new Error("sync failed"); })
+    ).rejects.toThrow("sync failed");
+
+    expect(client.query).toHaveBeenCalledWith("RESET app.change_source");
+    expect(client.query).toHaveBeenCalledWith("RESET app.changed_by");
+  });
+
+  it("returns the operation result (WHO: sync service | WHAT: return value propagated | WHERE: withSyncContext | WHY: callers need the result of the wrapped operation)", async () => {
+    const client = { query: vi.fn() };
+    const result = await withSyncContext(client, "local", undefined, async () => ({ id: 42 }));
+    expect(result).toEqual({ id: 42 });
+  });
+});
