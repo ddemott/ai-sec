@@ -101,6 +101,15 @@ export interface IRepository {
   getOwnerPhone(tenantId: string, logger: Logger): Promise<string | null>;
 
   /**
+   * Get tenant notification info (owner phone, inbound phone, business name).
+   */
+  getTenantNotificationInfo(tenantId: string, logger: Logger): Promise<{
+    ownerPhone: string | null;
+    inboundPhone: string | null;
+    tenantName: string;
+  } | null>;
+
+  /**
    * Single-query find-and-book: customer upsert + resource/employee matching + booking.
    * Replaces the 4-query getSchedulingOptions + bookAtomic flow.
    */

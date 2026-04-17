@@ -532,6 +532,12 @@ export const Api = {
         source: 'policy-questionnaire',
       }),
 
+    unanswered: (tenantId: string | null) =>
+      apiFetch<{ success: boolean; questions: Array<{ id: string; question: string; caller_phone: string | null; caller_message: string | null; created_at: string }> }>(`/knowledge/unanswered`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    resolveUnanswered: (id: string, tenantId: string | null) =>
+      apiMutate<{ success: boolean }>(`/knowledge/unanswered/${id}/resolve`, 'PATCH', { tenant_id: tenantId }),
+
     ingest: async (tenantId: string | null, file: File) => {
       const formData = new FormData();
       formData.append('file', file);

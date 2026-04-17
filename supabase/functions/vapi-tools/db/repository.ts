@@ -658,13 +658,24 @@ export class PostgresRepository implements IRepository {
   }
 
   async getOwnerPhone(tenantId: string, logger: Logger): Promise<string | null> {
-    logger.info({ tenantId }, "Fetching owner phone for notification");
+    const info = await this.getTenantNotificationInfo(tenantId, logger);
+    return info?.ownerPhone || null;
+  }
+
+  async getTenantNotificationInfo(tenantId: string, logger: Logger): Promise<{
+    ownerPhone: string | null;
+    inboundPhone: string | null;
+    tenantName: string;
+  } | null> {
+    logger.info({ tenantId }, "Fetching tenant notification info");
     return this.withClient(tenantId, async (c) => {
-      const res = await c.queryObject<{ owner_phone: string | null }>(
-        "SELECT owner_phone FROM tenants WHERE id = $1",
+      const res = await c.queryObject<{ owner_phone: string | null; inbound_phone: string | null; name: string }>(
+        "SELECT owner_phone, inbound_phone, name FROM tenants WHERE id = $1",
         [tenantId]
       );
-      return res.rows[0]?.owner_phone || null;
+      const row = res.rows[0];
+      if (!row) return null;
+      return { ownerPhone: row.owner_phone, inboundPhone: row.inbound_phone, tenantName: row.name };
     });
   }
 

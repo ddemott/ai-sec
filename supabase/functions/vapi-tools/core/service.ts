@@ -302,6 +302,10 @@ export class AISecretaryService {
         logger.warn({ err }, "Failed to log unanswered question (non-fatal)");
       }
 
+      // Notify the business owner via SMS (fire-and-forget — never block the call)
+      this.notifyOwnerOfUnansweredQuestion(tenantId, question, callerContext?.phone || null, logger)
+        .catch(err => logger.warn({ err }, "Owner SMS notification failed (non-fatal)"));
+
       return {
         result: "I don't have specific information on that topic right now. I'd be happy to take a message so the owner can get back to you, or if there's anything else I can help with — like booking an appointment or answering questions about our services — I'm here for you."
       };
@@ -421,6 +425,64 @@ export class AISecretaryService {
     }).join("\n");
     logger.info({ serviceCount: services.length }, "Service catalog returned");
     return { result: formatted };
+  }
+
+  /**
+   * Send SMS to the business owner when the AI couldn't answer a caller's question.
+   * Uses Telnyx Messaging API directly (single fetch, no SDK).
+   * Fire-and-forget — errors are logged but never block the call.
+   */
+  private async notifyOwnerOfUnansweredQuestion(
+    tenantId: string,
+    question: string,
+    callerPhone: string | null,
+    logger: Logger
+  ): Promise<void> {
+    const tenantInfo = await this.repo.getTenantNotificationInfo(tenantId, logger);
+    if (!tenantInfo?.ownerPhone) {
+      logger.info({ tenantId }, "No owner phone configured — skipping SMS notification");
+      return;
+    }
+    if (!tenantInfo.inboundPhone) {
+      logger.info({ tenantId }, "No inbound phone configured — skipping SMS (no from number)");
+      return;
+    }
+
+    const TELNYX_API_KEY = Deno.env.get("TELNYX_API_KEY");
+    if (!TELNYX_API_KEY) {
+      logger.warn("TELNYX_API_KEY not set — cannot send owner SMS notification");
+      return;
+    }
+
+    const businessName = tenantInfo.tenantName || "your business";
+    const truncatedQuestion = question.length > 100 ? question.slice(0, 100) + "..." : question;
+    const callerInfo = callerPhone ? `\nCaller: ${callerPhone} — they're expecting a call back.` : "";
+
+    const smsBody = `Secretary HQ: A caller asked "${truncatedQuestion}" but your AI assistant didn't have an answer.${callerInfo}\n\nLog in to update your knowledge base so future callers get an answer.`;
+
+    try {
+      const res = await fetch("https://api.telnyx.com/v2/messages", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${TELNYX_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: tenantInfo.inboundPhone,
+          to: tenantInfo.ownerPhone,
+          text: smsBody,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        logger.warn({ status: res.status, body: errBody }, "Telnyx SMS send failed");
+      } else {
+        logger.info({ ownerPhone: tenantInfo.ownerPhone }, "Owner notified via SMS about unanswered question");
+      }
+    } catch (err) {
+      logger.warn({ err }, "Telnyx SMS fetch failed");
+    }
   }
 }
 

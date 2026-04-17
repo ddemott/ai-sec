@@ -76,9 +76,19 @@ export function OutlookLayout({
   const profileBtnRef = useRef<HTMLButtonElement>(null)
 
   const { tenantsVersion } = useSessionContext()
+  const [unansweredCount, setUnansweredCount] = useState(0)
 
   const currentMode = activeTab === 'all-businesses' ? 'front-desk' : getMode(activeTab)
   const subTabs = currentMode === 'front-desk' ? FRONT_DESK_TABS : BACK_OFFICE_TABS
+
+  // Fetch unanswered question count for KB badge
+  const effectiveTenantId = managedTenantId || null
+  useEffect(() => {
+    if (!effectiveTenantId) return
+    Api.knowledge.unanswered(effectiveTenantId)
+      .then(res => setUnansweredCount(res?.questions?.length || 0))
+      .catch(() => {}) // non-fatal
+  }, [effectiveTenantId, activeTab])
 
   useEffect(() => {
     if (isAdmin) {
@@ -186,8 +196,17 @@ export function OutlookLayout({
       {/* SECONDARY NAVIGATION — Sub-tabs for current mode */}
       <FolderTabBar size="md" ariaLabel="Section navigation">
         {subTabs.map(tab => (
-          <span key={tab.id} data-tab-id={tab.id}>
+          <span key={tab.id} data-tab-id={tab.id} className="relative">
             <FolderTab label={tab.label} icon={tab.icon} size="md" isActive={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
+            {tab.id === 'ai-insights' && unansweredCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none"
+                style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
+                title={`${unansweredCount} unanswered question${unansweredCount > 1 ? 's' : ''} from callers`}
+              >
+                {unansweredCount > 99 ? '99+' : unansweredCount}
+              </span>
+            )}
           </span>
         ))}
       </FolderTabBar>
@@ -232,11 +251,19 @@ export function OutlookLayout({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === tab.id ? '' : 'text-gray-500'}`}
+                className={`relative flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === tab.id ? '' : 'text-gray-500'}`}
                 style={activeTab === tab.id ? { color: 'var(--accent-soft)' } : undefined}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-[9px] mt-0.5 font-medium">{tab.label}</span>
+                {tab.id === 'ai-insights' && unansweredCount > 0 && (
+                  <span
+                    className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full text-[8px] font-bold leading-none"
+                    style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
+                  >
+                    {unansweredCount > 99 ? '99+' : unansweredCount}
+                  </span>
+                )}
               </button>
             )
           })}
