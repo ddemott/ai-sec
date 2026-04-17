@@ -160,4 +160,4 @@ From April 10-11 UX review. Grouped by severity.
 - [ ] Replace ad hoc tenant typing with shared dashboard tenant view type
 - [ ] Normalize response envelopes across CRM disconnect/sync-status routes
 
-Full backlog: see `IMPROVEMENT_IDEAS.md` (160 tasks across 10 review phases)
+Full backlog: see `docs/IMPROVEMENT_IDEAS.md` (160 tasks across 10 review phases)

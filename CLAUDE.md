@@ -136,7 +136,7 @@ Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,493 backe
 
 ### Remaining Work
 
-See `TODO.md` for the unified task list. Key blockers: deploy dashboard, set DASHBOARD_URL, beta test with DynaTire.
+See `docs/TODO.md` for the unified task list. Key blockers: deploy dashboard, set DASHBOARD_URL, beta test with DynaTire.
 
 ### Railway Deployment Status (as of 2026-03-23)
 - Backend live at `https://ai-sec-production.up.railway.app/`
@@ -174,7 +174,7 @@ See `TODO.md` for the unified task list. Key blockers: deploy dashboard, set DAS
 
 ### Backlog (post-launch)
 
-See `TODO.md` for full backlog. Key post-launch features: automated phone provisioning, full billing system (Professional tier), business intelligence/ROI, personal resources, advanced coverage alerts.
+See `docs/TODO.md` for full backlog. Key post-launch features: automated phone provisioning, full billing system (Professional tier), business intelligence/ROI, personal resources, advanced coverage alerts.
 
 ## Design Session — March 24, 2026
 

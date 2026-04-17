@@ -62,7 +62,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 
 ## What's Left
 
-See `TODO.md` for the unified task list.
+See `docs/TODO.md` for the unified task list.
 
 ### Test Count (as of 2026-04-17)
 - **1,493 backend tests + 465 dashboard tests = 1,958 total**, 0 failures
