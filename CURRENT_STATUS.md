@@ -62,18 +62,13 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 
 ## What's Left
 
-### Phase 13 Remaining
-- **Deploy dashboard to Railway** — code ready, blocked by Railway incident April 2
-- **Set `DASHBOARD_URL`** on backend — needs dashboard deployed
-- ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit, 35 items resolved)
-- **Database webhooks for n8n** — ops task, triggers exist
-- **Beta testing with DynaTire** — needs dashboard deployed
+See `TODO.md` for the unified task list.
 
-### Test Count
-- **1,586 tests passing, 0 failures**
-- 1,118 backend + 465 dashboard + 3 edge function
+### Test Count (as of 2026-04-17)
+- **1,493 backend tests + 465 dashboard tests = 1,958 total**, 0 failures
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
+- Zero TypeScript errors
 
 ---
 

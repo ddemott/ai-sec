@@ -132,36 +132,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progress. 1,118 backend tests + 465 dashboard tests + 3 edge function tests = 1,586 total passing (with DB running). 19 Playwright e2e tests (7 critical fixes + 12 functional audit). 29 live QA tool-call tests (88 assertions). Zero TypeScript errors. UI/UX audit complete (35 items, all resolved).
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,493 backend tests + 465 dashboard tests = 1,958 total passing. 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
-### Remaining (Phase 13)
-- ~~Supabase support ticket~~ — Resolved 2026-03-30. Project no longer stuck in "pausing" state.
-- ~~End-to-end voice call~~ — Done (2026-03-30). Voice AI books appointments, answers policy questions, handles rejections naturally.
-- **Deploy dashboard** (Vercel or Railway — currently local only)
-- **Set `DASHBOARD_URL`** in Railway (after dashboard deployment, needed for Stripe checkout redirects)
-- ~~SetupWizard Step 7 "Go Live"~~ — Done. Activate phone from wizard with area code input, provisioning spinner, success/error states
-- ~~UI/UX flow improvements~~ — Done (2026-04-10). Full audit: 35 items across Critical/High/Medium, all resolved. Playwright e2e validation.
-- ~~Front Desk shift bars~~ — Done (2026-04-09). Root cause: scheduler fetched raw overrides instead of effective shifts. Added bulk RPC + matched styling to Working Hours view.
-- ~~Scheduler view tabs~~ — Done (2026-04-10). Staff view now shows tab bar for switching to Resources/List/Calendar.
-- ~~Vocabulary wiring~~ — Done. All dashboard components use `useVocabulary()` hook
-- ~~Google Calendar sync~~ — Done. Real OAuth flow, token refresh, auto-sync on appointment create/update/delete/cancel
-- ~~Outlook calendar sync~~ — Done. Microsoft Graph API, OAuth flow, token refresh, auto-sync on appointment create/update/delete/cancel
-- ~~Jobber CRM integration~~ — Done. Bidirectional sync (push + pull), timestamp-based merge, OAuth flow, GraphQL API, webhook receiver, full sync
-- ~~HubSpot CRM integration~~ — Done. Bidirectional sync, REST API (contacts + meetings), OAuth flow, webhook receiver with v3 signature verification, full sync
-- ~~Square CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + bookings), OAuth flow, HMAC webhook verification, full sync
-- ~~ServiceTitan CRM integration~~ — Done. Bidirectional sync, REST v2 API (customers + jobs), OAuth flow, ST-App-Key auth, full sync
-- ~~Comprehensive sad path test coverage~~ — Done. 1,319 total tests (1,006 backend + 313 dashboard), 5W diagnostics in all error paths
-- ~~Group 3 refactorings (production hardening)~~ — Done. All 24 items complete (see SUGGESTED_REFACTORINGS.md)
-- ~~Knowledge base questionnaire~~ — Done (2026-03-30). 40 policy Q&A pairs across 9 categories, auto-save, document upload, embedding generation.
-- ~~Voice AI fixes~~ — Done (2026-03-30). 8 critical fixes (tool response format, Zod relaxation, caller ID capture, timezone handling, natural error messages).
-- ~~QA test suite~~ — Done (2026-03-30). `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function.
-- ~~Scheduling timezone fix~~ — Done (2026-04-01). BUG-059: `book_with_scheduling_atomic()` timezone regression fixed. Migration applied to production.
-- ~~Voice AI phone/date/employee fixes~~ — Done (2026-04-01). BUG-060/061/062: Phone validation, dynamic date prompt, service-to-skill mapping.
-- ~~Booking error handling~~ — Done (2026-04-01). BUG-063/064: Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, etc.) for better AI responses.
-- ~~OAuth callback refactoring~~ — Done (2026-04-01). Generic `oauthCallbackFactory.ts` + shared `tokenManagement.ts` eliminate duplication across 4 CRM integrations.
-- **Improvement hardening (Phase 13B)** — In progress (2026-04-12). 109 tasks in IMPROVEMENT_IDEAS.md across 10 phases. Shared route helpers (routeHelpers.ts), zero-row mutation guards on all routes, employee tenant-scoping bug fixed, nameUtils extended with slugify/buildDisplayName. See IMPROVEMENT_IDEAS.md for full backlog.
-- Database webhooks for n8n triggers
-- Beta testing with DynaTire
+### Remaining Work
+
+See `TODO.md` for the unified task list. Key blockers: deploy dashboard, set DASHBOARD_URL, beta test with DynaTire.
 
 ### Railway Deployment Status (as of 2026-03-23)
 - Backend live at `https://ai-sec-production.up.railway.app/`
@@ -181,7 +156,7 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - Edge functions deployed to Supabase (vapi-tools v9), DB URL secrets updated
 - Phone provisioned: +1 (630) 397-0194 on DynaTire (Vapi voice: Clara, LLM: OpenAI GPT-4o-mini)
 - ~~Supabase pausing bug~~ — Resolved 2026-03-30. Edge functions now reachable.
-- **Still needs**: Dashboard deployment, DASHBOARD_URL env var
+- **Still needs**: Dashboard deployment, DASHBOARD_URL env var (see TODO.md)
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
 - **12A — Repeatable Setup Wizard**: 7-step guided setup (Services, Resources, Employees, Shifts, Assignments, Review, Go Live), live coverage badges, phone activation on final step.
@@ -198,11 +173,8 @@ Phases 1–12 complete. Phase 13 (UI/UX Polish & Production Readiness) in progre
 - **Tenant List Sync**: `tenantsVersion` counter in SessionContext keeps dropdown in sync with admin panel.
 
 ### Backlog (post-launch)
-- **Automated Phone Provisioning**: Telnyx + Vapi auto-setup during onboarding. Manual provisioning works for first 10–20 customers.
-- **Full Billing System**: Extends Stripe Lite with Professional tier ($449/mo), plan picker UI, Stripe Elements, 14-day trials, call limits, billing portal.
-- **Business Intelligence & ROI**: Employee utilisation, service ROI, recommendations engine. Retention feature — not needed for launch.
-- **Personal Resources**: `is_personal` flag on resources for mobile techs and service writers. Only needed for businesses without fixed stations.
-- **Advanced Coverage Alerts**: Owner SMS, AI alternative time suggestions, missed revenue tracking, nightly coverage jobs.
+
+See `TODO.md` for full backlog. Key post-launch features: automated phone provisioning, full billing system (Professional tier), business intelligence/ROI, personal resources, advanced coverage alerts.
 
 ## Design Session — March 24, 2026
 
