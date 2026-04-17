@@ -24,6 +24,20 @@ import type {
   ChangeSource,
 } from '../types/versionHistory';
 
+/** Row shape returned by get_record_history() RPC (uses version_id, not id) */
+interface RecordHistoryRow {
+  version_id: string;
+  version_number: number;
+  data: Record<string, unknown>;
+  changed_fields: string[] | null;
+  previous_values: Record<string, unknown> | null;
+  change_type: string;
+  change_source: string;
+  changed_by: string | null;
+  change_summary: string | null;
+  changed_at: string;
+}
+
 const VERSIONED_TABLES: VersionedTable[] = [
   'customers',
   'appointments',
@@ -167,7 +181,7 @@ export function registerVersionHistoryRoutes(
       const record = recordResult.rows[0];
 
       // Get all versions
-      const versionsResult = await client.query<RecordVersion>(
+      const versionsResult = await client.query<RecordHistoryRow>(
         `SELECT * FROM get_record_history($1, $2, $3)`,
         [tenantId, table, recordId]
       );
@@ -310,7 +324,7 @@ export function registerVersionHistoryRoutes(
       await client.query(`SELECT set_config('app.change_source', $1, true)`, [change_source || 'local']);
       await client.query(`SELECT set_config('app.changed_by', $1, true)`, [restored_by || 'user']);
 
-      const restoreResult = await client.query<{ restore_fields_from_version: Record<string, unknown> }>(
+      const restoreResult = await client.query<{ data: Record<string, unknown> }>(
         `SELECT restore_fields_from_version($1, $2, $3, $4, $5, $6, $7) as data`,
         [tenantId, table, recordId, source_version, fields, restored_by || 'user', change_source || 'local']
       );
@@ -360,7 +374,7 @@ export function registerVersionHistoryRoutes(
     const { deleted_by, change_source } = parsed.success ? parsed.data : { deleted_by: undefined, change_source: undefined };
 
     const deleted = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<{ soft_delete_record: boolean }>(
+      const result = await client.query<{ deleted: boolean }>(
         `SELECT soft_delete_record($1, $2, $3, $4, $5) as deleted`,
         [tenantId, table, recordId, deleted_by || 'user', change_source || 'local']
       );
@@ -405,7 +419,7 @@ export function registerVersionHistoryRoutes(
     };
 
     const restored = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<{ restore_deleted_record: boolean }>(
+      const result = await client.query<{ restored: boolean }>(
         `SELECT restore_deleted_record($1, $2, $3, $4, $5) as restored`,
         [tenantId, table, recordId, restored_by || 'user', change_source || 'local']
       );
@@ -513,7 +527,7 @@ export function registerVersionHistoryRoutes(
     const { source_record_id, target_record_id, fields, copied_by, change_source } = bodyResult.data;
 
     const result = await withTenantClient(tenantId, async (client) => {
-      const copyResult = await client.query<{ copy_fields_between_records: Record<string, unknown> }>(
+      const copyResult = await client.query<{ data: Record<string, unknown> }>(
         `SELECT copy_fields_between_records($1, $2, $3, $4, $5, $6, $7) as data`,
         [tenantId, table, source_record_id, target_record_id, fields, copied_by || 'user', change_source || 'local']
       );

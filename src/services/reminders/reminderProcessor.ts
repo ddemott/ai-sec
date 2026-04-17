@@ -38,7 +38,7 @@ export class ReminderProcessor {
       }
 
       // Check if reminder is still relevant (appointment not cancelled and time hasn't passed)
-      const appointmentDateTime = new Date(appointment.date_time);
+      const appointmentDateTime = new Date(appointment.date_time || appointment.start_time);
       const now = new Date();
 
       if (appointment.status === 'cancelled' || appointmentDateTime <= now) {
@@ -161,19 +161,21 @@ export class ReminderProcessor {
           'email',
         );
         if (emailConsent) {
+          const appointmentData = {
+            customerName: appointment.customer_name || 'Customer',
+            serviceName: appointment.service_name || 'Service',
+            staffName: appointment.staff_name || 'Staff',
+            dateTime: appointment.date_time || appointment.start_time,
+            duration: appointment.duration || 60,
+            notes: appointment.notes,
+          };
+
           if (reminder.reminder_type === 'confirmation') {
             const result = await this.communicationService.sendAppointmentConfirmation(
               reminder.tenant_id.toString(),
               reminder.customer_email,
               appointment.customer_phone,
-              {
-                customerName: appointment.customer_name,
-                serviceName: appointment.service_name,
-                staffName: appointment.staff_name,
-                dateTime: appointment.date_time,
-                duration: appointment.duration,
-                notes: appointment.notes,
-              },
+              appointmentData,
             );
             emailSent = result.email?.success || false;
           } else {
@@ -181,14 +183,7 @@ export class ReminderProcessor {
               reminder.tenant_id.toString(),
               reminder.customer_email,
               appointment.customer_phone,
-              {
-                customerName: appointment.customer_name,
-                serviceName: appointment.service_name,
-                staffName: appointment.staff_name,
-                dateTime: appointment.date_time,
-                duration: appointment.duration,
-                notes: appointment.notes,
-              },
+              appointmentData,
               hoursUntil,
             );
             emailSent = result.email?.success || false;
@@ -206,11 +201,11 @@ export class ReminderProcessor {
         );
         if (smsConsent) {
           const smsData = {
-            customerName: appointment.customer_name,
-            serviceName: appointment.service_name,
-            staffName: appointment.staff_name,
-            dateTime: new Date(appointment.date_time).toLocaleString(),
-            duration: appointment.duration,
+            customerName: appointment.customer_name || 'Customer',
+            serviceName: appointment.service_name || 'Service',
+            staffName: appointment.staff_name || 'Staff',
+            dateTime: new Date(appointment.date_time || appointment.start_time).toLocaleString(),
+            duration: appointment.duration || 60,
             hoursUntil: hoursUntil,
           };
 

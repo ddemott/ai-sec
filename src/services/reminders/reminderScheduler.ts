@@ -11,7 +11,7 @@ export class ReminderScheduler {
    * Schedule reminders for a new appointment
    */
   async scheduleAppointmentReminders(appointment: Appointment): Promise<void> {
-    const appointmentDateTime = new Date(appointment.date_time);
+    const appointmentDateTime = new Date(appointment.date_time || appointment.start_time);
     const now = new Date();
 
     // Don't schedule reminders for past appointments
@@ -41,7 +41,7 @@ export class ReminderScheduler {
             typeof appointment.tenant_id === 'string'
               ? parseInt(appointment.tenant_id, 10)
               : appointment.tenant_id,
-          customer_email: appointment.customer_email,
+          customer_email: appointment.customer_email || '',
           customer_phone: appointment.customer_phone,
           reminder_type: reminder.type,
           scheduled_for: scheduledFor.toISOString(),

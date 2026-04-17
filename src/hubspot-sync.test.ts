@@ -134,17 +134,22 @@ beforeEach(() => {
 
 describe("HubSpot Sync — Push Happy Paths", () => {
   it("PUSH-CREATE: When tenant pushes new customer to HubSpot, system creates contact in HubSpot and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
+    // WHO: syncCustomerToHubSpot with action='create'
+    // WHAT: Local customer exists, no entity_sync_map entry — triggers createContact REST v3 API call
+    // WHEN: Push sync after new customer created in dashboard or via voice AI booking
+    // WHERE: services/hubspotSync.ts → syncCustomerToHubSpot() → hubspotClient.createContact()
+    // WHY: Without sync_map INSERT after create, next sync would duplicate the contact in HubSpot CRM instead of updating
     const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // getTokensWithRefresh: integration settings (token not expired)
     queryResponses.push({ rows: [makeIntegrationSettings()] });
 
-    // syncCustomerToHubSpot: fetch local customer
-    queryResponses.push({ rows: [makeCustomerRow()] });
-
-    // syncCustomerToHubSpot: check sync map (empty — new)
+    // syncCustomerToHubSpot: check sync map FIRST (lock ordering: sync_map before customers)
     queryResponses.push({ rows: [] });
+
+    // syncCustomerToHubSpot: fetch local customer SECOND
+    queryResponses.push({ rows: [makeCustomerRow()] });
 
     // syncCustomerToHubSpot: INSERT sync map after create
     queryResponses.push({ rows: [] });
@@ -172,17 +177,22 @@ describe("HubSpot Sync — Push Happy Paths", () => {
   });
 
   it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing HubSpot contact using stored external_id to maintain data consistency across systems", async () => {
+    // WHO: syncCustomerToHubSpot with action='update'
+    // WHAT: Local customer updated, entity_sync_map has existing external_id — triggers updateContact REST v3 API call
+    // WHEN: Push sync after customer phone/email/name edited in dashboard
+    // WHERE: services/hubspotSync.ts → syncCustomerToHubSpot() → hubspotClient.updateContact()
+    // WHY: Without using stored external_id from sync_map, system would create a duplicate contact in HubSpot instead of updating
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // getTokensWithRefresh: integration settings
     queryResponses.push({ rows: [makeIntegrationSettings()] });
 
+    // check sync map — existing mapping — read sync_map BEFORE customers (lock order)
+    queryResponses.push({ rows: [{ external_id: HUBSPOT_CONTACT_ID }] });
+
     // fetch local customer
     queryResponses.push({ rows: [makeCustomerRow()] });
-
-    // check sync map — existing mapping
-    queryResponses.push({ rows: [{ external_id: HUBSPOT_CONTACT_ID }] });
 
     // UPDATE sync map after update
     queryResponses.push({ rows: [] });
@@ -205,6 +215,11 @@ describe("HubSpot Sync — Push Happy Paths", () => {
   });
 
   it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling HubSpot API, preserving HubSpot data while breaking the link", async () => {
+    // WHO: syncCustomerToHubSpot with action='delete'
+    // WHAT: Local customer soft-deleted, sync_map entry exists — only removes mapping, no HubSpot API call
+    // WHEN: Push sync after customer deleted from dashboard
+    // WHERE: services/hubspotSync.ts → syncCustomerToHubSpot() → DELETE FROM entity_sync_map
+    // WHY: Calling HubSpot's delete API would destroy CRM deal history and engagement timeline that the sales team still needs
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -224,20 +239,25 @@ describe("HubSpot Sync — Push Happy Paths", () => {
   });
 
   it("PUSH-APPOINTMENT: When tenant creates appointment, system creates HubSpot meeting and associates it with the customer's contact so sales team sees scheduled work", async () => {
+    // WHO: syncAppointmentToHubSpot with action='create'
+    // WHAT: Local appointment with synced customer — triggers createMeeting + associateMeetingToContact API calls
+    // WHEN: Push sync after appointment booked via dashboard or voice AI
+    // WHERE: services/hubspotSync.ts → syncAppointmentToHubSpot() → hubspotClient.createMeeting() + associateMeetingToContact()
+    // WHY: Without the association call, meeting would exist in HubSpot but not appear on the contact's timeline, making it invisible to sales
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // getTokensWithRefresh
     queryResponses.push({ rows: [makeIntegrationSettings()] });
 
+    // check appointment sync map — new — read sync_map BEFORE appointments (lock order)
+    queryResponses.push({ rows: [] });
+
     // fetch appointment with customer details
     queryResponses.push({ rows: [makeAppointmentRow()] });
 
     // check customer sync map — already synced
     queryResponses.push({ rows: [{ external_id: HUBSPOT_CONTACT_ID }] });
-
-    // check appointment sync map — new
-    queryResponses.push({ rows: [] });
 
     // INSERT sync map for appointment
     queryResponses.push({ rows: [] });
@@ -268,6 +288,11 @@ describe("HubSpot Sync — Push Happy Paths", () => {
   });
 
   it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates meeting, ensuring referential integrity in HubSpot", async () => {
+    // WHO: syncAppointmentToHubSpot calling syncCustomerToHubSpot recursively
+    // WHAT: Appointment's customer has no sync_map entry — system auto-syncs customer before creating meeting
+    // WHEN: Push sync when voice AI books appointment for a brand-new caller (customer created moments before)
+    // WHERE: services/hubspotSync.ts → syncAppointmentToHubSpot() → syncCustomerToHubSpot() → createContact + createMeeting
+    // WHY: Without cascade sync, associateMeetingToContact would fail with invalid contact ID — HubSpot requires valid contact for association
     const queries: MockQuery[] = [];
     const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
 
@@ -285,31 +310,31 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     // 1. getTokensWithRefresh (for syncAppointmentToHubSpot)
     allResponses.push({ rows: [makeIntegrationSettings()] });
 
-    // 2. fetch appointment
+    // 2. check appointment sync map — new (read sync_map BEFORE appointments — lock order)
+    allResponses.push({ rows: [] });
+
+    // 3. fetch appointment
     allResponses.push({ rows: [makeAppointmentRow()] });
 
-    // 3. check customer sync map — NOT synced yet
+    // 4. check customer sync map — NOT synced yet
     allResponses.push({ rows: [] });
 
     // --- Recursive syncCustomerToHubSpot call ---
-    // 4. getTokensWithRefresh (for syncCustomerToHubSpot)
+    // 5. getTokensWithRefresh (for syncCustomerToHubSpot)
     allResponses.push({ rows: [makeIntegrationSettings()] });
 
-    // 5. fetch local customer
-    allResponses.push({ rows: [makeCustomerRow()] });
-
-    // 6. check customer sync map (empty — create)
+    // 6. check customer sync map (empty — create) — read sync_map BEFORE customers (lock order)
     allResponses.push({ rows: [] });
 
-    // 7. INSERT customer sync map
+    // 7. fetch local customer
+    allResponses.push({ rows: [makeCustomerRow()] });
+
+    // 8. INSERT customer sync map
     allResponses.push({ rows: [] });
 
     // --- Back in syncAppointmentToHubSpot ---
-    // 8. re-check customer sync map — NOW synced
+    // 9. re-check customer sync map — NOW synced
     allResponses.push({ rows: [{ external_id: HUBSPOT_CONTACT_ID }] });
-
-    // 9. check appointment sync map — new
-    allResponses.push({ rows: [] });
 
     // 10. INSERT appointment sync map
     allResponses.push({ rows: [] });
@@ -344,6 +369,11 @@ describe("HubSpot Sync — Push Happy Paths", () => {
 
 describe("HubSpot Sync — Pull Happy Paths", () => {
   it("PULL-CREATE: When HubSpot contact has no local match (by sync_map or phone), system creates new customer locally so CRM leads appear in scheduling system", async () => {
+    // WHO: pullHubSpotContact processing a new HubSpot contact
+    // WHAT: No entity_sync_map match AND no customers row matching phone — triggers INSERT INTO customers + sync_map
+    // WHEN: Pull sync during fullSync or webhook when HubSpot contact was created by sales team outside SecretaryHQ
+    // WHERE: services/hubspotSync.ts → pullHubSpotContact() → INSERT INTO customers, INSERT INTO entity_sync_map
+    // WHY: Without creating local customer, voice AI wouldn't recognize returning callers who were added through HubSpot CRM
     const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -361,7 +391,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 
     await pullHubSpotContact(pool, TENANT_ID, makeHubSpotContactData(), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from HubSpot contact'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from hubspot customer'));
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query (getDataQueries filters out session variable queries)
@@ -373,6 +403,11 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
   });
 
   it("PULL-MERGE-REMOTE-WINS: When HubSpot contact matches local customer by phone and HubSpot data is newer, system updates local record to keep most recent data from authoritative source", async () => {
+    // WHO: pullHubSpotContact merging with existing local customer
+    // WHAT: Phone match found, HubSpot lastmodifieddate (2026-03-25) > local updated_at (2026-03-10) — remote wins timestamp merge
+    // WHEN: Pull sync when sales rep updated customer email in HubSpot after original booking
+    // WHERE: services/hubspotSync.ts → pullHubSpotContact() → UPDATE customers SET name, phone, email
+    // WHY: Without timestamp comparison, stale local data would persist and customer would receive communications at old email address
     const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -392,7 +427,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 
     await pullHubSpotContact(pool, TENANT_ID, contactData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged HubSpot contact into existing customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged hubspot customer into existing customer'));
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued (getDataQueries filters out session variable queries)
@@ -401,6 +436,11 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
   });
 
   it("PULL-MERGE-LOCAL-WINS: When HubSpot contact matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+    // WHO: pullHubSpotContact merging with existing local customer where local is newer
+    // WHAT: Phone match found, local updated_at (2026-03-28) > HubSpot lastmodifieddate (2026-03-25) — local wins, no UPDATE issued
+    // WHEN: Pull sync when receptionist updated customer info via dashboard after HubSpot's last modification
+    // WHERE: services/hubspotSync.ts → pullHubSpotContact() → INSERT INTO entity_sync_map (skip UPDATE)
+    // WHY: Without this guard, a stale HubSpot record would overwrite the receptionist's recent corrections, corrupting name/phone/email fields
     const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -429,6 +469,11 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 
 describe("HubSpot Sync — Sad Paths", () => {
   it("NO-SETTINGS: When tenant has no HubSpot integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
+    // WHO: getTokensWithRefresh for a tenant without HubSpot integration
+    // WHAT: tenant_integration_settings query returns 0 rows — function returns null
+    // WHEN: Push/pull sync triggered for tenant that never connected HubSpot OAuth
+    // WHERE: services/hubspotSync.ts → getTokensWithRefresh() → SELECT FROM tenant_integration_settings
+    // WHY: Without null return, downstream sync functions would crash on undefined access_token, causing unhandled promise rejections
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -442,6 +487,11 @@ describe("HubSpot Sync — Sad Paths", () => {
   });
 
   it("INACTIVE-INTEGRATION: When tenant's HubSpot integration is marked inactive (is_active=false), system returns null and logs warning so disabled integrations don't attempt API calls", async () => {
+    // WHO: getTokensWithRefresh for a tenant with disabled HubSpot integration
+    // WHAT: tenant_integration_settings.is_active = false — function returns null with warning log
+    // WHEN: Sync triggered after admin disabled integration (or after token refresh failure auto-disabled it)
+    // WHERE: services/hubspotSync.ts → getTokensWithRefresh() → is_active check
+    // WHY: Without this guard, system would send API calls with potentially revoked tokens, causing 401 errors and wasted HubSpot API quota
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -455,6 +505,11 @@ describe("HubSpot Sync — Sad Paths", () => {
   });
 
   it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
+    // WHO: getTokensWithRefresh when token is expired and refresh fails
+    // WHAT: token_expires_at is in the past, refreshAccessToken throws 'OAuth grant revoked' — marks is_active=false in DB
+    // WHEN: Sync triggered after user revoked HubSpot OAuth access from their HubSpot account settings
+    // WHERE: services/hubspotSync.ts → getTokensWithRefresh() → hubspotClient.refreshAccessToken() → UPDATE SET is_active=false
+    // WHY: Without auto-disabling, every subsequent sync attempt would retry the failed refresh, generating error logs and wasting API calls indefinitely
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -483,11 +538,19 @@ describe("HubSpot Sync — Sad Paths", () => {
   });
 
   it("CUSTOMER-NOT-FOUND: When sync triggered for customer_id that doesn't exist in local DB (e.g., race condition or stale event), system logs warning and skips push to avoid creating orphan HubSpot records", async () => {
+    // WHO: syncCustomerToHubSpot when local customer was deleted between event dispatch and sync execution
+    // WHAT: SELECT FROM customers returns 0 rows for the given customer_id — skip push, no API call
+    // WHEN: Race condition where customer deleted while push sync event was queued (e.g., n8n webhook delay)
+    // WHERE: services/hubspotSync.ts → syncCustomerToHubSpot() → SELECT FROM customers WHERE id = $1
+    // WHY: Without this check, system would send empty/null fields to createContact, creating garbage records in HubSpot CRM
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
     // getTokensWithRefresh
     queryResponses.push({ rows: [makeIntegrationSettings()] });
+
+    // check sync map — no existing mapping (read sync_map BEFORE customers — lock order)
+    queryResponses.push({ rows: [] });
 
     // fetch local customer — not found
     queryResponses.push({ rows: [] });
@@ -500,6 +563,11 @@ describe("HubSpot Sync — Sad Paths", () => {
   });
 
   it("NO-PHONE-SKIP: When HubSpot contact has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
+    // WHO: pullHubSpotContact receiving a HubSpot contact with empty phone property
+    // WHAT: HubSpotContact.properties.phone = '' — skip pull entirely, no DB queries issued
+    // WHEN: Pull sync when HubSpot has marketing-only contacts with no phone collected (email-only leads)
+    // WHERE: services/hubspotSync.ts → pullHubSpotContact() → properties.phone empty check
+    // WHY: Without phone, customer can't be matched to existing records (duplicate risk) and voice AI can't send SMS confirmations
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -508,10 +576,15 @@ describe("HubSpot Sync — Sad Paths", () => {
     await pullHubSpotContact(pool, TENANT_ID, contactData, silentLogger);
 
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('no phone number'));
-    expect(mockClient.release).toHaveBeenCalled();
+    // No pool.connect() needed — shared helper returns early before acquiring a connection
   });
 
   it("ALREADY-SYNCED: When HubSpot contact's lastmodifieddate matches sync_map.remote_updated_at, system skips processing to avoid redundant DB writes and improve sync performance", async () => {
+    // WHO: pullHubSpotContact checking already-synced version
+    // WHAT: sync_map.remote_updated_at matches HubSpot lastmodifieddate exactly — no DB queries beyond the sync_map check
+    // WHEN: Pull sync during fullSync pagination when most contacts haven't changed since last sync
+    // WHERE: services/hubspotSync.ts → pullHubSpotContact() → early return after entity_sync_map SELECT
+    // WHY: Without this skip optimization, fullSync of thousands of HubSpot contacts would issue unnecessary SELECT+UPDATE pairs
     const { mockClient, queryResponses, getDataQueries } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -533,6 +606,11 @@ describe("HubSpot Sync — Sad Paths", () => {
   });
 
   it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+    // WHO: getTokensWithRefresh when database connection fails mid-query
+    // WHAT: First query throws 'DB connection lost' — function re-throws but still calls client.release()
+    // WHEN: Any sync operation when Postgres is temporarily unreachable (network blip, connection timeout)
+    // WHERE: services/hubspotSync.ts → getTokensWithRefresh() → finally { client.release() }
+    // WHY: Without release in finally block, leaked pool connections would accumulate until pool exhaustion (max 2 connections), blocking all sync operations
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
@@ -548,6 +626,11 @@ describe("HubSpot Sync — Sad Paths", () => {
   });
 
   it("PAGINATION-ERROR: When HubSpot API returns error during contact list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
+    // WHO: fullSync when HubSpot API returns 500 during pagination
+    // WHAT: listContacts throws on first page — sync completes with 0 records but updates last_sync_at
+    // WHEN: HubSpot API experiencing downtime during scheduled full sync
+    // WHERE: services/hubspotSync.ts → fullSync() → listContacts pagination → UPDATE last_sync_at
+    // WHY: Without updating last_sync_at after partial failure, next sync would re-fetch all contacts from beginning of time instead of just the gap period
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 

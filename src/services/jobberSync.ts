@@ -1,7 +1,21 @@
 import type { Pool } from 'pg';
 import * as jobber from './jobberClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, setSyncContext, clearSyncContext } from './tokenManagement';
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, withSyncContext } from './tokenManagement';
 import { splitName, joinName } from './nameUtils';
+import {
+  syncMapUpsertOnCreate,
+  syncMapUpdateAfterPush,
+  syncMapDeleteByLocalId,
+  syncMapFindByLocalId,
+  syncMapFindByExternalId,
+  syncMapUpsertOnPull,
+  syncMapUpdateAfterPull,
+  ensureRemoteCustomer,
+  pullRemoteCustomer,
+  isAlreadySynced,
+  isRemoteNewer,
+  updateLastSyncAt,
+} from './syncMapHelpers';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('jobber', tenantId, entityType, action);
@@ -24,6 +38,8 @@ export async function getTokensWithRefresh(
 // -----------------------------------------------------------------------
 
 /** Push a local customer to Jobber (create or update) */
+// DEADLOCK PREVENTION: Lock order is always entity_sync_map → customers → appointments.
+// Push and pull operations must follow this order to prevent circular waits.
 export async function syncCustomerToJobber(
   pool: Pool,
   tenantId: string,
@@ -40,14 +56,13 @@ export async function syncCustomerToJobber(
   const client = await pool.connect();
   try {
     if (action === 'delete') {
-      // Remove sync map entry — Jobber doesn't support hard delete via API
-      await client.query(
-        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'customer' AND local_id = $2`,
-        [tenantId, customerId]
-      );
+      await syncMapDeleteByLocalId(client, tenantId, 'jobber', 'customer', customerId);
       log.info(`${prefix} — sync map entry removed (Jobber client archived, not deleted)`);
       return;
     }
+
+    // Check sync map for existing mapping (read sync_map BEFORE customers — lock order)
+    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'jobber', 'customer', customerId);
 
     // Fetch local customer
     const custRes = await client.query(
@@ -60,13 +75,6 @@ export async function syncCustomerToJobber(
       return;
     }
 
-    // Check sync map for existing mapping
-    const syncRes = await client.query(
-      `SELECT external_id, remote_updated_at FROM entity_sync_map
-       WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'customer' AND local_id = $2`,
-      [tenantId, customerId]
-    );
-
     const nameParts = splitName(cust.name);
     const clientInput: Record<string, any> = {
       firstName: nameParts.firstName,
@@ -78,7 +86,7 @@ export async function syncCustomerToJobber(
       clientInput.billingAddress = { street1: cust.address };
     }
 
-    if (syncRes.rows.length === 0 || action === 'create') {
+    if (!syncEntry || action === 'create') {
       // Create in Jobber
       const result = await jobber.graphql(tokens.accessToken, jobber.QUERIES.createClient, { input: clientInput });
       const jobberClient = result.data?.clientCreate?.client;
@@ -88,17 +96,14 @@ export async function syncCustomerToJobber(
         return;
       }
 
-      await client.query(
-        `INSERT INTO entity_sync_map (tenant_id, provider, entity_type, local_id, external_id, local_updated_at, remote_updated_at, last_synced_at, sync_status)
-         VALUES ($1, 'jobber', 'customer', $2, $3, $4, $5, NOW(), 'synced')
-         ON CONFLICT (tenant_id, provider, entity_type, local_id) DO UPDATE SET
-           external_id = $3, local_updated_at = $4, remote_updated_at = $5, last_synced_at = NOW(), sync_status = 'synced', error_message = NULL`,
-        [tenantId, customerId, jobberClient.id, cust.updated_at, jobberClient.updatedAt || new Date().toISOString()]
+      await syncMapUpsertOnCreate(
+        client, tenantId, 'jobber', 'customer', customerId, jobberClient.id,
+        cust.updated_at, jobberClient.updatedAt || new Date().toISOString()
       );
       log.info(`${prefix} — customer pushed to Jobber (jobberId=${jobberClient.id} name=${cust.name})`);
     } else {
       // Update in Jobber
-      const externalId = syncRes.rows[0].external_id;
+      const externalId = syncEntry.external_id;
       const result = await jobber.graphql(tokens.accessToken, jobber.QUERIES.updateClient, {
         clientId: externalId,
         input: clientInput,
@@ -109,11 +114,7 @@ export async function syncCustomerToJobber(
         return;
       }
 
-      await client.query(
-        `UPDATE entity_sync_map SET local_updated_at = $1, last_synced_at = NOW(), sync_status = 'synced', error_message = NULL
-         WHERE tenant_id = $2 AND provider = 'jobber' AND entity_type = 'customer' AND local_id = $3`,
-        [cust.updated_at, tenantId, customerId]
-      );
+      await syncMapUpdateAfterPush(client, tenantId, 'jobber', 'customer', customerId, cust.updated_at);
       log.info(`${prefix} — customer updated in Jobber (jobberId=${externalId} name=${cust.name})`);
     }
   } finally {
@@ -122,6 +123,8 @@ export async function syncCustomerToJobber(
 }
 
 /** Push a local appointment to Jobber as a Job+Visit */
+// DEADLOCK PREVENTION: Lock order is always entity_sync_map → customers → appointments.
+// Push and pull operations must follow this order to prevent circular waits.
 export async function syncAppointmentToJobber(
   pool: Pool,
   tenantId: string,
@@ -138,13 +141,13 @@ export async function syncAppointmentToJobber(
   const client = await pool.connect();
   try {
     if (action === 'delete') {
-      await client.query(
-        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'appointment' AND local_id = $2`,
-        [tenantId, appointmentId]
-      );
+      await syncMapDeleteByLocalId(client, tenantId, 'jobber', 'appointment', appointmentId);
       log.info(`${prefix} — sync map entry removed`);
       return;
     }
+
+    // Check if already synced (read sync_map BEFORE appointments — lock order)
+    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'jobber', 'appointment', appointmentId);
 
     // Fetch appointment with customer details
     const apptRes = await client.query(
@@ -162,37 +165,13 @@ export async function syncAppointmentToJobber(
       return;
     }
 
-    // Find Jobber client ID for customer (needed to create a job)
-    const custSyncRes = await client.query(
-      `SELECT external_id FROM entity_sync_map
-       WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'customer' AND local_id = $2`,
-      [tenantId, appt.customer_id]
+    // Ensure Jobber client exists for customer
+    const jobberClientId = await ensureRemoteCustomer(
+      client, pool, tenantId, 'jobber', appt.customer_id, syncCustomerToJobber, logger, prefix
     );
+    if (!jobberClientId) return;
 
-    let jobberClientId = custSyncRes.rows[0]?.external_id;
-    if (!jobberClientId) {
-      // Customer not yet synced — push them first
-      await syncCustomerToJobber(pool, tenantId, appt.customer_id, 'create', logger);
-      const reSyncRes = await client.query(
-        `SELECT external_id FROM entity_sync_map
-         WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'customer' AND local_id = $2`,
-        [tenantId, appt.customer_id]
-      );
-      jobberClientId = reSyncRes.rows[0]?.external_id;
-      if (!jobberClientId) {
-        log.error(`${prefix} — cannot push appointment: customer sync failed (customerId=${appt.customer_id})`);
-        return;
-      }
-    }
-
-    // Check if already synced
-    const syncRes = await client.query(
-      `SELECT external_id FROM entity_sync_map
-       WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'appointment' AND local_id = $2`,
-      [tenantId, appointmentId]
-    );
-
-    if (syncRes.rows.length === 0 || action === 'create') {
+    if (!syncEntry || action === 'create') {
       // Create Job+Visit in Jobber
       const title = appt.description || `Appointment - ${appt.customer_name || 'Customer'}`;
       const result = await jobber.graphql(tokens.accessToken, jobber.QUERIES.createJob, {
@@ -218,17 +197,14 @@ export async function syncAppointmentToJobber(
 
       // Use the visit ID as the external ID (visits are what have schedule)
       const visitId = job.visits?.nodes?.[0]?.id || job.id;
-      await client.query(
-        `INSERT INTO entity_sync_map (tenant_id, provider, entity_type, local_id, external_id, local_updated_at, last_synced_at, sync_status)
-         VALUES ($1, 'jobber', 'appointment', $2, $3, $4, NOW(), 'synced')
-         ON CONFLICT (tenant_id, provider, entity_type, local_id) DO UPDATE SET
-           external_id = $3, local_updated_at = $4, last_synced_at = NOW(), sync_status = 'synced', error_message = NULL`,
-        [tenantId, appointmentId, visitId, appt.updated_at || new Date().toISOString()]
+      await syncMapUpsertOnCreate(
+        client, tenantId, 'jobber', 'appointment', appointmentId, visitId,
+        appt.updated_at || new Date().toISOString()
       );
       log.info(`${prefix} — appointment pushed to Jobber as job (jobId=${job.id} visitId=${visitId} customer=${appt.customer_name})`);
     } else {
       // Update not supported via simple visit update yet — log it
-      log.info(`${prefix} — appointment update sync not yet implemented for Jobber (jobberId=${syncRes.rows[0].external_id})`);
+      log.info(`${prefix} — appointment update sync not yet implemented for Jobber (jobberId=${syncEntry.external_id})`);
     }
   } finally {
     client.release();
@@ -240,130 +216,40 @@ export async function syncAppointmentToJobber(
 // -----------------------------------------------------------------------
 
 /** Pull a Jobber client into the local customers table */
+// DEADLOCK PREVENTION: Lock order is always entity_sync_map → customers → appointments.
+// Push and pull operations must follow this order to prevent circular waits.
 export async function pullJobberClient(
   pool: Pool,
   tenantId: string,
   jobberClientData: jobber.JobberClient,
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
   const prefix = ctx(tenantId, 'customer', 'pull');
+  const name = joinName(jobberClientData.firstName, jobberClientData.lastName);
+  const phone = jobberClientData.phones?.find(p => p.primary)?.number || jobberClientData.phones?.[0]?.number || '';
+  const email = jobberClientData.emails?.find(e => e.primary)?.address || jobberClientData.emails?.[0]?.address || null;
+  const address = jobberClientData.billingAddress
+    ? [jobberClientData.billingAddress.street1, jobberClientData.billingAddress.city, jobberClientData.billingAddress.province].filter(Boolean).join(', ')
+    : null;
 
-  const client = await pool.connect();
-  try {
-    // Set version tracking context so changes are recorded as coming from Jobber
-    await setSyncContext(client, 'jobber', 'sync-jobber');
-
-    const jobberId = jobberClientData.id;
-    const remoteUpdatedAt = jobberClientData.updatedAt;
-
-    // Check sync map for existing mapping
-    const syncRes = await client.query(
-      `SELECT local_id, remote_updated_at FROM entity_sync_map
-       WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'customer' AND external_id = $2`,
-      [tenantId, jobberId]
-    );
-
-    const name = joinName(jobberClientData.firstName, jobberClientData.lastName);
-    const phone = jobberClientData.phones?.find(p => p.primary)?.number || jobberClientData.phones?.[0]?.number || '';
-    const email = jobberClientData.emails?.find(e => e.primary)?.address || jobberClientData.emails?.[0]?.address || null;
-    const address = jobberClientData.billingAddress
-      ? [jobberClientData.billingAddress.street1, jobberClientData.billingAddress.city, jobberClientData.billingAddress.province].filter(Boolean).join(', ')
-      : null;
-
-    if (!phone) {
-      log.warn(`${prefix} — skipped: Jobber client ${jobberId} has no phone number (required field)`);
-      return;
-    }
-
-    if (syncRes.rows.length === 0) {
-      // New client from Jobber — check if customer with same phone exists
-      const existingRes = await client.query(
-        `SELECT id, updated_at FROM customers WHERE tenant_id = $1 AND phone = $2`,
-        [tenantId, phone]
-      );
-
-      let localId: string;
-      if (existingRes.rows.length > 0) {
-        // Match by phone — merge
-        localId = existingRes.rows[0].id;
-        const localUpdatedAt = existingRes.rows[0].updated_at;
-
-        if (new Date(remoteUpdatedAt) > new Date(localUpdatedAt)) {
-          // Remote is newer — update local
-          await client.query(
-            `UPDATE customers SET name = COALESCE($1, name), email = COALESCE($2, email), address = COALESCE($3, address)
-             WHERE id = $4 AND tenant_id = $5`,
-            [name, email, address, localId, tenantId]
-          );
-          log.info(`${prefix} — merged Jobber client into existing customer (jobberId=${jobberId} localId=${localId} phone=${phone} — remote was newer)`);
-        } else {
-          log.info(`${prefix} — matched existing customer by phone (jobberId=${jobberId} localId=${localId} — local was newer, kept local values)`);
-        }
-      } else {
-        // Brand new customer
-        const insertRes = await client.query(
-          `INSERT INTO customers (tenant_id, name, phone, email, address)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id`,
-          [tenantId, name, phone, email, address]
-        );
-        localId = insertRes.rows[0].id;
-        log.info(`${prefix} — created local customer from Jobber client (jobberId=${jobberId} localId=${localId} name=${name})`);
-      }
-
-      // Create sync map entry
-      await client.query(
-        `INSERT INTO entity_sync_map (tenant_id, provider, entity_type, local_id, external_id, remote_updated_at, last_synced_at, sync_status)
-         VALUES ($1, 'jobber', 'customer', $2, $3, $4, NOW(), 'synced')
-         ON CONFLICT (tenant_id, provider, entity_type, external_id) DO UPDATE SET
-           local_id = $2, remote_updated_at = $4, last_synced_at = NOW(), sync_status = 'synced'`,
-        [tenantId, localId, jobberId, remoteUpdatedAt]
-      );
-    } else {
-      // Existing mapping — timestamp-based merge
-      const localId = syncRes.rows[0].local_id;
-      const lastRemoteUpdate = syncRes.rows[0].remote_updated_at;
-
-      // Skip if we've already processed this version
-      if (lastRemoteUpdate && new Date(remoteUpdatedAt) <= new Date(lastRemoteUpdate)) {
-        log.info(`${prefix} — skipped: already synced this version (jobberId=${jobberId} remoteUpdatedAt=${remoteUpdatedAt})`);
-        return;
-      }
-
-      // Get local record to compare timestamps
-      const localRes = await client.query(
-        `SELECT updated_at FROM customers WHERE id = $1 AND tenant_id = $2`,
-        [localId, tenantId]
-      );
-      const localUpdatedAt = localRes.rows[0]?.updated_at;
-
-      if (new Date(remoteUpdatedAt) > new Date(localUpdatedAt)) {
-        // Remote is newer — update local with non-null fields
-        await client.query(
-          `UPDATE customers SET name = COALESCE($1, name), email = COALESCE($2, email), address = COALESCE($3, address)
-           WHERE id = $4 AND tenant_id = $5`,
-          [name, email, address, localId, tenantId]
-        );
-        log.info(`${prefix} — updated local customer from Jobber (jobberId=${jobberId} localId=${localId} — remote was newer)`);
-      } else {
-        log.info(`${prefix} — kept local values (jobberId=${jobberId} localId=${localId} — local was newer)`);
-      }
-
-      // Update sync map
-      await client.query(
-        `UPDATE entity_sync_map SET remote_updated_at = $1, last_synced_at = NOW(), sync_status = 'synced'
-         WHERE tenant_id = $2 AND provider = 'jobber' AND entity_type = 'customer' AND external_id = $3`,
-        [remoteUpdatedAt, tenantId, jobberId]
-      );
-    }
-  } finally {
-    await clearSyncContext(client);
-    client.release();
-  }
+  await pullRemoteCustomer({
+    pool,
+    tenantId,
+    provider: 'jobber',
+    changeSource: 'jobber',
+    externalId: jobberClientData.id,
+    remoteUpdatedAt: jobberClientData.updatedAt,
+    fields: { name, phone, email, address },
+    updateSetClause: 'name = COALESCE($1, name), email = COALESCE($2, email), address = COALESCE($3, address)',
+    updateValues: [name, email, address],
+    logger,
+    prefix,
+  });
 }
 
 /** Pull a Jobber visit into the local appointments table */
+// DEADLOCK PREVENTION: Lock order is always entity_sync_map → customers → appointments.
+// Push and pull operations must follow this order to prevent circular waits.
 export async function pullJobberVisit(
   pool: Pool,
   tenantId: string,
@@ -375,101 +261,81 @@ export async function pullJobberVisit(
 
   const client = await pool.connect();
   try {
-    // Set version tracking context so changes are recorded as coming from Jobber
-    await setSyncContext(client, 'jobber', 'sync-jobber');
+    await withSyncContext(client, 'jobber', 'sync-jobber', async () => {
+      const jobberId = visitData.id;
+      const remoteUpdatedAt = visitData.updatedAt;
 
-    const jobberId = visitData.id;
-    const remoteUpdatedAt = visitData.updatedAt;
-
-    // Find local customer from Jobber client ID
-    const jobberClientId = visitData.job?.client?.id;
-    if (!jobberClientId) {
-      log.warn(`${prefix} — skipped: Jobber visit ${jobberId} has no associated client`);
-      return;
-    }
-
-    const custSyncRes = await client.query(
-      `SELECT local_id FROM entity_sync_map
-       WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'customer' AND external_id = $2`,
-      [tenantId, jobberClientId]
-    );
-    if (custSyncRes.rows.length === 0) {
-      log.warn(`${prefix} — skipped: Jobber client ${jobberClientId} not yet synced locally (pull the client first)`);
-      return;
-    }
-    const localCustomerId = custSyncRes.rows[0].local_id;
-
-    // Get default resource for this tenant
-    const resourceRes = await client.query(
-      `SELECT id FROM resources WHERE tenant_id = $1 AND (is_active = true OR is_active IS NULL) ORDER BY created_at LIMIT 1`,
-      [tenantId]
-    );
-    if (resourceRes.rows.length === 0) {
-      log.warn(`${prefix} — skipped: tenant ${tenantId} has no active resources (needed to create appointment)`);
-      return;
-    }
-    const resourceId = resourceRes.rows[0].id;
-
-    // Check sync map
-    const syncRes = await client.query(
-      `SELECT local_id, remote_updated_at FROM entity_sync_map
-       WHERE tenant_id = $1 AND provider = 'jobber' AND entity_type = 'appointment' AND external_id = $2`,
-      [tenantId, jobberId]
-    );
-
-    const description = visitData.title || visitData.job?.title || 'Jobber Visit';
-
-    if (syncRes.rows.length === 0) {
-      // Create local appointment
-      const insertRes = await client.query(
-        `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-         RETURNING id`,
-        [tenantId, resourceId, localCustomerId, visitData.startAt, visitData.endAt, description]
-      );
-      const localId = insertRes.rows[0].id;
-
-      await client.query(
-        `INSERT INTO entity_sync_map (tenant_id, provider, entity_type, local_id, external_id, remote_updated_at, last_synced_at, sync_status)
-         VALUES ($1, 'jobber', 'appointment', $2, $3, $4, NOW(), 'synced')`,
-        [tenantId, localId, jobberId, remoteUpdatedAt]
-      );
-      log.info(`${prefix} — created local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} description=${description})`);
-    } else {
-      // Existing — timestamp merge
-      const localId = syncRes.rows[0].local_id;
-      const lastRemoteUpdate = syncRes.rows[0].remote_updated_at;
-
-      if (lastRemoteUpdate && new Date(remoteUpdatedAt) <= new Date(lastRemoteUpdate)) {
-        log.info(`${prefix} — skipped: already synced this version (jobberId=${jobberId})`);
+      // Find local customer from Jobber client ID
+      const jobberClientId = visitData.job?.client?.id;
+      if (!jobberClientId) {
+        log.warn(`${prefix} — skipped: Jobber visit ${jobberId} has no associated client`);
         return;
       }
 
-      const localRes = await client.query(
-        `SELECT updated_at FROM appointments WHERE id = $1 AND tenant_id = $2`,
-        [localId, tenantId]
-      );
-      const localUpdatedAt = localRes.rows[0]?.updated_at;
-
-      if (new Date(remoteUpdatedAt) > new Date(localUpdatedAt)) {
-        await client.query(
-          `UPDATE appointments SET start_time = $1, end_time = $2, description = COALESCE($3, description)
-           WHERE id = $4 AND tenant_id = $5`,
-          [visitData.startAt, visitData.endAt, description, localId, tenantId]
-        );
-        log.info(`${prefix} — updated local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} — remote was newer)`);
-      } else {
-        log.info(`${prefix} — kept local values (jobberId=${jobberId} localId=${localId} — local was newer)`);
+      const custSync = await syncMapFindByExternalId(client, tenantId, 'jobber', 'customer', jobberClientId);
+      if (!custSync) {
+        log.warn(`${prefix} — skipped: Jobber client ${jobberClientId} not yet synced locally (pull the client first)`);
+        return;
       }
+      const localCustomerId = custSync.local_id;
 
-      await client.query(
-        `UPDATE entity_sync_map SET remote_updated_at = $1, last_synced_at = NOW(), sync_status = 'synced'
-         WHERE tenant_id = $2 AND provider = 'jobber' AND entity_type = 'appointment' AND external_id = $3`,
-        [remoteUpdatedAt, tenantId, jobberId]
+      // Get default resource for this tenant
+      const resourceRes = await client.query(
+        `SELECT id FROM resources WHERE tenant_id = $1 AND (is_active = true OR is_active IS NULL) ORDER BY created_at LIMIT 1`,
+        [tenantId]
       );
-    }
+      if (resourceRes.rows.length === 0) {
+        log.warn(`${prefix} — skipped: tenant ${tenantId} has no active resources (needed to create appointment)`);
+        return;
+      }
+      const resourceId = resourceRes.rows[0].id;
+
+      // Check sync map
+      const syncEntry = await syncMapFindByExternalId(client, tenantId, 'jobber', 'appointment', jobberId);
+      const description = visitData.title || visitData.job?.title || 'Jobber Visit';
+
+      if (!syncEntry) {
+        // Create local appointment
+        const insertRes = await client.query(
+          `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
+           RETURNING id`,
+          [tenantId, resourceId, localCustomerId, visitData.startAt, visitData.endAt, description]
+        );
+        const localId = insertRes.rows[0].id;
+
+        await syncMapUpsertOnPull(client, tenantId, 'jobber', 'appointment', localId, jobberId, remoteUpdatedAt);
+        log.info(`${prefix} — created local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} description=${description})`);
+      } else {
+        // Existing — timestamp merge
+        const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
+
+        if (isAlreadySynced(remoteUpdatedAt, lastRemoteUpdate)) {
+          log.info(`${prefix} — skipped: already synced this version (jobberId=${jobberId})`);
+          return;
+        }
+
+        const localRes = await client.query(
+          `SELECT updated_at FROM appointments WHERE id = $1 AND tenant_id = $2`,
+          [localId, tenantId]
+        );
+        const localUpdatedAt = localRes.rows[0]?.updated_at;
+
+        if (isRemoteNewer(remoteUpdatedAt, localUpdatedAt)) {
+          await client.query(
+            `UPDATE appointments SET start_time = $1, end_time = $2, description = COALESCE($3, description)
+             WHERE id = $4 AND tenant_id = $5`,
+            [visitData.startAt, visitData.endAt, description, localId, tenantId]
+          );
+          log.info(`${prefix} — updated local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} — remote was newer)`);
+        } else {
+          log.info(`${prefix} — kept local values (jobberId=${jobberId} localId=${localId} — local was newer)`);
+        }
+
+        await syncMapUpdateAfterPull(client, tenantId, 'jobber', 'appointment', jobberId, remoteUpdatedAt);
+      }
+    });
   } finally {
-    await clearSyncContext(client);
     client.release();
   }
 }
@@ -556,18 +422,7 @@ export async function fullSync(
     }
   }
 
-  // Update last_sync_at
-  const syncClient = await pool.connect();
-  try {
-    await syncClient.query(
-      `UPDATE tenant_integration_settings SET last_sync_at = NOW(), updated_at = NOW()
-       WHERE tenant_id = $1 AND provider = 'jobber'`,
-      [tenantId]
-    );
-  } finally {
-    syncClient.release();
-  }
-
+  await updateLastSyncAt(pool, tenantId, 'jobber');
   log.info(`[jobber-sync] tenant=${tenantId} — full sync complete (clients=${clientsSynced} visits=${visitsSynced} errors=${errors})`);
   return { clientsSynced, visitsSynced, errors };
 }

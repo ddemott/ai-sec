@@ -22,7 +22,7 @@ export class GoHighLevelAdapter extends BaseCRMAdapter {
   async refreshAccessToken(): Promise<string | null> {
     if (!this.tokenManager) return null;
 
-    const refreshToken = await this.tokenManager.getRefreshToken(
+    const refreshToken = await this.tokenManager.getRefreshToken!(
       this.config.tenantId,
       this.getProvider(),
     );
@@ -55,11 +55,10 @@ export class GoHighLevelAdapter extends BaseCRMAdapter {
 
       const data = await response.json();
 
-      await this.tokenManager.storeToken(this.config.tenantId, this.getProvider(), {
+      await this.tokenManager.storeToken!(this.config.tenantId!, this.getProvider(), {
         accessToken: data.access_token,
         refreshToken: data.refresh_token, // GHL returns a new refresh token
         expiresIn: data.expires_in,
-        scope: data.scope,
       });
 
       return data.access_token;
@@ -395,7 +394,7 @@ export class GoHighLevelAdapter extends BaseCRMAdapter {
     try {
       const response = await fetch(`${this.baseUrl}/users`, {
         headers: {
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.config.apiKey}`,
           'Content-Type': 'application/json',
         },
       });

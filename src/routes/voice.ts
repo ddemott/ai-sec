@@ -78,7 +78,7 @@ export function registerVoiceRoutes(
 
     const context = await withTenantClient(tenantId, async (client) => {
       // Use the database function to start session and get context
-      const result = await client.query<{ start_voice_session: CustomerContext }>(
+      const result = await client.query<{ context: CustomerContext }>(
         'SELECT start_voice_session($1, $2, $3) as context',
         [tenantId, call_id, caller_phone]
       );
@@ -137,7 +137,7 @@ export function registerVoiceRoutes(
     const { call_id, duration_seconds, outcome, transcript, summary, appointment_id } = parsed.data;
 
     const ended = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<{ end_voice_session: boolean }>(
+      const result = await client.query<{ ended: boolean }>(
         'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) as ended',
         [tenantId, call_id, duration_seconds || null, outcome || null, transcript || null, summary || null, appointment_id || null]
       );
@@ -325,7 +325,7 @@ export function registerVoiceRoutes(
         return null;
       }
 
-      const result = await client.query<{ get_customer_context_for_call: CustomerContext }>(
+      const result = await client.query<{ context: CustomerContext }>(
         'SELECT get_customer_context_for_call($1, $2) as context',
         [tenantId, customerResult.rows[0].phone]
       );
@@ -397,7 +397,7 @@ export function registerVoiceRoutes(
         return false;
       }
 
-      const result = await client.query<{ add_customer_note: boolean }>(
+      const result = await client.query<{ added: boolean }>(
         'SELECT add_customer_note($1, $2, $3, $4) as added',
         [customer_id, note, note_type || 'general', call_id || null]
       );
@@ -432,7 +432,7 @@ export function registerVoiceRoutes(
     const { phone } = req.params as { phone: string };
 
     const context = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<{ get_customer_context_for_call: CustomerContext }>(
+      const result = await client.query<{ context: CustomerContext }>(
         'SELECT get_customer_context_for_call($1, $2) as context',
         [tenantId, phone]
       );
