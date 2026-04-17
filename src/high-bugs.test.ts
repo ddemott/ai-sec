@@ -652,7 +652,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             try {
                 jwt.verify(expiredToken, JWT_SECRET);
                 expect.fail("Should have thrown");
-            } catch (err: any) {
+            } catch (err) {
                 // Error should clearly say "expired" — not just "invalid"
                 expect(err.message).toMatch(/expired/i);
                 expect(err.name).toBe('TokenExpiredError');
@@ -668,7 +668,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             try {
                 jwt.verify(badSecretToken, JWT_SECRET);
                 expect.fail("Should have thrown");
-            } catch (err: any) {
+            } catch (err) {
                 // Error should clearly say "invalid signature" — different from expired
                 expect(err.message).toMatch(/invalid signature/i);
                 expect(err.name).toBe('JsonWebTokenError');

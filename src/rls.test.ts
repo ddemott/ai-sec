@@ -155,7 +155,7 @@ describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => 
                 const res = await api.query("SELECT * FROM resources WHERE name = 'Sneaky'");
                 // Either the insert was blocked (threw) or RLS hides it
                 expect(res.rows.length).toBeLessThanOrEqual(0);
-            } catch (err: any) {
+            } catch (err) {
                 // RLS policy violation — Postgres should return a clear error
                 expect(err.message).toMatch(/policy|permission|violates/i);
             }

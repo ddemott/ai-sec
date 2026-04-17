@@ -852,7 +852,7 @@ describe("CRUD Routes - Database Level", () => {
                     [null]
                 );
                 expect.fail("Should have thrown a NOT NULL violation");
-            } catch (err: any) {
+            } catch (err) {
                 // Postgres error should identify the column that failed
                 expect(err.message).toMatch(/null value|not-null|violates not-null/i);
                 expect(err.column || err.message).toBeDefined();
@@ -870,7 +870,7 @@ describe("CRUD Routes - Database Level", () => {
                     [tenantId, null]
                 );
                 expect.fail("Should have thrown a NOT NULL violation");
-            } catch (err: any) {
+            } catch (err) {
                 expect(err.code).toBe("23502");
                 expect(err.message).toMatch(/null value|not-null/i);
             }
@@ -900,7 +900,7 @@ describe("CRUD Routes - Database Level", () => {
                     [fakeTenantId]
                 );
                 expect.fail("Should have thrown a FK violation");
-            } catch (err: any) {
+            } catch (err) {
                 // Postgres FK violation code is 23503 — error should mention the constraint
                 expect(err.code).toBe("23503");
                 expect(err.message).toMatch(/foreign key|violates foreign key/i);
@@ -924,7 +924,7 @@ describe("CRUD Routes - Database Level", () => {
                     [tenantId]
                 );
                 expect.fail("Should have thrown a unique violation");
-            } catch (err: any) {
+            } catch (err) {
                 // Postgres unique violation code is 23505
                 expect(err.code).toBe("23505");
                 expect(err.message).toMatch(/duplicate key|unique/i);

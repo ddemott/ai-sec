@@ -68,9 +68,9 @@ export class ReminderProcessor {
       } else {
         await this.repository.updateReminderStatus(reminderId, 'failed', 'Failed to send reminder');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error processing reminder ${reminderId}:`, error);
-      await this.repository.updateReminderStatus(reminderId, 'failed', error.message);
+      await this.repository.updateReminderStatus(reminderId, 'failed', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 

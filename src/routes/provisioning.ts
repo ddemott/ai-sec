@@ -179,8 +179,8 @@ export function registerProvisioningRoutes(
       if (vapi_phone_number_id) {
         try {
           await vapiClient.deletePhoneNumber(vapi_phone_number_id);
-        } catch (err: any) {
-          const msg = `Failed to delete Vapi phone number ${vapi_phone_number_id}: ${err.message || 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
+        } catch (err) {
+          const msg = `Failed to delete Vapi phone number ${vapi_phone_number_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
           warnings.push(msg);
           logError(req, 'vapi_phone_delete_failed', err, { vapi_phone_number_id, tenant_id });
         }
@@ -190,8 +190,8 @@ export function registerProvisioningRoutes(
       if (vapi_assistant_id) {
         try {
           await vapiClient.deleteAssistant(vapi_assistant_id);
-        } catch (err: any) {
-          const msg = `Failed to delete Vapi assistant ${vapi_assistant_id}: ${err.message || 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
+        } catch (err) {
+          const msg = `Failed to delete Vapi assistant ${vapi_assistant_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
           warnings.push(msg);
           logError(req, 'vapi_assistant_delete_failed', err, { vapi_assistant_id, tenant_id });
         }

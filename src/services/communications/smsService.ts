@@ -97,11 +97,11 @@ export class SMSService {
         success: true,
         messageId: result.messageSid,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Error sending SMS:', error);
       return {
         success: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -134,11 +134,11 @@ export class SMSService {
         success: true,
         messageId: result.messageSid,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Error sending system SMS:', error);
       return {
         success: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }

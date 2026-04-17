@@ -104,7 +104,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       }
       const bodyStr = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
       event = stripe.webhooks.constructEvent(bodyStr, sig as string, STRIPE_WEBHOOK_SECRET);
-    } catch (err: any) {
+    } catch (err) {
       logError(req, 'stripe_webhook_signature_failed', err);
       return reply.status(400).send({ success: false, error: 'Invalid webhook signature' });
     }
@@ -160,7 +160,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
       }
 
       return reply.send({ received: true });
-    } catch (err: any) {
+    } catch (err) {
       logError(req, 'stripe_webhook_processing_failed', err);
       return reply.status(500).send({ success: false, error: 'Webhook processing failed' });
     }

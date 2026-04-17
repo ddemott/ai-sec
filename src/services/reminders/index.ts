@@ -192,8 +192,8 @@ export class ReminderService {
       } else {
         await this.updateReminderStatus(reminderId, 'failed', 'Communication failed');
       }
-    } catch (error: any) {
-      await this.updateReminderStatus(reminderId, 'failed', error.message);
+    } catch (error) {
+      await this.updateReminderStatus(reminderId, 'failed', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
