@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
+import { assertRowAffected } from './routeHelpers';
 
 const CreateResourceSchema = z.object({
   tenant_id: z.string().uuid().optional(),
@@ -63,7 +64,7 @@ export function registerResourceRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
+    const res = await withTenantClient(tenantId, async (client) => {
       const fields: string[] = [];
       const values: unknown[] = [];
       if (body.name !== undefined) { fields.push('name'); values.push(body.name); }
@@ -76,8 +77,9 @@ export function registerResourceRoutes(
       const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
       values.push(id);
       values.push(tenantId);
-      await client.query(`UPDATE resources SET ${setClause} WHERE id = $${values.length - 1} AND tenant_id = $${values.length}`, values);
+      return client.query(`UPDATE resources SET ${setClause} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING id`, values);
     });
+    if (!assertRowAffected(res, reply, 'Resource')) return;
 
     logEvent(req, 'resource_updated', { resourceId: id });
     return reply.send({ success: true });
@@ -95,9 +97,7 @@ export function registerResourceRoutes(
         [id, tenantId]
       );
     });
-    if (res.rows.length === 0) {
-      return reply.status(404).send({ success: false, error: 'Resource not found' });
-    }
+    if (!assertRowAffected(res, reply, 'Resource')) return;
 
     logEvent(req, 'resource_deleted', { resourceId: id });
     return reply.send({ success: true });

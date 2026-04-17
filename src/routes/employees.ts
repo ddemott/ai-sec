@@ -2,6 +2,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { assertRowAffected } from './routeHelpers';
 
 const CreateEmployeeSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -113,10 +114,11 @@ export function registerEmployeeRoutes(
           skills = COALESCE($6, skills),
           is_active = COALESCE($7, is_active),
           updated_at = NOW()
-        WHERE id = $8 RETURNING *`,
-        [displayName, body.first_name, body.last_name, body.email, body.phone, body.skills, body.is_active, id]
+        WHERE id = $8 AND tenant_id = $9 RETURNING *`,
+        [displayName, body.first_name, body.last_name, body.email, body.phone, body.skills, body.is_active, id, tenantId]
       );
     });
+    if (!assertRowAffected(res, reply, 'Employee')) return;
 
     logEvent(req, 'employee_updated', { employeeId: id });
     return reply.send({ success: true, employee: res.rows[0] });

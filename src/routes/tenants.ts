@@ -2,6 +2,7 @@
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, logEvent, requireAuth, type AppRequest } from '../middleware';
+import { assertRowAffected } from './routeHelpers';
 
 const CreateTenantSchema = z.object({
   tenant_name: z.string().min(1).max(200),
@@ -59,9 +60,10 @@ export function registerTenantRoutes(app: any, pool: Pool) {
   app.delete('/tenants/:id', withHandler(async (req: AppRequest, reply) => {
     if (!requireAuth(req, reply)) return;
     const { id } = req.params as { id: string };
-    await withPoolClient(pool, client =>
-      client.query('DELETE FROM tenants WHERE id = $1', [id])
+    const res = await withPoolClient(pool, client =>
+      client.query('DELETE FROM tenants WHERE id = $1 RETURNING id', [id])
     );
+    if (!assertRowAffected(res, reply, 'Tenant')) return;
     logEvent(req, 'tenant_deleted', { tenantId: id });
     return reply.send({ success: true });
   }, 'Failed to delete tenant'));
@@ -73,16 +75,17 @@ export function registerTenantRoutes(app: any, pool: Pool) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
     const body = parsed.data;
-    await withPoolClient(pool, client =>
+    const res = await withPoolClient(pool, client =>
       client.query(
         `UPDATE tenants SET
             name = $1, business_type = $2, timezone = $3, voice_id = $4,
             system_prompt = $5, first_message = $6, owner_phone = $7, inbound_phone = $8
-         WHERE id = $9`,
+         WHERE id = $9 RETURNING id`,
         [body.name, body.business_type, body.timezone, body.voice_id,
          body.system_prompt, body.first_message, body.owner_phone, body.inbound_phone, id]
       )
     );
+    if (!assertRowAffected(res, reply, 'Tenant')) return;
     logEvent(req, 'tenant_attributes_updated', { tenantId: id });
     return reply.send({ success: true });
   }, 'Failed to update tenant'));
@@ -106,12 +109,13 @@ export function registerTenantRoutes(app: any, pool: Pool) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
     const body = parsed.data;
-    await withPoolClient(pool, client =>
+    const res = await withPoolClient(pool, client =>
       client.query(
-        'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE id = $5',
+        'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE id = $5 RETURNING id',
         [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
       )
     );
+    if (!assertRowAffected(res, reply, 'Tenant')) return;
     logEvent(req, 'tenant_config_updated', { tenantId: id });
     return reply.send({ success: true });
   }, 'Failed to update tenant config'));

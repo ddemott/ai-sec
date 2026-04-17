@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
+import { assertRowAffected } from './routeHelpers';
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -136,9 +137,10 @@ export function registerAppointmentRoutes(
     // Sync delete before removing from DB
     syncAppointmentToAll(pool, tenantId, id, 'delete', req.log);
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM appointments WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query('DELETE FROM appointments WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
     });
+    if (!assertRowAffected(res, reply, 'Appointment')) return;
 
     logEvent(req, 'appointment_deleted', { appointmentId: id });
     return reply.send({ success: true });

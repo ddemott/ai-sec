@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import pdfParse from 'pdf-parse';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { assertRowAffected } from './routeHelpers';
 
 const knowledgeEntrySchema = z.object({
   question: z.string().min(1, 'question is required'),
@@ -36,9 +37,10 @@ export function registerKnowledgeRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
     });
+    if (!assertRowAffected(res, reply, 'Knowledge entry')) return;
 
     logEvent(req, 'knowledge_entry_deleted', { entryId: id });
     return reply.send({ success: true });
@@ -163,12 +165,13 @@ export function registerKnowledgeRoutes(
 
     const embedding = await getEmbedding(normalizedText);
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        'UPDATE tenant_docs SET title = $1, section = $2, content = $3, source = $4, normalized_text = $5, embedding = $6::vector WHERE id = $7 AND tenant_id = $8',
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
+        'UPDATE tenant_docs SET title = $1, section = $2, content = $3, source = $4, normalized_text = $5, embedding = $6::vector WHERE id = $7 AND tenant_id = $8 RETURNING id',
         [question, category || null, combined, source, normalizedText, JSON.stringify(embedding), id, tenantId]
       );
     });
+    if (!assertRowAffected(res, reply, 'Knowledge entry')) return;
 
     logEvent(req, 'knowledge_entry_updated', { id, source });
     return reply.send({ success: true });

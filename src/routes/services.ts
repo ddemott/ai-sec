@@ -2,6 +2,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { assertRowAffected } from './routeHelpers';
 
 const CreateServiceSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -86,6 +87,7 @@ export function registerServiceRoutes(
         [body.name, body.subtitle, body.description, body.duration_minutes, body.price, id, tenantId]
       );
     });
+    if (!assertRowAffected(res, reply, 'Service')) return;
 
     logEvent(req, 'service_updated', { serviceId: id });
     return reply.send({ success: true, service: res.rows[0] });
@@ -96,20 +98,22 @@ export function registerServiceRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
+    const res = await withTenantClient(tenantId, async (client) => {
       // Wrap in transaction to ensure atomicity
       await client.query('BEGIN');
       try {
         // Remove mappings first, then delete the service
         await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
         await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
-        await client.query('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+        const deleteRes = await client.query('DELETE FROM services WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
         await client.query('COMMIT');
+        return deleteRes;
       } catch (err) {
         await client.query('ROLLBACK');
         throw err;
       }
     });
+    if (!assertRowAffected(res, reply, 'Service')) return;
 
     logEvent(req, 'service_deleted', { serviceId: id });
     return reply.send({ success: true });

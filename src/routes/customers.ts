@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncCustomerToAll } from '../services/syncOrchestrator';
+import { assertRowAffected } from './routeHelpers';
 
 const CustomerCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -96,19 +97,20 @@ export function registerCustomerRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
         `UPDATE customers SET
            first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
            address = $6, address_line2 = $7, city = $8, state = $9,
            postal_code = $10, metadata = $11, timezone = $12
-         WHERE id = $13 AND tenant_id = $14`,
+         WHERE id = $13 AND tenant_id = $14 RETURNING id`,
         [body.first_name || null, body.last_name || null, body.name || null,
          body.phone, body.email, body.address, body.address_line2 || null,
          body.city || null, body.state || null, body.postal_code || null,
          body.metadata || {}, body.timezone || 'America/New_York', id, tenantId]
       );
     });
+    if (!assertRowAffected(res, reply, 'Customer')) return;
 
     logEvent(req, 'customer_updated', { customerId: id });
     // Fire-and-forget CRM sync
@@ -146,9 +148,10 @@ export function registerCustomerRoutes(
     // Fire-and-forget CRM sync BEFORE DB delete (so sync can still read customer data if needed)
     syncCustomerToAll(pool, tenantId, id, 'delete', req.log);
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query('DELETE FROM customers WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query('DELETE FROM customers WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
     });
+    if (!assertRowAffected(res, reply, 'Customer')) return;
 
     logEvent(req, 'customer_deleted', { customerId: id });
     return reply.send({ success: true });
