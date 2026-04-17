@@ -176,4 +176,45 @@ export function registerKnowledgeRoutes(
     logEvent(req, 'knowledge_entry_updated', { id, source });
     return reply.send({ success: true });
   }, 'Failed to update knowledge entry'));
+
+  // -----------------------------------------------------------------------
+  // Unanswered Questions (KB gap tracking)
+  // -----------------------------------------------------------------------
+
+  /** GET /knowledge/unanswered — list unanswered questions for the tenant */
+  app.get('/knowledge/unanswered', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
+        `SELECT id, question, caller_phone, call_id, caller_message, owner_notified, resolved, created_at
+         FROM unanswered_questions
+         WHERE tenant_id = $1 AND resolved = false
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [tenantId]
+      );
+    });
+
+    return reply.send({ success: true, questions: res.rows });
+  }, 'Failed to fetch unanswered questions'));
+
+  /** PATCH /knowledge/unanswered/:id/resolve — mark a question as resolved */
+  app.patch('/knowledge/unanswered/:id/resolve', withHandler(async (req: AppRequest, reply) => {
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+    const { id } = req.params as { id: string };
+
+    const res = await withTenantClient(tenantId, async (client) => {
+      return client.query(
+        `UPDATE unanswered_questions SET resolved = true WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+        [id, tenantId]
+      );
+    });
+    if (!assertRowAffected(res, reply, 'Unanswered question')) return;
+
+    logEvent(req, 'unanswered_question_resolved', { questionId: id });
+    return reply.send({ success: true });
+  }, 'Failed to resolve unanswered question'));
 }

@@ -84,6 +84,23 @@ export interface IRepository {
   ): Promise<Array<{ content: string; similarity: number }>>;
 
   /**
+   * Log an unanswered question so the business owner can see KB gaps.
+   */
+  logUnansweredQuestion(
+    tenantId: string,
+    question: string,
+    callerPhone: string | null,
+    callId: string | null,
+    callerMessage: string | null,
+    logger: Logger,
+  ): Promise<void>;
+
+  /**
+   * Get the business owner's phone number for notifications.
+   */
+  getOwnerPhone(tenantId: string, logger: Logger): Promise<string | null>;
+
+  /**
    * Single-query find-and-book: customer upsert + resource/employee matching + booking.
    * Replaces the 4-query getSchedulingOptions + bookAtomic flow.
    */

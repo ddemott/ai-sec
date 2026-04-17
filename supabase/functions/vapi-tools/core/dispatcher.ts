@@ -255,7 +255,8 @@ export class Dispatcher {
             args.question,
             toolLogger,
             this.getEmbedding,
-            this.normalizeForEmbedding
+            this.normalizeForEmbedding,
+            { phone: this.callerPhone || undefined, callId: message.call?.id || undefined }
           );
           break;
         case "get_service_catalog":

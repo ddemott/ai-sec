@@ -639,6 +639,35 @@ export class PostgresRepository implements IRepository {
     });
   }
 
+  async logUnansweredQuestion(
+    tenantId: string,
+    question: string,
+    callerPhone: string | null,
+    callId: string | null,
+    callerMessage: string | null,
+    logger: Logger,
+  ) {
+    logger.info({ tenantId, question, callerPhone }, "Logging unanswered question");
+    return this.withClient(tenantId, async (c) => {
+      await c.queryObject(
+        `INSERT INTO unanswered_questions (tenant_id, question, caller_phone, call_id, caller_message)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [tenantId, question, callerPhone, callId, callerMessage]
+      );
+    });
+  }
+
+  async getOwnerPhone(tenantId: string, logger: Logger): Promise<string | null> {
+    logger.info({ tenantId }, "Fetching owner phone for notification");
+    return this.withClient(tenantId, async (c) => {
+      const res = await c.queryObject<{ owner_phone: string | null }>(
+        "SELECT owner_phone FROM tenants WHERE id = $1",
+        [tenantId]
+      );
+      return res.rows[0]?.owner_phone || null;
+    });
+  }
+
   async searchKnowledgeBase(
     tenantId: string,
     queryEmbedding: number[],

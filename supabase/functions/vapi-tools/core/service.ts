@@ -257,13 +257,16 @@ export class AISecretaryService {
 
   /**
    * Performs semantic search to answer business policy/FAQ questions.
+   * When the knowledge base has no answer, logs the unanswered question
+   * and returns a helpful response offering to take a message for the owner.
    */
   async getCompanyPolicyAnswer(
     tenantId: string,
     question: string,
     logger: Logger,
     getEmbedding: (text: string) => Promise<number[]>,
-    normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
+    normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>,
+    callerContext?: { phone?: string; callId?: string }
   ) {
     logger.info({ tenantId, question }, "Answering company policy question");
 
@@ -283,9 +286,24 @@ export class AISecretaryService {
     const matches = await this.repo.searchKnowledgeBase(tenantId, embedding, logger);
 
     if (matches.length === 0) {
-      logger.info("No knowledge base matches found");
-      return { 
-        result: "I'm sorry, I don't have information on that specific topic. Let me check with the team for you." 
+      logger.info({ question }, "No knowledge base matches — logging unanswered question");
+
+      // Log the unanswered question so the owner can see KB gaps
+      try {
+        await this.repo.logUnansweredQuestion(
+          tenantId,
+          question,
+          callerContext?.phone || null,
+          callerContext?.callId || null,
+          null,
+          logger
+        );
+      } catch (err) {
+        logger.warn({ err }, "Failed to log unanswered question (non-fatal)");
+      }
+
+      return {
+        result: "I don't have specific information on that topic right now. I'd be happy to take a message so the owner can get back to you, or if there's anything else I can help with — like booking an appointment or answering questions about our services — I'm here for you."
       };
     }
 
