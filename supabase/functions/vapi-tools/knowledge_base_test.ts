@@ -87,7 +87,7 @@ Deno.test({
       unrelatedVector[1000] = 1.0;
       
       const res = await service.getCompanyPolicyAnswer(tenantId, "unrelated query", baseLogger, async () => unrelatedVector);
-      assertEquals(res.result.includes("I'm sorry, I don't have information on that specific topic"), true);
+      assertEquals(res.result.includes("I don't have specific information on that topic right now"), true);
     });
 
     await t.step("Dispatcher: handles get_company_policy_answer tool call", async () => {
