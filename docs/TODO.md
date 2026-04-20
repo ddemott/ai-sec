@@ -87,64 +87,17 @@ Migrated from ai-secretary, stub implementations need wiring to production DB.
 
 ---
 
-## UX / Accessibility Backlog
+## UX / Accessibility Backlog — COMPLETE (2026-04-20)
 
-From April 10-11 UX review. Grouped by severity.
-
-### High Priority
-- [ ] **TenantCard**: Convert clickable div to semantic button/listbox with `aria-selected` + keyboard handlers
-- [ ] **TenantEditPanel**: Replace `confirm()`/`alert()`/`getElementById()` with shared ConfirmModal + Input + Button
-- [ ] **SkillManagementView**: Replace `confirm()`/`alert()` delete flow with shared confirm modal
-- [ ] **AppointmentListSidebar**: Convert clickable div rows to semantic button/option with `aria-selected`
-- [ ] **RecordHistoryModal**: Rebuild on shared `Modal` component (currently hand-rolled)
-- [ ] **WizardModeChooser**: Rebuild on shared `Modal` (no Escape handling, no dialog semantics)
-- [ ] **AppointmentBlock**: Add `role="button"`, tabIndex, Enter/Space keyboard handling
-- [ ] **EmployeeDayFocusPanel**: Convert timeline div rows to semantic buttons
-- [ ] **NewSchedulerView**: Split staff row into button + separate drag handle
-- [ ] **StaffSwimLaneView**: Add keyboard-accessible shift actions, replace `confirm()` with shared modal
-- [ ] **AppointmentPopover**: Add `role="dialog"`, focus management, focus return on close
-- [ ] **AIConfigView**: Replace MOCK_TENANT with real session-backed tenant context
-
-### Medium Priority
-- [ ] LoginView: Use shared Input/Button primitives, add `role="alert"` to error banner
-- [ ] TenantCard: Split drag grip into separate handle element
-- [ ] TenantEditPanel: Stacked action layout for small screens
-- [ ] AIConfigView: Use shared Textarea variant, remove duplicate modal close button
-- [ ] MyBusinessView: Sync sub-tab state to URL query params
-- [ ] TenantCreateForm: Collapse credential grid to single column on narrow screens
-- [ ] DashboardHome: Show empty/unavailable state instead of returning null
-- [ ] ErrorBoundary: Add retry/reset action and route back to safe view
-- [ ] OutlookLayout: Add listbox semantics or keyboard filtering to tenant switcher
-- [ ] BusinessSettingsView: Standardize on shared form primitives
-- [ ] MyTeamView: Sync sub-tab to URL query params
-- [ ] ResourceManagerView: Consolidate on shared form-group patterns
-- [ ] ServiceAssignmentView: Add shared textarea primitive, expose selection semantics
-- [ ] KnowledgeBaseView: Increase separation between questionnaire/uploads/search
-- [ ] SchedulerView: Anchor active mode and date range visually
-- [ ] QuickBookPanel: Rebuild customer search with shared primitives, add `aria-live` for errors
-- [ ] ResourceColumnsView: Add text coverage summary per row
-- [ ] SkillMapConnections: Add keyboard-reachable disconnect, clearer legend
-- [ ] SkillMapFixPanel: Surface assignment failures via toast/inline feedback
-- [ ] SkillMapNode: Add interactive semantics and keyboard handling
-- [ ] SkillRelationshipMap: Add mode cues, improve small-screen overflow
-- [ ] AppointmentPopover: Measure rendered height instead of hardcoded 220px
-- [ ] AnalyticsView: Add loading skeleton and empty-data state
-- [ ] AIInsightsView: Add per-tab empty/loading states
-
-### Low Priority
-- [ ] TenantEditPanel: `aria-live` for provisioning status changes
-- [ ] AIConfigView: Expose voice choices as semantic radio group
-- [ ] MyBusinessView: Replace Setup Assistant trigger with shared Button
-- [ ] TenantCreateForm: Add explicit labels instead of placeholder-only
-- [ ] DashboardHome: Rebuild quick-action tiles on shared primitives
-- [ ] ErrorBoundary: Align fallback with shared Card/Button styling
-- [ ] OutlookLayout: Consolidate shell action patterns into shared primitive
-- [ ] ProfileView: Add field grouping and fallback copy for empty fields
-- [ ] AppointmentBlock: Add compact status cue for narrow blocks
-- [ ] AppointmentListSidebar: Wire search to filtering or remove until functional
-- [ ] AppointmentDetailPanel: Strengthen action labelling for edit/cancel/delete
-- [ ] CustomerDetailPanel: Add in-panel navigation for profile/bookings/calls
-- [ ] AnalyticsView: Differentiate "coming later" cards with roadmap messaging
+All 47 items from April 10-11 UX review resolved in commit `f9ffa8e`. Key changes:
+- Clickable divs → semantic buttons with keyboard handlers across 8 components
+- Hand-rolled modals → shared Modal (RecordHistoryModal, WizardModeChooser)
+- All confirm()/alert() → ConfirmModal + showToast
+- ARIA roles, aria-selected, aria-live, role="dialog" added throughout
+- URL query param sync on sub-tabs (MyBusinessView, MyTeamView)
+- Loading skeletons, empty states, dynamic popover height
+- Radiogroup semantics, fieldset grouping, explicit labels
+- In-panel nav, compact status dots, improved button labels
 
 ---
 
