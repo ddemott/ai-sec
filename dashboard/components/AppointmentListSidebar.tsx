@@ -4,7 +4,6 @@ import { Button } from './ui/Button';
 import {
   RefreshCw,
   ChevronRight,
-  Search,
   Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -48,10 +47,7 @@ export function AppointmentListSidebar({
               </Button>
           </div>
         </div>
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }} />
-          <input type="text" placeholder="Search bookings..." className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }} />
-        </div>
+        {/* Search removed: was non-functional placeholder */}
       </header>
 
       <div className="flex-1 overflow-y-auto pb-20 md:pb-0">

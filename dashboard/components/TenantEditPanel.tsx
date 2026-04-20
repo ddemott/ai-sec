@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Building2,
   Save,
@@ -24,6 +24,9 @@ import { PhoneInput } from './ui/PhoneInput';
 import { Select } from './ui/Select';
 import { Card } from './ui/Card';
 import { Api } from '../lib/api';
+import { ConfirmModal } from './ui/ConfirmModal';
+import { useConfirm } from '../lib/useConfirm';
+import { showToast } from './ui/Toast';
 
 type Tenant = {
   id: string;
@@ -76,6 +79,8 @@ export function TenantEditPanel({
   onDelete,
   onTenantUpdate,
 }: TenantEditPanelProps) {
+  const { state: confirmState, confirm: openConfirm, close: closeConfirm } = useConfirm();
+  const areaCodeRef = useRef<HTMLInputElement>(null);
   return (
     <>
       <header className="p-4 md:p-8 border-b flex items-center justify-between sticky top-0 z-10 transition-colors duration-200" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
@@ -194,7 +199,7 @@ export function TenantEditPanel({
                       </div>
                   )}
                   {/* Phone Provisioning */}
-                  <div className="space-y-2">
+                  <div className="space-y-2" aria-live="polite">
                       <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--accent-soft)' }}>
                           <Globe className="w-3 h-3 mr-1" /> AI Phone Line
                       </label>
@@ -205,15 +210,21 @@ export function TenantEditPanel({
                               </span>
                               <span className="font-mono font-bold" style={{ color: 'var(--accent-soft)' }}>{formatPhone(selectedTenant.inbound_phone)}</span>
                               <button
-                                  onClick={async () => {
-                                      if (!confirm('Deactivate this phone line? The number will be released.')) return
-                                      try {
-                                          await Api.provisioning.deactivate(selectedTenant.id)
-                                          onTenantUpdate({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, vapi_assistant_id: null, vapi_phone_number_id: null})
-                                      } catch (err: unknown) {
-                                          const msg = err instanceof Error ? err.message : 'Failed to deactivate phone';
-                                          alert(msg)
-                                      }
+                                  onClick={() => {
+                                      openConfirm({
+                                          title: 'Deactivate Phone Line',
+                                          message: 'Deactivate this phone line? The number will be released.',
+                                          onConfirm: async () => {
+                                              closeConfirm();
+                                              try {
+                                                  await Api.provisioning.deactivate(selectedTenant.id)
+                                                  onTenantUpdate({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, vapi_assistant_id: null, vapi_phone_number_id: null})
+                                              } catch (err: unknown) {
+                                                  const msg = err instanceof Error ? err.message : 'Failed to deactivate phone';
+                                                  showToast(msg, 'error')
+                                              }
+                                          },
+                                      });
                                   }}
                                   className="text-xs text-red-500 hover:text-red-700 underline"
                               >Deactivate</button>
@@ -238,11 +249,12 @@ export function TenantEditPanel({
                                       className="w-24 px-2.5 py-1.5 text-sm border rounded-lg"
                                       style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
                                       id="area-code-input"
+                                      ref={areaCodeRef}
                                   />
                               </div>
                               <button
                                   onClick={async () => {
-                                      const areaCode = (document.getElementById('area-code-input') as HTMLInputElement)?.value?.trim()
+                                      const areaCode = areaCodeRef.current?.value?.trim()
                                       onTenantUpdate({...selectedTenant, phone_status: 'provisioning'})
                                       try {
                                           const result = await Api.provisioning.activate(selectedTenant.id, areaCode || undefined)
@@ -256,7 +268,7 @@ export function TenantEditPanel({
                                       } catch (err: unknown) {
                                           onTenantUpdate({...selectedTenant, phone_status: 'failed'})
                                           const msg = err instanceof Error ? err.message : 'Failed to activate phone';
-                                          alert(msg)
+                                          showToast(msg, 'error')
                                       }
                                   }}
                                   className="px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 rounded-lg flex items-center gap-1.5"
@@ -355,6 +367,16 @@ export function TenantEditPanel({
         )}
 
       </div>
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        confirmVariant={confirmState.confirmVariant}
+        onConfirm={confirmState.onConfirm}
+        onClose={closeConfirm}
+      />
     </>
   );
 }

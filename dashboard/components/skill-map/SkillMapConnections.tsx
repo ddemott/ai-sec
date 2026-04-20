@@ -184,7 +184,9 @@ export default function SkillMapConnections({
             }}
           >
             <button
+              ref={(el) => el?.focus()}
               onClick={handleDisconnect}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleDisconnect(); } }}
               className="flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-700 transition-colors"
             >
               <X className="w-3.5 h-3.5" />

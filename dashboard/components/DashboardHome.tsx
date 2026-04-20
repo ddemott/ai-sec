@@ -394,7 +394,13 @@ function WeekView({ tenantId, employees, vocab, onNavigate }: {
     return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`
   }
 
-  if (weekAppts.length === 0) return null
+  if (weekAppts.length === 0) {
+    return (
+      <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+        No recent activity
+      </p>
+    )
+  }
 
   return (
     <div className="grid grid-cols-7 gap-2">

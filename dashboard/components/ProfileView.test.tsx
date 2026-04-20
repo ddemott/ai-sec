@@ -126,7 +126,7 @@ describe('ProfileView', () => {
     test('displays fallback text when userName is null', () => {
       mockUserName = null
       render(<ProfileView />)
-      expect(screen.getByText('Unknown User')).toBeInTheDocument()
+      expect(screen.getAllByText('Not set').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('U')).toBeInTheDocument() // Avatar initial
       // WHO: user with missing name data | WHAT: graceful fallback
       // WHEN: name not in session | WHERE: Account section
@@ -136,7 +136,7 @@ describe('ProfileView', () => {
     test('displays fallback text when userEmail is null', () => {
       mockUserEmail = null
       render(<ProfileView />)
-      expect(screen.getByText('No email on file')).toBeInTheDocument()
+      expect(screen.getAllByText('Not set').length).toBeGreaterThanOrEqual(1)
       // WHO: user with missing email data | WHAT: graceful fallback
       // WHEN: email not in session | WHERE: Account section
       // WHY: prevent blank display if session data incomplete
@@ -154,7 +154,7 @@ describe('ProfileView', () => {
     test('handles empty string userName', () => {
       mockUserName = ''
       render(<ProfileView />)
-      expect(screen.getByText('Unknown User')).toBeInTheDocument()
+      expect(screen.getAllByText('Not set').length).toBeGreaterThanOrEqual(1)
       // WHO: user with empty name | WHAT: empty string handling
       // WHEN: empty string in session | WHERE: Account section
       // WHY: empty string is falsy, should fall back

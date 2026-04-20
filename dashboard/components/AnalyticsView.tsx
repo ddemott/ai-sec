@@ -111,8 +111,32 @@ export default function AnalyticsView() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>
-        <Loader2 className="w-6 h-6 animate-spin" />
+      <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'var(--bg-base)' }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="h-8 w-32 rounded-lg mb-1 animate-pulse" style={{ backgroundColor: 'var(--bg-raised)' }} />
+          <div className="h-4 w-64 rounded mb-6 animate-pulse" style={{ backgroundColor: 'var(--bg-raised)' }} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl p-5" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)' }}>
+                <div className="h-4 w-24 rounded mb-2 animate-pulse" style={{ backgroundColor: 'var(--bg-raised)' }} />
+                <div className="h-3 w-40 rounded mb-3 animate-pulse" style={{ backgroundColor: 'var(--bg-raised)' }} />
+                <div className="h-16 rounded-lg animate-pulse" style={{ backgroundColor: 'var(--bg-raised)' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!summary || summary.total === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-base)' }}>
+        <div className="text-center">
+          <CalendarCheck className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No booking data yet</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Analytics will appear once appointments are booked.</p>
+        </div>
       </div>
     )
   }
@@ -315,7 +339,7 @@ function MetricCard({ icon: Icon, title, subtitle, placeholder, children }: {
       <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>
       {placeholder ? (
         <div className="h-16 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--bg-raised)' }}>
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Phase 2</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Coming in Phase 2 — available after Vapi integration</span>
         </div>
       ) : (
         children

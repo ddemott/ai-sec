@@ -285,10 +285,27 @@ export function OutlookLayout({
           <div className="p-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a] text-[10px] font-bold uppercase tracking-widest text-gray-400">
             Switch Active Business
           </div>
-          <div className="max-h-60 overflow-y-auto">
+          <div className="max-h-60 overflow-y-auto" role="listbox" aria-label="Select active business" onKeyDown={(e) => {
+            const items = e.currentTarget.querySelectorAll('[role="option"]')
+            const focused = e.currentTarget.querySelector(':focus') as HTMLElement | null
+            const idx = focused ? Array.from(items).indexOf(focused) : -1
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              const next = items[idx + 1] as HTMLElement | undefined
+              next?.focus()
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              const prev = items[idx - 1] as HTMLElement | undefined
+              prev?.focus()
+            } else if (e.key === 'Enter' && focused) {
+              focused.click()
+            }
+          }}>
             {allTenants.map(t => (
               <button
                 key={t.id}
+                role="option"
+                aria-selected={managedTenantId === t.id}
                 onClick={() => { if (onSelectTenant) onSelectTenant(t.id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('dashboard'); }}
                 className="w-full text-left px-4 py-3 flex flex-col transition-colors border-b border-gray-50 dark:border-gray-800/50 hover:brightness-125"
                 style={{ backgroundColor: managedTenantId === t.id ? 'var(--accent-muted)' : undefined }}

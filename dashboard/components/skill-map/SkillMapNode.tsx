@@ -60,7 +60,10 @@ export default function SkillMapNode({
     <div
       data-node-id={node.id}
       data-testid={`node-${node.id}`}
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200
         bg-white dark:bg-[#1a1a1a] hover:shadow-md
         ${brokenBorder} ${selectedRing} ${linkSourceRing} ${linkTargetStyle} ${dimmed}`}

@@ -112,7 +112,7 @@ test('AppointmentView: can modify and save an appointment', async () => {
   fireEvent.click(listItems[0])
 
   // Enter edit mode
-  const modifyBtns = await screen.findAllByRole('button', { name: /Modify/i })
+  const modifyBtns = await screen.findAllByRole('button', { name: /Edit Details/i })
   fireEvent.click(modifyBtns[0])
 
   // Format the expected time using the component's internal toLocalISO logic
@@ -155,7 +155,7 @@ test('AppointmentView: canceling confirmation reverts changes and does not save'
   const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
   fireEvent.click(listItems[0])
 
-  const modifyBtns = await screen.findAllByRole('button', { name: /Modify/i })
+  const modifyBtns = await screen.findAllByRole('button', { name: /Edit Details/i })
   fireEvent.click(modifyBtns[0])
 
   const updateButton = screen.getByRole('button', { name: /Update Appointment/i })
@@ -295,7 +295,7 @@ describe('AppointmentView sad paths', () => {
     fireEvent.click(listItems[0])
 
     // Enter edit mode
-    const modifyBtns = await screen.findAllByRole('button', { name: /Modify/i })
+    const modifyBtns = await screen.findAllByRole('button', { name: /Edit Details/i })
     fireEvent.click(modifyBtns[0])
 
     // Click Update Appointment

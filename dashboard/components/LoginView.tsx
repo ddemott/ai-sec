@@ -59,7 +59,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         <div className="p-8">
           {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 text-sm rounded-r-md">
+            <div role="alert" className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 text-sm rounded-r-md">
               {error}
             </div>
           )}

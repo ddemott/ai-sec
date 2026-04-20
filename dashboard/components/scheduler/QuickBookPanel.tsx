@@ -159,11 +159,13 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {error && (
-          <div className="p-3 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900/40">
-            {error}
-          </div>
-        )}
+        <div aria-live="polite">
+          {error && (
+            <div className="p-3 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900/40">
+              {error}
+            </div>
+          )}
+        </div>
 
         {/* Customer search */}
         <div>

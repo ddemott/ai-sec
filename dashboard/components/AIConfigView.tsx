@@ -235,7 +235,7 @@ export default function AIConfigView() {
             <Mic className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
             Voice Identity
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="radiogroup" aria-label="Voice selection">
             {[
               { id: 'ba124806-6962-4354-94a0-7607775952f4', name: 'Cartesia - British Female', desc: 'Professional, Calm, Clear' },
               { id: '21m00Tcm4llvDq8ikWAM', name: 'Rachel - US Female', desc: 'Soft, Friendly, Warm' },
@@ -250,6 +250,9 @@ export default function AIConfigView() {
                 }}
                 className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'ring-1' : ''}`}
                 style={config?.voice_id === voice.id ? { borderColor: 'var(--accent)', ['--tw-ring-color' as string]: 'var(--accent)' } : undefined}
+                role="radio"
+                aria-checked={config?.voice_id === voice.id}
+                aria-label={voice.name}
               >
                 <div>
                   <p className="font-bold">{voice.name}</p>

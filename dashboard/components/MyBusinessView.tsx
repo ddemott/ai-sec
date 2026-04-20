@@ -1,7 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Wand2 } from 'lucide-react'
+import { Button } from './ui/Button'
 import { FolderTab, FolderTabBar } from './ui/FolderTabs'
 import ServiceAssignmentView from './ServiceAssignmentView'
 import ResourceManagerView from './ResourceManagerView'
@@ -17,8 +19,21 @@ import { Api } from '../lib/api'
 type SubTab = 'services' | 'resources' | 'knowledge'
 type WizardMode = 'solo' | 'team' | null
 
+const VALID_SUB_TABS: SubTab[] = ['services', 'resources', 'knowledge']
+
 export default function MyBusinessView() {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('services')
+  const searchParams = useSearchParams()
+  const initialTab = VALID_SUB_TABS.includes(searchParams.get('subtab') as SubTab)
+    ? (searchParams.get('subtab') as SubTab)
+    : 'services'
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialTab)
+
+  const handleSubTabChange = useCallback((tab: SubTab) => {
+    setActiveSubTab(tab)
+    const params = new URLSearchParams(window.location.search)
+    params.set('subtab', tab)
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
+  }, [])
   const tenantId = useActiveTenantId()
   const vocab = useVocabulary()
   const refreshVocabulary = useVocabularyRefresh()
@@ -65,17 +80,18 @@ export default function MyBusinessView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <FolderTabBar size="sm" ariaLabel="Business sections" right={
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleOpenWizard}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-          style={{ color: 'var(--accent-soft)' }}
+          className="flex items-center gap-1.5 text-xs font-medium"
         >
           <Wand2 className="w-3.5 h-3.5" />
           Setup Assistant
-        </button>
+        </Button>
       }>
         {SUB_TABS.map(tab => (
-          <FolderTab key={tab.id} label={tab.label} size="sm" isActive={activeSubTab === tab.id} onClick={() => setActiveSubTab(tab.id)} />
+          <FolderTab key={tab.id} label={tab.label} size="sm" isActive={activeSubTab === tab.id} onClick={() => handleSubTabChange(tab.id)} />
         ))}
       </FolderTabBar>
       <div className="flex-1 overflow-hidden">

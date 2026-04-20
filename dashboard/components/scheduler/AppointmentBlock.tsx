@@ -75,7 +75,15 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
       title={`${customerName} — ${appointment.description}`}
       data-testid={`appointment-block-${appointment.id}`}
     >
-      {customerName}
+      {width < 0.04 ? (
+        <span
+          className="inline-block w-2 h-2 rounded-full mt-0.5"
+          style={{ backgroundColor: sc.text }}
+          aria-label={`${appointment.status}: ${customerName}`}
+        />
+      ) : (
+        customerName
+      )}
     </div>
   );
 };

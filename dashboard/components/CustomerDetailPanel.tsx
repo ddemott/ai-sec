@@ -156,7 +156,17 @@ export function CustomerDetailPanel({
           </header>
 
           <div className="p-4 md:p-8 space-y-8">
-            <Card title="Contact Details & Notes" className="max-w-2xl">
+            {/* In-panel section navigation */}
+            {!isCreating && !isEditing && selectedCustomer && (
+              <nav aria-label="Customer sections" className="flex gap-3 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                <a href="#customer-contact" className="hover:underline" style={{ color: 'var(--accent-soft)' }}>Contact</a>
+                <a href="#customer-upcoming" className="hover:underline" style={{ color: 'var(--accent-soft)' }}>Upcoming</a>
+                <a href="#customer-history" className="hover:underline" style={{ color: 'var(--accent-soft)' }}>History</a>
+                <a href="#customer-calls" className="hover:underline" style={{ color: 'var(--accent-soft)' }}>Calls</a>
+              </nav>
+            )}
+
+            <Card title="Contact Details & Notes" className="max-w-2xl" id="customer-contact">
               {(!isEditing && !isCreating) ? (
                   <div className="space-y-4 text-sm">
                       <div className="flex items-start">
@@ -240,7 +250,7 @@ export function CustomerDetailPanel({
             {!isCreating && (
               <>
                 {/* UPCOMING APPOINTMENTS */}
-                <div className="space-y-4">
+                <div id="customer-upcoming" className="space-y-4">
                   <h3 className="font-bold flex items-center text-lg" style={{ color: 'var(--text-primary)' }}>
                     <Calendar className="w-5 h-5 mr-2" style={{ color: 'var(--text-muted)' }} />
                     Upcoming Appointments
@@ -275,7 +285,7 @@ export function CustomerDetailPanel({
                 </div>
 
                 {/* APPOINTMENT HISTORY */}
-                <div className="space-y-4">
+                <div id="customer-history" className="space-y-4">
                   <h3 className="font-bold flex items-center text-lg" style={{ color: 'var(--text-primary)' }}>
                     <History className="w-5 h-5 mr-2" style={{ color: 'var(--text-muted)' }} />
                     Appointment History
@@ -306,7 +316,7 @@ export function CustomerDetailPanel({
                 </div>
 
                 {/* AI CALL HISTORY */}
-                <div className="space-y-4">
+                <div id="customer-calls" className="space-y-4">
                   <h3 className="font-bold flex items-center text-lg" style={{ color: 'var(--text-primary)' }}>
                     <Phone className="w-5 h-5 mr-2" style={{ color: 'var(--text-muted)' }} />
                     AI Call History

@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Api } from '../../lib/api'
 import { Button } from '../ui/Button'
+import { showToast } from '../ui/Toast'
 import type { BrokenChain } from './useSkillMapData'
 
 interface FixPanelEntity { id: string | number; name: string; type?: string }
@@ -42,6 +43,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
       onFixed()
     } catch (err) {
       console.error('Failed to assign employee to service', err)
+      showToast('Assignment failed', 'error')
     } finally {
       setSaving(false)
     }
@@ -55,6 +57,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
       onFixed()
     } catch (err) {
       console.error('Failed to assign resource to service', err)
+      showToast('Assignment failed', 'error')
     } finally {
       setSaving(false)
     }

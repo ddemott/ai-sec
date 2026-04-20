@@ -31,8 +31,11 @@ export function AppointmentPopover({
   onOpenDetails,
 }: AppointmentPopoverProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+
     function handleClick(e: MouseEvent) {
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
         onClose();
@@ -45,17 +48,29 @@ export function AppointmentPopover({
       document.addEventListener('mousedown', handleClick);
     }, 0);
     document.addEventListener('keydown', handleKeyDown);
+
+    // Focus the popover when it opens
+    requestAnimationFrame(() => {
+      cardRef.current?.focus();
+    });
+
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus to the element that opened the popover
+      if (previousFocusRef.current && document.body.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus();
+      }
     };
   }, [onClose]);
 
   const cardWidth = 280;
-  const cardEstHeight = 220;
   const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
+
+  // Use measured height when available, fallback to estimate for initial render
+  const cardEstHeight = cardRef.current?.offsetHeight || 220;
 
   const spaceBelow = viewportHeight - anchorRect.bottom;
   const positionAbove = spaceBelow < cardEstHeight && anchorRect.top > cardEstHeight;
@@ -74,7 +89,10 @@ export function AppointmentPopover({
     <div
       ref={cardRef}
       data-testid="appointment-popover"
-      className="fixed z-50 rounded-lg shadow-xl"
+      role="dialog"
+      aria-label={`Appointment details: ${appointment.description || 'Appointment'}`}
+      tabIndex={-1}
+      className="fixed z-50 rounded-lg shadow-xl outline-none"
       style={{
         top,
         left,

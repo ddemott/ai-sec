@@ -25,17 +25,18 @@ export default function ProfileView() {
       <div className="max-w-2xl space-y-6">
         {/* Account Info */}
         <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
-          <h2 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--text-secondary)' }}>Account</h2>
+          <fieldset>
+          <legend className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--text-secondary)' }}>Account</legend>
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
                 {userName ? userName.charAt(0).toUpperCase() : 'U'}
               </div>
               <div>
-                <div className="font-bold text-sm">{userName || 'Unknown User'}</div>
+                <div className="font-bold text-sm">{userName || 'Not set'}</div>
                 <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
                   <Mail className="w-3 h-3" />
-                  {userEmail || 'No email on file'}
+                  {userEmail || 'Not set'}
                 </div>
               </div>
               {isAdmin && (
@@ -46,11 +47,13 @@ export default function ProfileView() {
               )}
             </div>
           </div>
+          </fieldset>
         </Card>
 
         {/* Theme Preference */}
         <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
-          <h2 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--text-secondary)' }}>Appearance</h2>
+          <fieldset>
+          <legend className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--text-secondary)' }}>Appearance</legend>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {THEMES.map(t => (
               <button
@@ -70,11 +73,15 @@ export default function ProfileView() {
               </button>
             ))}
           </div>
+          </fieldset>
         </Card>
 
         {/* Future: Password change, notification preferences, etc. */}
         <Card className="p-6 text-center" style={{ backgroundColor: 'var(--bg-raised)' }}>
-          <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>Password change and notification preferences coming soon.</p>
+          <fieldset>
+            <legend className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--text-secondary)' }}>Security</legend>
+            <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>Password change and notification preferences coming soon.</p>
+          </fieldset>
         </Card>
       </div>
     </div>

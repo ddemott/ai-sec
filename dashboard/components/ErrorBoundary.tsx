@@ -1,6 +1,8 @@
 'use client'
 
 import React, { Component, type ReactNode } from 'react'
+import { Card } from './ui/Card'
+import { Button } from './ui/Button'
 
 interface Props {
   children: ReactNode
@@ -31,21 +33,21 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback
 
       return (
-        <div className="flex items-center justify-center p-8">
-          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-lg w-full">
-            <h2 className="text-red-800 dark:text-red-300 font-semibold text-lg mb-2">
+        <div className="flex items-center justify-center p-8" role="alert">
+          <Card className="p-6 max-w-lg w-full">
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--text-primary)' }}>
               Something went wrong
             </h2>
-            <p className="text-red-600 dark:text-red-400 text-sm mb-4">
+            <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
               {this.state.error?.message || 'An unexpected error occurred.'}
             </p>
-            <button
+            <Button
+              variant="danger"
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
             >
               Try Again
-            </button>
-          </div>
+            </Button>
+          </Card>
         </div>
       )
     }

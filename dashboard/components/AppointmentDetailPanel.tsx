@@ -100,15 +100,15 @@ export function AppointmentDetailPanel({
             <div className="flex items-center space-x-2">
               {!isEditing && !isCreating ? (
                 <>
-                  <Button variant="danger" size="sm" onClick={onDelete} title="Delete record">
-                    <Trash2 className="w-5 h-5" />
+                  <Button variant="danger" size="sm" onClick={onDelete} title="Cancel this appointment">
+                    <Trash2 className="w-4 h-4 mr-1" /> Cancel Appointment
                   </Button>
                   {selectedAppointment?.status === 'scheduled' && (
                     <Button
                       variant="secondary"
                       onClick={onEdit}
                     >
-                      <Edit className="w-4 h-4 mr-2" /> Modify
+                      <Edit className="w-4 h-4 mr-2" /> Edit Details
                     </Button>
                   )}
                 </>
