@@ -331,16 +331,16 @@ function WeekView({ tenantId, employees, vocab, onNavigate }: {
     const weekEnd = days[6]
     try {
       const appts = await Api.appointments.list(tenantId, { startDate: days[0], endDate: new Date(new Date(weekEnd).getTime() + 86400000).toISOString().split('T')[0] })
-      const apptList = Array.isArray(appts) ? appts.filter((a: any) => a.status === 'scheduled') : []
+      const apptList = Array.isArray(appts) ? appts.filter(a => a.status === 'scheduled') : []
 
       const byDay = days.map(date => {
         const dayAppts = apptList
-          .filter((a: any) => a.start_time.startsWith(date))
-          .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time))
+          .filter(a => a.start_time.startsWith(date))
+          .sort((a, b) => a.start_time.localeCompare(b.start_time))
         return {
           date,
           count: dayAppts.length,
-          appts: dayAppts.slice(0, 4).map((a: any) => {
+          appts: dayAppts.slice(0, 4).map(a => {
             const empName = a.employee_id && employees.find(e => e.id === String(a.employee_id))
             return {
               time: new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),

@@ -11,6 +11,7 @@
  *   POST /communications/opt-out - Process opt-out request
  */
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
@@ -70,7 +71,7 @@ const HistoryQuerySchema = z.object({
 // ── Route Registration ───────────────────────────────────────────────
 
 export function registerCommunicationRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

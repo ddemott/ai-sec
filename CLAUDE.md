@@ -8,7 +8,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - **Backend API**: Node.js / Fastify (25 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
-- **Async Workers**: n8n (post-call summaries, calendar sync, SMS)
+- **Async Workers**: Inline in Fastify routes (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
@@ -19,12 +19,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 68 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, shift_overrides, night shifts, get_effective_shifts_bulk)
+- `/supabase/migrations` - 74 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk)
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion, `qa-live-test.py` QA suite)
 - `/vapi` - Vapi agent config and tool definitions
-- `/n8n` - Workflow blueprints (calendar sync, post-call summarizer)
 - `/docs` - Architecture, setup, plans, and reference docs
 - `/certs` - Self-signed HTTPS certificates for local dev
 
@@ -38,7 +37,9 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - **QA**: `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live Supabase edge function
 
 ## Development
-- Bootstrap: `npm run bootstrap` (installs deps, starts DB, applies migrations, seeds)
+- Bootstrap: `npm run bootstrap` (installs deps, starts DB, applies migrations, seeds, runs tests)
+- Migrate only: `npm run db:migrate` or `npm run db:migrate -- "postgres://..."` (cloud-ready)
+- Seed only: `npm run db:seed` or `npm run db:seed -- "postgres://..."` (demo data, safe to re-run)
 - Start: `npm start` (Dashboard: https://localhost:4000, Backend: https://localhost:4001)
 - Test backend: `npm test`
 - Test dashboard: `cd dashboard && npm test`
@@ -56,11 +57,11 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - Admin bypass policies on `tenants`, `users`, `business_templates` for cross-tenant operations when no tenant context set
 - Audit trigger (`fn_audit_trigger`) is `SECURITY DEFINER` to bypass RLS for internal logging
 - `book_appointment_atomic()` RPC: 7-layer constraint check (resource availability, staff qualification, resource capability, staff on shift, service coverage, auto end-time, customer upsert) + past-time rejection, business hours validation, fuzzy service matching
-- `book_with_scheduling_atomic()` RPC: Production booking RPC with shift_overrides support (checks overrides first, falls back to patterns), night shift support (cross-midnight), specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS)
-- `shift_overrides` table: date-specific employee schedules (replaces weekly patterns in UI). Both Working Hours and Front Desk scheduler read from this table. API: `GET/POST /shifts/overrides`
-- `get_effective_shifts()` and `get_effective_shifts_bulk()` RPCs: return only explicit overrides (no weekly pattern fallback). Date-based scheduling only.
+- `book_with_scheduling_atomic()` RPC: Production booking RPC using `employee_schedule` for shift validation (date-based only, no weekly pattern fallback), night shift support (cross-midnight), specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS)
+- `employee_schedule` table: date-specific employee schedules (replaces weekly patterns in UI). Both Working Hours and Front Desk scheduler read from this table. API: `GET/POST /shifts/overrides`
+- `get_effective_shifts()` and `get_effective_shifts_bulk()` RPCs: return entries from `employee_schedule` table (which IS the schedule). Date-based scheduling only.
 - `get_effective_shifts_bulk()` RPC: returns effective shifts for all employees in a date range (single query) — used by scheduler for efficient bulk loading
-- `employee_shifts` table: weekly patterns (day_of_week 0-6) — still exists for booking RPC fallback but NOT used by dashboard UI. UI uses date-based scheduling only.
+- `employee_shifts` table: LEGACY (weekly patterns, day_of_week 0-6) — NOT used by any production code. All scheduling uses `employee_schedule` only. Owners copy weeks forward via the UI.
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
 - Polymorphic assignment: `p_assignment_id` is UUID
 - All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)

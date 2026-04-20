@@ -1,12 +1,11 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
-import { VoiceSession, VoiceSessionDisplay, CustomerContext } from '@/lib/types'
+import React, { useEffect, useState } from 'react'
+import { VoiceSession, VoiceSessionDisplay } from '@/lib/types'
 import {
   Phone,
   PhoneIncoming,
   PhoneOff,
-  Clock,
   User,
   Calendar,
   MessageSquare,

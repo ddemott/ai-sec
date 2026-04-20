@@ -10,9 +10,8 @@ Single source of truth for all remaining work. Organized by priority.
 
 - [ ] **Deploy dashboard** to Railway or Vercel (currently local only)
 - [ ] **Set `DASHBOARD_URL`** env var in Railway (needed for Stripe checkout + OAuth redirects)
-- [ ] **Database webhooks for n8n** (post-call summaries, calendar sync triggers)
 - [ ] **Beta testing with DynaTire** (needs dashboard deployed first)
-- [ ] **BUG-072**: Front Desk scheduler shift bars not rendering (data confirmed in API, display issue in NewSchedulerView)
+- [x] **BUG-072**: Front Desk scheduler shift bars not rendering — root cause: seed data populated legacy `employee_shifts` table instead of `employee_schedule`. Fixed seed to use `employee_schedule` (2 weeks of date-based shifts).
 
 ---
 
@@ -33,15 +32,16 @@ Plan file: `.claude/plans/federated-snacking-puffin.md`
 ## Code Quality
 
 ### Type Safety (from lint audit)
-- [ ] Replace `catch (networkErr: any)` with `catch (err: unknown)` + type narrowing (30+ instances across CRM clients/sync files)
-- [ ] Type `app: any` as `FastifyInstance` in skills.ts, knowledge.ts, employees.ts, servicetitan.ts route modules
+- [x] Replace `catch (err: any)` with `catch (err: unknown)` + type narrowing (provisioning.ts, TenantEditPanel.tsx)
+- [x] Type `app: any` as `FastifyInstance<any, any, any>` in all 25 route modules + fix OAuth callback factory
 - [ ] Clean up `any` types in dashboard test mocks (~20 instances)
 
 ### Legacy Cleanup
-- [ ] Delete `vapi/agent.json` (replaced by `agent.template.json`, contains stale data)
-- [ ] Delete duplicate bug-fix markdown files: `BUG-064-SPECIFIC-ERROR-CODES.md`, `BUG-FIX-APRIL-1-2026.md`, `BUG-FIXES-APRIL-1-VOICE-AI.md`, `FIXES-COMPLETE-APRIL-1-2026.md`
-- [ ] Delete or archive one-off scripts: `scripts/fix-vapi-assistant.js`, `scripts/fix-vapi-assistant.ts`
-- [ ] Remove `dashboard/server.js` (CommonJS) and `dashboard/test-fetch.js` if unused
+- [x] `vapi/agent.json`, bug-fix markdown files, `fix-vapi-assistant.js/.ts`, `dashboard/test-fetch.js` — all already deleted in prior commits
+- [x] `dashboard/server.js` — verified ACTIVE (dev HTTPS server + Railway deploy), not legacy
+- [x] `scripts/configure-vapi-agent.sh` — deleted (superseded by provisioning API)
+- [x] `n8n/` directory + `docs/N8N_WORKFLOWS.md` — deleted (functionality built into Fastify routes)
+- [x] `shift_overrides` → `employee_schedule` rename, `employee_shifts` fallback removed from booking RPCs
 
 ### Soft Delete Filtering (BUG-038 partial)
 - [ ] Add `WHERE is_deleted = false` to SELECT queries in routes touching soft-deletable tables (appointments, customers, resources, employees) — only 2 of 20 routes currently filter

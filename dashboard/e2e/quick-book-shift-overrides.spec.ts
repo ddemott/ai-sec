@@ -1,10 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
 
 /**
- * E2E test: Quick Book should succeed when employees have shift_overrides for the day.
+ * E2E test: Quick Book should succeed when employees have employee_schedule for the day.
  *
  * Bug: book_appointment_atomic only checked employee_shifts (weekly patterns), not
- * shift_overrides (date-based). Dashboard UI uses shift_overrides, so employees appeared
+ * employee_schedule (date-based). Dashboard UI uses employee_schedule, so employees appeared
  * scheduled on the timeline but bookings failed with "Employee is not on shift."
  */
 
@@ -48,7 +48,7 @@ async function switchToBellasTenant(page: Page) {
   }
 }
 
-test.describe('Quick Book with shift_overrides', () => {
+test.describe('Quick Book with employee_schedule', () => {
 
   test('booking succeeds for employee with shift_override but no weekly pattern', async ({ page }) => {
     await ensureLoggedIn(page);
@@ -125,7 +125,7 @@ test.describe('Quick Book with shift_overrides', () => {
 
     if (errorVisible) {
       const errorText = await errorMsg.textContent();
-      // These errors indicate the shift_overrides fix didn't work
+      // These errors indicate the employee_schedule fix didn't work
       expect(errorText).not.toContain('not on shift');
       expect(errorText).not.toContain('not scheduled');
     }

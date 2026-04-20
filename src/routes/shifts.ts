@@ -1,4 +1,5 @@
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -43,7 +44,7 @@ const CopyWeekSchema = z.object({
 });
 
 export function registerShiftRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
@@ -117,7 +118,7 @@ export function registerShiftRoutes(
     return reply.send({ success: true });
   }, 'Failed to delete shift'));
 
-  // ── Shift Overrides (date-specific) ────────────────────────────
+  // ── Employee Schedule (date-specific) ────────────────────────────
 
   app.get('/shifts/overrides', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);
@@ -149,7 +150,7 @@ export function registerShiftRoutes(
     // Raw overrides list
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        'SELECT * FROM shift_overrides WHERE tenant_id = $1 ORDER BY shift_date',
+        'SELECT * FROM employee_schedule WHERE tenant_id = $1 ORDER BY shift_date',
         [tenantId]
       );
     });
@@ -165,7 +166,7 @@ export function registerShiftRoutes(
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(
-        `INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+        `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (tenant_id, employee_id, shift_date)
          DO UPDATE SET start_time = $4, end_time = $5, is_off = $6, updated_at = now()
@@ -188,7 +189,7 @@ export function registerShiftRoutes(
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(
-        `UPDATE shift_overrides SET
+        `UPDATE employee_schedule SET
           start_time = COALESCE($1, start_time), end_time = COALESCE($2, end_time),
           is_off = COALESCE($3, is_off), updated_at = now()
         WHERE id = $4 AND tenant_id = $5 RETURNING *`,
@@ -209,7 +210,7 @@ export function registerShiftRoutes(
     if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM shift_overrides WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+      return client.query('DELETE FROM employee_schedule WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
     });
 
     if (res.rows.length === 0) {
@@ -253,7 +254,7 @@ export function registerShiftRoutes(
         const targetDateStr = targetDate.toISOString().slice(0, 10);
 
         await client.query(
-          `INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+          `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (tenant_id, employee_id, shift_date)
            DO UPDATE SET start_time = $4, end_time = $5, is_off = $6, updated_at = now()`,

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
 import { VapiClient } from '../services/vapiClient';
@@ -9,7 +10,7 @@ const ActivateSchema = z.object({
 });
 
 export function registerProvisioningRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   vapiClient: VapiClient | null
 ) {
@@ -121,7 +122,7 @@ export function registerProvisioningRoutes(
           phone_number_id: phoneResult.id,
         });
 
-      } catch (vapiError: any) {
+      } catch (vapiError: unknown) {
         // Rollback: delete assistant if it was created
         if (assistantId) {
           try {
@@ -133,10 +134,11 @@ export function registerProvisioningRoutes(
 
         await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['failed', tenant_id]);
 
+        const detail = vapiError instanceof Error ? vapiError.message : String(vapiError);
         logError(req, 'phone_provisioning_failed', vapiError, { tenant_id, assistantId });
         return reply.status(502).send({
           error: 'Phone provisioning failed',
-          detail: vapiError.message || 'Unknown Vapi API error',
+          detail,
           tenant_id,
           tenant_name: tenant.name,
           assistant_created: !!assistantId,

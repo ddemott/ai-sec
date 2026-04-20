@@ -148,8 +148,9 @@ describe('AppointmentBlock', () => {
       </div>
     );
     fireEvent.click(screen.getByText('Alice Smith'));
-    expect(onClick).toHaveBeenCalledWith(appt);
-    // WHO: receptionist | WHAT: click appointment to view details | WHEN: appointment block clicked | WHERE: AppointmentBlock | WHY: unclickable blocks prevent viewing or editing appointment details
+    expect(onClick).toHaveBeenCalledWith(appt, expect.any(Object));
+    // WHO: receptionist | WHAT: click appointment to view details | WHEN: appointment block clicked | WHERE: AppointmentBlock
+    // WHY: onClick receives (appointment, mouseEvent) — unclickable blocks prevent viewing or editing appointment details
   });
 
   test('getEmployeeColor returns gray for null employee', () => {
@@ -427,8 +428,9 @@ describe('AppointmentListView', () => {
       />
     );
     fireEvent.click(screen.getByTestId('list-item-appt-1'));
-    expect(onClick).toHaveBeenCalledWith(appt);
-    // WHO: receptionist | WHAT: click appointment in list to view details | WHEN: list item clicked | WHERE: AppointmentListView | WHY: unclickable list items prevent viewing customer info or editing the booking
+    expect(onClick).toHaveBeenCalledWith(appt, expect.any(Object));
+    // WHO: receptionist | WHAT: click appointment in list to view details | WHEN: list item clicked | WHERE: AppointmentListView
+    // WHY: onAppointmentClick receives (appointment, mouseEvent) — unclickable list items prevent viewing customer info or editing the booking
   });
 });
 

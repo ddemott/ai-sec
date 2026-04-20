@@ -124,11 +124,6 @@ export default function SkillMapConnections({
             from { stroke-dashoffset: 1000; }
             to { stroke-dashoffset: 0; }
           }
-          .skill-map-line {
-            animation: drawLine 0.8s ease-out forwards;
-            stroke-dasharray: 1000;
-            stroke-dashoffset: 1000;
-          }
         `}</style>
         {paths.map(path => {
           const isActive = !hasSelection || path.isHighlighted
@@ -153,7 +148,6 @@ export default function SkillMapConnections({
                 data-testid={`path-${path.id}`}
                 d={path.d}
                 fill="none"
-                className="skill-map-line"
                 stroke={
                   isHovered
                     ? '#ef4444'
@@ -165,9 +159,10 @@ export default function SkillMapConnections({
                 }
                 strokeWidth={isHovered ? 3 : path.isHighlighted ? 2.5 : 2}
                 strokeOpacity={isActive ? (path.isHighlighted || isHovered ? 1 : 0.7) : 0.15}
-                strokeDasharray={path.isBroken ? '4 4' : undefined}
                 style={{
-                  ...(path.isBroken ? { animation: 'none', strokeDashoffset: 0 } : {}),
+                  strokeDasharray: path.isBroken ? '4 4' : '1000',
+                  strokeDashoffset: 0,
+                  animation: path.isBroken ? 'none' : 'drawLine 0.8s ease-out forwards',
                   pointerEvents: 'none',
                   transition: 'stroke 0.15s, stroke-width 0.15s',
                 }}

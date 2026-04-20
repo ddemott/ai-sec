@@ -1,11 +1,12 @@
 import type { Pool, PoolClient } from 'pg';
+import type { FastifyInstance } from 'fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as squareClient from '../services/squareClient';
 import * as squareSync from '../services/squareSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerSquareRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

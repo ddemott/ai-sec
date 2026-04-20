@@ -19,7 +19,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // Mock VocabularyContext
@@ -851,7 +851,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
   })
 
   test('area code is passed to the API', async () => {
-    const mockFetch = vi.fn().mockImplementation((url: string, _options?: RequestInit) => {
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
@@ -883,7 +883,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
 
     await waitFor(() => {
       const activateCall = mockFetch.mock.calls.find(
-        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/provisioning/activate')
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/provisioning/activate')
       )
       expect(activateCall).toBeDefined()
       const body = JSON.parse(activateCall![1]?.body as string)

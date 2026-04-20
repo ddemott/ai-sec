@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { FastifyInstance } from 'fastify';
 import Stripe from 'stripe';
 import { withHandler, logEvent, logError, requireTenantId, type AppRequest } from '../middleware';
 
@@ -15,7 +16,7 @@ function getStripe(): Stripe | null {
   return new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-02-24.acacia' as any });
 }
 
-export function registerBillingRoutes(app: any, pool: Pool) {
+export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool: Pool) {
   // POST /billing/checkout — create a Stripe Checkout session
   app.post('/billing/checkout', withHandler(async (req: AppRequest, reply) => {
     const stripe = getStripe();
@@ -83,7 +84,7 @@ export function registerBillingRoutes(app: any, pool: Pool) {
   app.post('/billing/webhook', {
     config: {
       rawBody: true, // Enable raw body preservation for this route
-    },
+    } as Record<string, unknown>,
   }, async (req: AppRequest, reply) => {
     const stripe = getStripe();
     if (!stripe) {

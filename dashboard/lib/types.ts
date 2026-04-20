@@ -120,7 +120,7 @@ export interface Shift {
   is_active: boolean;
 }
 
-export interface ShiftOverride {
+export interface ScheduleEntry {
   id: string;
   tenant_id: string;
   employee_id: string;

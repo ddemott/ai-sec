@@ -56,8 +56,8 @@ const MOCK_CUSTOMER_APPOINTMENTS = [
 /**
  * Helper to set up fetch mock that responds differently based on URL
  */
-function setupFetchMock(overrides: Record<string, any> = {}) {
-  ;(global.fetch as any).mockImplementation((url: string) => {
+function setupFetchMock(overrides: Record<string, unknown> = {}) {
+  ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
     if (url.includes('/customers/') && url.includes('/appointments')) {
       return Promise.resolve({
         ok: true,
@@ -160,7 +160,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
     await waitFor(() => {
@@ -292,8 +292,8 @@ describe('CRM Unified View - Cancel Appointment Flow', () => {
 
     // Should have called the cancel endpoint
     await waitFor(() => {
-      const calls = (global.fetch as any).mock.calls
-      const cancelCall = calls.find((c: any) => c[0].includes('/appointments/') && c[0].includes('/cancel'))
+      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      const cancelCall = calls.find((c: unknown[]) => typeof c[0] === 'string' && c[0].includes('/appointments/') && c[0].includes('/cancel'))
       expect(cancelCall).toBeDefined()
     })
     // WHO: tenant user | WHAT: cancel an upcoming appointment | WHEN: appointment is in the future | WHERE: CRMView appointment card | WHY: allow front-desk staff to cancel on behalf of customer

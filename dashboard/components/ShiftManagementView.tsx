@@ -268,7 +268,7 @@ export default function ShiftManagementView() {
             </div>
             <div>
               <h1 className="text-3xl font-display">{vocab.employee_label} Schedule</h1>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Schedule your team's working hours by date.</p>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Schedule your team&apos;s working hours by date.</p>
             </div>
           </div>
         </div>
@@ -370,7 +370,7 @@ export default function ShiftManagementView() {
                               </span>
                             )}
                             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); shift.override_id ? handleDelete(shift.override_id) : handleClearDay(day.dateStr) } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); if (shift.override_id) { handleDelete(shift.override_id) } else { handleClearDay(day.dateStr) } } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
                             </div>
                           </div>
                         )}
@@ -406,7 +406,7 @@ export default function ShiftManagementView() {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDate ? `Schedule for ${editingDate}` : 'Schedule'} disableBackdropClose
         footer={<div className="flex gap-2">
           {editingDate && shiftForDate(editingDate) && !shiftForDate(editingDate)?.is_off && (
-            <Button variant="ghost" onClick={() => { editingShiftId ? handleDelete(editingShiftId) : handleClearDay(editingDate); setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
+            <Button variant="ghost" onClick={() => { if (editingShiftId) { handleDelete(editingShiftId) } else { handleClearDay(editingDate) } setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
           )}
           <div className="flex-1" />
           <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>

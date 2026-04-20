@@ -155,6 +155,7 @@ function AppointmentViewInner() {
         customer_notes: customerMetadata.notes || ''
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAppointment])
 
   async function fetchAppointments(selectId?: string) {

@@ -58,9 +58,9 @@ Telnyx (telephony) --> Vapi (STT/LLM/TTS) --> Supabase Edge Function (Deno)
 | **Voice** | Vapi (Clara voice), Telnyx, OpenAI GPT-4o-mini, Deepgram Nova-2 |
 | **Backend** | Fastify 4.x, 25 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 72 migrations, Row Level Security, atomic booking RPCs |
+| **Database** | PostgreSQL + pgvector, 74 migrations, Row Level Security, atomic booking RPCs |
 | **Edge Functions** | Deno, Supabase Edge Functions, 7 voice AI tools |
-| **Async** | n8n workflows (post-call summaries, calendar sync, SMS) |
+| **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
 | **Security** | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS |
 
@@ -75,19 +75,30 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 - Docker (for local PostgreSQL)
 - npm
 
-### 1. Bootstrap
+### 1. Bootstrap (full local setup)
 ```bash
 npm run bootstrap
 ```
-Installs dependencies, starts the database, applies all 72 migrations, and seeds initial data.
+Installs dependencies, starts Docker DB, applies all migrations, seeds demo data, and runs tests.
 
-### 2. Trust the Backend Certificate
+### 2. Database Only (migrations + seed separately)
+```bash
+# Apply schema migrations (works with any Postgres — local, Supabase, Railway)
+npm run db:migrate                              # uses DATABASE_URL from .env
+npm run db:migrate -- "postgres://user:pass@host:5432/db"  # explicit URL
+
+# Seed demo data (platform admin + DynaTire tenant)
+npm run db:seed                                 # uses DATABASE_URL from .env
+npm run db:seed -- "postgres://user:pass@host:5432/db"     # explicit URL
+```
+
+### 3. Trust the Backend Certificate
 The backend uses HTTPS with self-signed certificates:
 - Visit [https://localhost:4001/health](https://localhost:4001/health)
 - Click **Advanced** > **Proceed to localhost**
 - You should see `{"status":"ok"}`
 
-### 3. Start
+### 4. Start
 ```bash
 npm start
 ```
@@ -96,14 +107,9 @@ npm start
 | Dashboard | https://localhost:4000 |
 | Backend API | https://localhost:4001 |
 
-### 4. Sign In
+### 5. Sign In
 
 Default credentials are created by the seed script. See `supabase/seed.sql` for details.
-
-### 5. Load Demo Data (optional)
-```bash
-./scripts/reset-and-seed.sh
-```
 
 ---
 
@@ -126,10 +132,9 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── migrations/            72 SQL migrations
 │   └── seed.sql               Platform admin + DynaTire demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling)
-├── scripts/                Automation (bootstrap, deploy, reset, QA)
+├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
 ├── docs/                   Architecture, plans, deployment, design, TODO
-├── vapi/                   Vapi agent config and tool definitions
-└── n8n/                    Workflow blueprints
+└── vapi/                   Vapi agent config and tool definitions
 ```
 
 ---

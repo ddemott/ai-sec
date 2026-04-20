@@ -9,6 +9,8 @@
     "test": "vitest run src/ --fileParallelism=false",
     "test:ci": "DATABASE_URL=postgres://postgres:postgres@localhost:5433/test_db vitest run src/ --fileParallelism=false",
     "bootstrap": "bash scripts/bootstrap.sh",
+    "db:migrate": "bash scripts/setup-db.sh",
+    "db:seed": "bash scripts/seed-db.sh",
     "start": "bash scripts/start-all.sh",
     "restart": "bash scripts/restart-all.sh",
     "build": "tsc -p ."

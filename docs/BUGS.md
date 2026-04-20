@@ -47,9 +47,9 @@ Full dashboard UI/UX audit conducted via code review. 35 issues identified acros
 
 ### April 3-4, 2026 Architecture Review Fixes (BUG-065 through BUG-072)
 - BUG-065: Booking RPC shift_override is_off bypass — FIXED (migration 20260403000001)
-- BUG-066: check_coverage_gaps() ignored shift_overrides — FIXED (migration 20260403000001)
+- BUG-066: check_coverage_gaps() ignored employee_schedule — FIXED (migration 20260403000001)
 - BUG-067: Edge function hardcoded Central Time for all tenants — FIXED (dispatcher.ts applyTimezone)
-- BUG-068: RLS admin bypass policy too permissive on shift_overrides — FIXED (migration 20260403000001)
+- BUG-068: RLS admin bypass policy too permissive on employee_schedule — FIXED (migration 20260403000001)
 - BUG-069: No rate limiting on API — FIXED (@fastify/rate-limit, 5 login attempts/5min)
 - BUG-070: No security headers — FIXED (@fastify/helmet)
 - BUG-071: Night shifts (23:00-02:00) fail time comparison — FIXED (migration 20260404000000)

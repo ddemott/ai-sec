@@ -1,11 +1,12 @@
 import type { Pool, PoolClient } from 'pg';
+import type { FastifyInstance } from 'fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as hubspotClient from '../services/hubspotClient';
 import * as hubspotSync from '../services/hubspotSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerHubSpotRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

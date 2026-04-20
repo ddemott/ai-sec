@@ -1,4 +1,5 @@
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
@@ -38,7 +39,7 @@ const CustomerUpdateSchema = z.object({
 });
 
 export function registerCustomerRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

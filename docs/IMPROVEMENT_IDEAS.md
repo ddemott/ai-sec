@@ -811,7 +811,7 @@
 ### Task: Add a Shared Override Persistence Helper for Shift Override Create, Update, and Week-Copy Flows
 **Status:** proposed
 **Files to change:** `src/routes/shifts.ts:L124-L263`, `src/middleware.ts:L1-L260` (or new `src/routes/shifts/helpers.ts`), `src/routes/shifts.test.ts:L1-L260` (new if needed)
-**What to do:** Pull the repeated `shift_overrides` insert/update shape used by override create, override update, and `/shifts/copy-week` into one focused helper that accepts tenant, employee, date, times, and `is_off`, then performs the current upsert behavior. Keep route-specific validation and date-offset logic in place, but centralize the actual override write contract in one reusable function.
+**What to do:** Pull the repeated `employee_schedule` insert/update shape used by override create, override update, and `/shifts/copy-week` into one focused helper that accepts tenant, employee, date, times, and `is_off`, then performs the current upsert behavior. Keep route-specific validation and date-offset logic in place, but centralize the actual override write contract in one reusable function.
 **Done when:**
 - [ ] Shift override create and copy-week no longer duplicate the same upsert SQL block
 - [ ] Override update shares the same field-normalization rules where applicable
@@ -2568,3 +2568,798 @@
 **What's working:** The append-only structure is still keeping the history easy to audit, and the current format is continuing to surface concrete route-level work instead of broad repetitive refactor themes.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions are still producing clear, prioritized output with useful effort-vs-gain framing, so I do not see a worthwhile tweak right now.
+
+## Ideas — 2026-04-17 (UI/UX patterns reviewed)
+
+### Task: Replace blocking confirm/alert flows in EmployeeManagementView with shared modal and toast feedback
+**Status:** proposed
+**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`, `dashboard/components/ui/ConfirmModal.tsx:L1-L220`, `dashboard/components/ui/Toast.tsx:L1-L220`, `dashboard/components/ui/useConfirm.tsx:L1-L220` if present
+**What to do:** Refactor employee delete and mapping-update failure flows so they use the shared confirm-modal and non-blocking feedback patterns instead of browser `confirm()` and `alert()`. Keep the current delete and service-toggle behavior, but make destructive confirmation and error reporting match the rest of the dashboard’s UI system.
+**Done when:**
+- [ ] EmployeeManagementView no longer uses browser `confirm()` for delete confirmation
+- [ ] Delete and service-toggle failures no longer use blocking `alert()` dialogs
+- [ ] Confirmation, success, and failure feedback use the shared modal/toast approach already present elsewhere in the dashboard
+- [ ] All existing tests pass, new tests cover confirm/cancel/delete and mapping-failure feedback
+**Why it matters:** Browser-native dialogs feel jarring on a polished admin surface, and blocking error popups make staffing edits feel less trustworthy and less consistent than the rest of the app.
+**Tradeoff:** This should stay scoped to feedback mechanics, not a larger redesign of the employee-management workflow.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Low effort, high gain because it removes the last bits of browser-native friction from a frequently used management screen.
+
+### Task: Add explicit mapping-load and empty-assignment states to EmployeeManagementView
+**Status:** proposed
+**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`
+**What to do:** Refactor the employee cards and quick-edit modal so mapping fetches, unmapped employees, and missing-services prerequisites are communicated through deliberate loading and empty states instead of silent fallbacks like "No services provided" or an empty matrix of pills. Keep the card-and-modal layout, but make it obvious whether services are still loading, not configured, or simply not assigned to a given employee.
+**Done when:**
+- [ ] Employee cards distinguish between loading mappings, no available services, and no assignments for that employee
+- [ ] The quick-edit modal communicates when service assignment data is unavailable or still loading
+- [ ] Empty-state messaging explains the next useful action, such as creating services first
+- [ ] All existing tests pass, new tests cover mapping-loading and empty-assignment rendering
+**Why it matters:** Staffing setup depends on service relationships, and unclear empty states make it hard to tell whether the system is empty, broken, or just still loading.
+**Tradeoff:** The extra messaging should stay compact so the screen does not become visually noisy once data is present.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it clarifies a common setup workflow that currently has ambiguous silent fallbacks.
+
+### Task: Add workforce-screen tests for employee delete confirmation, mapping feedback, and empty assignment states
+**Status:** proposed
+**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin delete confirmation behavior, mapping-toggle error feedback, unmapped/no-services messaging, and quick-edit modal assignment-state handling in EmployeeManagementView. Keep the suite focused on visible interaction states so staffing-screen feedback stays reliable as the implementation evolves.
+**Done when:**
+- [ ] EmployeeManagementView is tested for confirm/cancel delete behavior
+- [ ] Mapping-toggle failures are tested for visible non-blocking feedback
+- [ ] Empty assignment and no-services states are tested in both the card list and quick-edit modal where relevant
+- [ ] All existing tests pass, new tests protect the employee-management UX contract
+**Why it matters:** Employee management is a high-frequency admin surface, and regressions in destructive actions or assignment feedback create day-to-day friction quickly.
+**Tradeoff:** The tests should stay centered on visible UI states and not expand into deeper mapping business logic coverage.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects a key workforce-management workflow with focused UI-state coverage.
+
+## Self-Review — 2026-04-17
+**Cycles since last self-review:** 1
+**What's working:** The recent-entry skim is still surfacing sharper issues inside familiar areas, and this cycle found a concrete browser-dialog inconsistency instead of another broad state-pattern note.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current structure already gives enough room to revisit important screens productively, so I do not think more rules would improve the output.
+
+## Ideas — 2026-04-17 (UI/UX patterns reviewed)
+
+### Task: Add consistent prerequisite and no-employee messaging across wizard staffing steps
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/StepEmployees.tsx:L1-L260`, `dashboard/components/SetupWizard/StepShifts.tsx:L1-L220`, `dashboard/components/SetupWizard/Step7GoLive.tsx:L1-L260`
+**What to do:** Align the way the staffing-related wizard steps explain missing employees, incomplete shift setup, and phone-activation blockers so the user gets one consistent “what’s missing and what next” pattern across the flow. Keep each step’s current layout, but standardize the shell-level prerequisite messaging and action copy instead of letting each stage invent its own empty/problem state treatment.
+**Done when:**
+- [ ] Employee, shifts, and go-live steps use a visibly consistent prerequisite/next-action pattern
+- [ ] Missing employees or incomplete staffing setup are explained clearly before the user hits phone activation
+- [ ] Go-live step blocker messaging feels like a continuation of earlier staffing guidance rather than a separate system
+- [ ] All existing tests pass, new tests cover aligned prerequisite messaging where added
+**Why it matters:** Wizard trust comes from continuity, and inconsistent blocker messaging across adjacent steps makes setup feel more brittle than it is.
+**Tradeoff:** The guidance should stay concise so it helps users move forward without turning the wizard into a wall of instructional text.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it improves continuity in one of the setup flow’s most important handoffs.
+
+### Task: Add explicit async state continuity between shift setup and go-live phone activation
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/StepShifts.tsx:L1-L220`, `dashboard/components/SetupWizard/Step7GoLive.tsx:L1-L260`
+**What to do:** Refine the handoff between schedule configuration and phone activation so loading, saving, and blocking states carry through more deliberately instead of resetting the user’s context at the final step. Keep the current separate steps, but make the go-live screen acknowledge recent schedule/setup work and show clear in-progress or blocked states tied to that context.
+**Done when:**
+- [ ] Step7GoLive shows clear blocked/in-progress messaging when earlier staffing prerequisites are incomplete
+- [ ] StepShifts communicates completion in a way that flows naturally into go-live expectations
+- [ ] Phone-activation loading and failure states feel connected to the broader setup flow rather than isolated to a single button
+- [ ] All existing tests pass, new tests cover shift-to-go-live state continuity where added
+**Why it matters:** The final setup step is where users decide whether the system is ready, so context loss here disproportionately hurts confidence.
+**Tradeoff:** This is continuity work, so it should avoid expanding into a broader redesign of phone provisioning itself.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it sharpens the most consequential transition in the wizard.
+
+### Task: Add staffing-to-go-live wizard tests for blocker messaging, async feedback, and completion continuity
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/StepEmployees.tsx:L1-L260`, `dashboard/components/SetupWizard/StepShifts.tsx:L1-L220`, `dashboard/components/SetupWizard/Step7GoLive.tsx:L1-L260`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin missing-employee guidance, shift-step completion messaging, go-live blocker states, and phone-activation loading/failure feedback. Use shared assertions for prerequisite messaging so the staffing-to-launch part of the wizard stays coherent as individual steps evolve.
+**Done when:**
+- [ ] StepEmployees is tested for visible prerequisite/empty-state guidance
+- [ ] StepShifts is tested for completion and blocked-state messaging
+- [ ] Step7GoLive is tested for blocker, loading, success, and failure feedback around phone activation
+- [ ] All existing tests pass, new tests protect the staffing-to-go-live wizard UX contract
+**Why it matters:** These steps form the emotional endgame of onboarding, and regressions in blocker or activation feedback are especially damaging when the user is trying to finish setup.
+**Tradeoff:** The tests should stay focused on visible interaction and messaging behavior, not deeper provisioning logic.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it protects the most important handoff in the guided setup flow.
+
+## Self-Review — 2026-04-17
+**Cycles since last self-review:** 1
+**What's working:** Re-checking actual artifact paths caught the docs/ drift cleanly, and the recent-entry skim still let me revisit the wizard from a genuinely different handoff-focused angle.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process itself is still doing the right thing, the main lesson this cycle was to keep verifying where the project is really writing its artifacts.
+
+## Ideas — 2026-04-17 (UI/UX patterns reviewed)
+
+### Task: Add shared empty-search and no-match treatment to BusinessTypePicker and WizardModeChooser
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/BusinessTypePicker.tsx:L1-L260`, `dashboard/components/SetupWizard/WizardModeChooser.tsx:L1-L200`, optional new small empty-state helper in `dashboard/components/ui/`
+**What to do:** Align the way the wizard entry surfaces communicate no matching business types, unavailable choices, and next actions when the user’s search or mode selection yields a dead end. Keep the current card/grid layouts, but replace silent filtered emptiness or sparse fallback copy with one consistent, actionable empty-state pattern.
+**Done when:**
+- [ ] BusinessTypePicker shows a clear no-match state when search filtering removes all templates
+- [ ] WizardModeChooser communicates unavailable or not-yet-applicable choices with a consistent visual pattern
+- [ ] Empty/no-match treatment across both entry surfaces suggests the next useful action, such as clearing search or choosing the other wizard mode
+- [ ] All existing tests pass, new tests cover no-match and unavailable-choice rendering
+**Why it matters:** These are the first decision points in setup, and empty or under-explained dead ends make the wizard feel fragile before it really starts.
+**Tradeoff:** The empty-state treatment should stay lightweight so it does not overpower the normal card-selection flow.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it clarifies the earliest branch points in the onboarding experience.
+
+### Task: Add pre-finalize prerequisite and success-transition continuity to SoloStepReview
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/SoloStepReview.tsx:L1-L220`
+**What to do:** Refine SoloStepReview so the user sees clearer prerequisite messaging before finalization, better disabled-button reasoning when no services exist, and a more deliberate transition from in-progress setup to the success state. Keep the current single-button flow, but make the final step explain why completion is blocked and what changed after setup finishes.
+**Done when:**
+- [ ] The review step explains why the finalize button is disabled when prerequisites are missing
+- [ ] Finalizing state provides more context than a generic loading label alone
+- [ ] The success state makes the transition from setup-in-progress to configured/completed feel more explicit
+- [ ] All existing tests pass, new tests cover blocked, finalizing, and finalized state messaging
+**Why it matters:** The review step is the emotional commit point of the solo wizard, so vague disabled or success states undercut confidence at exactly the wrong moment.
+**Tradeoff:** This should stay focused on feedback continuity and not turn the review step into a longer summary page.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Low effort, high gain because it sharpens the most consequential moment in the solo setup flow.
+
+### Task: Add wizard-entry tests for search dead ends, mode selection, and review-step completion states
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/BusinessTypePicker.tsx:L1-L260`, `dashboard/components/SetupWizard/WizardModeChooser.tsx:L1-L200`, `dashboard/components/SetupWizard/SoloStepReview.tsx:L1-L220`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin business-type search no-match behavior, wizard-mode selection messaging, review-step disabled/finalizing/finalized states, and next-action copy. Use shared assertions for visible wizard-entry feedback so the onboarding flow keeps a coherent first-impression contract.
+**Done when:**
+- [ ] BusinessTypePicker is tested for search filtering and no-match rendering
+- [ ] WizardModeChooser is tested for visible option selection and unavailable-choice messaging
+- [ ] SoloStepReview is tested for disabled, finalizing, and finalized states
+- [ ] All existing tests pass, new tests protect the wizard-entry UX contract
+**Why it matters:** These small entry and review surfaces frame the whole onboarding experience, and regressions here are disproportionately noticeable because they shape first impressions.
+**Tradeoff:** The tests should stay focused on visible entry/review behavior rather than broad wizard internals.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects several pivotal wizard touchpoints with one focused suite.
+
+## Self-Review — 2026-04-17
+**Cycles since last self-review:** 1
+**What's working:** Re-checking the active artifact path avoided another bad write target, and the recent-entry skim still let me revisit setup from a lighter entry/review angle instead of repeating the deeper step-workflow batches.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current process is doing its job, the biggest practical lesson is still to verify the live artifact location before appending.
+
+## Ideas — 2026-04-17 (UI/UX patterns reviewed)
+
+### Task: Align login and top-level shell surfaces on shared empty/error/retry treatment
+**Status:** proposed
+**Files to change:** `dashboard/components/LoginView.tsx:L1-L140`, `dashboard/components/DashboardHome.tsx:L1-L260`, `dashboard/components/OutlookLayout.tsx:L1-L260`, shared UI primitives if needed
+**What to do:** Refine the login screen and top-level shell components so they use one coherent pattern for first-load, failure, and retry states instead of each screen inventing its own isolated treatment. Keep the current layouts, but make entry and shell surfaces feel like the same product when users hit a network problem or no-data condition.
+**Done when:**
+- [ ] LoginView, DashboardHome, and OutlookLayout show visibly compatible failure/retry treatment patterns
+- [ ] First-load and no-data messaging are clearer and more deliberate across the three shells
+- [ ] Shared UI primitives are used where that reduces one-off shell-state markup
+- [ ] All existing tests pass, new tests cover shell-level error/retry behavior where added
+**Why it matters:** These components frame the whole app experience, so inconsistent shell-state treatment makes the product feel stitched together even before users reach deeper workflows.
+**Tradeoff:** This should stay focused on shell-state consistency, not drift into a broader shell redesign.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it improves coherence at the app’s highest-visibility surfaces.
+
+### Task: Replace raw LoginView fields with shared input/button primitives and consistent auth messaging
+**Status:** proposed
+**Files to change:** `dashboard/components/LoginView.tsx:L1-L140`, `dashboard/components/ui/Input.tsx:L1-L220`, `dashboard/components/ui/Button.tsx:L1-L220`, optional shared alert/message primitive if present
+**What to do:** Refactor LoginView so its email/password fields, submit button, and error messaging use the same primitives and feedback language as the rest of the dashboard. Keep the branded login card, but stop hand-rolling the primary auth controls and error treatment in isolation.
+**Done when:**
+- [ ] LoginView no longer uses raw `<input>` fields and a bespoke submit button
+- [ ] Auth error treatment uses the shared UI system instead of a one-off banner block
+- [ ] Disabled/loading/focus behavior matches dashboard primitives
+- [ ] All existing tests pass, new tests cover primitive-driven auth loading/error states if relevant
+**Why it matters:** Login is still the app’s first impression, and inconsistent primitives there make the rest of the polished dashboard feel disconnected.
+**Tradeoff:** This is a contained consistency fix, so it should not expand into a broader auth-flow redesign.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it aligns the app’s first interaction with the rest of the design system.
+
+### Task: Add shell-entry tests for login, dashboard-home, and layout retry/no-data behavior
+**Status:** proposed
+**Files to change:** `dashboard/components/LoginView.tsx:L1-L140`, `dashboard/components/DashboardHome.tsx:L1-L260`, `dashboard/components/OutlookLayout.tsx:L1-L260`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin login error/loading states, dashboard-home loading/no-data treatment, and OutlookLayout shell retry or empty behavior. Use shared assertions around visible shell-state messaging so the app’s entry surfaces do not drift apart over time.
+**Done when:**
+- [ ] LoginView is tested for loading, auth failure, and network failure states
+- [ ] DashboardHome is tested for loading and no-data/retry shell behavior
+- [ ] OutlookLayout is tested for shell-level empty/retry state handling where applicable
+- [ ] All existing tests pass, new tests protect the app-entry UX contract
+**Why it matters:** These screens shape first impressions and app-level trust, so shell-state regressions here are disproportionately noticeable.
+**Tradeoff:** The tests should stay on visible shell behavior and avoid duplicating deeper feature coverage.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects the app’s first-contact surfaces with a shared lens.
+
+## Self-Review — 2026-04-17
+**Cycles since last self-review:** 1
+**What's working:** Verifying the live artifact path up front is preventing wasted writes now, and the recent-entry skim still lets me revisit broad shell surfaces from a different consistency angle instead of duplicating earlier notes.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is holding up well, the main thing that matters now is staying disciplined about path verification and angle selection rather than changing the instructions again.
+
+## Ideas — 2026-04-17 (UI/UX patterns reviewed)
+
+### Task: Replace ad hoc search and close controls in BusinessTypePicker and WizardModeChooser with shared primitives
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/BusinessTypePicker.tsx:L1-L260`, `dashboard/components/SetupWizard/WizardModeChooser.tsx:L1-L220`, `dashboard/components/ui/Input.tsx:L1-L220`, `dashboard/components/ui/Button.tsx:L1-L220`
+**What to do:** Refactor the wizard-entry search field, dismiss controls, and mode-selection actions so they use shared input/button primitives instead of bespoke icon-button and inline control styling. Keep the current compact onboarding cards, but move focus, disabled, hover, and close-button behavior onto the common UI layer.
+**Done when:**
+- [ ] BusinessTypePicker search and dismiss controls no longer rely on one-off control markup
+- [ ] WizardModeChooser action controls use shared button primitives for focus and disabled states
+- [ ] Entry-surface controls remain visually compact while aligning with the dashboard design system
+- [ ] All existing tests pass, new tests cover any primitive-driven state behavior if relevant
+**Why it matters:** These are the wizard’s first touchpoints, and consistent controls there help the whole onboarding flow feel more deliberate and polished.
+**Tradeoff:** This is primitive-reuse cleanup, so it should avoid broad visual redesign of the entry cards.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it improves consistency at the first interaction surfaces of onboarding.
+
+### Task: Add blocked-state reasoning and next-action copy to SoloStepReview completion gating
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/SoloStepReview.tsx:L1-L180`
+**What to do:** Expand the review step’s disabled-finalize treatment so it explains why completion is blocked, what prerequisite is missing, and what the user should do next instead of only disabling the button when `services.length === 0`. Keep the current simple review card, but make blocked states feel intentional and actionable.
+**Done when:**
+- [ ] SoloStepReview explains why completion is blocked when prerequisites are missing
+- [ ] Disabled finalize state includes a concise next action rather than relying on the button state alone
+- [ ] Finalizing and finalized states remain visually distinct from the blocked state
+- [ ] All existing tests pass, new tests cover blocked, finalizing, and finalized messaging
+**Why it matters:** The review step is the last point before completion, so unexplained disabled states create unnecessary uncertainty at the most important moment in the solo flow.
+**Tradeoff:** The copy should stay brief so it clarifies the state without turning the review card into a verbose help screen.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Low effort, high gain because it makes the wizard’s finish line much clearer when the user is blocked.
+
+### Task: Add wizard-entry parity tests for primitive controls and blocked review states
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/BusinessTypePicker.tsx:L1-L260`, `dashboard/components/SetupWizard/WizardModeChooser.tsx:L1-L220`, `dashboard/components/SetupWizard/SoloStepReview.tsx:L1-L180`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin search-field behavior, dismiss/control affordances, mode-selection feedback, and blocked/finalizing/finalized review states. Use shared assertions around visible entry/review behavior so the wizard’s first and last touchpoints stay aligned.
+**Done when:**
+- [ ] BusinessTypePicker is tested for search control behavior and no-match interaction states
+- [ ] WizardModeChooser is tested for visible mode-selection and close/control behavior
+- [ ] SoloStepReview is tested for blocked, finalizing, and finalized state messaging
+- [ ] All existing tests pass, new tests protect the wizard entry/review UX contract
+**Why it matters:** These components bookend the onboarding flow, and regressions here are especially noticeable because they shape first and last impressions.
+**Tradeoff:** The tests should stay centered on visible UI behavior and not expand into broader wizard internals.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects the onboarding bookends with a tight, coherent suite.
+
+## Self-Review — 2026-04-17
+**Cycles since last self-review:** 1
+**What's working:** Re-verifying the active docs/ artifact path is preventing bad writes now, and the recent-entry skim still lets me revisit onboarding surfaces from a distinct control-and-blocked-state angle instead of repeating the prior step-guidance batch.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is holding up well, the main thing that matters is staying disciplined about path verification and picking a genuinely different slice each cycle.
+
+## Ideas — 2026-04-17 (UI/UX patterns reviewed)
+
+### Task: Replace remaining blocking delete alert in KnowledgeBaseView with shared in-flow feedback
+**Status:** proposed
+**Files to change:** `dashboard/components/KnowledgeBaseView.tsx:L180-L260`, `dashboard/components/ui/Toast.tsx:L1-L220` or existing message treatment
+**What to do:** Remove the remaining `alert('Failed to delete')` path from KnowledgeBaseView and route delete failures through the same inline/toast feedback system already used for uploads and other knowledge actions. Keep the existing confirm-modal delete flow, but make failure handling consistent and non-blocking.
+**Done when:**
+- [ ] KnowledgeBaseView no longer uses a blocking alert for delete failures
+- [ ] Delete failures surface through the same visible feedback treatment as upload/save errors
+- [ ] Success and failure feedback for knowledge actions follow one consistent pattern
+- [ ] All existing tests pass, new tests cover delete-failure feedback
+**Why it matters:** A single blocking alert on an otherwise polished content-authoring surface feels jarring and breaks the interaction consistency the rest of the screen is already moving toward.
+**Tradeoff:** This is a small cleanup, so it should stay tightly scoped to failure feedback and not reopen unrelated knowledge-view concerns.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it removes a visible inconsistency from a high-interaction admin screen.
+
+### Task: Add unified action-feedback treatment across CRMView and KnowledgeBaseView side effects
+**Status:** proposed
+**Files to change:** `dashboard/components/CRMView.tsx:L1-L320`, `dashboard/components/KnowledgeBaseView.tsx:L1-L420`, shared toast/message primitive files if needed
+**What to do:** Align the way CRM sync/integration actions and knowledge upload/delete/save actions surface success, failure, and retry feedback so content-management and integration-management screens speak the same feedback language. Keep each view’s workflows intact, but standardize the top-level feedback treatment and action-result visibility.
+**Done when:**
+- [ ] CRMView and KnowledgeBaseView use visibly consistent success/failure feedback patterns for async actions
+- [ ] Retryable failures are surfaced in a similar way across both screens
+- [ ] Shared primitives or helpers reduce one-off message rendering differences where practical
+- [ ] All existing tests pass, new tests cover the aligned action-feedback treatment where added
+**Why it matters:** These are both admin heavy-lifting screens, and consistent action feedback helps users trust that the system is responding predictably across different domains.
+**Tradeoff:** The alignment should stay at the feedback-pattern level and not force unrelated workflows into the same detailed UI.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it improves coherence across two interaction-heavy admin surfaces.
+
+### Task: Add admin-surface tests for delete-failure feedback and cross-screen action-result consistency
+**Status:** proposed
+**Files to change:** `dashboard/components/KnowledgeBaseView.tsx:L1-L420`, `dashboard/components/CRMView.tsx:L1-L320`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin non-blocking delete-failure feedback in KnowledgeBaseView and visible success/failure treatment for CRM async actions, then compare those screens with shared assertions around action-result messaging. Keep the tests centered on visible behavior so future cleanup work cannot quietly reintroduce blocking dialogs or inconsistent feedback.
+**Done when:**
+- [ ] KnowledgeBaseView is tested for visible non-blocking delete-failure feedback
+- [ ] CRMView is tested for async action success/failure feedback visibility
+- [ ] Shared assertions compare the action-result messaging patterns across both admin surfaces
+- [ ] All existing tests pass, new tests protect the cross-screen feedback contract
+**Why it matters:** These screens perform consequential admin actions, so visible and consistent result feedback is a core trust requirement rather than a polish detail.
+**Tradeoff:** The tests should stay focused on action-result behavior and not sprawl into full feature suites for both screens.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects a subtle but important consistency line across two major admin workflows.
+
+## Self-Review — 2026-04-17
+**Cycles since last self-review:** 1
+**What's working:** Verifying the live docs/ log path is routine now, and the recent-entry skim still lets me revisit a broad admin area by targeting a smaller leftover inconsistency instead of producing a duplicate batch.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is already giving enough structure to catch these smaller follow-up issues without more workflow changes.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Add cross-step completion summaries between employee, shift, and go-live wizard steps
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/StepEmployees.tsx:L1-L240`, `dashboard/components/SetupWizard/StepShifts.tsx:L1-L220`, `dashboard/components/SetupWizard/Step7GoLive.tsx:L1-L260`
+**What to do:** Add a lightweight completion-summary pattern to the staffing-related wizard steps so each step shows what has already been configured before the user advances to the next one. Keep the current layouts, but expose concise “X employees added” or “Y shifts configured” summaries so the go-live step feels like the continuation of prior work rather than a fresh isolated screen.
+**Done when:**
+- [ ] StepEmployees and StepShifts show a concise completion summary when data exists
+- [ ] Step7GoLive acknowledges staffing setup state before the activation call-to-action
+- [ ] Summary treatment is visually consistent across the three steps and stays lightweight
+- [ ] All existing tests pass, new tests cover summary rendering where added
+**Why it matters:** The wizard feels more trustworthy when users can see continuity between completed setup work and the final launch step.
+**Tradeoff:** The summaries should stay compact so they reinforce progress without cluttering already busy steps.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it improves continuity at a critical setup handoff.
+
+### Task: Add richer retry and fallback affordances to Step7GoLive activation failures
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/Step7GoLive.tsx:L1-L260`
+**What to do:** Refine the failed activation state so it offers a clearer retry path, preserves the prior status context, and explains whether the user can proceed later without losing setup progress. Keep the existing activation card, but make failure recovery feel like part of the guided flow rather than a dead-end error panel.
+**Done when:**
+- [ ] Failed activation state includes a clear retry action and preserves relevant context
+- [ ] The user can tell whether setup progress is intact and activation can be retried later
+- [ ] Error and fallback copy feel consistent with the rest of the wizard’s guidance language
+- [ ] All existing tests pass, new tests cover failure, retry, and fallback messaging
+**Why it matters:** Go-live is the most emotionally loaded step in the wizard, so weak failure recovery there damages confidence disproportionately.
+**Tradeoff:** This is recovery-state polish, so it should avoid expanding into provisioning logic changes.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Low effort, high gain because it improves resilience at the wizard’s most consequential failure point.
+
+### Task: Add staffing-to-launch wizard tests for progress summaries and activation recovery
+**Status:** proposed
+**Files to change:** `dashboard/components/SetupWizard/StepEmployees.tsx:L1-L240`, `dashboard/components/SetupWizard/StepShifts.tsx:L1-L220`, `dashboard/components/SetupWizard/Step7GoLive.tsx:L1-L260`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin completion-summary rendering, go-live prerequisite continuity, activation failure/retry behavior, and fallback messaging. Use shared assertions so the staffing-to-launch part of the wizard keeps a coherent progress-and-recovery contract.
+**Done when:**
+- [ ] StepEmployees and StepShifts are tested for summary/progress rendering
+- [ ] Step7GoLive is tested for success, failure, retry, and later-activation fallback messaging
+- [ ] Shared assertions compare continuity cues across the staffing-to-launch steps
+- [ ] All existing tests pass, new tests protect this wizard handoff contract
+**Why it matters:** These steps define the finish line of onboarding, and regressions in progress or recovery feedback are especially painful when users are trying to launch.
+**Tradeoff:** The tests should stay focused on visible guidance and recovery behavior rather than provisioning internals.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it protects the most consequential wizard handoff with focused UX coverage.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** The live docs/ artifact check is still necessary, and the recent-entry skim let me stay in the onboarding area while shifting from blocker messaging to progress-and-recovery continuity, which kept this batch distinct.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is still producing useful variety within a narrow area, so the main discipline remains path verification and angle selection rather than process edits.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Extract shared search/filter toolbar primitives across customer and appointment list surfaces
+**Status:** proposed
+**Files to change:** `dashboard/components/AppointmentListSidebar.tsx:L1-L260`, `dashboard/components/CustomerListSidebar.tsx:L1-L260` if present, `dashboard/components/CRMView.tsx:L1-L320`, new `dashboard/components/ui/ListToolbar.tsx` or similar
+**What to do:** Pull the repeated search input, result count, and quick-filter toolbar pattern used across customer- and appointment-oriented list surfaces into a narrow shared primitive. Keep each screen’s domain-specific filters local, but stop hand-authoring similar top-of-list controls with slightly different spacing and feedback treatment.
+**Done when:**
+- [ ] Appointment and customer list surfaces no longer duplicate the same search/filter toolbar markup inline
+- [ ] Shared toolbar primitive supports search input, result count, and optional action/filter slots
+- [ ] Existing dark-theme spacing and compact density remain intact across the surfaces that adopt it
+- [ ] All existing tests pass, new tests cover the primitive’s supported toolbar variants if introduced
+**Why it matters:** List/tooling headers are becoming a recurring pattern, and shared primitives would reduce drift while making adjacent operational views feel more cohesive.
+**Tradeoff:** The toolbar should stay narrow so it does not become a generic layout shell for every list in the app.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it strengthens consistency across several high-traffic list workflows.
+
+### Task: Add explicit no-selection and stale-selection clearing states to detail panels tied to list surfaces
+**Status:** proposed
+**Files to change:** `dashboard/components/AppointmentDetailPanel.tsx:L1-L420`, `dashboard/components/CustomerDetailPanel.tsx:L1-L344`, `dashboard/components/CRMView.tsx:L1-L320`
+**What to do:** Standardize how list-driven detail panels behave when nothing is selected, the selected record disappears from filtered results, or the parent view reloads. Keep the existing list-plus-detail layouts, but ensure the detail area communicates no-selection and stale-selection transitions instead of quietly holding old context.
+**Done when:**
+- [ ] Appointment and customer detail panels show a deliberate no-selection state when nothing is selected
+- [ ] Parent views clear or explain stale selections when filtering/reloading removes the active record
+- [ ] Detail surfaces do not silently retain outdated data after list-driven context changes
+- [ ] All existing tests pass, new tests cover no-selection and stale-selection behavior
+**Why it matters:** Operators rely on list-detail coherence, and stale detail context is one of the easiest ways for these workflows to feel unreliable.
+**Tradeoff:** This is state-coordination work, so it should avoid expanding into a broader rewrite of list data fetching.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it improves trust in the app’s most common list-detail interaction model.
+
+### Task: Add list-detail parity tests for search filtering, no-selection, and stale-detail clearing
+**Status:** proposed
+**Files to change:** `dashboard/components/AppointmentListSidebar.tsx:L1-L260`, `dashboard/components/AppointmentDetailPanel.tsx:L1-L420`, `dashboard/components/CustomerDetailPanel.tsx:L1-L344`, `dashboard/components/CRMView.tsx:L1-L320`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin search/filter behavior, no-selection messaging, and stale-detail clearing across appointment and customer list-detail flows. Use shared assertions for the list-to-detail contract so regressions in one workflow are easy to compare with the other.
+**Done when:**
+- [ ] Appointment list/detail flow is tested for search filtering, no-selection, and stale-detail clearing
+- [ ] Customer/CRM detail flow is tested for the same visible state transitions where applicable
+- [ ] Shared assertions compare list-detail UX contract behavior across both domains
+- [ ] All existing tests pass, new tests protect the app’s core list-detail interaction model
+**Why it matters:** List-detail screens are the backbone of the dashboard, and consistent clearing and no-selection behavior directly affects day-to-day operator trust.
+**Tradeoff:** The tests should stay on visible interaction-state behavior and not grow into exhaustive feature coverage of every sidebar or panel field.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it protects one of the dashboard’s most fundamental UX patterns.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** Path verification is still catching the live docs/ append target reliably, and the recent-entry skim let me revisit familiar detail surfaces from the higher-level list-detail contract angle instead of repeating prior panel-specific notes.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current process already encourages the right discipline, verify the live files, then choose a genuinely different angle on the code.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Replace remaining raw action controls in TenantEditPanel and TenantCreateForm with shared primitives
+**Status:** proposed
+**Files to change:** `dashboard/components/TenantEditPanel.tsx:L260-L460`, `dashboard/components/TenantCreateForm.tsx:L1-L160`, `dashboard/components/ui/Button.tsx:L1-L220`, `dashboard/components/ui/Input.tsx:L1-L220`
+**What to do:** Refactor the remaining custom-styled action controls in the tenant create/edit flow, especially the phone activation button and any raw submit/cancel affordances, so they use the shared button/input primitives consistently. Keep the existing admin layout and hierarchy, but move the last one-off controls back onto the dashboard’s design system.
+**Done when:**
+- [ ] TenantEditPanel no longer uses a raw styled button for phone activation
+- [ ] TenantCreateForm and TenantEditPanel share the same primitive-driven submit/cancel interaction style
+- [ ] Focus, disabled, loading, and failure-adjacent states are handled through shared primitives instead of inline control styling
+- [ ] All existing tests pass, new tests cover any changed primitive-driven action states if relevant
+**Why it matters:** The tenant flow is a core super-admin path, and every remaining one-off control makes the admin experience feel less cohesive than the rest of the dashboard.
+**Tradeoff:** This is a targeted consistency pass, so it should avoid expanding into a larger redesign of tenant management.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it removes some of the last obvious primitive-reuse gaps from a high-traffic admin surface.
+
+### Task: Add explicit no-selection and empty-detail continuity to tenant list/edit surfaces
+**Status:** proposed
+**Files to change:** `dashboard/components/TenantCard.tsx:L1-L220`, `dashboard/components/TenantEditPanel.tsx:L1-L460`, parent super-admin container if needed
+**What to do:** Tighten the no-selection and empty-detail experience around the tenant list and edit panel so operators get a clearer explanation when no tenant is active, when a selected tenant disappears after changes, or when the panel is waiting on a newly created tenant. Keep the current list-plus-detail pattern, but make the empty/detail transitions feel deliberate rather than incidental.
+**Done when:**
+- [ ] Tenant detail surfaces show a clear no-selection state when no tenant is active
+- [ ] The edit panel handles stale or recently deleted tenant selection with deliberate UI feedback
+- [ ] Creating or switching tenants does not leave ambiguous blank detail space while the new context loads
+- [ ] All existing tests pass, new tests cover no-selection and stale-selection behavior in the tenant workflow
+**Why it matters:** Tenant management is one of the most consequential admin workflows, and unclear detail-panel transitions make the system feel riskier than it needs to.
+**Tradeoff:** This is state-coordination work, so it should stay focused on visible transitions rather than broader tenant data-flow changes.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it improves trust in a central admin list-detail workflow.
+
+### Task: Add tenant-admin parity tests for list selection, action states, and create/edit continuity
+**Status:** proposed
+**Files to change:** `dashboard/components/TenantCard.tsx:L1-L220`, `dashboard/components/TenantCreateForm.tsx:L1-L160`, `dashboard/components/TenantEditPanel.tsx:L1-L460`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin tenant-card selection, create-form submit states, edit-panel action feedback, phone-activation button behavior, and no-selection/stale-selection transitions. Use shared assertions for the tenant create/edit contract so the super-admin workflow stays coherent as individual screens change.
+**Done when:**
+- [ ] TenantCard is tested for selection and status-display behavior
+- [ ] TenantCreateForm is tested for visible submit/disabled states
+- [ ] TenantEditPanel is tested for action feedback, phone activation behavior, and no-selection/stale-selection transitions
+- [ ] All existing tests pass, new tests protect the tenant-admin UX contract
+**Why it matters:** This workflow spans list, create, and edit surfaces, and testing their visible contract together is the best way to prevent subtle admin regressions.
+**Tradeoff:** The tests should stay on visible interaction-state behavior and avoid becoming deep end-to-end coverage of tenant provisioning logic.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects one of the dashboard’s most important admin flows with a coherent test lens.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** Verifying the live docs/ append target has become routine, and the recent-entry skim let me revisit tenant admin from a narrower list-detail-and-primitive angle instead of repeating the earlier tenant UI pass.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current process is still producing distinct, bounded batches, so the main discipline remains path verification and angle selection rather than changing the workflow itself.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Extract shared shell header and empty-state cards across OutlookLayout, DashboardHome, and ProfileView
+**Status:** proposed
+**Files to change:** `dashboard/components/OutlookLayout.tsx:L1-L260`, `dashboard/components/DashboardHome.tsx:L1-L260`, `dashboard/components/ProfileView.tsx:L1-L140`, new `dashboard/components/ui/PageHeader.tsx` and/or `dashboard/components/ui/EmptyStateCard.tsx`
+**What to do:** Pull the repeated page-header and centered empty-state card patterns from the main shell surfaces into a couple of narrow UI primitives. Keep each view’s content and icons local, but stop hand-authoring similar title/subtitle/icon blocks and “coming soon”/no-data cards across top-level dashboard shells.
+**Done when:**
+- [ ] OutlookLayout, DashboardHome, and ProfileView no longer duplicate the same page-header structure inline
+- [ ] Shared header/empty-state primitives support the existing icon, title, subtitle, and optional action variants
+- [ ] Current dark-theme visual hierarchy remains intact or intentionally improved
+- [ ] All existing tests pass, new tests cover the primitive variants if introduced
+**Why it matters:** These shell surfaces define the app’s visual rhythm, and shared primitives would make them feel more coherent while reducing repeated presentational code.
+**Tradeoff:** The primitives need to stay narrow so they improve consistency without turning into generic catch-all layout wrappers.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it improves consistency at the app’s most frequently seen shell level.
+
+### Task: Add explicit unavailable and coming-soon shell treatment to ProfileView instead of static placeholder copy
+**Status:** proposed
+**Files to change:** `dashboard/components/ProfileView.tsx:L1-L140`
+**What to do:** Replace the current italic “coming soon” placeholder block in ProfileView with a more deliberate unavailable/future-settings state that matches other dashboard shell feedback patterns. Keep the profile card layout, but make the unresolved settings area feel intentional and informative rather than like a stray temporary note.
+**Done when:**
+- [ ] ProfileView no longer uses a plain italic placeholder line for future settings
+- [ ] The unavailable/future-settings state uses a structured card treatment consistent with other shell states
+- [ ] The profile page communicates what is currently available versus what will be configurable later
+- [ ] All existing tests pass, new tests cover the shell-level unavailable state
+**Why it matters:** Static placeholder copy is easy to read as unfinished product residue, and ProfileView is visible enough that this weakens the perceived polish of the settings area.
+**Tradeoff:** The replacement should stay lightweight so it clarifies the state without adding unnecessary detail to a simple page.
+**Size:** small (< 1hr)
+**Impact:** low
+**Effort vs Gain:** Low effort, modest gain because it makes a visible shell surface feel more intentional.
+
+### Task: Add shell-surface tests for shared header patterns and unavailable-state consistency
+**Status:** proposed
+**Files to change:** `dashboard/components/OutlookLayout.tsx:L1-L260`, `dashboard/components/DashboardHome.tsx:L1-L260`, `dashboard/components/ProfileView.tsx:L1-L140`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin shell-header rendering, icon/title/subtitle consistency, and unavailable/empty-state treatment across these top-level surfaces. Use shared assertions so future shell cleanups cannot quietly reintroduce inconsistent header or placeholder behavior.
+**Done when:**
+- [ ] OutlookLayout, DashboardHome, and ProfileView are tested for visible shell-header rendering
+- [ ] ProfileView unavailable-state treatment is covered explicitly
+- [ ] Shared assertions compare top-level shell-state and header patterns across the three views
+- [ ] All existing tests pass, new tests protect the shell-surface consistency contract
+**Why it matters:** Small shell inconsistencies compound quickly because users see these containers constantly, and focused tests make that drift easier to catch.
+**Tradeoff:** The tests should stay centered on visible shell patterns rather than deep child-content coverage.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects the visual rhythm of the app’s top-level shell layer.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** The live docs/ artifact check is still necessary, and the recent-entry skim helped me stay in the shell layer while shifting to a narrower header-and-empty-state consistency angle instead of repeating the last shell-state batch.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current workflow is already producing distinct batches inside the same broad area, so the main value remains disciplined file/path checks rather than more instruction changes.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Add shared panel-shell primitives across scheduler side panels
+**Status:** proposed
+**Files to change:** `dashboard/components/scheduler/AppointmentPopover.tsx:L1-L220`, `dashboard/components/scheduler/QuickBookPanel.tsx:L1-L320`, `dashboard/components/scheduler/EmployeeDayFocusPanel.tsx:L1-L220`, new `dashboard/components/ui/SidePanel.tsx` or scheduler-local shell primitive
+**What to do:** Extract the repeated side-panel shell structure used by scheduler overlays, title row, close action, scroll body, and padded sections, into a narrow shared panel primitive. Keep each panel’s booking/detail logic local, but stop hand-authoring similar fixed-position shell markup with slightly different spacing and close-control treatment.
+**Done when:**
+- [ ] QuickBookPanel and EmployeeDayFocusPanel no longer duplicate side-panel shell markup inline
+- [ ] AppointmentPopover and other scheduler overlays can share the same close/header/body pattern where appropriate
+- [ ] Shared shell supports title, optional icon, close action, and scrollable body without forcing identical inner layouts
+- [ ] All existing tests pass, new tests cover the shell primitive variants if introduced
+**Why it matters:** The scheduler is becoming a mini-product inside the dashboard, and shared overlay shells would make it feel much more cohesive while reducing repetitive layout code.
+**Tradeoff:** The primitive should stay scheduler-focused so it does not become an awkward generic overlay abstraction for unrelated screens.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it improves consistency across several high-visibility scheduler overlays.
+
+### Task: Add explicit loading, empty, and handoff states to EmployeeDayFocusPanel timeline content
+**Status:** proposed
+**Files to change:** `dashboard/components/scheduler/EmployeeDayFocusPanel.tsx:L1-L220`
+**What to do:** Refine the focus panel so it distinguishes between “loading appointments”, “no appointments today”, and “no employee selected” instead of only rendering nothing or the final empty timeline message. Keep the current right-side panel layout, but make panel opening and data-refresh states feel deliberate rather than instantaneous or silent.
+**Done when:**
+- [ ] EmployeeDayFocusPanel has a visible loading state before appointment/shifts data is ready
+- [ ] Empty-day messaging is distinct from the not-open/not-selected case
+- [ ] Opening the panel does not briefly rely on stale prior data or silent blank content
+- [ ] All existing tests pass, new tests cover loading and empty timeline states
+**Why it matters:** This panel is designed for quick operator decisions, and ambiguous opening states make it harder to trust the day snapshot at a glance.
+**Tradeoff:** The extra state handling should stay lightweight so it does not slow down the panel’s quick-inspection feel.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it clarifies a fast, decision-oriented scheduler panel.
+
+### Task: Add scheduler-overlay tests for shell consistency, close controls, and empty/loading panel states
+**Status:** proposed
+**Files to change:** `dashboard/components/scheduler/AppointmentPopover.tsx:L1-L220`, `dashboard/components/scheduler/QuickBookPanel.tsx:L1-L320`, `dashboard/components/scheduler/EmployeeDayFocusPanel.tsx:L1-L220`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin overlay close behavior, shell header consistency, focus-panel loading/empty states, and quick-book panel open/close interactions. Use shared assertions so scheduler overlays maintain a coherent interaction contract as they evolve separately.
+**Done when:**
+- [ ] Scheduler overlays are tested for visible close controls and dismissal behavior
+- [ ] EmployeeDayFocusPanel is tested for loading and empty timeline states
+- [ ] QuickBookPanel and other overlay shells are compared for consistent header/body behavior where applicable
+- [ ] All existing tests pass, new tests protect the scheduler-overlay UX contract
+**Why it matters:** These overlays are some of the most interactive surfaces in the scheduler, and consistency across them directly affects usability during rapid front-desk work.
+**Tradeoff:** The tests should focus on visible overlay behavior and not turn into broad scheduler integration tests.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects a cluster of interaction-heavy scheduler surfaces with one coherent test lens.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** The live docs/ path check is still catching the real append target, and the recent-entry skim let me move into scheduler overlays with a clearly different shell-and-handoff angle instead of repeating prior scheduler notes.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current process is still yielding distinct, bounded batches, so the value is in disciplined file selection and path verification rather than more instruction changes.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Replace bespoke ErrorBoundary fallback styling with shared failure-state primitives
+**Status:** proposed
+**Files to change:** `dashboard/components/ErrorBoundary.tsx:L1-L52`, `dashboard/components/ui/Card.tsx:L1-L220`, `dashboard/components/ui/Button.tsx:L1-L220`
+**What to do:** Rebuild the default ErrorBoundary fallback using the shared dashboard card and button primitives instead of a custom red panel and raw button styling. Keep the simple retry/reset interaction, but make the failure surface feel like part of the same design system as the rest of the app.
+**Done when:**
+- [ ] ErrorBoundary fallback no longer uses bespoke container and button markup/styles
+- [ ] Retry action uses the shared button primitive with consistent focus and disabled behavior
+- [ ] Failure-state container uses a shared card-style treatment that still preserves error emphasis
+- [ ] All existing tests pass, new tests cover default fallback rendering and reset behavior
+**Why it matters:** Error boundaries are globally visible recovery surfaces, and a custom fallback makes failures feel disconnected from the dashboard’s otherwise consistent UI.
+**Tradeoff:** This should stay a narrow consistency pass, not expand into a full-blown error-reporting component.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it cleans up a globally visible failure state.
+
+### Task: Add explicit action-result feedback to deleted-record restore and history-copy flows
+**Status:** proposed
+**Files to change:** `dashboard/components/DeletedRecordsPanel.tsx:L1-L320`, `dashboard/components/RecordHistoryModal.tsx:L1-L360`
+**What to do:** Refine the restore and copy-fields flows so success, failure, and in-progress feedback appears next to the relevant action instead of relying mainly on indirect state changes or broad panel refreshes. Keep the current workflows, but make action outcomes obvious before the user has to infer success from disappearing items or changed history.
+**Done when:**
+- [ ] Restore actions show visible in-progress and post-action feedback near the trigger point
+- [ ] Copy-fields/history actions expose clear success/failure states without requiring the user to infer results indirectly
+- [ ] Recovery panels remain readable while making action outcomes more explicit
+- [ ] All existing tests pass, new tests cover visible action-result feedback
+**Why it matters:** Recovery flows are inherently high-trust, and users should not have to guess whether a restore or history action actually succeeded.
+**Tradeoff:** The added feedback should stay lightweight so it improves clarity without cluttering already dense recovery surfaces.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it improves confidence in sensitive recovery workflows.
+
+### Task: Add recovery-surface tests for error fallback consistency and action-result visibility
+**Status:** proposed
+**Files to change:** `dashboard/components/ErrorBoundary.tsx:L1-L52`, `dashboard/components/DeletedRecordsPanel.tsx:L1-L320`, `dashboard/components/RecordHistoryModal.tsx:L1-L360`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin default error-boundary fallback behavior, visible restore/copy feedback, and recovery action progress states across the deleted-record and version-history surfaces. Use shared assertions so these failure/recovery surfaces keep a coherent interaction contract.
+**Done when:**
+- [ ] ErrorBoundary is tested for default fallback rendering and retry/reset behavior
+- [ ] DeletedRecordsPanel is tested for visible restore progress/success/failure feedback
+- [ ] RecordHistoryModal is tested for copy/history action-result visibility
+- [ ] All existing tests pass, new tests protect the recovery-surface UX contract
+**Why it matters:** These components only matter when something goes wrong or needs restoration, so regressions in their visible behavior are especially damaging to user trust.
+**Tradeoff:** The tests should stay on visible interaction states rather than over-specifying cosmetic details.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects several high-sensitivity recovery experiences with one focused suite.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** The live docs/ path check is still paying for itself, and revisiting recovery surfaces from a clearer primitive-and-action-feedback angle kept this batch distinct from the earlier recovery notes.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current process already supports useful revisits as long as I keep validating the live files and picking a sharper sub-angle instead of repeating the same broad critique.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Replace blocking confirm/alert flows in EmployeeManagementView with shared modal and toast feedback
+**Status:** proposed
+**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`, `dashboard/components/ui/ConfirmModal.tsx:L1-L220`, `dashboard/components/ui/Toast.tsx:L1-L220`, `dashboard/components/ui/useConfirm.tsx:L1-L220` if present
+**What to do:** Refactor employee delete and service-mapping failure flows so they use the shared confirm-modal and non-blocking feedback patterns instead of browser `confirm()` and `alert()`. Keep the current delete and service-toggle behavior, but make destructive confirmation and error reporting consistent with the rest of the dashboard’s UI system.
+**Done when:**
+- [ ] EmployeeManagementView no longer uses browser `confirm()` for delete confirmation
+- [ ] Delete and service-toggle failures no longer use blocking `alert()` dialogs
+- [ ] Confirmation, success, and failure feedback use the shared modal/toast approach already present elsewhere in the dashboard
+- [ ] All existing tests pass, new tests cover confirm/cancel/delete and mapping-failure feedback
+**Why it matters:** Browser-native dialogs feel jarring on a polished admin surface, and blocking error popups make staffing edits feel less trustworthy and less consistent than the rest of the app.
+**Tradeoff:** This should stay scoped to feedback mechanics, not a larger redesign of the employee-management workflow.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Low effort, high gain because it removes the last bits of browser-native friction from a frequently used management screen.
+
+### Task: Add explicit mapping-load and empty-assignment states to EmployeeManagementView cards and quick-edit modal
+**Status:** proposed
+**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`
+**What to do:** Refactor the employee cards and quick-edit modal so mapping fetches, unmapped employees, and missing-services prerequisites are communicated through deliberate loading and empty states instead of silent fallbacks like "No services provided" or an empty matrix of pills. Keep the card-and-modal layout, but make it obvious whether services are still loading, not configured, or simply not assigned to a given employee.
+**Done when:**
+- [ ] Employee cards distinguish between loading mappings, no available services, and no assignments for that employee
+- [ ] The quick-edit modal communicates when service assignment data is unavailable or still loading
+- [ ] Empty-state messaging explains the next useful action, such as creating services first
+- [ ] All existing tests pass, new tests cover mapping-loading and empty-assignment rendering
+**Why it matters:** Staffing setup depends on service relationships, and unclear empty states make it hard to tell whether the system is empty, broken, or just still loading.
+**Tradeoff:** The extra messaging should stay compact so the screen does not become visually noisy once data is present.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it clarifies a common setup workflow that currently has ambiguous silent fallbacks.
+
+### Task: Add workforce-screen tests for employee delete confirmation, mapping feedback, and empty assignment states
+**Status:** proposed
+**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin delete confirmation behavior, mapping-toggle error feedback, unmapped/no-services messaging, and quick-edit modal assignment-state handling in EmployeeManagementView. Keep the suite focused on visible interaction states so staffing-screen feedback stays reliable as the implementation evolves.
+**Done when:**
+- [ ] EmployeeManagementView is tested for confirm/cancel delete behavior
+- [ ] Mapping-toggle failures are tested for visible non-blocking feedback
+- [ ] Empty assignment and no-services states are tested in both the card list and quick-edit modal where relevant
+- [ ] All existing tests pass, new tests protect the employee-management UX contract
+**Why it matters:** Employee management is a high-frequency admin surface, and regressions in destructive actions or assignment feedback create day-to-day friction quickly.
+**Tradeoff:** The tests should stay centered on visible UI states and not expand into deeper mapping business logic coverage.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects a key workforce-management workflow with focused UI-state coverage.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** Verifying the live docs/ path is still saving wasted writes, and this cycle surfaced a very concrete browser-dialog inconsistency in a high-frequency admin workflow instead of another broad shell-level note.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current process is already good at finding sharp, bounded issues as long as I keep validating the active files and choosing a fresh angle.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Add explicit no-selection and no-call-context treatment to VoiceCallsView side panels
+**Status:** proposed
+**Files to change:** `dashboard/components/VoiceCallsView.tsx:L1-L520`
+**What to do:** Refine the voice-call detail panes so transcript, summary, and customer-context sections distinguish between “no call selected”, “call selected but no data captured yet”, and “data unavailable due to fetch failure”. Keep the current two-pane layout, but remove cases where blank card bodies force the operator to guess why detail content is missing.
+**Done when:**
+- [ ] VoiceCallsView shows a clear no-selection state before a call is chosen
+- [ ] Transcript, summary, and customer-context panels distinguish empty data from unavailable/failed data
+- [ ] Visible detail content does not silently collapse into blank card space when a section has no payload
+- [ ] All existing tests pass, new tests cover no-selection and no-data detail states
+**Why it matters:** Voice-call review is a trust-heavy workflow, and ambiguous blank detail regions make operators doubt whether the system captured the call correctly.
+**Tradeoff:** The extra messaging should stay lightweight so it clarifies missing data without making the detail pane noisy.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it sharpens clarity in a complex, high-trust operational surface.
+
+### Task: Add shell-level unavailable-state messaging to AIInsightsView tab handoff
+**Status:** proposed
+**Files to change:** `dashboard/components/AIInsightsView.tsx:L1-L80`, `dashboard/components/AIConfigView.tsx:L1-L360`, `dashboard/components/AnalyticsView.tsx:L1-L320`
+**What to do:** Add a light shell-level unavailable/empty handoff state in AIInsightsView so the tab container can communicate when underlying persona or analytics content is unavailable before the child view fully renders. Keep the current FolderTab layout, but make the parent shell do a bit more explanatory work when one sub-view is blocked or not configured.
+**Done when:**
+- [ ] AIInsightsView can render a shell-level unavailable/empty message before delegating fully to child content
+- [ ] Tab switches do not leave the shell looking blank while blocked child views decide what to show
+- [ ] The shell-level message remains lightweight and consistent with FolderTab visual language
+- [ ] All existing tests pass, new tests cover unavailable/empty shell handoff behavior
+**Why it matters:** The AI section is a nested shell, and without lightweight parent-level guidance, blocked child content can feel like a rendering bug instead of an intentional state.
+**Tradeoff:** This should stay a thin shell enhancement, not duplicate the full empty-state logic already owned by child views.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it improves perceived continuity across the AI section tabs.
+
+### Task: Add insight-surface tests for voice no-data detail states and AI shell handoff behavior
+**Status:** proposed
+**Files to change:** `dashboard/components/VoiceCallsView.tsx:L1-L520`, `dashboard/components/AnalyticsView.tsx:L1-L320`, `dashboard/components/AIInsightsView.tsx:L1-L80`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin no-selection/no-data detail behavior in VoiceCallsView, loading/no-data handling in AnalyticsView, and shell-level handoff behavior in AIInsightsView. Use shared assertions around visible unavailable-state treatment so the product’s insight surfaces keep a coherent UX contract.
+**Done when:**
+- [ ] VoiceCallsView is tested for no-selection and empty-detail panel behavior
+- [ ] AnalyticsView is tested for loading and no-data shell treatment
+- [ ] AIInsightsView is tested for tab-shell handoff behavior when child content is unavailable
+- [ ] All existing tests pass, new tests protect the insight-surface UX contract
+**Why it matters:** These surfaces present interpreted operational information, and users need a clear, consistent explanation when that information is absent or delayed.
+**Tradeoff:** The tests should stay at the visible-shell/detail state level and avoid deep chart or data-transform assertions.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects the most ambiguity-prone parts of the app’s insight layer.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** The live docs/ path check is still necessary, and the recent-entry skim let me revisit the insight area from a more specific empty-detail and shell-handoff angle instead of repeating the earlier stat-card batch.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is already giving me enough structure to revisit broad areas productively as long as I keep choosing a genuinely narrower slice.
+
+## Ideas — 2026-04-18 (UI/UX patterns reviewed)
+
+### Task: Replace console-only analytics failure handling with visible shell feedback across analytics and insights surfaces
+**Status:** proposed
+**Files to change:** `dashboard/components/AnalyticsView.tsx:L1-L260`, `dashboard/components/AIInsightsView.tsx:L1-L120`, `dashboard/components/VoiceCallsView.tsx:L1-L520`, shared toast/empty-state primitives if needed
+**What to do:** Refactor the analytics and insights shells so failed data loads use visible in-flow feedback rather than `console.error` or silent fallbacks to empty UI. Keep the current layouts, but ensure users can distinguish between “no data yet” and “failed to load the data” across analytics, AI insights, and voice insights surfaces.
+**Done when:**
+- [ ] AnalyticsView no longer relies on console-only failure handling for load errors
+- [ ] AIInsightsView and VoiceCallsView follow the same visible failure-state pattern when underlying insight data is unavailable
+- [ ] “No data” and “load failed” states are visually distinct across the three screens
+- [ ] All existing tests pass, new tests cover visible failure-state rendering where added
+**Why it matters:** Insight surfaces are only useful if users can trust what missing content means, and silent failure handling undermines that trust immediately.
+**Tradeoff:** The added feedback should stay lightweight so it clarifies failure without drowning the screens in extra chrome.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Moderate effort, high gain because it fixes a trust issue across several summary-driven operational screens.
+
+### Task: Extract shared no-data and unavailable-state cards for analytics-style screens
+**Status:** proposed
+**Files to change:** `dashboard/components/AnalyticsView.tsx:L1-L320`, `dashboard/components/AIInsightsView.tsx:L1-L120`, `dashboard/components/VoiceCallsView.tsx:L1-L520`, new `dashboard/components/ui/InsightEmptyState.tsx` or similar
+**What to do:** Pull the repeated “no data yet”, “placeholder”, and unavailable-state card treatments from analytics-oriented screens into a narrow reusable primitive. Keep each screen’s copy and icon choices local, but standardize the shell treatment so insight surfaces feel like one coherent family.
+**Done when:**
+- [ ] Analytics, AI insights, and voice insights surfaces no longer hand-roll their empty/unavailable card structures independently
+- [ ] Shared primitive supports icon, title, short description, and optional action/retry affordance
+- [ ] Existing visual hierarchy remains consistent with the dark theme and insight-card layouts
+- [ ] All existing tests pass, new tests cover the empty-state primitive variants if introduced
+**Why it matters:** These surfaces are all communicating absence or partial availability of insight data, so consistent empty-state treatment helps users parse them faster.
+**Tradeoff:** The primitive should stay tightly scoped to insight-state cards, not become another generic container abstraction.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it reduces drift across a growing family of analytics-style screens.
+
+### Task: Add insight-surface tests for failure visibility, no-data cards, and placeholder consistency
+**Status:** proposed
+**Files to change:** `dashboard/components/AnalyticsView.tsx:L1-L320`, `dashboard/components/AIInsightsView.tsx:L1-L120`, `dashboard/components/VoiceCallsView.tsx:L1-L520`, corresponding dashboard test files (new if needed)
+**What to do:** Add focused component tests that pin load-failure visibility, no-data card rendering, placeholder card treatment, and unavailable-state messaging across analytics, AI insights, and voice insights views. Use shared assertions so the product’s insight layer maintains one clear contract for absent or failed data.
+**Done when:**
+- [ ] AnalyticsView is tested for visible load-failure and no-data states
+- [ ] AIInsightsView is tested for tab-shell unavailable/placeholder treatment
+- [ ] VoiceCallsView is tested for no-selection/no-data insight-card behavior
+- [ ] All existing tests pass, new tests protect the insight-surface empty/failure contract
+**Why it matters:** These screens summarize important operational signals, and users need consistent cues when the signal is absent, delayed, or broken.
+**Tradeoff:** The tests should remain focused on visible shell/card behavior rather than deeper data-calculation logic.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it protects a subtle but important trust layer in the product.
+
+## Self-Review — 2026-04-18
+**Cycles since last self-review:** 1
+**What's working:** The live docs/ target check remains necessary, and this cycle revisited the insight layer from a sharper failure-visibility angle instead of duplicating the earlier no-selection and stat-card notes.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is still producing distinct, bounded follow-ups as long as I keep validating the active files and choosing a genuinely narrower angle within a broader area.

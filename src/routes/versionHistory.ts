@@ -9,6 +9,7 @@
  * - Viewing recent changes across all tables
  */
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -152,7 +153,7 @@ function validateBody<T>(
 }
 
 export function registerVersionHistoryRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

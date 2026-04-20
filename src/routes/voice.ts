@@ -9,6 +9,7 @@
  * - Adding notes to customers from calls
  */
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -50,7 +51,7 @@ const AddNoteSchema = z.object({
 });
 
 export function registerVoiceRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
   io?: any // Socket.IO server instance

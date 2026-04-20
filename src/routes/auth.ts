@@ -1,4 +1,5 @@
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, type AppRequest } from '../middleware';
@@ -17,7 +18,7 @@ const RegisterSchema = z.object({
 });
 
 export function registerAuthRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   generateToken: (payload: { tenant_id: string; user_id: string; email: string }) => string
 ) {

@@ -1,5 +1,5 @@
 /**
- * Tests for Fix #16 + #17: Edge function shift_overrides support
+ * Tests for Fix #16 + #17: Edge function employee_schedule support
  * Verifies get_effective_shifts RPC returns correct data for date-specific queries
  * (simulating what the edge function repository does).
  * Happy + sad paths with 5W diagnostic context.
@@ -11,7 +11,7 @@ import {
   beginTestTransaction, rollbackTestTransaction,
 } from './test-utils';
 
-describe('Fix #16 + #17: Edge function shift_overrides support', () => {
+describe('Fix #16 + #17: Edge function employee_schedule support', () => {
   let client: Client;
   let tenantId: string;
   let employeeId: string;
@@ -99,7 +99,7 @@ describe('Fix #16 + #17: Edge function shift_overrides support', () => {
 
       // Create override: work 10am-2pm instead of 8am-5pm
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
         [tenantId, employeeId, dateStr]
       );
 
@@ -125,7 +125,7 @@ describe('Fix #16 + #17: Edge function shift_overrides support', () => {
       const dateStr = toDateStr(tuesday);
 
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
         [tenantId, employeeId, dateStr]
       );
 
@@ -149,7 +149,7 @@ describe('Fix #16 + #17: Edge function shift_overrides support', () => {
       const dateStr = toDateStr(saturday);
 
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '09:00', '13:00')",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '09:00', '13:00')",
         [tenantId, employeeId, dateStr]
       );
 
@@ -179,7 +179,7 @@ describe('Fix #16 + #17: Edge function shift_overrides support', () => {
 
       // Override Wednesday to half day
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '08:00', '12:00')",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '08:00', '12:00')",
         [tenantId, employeeId, toDateStr(wednesday)]
       );
 
@@ -215,7 +215,7 @@ describe('Fix #16 + #17: Edge function shift_overrides support', () => {
 
       // Override: only 10am-2pm
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
         [tenantId, employeeId, dateStr]
       );
 
@@ -242,7 +242,7 @@ describe('Fix #16 + #17: Edge function shift_overrides support', () => {
       const dateStr = toDateStr(monday);
 
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
         [tenantId, employeeId, dateStr]
       );
 

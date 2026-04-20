@@ -1,9 +1,10 @@
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 
 export function registerAnalyticsRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

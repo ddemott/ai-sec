@@ -61,7 +61,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
           COALESCE(so.start_time, es.start_time)::text AS start_time,
           COALESCE(so.end_time, es.end_time)::text AS end_time
         FROM active_employees ae
-        LEFT JOIN shift_overrides so
+        LEFT JOIN employee_schedule so
           ON so.employee_id = ae.id
           AND so.tenant_id = $1
           AND so.shift_date = $3::date
@@ -168,7 +168,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     expect(result.shifts.length).toBe(2);
   });
 
-  it('HAPPY: respects shift_overrides over patterns', async () => {
+  it('HAPPY: respects employee_schedule over patterns', async () => {
     // WHO: Employee with override for the queried date
     // WHAT: Should use override hours, not pattern hours
     // WHY: Override-aware scheduling is critical for variable schedules
@@ -180,7 +180,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
 
     // Override: shorter hours on this specific date
     await client.query(
-      "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
+      "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
       [tenantId, empId, TEST_DATE]
     );
 
@@ -202,7 +202,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     await createShift(client, tenantId, empId, 1, '08:00', '17:00'); // pattern
 
     await client.query(
-      "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
+      "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
       [tenantId, empId, TEST_DATE]
     );
 

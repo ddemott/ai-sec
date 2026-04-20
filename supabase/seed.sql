@@ -105,34 +105,45 @@ VALUES
     ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'Dana Okafor', 'Dana', 'Okafor', '+16305550203', ARRAY['flat-repair', 'tire-rotation', 'tire-install'])
 ON CONFLICT DO NOTHING;
 
--- 8. Seed Shifts for DynaTire employees (Mon-Fri)
+-- 8. Seed Shifts for DynaTire employees (current week + next week, date-based via employee_schedule)
 DO $$
 DECLARE
     v_mike_id UUID;
     v_carlos_id UUID;
     v_dana_id UUID;
     v_tenant_id UUID := 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+    v_day DATE;
+    v_start DATE;
+    v_end DATE;
 BEGIN
     SELECT id INTO v_mike_id FROM employees WHERE name = 'Mike Rivera' AND tenant_id = v_tenant_id;
     SELECT id INTO v_carlos_id FROM employees WHERE name = 'Carlos Vega' AND tenant_id = v_tenant_id;
     SELECT id INTO v_dana_id FROM employees WHERE name = 'Dana Okafor' AND tenant_id = v_tenant_id;
 
-    -- Mike: Mon-Fri 7am-4pm
-    FOR dow IN 1..5 LOOP
-        INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-        VALUES (v_tenant_id, v_mike_id, dow, '07:00', '16:00') ON CONFLICT DO NOTHING;
-    END LOOP;
+    -- Seed 2 weeks of shifts (current week Monday through next week Friday)
+    v_start := CURRENT_DATE - EXTRACT(DOW FROM CURRENT_DATE)::INT + 1; -- this Monday
+    v_end := v_start + 11; -- next Friday (12 weekdays across 2 weeks)
 
-    -- Carlos: Mon-Fri 8am-5pm
-    FOR dow IN 1..5 LOOP
-        INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-        VALUES (v_tenant_id, v_carlos_id, dow, '08:00', '17:00') ON CONFLICT DO NOTHING;
-    END LOOP;
+    v_day := v_start;
+    WHILE v_day <= v_end LOOP
+        -- Skip weekends
+        IF EXTRACT(DOW FROM v_day) NOT IN (0, 6) THEN
+            -- Mike: Mon-Fri 7am-4pm
+            INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+            VALUES (v_tenant_id, v_mike_id, v_day, '07:00', '16:00', false)
+            ON CONFLICT (tenant_id, employee_id, shift_date) DO NOTHING;
 
-    -- Dana: Mon-Fri 9am-6pm
-    FOR dow IN 1..5 LOOP
-        INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time)
-        VALUES (v_tenant_id, v_dana_id, dow, '09:00', '18:00') ON CONFLICT DO NOTHING;
+            -- Carlos: Mon-Fri 8am-5pm
+            INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+            VALUES (v_tenant_id, v_carlos_id, v_day, '08:00', '17:00', false)
+            ON CONFLICT (tenant_id, employee_id, shift_date) DO NOTHING;
+
+            -- Dana: Mon-Fri 9am-6pm
+            INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+            VALUES (v_tenant_id, v_dana_id, v_day, '09:00', '18:00', false)
+            ON CONFLICT (tenant_id, employee_id, shift_date) DO NOTHING;
+        END IF;
+        v_day := v_day + 1;
     END LOOP;
 END $$;
 

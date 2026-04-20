@@ -210,8 +210,9 @@ export function TenantEditPanel({
                                       try {
                                           await Api.provisioning.deactivate(selectedTenant.id)
                                           onTenantUpdate({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, vapi_assistant_id: null, vapi_phone_number_id: null})
-                                      } catch (err: any) {
-                                          alert(err.message || 'Failed to deactivate phone')
+                                      } catch (err: unknown) {
+                                          const msg = err instanceof Error ? err.message : 'Failed to deactivate phone';
+                                          alert(msg)
                                       }
                                   }}
                                   className="text-xs text-red-500 hover:text-red-700 underline"
@@ -252,9 +253,10 @@ export function TenantEditPanel({
                                               vapi_assistant_id: result.assistant_id,
                                               vapi_phone_number_id: result.phone_number_id,
                                           })
-                                      } catch (err: any) {
+                                      } catch (err: unknown) {
                                           onTenantUpdate({...selectedTenant, phone_status: 'failed'})
-                                          alert(err.message || 'Failed to activate phone')
+                                          const msg = err instanceof Error ? err.message : 'Failed to activate phone';
+                                          alert(msg)
                                       }
                                   }}
                                   className="px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 rounded-lg flex items-center gap-1.5"

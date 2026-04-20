@@ -57,7 +57,7 @@ vi.mock('../../lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => 'test-tenant',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // --- Mock hooks ---

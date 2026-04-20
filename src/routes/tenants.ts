@@ -1,4 +1,5 @@
 
+import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, logEvent, requireAuth, type AppRequest } from '../middleware';
@@ -48,7 +49,7 @@ const CreateTemplateSchema = z.object({
   example_services: z.array(z.string()).optional(),
 });
 
-export function registerTenantRoutes(app: any, pool: Pool) {
+export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: Pool) {
   app.get('/tenants', withHandler(async (req: AppRequest, reply) => {
     if (!requireAuth(req, reply)) return;
     const res = await withPoolClient(pool, client =>

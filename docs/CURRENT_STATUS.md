@@ -50,7 +50,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 
 **Scheduling simplified** — User rejected pattern+override model as too complex:
 - **New model**: date-based only. Click a day → set times → save. No weekly patterns.
-- Data lives in `shift_overrides` table (renamed in API to `Api.shifts.schedule.*`)
+- Data lives in `employee_schedule` table (API: `Api.shifts.schedule.*`)
 - Both Working Hours and Front Desk scheduler read from same table
 - Default times: 8:00 AM - 5:00 PM
 - `employee_shifts` (weekly patterns) still exists in DB but no longer used by UI

@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import type { FastifyInstance } from 'fastify';
 import { logEvent, logError, type AppRequest } from '../middleware';
 
 const XAI_TTS_URL = 'https://api.x.ai/v1/tts';
@@ -14,7 +15,7 @@ interface VapiVoiceRequest {
 }
 
 export function registerTtsRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   xaiApiKey: string,
   xaiTtsSecret: string,
   xaiTtsVoice: string

@@ -1,11 +1,12 @@
 import type { Pool, PoolClient } from 'pg';
+import type { FastifyInstance } from 'fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as jobberClient from '../services/jobberClient';
 import * as jobberSync from '../services/jobberSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerJobberRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

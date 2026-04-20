@@ -171,7 +171,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 

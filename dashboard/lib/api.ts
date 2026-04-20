@@ -1,6 +1,6 @@
 import { normalizePhone } from './phone'
 import type {
-  Appointment, Customer, Resource, Employee, Service, Shift, ShiftOverride, EffectiveShift, BulkEffectiveShift, Skill,
+  Appointment, Customer, Resource, Employee, Service, Shift, ScheduleEntry, EffectiveShift, BulkEffectiveShift, Skill,
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
   CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
   CallSummary, JobberSettings, JobberSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
@@ -214,7 +214,7 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
  */
 async function apiMutate<T>(
   endpoint: string,
-  method: 'POST' | 'PUT' | 'DELETE',
+  method: 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   body?: Record<string, unknown>
 ): Promise<{ success: boolean; error?: string } & T> {
   await ensureTokenFresh();
@@ -388,7 +388,7 @@ export const Api = {
 
     schedule: {
       list: (tenantId: string | null) =>
-        apiFetch<ShiftOverride[]>(`/shifts/overrides`, tenantId ? { tenant_id: tenantId } : undefined),
+        apiFetch<ScheduleEntry[]>(`/shifts/overrides`, tenantId ? { tenant_id: tenantId } : undefined),
 
       forDate: (tenantId: string | null, employeeId: string, startDate: string, endDate: string) =>
         apiFetch<EffectiveShift[]>(`/shifts/overrides`, {
@@ -406,8 +406,8 @@ export const Api = {
           end_date: endDate,
         }),
 
-      save: (tenantId: string | null, data: Partial<ShiftOverride>) =>
-        apiMutate<{ override: ShiftOverride }>(`/shifts/overrides/create`, 'POST', { tenant_id: tenantId, ...data }),
+      save: (tenantId: string | null, data: Partial<ScheduleEntry>) =>
+        apiMutate<{ override: ScheduleEntry }>(`/shifts/overrides/create`, 'POST', { tenant_id: tenantId, ...data }),
 
       remove: (id: string, tenantId: string | null) =>
         apiMutate(`/shifts/overrides/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),

@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { X, History, RotateCcw, ChevronDown, ChevronRight, Check, Clock, User, RefreshCw, Trash2, Plus, Edit, Merge } from 'lucide-react'
+import { X, History, RotateCcw, ChevronDown, ChevronRight, Check, Clock, RefreshCw, Trash2, Plus, Edit, Merge } from 'lucide-react'
 import { Api } from '../lib/api'
-import type { RecordHistoryResponse, RecordVersion, VersionedTable, ChangeType, ChangeSource, FieldRestoreOption, RecordRestorePreview } from '../lib/types'
+import type { RecordHistoryResponse, VersionedTable, ChangeType, ChangeSource, RecordRestorePreview } from '../lib/types'
 
 interface RecordHistoryModalProps {
   isOpen: boolean
@@ -113,6 +113,7 @@ export function RecordHistoryModal({
     if (isOpen && recordId) {
       loadHistory()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, recordId, table, tenantId])
 
   async function loadHistory() {

@@ -570,25 +570,16 @@ export class PostgresRepository implements IRepository {
             AND (is_deleted IS NULL OR is_deleted = false)
         ),
         effective_shifts AS (
-          -- Override-aware: check shift_overrides first, fall back to employee_shifts pattern
           SELECT DISTINCT
-            COALESCE(so.start_time, es.start_time)::text AS start_time,
-            COALESCE(so.end_time, es.end_time)::text AS end_time
+            es.start_time::text AS start_time,
+            es.end_time::text AS end_time
           FROM active_employees ae
-          LEFT JOIN shift_overrides so
-            ON so.employee_id = ae.id
-            AND so.tenant_id = $1
-            AND so.shift_date = $3::date
-          LEFT JOIN employee_shifts es
+          JOIN employee_schedule es
             ON es.employee_id = ae.id
-            AND es.day_of_week = EXTRACT(DOW FROM $3::date)::integer
-            AND es.is_active = true
-            AND so.id IS NULL
-          WHERE (
-            (so.id IS NOT NULL AND so.is_off = false AND so.start_time IS NOT NULL)
-            OR
-            (so.id IS NULL AND es.id IS NOT NULL)
-          )
+            AND es.tenant_id = $1
+            AND es.shift_date = $3::date
+            AND es.is_off = false
+            AND es.start_time IS NOT NULL
         ),
         day_appointments AS (
           SELECT start_time::text, end_time::text

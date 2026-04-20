@@ -1,5 +1,5 @@
 /**
- * Tests for Fix #30 (night shifts) and #32 (check_availability_with_tz shift_overrides)
+ * Tests for Fix #30 (night shifts) and #32 (check_availability_with_tz employee_schedule)
  * Happy + sad paths with 5W diagnostic context.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -103,7 +103,7 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
   });
 });
 
-describe('Fix #32: check_availability_with_tz with shift_overrides', () => {
+describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
   let client: Client;
   let tenantId: string;
   let resourceId: string;
@@ -194,7 +194,7 @@ describe('Fix #32: check_availability_with_tz with shift_overrides', () => {
 
     await createShift(client, tenantId, employeeId, 1, '08:00', '17:00');
     await client.query(
-      "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, '2026-06-01', true)",
+      "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, '2026-06-01', true)",
       [tenantId, employeeId]
     );
 
@@ -213,7 +213,7 @@ describe('Fix #32: check_availability_with_tz with shift_overrides', () => {
     if (!dbAvailable) return;
 
     await client.query(
-      "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, '2026-06-06', '09:00', '13:00')",
+      "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, '2026-06-06', '09:00', '13:00')",
       [tenantId, employeeId]
     );
 

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Trash2, RotateCcw, History, Copy, ChevronDown, ChevronRight, Search, Filter, X } from 'lucide-react'
+import { Trash2, RotateCcw, History, Copy, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 import { Api } from '../lib/api'
 import type { DeletedRecord, DeletedRecordsResponse, VersionedTable, Customer } from '../lib/types'
 
@@ -40,6 +40,7 @@ export function DeletedRecordsPanel({
     if (table === 'customers') {
       loadCustomers()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, tenantId])
 
   async function loadDeletedRecords() {
@@ -58,7 +59,7 @@ export function DeletedRecordsPanel({
   async function loadCustomers() {
     try {
       const data = await Api.customers.list(tenantId)
-      setCustomers(data.filter((c: Customer) => !c.is_deleted))
+      setCustomers(data)
     } catch (err) {
       console.error('Failed to load customers for copy target', err)
     }

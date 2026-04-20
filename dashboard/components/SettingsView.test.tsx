@@ -23,7 +23,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => mockTenantId,
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // Mock VocabularyContext
@@ -106,7 +106,7 @@ describe('SettingsView: Calendar Section', () => {
 
     await waitFor(() => {
       const authCall = mockFetch.mock.calls.find(
-        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/calendar/auth/google')
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/calendar/auth/google')
       )
       expect(authCall).toBeDefined()
     })
@@ -139,7 +139,7 @@ describe('SettingsView: Calendar Section', () => {
   })
 
   test('disconnect button calls disconnect API', async () => {
-    const mockFetch = vi.fn().mockImplementation((url: string, _options?: RequestInit) => {
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
       // Check disconnect first since it also matches /calendar/settings
       if (url.includes('/calendar/settings/disconnect')) {
         return Promise.resolve({
@@ -172,7 +172,6 @@ describe('SettingsView: Calendar Section', () => {
     })
     // Click the Disconnect button inside the modal (not the trigger button)
     const modal = screen.getByRole('dialog')
-    const confirmBtn = modal.querySelector('button')
     // Find the danger/confirm button (last button in footer)
     const allBtns = modal.querySelectorAll('button')
     const disconnectBtn = Array.from(allBtns).find(b => b.textContent === 'Disconnect')!
@@ -180,7 +179,7 @@ describe('SettingsView: Calendar Section', () => {
 
     await waitFor(() => {
       const disconnectCall = mockFetch.mock.calls.find(
-        (call: any[]) =>
+        (call: unknown[]) =>
           typeof call[0] === 'string' && call[0].includes('/calendar/settings/disconnect')
       )
       expect(disconnectCall).toBeDefined()
@@ -251,7 +250,7 @@ describe('SettingsView: Calendar Section', () => {
     // The useEffect should detect calendarConnected=true and fetch calendar settings
     await waitFor(() => {
       const settingsCalls = mockFetch.mock.calls.filter(
-        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/calendar/settings')
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/calendar/settings')
       )
       // Should be called at least twice: once from initial mount useEffect, once from query param detection
       expect(settingsCalls.length).toBeGreaterThanOrEqual(2)
@@ -382,7 +381,7 @@ describe('SettingsView: Sad Paths', () => {
     // Calendar settings fetch should NOT have been called (tenantId is null)
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
     const calendarCalls = fetchMock.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && call[0].includes('/calendar/settings')
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/calendar/settings')
     )
     expect(calendarCalls.length).toBe(0)
 
@@ -459,7 +458,7 @@ describe('SettingsView: Sad Paths', () => {
     await waitFor(() => {
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
       const createCalls = fetchMock.mock.calls.filter(
-        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/resources/create')
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/resources/create')
       )
       expect(createCalls.length).toBe(1)
     })
@@ -546,7 +545,7 @@ describe('SettingsView: Sad Paths', () => {
     await waitFor(() => {
       const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
       const updateCalls = fetchMock.mock.calls.filter(
-        (call: any[]) => typeof call[0] === 'string' && call[0].includes('/update')
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/update')
       )
       expect(updateCalls.length).toBe(1)
     })

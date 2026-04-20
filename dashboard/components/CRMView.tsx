@@ -90,7 +90,7 @@ export default function CRMView() {
     if (tz) {
       setEditForm(prev => ({ ...prev, timezone: tz }))
     }
-  }, [editForm.city, editForm.state, isEditing, isCreating])
+  }, [editForm.city, editForm.state, isEditing, isCreating, setEditForm])
 
   async function fetchCustomers() {
     setLoading(true)

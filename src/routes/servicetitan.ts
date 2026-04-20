@@ -1,11 +1,12 @@
 import type { Pool, PoolClient } from 'pg';
+import type { FastifyInstance } from 'fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as servicetitanClient from '../services/servicetitanClient';
 import * as servicetitanSync from '../services/servicetitanSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 
 export function registerServiceTitanRoutes(
-  app: any,
+  app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

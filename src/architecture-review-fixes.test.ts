@@ -63,7 +63,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
       const dateStr = tomorrow.toISOString().slice(0, 10);
 
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3, '08:00', '17:00', false) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = '08:00', end_time = '17:00', is_off = false",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3, '08:00', '17:00', false) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = '08:00', end_time = '17:00', is_off = false",
         [TEST_TENANT_ID, emp.id, dateStr]
       );
 
@@ -82,7 +82,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
       if (result.rows[0].appointment_id) {
         await client.query("DELETE FROM appointments WHERE id = $1", [result.rows[0].appointment_id]);
       }
-      await client.query("DELETE FROM shift_overrides WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
     });
   });
 
@@ -121,7 +121,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
 
       // Create is_off override for that date
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
         [TEST_TENANT_ID, emp.id, dateStr]
       );
 
@@ -139,7 +139,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
       expect(['EMPLOYEE_NOT_SCHEDULED', 'NO_AVAILABILITY']).toContain(result.rows[0].error_code);
 
       // Cleanup
-      await client.query("DELETE FROM shift_overrides WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
       // Clean up any customer created by the RPC
       await client.query("DELETE FROM customers WHERE tenant_id = $1 AND phone = '+16085559999'", [TEST_TENANT_ID]);
     });
@@ -147,9 +147,9 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// FIX #2: check_coverage_gaps() respects shift_overrides
+// FIX #2: check_coverage_gaps() respects employee_schedule
 // ═══════════════════════════════════════════════════════════════
-describe('Fix #2: check_coverage_gaps with shift_overrides', () => {
+describe('Fix #2: check_coverage_gaps with employee_schedule', () => {
   test('HAPPY: coverage shows as full when override provides coverage', async () => {
     // WHO: Service with employee who has override (working)
     // WHAT: check_coverage_gaps should count override hours as covered
@@ -194,7 +194,7 @@ describe('Fix #2: check_coverage_gaps with shift_overrides', () => {
       // Mark all employees off on that date
       for (const emp of emps.rows) {
         await client.query(
-          "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
+          "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
           [TEST_TENANT_ID, emp.id, dateStr]
         );
       }
@@ -210,7 +210,7 @@ describe('Fix #2: check_coverage_gaps with shift_overrides', () => {
       }
 
       // Cleanup
-      await client.query("DELETE FROM shift_overrides WHERE tenant_id = $1 AND shift_date = $2", [TEST_TENANT_ID, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND shift_date = $2", [TEST_TENANT_ID, dateStr]);
     });
   });
 });
@@ -220,35 +220,35 @@ describe('Fix #2: check_coverage_gaps with shift_overrides', () => {
 // ═══════════════════════════════════════════════════════════════
 describe('Fix #4: RLS admin bypass policy', () => {
   test('HAPPY: RLS policies exist with correct structure', async () => {
-    // WHO: shift_overrides table
+    // WHO: employee_schedule table
     // WHAT: Should have tenant isolation + admin bypass policies
     // WHERE: pg_policies system catalog
     // WHY: RLS must be configured correctly for production
     await withClient(async (client) => {
       // Verify FORCE RLS is enabled
       const rlsCheck = await client.query(
-        "SELECT relforcerowsecurity FROM pg_class WHERE relname = 'shift_overrides'"
+        "SELECT relforcerowsecurity FROM pg_class WHERE relname = 'employee_schedule'"
       );
       expect(rlsCheck.rows[0].relforcerowsecurity).toBe(true);
 
       // Verify RLS is enabled
       const rlsEnabled = await client.query(
-        "SELECT relrowsecurity FROM pg_class WHERE relname = 'shift_overrides'"
+        "SELECT relrowsecurity FROM pg_class WHERE relname = 'employee_schedule'"
       );
       expect(rlsEnabled.rows[0].relrowsecurity).toBe(true);
     });
   });
 
   test('SAD: RLS policy correctly filters by tenant_id (policy structure)', async () => {
-    // WHO: RLS policies on shift_overrides
+    // WHO: RLS policies on employee_schedule
     // WHAT: Tenant isolation policy should match only the current tenant
-    // WHERE: shift_overrides table policies
+    // WHERE: employee_schedule table policies
     // WHY: Cross-tenant data leak prevention (FIX #4)
     // NOTE: postgres superuser has BYPASSRLS=true, so we verify policy structure
     //       instead of runtime behavior (Supabase uses non-superuser in production)
     await withClient(async (client) => {
       const policies = await client.query(
-        "SELECT policyname, qual FROM pg_policies WHERE tablename = 'shift_overrides'"
+        "SELECT policyname, qual FROM pg_policies WHERE tablename = 'employee_schedule'"
       );
 
       // Should have exactly 2 policies
@@ -379,7 +379,7 @@ describe('get_effective_shifts RPC integration', () => {
       const dateStr = futureDate.toISOString().slice(0, 10);
 
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3, '10:00', '14:00', false) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = '10:00', end_time = '14:00', is_off = false",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3, '10:00', '14:00', false) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = '10:00', end_time = '14:00', is_off = false",
         [TEST_TENANT_ID, emp.rows[0].id, dateStr]
       );
 
@@ -397,7 +397,7 @@ describe('get_effective_shifts RPC integration', () => {
       }
 
       // Cleanup
-      await client.query("DELETE FROM shift_overrides WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].id, dateStr]);
     });
   });
 
@@ -414,7 +414,7 @@ describe('get_effective_shifts RPC integration', () => {
       const dateStr = futureDate.toISOString().slice(0, 10);
 
       await client.query(
-        "INSERT INTO shift_overrides (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
         [TEST_TENANT_ID, emp.rows[0].id, dateStr]
       );
 
@@ -430,7 +430,7 @@ describe('get_effective_shifts RPC integration', () => {
       }
 
       // Cleanup
-      await client.query("DELETE FROM shift_overrides WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].id, dateStr]);
     });
   });
 });

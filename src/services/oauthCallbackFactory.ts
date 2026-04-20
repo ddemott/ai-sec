@@ -55,7 +55,7 @@ export function createOAuthCallbackHandler(
   const connectedParam = `${provider}Connected`;
   const displayName = provider.charAt(0).toUpperCase() + provider.slice(1);
 
-  return async (req: { query: Record<string, string> }, reply: { redirect: (url: string) => void }) => {
+  return async (req: { query: unknown }, reply: { redirect: (url: string) => void }) => {
     const query = req.query as Record<string, string>;
     const { code, state, error: oauthError } = query;
 

@@ -1,5 +1,5 @@
 /**
- * Tests for Fix #18: shared/scheduling.ts shift_overrides support
+ * Tests for Fix #18: shared/scheduling.ts employee_schedule support
  * Verifies selectAssignments respects date-specific overrides.
  * Happy + sad paths with 5W diagnostic context.
  */
@@ -35,7 +35,7 @@ const patternShifts: Shift[] = [1, 2, 3, 4, 5].map(dow => ({
   end_time: '17:00',
 }));
 
-describe('Fix #18: shared/scheduling.ts shift_overrides support', () => {
+describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
   describe('isEmployeeOnShift with overrides', () => {
     it('HAPPY: employee on shift via pattern when no override exists', () => {
       // WHO: Mike with Mon-Fri 8-5 pattern

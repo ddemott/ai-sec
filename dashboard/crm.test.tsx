@@ -23,7 +23,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // Mock Supabase for the history fetch
@@ -42,7 +42,7 @@ beforeEach(() => {
   // Set tenantId so useSession/fetchCustomers trigger
   window.localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a')
   // Default successful fetch for customers
-  ;(global.fetch as any).mockResolvedValue({
+  ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
     ok: true,
     json: async () => MOCK_CUSTOMERS
   })
@@ -68,7 +68,7 @@ test('CRMView: should enter edit mode and update state', async () => {
   fireEvent.change(notesInput, { target: { value: 'Newly added secret note' } })
 
   // Mock the save response specifically for this call
-  ;(global.fetch as any).mockResolvedValueOnce({
+  ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
     ok: true,
     json: async () => ({ success: true })
   })
@@ -83,7 +83,7 @@ test('CRMView: should enter edit mode and update state', async () => {
 
 describe('Sad Paths', () => {
   test('CRMView: fetch failure renders without crashing', async () => {
-    ;(global.fetch as any).mockRejectedValueOnce(new Error('Network error'))
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'))
 
     render(<CRMView />)
 
@@ -112,7 +112,7 @@ describe('Sad Paths', () => {
     fireEvent.change(notesInput, { target: { value: 'Important note that must not be lost' } })
 
     // Mock save to fail
-    ;(global.fetch as any).mockResolvedValueOnce({
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       status: 500,
       text: async () => 'Internal Server Error',
