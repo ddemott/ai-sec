@@ -3,7 +3,14 @@
 ## Project Overview
 Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded — they do not appear anywhere in the UI.
 
-## Architecture
+## Framework Migrations (in flight)
+
+See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
+1. **Voice orchestrator: Vapi → LiveKit Agents** — Phase 1 done, Phase 2 ready. Plan at `.claude/plans/federated-snacking-puffin.md`. Blocked on LiveKit API Secret + WSS URL.
+2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — 8 voice AI tools port to `src/routes/agentTools.ts`. Unblocked; part of LiveKit Phase 2.
+3. **TTS provider: Vapi Clara → xAI Grok** — Shipped as custom-voice proxy (`src/routes/tts.ts`); goes native in LiveKit Phase 4.
+
+## Architecture (current, pre-migration)
 - **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
 - **Backend API**: Node.js / Fastify (25 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
@@ -133,7 +140,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,493 backend tests + 465 dashboard tests = 1,958 total passing. 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,429 backend tests + 465 dashboard tests = 1,894 total passing (verified 2026-04-21). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 

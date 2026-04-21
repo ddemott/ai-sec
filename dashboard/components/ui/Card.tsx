@@ -1,13 +1,10 @@
 import React from 'react';
 
-interface CardProps {
+export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   children: React.ReactNode;
   title?: string;
   icon?: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
   variant?: 'default' | 'success' | 'info' | 'dark';
-  onClick?: () => void;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -18,6 +15,10 @@ export const Card: React.FC<CardProps> = ({
   style,
   variant = 'default',
   onClick,
+  role,
+  tabIndex,
+  onKeyDown,
+  ...rest
 }) => {
   const variants = {
     default: 'border text-inherit',
@@ -51,9 +52,10 @@ export const Card: React.FC<CardProps> = ({
       className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${onClick ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2' : ''} ${className}`}
       style={style ? { ...defaultStyle, ...variantInlineStyles, ...style } : { ...defaultStyle, ...variantInlineStyles }}
       onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      role={role ?? (onClick ? 'button' : undefined)}
+      tabIndex={tabIndex ?? (onClick ? 0 : undefined)}
+      onKeyDown={onKeyDown ?? (onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e as unknown as React.MouseEvent<HTMLDivElement>); } } : undefined)}
+      {...rest}
     >
       {title && (
         <h3 className={`font-bold mb-4 flex items-center text-sm uppercase tracking-widest ${titleColors[variant]}`}>

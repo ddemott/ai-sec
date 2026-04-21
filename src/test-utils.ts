@@ -21,7 +21,25 @@ export async function getApiClient() {
 }
 
 export async function clearDB(client: Client) {
-    await client.query("TRUNCATE tenants, resources, customers, appointments, call_summaries, call_transcripts, soft_reservations, users, services, employees, employee_shifts, service_employee, service_resource, tenant_docs, tenant_skills CASCADE;");
+    // Truncate all known tables, ignoring missing ones (schema may vary between environments)
+    const tables = [
+        'tenants', 'resources', 'customers', 'appointments', 'call_summaries',
+        'call_transcripts', 'soft_reservations', 'users', 'services', 'employees',
+        'employee_shifts', 'employee_schedule', 'service_employee', 'service_resource',
+        'tenant_docs', 'tenant_skills',
+    ];
+    for (const table of tables) {
+        await client.query(`TRUNCATE ${table} CASCADE`).catch(() => { /* table may not exist */ });
+    }
+}
+
+/** Check if a table exists in the current database */
+export async function tableExists(client: Client, tableName: string): Promise<boolean> {
+    const res = await client.query(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)",
+        [tableName]
+    );
+    return res.rows[0].exists;
 }
 
 export async function setupBasicTenant(client: Client) {

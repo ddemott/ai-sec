@@ -1,11 +1,17 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-04-10
+**Last updated:** 2026-04-21
 
 ---
 
 ## Where We Are
 
-Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone provisioned. Voice AI working end-to-end.
+Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone provisioned. Voice AI working end-to-end on Vapi — **migration to LiveKit Agents in flight** (see `docs/FRAMEWORK_MIGRATIONS.md`).
+
+### April 20-21 Session: UX/a11y backlog complete + migration docs
+
+- **All 47 UX/accessibility items resolved** (commit `f9ffa8e`, tracked in `docs/TODO.md`). Clickable divs → semantic buttons with keyboard handlers across 8 components. Hand-rolled modals consolidated onto shared `Modal`. All `confirm()`/`alert()` calls replaced with `ConfirmModal` + `showToast`. ARIA roles, `aria-selected`, `aria-live`, `role="dialog"` added throughout. URL query param sync on sub-tabs. Loading skeletons, empty states. Radiogroup semantics, fieldset grouping, explicit labels.
+- **Framework migration index created** — `docs/FRAMEWORK_MIGRATIONS.md` tracks three in-flight swaps: Vapi→LiveKit (orchestrator), Supabase Edge Functions→Fastify (tool runtime, 8 tools), Vapi Clara→xAI Grok TTS (shipped as proxy, going native in LiveKit Phase 4).
+- **Docs audit + sync** — CLAUDE.md, README.md, BUGS.md, ARCHITECTURE.md, DEPLOYMENT.md, PLAN.md all updated to reflect current state.
 
 ### April 9-10 Session: UI/UX Audit + Shift Bar Fix
 
@@ -64,11 +70,11 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone prov
 
 See `docs/TODO.md` for the unified task list.
 
-### Test Count (as of 2026-04-17)
-- **1,493 backend tests + 465 dashboard tests = 1,958 total**, 0 failures
+### Test Count (verified 2026-04-21)
+- **1,429 backend tests + 465 dashboard tests = 1,894 total**, 0 failures
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
-- Zero TypeScript errors
+- Zero TypeScript errors (`npx tsc --noEmit` clean)
 
 ---
 
@@ -76,18 +82,18 @@ See `docs/TODO.md` for the unified task list.
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 20 route modules, Railway auto-deploy from main |
+| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 25 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 63 migrations applied, FORCE RLS on all tables |
+| **Database** | Live | Supabase Postgres (managed), 74 migrations applied, FORCE RLS on all tables |
 | **Phone provisioning** | Working | `POST /provisioning/activate` creates Vapi assistant + phone number automatically |
 | **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant (Clara voice, GPT-4o-mini), phone assigned |
-| **Voice AI (end-to-end)** | Working | Answers calls, books appointments, answers policy questions, rejects invalid bookings naturally |
-| **Edge functions** | Working | Supabase pausing bug resolved 2026-03-30, all 7 tools operational |
+| **Voice AI (end-to-end)** | Working | Answers calls, books appointments, answers policy questions, rejects invalid bookings naturally. **Migrating to LiveKit** — see `docs/FRAMEWORK_MIGRATIONS.md` |
+| **Edge functions** | Working | Supabase pausing bug resolved 2026-03-30, all 8 tools operational |
 | **Knowledge base** | Working | 40 policy Q&A pairs across 9 categories, document upload (PDF/TXT/DOC/DOCX/MD), auto-save |
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,118 backend + 465 dashboard = 1,586 passing + 88 QA assertions | All green (with DB running), zero TS errors |
+| **Tests** | 1,429 backend + 465 dashboard = 1,894 passing + 88 QA assertions | All green (verified 2026-04-21), zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
@@ -213,9 +219,9 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 
 1. **Deploy dashboard** (Vercel or Railway) — currently local only
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
-3. ~~Apply new migrations to Supabase~~ — Done. All 63 migrations applied including April 1 timezone fix + specific booking errors
-4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit, 35 items resolved)
-5. **Database webhooks for n8n** — post-call summaries, calendar sync triggers
+3. ~~Apply new migrations to Supabase~~ — Done. All 74 migrations applied
+4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit 35 items + April 20 a11y 47 items, commit `f9ffa8e`)
+5. **Voice AI migration**: Vapi → LiveKit Agents (Phase 2 ready, blocked on credentials) — see `docs/FRAMEWORK_MIGRATIONS.md`
 6. **Beta testing with DynaTire** — real-world validation with live calls
 
 ### Done This Session (2026-04-01)
@@ -293,4 +299,4 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
 | QA live tests | 1 file | 29 calls / 88 assertions | Live edge function tool calls with DB verification |
-| **Total** | **59 + 16 + 1** | **1,319 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration |
+| **Total** | **75 backend + 22 dashboard + 1 QA** | **1,894 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration (verified 2026-04-21) |

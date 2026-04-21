@@ -16,6 +16,13 @@
   }
 }
 
+/* Match datetime-local / date / time picker icons to input text color */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
 /* ===== THEME SYSTEM — CSS Custom Properties ===== */
 /* Every theme defines: backgrounds, accents, text, borders, fonts, semantic colors */
 /* Components must use var(--xxx) — never hardcode colors or fonts */

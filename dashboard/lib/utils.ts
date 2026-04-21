@@ -10,7 +10,7 @@ export function toLocalISO(date: string | Date): string {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return '';
   const tzOffset = d.getTimezoneOffset() * 60000;
-  const localISO = new Date(d.getTime() - tzOffset).toISOString().slice(0, -1);
+  const localISO = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   return localISO;
 }
 

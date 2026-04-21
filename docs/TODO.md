@@ -17,6 +17,8 @@ Single source of truth for all remaining work. Organized by priority.
 
 ## Voice AI Migration: Vapi → LiveKit Agents
 
+See `docs/FRAMEWORK_MIGRATIONS.md` for the full list of in-flight framework swaps (LiveKit, Edge Functions → Fastify, TTS).
+
 Plan file: `.claude/plans/federated-snacking-puffin.md`
 
 - [ ] Phase 2: Port 8 edge function tools to `/agent-tools/*` Fastify routes

@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { User, Users } from 'lucide-react'
+import { User, Users, Wand2, X } from 'lucide-react'
 
 interface WizardModeChooserProps {
   onChoose: (mode: 'solo' | 'team') => void

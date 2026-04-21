@@ -34,7 +34,7 @@ function toLocalISOFromParts(date: Date, hour: number): string {
   const d = new Date(date);
   d.setHours(hour, 0, 0, 0);
   const offset = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - offset).toISOString().slice(0, -1);
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 }
 
 export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({

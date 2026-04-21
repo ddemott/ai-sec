@@ -13,9 +13,9 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Phase** | 13 — Production Readiness |
 | **Backend** | Live on Railway (`ai-sec-production.up.railway.app`) |
 | **Dashboard** | Local dev (deployment pending) |
-| **Voice AI** | Working end-to-end (Vapi + Clara voice, migrating to LiveKit) |
+| **Voice AI** | Working end-to-end (Vapi + Clara voice). Migrating to LiveKit Agents — see `docs/FRAMEWORK_MIGRATIONS.md` |
 | **Phone** | Provisioned (DynaTire demo tenant) |
-| **Tests** | 1,958 passing (1,493 backend + 465 dashboard), zero TypeScript errors |
+| **Tests** | 1,894 passing (1,429 backend + 465 dashboard), zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
@@ -59,7 +59,7 @@ Telnyx (telephony) --> Vapi (STT/LLM/TTS) --> Supabase Edge Function (Deno)
 | **Backend** | Fastify 4.x, 25 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
 | **Database** | PostgreSQL + pgvector, 74 migrations, Row Level Security, atomic booking RPCs |
-| **Edge Functions** | Deno, Supabase Edge Functions, 7 voice AI tools |
+| **Edge Functions** | Deno, Supabase Edge Functions, 8 voice AI tools (being ported to Fastify `/agent-tools/*`) |
 | **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
 | **Security** | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS |
@@ -129,7 +129,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   └── e2e/                Playwright tests
 ├── supabase/
 │   ├── functions/vapi-tools/  Deno Edge Functions (voice AI tool handlers)
-│   ├── migrations/            72 SQL migrations
+│   ├── migrations/            74 SQL migrations
 │   └── seed.sql               Platform admin + DynaTire demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -142,7 +142,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,493 tests)
+npm test                              # Backend (1,429 tests)
 cd dashboard && npx vitest run        # Dashboard (465 tests)
 deno task test --no-check             # Edge functions
 cd dashboard && npx playwright test   # E2e (19 Playwright tests)
@@ -233,7 +233,8 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions |
 | `docs/UI_UX_DESIGN.md` | Interaction design + UX principles |
 | `docs/PLAN.md` | Roadmap (phases 1-13+) |
-| `docs/BUGS.md` | Historical bug tracker (72 bugs + 35 UX items) |
+| `docs/BUGS.md` | Historical bug tracker (72 bugs + 47 UX items, all resolved) |
+| `docs/FRAMEWORK_MIGRATIONS.md` | Index of in-flight migrations (Vapi→LiveKit, Edge Functions→Fastify, Clara→xAI Grok) |
 
 ---
 

@@ -1,19 +1,23 @@
 # SecretaryHQ SaaS – Architecture
 
 ## 1. Overview
-The system is a multi-tenant, **Edge-First / Serverless** SecretaryHQ built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 20 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+The system is a multi-tenant SaaS built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 25 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
+
+> **Migration in flight:** The voice-AI stack is moving from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify. Sections 2 and 8 below describe the **current** architecture. See `docs/FRAMEWORK_MIGRATIONS.md` for the target architecture and migration plan.
 
 ---
 
-## 2. Core System Flow (The "Live" Voice Loop)
+## 2. Core System Flow (The "Live" Voice Loop — current / pre-migration)
 1.  **Inbound Call**: Caller → Telnyx → Voice Orchestrator (Vapi).
 2.  **Warm-up Trigger**: Vapi sends a "Call Started" webhook to eliminate cold-starts.
-3.  **Conversation**: Orchestrator (STT/TTS/VAD) ↔ LLM (OpenAI GPT-4o-mini).
-4.  **Tool Execution**: LLM → **Adapter Layer** (Supabase Edge Function).
+3.  **Conversation**: Orchestrator (STT/TTS/VAD) ↔ LLM (OpenAI GPT-4o-mini). TTS is routed through `src/routes/tts.ts` to xAI Grok.
+4.  **Tool Execution**: LLM → **Adapter Layer** (Supabase Edge Function, 8 tools).
 5.  **Business Logic**: Adapter → **Core Service Layer** (TypeScript/Deno).
 6.  **Data Persistence**: Core Service → **Repository Layer** (Postgres RPC).
 7.  **Knowledge Retrieval**: Core Service → **RAG Layer** (pgvector search).
-8.  **Async Logic**: Postgres Trigger → n8n (Calendar Sync, SMS, Summarization).
+8.  **Async Logic**: Inline in Fastify route handlers — post-call summaries, calendar sync, CRM sync, SMS (all fire-and-forget from mutation routes).
+
+**Target (post-LiveKit migration):** Telnyx → LiveKit (SIP + orchestrator) → Deepgram STT → OpenAI LLM → xAI Grok TTS (native), with the 8 tools ported from the Supabase Edge Function into `src/routes/agentTools.ts` on Fastify.
 
 ---
 
@@ -25,7 +29,7 @@ The Dashboard provides business owners with transparency and control.
 - **State Management**: `SessionProvider` React Context for auth/session; `useStaticData` hook for shared tenant data.
 - **Auth**: JWT-based authentication (8h expiry) via `/login` endpoint. Auto-logout on 401. Tokens stored in localStorage and sent as `Authorization: Bearer` headers.
 - **Error Handling**: React `ErrorBoundary` wraps all views. Structured JSON logging via `createLogger()` utility.
-- **Testing**: Vitest + React Testing Library (jsdom environment). 313 tests across smoke, appointment, CRM, settings, employee, setup wizard, skill map, scheduler, and component suites.
+- **Testing**: Vitest + React Testing Library (jsdom environment). 465 tests across smoke, appointment, CRM, settings, employee, setup wizard, skill map, scheduler, and component suites.
 
 ### 3.2 Key Views & Features
 - **Business Analytics**: High-level metrics for call volume, booking conversion, and estimated revenue generated.
@@ -53,7 +57,7 @@ The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template,
 ---
 
 ## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 20 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan).
+The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 25 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, tts).
 
 ### 4.0 Middleware Layer
 Shared middleware lives in `src/middleware.ts`:
@@ -63,15 +67,14 @@ Shared middleware lives in `src/middleware.ts`:
 - **`logEvent` / `logWarning`**: Structured logging utilities for audit trail and debugging.
 
 ### 4.1 Security
-- **RLS Enforcement**: All tenant-scoped route modules use `withTenantClient()` which acquires a connection from `apiPool` (the `api_user` role), calls `set_tenant_context()`, and releases after the query. Only super-admin and auth routes use the admin pool. This ensures all tenant data access goes through Postgres Row-Level Security.
-- **Least Privilege**: The `api_user` role has explicit `SELECT, INSERT, UPDATE, DELETE` grants per table (not `ALL PRIVILEGES`).
+- **RLS Enforcement**: All tenant-scoped route modules use `withTenantClient()` which acquires a connection from the single DB pool, calls `set_tenant_context()`, and releases after the query. `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables ensures tenant isolation holds even under the `postgres` superuser role (required for Supabase-managed Postgres where a separate `api_user` role isn't available).
 - **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
 - **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
 
 ### 4.2 Testing
 - **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
 - **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 1,006 backend tests across critical-bugs, high-bugs, medium-bugs, low-bugs, schema, RLS, customer, CRM-appointments, vocabulary, registration, coverage, billing, tools, scheduling, scheduling-timezone, voice-ai-fixes, oauth-callback-factory, token-management, available-slots, bugfix-regression (rounds 1-5), calendar-sync, google-calendar, outlook-calendar, square, servicetitan, provisioning, normalizer, vapi-agent-config, and index suites. 313 dashboard tests across CRM, appointments, settings, employee, setup wizard, skill map, scheduler, settings-calendar, and component suites. 1,319 total unit tests + 88 live QA assertions. All tests include happy and sad path coverage with 5W diagnostic context.
+- **Coverage**: 1,429 backend tests across 75 files (routes, services, scheduling, RLS, CRM sync, OAuth, voice-AI fixes, bug regression, schema, provisioning, billing, etc.) + 465 dashboard tests across 22 files (CRM, appointments, settings, employee, setup wizard, skill map, scheduler, components). **1,894 total unit tests + 88 live QA assertions** (verified 2026-04-21). All tests include happy and sad path coverage with 5W diagnostic context.
 
 ---
 
@@ -117,14 +120,18 @@ Four CRM integrations with bidirectional sync using timestamp-based merge (most 
 - **Pull triggers**: Webhook receivers per provider + periodic full sync endpoints.
 - **DB tables**: `tenant_integration_settings` (OAuth tokens per provider), `entity_sync_map` (local/external ID mapping with timestamps).
 
-## 8. Async Integration Layer (n8n)
-- **Post-Call Processing**: Generates summaries and sentiment analysis.
-- **Notifications**: Automated SMS/Email alerts to business owners upon new bookings.
-- **Trigger**: The Postgres trigger (`notify_n8n_on_appointment`) uses `pg_net` for real HTTP calls to the tenant's n8n webhook URL. Falls back to `RAISE NOTICE` on local dev without `pg_net`.
+## 8. Async Integration Layer
+
+**n8n has been removed.** Post-call summarization, calendar sync, CRM sync, and SMS are all now handled inline in Fastify route handlers as fire-and-forget calls from mutation endpoints. The `n8n/` directory and `docs/N8N_WORKFLOWS.md` were deleted. Any remaining `notify_n8n_on_appointment` trigger references in historical migrations are dead code.
+
+- **Post-call summaries**: generated in `src/routes/voice.ts` after Vapi's "call ended" webhook fires.
+- **Calendar sync**: `src/services/calendarSync.ts` orchestrates Google + Outlook push on every appointment mutation.
+- **CRM sync**: `src/services/syncOrchestrator.ts` fans out to Jobber/HubSpot/Square/ServiceTitan on appointment + customer mutations.
+- **SMS**: `src/routes/communications.ts` + `src/routes/reminders.ts` — routes and schemas exist, but provider integration (Twilio or Telnyx SMS) is still stubbed. Planned to use Telnyx post-LiveKit migration to keep the telephony provider unified.
 
 ---
 
-## 8. Data Resiliency & Security
+## 9. Data Resiliency & Security
 - **Atomic Bookings**: Postgres RPCs (`book_appointment_atomic`) with strict conflict resolution and multi-layer validation.
 - **Row Level Security (RLS)**: Every table is isolated by `tenant_id`. All RLS policies standardized on `app.current_tenant_id`. Backend enforces RLS via `withTenantClient()`.
 - **JWT Authentication**: 8-hour token expiry with auto-logout. No more plain localStorage sessions.

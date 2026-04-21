@@ -31,13 +31,13 @@
 - Full code review resolved 58 bugs across all severity levels
 - JWT auth with expiry and auto-logout, standardized RLS via `withTenantClient()`, Zod validation at all API boundaries
 - DST-safe shift checks, error boundaries, SessionContext, structured logging
-- Tests passing (expanded to 1,319 total by Phase 13)
+- Tests passing (expanded to 1,894 total by Phase 13)
 
 ### Phase 9: Scale & Polish
 - UUID standardization throughout, shared `scheduling.ts` and `getEmbedding.ts`
 - Dead code cleanup, audit logging with before/after snapshots, soft deletes with partial indexes
 - ARIA accessibility labels, customer timezone support, agent template with Mustache variables
-- Route extraction: 20 focused modules under `src/routes/` with shared middleware layer (expanded with CRM integration routes)
+- Route extraction: 25 focused modules under `src/routes/` with shared middleware layer (expanded with CRM integration routes, communications, reminders, versionHistory, tts)
 
 ### Phase 10: CRM & Dashboard Enhancements
 - Unified CRM detail view with appointments, call summaries, transcripts, notes, and search
@@ -67,10 +67,10 @@
 - [x] **Secrets Management**: Done — `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET` set in Supabase
 - [x] **Vapi Agent**: Done — Agent configured with GPT-4o-mini LLM, Deepgram Nova-2 STT, Clara voice, pointing to production Edge Function
 - [x] **Telephony Wiring**: Done — +1 (630) 397-0194 provisioned and operational for DynaTire
-- [ ] **Database Webhooks**: Enable Supabase webhooks to trigger n8n
+- [x] **n8n removed**: Done — all async work (post-call summaries, calendar sync, CRM sync) runs inline in Fastify route handlers. `n8n/` directory deleted.
 - [x] **Outlook Sync**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel
 - [x] **Token Refresh**: Done — 5-minute buffer proactive refresh for both Google and Outlook
-- [ ] **Call Summary Embeddings**: Generate embeddings in post-call summarizer n8n workflow
+- [x] **Call Summary Embeddings**: Done — generated inline after call summary creation (BUG-032)
 - [x] **Live RAG Testing**: Done — Knowledge base questionnaire built (40 questions, 9 categories), POST /knowledge/add, PUT /knowledge/:id
 - [x] **Live Shift Testing**: Done — Business hours validation and past-time rejection verified in production
 - [x] **Scheduling Timezone Fix**: Done (2026-04-01) — BUG-059: `book_with_scheduling_atomic()` timezone regression fixed. Migration `20260401000000` applied to production.
@@ -82,6 +82,9 @@
 - [x] **Front Desk Shift Bars**: Done (2026-04-09) — BUG-072 resolved, shift bars rendering correctly in NewSchedulerView.
 - [x] **Scheduler View Tabs**: Done (2026-04-09) — Staff view now includes scheduler sub-tabs.
 - [x] **5W Diagnostic Compliance**: Done (2026-04-09) — All 465 dashboard tests include 5W diagnostic context.
+- [x] **UX/a11y Backlog**: Done (2026-04-20, commit `f9ffa8e`) — all 47 items from April 10-11 review resolved.
+- [ ] **Deploy Dashboard**: Vercel or Railway. Set `DASHBOARD_URL` in Railway env vars.
+- [ ] **Voice AI Migration (Vapi → LiveKit)**: Phase 2+ of the plan in `.claude/plans/federated-snacking-puffin.md`. Phase 1 complete. See `docs/FRAMEWORK_MIGRATIONS.md`.
 - [ ] **Stripe Test Products**: Recreate 4 products (Solo/Growth/Professional/Enterprise) in Stripe test mode. Update Price IDs in `.env.production`. Live mode products already created.
 - [ ] **Rotate Exposed Keys**: Supabase DB password, OpenAI API key, Supabase access token were exposed in chat. Regenerate all and update `.env.production`.
 - [ ] **Beta Testing**: Real-world call tests with DynaTire
@@ -139,7 +142,7 @@ Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works 
 | Telephony | Telnyx (SIP trunk config, planned provisioning API) |
 | Embeddings | OpenAI (`text-embedding-3-small`) |
 | LLM | OpenAI (GPT-4o-mini for voice + normalization) |
-| Calendar Sync | Google Calendar (n8n workflow) |
+| Calendar Sync | Google Calendar + Outlook (inline in Fastify, no n8n) |
 | Payments | Stripe (direct API in `src/routes/billing.ts`) |
 | Auth | bcrypt + JWT (hardcoded, no OAuth/SSO) |
 
@@ -220,7 +223,7 @@ CREATE TABLE tenant_integrations (
 | 4 | SMS/Notifications (Telnyx > Twilio) | 1 week |
 | 5 | Payment Provider (Stripe > Square) | 1-2 weeks |
 | 6 | Data Access Layer (PostgreSQL abstraction) | 4-8 weeks |
-| 7 | Voice AI Provider (Vapi > alternatives) | 2-4 weeks |
+| 7 | ~~Voice AI Provider (Vapi > alternatives)~~ **ACTIVE** — migrating to LiveKit Agents, see `docs/FRAMEWORK_MIGRATIONS.md` | 8-12 days |
 
 **What NOT to abstract:** Auth (add OAuth/SSO as feature, not adapter), frontend framework (Next.js/React), Edge Functions runtime (Deno/Supabase).
 

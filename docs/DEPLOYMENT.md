@@ -37,10 +37,10 @@ From **Project Settings** > **Database**:
 In the Supabase SQL Editor, run:
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgvector;
-CREATE EXTENSION IF NOT EXISTS pg_net;
 ```
 - `pgvector`: Required for RAG knowledge base embeddings
-- `pg_net`: Required for the `notify_n8n_on_appointment` trigger to make HTTP calls
+
+(`pg_net` is no longer required — the old `notify_n8n_on_appointment` trigger is dead code. All async work runs inline in Fastify route handlers.)
 
 ---
 
@@ -62,19 +62,10 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 ./scripts/setup-db.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
 ```
 
-This applies all 63 migrations in order and seeds the database with the DynaTire demo tenant.
+This applies all 74 migrations in order and seeds the database with the DynaTire demo tenant.
 
-### 2.3 Create the api_user Role
-The migrations create an `api_user` role with least-privilege grants. On Supabase, you may need to verify this role exists:
-
-```sql
--- Check if api_user was created
-SELECT rolname FROM pg_roles WHERE rolname = 'api_user';
-```
-
-If the role wasn't created (some Supabase plans restrict `CREATE ROLE`), you have two options:
-1. **Recommended**: Use the Supabase service_role connection for the backend instead of a separate api_user pool
-2. **Alternative**: Create the role manually via the SQL Editor with the same grants from `20260228000003_api_user.sql`
+### 2.3 RLS Enforcement
+No separate `api_user` role is needed. The backend connects as the `postgres` role via `DATABASE_URL`, and `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables (migration `20260323000000_force_rls_single_pool.sql`) enforces tenant isolation even under superuser. `withTenantClient()` sets `app.current_tenant_id` per request.
 
 ### 2.4 Verify the Schema
 Spot-check that critical objects exist:
@@ -84,8 +75,9 @@ SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
 
 -- Key functions
 SELECT proname FROM pg_proc WHERE proname IN (
-  'book_appointment_atomic', 'check_availability_with_tz',
-  'notify_n8n_on_appointment', 'link_orphaned_transcripts',
+  'book_appointment_atomic', 'book_with_scheduling_atomic',
+  'check_availability_with_tz', 'get_effective_shifts',
+  'get_effective_shifts_bulk', 'link_orphaned_transcripts',
   'set_tenant_context'
 );
 
@@ -142,7 +134,7 @@ Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 3. **Health check**: `/health` endpoint
 4. **Restart policy**: `ON_FAILURE` with max 10 retries
 
-**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 63 migrations (including `20260323000000_force_rls_single_pool.sql`) to Supabase before deploying.
+**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 74 migrations (including `20260323000000_force_rls_single_pool.sql`) to Supabase before deploying.
 
 **Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -225,6 +217,8 @@ Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 
 ## Phase 6: Telephony Setup (Telnyx + Vapi)
 
+> **Migration note:** Voice orchestration is moving from Vapi to LiveKit Agents. This section documents the **current** (Vapi) setup. Once LiveKit Phase 2+ ships, this phase will be replaced with LiveKit SIP bridge + dispatch rule configuration. See `docs/FRAMEWORK_MIGRATIONS.md` and `.claude/plans/federated-snacking-puffin.md`.
+
 ### 6.1 Telnyx: Buy a Phone Number
 1. Sign in to [portal.telnyx.com](https://portal.telnyx.com)
 2. Go to **Numbers** > **Search and Buy Numbers**
@@ -260,34 +254,16 @@ Create the agent in Vapi (via API or dashboard) and assign the imported phone nu
 
 ---
 
-## Phase 7: n8n Workflows (Optional)
+## Phase 7: Async Work (No n8n Required)
 
-The project includes two n8n workflow blueprints in `n8n/`:
+**n8n has been removed from this project.** All async work runs inline in Fastify route handlers:
 
-### 7.1 Post-Call Summarizer (`n8n/post_call_summarizer.json`)
-- Triggered by Vapi's "call ended" webhook
-- Generates AI summaries and sentiment via OpenAI
-- Stores results in `call_summaries` table
+- **Post-call summarization** — `src/routes/voice.ts` handles Vapi's `call-ended` webhook, calls OpenAI for summary + sentiment, stores in `call_summaries`.
+- **Calendar sync** — `src/services/calendarSync.ts` fires on every appointment mutation (Google + Outlook).
+- **CRM sync** — `src/services/syncOrchestrator.ts` fans out to Jobber/HubSpot/Square/ServiceTitan on appointment + customer mutations.
+- **SMS / reminders** — `src/routes/communications.ts` + `src/routes/reminders.ts` (routes and Zod schemas exist; provider integration stubbed).
 
-### 7.2 Calendar Sync (Direct Backend Integration)
-Google Calendar sync is now built directly into the Fastify backend — no n8n required. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` in Railway env vars. Tenants connect via Settings > Calendar Synchronization > Connect Google Calendar (OAuth flow). Appointments automatically sync on create, update, delete, and cancel.
-
-The legacy n8n blueprint (`n8n/calendar_sync.json`) is retained for reference but is no longer the active implementation.
-
-### Setup
-1. Deploy n8n (self-hosted or [n8n.cloud](https://n8n.cloud))
-2. Import the workflow JSON files
-3. Set the n8n webhook URL on the tenant:
-   ```sql
-   UPDATE tenants SET n8n_webhook_url = 'https://your-n8n-instance.com/webhook/...'
-   WHERE id = '<TENANT_ID>';
-   ```
-
-### 7.3 Enable Database Webhooks (Alternative to pg_net)
-If `pg_net` isn't available or you prefer Supabase-native webhooks:
-1. Go to **Database** > **Webhooks** in the Supabase dashboard
-2. Create a webhook on the `appointments` table for `INSERT` events
-3. Point it to your n8n webhook URL
+Required env vars for async integrations are all set in Railway (Google/Outlook OAuth creds, CRM OAuth creds, Stripe keys). No separate workflow engine to deploy.
 
 ---
 
@@ -344,7 +320,6 @@ Before going live, verify:
 - [ ] **Login credentials** have been changed from the seeded defaults
 - [ ] **CORS origin** is restricted to your dashboard domain (currently set to `origin: true` which allows all)
 - [ ] **Supabase RLS** is verified as enabled on all tenant-scoped tables
-- [ ] **pg_net** is enabled for the n8n trigger (or Database Webhooks are configured)
 
 ---
 
@@ -354,8 +329,7 @@ Before going live, verify:
 |---|---|
 | Edge Function returns 500 | Check logs: `npx supabase functions logs vapi-tools` |
 | Database connection refused | Verify connection string and that Supabase allows your IP |
-| Migrations fail on Supabase | Some extensions need enabling first (`pgvector`, `pg_net`) |
-| `api_user` role doesn't exist | See Phase 2.2 — use service_role or create manually |
+| Migrations fail on Supabase | `pgvector` extension must be enabled first |
 | Vapi can't reach Edge Function | Ensure `--no-verify-jwt` was used during deploy |
 | CORS errors on dashboard | Update CORS origin in `src/index.ts` to your dashboard domain |
 | JWT errors after deploy | Ensure `JWT_SECRET` is the same across backend restarts |

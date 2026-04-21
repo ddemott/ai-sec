@@ -1,8 +1,8 @@
 # Bugs & Issues
 
-Found during full code review on March 16, 2026. Updated April 9, 2026 with UI/UX audit.
+Found during full code review on March 16, 2026. Updated April 21, 2026 with UX/a11y backlog resolution.
 
-**Summary**: 72 bugs tracked + 35 UX issues. 70 FIXED, 2 NOT A BUG, 35 UX RESOLVED, 1 OPEN (BUG-072).
+**Summary**: 72 bugs tracked + 47 UX/a11y issues. 71 FIXED, 2 NOT A BUG, 47 UX RESOLVED, 0 OPEN.
 
 ### April 9-10, 2026: UI/UX Audit (35 items resolved)
 

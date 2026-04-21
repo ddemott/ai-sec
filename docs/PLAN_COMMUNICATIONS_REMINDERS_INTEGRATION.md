@@ -72,8 +72,9 @@ Create adapter layer that implements the expected interfaces using ai-sec's data
   - Add rate limiting for email sends
   - Add delivery tracking
 
-- [ ] **TODO-2.4**: Wire SMSService to Twilio
-  - Verify TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
+- [ ] **TODO-2.4**: Wire SMSService to Telnyx
+  - Provider choice: **Telnyx** (not Twilio) — we already use Telnyx for SIP trunking, keeping the telephony vendor unified. Planned as part of LiveKit migration Phase 7 (`docs/FRAMEWORK_MIGRATIONS.md`).
+  - Verify TELNYX_API_KEY, TELNYX_MESSAGING_PROFILE_ID, TELNYX_PHONE_NUMBER
   - Test SMS delivery in staging
   - Add usage tracking integration
 
@@ -86,7 +87,7 @@ Create adapter layer that implements the expected interfaces using ai-sec's data
 
 - [ ] **TODO-3.1**: Create reminder scheduler worker
   - Background job that processes due reminders
-  - Options: node-cron, Bull queue, or n8n workflow
+  - Options: node-cron (simplest) or Bull queue (if persistence/retry needed). n8n is no longer an option — removed from the stack.
   - Run every minute to check for due reminders
 
 - [ ] **TODO-3.2**: Wire ReminderService to appointments
@@ -109,7 +110,7 @@ Create adapter layer that implements the expected interfaces using ai-sec's data
 - [ ] **TODO-4.1**: Communications service tests
   - Happy paths: send email, send SMS, multi-channel appointment notifications
   - Sad paths: invalid email, no consent, provider failure, rate limit
-  - Integration tests with mock SMTP/Twilio
+  - Integration tests with mock SMTP/Telnyx
 
 - [ ] **TODO-4.2**: Reminders service tests
   - Happy paths: schedule, process, trigger, cancel reminders
@@ -180,7 +181,7 @@ supabase/migrations/YYYYMMDD_reminder_schedules.sql
 ```
 src/services/tenants/index.ts            # DB-backed implementation
 src/services/communications/emailService.ts  # Production SMTP config
-src/services/communications/smsService.ts    # Production Twilio config
+src/services/communications/smsService.ts    # Production Telnyx config
 src/routes/appointments.ts               # Hook reminder scheduling
 src/index.ts                             # Register new routes
 package.json                             # Add nodemailer dependency
