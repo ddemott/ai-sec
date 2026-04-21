@@ -1,0 +1,30 @@
+stateDiagram-v2
+  [*] --> NoSub: tenant created
+
+  NoSub --> Checkout: POST /billing/checkout
+  Checkout --> NoSub: user cancels
+  Checkout --> Active: checkout.session.completed
+
+  Active --> PastDue: invoice.payment_failed
+  PastDue --> Active: payment retry succeeds
+  PastDue --> Canceled: customer.subscription.deleted
+  Active --> Canceled: customer.subscription.deleted
+
+  Canceled --> NoSub: stripe_subscription_id nulled
+  Canceled --> Checkout: re-subscribe
+
+  state Active {
+    [*] --> Solo
+    Solo: Solo — $129/mo
+    Growth: Growth — $279/mo
+    Professional: Professional — $449/mo<br/>(defined, not gated)
+    Solo --> Growth: plan switch
+    Growth --> Solo: plan switch
+    Solo --> Professional
+    Growth --> Professional
+  }
+
+  note right of PastDue
+    subscriptionGateMiddleware returns 402
+    Exempt: /billing/*, /auth/*, /health
+  end note

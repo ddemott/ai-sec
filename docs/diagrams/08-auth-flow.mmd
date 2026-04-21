@@ -1,0 +1,40 @@
+sequenceDiagram
+  autonumber
+  actor User
+  participant Dash as Dashboard<br/>(SessionContext)
+  participant API as Fastify /auth
+
+  Note over User,API: Register
+  User->>Dash: register form
+  Dash->>API: POST /register<br/>(email, password, company, business_type)
+  API->>API: bcrypt hash
+  API->>API: INSERT tenants + users<br/>(email unique per-tenant, not global)
+  API->>API: jwt.sign(tenant_id, user_id, email)<br/>expires 8h
+  API-->>Dash: { token, tenant_id, user_id }
+  Dash->>Dash: localStorage.setItem
+
+  Note over User,API: Login
+  User->>Dash: login form
+  Dash->>API: POST /auth/login<br/>(rate-limit 5 / 5min)
+  API->>API: SELECT user → bcrypt.compare
+  API-->>Dash: { token }
+
+  Note over Dash,API: Any authenticated call
+  Dash->>API: GET /resource<br/>Authorization Bearer jwt
+
+  alt valid
+    API-->>Dash: 200 { data }
+  else 401 TOKEN_EXPIRED
+    API-->>Dash: 401
+    Dash->>API: POST /auth/refresh<br/>(verifies signature, ignores exp)
+    API-->>Dash: fresh token
+    Dash->>API: retry original
+  else 401 TENANT_NOT_FOUND
+    API-->>Dash: 401
+    Dash->>Dash: forceLogout()<br/>clear localStorage + redirect
+  else 402 SUBSCRIPTION_REQUIRED
+    API-->>Dash: 402 + upgrade_url
+    Dash->>Dash: show upgrade modal
+  end
+
+  Note over Dash: pre-emptive refresh<br/>10 min before expiry

@@ -1,0 +1,56 @@
+flowchart LR
+  subgraph triggers["Mutation points in routes"]
+    A1[appointment create]
+    A2[appointment update]
+    A3[appointment delete]
+    A4[appointment cancel]
+    C1[customer create]
+    C2[customer update]
+    C3[customer delete]
+  end
+
+  CalSync["calendarSync.ts<br/>(fire-and-forget)"]
+  CrmSync["syncOrchestrator.ts<br/>(fire-and-forget)"]
+
+  A1 & A2 & A3 & A4 --> CalSync
+  A1 & A2 & A3 & A4 --> CrmSync
+  C1 & C2 & C3 --> CrmSync
+
+  subgraph cal["Calendars (push-only)"]
+    G[Google Calendar]
+    O[Outlook / MS Graph]
+  end
+
+  subgraph crm["CRMs (bidirectional)"]
+    J[Jobber — GraphQL]
+    H[HubSpot — REST v3]
+    S[Square — REST v2]
+    ST[ServiceTitan — REST v2]
+  end
+
+  CalSync --> G
+  CalSync --> O
+  CrmSync --> J
+  CrmSync --> H
+  CrmSync --> S
+  CrmSync --> ST
+
+  subgraph pull["Pull triggers"]
+    WH["POST /{provider}/webhook<br/>(signature-verified)"]
+    Recon["POST /{provider}/sync<br/>full reconcile"]
+  end
+
+  J -.webhook.-> WH
+  H -.webhook.-> WH
+  S -.webhook.-> WH
+  ST -.webhook.-> WH
+  WH --> CrmSync
+  Recon --> CrmSync
+
+  ESM[("entity_sync_map<br/>local_id ↔ external_id")]
+  ASM[("appointment_sync_map")]
+  CrmSync <--> ESM
+  CalSync <--> ASM
+
+  Merge["Merge rule:<br/>most recent updated_at wins<br/>COALESCE for non-conflicting fields"]
+  CrmSync -.-> Merge

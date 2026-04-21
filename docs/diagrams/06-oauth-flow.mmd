@@ -1,0 +1,40 @@
+sequenceDiagram
+  autonumber
+  actor Owner as Owner (dashboard)
+  participant API as Fastify<br/>/{provider}/auth/*
+  participant Factory as oauthCallbackFactory
+  participant Provider as Provider<br/>(Google/Jobber/etc)
+  participant DB as tenant_integration_settings
+  participant Token as tokenManagement.ts
+
+  rect rgb(40, 50, 70)
+    Note over Owner,DB: Initial connect
+    Owner->>API: GET /{provider}/auth/start
+    API->>Factory: sign state JWT<br/>(tenant_id, csrf_nonce)
+    Factory-->>Owner: 302 to provider authorize URL
+    Owner->>Provider: authorize (browser)
+    Provider-->>Owner: 302 to callback<br/>?code=...&state=...
+    Owner->>API: GET /{provider}/auth/callback
+    API->>Factory: verify state JWT (CSRF)
+    Factory->>Provider: exchange code<br/>for access+refresh tokens
+    Provider-->>Factory: tokens + expires_in
+    Factory->>DB: upsert tokens (RLS-scoped)
+    Factory-->>Owner: 302 to dashboard
+  end
+
+  rect rgb(40, 60, 45)
+    Note over API,Token: Later — any call that needs a token
+    API->>Token: getValidToken(tenantId, provider)
+    Token->>DB: SELECT tokens
+    alt expires_at - now < 5min
+      Token->>Provider: POST /oauth/token<br/>(refresh_token grant)
+      alt refresh ok
+        Provider-->>Token: fresh tokens
+        Token->>DB: UPDATE tokens
+      else refresh fails
+        Token->>DB: UPDATE is_active = false
+        Token-->>API: throw<br/>(dashboard shows "Reconnect required")
+      end
+    end
+    Token-->>API: access_token
+  end

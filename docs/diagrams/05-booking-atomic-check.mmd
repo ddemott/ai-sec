@@ -1,0 +1,45 @@
+sequenceDiagram
+  autonumber
+  participant LLM
+  participant Tool as book_with_scheduling<br/>(edge fn today, Fastify tomorrow)
+  participant RPC as book_with_scheduling_atomic()
+  participant DB as Postgres
+
+  LLM->>Tool: serviceName, startTime, phone,<br/>name, requiredEmployeeSkills[]
+  Tool->>Tool: Zod validate
+  Tool->>RPC: BEGIN
+
+  Note over RPC,DB: atomic — all checks or nothing
+  RPC->>DB: 1. Past-time check<br/>(now AT TIME ZONE tenant.tz)
+  alt in the past
+    RPC-->>Tool: INVALID_PARAMS
+    Tool-->>LLM: "ERROR: INVALID_PARAMS"
+  end
+
+  RPC->>DB: 2. Business-hours check
+  RPC->>DB: 3. Resource availability<br/>(no overlap on resource_id)
+  alt resource busy
+    RPC-->>Tool: TIMESLOT_OCCUPIED
+  end
+
+  RPC->>DB: 4. Staff on shift<br/>(employee_schedule date-based,<br/>night-shift aware, DST-safe)
+  alt nobody scheduled
+    RPC-->>Tool: EMPLOYEE_NOT_SCHEDULED
+  end
+
+  RPC->>DB: 5. Staff expertise<br/>(service_employee ∩ skill)
+  alt no qualified employee
+    RPC-->>Tool: NO_SKILLED_EMPLOYEE
+  end
+
+  RPC->>DB: 6. Resource capability<br/>(service_resource)
+  alt no capable resource
+    RPC-->>Tool: NO_AVAILABILITY
+  end
+
+  RPC->>DB: 7. Customer upsert by phone
+  RPC->>DB: auto end_time from service.duration_minutes
+  RPC->>DB: INSERT appointments
+  RPC->>RPC: COMMIT
+  RPC-->>Tool: { appointment_id, customer_id, employee_id, resource_id }
+  Tool-->>LLM: success

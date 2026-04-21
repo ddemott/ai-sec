@@ -1,0 +1,143 @@
+erDiagram
+  tenants ||--o{ users : "has"
+  tenants ||--o{ customers : "owns"
+  tenants ||--o{ employees : "employs"
+  tenants ||--o{ resources : "owns"
+  tenants ||--o{ services : "offers"
+  tenants ||--o{ appointments : "books"
+  tenants ||--o{ tenant_skills : "defines"
+  tenants ||--o{ tenant_docs : "knows"
+  tenants ||--o{ call_transcripts : "records"
+  tenants ||--o{ call_summaries : "summarizes"
+  tenants ||--o{ tenant_integration_settings : "configures"
+  tenants ||--o{ tenant_calendar_settings : "configures"
+  tenants ||--o{ reminder_schedules : "schedules"
+  tenants ||--o{ unanswered_questions : "logs"
+
+  employees ||--o{ employee_schedule : "scheduled"
+  employees ||--o{ service_employee : "qualified for"
+  services ||--o{ service_employee : "needs skill"
+  services ||--o{ service_resource : "needs resource"
+  resources ||--o{ service_resource : "capable of"
+  tenant_skills ||--o{ service_employee : "via skill"
+
+  customers ||--o{ appointments : "books"
+  employees ||--o{ appointments : "assigned"
+  resources ||--o{ appointments : "occupies"
+  services ||--o{ appointments : "for"
+
+  call_transcripts ||--o| call_summaries : "summarized as"
+  appointments ||--o{ appointment_sync_map : "external id"
+  customers ||--o{ entity_sync_map : "external id"
+
+  tenants {
+    uuid id PK
+    text name
+    text phone_number
+    text subscription_status
+    text subscription_plan
+    text timezone
+    int sort_order
+  }
+  users {
+    uuid id PK
+    uuid tenant_id FK
+    text email "per-tenant unique"
+    text password_hash
+  }
+  customers {
+    uuid id PK
+    uuid tenant_id FK
+    text phone "E.164"
+    text name
+    bool is_deleted
+  }
+  employees {
+    uuid id PK
+    uuid tenant_id FK
+    text first_name
+    text last_name
+    bool is_deleted
+  }
+  employee_schedule {
+    uuid id PK
+    uuid tenant_id FK
+    uuid employee_id FK
+    date schedule_date
+    time start_time
+    time end_time "may be cross-midnight"
+  }
+  resources {
+    uuid id PK
+    uuid tenant_id FK
+    text name
+    bool is_deleted
+  }
+  services {
+    uuid id PK
+    uuid tenant_id FK
+    text name
+    int duration_minutes
+    numeric price
+    bool is_deleted
+  }
+  appointments {
+    uuid id PK
+    uuid tenant_id FK
+    timestamptz start_time
+    timestamptz end_time
+    uuid customer_id FK
+    uuid employee_id FK
+    uuid resource_id FK
+    uuid service_id FK
+    text status
+    text call_id
+  }
+  tenant_docs {
+    uuid id PK
+    uuid tenant_id FK
+    text source_file
+    text text
+    text normalized_text
+    vector embedding "dim 1536"
+  }
+  call_transcripts {
+    uuid id PK
+    uuid tenant_id FK
+    text call_id
+    text transcript
+  }
+  call_summaries {
+    uuid id PK
+    uuid tenant_id FK
+    text call_id
+    text summary
+    vector embedding
+  }
+  tenant_integration_settings {
+    uuid id PK
+    uuid tenant_id FK
+    text provider
+    text access_token
+    text refresh_token
+    timestamptz expires_at
+    bool is_active
+  }
+  entity_sync_map {
+    uuid id PK
+    uuid tenant_id FK
+    text local_entity_type
+    uuid local_id
+    text provider
+    text external_id
+    timestamptz external_updated_at
+  }
+  service_employee {
+    uuid service_id FK
+    uuid employee_id FK
+    uuid skill_id FK
+  }
+  service_resource {
+    uuid service_id FK
+    uuid resource_id FK
+  }

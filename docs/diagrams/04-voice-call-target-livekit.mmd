@@ -1,0 +1,42 @@
+sequenceDiagram
+  autonumber
+  actor Caller
+  participant Telnyx
+  participant LK as LiveKit Cloud
+  participant Agent as Agent Worker<br/>(Node on Railway)
+  participant DG as Deepgram STT
+  participant OAI as OpenAI LLM
+  participant XAI as xAI Grok TTS
+  participant API as Fastify<br/>/agent-tools/*
+  participant DB as Postgres
+
+  Caller->>Telnyx: Dial number
+  Telnyx->>LK: SIP INVITE → inbound trunk
+  LK->>LK: dispatch rule → create room<br/>metadata = { tenant_id }
+  LK->>Agent: room.created event (WebSocket)
+  Agent->>LK: join room
+  Agent->>Caller: greeting (TTS audio)
+
+  loop each turn
+    Caller->>LK: audio frames
+    LK->>Agent: audio stream
+    Agent->>DG: STT
+    DG-->>Agent: transcript
+    Agent->>OAI: LLM
+    OAI-->>Agent: text + tool calls
+    opt tool call
+      Agent->>API: POST /agent-tools/{name}<br/>+ x-agent-secret<br/>body contains tenant_id
+      API->>DB: withTenantClient → RPC
+      DB-->>API: result
+      API-->>Agent: { success: true, result: ... }
+    end
+    Agent->>XAI: TTS (native plugin)
+    XAI-->>Agent: audio
+    Agent->>LK: publish audio
+    LK->>Caller: audio
+  end
+
+  Caller--xLK: hangup
+  LK->>Agent: room.closed
+  Agent->>API: POST /voice/call-ended
+  API->>DB: same summary + sync path as today

@@ -1,0 +1,40 @@
+sequenceDiagram
+  autonumber
+  actor Caller
+  participant Telnyx
+  participant Vapi as Vapi Orchestrator
+  participant TTS as TTS Proxy<br/>src/routes/tts.ts
+  participant XAI as xAI Grok TTS
+  participant Edge as Edge Fn<br/>vapi-tools
+  participant DB as Postgres
+  participant API as Fastify /voice
+
+  Caller->>Telnyx: Dial +1 (630) 397-0194
+  Telnyx->>Vapi: SIP INVITE
+  Vapi->>Vapi: STT warmup (Deepgram)
+  Vapi->>Caller: greeting (TTS audio)
+
+  loop each turn
+    Caller->>Vapi: speech
+    Vapi->>Vapi: STT (Deepgram Nova-2)
+    Vapi->>Vapi: LLM (GPT-4o-mini)
+    opt LLM issues tool call
+      Vapi->>Edge: POST /vapi-tools<br/>+ x-vapi-secret
+      Edge->>Edge: Zod validate
+      Edge->>DB: RPC or pgvector query
+      DB-->>Edge: rows / error code
+      Edge-->>Vapi: { results: [...] }<br/>or "ERROR: ..."
+    end
+    Vapi->>TTS: voice-request + x-vapi-secret
+    TTS->>XAI: POST /v1/tts (15s abort)
+    XAI-->>TTS: audio stream
+    TTS-->>Vapi: audio stream
+    Vapi->>Caller: TTS audio
+  end
+
+  Caller--xTelnyx: hangup
+  Telnyx->>Vapi: BYE
+  Vapi->>API: POST /voice/call-ended (webhook)
+  API->>API: generate summary + embedding
+  API->>DB: INSERT call_summaries<br/>link_orphaned_transcripts()
+  API-)API: fire-and-forget CRM + calendar sync

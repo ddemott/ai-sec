@@ -1,0 +1,49 @@
+flowchart TB
+  Caller([Caller phone])
+  Telnyx["Telnyx SIP Trunk<br/>+1 630 397 0194"]
+  Caller -->|PSTN| Telnyx
+
+  subgraph curr["CURRENT — Vapi + Edge Function"]
+    direction TB
+    Vapi["Vapi Orchestrator<br/>STT Deepgram + LLM OpenAI + TTS Clara"]
+    TTSProxy["src/routes/tts.ts<br/>TTS proxy"]
+    XAI["xAI Grok TTS"]
+    EdgeFn["Supabase Edge Function<br/>vapi-tools (Deno)"]
+    Vapi -->|TTS provider=custom-voice| TTSProxy
+    TTSProxy --> XAI
+    Vapi -->|POST + x-vapi-secret| EdgeFn
+  end
+
+  subgraph tgt["TARGET — LiveKit Agent"]
+    direction TB
+    LiveKit["LiveKit Cloud<br/>SIP bridge + rooms"]
+    Agent["Agent Worker (Node)<br/>separate Railway service"]
+    DG["Deepgram STT"]
+    OAI["OpenAI LLM"]
+    XAINative["xAI Grok TTS<br/>native plugin"]
+    LiveKit -->|WebSocket| Agent
+    Agent --> DG
+    Agent --> OAI
+    Agent --> XAINative
+  end
+
+  Telnyx -.current.-> Vapi
+  Telnyx -.target.-> LiveKit
+
+  Fastify["Fastify Backend<br/>25 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+
+  EdgeFn --> Fastify
+  Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
+
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2")]
+  Stripe["Stripe"]
+  Integrations["Google / Outlook<br/>Jobber / HubSpot<br/>Square / ServiceTitan"]
+  Dashboard["Next.js 14 Dashboard<br/>(Vercel pending)"]
+
+  Fastify --> Postgres
+  Fastify --> Stripe
+  Fastify --> Integrations
+  Dashboard -->|Api.* calls| Fastify
+
+  style curr fill:#2a1a1a,stroke:#884
+  style tgt fill:#1a2a1a,stroke:#484

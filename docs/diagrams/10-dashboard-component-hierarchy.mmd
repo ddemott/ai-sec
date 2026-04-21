@@ -1,0 +1,58 @@
+flowchart TB
+  Layout["app/layout.tsx<br/>ErrorBoundary + ToastContainer"]
+
+  subgraph Contexts["React Contexts (dashboard/lib/)"]
+    direction LR
+    Session["SessionContext<br/>JWT + useActiveTenantId + tenantsVersion"]
+    Theme["ThemeContext<br/>8 themes, CSS vars"]
+    Vocab["VocabularyContext<br/>3-tier label fallback"]
+    ApptDetail["AppointmentDetailContext"]
+  end
+
+  Layout --> Contexts
+  Layout --> Landing["app/page.tsx<br/>Marketing landing"]
+  Contexts --> Shell["app/dashboard/page.tsx<br/>Single-route app shell<br/>?tab=... URL sync"]
+
+  Shell --> FD["Front Desk tab"]
+  Shell --> BO["Back Office tab"]
+  Shell --> Wizard["SetupWizard — 7 steps<br/>+ WizardModeChooser (solo/team)"]
+
+  FD --> Schedule["Schedule<br/>NewSchedulerView"]
+  FD --> CRMView["Customers (CRM)"]
+  FD --> StaffingMap["Staffing Map"]
+
+  Schedule --> StaffRow["StaffRow"]
+  Schedule --> ResCol["ResourceColumns"]
+  Schedule --> QuickBook["QuickBookPanel"]
+  Schedule --> DayFocus["EmployeeDayFocusPanel"]
+  Schedule --> Profile["StaffProfileCard"]
+
+  BO --> MyTeam["My Team<br/>employees / skills / schedules"]
+  BO --> MyBiz["My Business<br/>services / resources / hours / KB"]
+  BO --> AIInsights["AI and Insights<br/>analytics / KB Q+A / vocabulary"]
+
+  subgraph UI["components/ui/ — 16 primitives"]
+    direction LR
+    Button
+    Card
+    Modal
+    ConfirmModal
+    Toast
+    FolderTabs
+    Input
+    Select
+    Badge
+    Feedback[FeedbackButton]
+    Coverage[CoverageBar]
+    Phone[PhoneInput]
+    TimeInput
+  end
+
+  Shell -.consumes.-> UI
+  FD -.consumes.-> UI
+  BO -.consumes.-> UI
+  Wizard -.consumes.-> UI
+
+  API["lib/api.ts<br/>Api.{resource}.{action}() — fully typed"]
+  Shell -.HTTP.-> API
+  API -->|Bearer JWT| Fastify["Fastify Backend"]

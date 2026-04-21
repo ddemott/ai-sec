@@ -1,0 +1,31 @@
+sequenceDiagram
+  autonumber
+  participant Route as Fastify Route
+  participant WTC as withTenantClient()
+  participant Pool as pg Pool<br/>(DATABASE_URL, single)
+  participant Client as Postgres client
+  participant RLS as RLS Policy
+
+  Route->>WTC: withTenantClient(pool, tenantId,<br/>async (c) => { ... })
+  WTC->>Pool: pool.connect()
+  Pool-->>WTC: client
+
+  WTC->>Client: SELECT set_tenant_context($1)
+  Note right of Client: sets app.current_tenant_id<br/>on this session
+  Client-->>WTC: ok
+
+  WTC->>Route: invoke handler(client)
+  Route->>Client: SELECT * FROM customers
+  Client->>RLS: evaluate USING clause
+  Note right of RLS: tenant_id =<br/>current_setting('app.current_tenant_id')::uuid
+  RLS-->>Client: filtered rows
+  Client-->>Route: rows (this tenant only)
+
+  Note over Client,RLS: FORCE ROW LEVEL SECURITY means the<br/>policy applies even to the postgres<br/>superuser role — required because<br/>Supabase doesn't allow a separate<br/>api_user role.
+
+  Route-->>WTC: handler returns value
+  WTC->>Client: SELECT set_tenant_context(NULL)
+  WTC->>Client: client.release()
+  WTC-->>Route: result
+
+  Note over Route: Admin routes (super-admin tenant<br/>00000000-0000-0000-0000-000000000000)<br/>skip set_tenant_context entirely.<br/>tenants, users, business_templates<br/>have admin-bypass policies:<br/>if context is NULL, allow all rows.
