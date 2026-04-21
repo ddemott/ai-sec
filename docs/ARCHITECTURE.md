@@ -1,142 +1,906 @@
-# SecretaryHQ SaaS – Architecture
+# SecretaryHQ SaaS — Architecture
+
+**Last verified:** 2026-04-21 (1,894 tests passing, 25 route modules, 74 migrations, 8 edge function tools)
+
+> **Migration in flight:** The voice-AI stack is moving from **Vapi + Supabase Edge Functions** to **LiveKit Agents + Fastify**. Sections that describe the voice loop (§6), tools catalog (§7), phone provisioning (§8), and deployment topology (§3) call out both current and target states. See `docs/FRAMEWORK_MIGRATIONS.md` for the migration index and `.claude/plans/federated-snacking-puffin.md` for the implementation plan.
+
+---
 
 ## 1. Overview
-The system is a multi-tenant SaaS built for ultra-low latency and high reliability. The backend follows a **Route Module Architecture** — 25 focused route files under `src/routes/` registered by a slim `src/index.ts` entry point. Shared business logic lives in `shared/` for cross-runtime reuse (Node and Deno).
 
-> **Migration in flight:** The voice-AI stack is moving from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify. Sections 2 and 8 below describe the **current** architecture. See `docs/FRAMEWORK_MIGRATIONS.md` for the target architecture and migration plan.
+Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). HIPAA verticals are permanently excluded.
 
----
+**Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + CRM.
 
-## 2. Core System Flow (The "Live" Voice Loop — current / pre-migration)
-1.  **Inbound Call**: Caller → Telnyx → Voice Orchestrator (Vapi).
-2.  **Warm-up Trigger**: Vapi sends a "Call Started" webhook to eliminate cold-starts.
-3.  **Conversation**: Orchestrator (STT/TTS/VAD) ↔ LLM (OpenAI GPT-4o-mini). TTS is routed through `src/routes/tts.ts` to xAI Grok.
-4.  **Tool Execution**: LLM → **Adapter Layer** (Supabase Edge Function, 8 tools).
-5.  **Business Logic**: Adapter → **Core Service Layer** (TypeScript/Deno).
-6.  **Data Persistence**: Core Service → **Repository Layer** (Postgres RPC).
-7.  **Knowledge Retrieval**: Core Service → **RAG Layer** (pgvector search).
-8.  **Async Logic**: Inline in Fastify route handlers — post-call summaries, calendar sync, CRM sync, SMS (all fire-and-forget from mutation routes).
-
-**Target (post-LiveKit migration):** Telnyx → LiveKit (SIP + orchestrator) → Deepgram STT → OpenAI LLM → xAI Grok TTS (native), with the 8 tools ported from the Supabase Edge Function into `src/routes/agentTools.ts` on Fastify.
+**Layering:**
+- **Edge**: Telnyx (PSTN + SIP) → Vapi today / LiveKit tomorrow (orchestrator + STT/LLM/TTS glue)
+- **Tools**: 8 voice tools that run against the tenant's Postgres — today on Supabase Edge Functions (Deno), tomorrow on Fastify (Node) at `/agent-tools/*`
+- **API**: Fastify (25 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
+- **DB**: Postgres + pgvector on Supabase, 74 migrations, RLS on every tenant-scoped table
+- **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
 
-## 3. Dashboard & Management UI
-The Dashboard provides business owners with transparency and control.
+## 2. Directory Structure
 
-### 3.1 Tech Stack
-- **Framework**: Next.js (React) + Tailwind CSS.
-- **State Management**: `SessionProvider` React Context for auth/session; `useStaticData` hook for shared tenant data.
-- **Auth**: JWT-based authentication (8h expiry) via `/login` endpoint. Auto-logout on 401. Tokens stored in localStorage and sent as `Authorization: Bearer` headers.
-- **Error Handling**: React `ErrorBoundary` wraps all views. Structured JSON logging via `createLogger()` utility.
-- **Testing**: Vitest + React Testing Library (jsdom environment). 465 tests across smoke, appointment, CRM, settings, employee, setup wizard, skill map, scheduler, and component suites.
+```
+/
+├── src/                          Fastify backend (Node)
+│   ├── index.ts                  Entry — registers 25 route modules
+│   ├── middleware.ts             withHandler, tenantMiddleware, AppError, logEvent
+│   ├── routes/                   25 route modules + routeHelpers.ts
+│   ├── services/                 21 files (CRM clients + sync, calendar sync, OAuth, TTS, name/token utilities)
+│   └── database/                 DB pool, withTenantClient()
+├── dashboard/                    Next.js 14 App Router
+│   ├── app/                      page.tsx (landing), dashboard/page.tsx (app shell), layout.tsx, globals.css
+│   ├── components/               ~60 feature components + ui/ primitives
+│   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
+│   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
+│   ├── e2e/                      19 Playwright tests
+│   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
+│   └── 22 *.test.tsx files       Vitest + React Testing Library
+├── supabase/
+│   ├── functions/vapi-tools/     Deno edge function — 8 tools (current)
+│   │   ├── index.ts              Dispatcher + Zod schemas
+│   │   ├── core/                 dispatcher.ts, service.ts
+│   │   └── db/                   repository.ts
+│   ├── migrations/               74 SQL migrations
+│   └── seed.sql                  Platform admin + DynaTire tenant
+├── shared/                       Cross-runtime code (Node + Deno)
+│   ├── getEmbedding.ts           OpenAI text-embedding-3-small wrapper
+│   ├── normalizeForEmbedding.ts  gpt-4o-mini normalization before pgvector storage
+│   └── scheduling.ts             Core scheduling algorithm (shared between booking RPC caller and UI)
+├── vapi/                         Vapi assistant template + tool definitions (current orchestrator)
+├── scripts/                      bootstrap, setup-db, seed-db, preflight-cloud, deploy, qa-live-test.py
+├── docs/                         Architecture, deployment, UI/UX, TODO, migrations, bugs, plans
+├── certs/                        Self-signed HTTPS certs for local dev
+├── railway.json + nixpacks.toml  Backend deploy config
+├── CLAUDE.md + README.md         Project overview + developer docs
+└── .env.* + package.json         Config + deps
+```
 
-### 3.2 Key Views & Features
-- **Business Analytics**: High-level metrics for call volume, booking conversion, and estimated revenue generated.
-- **Knowledge Base**: Document management system for uploading PDFs and text to "train" the AI on business policies.
-- **Staff Working Hours**: Interface for managing employee shifts (Day of Week + Time Ranges) with create/edit support.
-- **Skill & Capability Matrix**: Unified grid for matching staff expertise with physical resource (bay/chair) capabilities. Debounce guard prevents duplicate requests.
-- **Outlook-style Calendar**: Multi-resource schedule view showing all confirmed appointments.
-- **CRM Viewer**: Unified customer detail view with upcoming/past appointments (cancel flow), AI-generated call summaries with transcript data, and internal notes. Search bar filters by name, phone, or email.
-
-### 3.3 Navigation Architecture
-The dashboard uses a **Front Desk / Back Office two-tab layout**:
-- **Front Desk** — Daily operations: Schedule, Customers, Staffing Map
-- **Back Office** — Configuration and setup: My Team, My Business, AI & Insights
-
-Desktop: Two primary tabs at top level with sub-views within each. Mobile: Bottom nav with primary sections. Sub-tabs render as a horizontal tab bar at the top of composite views.
-
-### 3.4 Vocabulary System
-UI labels adapt per business type via a 3-tier fallback:
-1. **Tenant override** (e.g., owner changed "Bay" to "Stall")
-2. **Template default** (e.g., auto-shop template says "Bay")
-3. **Hardcoded fallback** ("Resource")
-
-The `GET /vocabulary` endpoint resolves labels using `COALESCE(tenant, template, hardcoded)`. Dashboard components consume labels via `Api.vocabulary.get()`. 29 business types across 6 categories (8 planned) supported with per-type vocabulary.
-
----
-
-## 4. Backend API (Fastify)
-The Fastify backend serves as the management API for the dashboard and administrative tasks. Routes are organized into 25 modules under `src/routes/` (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, tts).
-
-### 4.0 Middleware Layer
-Shared middleware lives in `src/middleware.ts`:
-- **`withHandler`**: Decorator that wraps route handlers with structured error handling, request logging, and consistent JSON responses.
-- **`tenantMiddleware`**: Validates tenant context, checks tenant existence via `withTenantClient`, and triggers auto-logout on `TENANT_NOT_FOUND`.
-- **`AppError`**: Typed error class with HTTP status codes for consistent error responses.
-- **`logEvent` / `logWarning`**: Structured logging utilities for audit trail and debugging.
-
-### 4.1 Security
-- **RLS Enforcement**: All tenant-scoped route modules use `withTenantClient()` which acquires a connection from the single DB pool, calls `set_tenant_context()`, and releases after the query. `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables ensures tenant isolation holds even under the `postgres` superuser role (required for Supabase-managed Postgres where a separate `api_user` role isn't available).
-- **Input Validation**: Zod schemas validate login, customer creation, and appointment creation at the API boundary.
-- **JWT Auth**: `/login` returns a signed JWT. Protected routes verify the token and extract tenant context.
-
-### 4.2 Testing
-- **Framework**: Vitest with `--fileParallelism=false` (tests share a database).
-- **Test Database**: Dedicated `test_db` on port 5433, isolated from development data.
-- **Coverage**: 1,429 backend tests across 75 files (routes, services, scheduling, RLS, CRM sync, OAuth, voice-AI fixes, bug regression, schema, provisioning, billing, etc.) + 465 dashboard tests across 22 files (CRM, appointments, settings, employee, setup wizard, skill map, scheduler, components). **1,894 total unit tests + 88 live QA assertions** (verified 2026-04-21). All tests include happy and sad path coverage with 5W diagnostic context.
+**Coming in LiveKit migration:**
+- `agent/` — separate Node.js package for the LiveKit agent worker (deployed as a second Railway service)
+- `src/routes/agentTools.ts` — 8 ported tools (deprecates `supabase/functions/vapi-tools/`)
 
 ---
 
-## 5. Multi-Tenant Knowledge Base (RAG)
-- **Data Storage**: A `tenant_docs` table stores business knowledge as text chunks with `vector(1536)` embeddings.
-- **Ingestion**: PDFs and text files are parsed, chunked (paragraph-aware with overlap), and embedded via OpenAI `text-embedding-3-small`. Duplicate detection deletes existing chunks before re-ingesting.
-- **Retrieval**: The `get_company_policy_answer` tool performs semantic search to provide the AI with factual context during a call, grounding the LLM and preventing hallucinations.
+## 3. Deployment Topology
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           Caller (phone)                            │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ PSTN / SIP
+                               ▼
+                       ┌──────────────────┐
+                       │  Telnyx (SIP)    │  +1 (630) 397-0194
+                       └───────┬──────────┘
+                               │
+               current ────────┼──────── target (in flight)
+                               │
+                     ▼                         ▼
+           ┌───────────────┐           ┌──────────────────┐
+           │    Vapi       │           │  LiveKit Cloud   │
+           │ (orchestrator)│           │ (orchestrator +  │
+           └───────┬───────┘           │   SIP bridge)    │
+                   │                   └────────┬─────────┘
+                   │ webhook                    │ WebSocket
+                   ▼                            ▼
+         ┌─────────────────┐         ┌────────────────────┐
+         │ Supabase Edge   │         │  Agent Worker       │
+         │ Function (Deno) │         │  (Node on Railway)  │
+         │  vapi-tools     │         │  /agent-tools/*     │
+         └────────┬────────┘         └─────────┬──────────┘
+                  │                            │ HTTP + x-agent-secret
+                  └────────────┬───────────────┘
+                               ▼
+                    ┌─────────────────────┐
+                    │  Fastify Backend    │  ai-sec-production.up.railway.app
+                    │  25 route modules   │  Railway (Nixpacks, Node 20)
+                    └──────────┬──────────┘
+                               │
+          ┌────────────────────┼─────────────────────┐
+          ▼                    ▼                     ▼
+    ┌──────────┐        ┌────────────┐        ┌──────────────┐
+    │ Postgres │        │  OpenAI /  │        │ Integrations │
+    │ Supabase │        │  Deepgram /│        │ Google /     │
+    │ + vector │        │  xAI Grok  │        │ Outlook /    │
+    └──────────┘        └────────────┘        │ Jobber /     │
+                                              │ HubSpot /    │
+                                              │ Square / ST  │
+                                              │ Stripe       │
+                                              └──────────────┘
+          ▲
+          │
+    ┌─────┴────────┐
+    │  Dashboard   │  Vercel (pending) or Railway
+    │  Next.js 14  │
+    └──────────────┘
+```
+
+| Service | Platform | Region / URL | Deploy mechanism |
+|---|---|---|---|
+| Backend (Fastify) | Railway | `ai-sec-production.up.railway.app` | Nixpacks auto-deploy from `main` |
+| Database | Supabase (managed Postgres + pgvector) | `sgibijfchvfuizudrmir` (us-west-2) | Migrations applied via `npm run db:migrate` |
+| Edge functions (current) | Supabase Edge Functions (Deno) | `sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools` | `npx supabase functions deploy` |
+| Dashboard | Vercel (planned) / Railway | not yet live | Next.js build via `dashboard/server.js` |
+| Telephony | Telnyx | US local number | Portal-configured SIP trunk to Vapi (today) / LiveKit (target) |
+| Voice orchestrator | Vapi (today) / LiveKit Cloud (target) | Managed | Provisioned per-tenant via `POST /provisioning/activate` |
+| Stripe | Hosted | Webhook: `/billing/webhook` on Railway | Products + price IDs in Stripe dashboard |
+| Agent worker (target) | Railway (separate service) | WebSocket long-runner | Node.js package under `agent/` |
+
+**Graceful shutdown:** Backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
+
+**Single DB pool:** Backend uses one pool via `DATABASE_URL`. No separate `api_user` pool — `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables enforces tenant isolation even as the `postgres` superuser (required for Supabase-managed Postgres).
 
 ---
 
-## 6. Advanced Scheduling Engine
-The scheduler ensures valid bookings by verifying multiple layers of constraints in a single atomic transaction (`book_appointment_atomic`):
-1.  **Resource Availability**: Is the bay/chair free during this window?
-2.  **Staff Expertise**: Does the assigned employee have the required skills for the service?
-3.  **Resource Capabilities**: Does the resource have the required capabilities for the service?
-4.  **Staff Working Hours**: Is the employee currently on-shift? (DST-safe via `AT TIME ZONE`.)
-5.  **Auto End-Time**: When `end_time` is NULL, derives it from `service.duration_minutes`.
-6.  **Customer Upsert**: When `customer_id` is NULL but phone is provided, auto-creates or finds the customer.
-7.  **Assignment Validation**: Validates `assignment_id` as UUID (all entity IDs are now UUID after SERIAL→UUID migration).
+## 4. Data Model
+
+### 4.1 Core entities
+
+```
+┌─────────────┐     ┌──────────────┐    ┌──────────────┐
+│  tenants    │◄────│    users     │    │  customers   │
+│             │     │ (email, pw)  │    │ (per-tenant) │
+└──────┬──────┘     └──────────────┘    └──────┬───────┘
+       │                                        │
+       │         ┌───────────────┐              │
+       ├────────►│   employees   │              │
+       │         └──────┬────────┘              │
+       │                │                       │
+       │         ┌──────▼──────────┐            │
+       │         │employee_schedule│            │
+       │         │ (date-based)    │            │
+       │         └─────────────────┘            │
+       │                                        │
+       │         ┌───────────────┐              │
+       ├────────►│   resources   │              │
+       │         └──────┬────────┘              │
+       │                │                       │
+       │                ▼                       ▼
+       │         ┌──────────────────────────────────┐
+       │         │          appointments             │
+       │         │ (start_time, end_time,           │
+       │         │  resource_id, employee_id,       │
+       │         │  customer_id, service_id,        │
+       │         │  status, call_id)                │
+       │         └──────────────────────────────────┘
+       │
+       │         ┌──────────────┐       ┌─────────────────┐
+       ├────────►│   services   │───────│ service_employee│
+       │         │ (duration,   │       │ (skill req)     │
+       │         │  price)      │       └─────────────────┘
+       │         └──────┬───────┘       ┌─────────────────┐
+       │                │───────────────│ service_resource│
+       │                                │ (capability)    │
+       │         ┌───────────────┐      └─────────────────┘
+       ├────────►│ tenant_skills │
+       │         └───────────────┘
+       │
+       │         ┌─────────────────┐
+       ├────────►│   tenant_docs   │  (pgvector knowledge base)
+       │         │ (embedding,     │
+       │         │  normalized)    │
+       │         └─────────────────┘
+       │
+       │         ┌──────────────────┐   ┌──────────────────┐
+       ├────────►│call_transcripts  │   │  call_summaries  │
+       │         └──────────────────┘   └──────────────────┘
+       │
+       │         ┌──────────────────────────┐
+       ├────────►│tenant_integration_settings│ (OAuth tokens per CRM/calendar)
+       │         └──────────────────────────┘
+       │         ┌────────────────────┐
+       ├────────►│  entity_sync_map   │ (local↔external ID mapping)
+       │         └────────────────────┘
+       │
+       │         ┌─────────────────────┐  ┌──────────────────┐
+       └────────►│tenant_calendar_sett.│  │appointment_sync_m│
+                 └─────────────────────┘  └──────────────────┘
+```
+
+### 4.2 Tables (20 RLS-enabled + 6 global)
+
+**Tenant-scoped (RLS + FORCE RLS):**
+`tenants`, `users`, `customers`, `employees`, `resources`, `services`, `appointments`, `service_employee`, `service_resource`, `tenant_skills`, `tenant_docs`, `employee_schedule`, `call_transcripts`, `call_summaries`, `tenant_integration_settings`, `entity_sync_map`, `tenant_calendar_settings`, `appointment_sync_map`, `reminder_schedules`, `unanswered_questions`.
+
+**Global / platform:**
+`business_templates` (vocabulary per business type), `audit_log`, `record_versions` (version history), `voice_sessions`, `consent_records`, `opt_out_records`.
+
+**Legacy (unused in production):**
+`employee_shifts` (weekly patterns, day_of_week 0-6) — replaced by `employee_schedule` in April 2026. No booking RPC or UI code references it.
+
+### 4.3 Key columns
+
+- All entity IDs are **UUID** (services + employees migrated from `SERIAL` in Phase 9).
+- Every tenant-scoped row has `tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE`.
+- Soft-deletable tables carry `is_deleted BOOLEAN DEFAULT false` + `deleted_at TIMESTAMPTZ` with partial indexes (e.g., `WHERE is_deleted = false`).
+- `customers.phone` is stored in E.164 format (`+1...`). `normalizePhone()` rejects anything with < 10 digits.
+- `appointments` has CHECK constraint `start_time < end_time`, indexes on `(tenant_id, start_time)` + `(resource_id, start_time)` for availability checks, and partial index on `call_id WHERE call_id IS NOT NULL` for Vapi back-reference.
+
+### 4.4 Stored procedures (key RPCs)
+
+| RPC | Purpose |
+|---|---|
+| `book_appointment_atomic(...)` | Legacy atomic booking — 7-layer constraint check + past-time rejection, business hours validation, fuzzy service matching. Used by dashboard QuickBook. |
+| `book_with_scheduling_atomic(...)` | Production voice-AI booking path — uses `employee_schedule` for shift validation (date-based), night-shift support (cross-midnight), specific error codes (`TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`, `NO_AVAILABILITY`, `INVALID_PARAMS`). |
+| `check_availability_with_tz(...)` | Timezone-aware availability check — queries `employee_schedule` for active employees + scans `appointments` for conflicts. |
+| `get_effective_shifts(tenant_id, date)` | Returns entries from `employee_schedule` (date-based only). |
+| `get_effective_shifts_bulk(tenant_id, start, end)` | Bulk variant — returns all employees' shifts in a date range. Used by scheduler for efficient loading. |
+| `search_tenant_docs(tenant_id, query_embedding)` | Cosine similarity over `tenant_docs.embedding` (pgvector `<=>` operator). |
+| `check_coverage_gaps(tenant_id)` | Returns list of services with missing coverage (no qualified employee or resource). |
+| `link_orphaned_transcripts()` | Post-call cleanup — joins transcripts to summaries where `call_id` matches. Called from `dispatcher.handleCallEnded()`. |
+| `set_tenant_context(uuid)` | Sets `app.current_tenant_id` session variable for RLS policy evaluation. Called by `withTenantClient()`. |
+| `fn_audit_trigger()` | `SECURITY DEFINER` trigger — writes before/after snapshots to `audit_log` on INSERT/UPDATE/DELETE of appointments, customers, resources. |
 
 ---
 
-## 7. Calendar Sync (Google Calendar)
-- **OAuth Flow**: `GET /calendar/auth/google` initiates consent, `GET /calendar/auth/google/callback` exchanges code for tokens, stores in `tenant_calendar_settings`.
-- **Auto-Sync**: Appointment create/update/delete/cancel triggers fire-and-forget sync to Google Calendar via `src/services/calendarSync.ts`.
-- **Token Refresh**: Automatic refresh with 5-minute buffer; marks calendar inactive if refresh fails.
-- **Service Layer**: `src/services/googleCalendar.ts` wraps `googleapis` — OAuth2, token management, Calendar API CRUD.
-- **Security**: State param is a signed JWT (CSRF protection), tokens never exposed to frontend, best-effort revocation on disconnect.
-- **Outlook**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel. `src/services/outlookCalendar.ts`.
+## 5. Multi-Tenancy & Row-Level Security
 
-## 7b. CRM Integrations (Bidirectional Sync)
-Four CRM integrations with bidirectional sync using timestamp-based merge (most recent `updated_at` wins per record, COALESCE for non-conflicting fields):
+### 5.1 The context variable
+
+Every tenant-scoped table has RLS policies using `current_setting('app.current_tenant_id', true)::uuid`. Before any query that touches tenant data, the backend sets this session variable:
+
+```ts
+// src/database/withTenantClient.ts
+await client.query(`SELECT set_tenant_context($1)`, [tenantId]);
+// query runs here, RLS auto-filters
+await client.query(`SELECT set_tenant_context(NULL)`);
+client.release();
+```
+
+### 5.2 FORCE ROW LEVEL SECURITY
+
+Supabase's managed Postgres doesn't let us create a separate `api_user` role. Without FORCE, the `postgres` superuser role bypasses RLS entirely. Migration `20260323000000_force_rls_single_pool.sql` applies `FORCE ROW LEVEL SECURITY` to all 20 RLS-enabled tables, which makes RLS apply even to superusers.
+
+### 5.3 Admin bypass
+
+Super-admin operations (cross-tenant queries, tenant listing, user registration) need to bypass RLS. Three tables (`tenants`, `users`, `business_templates`) carry an additional policy: **if `app.current_tenant_id` is unset, allow all rows**. Admin routes acquire a connection without calling `set_tenant_context()` — effectively running in admin mode.
+
+### 5.4 Audit trigger
+
+`fn_audit_trigger` is marked `SECURITY DEFINER` so it can insert into `audit_log` regardless of the caller's RLS context. This keeps the audit trail complete even during admin operations.
+
+---
+
+## 6. Voice Loop
+
+### 6.1 Current (Vapi + Supabase Edge Function)
+
+1. **Inbound call** — Caller dials Telnyx number → Telnyx SIP trunk → Vapi.
+2. **Warm-up** — Vapi sends "Call Started" webhook (not required, improves cold-start latency).
+3. **Conversation** — Vapi runs STT (Deepgram Nova-2), LLM (OpenAI GPT-4o-mini), TTS (Vapi Clara) internally. TTS is proxied through `src/routes/tts.ts` to xAI Grok when `provider: "custom-voice"` is configured.
+4. **Tool execution** — LLM issues tool calls → HTTP POST to `https://<project>.functions.supabase.co/vapi-tools` with `x-vapi-secret` header.
+5. **Business logic** — Edge function dispatcher → service layer → Postgres RPC or pgvector search.
+6. **Response** — Plain `"ERROR: ..."` strings on failure (so the LLM can paraphrase naturally), or Vapi-format JSON `{ results: [{ toolCallId, result }] }` on success.
+7. **Call end** — Vapi sends "call ended" webhook → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
+8. **Post-call async** — Appointment mutations trigger fire-and-forget sync to Google/Outlook/CRMs from route handlers.
+
+### 6.2 Target (LiveKit Agents)
+
+1. **Inbound call** — Telnyx SIP trunk → LiveKit Cloud SIP inbound trunk.
+2. **Room creation** — LiveKit dispatch rule creates a room with metadata `{ tenant_id }`.
+3. **Agent worker** — Node.js worker (separate Railway service) joins the room, runs `VoicePipelineAgent`.
+4. **Conversation** — Deepgram STT → OpenAI LLM → xAI Grok TTS (native plugins, no proxy).
+5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://ai-sec-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
+6. **Business logic** — Fastify route → `withTenantClient()` → same RPCs and pgvector queries as today.
+7. **Response** — Plain JSON `{ success: true, result: ... }`.
+8. **Call end** — LiveKit room close event → `src/routes/voice.ts` same path.
+
+**What stays the same:** Phone number, STT (Deepgram), LLM (OpenAI GPT-4o-mini), TTS (xAI Grok), all 8 tool behaviors, Postgres RPCs, dashboard UI.
+
+**What changes:** Orchestrator layer (Vapi → LiveKit), tool runtime (Deno edge → Node Fastify), phone provisioning (Vapi API → LiveKit dispatch rules + Telnyx direct).
+
+### 6.3 TTS proxy (`src/routes/tts.ts`)
+
+Vapi's custom-voice config points at our TTS proxy. Each synthesis request:
+
+1. Vapi POSTs `{ message: { type: 'voice-request', text, sampleRate, timestamp } }` to `/tts/synthesize` with `x-vapi-secret` header.
+2. Proxy validates secret, forwards text to `https://api.x.ai/v1/tts` with 15s abort timeout.
+3. Streams audio response back as the HTTP body.
+
+After the LiveKit migration this proxy is retired — the xAI plugin lives natively in the agent worker.
+
+---
+
+## 7. Voice AI Tools Catalog
+
+8 tools exposed to the LLM. Current implementation in `supabase/functions/vapi-tools/core/dispatcher.ts` switch statement. Target implementation in `src/routes/agentTools.ts`.
+
+| Tool | Purpose | Backing logic |
+|---|---|---|
+| `get_customer_context` | Caller phone lookup — returns known customer + last appointment + recent call summaries | `service.ts:getCustomerContextWithRouting()` |
+| `check_availability` | Is a specific start/end window free? | `check_availability_with_tz()` RPC |
+| `book_appointment` | Legacy atomic booking (no scheduling layer) | `book_appointment_atomic()` RPC |
+| `get_scheduling_options` | Propose open slots within a date range + service duration | Pure algorithm in `service.ts` + `shared/scheduling.ts` |
+| `book_with_scheduling` | **Production booking path** — atomic with full shift/skill/resource validation | `book_with_scheduling_atomic()` RPC |
+| `get_company_policy_answer` | RAG over `tenant_docs` (pgvector) | `search_tenant_docs()` RPC + OpenAI embedding of query |
+| `get_service_catalog` | Service list + pricing + duration | `SELECT * FROM services WHERE is_deleted = false` |
+| `get_available_slots` | Consolidated slot aggregator (replaces multiple round trips) | `service.ts:getAvailableSlots()` — single query |
+
+**Response contract (current):** Vapi-wrapped `{ results: [{ toolCallId, result }] }` on success, plain `"ERROR: ..."` string on failure.
+
+**Response contract (target):** Plain `{ success: true, result: ... }` JSON. Agent worker is responsible for translating failures into LLM-friendly prose.
+
+---
+
+## 8. Phone Provisioning
+
+### 8.1 Current flow (`POST /provisioning/activate`)
+
+1. Owner clicks "Activate Phone" in the setup wizard with an area code.
+2. Backend calls **Vapi API** `POST /phone-number` to provision a Telnyx number via Vapi's BYO-Telnyx integration.
+3. Backend calls Vapi `POST /assistant` with the tenant's template (from `vapi/agent.template.json`) — substitutes `{{TENANT_NAME}}`, `{{TENANT_ID}}`, `{{SERVER_URL}}`, `{{VOICE_PROVIDER}}`, `{{VOICE_ID}}`, `{{SERVICE_DESCRIPTION}}`, etc.
+4. Backend links phone number to assistant via Vapi API.
+5. Tenant row updated with `phone_number`, `vapi_assistant_id`, `vapi_phone_number_id`, `phone_status = 'active'`.
+
+Rollback on any failure — if step 3 fails, step 2's number is released.
+
+### 8.2 Target flow (post-LiveKit)
+
+1. Backend calls **Telnyx Portal API** directly to search + purchase numbers.
+2. Backend creates a SIP trunk pointing to LiveKit Cloud's SIP inbound endpoint.
+3. Backend creates a LiveKit dispatch rule keyed to the phone number: route inbound calls to a room with metadata `{ tenant_id }`.
+4. Agent worker is already running — picks up the new room automatically.
+
+Tenant row schema stays similar (`phone_number`, `livekit_dispatch_rule_id`, `telnyx_trunk_id`).
+
+---
+
+## 9. Backend API (Fastify)
+
+### 9.1 Route modules (25)
+
+```
+auth, tenants, appointments, customers, employees, shifts, resources,
+services, mappings, skills, calendar, knowledge, analytics, vocabulary,
+billing, provisioning, jobber, hubspot, square, servicetitan, voice,
+communications, reminders, versionHistory, tts
+```
+
+`src/index.ts` is slim — imports each `register*Routes(app, pool, withTenantClient)` and wires them.
+
+### 9.2 Middleware layer (`src/middleware.ts`)
+
+- **`withHandler(fn)`** — Decorator wrapping every route handler. Catches thrown `AppError`, converts to consistent `{ success: false, error, details? }` response. Logs request + response with structured fields.
+- **`tenantMiddleware`** — Validates tenant context from JWT, calls `withTenantClient` to ensure the tenant row still exists (triggers auto-logout on `TENANT_NOT_FOUND`).
+- **`AppError`** — Typed error class with HTTP status + error code. Preferred over `throw new Error()`.
+- **`requireAuth`** / **`requireTenantId`** — Per-route guards.
+- **`logEvent(req, name, fields)`** / **`logWarning` / `logError`** — Structured JSON logging via Pino.
+
+### 9.3 Request lifecycle
+
+```
+Request
+  → CORS + helmet + rate-limit (all routes)
+  → JWT verification (protected routes) → extract tenant_id
+  → tenantMiddleware (tenant-scoped routes) → verify tenant exists
+  → withHandler(handler)
+    → handler body
+      → withTenantClient(pool, tenantId, async (client) => {
+          set_tenant_context(tenantId)
+          await handler logic (SELECT/INSERT/UPDATE via client)
+          set_tenant_context(NULL)
+        })
+      → Zod validation at boundaries
+      → assertRowAffected() on UPDATE/DELETE
+    → catches AppError / Error, formats response
+  → Response
+```
+
+### 9.4 Validation & response conventions
+
+- Every mutation validated by a Zod schema at the API boundary.
+- Every response uses `{ success: boolean, ...payload | error }` envelope.
+- Every UPDATE/DELETE uses `assertRowAffected()` — zero-row operations return 404, never silent success.
+- All entity IDs validated by `requireValidUUID()`.
+- Pagination via `parsePagination(req.query)` (default limit 50, max 200).
+
+### 9.5 Shared route helpers (`src/routes/routeHelpers.ts`)
+
+`sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`.
+
+### 9.6 Security stack
+
+- `@fastify/helmet` — standard security headers.
+- `@fastify/rate-limit` — 100 req/min globally, 5 req / 5 min on `/auth/login` + `/register`.
+- CORS via `CORS_ORIGIN` env var (restrict to dashboard origin in production).
+- HTTPS in dev via self-signed certs in `certs/`; platform TLS termination in production.
+- Fail-fast env validation — server refuses to start if `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, or `STRIPE_SECRET_KEY` are missing.
+
+---
+
+## 10. Authentication & Authorization
+
+### 10.1 User auth flow
+
+```
+POST /register    { email, password, company_name, business_type }
+                  → bcrypt hash → INSERT users + INSERT tenants
+                  → returns { token, tenant_id, user_id }
+
+POST /login       { email, password }  [rate-limited: 5/5min]
+                  → SELECT user by email → bcrypt.compare
+                  → jwt.sign({ tenant_id, user_id, email }, JWT_SECRET, expiresIn: 8h)
+                  → returns { token }
+
+POST /auth/refresh { token }  (token may be expiring)
+                  → verifies signature (ignores expiry)
+                  → re-signs with fresh 8h expiry
+                  → returns { token }
+```
+
+Client keeps the token in `localStorage` and sends `Authorization: Bearer <jwt>` on every API call. On `401 TOKEN_EXPIRED`, client auto-calls `/auth/refresh`. On `401 TENANT_NOT_FOUND`, client force-logs-out (tenant was deleted).
+
+Dashboard `SessionContext` watches token TTL and pre-emptively refreshes 10 minutes before expiry.
+
+### 10.2 Tenant uniqueness
+
+`users.email` is scoped per-tenant, not globally unique. The same email can register a second tenant without collision (BUG-002 fix, March 2026 review).
+
+### 10.3 OAuth flows (integrations)
+
+All 6 external integrations (Google Calendar, Outlook, Jobber, HubSpot, Square, ServiceTitan) use the same OAuth 2.0 pattern via `src/services/oauthCallbackFactory.ts`:
+
+```
+GET /{provider}/auth/start
+  → Generate signed state JWT (contains tenant_id, csrf_nonce)
+  → Redirect to provider authorize URL with state + PKCE
+
+GET /{provider}/auth/callback?code=...&state=...
+  → Verify state JWT signature (CSRF protection)
+  → Exchange code for access + refresh token
+  → Store tokens in tenant_integration_settings (RLS-scoped)
+  → Redirect to dashboard
+```
+
+Token refresh is centralized in `src/services/tokenManagement.ts`:
+
+```ts
+async function getValidToken(tenantId, provider) {
+  const settings = SELECT * FROM tenant_integration_settings WHERE ...
+  if (expires_at - now < 5 min) {
+    const fresh = await provider.refreshAccessToken(refresh_token)
+    UPDATE tenant_integration_settings SET access_token = $1, expires_at = $2 ...
+    return fresh.access_token
+  }
+  return settings.access_token
+}
+```
+
+On persistent refresh failure (invalidated refresh token), the integration is marked `is_active = false` and surfaced in the dashboard as "Reconnect required."
+
+### 10.4 Agent tool auth (post-migration)
+
+`/agent-tools/*` routes bypass tenant middleware entirely. Auth via `x-agent-secret` header in a `preHandler` hook. The tenant_id comes from the request body (the agent gets it from LiveKit room metadata).
+
+---
+
+## 11. Scheduling Engine
+
+### 11.1 Data model
+
+`employee_schedule` is the single source of truth for staff availability:
+
+```sql
+CREATE TABLE employee_schedule (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  employee_id UUID NOT NULL,
+  schedule_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,  -- may be < start_time (cross-midnight / night shift)
+  ...
+);
+```
+
+Date-based only — no weekly patterns, no overrides. Owners copy a week forward from the UI. `employee_shifts` (weekly patterns) still exists as a table but is never read by production code.
+
+### 11.2 Effective shifts
+
+`get_effective_shifts(tenant_id, date)` and `get_effective_shifts_bulk(tenant_id, start, end)` return rows from `employee_schedule` verbatim. Both the Working Hours editor (Back Office → My Team) and the Front Desk scheduler read from these RPCs.
+
+### 11.3 Booking (7-layer check)
+
+`book_with_scheduling_atomic()` runs all seven checks in a single transaction:
+
+1. **Past-time rejection** — `start_time > now() AT TIME ZONE tenant.timezone` (BUG-059 fix).
+2. **Business hours** — (soft rule, not enforced at DB level) — checked before RPC call.
+3. **Resource availability** — no overlapping appointment on the same resource.
+4. **Staff on shift** — `start_time` and `end_time` fall inside an `employee_schedule` window (date-based, DST-safe via `AT TIME ZONE`, night-shift aware).
+5. **Staff expertise** — employee is in `service_employee` for the requested service (by skill_id).
+6. **Resource capability** — resource is in `service_resource` for the requested service.
+7. **Customer upsert** — if `customer_id IS NULL` and phone is provided, find-or-create.
+8. **Auto end-time** — if `end_time IS NULL`, compute from `service.duration_minutes`.
+
+Specific error codes: `TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`, `NO_AVAILABILITY`, `INVALID_PARAMS` (BUG-064).
+
+### 11.4 Night shifts
+
+`end_time < start_time` indicates cross-midnight. The shift is treated as two logical windows for overlap math — e.g. 22:00-06:00 against an appointment at 23:30 evaluates against window `[22:00, 24:00]`, and an appointment at 04:00 evaluates against `[00:00, 06:00]` on the following calendar day.
+
+### 11.5 Scheduling algorithm (`shared/scheduling.ts`)
+
+Shared between Node (tool runtime) and Deno (edge function). Takes the tenant, the service, and a date range → returns a list of viable (resource, employee, start, end) tuples. Uses `get_effective_shifts_bulk()` + single query for existing appointments → returns diagnostics object (`"no skilled employee on 4/23"`, `"all 3 bays busy 9-noon"`) so the LLM can explain **why** no slots exist.
+
+---
+
+## 12. Knowledge Base (RAG)
+
+### 12.1 Storage
+
+```sql
+CREATE TABLE tenant_docs (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  source_file TEXT,
+  text TEXT,              -- raw chunk
+  normalized_text TEXT,   -- post gpt-4o-mini normalization (§12.3)
+  embedding vector(1536),
+  ...
+);
+```
+
+### 12.2 Ingestion
+
+1. Dashboard uploads PDF/DOCX/DOC/TXT/MD.
+2. Server parses + chunks (paragraph-aware with overlap).
+3. For each chunk: `text` → `normalizeForEmbedding()` → `normalized_text` → `text-embedding-3-small` → `embedding`.
+4. INSERT into `tenant_docs`. Duplicate detection: delete existing chunks from the same `source_file` before re-ingesting.
+
+### 12.3 Query normalization
+
+Both ingestion and query paths pass text through `shared/normalizeForEmbedding.ts` (OpenAI GPT-4o-mini, temp 0.1, 15s abort). Normalization collapses synonyms, expands abbreviations, and strips presentation noise — dramatically improves cosine similarity hit rate.
+
+### 12.4 Retrieval
+
+The `get_company_policy_answer` tool:
+
+1. Normalizes the caller's question.
+2. Embeds the normalized query.
+3. `search_tenant_docs(tenant_id, query_embedding)` returns top-k by cosine distance (`<=>` operator).
+4. Top chunks are returned to the LLM as factual context.
+
+Unanswered questions (no chunk above similarity threshold) are logged to `unanswered_questions` table → surfaced in the owner's dashboard as a badge + SMS notification.
+
+### 12.5 Knowledge base questionnaire
+
+`dashboard/lib/policyQuestions.ts` defines 40 policy Q&A pairs across 9 categories (cancellation, payment, service area, hours, warranty, etc.). Owners fill these in during onboarding; answers are stored as `tenant_docs` rows with `source_file = 'questionnaire'`.
+
+---
+
+## 13. Calendar Sync (Push-only)
+
+Two providers, same orchestration layer.
+
+| Provider | Service | Route | API |
+|---|---|---|---|
+| Google | `src/services/googleCalendar.ts` | `src/routes/calendar.ts` | `googleapis` SDK |
+| Outlook | `src/services/outlookCalendar.ts` | `src/routes/calendar.ts` | Microsoft Graph API (raw fetch) |
+
+### 13.1 OAuth + token management
+Via `oauthCallbackFactory.ts` + `tokenManagement.ts` (§10.3). State param is a signed JWT (CSRF protection). Tokens never exposed to the frontend. Best-effort token revocation on disconnect.
+
+### 13.2 Sync orchestrator
+
+`src/services/calendarSync.ts` is provider-agnostic:
+
+```ts
+async function syncAppointment(tenantId, appointment, op: 'create'|'update'|'delete'|'cancel') {
+  const providers = SELECT * FROM tenant_calendar_settings WHERE tenant_id = $1 AND is_active
+  for (const p of providers) {
+    try {
+      const token = await getValidToken(tenantId, p.provider)
+      await callProviderAPI(p.provider, token, appointment, op)
+      UPDATE appointment_sync_map SET external_id = ..., last_synced_at = now()
+    } catch (err) {
+      logError(...); // fire-and-forget continues with other providers
+    }
+  }
+}
+```
+
+Fires from the 4 appointment mutation points (create, update, delete, cancel). Calendar is **display-only** — no pull back. Calendar events don't become SecretaryHQ appointments.
+
+---
+
+## 14. CRM Sync (Bidirectional)
 
 | Provider | Client | Sync | Route | API |
-|----------|--------|------|-------|-----|
-| Jobber | `src/services/jobberClient.ts` | `src/services/jobberSync.ts` | `src/routes/jobber.ts` | GraphQL |
-| HubSpot | `src/services/hubspotClient.ts` | `src/services/hubspotSync.ts` | `src/routes/hubspot.ts` | REST v3 |
-| Square | `src/services/squareClient.ts` | `src/services/squareSync.ts` | `src/routes/square.ts` | REST v2 |
-| ServiceTitan | `src/services/servicetitanClient.ts` | `src/services/servicetitanSync.ts` | `src/routes/servicetitan.ts` | REST v2 |
+|---|---|---|---|---|
+| Jobber | `jobberClient.ts` | `jobberSync.ts` | `jobber.ts` | GraphQL |
+| HubSpot | `hubspotClient.ts` | `hubspotSync.ts` | `hubspot.ts` | REST v3 |
+| Square | `squareClient.ts` | `squareSync.ts` | `square.ts` | REST v2 |
+| ServiceTitan | `servicetitanClient.ts` | `servicetitanSync.ts` | `servicetitan.ts` | REST v2 |
 
-- **Shared infrastructure**: `src/services/oauthCallbackFactory.ts` (generic OAuth callback handler) + `src/services/tokenManagement.ts` (shared token refresh with 5-min buffer) eliminate duplication across all 4 CRM integrations.
-- **Push triggers**: Appointment create/update/delete/cancel + customer create/update/delete fire to all connected integrations.
-- **Pull triggers**: Webhook receivers per provider + periodic full sync endpoints.
-- **DB tables**: `tenant_integration_settings` (OAuth tokens per provider), `entity_sync_map` (local/external ID mapping with timestamps).
+### 14.1 Merge strategy
 
-## 8. Async Integration Layer
+Timestamp-based merge. For each conflicting field, the row with the most recent `updated_at` wins. Non-conflicting fields merge via `COALESCE(local.field, external.field)`.
 
-**n8n has been removed.** Post-call summarization, calendar sync, CRM sync, and SMS are all now handled inline in Fastify route handlers as fire-and-forget calls from mutation endpoints. The `n8n/` directory and `docs/N8N_WORKFLOWS.md` were deleted. Any remaining `notify_n8n_on_appointment` trigger references in historical migrations are dead code.
+### 14.2 Push triggers
 
-- **Post-call summaries**: generated in `src/routes/voice.ts` after Vapi's "call ended" webhook fires.
-- **Calendar sync**: `src/services/calendarSync.ts` orchestrates Google + Outlook push on every appointment mutation.
-- **CRM sync**: `src/services/syncOrchestrator.ts` fans out to Jobber/HubSpot/Square/ServiceTitan on appointment + customer mutations.
-- **SMS**: `src/routes/communications.ts` + `src/routes/reminders.ts` — routes and schemas exist, but provider integration (Twilio or Telnyx SMS) is still stubbed. Planned to use Telnyx post-LiveKit migration to keep the telephony provider unified.
+From 7 mutation points:
+
+| Event | Calendar | Jobber | HubSpot | Square | ServiceTitan |
+|---|---|---|---|---|---|
+| Appointment create | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Appointment update | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Appointment delete | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Appointment cancel | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Customer create | — | ✓ | ✓ | ✓ | ✓ |
+| Customer update | — | ✓ | ✓ | ✓ | ✓ |
+| Customer delete | — | ✓ | ✓ | ✓ | ✓ |
+
+`src/services/syncOrchestrator.ts` fans out. Each provider fails independently — one bad provider doesn't block the others.
+
+### 14.3 Pull triggers
+
+- **Webhook receivers**: `POST /jobber/webhook/:tenantId`, `POST /hubspot/webhook`, `POST /square/webhook`, `POST /servicetitan/webhook`. Webhook signatures verified per provider spec.
+- **Periodic full sync**: `POST /{provider}/sync` — manual or cron-triggered full reconciliation.
+
+### 14.4 Mapping
+
+`entity_sync_map` stores `(tenant_id, local_entity_type, local_id, provider, external_id, last_synced_at, external_updated_at)`. Shared helpers in `src/services/syncMapHelpers.ts`.
 
 ---
 
-## 9. Data Resiliency & Security
-- **Atomic Bookings**: Postgres RPCs (`book_appointment_atomic`) with strict conflict resolution and multi-layer validation.
-- **Row Level Security (RLS)**: Every table is isolated by `tenant_id`. All RLS policies standardized on `app.current_tenant_id`. Backend enforces RLS via `withTenantClient()`.
-- **JWT Authentication**: 8-hour token expiry with auto-logout. No more plain localStorage sessions.
-- **Input Validation**: Zod at API boundaries; CHECK constraints on JSONB metadata columns.
-- **Name Sync**: Database triggers keep `full_name` ↔ `first_name`/`last_name` in sync on both users and customers tables.
-- **Persistence**: Managed Supabase Postgres with Docker-backed local development.
-- **Audit Logging**: `audit_log` table with triggers on appointments, customers, and resources capturing before/after snapshots.
-- **Soft Deletes**: `is_deleted`/`deleted_at` columns with partial indexes on key tables (appointments, customers, resources, employees) to prevent accidental data loss while maintaining query performance.
+## 15. Billing (Stripe Lite)
+
+### 15.1 Plans
+
+| Plan | Price | Capabilities |
+|---|---|---|
+| Solo | $129/mo | 1 employee, core features |
+| Growth | $279/mo | Multi-employee, CRM integrations |
+| Professional | $449/mo | (defined, not yet gated) |
+| Enterprise | Custom | Not implemented |
+
+### 15.2 Checkout flow
+
+```
+POST /billing/checkout { tenant_id, plan }
+  → stripe.checkout.sessions.create({
+      customer (or customer_email),
+      line_items: [{ price: STRIPE_{PLAN}_PRICE_ID }],
+      mode: 'subscription',
+      success_url + cancel_url (uses DASHBOARD_URL)
+    })
+  → returns { checkout_url }
+
+Client → redirects to checkout_url
+```
+
+### 15.3 Webhook (`POST /billing/webhook`)
+
+Stripe-signed via `STRIPE_WEBHOOK_SECRET`. Handles three events:
+
+| Event | Action |
+|---|---|
+| `checkout.session.completed` | `UPDATE tenants SET stripe_subscription_id, subscription_status = 'active', subscription_plan = $plan` |
+| `invoice.payment_failed` | `UPDATE tenants SET subscription_status = 'past_due'` |
+| `customer.subscription.deleted` | `UPDATE tenants SET subscription_status = 'canceled', stripe_subscription_id = NULL, subscription_plan = NULL` |
+
+### 15.4 Subscription gate middleware
+
+Tenant-scoped routes behind `subscriptionGateMiddleware` check `tenants.subscription_status`. If not in `('active', 'trialing')`, return **402 Payment Required** with upgrade URL. Exemptions: `/billing/*`, `/auth/*`, `/health`.
+
+### 15.5 Status endpoint
+
+`GET /billing/status` → `{ subscription_status, subscription_plan }` for the dashboard to decide what to gate.
+
+---
+
+## 16. Dashboard Architecture
+
+### 16.1 Routing
+
+Next.js 14 App Router:
+
+- `/app/page.tsx` — Marketing landing page.
+- `/app/dashboard/page.tsx` — App shell (single route, view-switching internally via tab state + URL query params).
+- `/app/layout.tsx` — Wraps `SessionProvider`, `ThemeProvider`, `VocabularyProvider`, `ToastContainer`, `ErrorBoundary`.
+
+### 16.2 Navigation — Front Desk / Back Office
+
+```
+Front Desk (daily operations)      Back Office (configuration)
+├─ Schedule                        ├─ My Team (employees, skills, schedules)
+├─ Customers (CRM)                 ├─ My Business (services, resources, hours, knowledge)
+└─ Staffing Map                    └─ AI & Insights (analytics, knowledge Q&A, vocabulary)
+```
+
+Desktop: two top-level tabs with sub-views. Mobile: bottom nav + scrollable sub-tabs. Tab state synced to URL query params (`?tab=schedule`) — shareable links, browser back/forward works.
+
+### 16.3 State management
+
+Four React contexts in `dashboard/lib/`:
+
+| Context | Purpose |
+|---|---|
+| `SessionContext` | JWT, current user, active tenant (via `useActiveTenantId()`), tenant list, `tenantsVersion` counter for cross-component sync |
+| `ThemeContext` | 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized) — swaps CSS custom properties in `app/globals.css` |
+| `VocabularyContext` | 3-tier label fallback (`COALESCE(tenant_override, template_default, hardcoded)`) per business type. 29 types across 6 categories |
+| `AppointmentDetailContext` | Holds selected appointment for cross-view access (list → detail panel) |
+
+### 16.4 Component hierarchy
+
+- `components/ui/` — 16 primitives (Button, Card, Input, Select, Modal, ConfirmModal, Toast, Badge, TimeInput, PhoneInput, FolderTabs, CoverageBar, CoverageStatusBadge, FeedbackButton)
+- `components/scheduler/` — `NewSchedulerView`, `StaffRow`, `ResourceColumns`, `QuickBookPanel`, `EmployeeDayFocusPanel`, `StaffProfileCard`
+- `components/SetupWizard/` — 7-step wizard + `WizardModeChooser` (solo vs team branching)
+- `components/CRM/`, `components/employees/`, `components/services/`, etc. — List+Detail pane pattern (sidebar + detail right)
+
+### 16.5 API client (`dashboard/lib/api.ts`)
+
+Centralized namespace: `Api.appointments.create(...)`, `Api.customers.list(...)`, `Api.services.update(...)`, etc. Every call fully typed (no `Record<string, unknown>` return types). Shared `forceLogout()` + `checkAuthFailure()` handle 401.
+
+### 16.6 Theming
+
+Every component consumes CSS custom properties (`--bg`, `--fg`, `--accent`, `--border`, `--font-display`, `--font-body`) — never hardcoded colors. All 8 themes are dark variants (locked from March 24 2026 design session). Fonts: Bebas Neue (display) + DM Sans (body).
+
+### 16.7 Test harness
+
+Vitest + React Testing Library (jsdom). 22 test files, 465 tests. Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
+
+### 16.8 Dev server
+
+`dashboard/server.js` — custom HTTPS server for local dev (self-signed certs from `certs/`), doubles as the Railway production entry when `NODE_ENV=production`.
+
+---
+
+## 17. Async Work (no n8n)
+
+`n8n/` was removed. All async work runs inline in Fastify route handlers as fire-and-forget calls.
+
+| Concern | Trigger point | Runs in |
+|---|---|---|
+| Post-call summary | `POST /voice/call-ended` webhook from Vapi | `src/routes/voice.ts` |
+| Call summary embedding | After summary insert | `src/routes/voice.ts` (OpenAI embedding call) |
+| Calendar sync | Appointment mutation routes | `src/services/calendarSync.ts` |
+| CRM push | Appointment + customer mutation routes | `src/services/syncOrchestrator.ts` |
+| CRM pull | `POST /{provider}/webhook` receivers | `src/routes/{provider}.ts` |
+| SMS / reminders | Planned cron-based | `src/routes/reminders.ts` (stub; scheduler not yet wired) |
+| Orphaned transcript linking | After call end | `link_orphaned_transcripts()` RPC from dispatcher |
+
+All async work is **best-effort**. If a sync fails, the user-facing operation still succeeds. Failures are logged + surfaced in the dashboard (e.g., "Reconnect required").
+
+---
+
+## 18. Testing Strategy
+
+### 18.1 Test pyramid
+
+```
+                  ╱╲
+                 ╱19╲        Playwright e2e (full-stack, browser)
+                ╱────╲
+               ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real Supabase edge function)
+              ╱────────╲
+             ╱  1,894   ╲    Vitest unit + integration (real DB, real RLS)
+            ╱────────────╲
+```
+
+### 18.2 Backend (`npm test` — 1,429 tests, 75 files)
+
+Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, CRM sync clients, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: DynaTire caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
+
+### 18.3 Dashboard (`cd dashboard && npm test` — 465 tests, 22 files)
+
+Vitest + React Testing Library (jsdom). Renders components with all 4 providers (Session, Theme, Vocabulary, AppointmentDetail). Tests interactions (click, keyboard, form submission), accessibility (role/tabIndex/aria attributes), and error states.
+
+### 18.4 Edge functions (`deno task test --no-check`)
+
+Deno's built-in test runner. Covers dispatcher + service layer in the edge function.
+
+### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 19 tests)
+
+7 critical-fix tests (regression gates on toast, validation, unsaved-changes warning, NaN guards) + 12-step functional audit (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav).
+
+### 18.6 Live QA (`scripts/qa-live-test.py` — 29 tool calls, 88 assertions)
+
+Hits the live Supabase edge function with the 29 voice-AI tool scenarios. Verifies DB side effects directly. Used as the pre-deploy integration check.
+
+### 18.7 Typecheck
+
+`npx tsc --noEmit --noUnusedLocals --noUnusedParameters` — must be clean. Currently passes with 0 errors.
+
+---
+
+## 19. Observability
+
+### 19.1 Structured logging
+
+Pino under Fastify. Every request + response logs a structured JSON line. Domain events logged via `logEvent(req, name, fields)`:
+
+```ts
+logEvent(req, 'appointment_booked', {
+  tenantId, customerId, appointmentId,
+  serviceId, employeeId, startTime, source: 'voice'
+})
+```
+
+Railway captures stdout/stderr. No aggregation pipeline yet (Datadog/Logtail/etc.) — planned but not started.
+
+### 19.2 Audit log
+
+`audit_log` table records before/after snapshots for every INSERT/UPDATE/DELETE on appointments, customers, and resources. Trigger `fn_audit_trigger` runs as `SECURITY DEFINER` to bypass RLS. Written atomically with the mutation — if the write fails, the log entry isn't created.
+
+Surfaces in dashboard via `GET /versionHistory/:entity/:id`.
+
+### 19.3 Record versions
+
+`record_versions` table — parallel history system specific to entities that need UI diff/restore (services, employees, resources). Triggered from `src/routes/versionHistory.ts`.
+
+### 19.4 Health endpoint
+
+`GET /health` → `{ status: 'ok' }`. Railway uses this as the healthcheck.
+
+### 19.5 Gaps
+
+- No error rate dashboard.
+- No latency percentile tracking.
+- No alerting on Stripe webhook failure, OAuth token invalidation, or sync error spikes.
+
+Planned once there's real call volume.
+
+---
+
+## 20. Error Handling & Retry
+
+### 20.1 Error taxonomy
+
+| Source | Type | Response |
+|---|---|---|
+| User input | Zod validation failure | 400 `{ error, details: [...zod issues] }` |
+| Auth | Invalid / expired JWT | 401 `{ error: 'TOKEN_EXPIRED' }` → client refresh |
+| Auth | Tenant deleted | 401 `{ error: 'TENANT_NOT_FOUND' }` → client force-logout |
+| Billing | No active subscription | 402 `{ error: 'SUBSCRIPTION_REQUIRED', upgrade_url }` |
+| Authorization | Wrong tenant | 403 `{ error: 'FORBIDDEN' }` |
+| Not found | Zero-row UPDATE/DELETE | 404 `{ error: 'NOT_FOUND' }` (via `assertRowAffected()`) |
+| Conflict | Booking clash | 409 `{ error: 'TIMESLOT_OCCUPIED' }` (RPC-specific codes) |
+| Upstream | OpenAI/Deepgram timeout | 502 `{ error: 'UPSTREAM_TIMEOUT' }` |
+| Server | Uncaught | 500 `{ error: 'INTERNAL_SERVER_ERROR' }` (details hidden in prod) |
+
+### 20.2 Retry strategy
+
+- **Token refresh**: automatic, 5-min buffer. On failure → mark integration inactive, no automatic retry.
+- **CRM sync**: fire-and-forget, no retry. Failures logged + visible in dashboard.
+- **Calendar sync**: same pattern.
+- **Stripe webhook**: idempotent by design (Stripe retries on non-2xx).
+- **Voice AI tool calls**: the LLM retries naturally (if the tool returns an error string, the LLM paraphrases and tries alternative tool or asks the caller).
+- **OpenAI/Deepgram API calls**: AbortController timeouts (10s embeddings, 15s normalization) — no retry, surface as upstream error.
+
+### 20.3 Destructive action safeguards
+
+- Type-to-confirm modal for tenant deletion.
+- `ConfirmModal` + `useConfirm()` hook for all destructive actions on the dashboard.
+- `beforeunload` warning on dirty state in reorder + form edit flows.
+
+---
+
+## 21. Security Summary
+
+- **Row Level Security** — enforced on 20 tenant-scoped tables with `FORCE ROW LEVEL SECURITY`. Context via `app.current_tenant_id`.
+- **JWT Authentication** — 8h expiry, auto-refresh, auto-logout on tenant deletion. bcrypt password hashing.
+- **Rate limiting** — 100 req/min global, 5 req / 5 min on auth endpoints.
+- **Security headers** — `@fastify/helmet` (HSTS, CSP, X-Frame-Options, etc.).
+- **CORS** — restricted to `CORS_ORIGIN` in production.
+- **Input validation** — Zod at every API boundary. CHECK constraints on JSONB columns.
+- **OAuth state** — signed JWT state param (CSRF protection) on every integration.
+- **Secrets** — env vars only; never committed. Production validation fail-fast on missing required secrets.
+- **Audit log** — immutable via `SECURITY DEFINER` trigger, cascaded delete from `tenants`.
+- **Soft deletes** — `is_deleted` flag + partial indexes on appointments, customers, resources, employees.
+- **HIPAA exclusion** — medical verticals permanently removed. No BAA, no ePHI handling, no compliance program.
+
+---
+
+## 22. Known Gaps / Future Work
+
+- **Dashboard deployment** — Vercel or Railway; currently local-only.
+- **LiveKit migration** — Phase 2+ pending LiveKit API Secret + WSS URL (`.claude/plans/federated-snacking-puffin.md`).
+- **Communications/reminders** — routes + schemas exist, Telnyx SMS + nodemailer wiring pending.
+- **Observability pipeline** — aggregation + alerting not started.
+- **Soft-delete SELECT filters** — only 2 of 20 routes currently filter `is_deleted = false` on SELECTs.
+- **Full billing system** — trial management, plan switching, call limits, Stripe portal. Post-launch.
+- **Business intelligence / ROI analytics** — requires real booking volume. Post-launch.
