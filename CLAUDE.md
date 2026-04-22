@@ -51,7 +51,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - Test backend: `npm test`
 - Test dashboard: `cd dashboard && npm test`
 - Test edge functions: `deno task test --no-check`
-- Login: dale@ai-sec.com / password
+- Login: daledemott@gmail.com / password
 - E2e tests: `cd dashboard && npx playwright test`
 - Super-admin tenant: `00000000-0000-0000-0000-000000000000`
 - PoC tenant (DynaTire): `f234e471-0e60-4163-86c9-93cfd9338e3a`

@@ -202,7 +202,7 @@ function generateToken(payload: { tenant_id: string; user_id: string; email: str
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as any });
 }
 
-function verifyToken(token: string): { tenant_id: string; user_id: string; email: string } | null {
+function verifyToken(token: string): { tenant_id: string; user_id: string; email: string; iat?: number } | null {
   try {
     return jwt.verify(token, JWT_SECRET) as any;
   } catch {
@@ -211,7 +211,7 @@ function verifyToken(token: string): { tenant_id: string; user_id: string; email
 }
 
 const PUBLIC_ROUTES = [
-  '/health', '/login', '/', '/demo',
+  '/health', '/login', '/forgot-password', '/reset-password', '/', '/demo',
   '/billing/webhook',
   // OAuth callbacks (redirects from external providers — no JWT available)
   '/calendar/auth/google/callback',
@@ -242,6 +242,20 @@ app.addHook('onRequest', async (request, reply) => {
   if (!decoded) {
     request.log.warn({ url: request.url, ip: request.ip }, 'JWT verification failed — invalid or expired token');
     return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
+  }
+
+  // Reject tokens issued before the user's most recent password change
+  if (decoded.iat) {
+    const client = await pool.connect();
+    try {
+      const r = await client.query('SELECT password_changed_at FROM users WHERE id = $1', [decoded.user_id]);
+      const changedAt = r.rows[0]?.password_changed_at as Date | undefined;
+      if (changedAt && Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
+        return reply.status(401).send({ success: false, error: 'Session expired — please log in again' });
+      }
+    } finally {
+      client.release();
+    }
   }
 
   (request as any).auth = decoded;

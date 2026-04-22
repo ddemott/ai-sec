@@ -19,7 +19,7 @@ setup('login as admin', async ({ page }) => {
     }
 
     // Fill login form
-    await page.locator('input[type="email"]').fill('dale@ai-sec.com');
+    await page.locator('input[type="email"]').fill('daledemott@gmail.com');
     await page.locator('input[type="password"]').fill('password');
     await page.locator('button[type="submit"]').click();
 

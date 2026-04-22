@@ -1,8 +1,12 @@
 
+import { createHash, randomBytes } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, type AppRequest } from '../middleware';
+import { sendPasswordResetEmail } from '../services/communications/systemEmail';
+
+const RESET_TTL_MINUTES = 30;
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -16,6 +20,17 @@ const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6).max(200),
 });
+
+const ForgotSchema = z.object({ email: z.string().email() });
+
+const ResetSchema = z.object({
+  token: z.string().min(20).max(200),
+  new_password: z.string().min(6).max(200),
+});
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 export function registerAuthRoutes(
   app: FastifyInstance<any, any, any>,
@@ -128,4 +143,86 @@ export function registerAuthRoutes(
     });
     return reply.send({ success: true, token });
   }, 'Token refresh failed'));
+
+  // POST /forgot-password - Issue a password reset link via email.
+  // Always returns 200 (avoid leaking whether the email exists).
+  app.post('/forgot-password', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, withHandler(async (req: AppRequest, reply) => {
+    const parsed = ForgotSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Invalid email format' });
+    }
+    const email = parsed.data.email.toLowerCase();
+    const user = await withPoolClient(pool, async (client) => {
+      const res = await client.query('SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1', [email]);
+      return res.rows[0];
+    });
+    if (user) {
+      const rawToken = randomBytes(32).toString('base64url');
+      const tokenHash = hashToken(rawToken);
+      const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() || req.ip || null;
+      await withPoolClient(pool, async (client) => {
+        await client.query(
+          `INSERT INTO password_resets (user_id, token_hash, channel, ip, expires_at)
+           VALUES ($1, $2, 'email', $3, NOW() + ($4 || ' minutes')::interval)`,
+          [user.id, tokenHash, ip, RESET_TTL_MINUTES]
+        );
+      });
+      const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
+      const resetLink = `${dashboardUrl}/reset-password?token=${rawToken}`;
+      try {
+        await sendPasswordResetEmail(email, resetLink, RESET_TTL_MINUTES);
+      } catch (err) {
+        req.log.error({ err }, 'Failed to send password reset email');
+      }
+    }
+    return reply.send({ success: true });
+  }, 'Forgot password failed'));
+
+  // POST /reset-password - Consume a token and set a new password.
+  // Force-logs out other sessions by bumping users.password_changed_at.
+  app.post('/reset-password', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, withHandler(async (req: AppRequest, reply) => {
+    const parsed = ResetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Invalid request' });
+    }
+    const { token, new_password } = parsed.data;
+    const tokenHash = hashToken(token);
+    const result = await withPoolClient(pool, async (client) => {
+      await client.query('BEGIN');
+      try {
+        const r = await client.query(
+          `SELECT id, user_id FROM password_resets
+           WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+           FOR UPDATE`,
+          [tokenHash]
+        );
+        if (r.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return { invalid: true };
+        }
+        const { id: resetId, user_id: userId } = r.rows[0];
+        const bcrypt = await import('bcrypt');
+        const hash = await bcrypt.hash(new_password, 10);
+        await client.query(
+          'UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE id = $2',
+          [hash, userId]
+        );
+        await client.query('UPDATE password_resets SET used_at = NOW() WHERE id = $1', [resetId]);
+        // Invalidate any other unused tokens for the same user
+        await client.query(
+          'UPDATE password_resets SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL',
+          [userId]
+        );
+        await client.query('COMMIT');
+        return { ok: true };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
+    });
+    if ('invalid' in result) {
+      return reply.status(400).send({ success: false, error: 'Reset link is invalid or expired' });
+    }
+    return reply.send({ success: true });
+  }, 'Reset password failed'));
 }

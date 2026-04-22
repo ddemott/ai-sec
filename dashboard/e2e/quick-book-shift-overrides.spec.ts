@@ -22,7 +22,7 @@ async function ensureLoggedIn(page: Page) {
   // If on login form, fill and submit
   const emailInput = page.locator('input[type="email"]');
   if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await emailInput.fill('dale@ai-sec.com');
+    await emailInput.fill('daledemott@gmail.com');
     await page.locator('input[type="password"]').fill('password');
     await page.getByText('Sign In to Dashboard').click();
     await page.waitForTimeout(3000);

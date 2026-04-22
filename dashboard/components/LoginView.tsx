@@ -117,6 +117,12 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 'Sign In to Dashboard'
               )}
             </button>
+
+            <div className="text-center">
+              <a href="/forgot-password" className="text-xs hover:underline" style={{ color: 'var(--text-secondary)' }}>
+                Forgot password?
+              </a>
+            </div>
           </form>
 
           <div className="mt-8 pt-6 border-t text-center" style={{ borderColor: 'var(--border-soft)' }}>

@@ -3,6 +3,11 @@ import { getRootClient, clearDB, createTenant, createUser, hashPassword } from "
 import { Client } from "pg";
 import bcrypt from "bcrypt";
 
+// Mock the email sender so route tests don't try to send real mail
+vi.mock('./services/communications/systemEmail', () => ({
+  sendPasswordResetEmail: vi.fn(async () => undefined),
+}));
+
 // ═══════════════════════════════════════════════════════════════════════
 // Route-level tests for registerAuthRoutes (/login, /register, /auth/refresh)
 // These test the actual Fastify route handler logic, not just DB queries.
@@ -25,6 +30,7 @@ function createMockReply() {
 function createMockRequest(body: any = {}, auth?: any) {
   return {
     body, auth,
+    headers: {}, ip: '127.0.0.1',
     log: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), child: vi.fn().mockReturnThis() },
     url: '/test', method: 'POST',
   } as any;
@@ -313,6 +319,160 @@ describe("Auth Routes — Handler-Level", () => {
 
       expect(reply.statusCode).toBe(401);
       expect(reply.body.error).toBe('Authentication required');
+    });
+  });
+
+  // ── /forgot-password ────────────────────────────────────────────────
+
+  describe("POST /forgot-password handler", () => {
+    it("returns 200 + sends email when user exists (WHO: registered user | WHAT: requests reset | WHERE: /forgot-password | WHY: enables self-service recovery)", async () => {
+      const sysmail = await import('./services/communications/systemEmail');
+      vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
+
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      // SELECT user — found
+      queryResponses.push({ rows: [{ id: USER_ID_MOCK }] });
+      // INSERT password_resets
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/forgot-password');
+      const req = createMockRequest({ email: 'me@test.com' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body).toEqual({ success: true });
+      expect(sysmail.sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+      // Token in URL must be a base64url string of reasonable length
+      const [to, link] = vi.mocked(sysmail.sendPasswordResetEmail).mock.calls[0];
+      expect(to).toBe('me@test.com');
+      expect(link).toMatch(/\/reset-password\?token=[A-Za-z0-9_-]{30,}/);
+    });
+
+    it("returns 200 silently when user does NOT exist (WHO: stranger | WHAT: probes for account | WHERE: /forgot-password | WHY: prevent email enumeration)", async () => {
+      const sysmail = await import('./services/communications/systemEmail');
+      vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
+
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      // SELECT user — not found
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/forgot-password');
+      const req = createMockRequest({ email: 'ghost@test.com' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body).toEqual({ success: true });
+      expect(sysmail.sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when email is malformed (WHO: garbage input | WHAT: Zod rejects | WHERE: /forgot-password | WHY: skip DB lookup on bad data)", async () => {
+      const { client } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/forgot-password');
+      const req = createMockRequest({ email: 'not-an-email' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(400);
+    });
+
+    it("has rate limit of 3 per hour (WHO: system | WHAT: throttle reset abuse | WHERE: /forgot-password opts | WHY: limit email-spam vector)", () => {
+      const pool = createMockPool({});
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+      const route = findRoute(routes, '/forgot-password');
+      expect(route.opts).toEqual({ config: { rateLimit: { max: 3, timeWindow: '1 hour' } } });
+    });
+  });
+
+  // ── /reset-password ─────────────────────────────────────────────────
+
+  describe("POST /reset-password handler", () => {
+    it("updates password + marks token used on valid token (WHO: user with reset link | WHAT: completes reset | WHERE: /reset-password | WHY: changes credentials and forces re-login of other sessions)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      // BEGIN
+      queryResponses.push({ rows: [] });
+      // SELECT password_resets — found, unused, not expired
+      queryResponses.push({ rows: [{ id: 'reset-id', user_id: USER_ID_MOCK }] });
+      // UPDATE users (password + password_changed_at)
+      queryResponses.push({ rows: [] });
+      // UPDATE password_resets SET used_at (this token)
+      queryResponses.push({ rows: [] });
+      // UPDATE password_resets SET used_at (any others for user)
+      queryResponses.push({ rows: [] });
+      // COMMIT
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/reset-password');
+      const req = createMockRequest({ token: 'a'.repeat(43), new_password: 'newSecure123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body).toEqual({ success: true });
+      // Verify the queries: BEGIN, SELECT, UPDATE users, UPDATE this reset, UPDATE other resets, COMMIT
+      const queries = client.query.mock.calls.map(c => (c[0] as string).trim().split('\n')[0]);
+      expect(queries[0]).toBe('BEGIN');
+      expect(queries[1]).toContain('SELECT id, user_id FROM password_resets');
+      expect(queries[2]).toContain('UPDATE users SET password_hash');
+      expect(queries[2]).toContain('password_changed_at = NOW()');
+      expect(queries[5]).toBe('COMMIT');
+    });
+
+    it("returns 400 when token is invalid/expired (WHO: stale link clicker | WHAT: token not found | WHERE: /reset-password | WHY: don't change password on bad token)", async () => {
+      const { client, queryResponses } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      // BEGIN
+      queryResponses.push({ rows: [] });
+      // SELECT — none
+      queryResponses.push({ rows: [] });
+      // ROLLBACK
+      queryResponses.push({ rows: [] });
+
+      const route = findRoute(routes, '/reset-password');
+      const req = createMockRequest({ token: 'b'.repeat(43), new_password: 'newSecure123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(400);
+      expect(reply.body.error).toMatch(/invalid|expired/i);
+    });
+
+    it("returns 400 when password is too short (WHO: user picks weak password | WHAT: Zod rejects <6 chars | WHERE: /reset-password | WHY: enforce minimum strength)", async () => {
+      const { client } = createMockPoolClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const route = findRoute(routes, '/reset-password');
+      const req = createMockRequest({ token: 'c'.repeat(43), new_password: '123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.statusCode).toBe(400);
     });
   });
 });
