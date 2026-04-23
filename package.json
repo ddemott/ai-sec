@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "main": "dist/src/index.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev:backend": "ts-node-dev --respawn --transpile-only src/index.ts",
     "dev:dashboard": "cd dashboard && npm run dev",
