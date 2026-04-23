@@ -1,12 +1,14 @@
 # dependencies
 /node_modules
 /dashboard/node_modules
+/agent/node_modules
 
 # build artifacts
 /dist
 /dashboard/.next
 /dashboard/out
 /dashboard/build
+/agent/dist
 
 # logs
 *.log
