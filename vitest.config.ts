@@ -8,6 +8,10 @@ export default defineConfig({
       'dashboard/**',
       'node_modules/**',
       'supabase/**',
+      // Agent package is tested via its own config. Its node_modules
+      // contains third-party tests (LiveKit agents SDK) that fail in
+      // isolation without their own fixtures.
+      'agent/**',
     ],
     // DB integration tests share one Postgres instance and use TRUNCATE / savepoints for cleanup.
     // Parallel execution causes deadlocks (40P01) because TRUNCATE needs AccessExclusiveLock

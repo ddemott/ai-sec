@@ -30,6 +30,7 @@ import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
 import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { registerTtsRoutes } from './routes/tts';
+import { registerAgentToolRoutes } from './routes/agentTools';
 import { registerVoiceRoutes } from './routes/voice';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { registerCommunicationRoutes } from './routes/communications';
@@ -72,6 +73,7 @@ if (isProduction) {
   if (!XAI_API_KEY) console.warn('WARNING: XAI_API_KEY not set — Grok TTS proxy disabled');
   if (XAI_API_KEY && !XAI_TTS_SECRET) console.warn('WARNING: XAI_TTS_SECRET not set — TTS proxy has no auth');
   if (XAI_API_KEY && !BACKEND_URL) console.warn('WARNING: BACKEND_URL not set — Vapi custom-voice cannot reach TTS proxy');
+  if (!process.env.AGENT_SECRET) console.warn('WARNING: AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls');
 }
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
@@ -350,6 +352,7 @@ registerVoiceRoutes(app, pool, withTenantClient);
 registerVersionHistoryRoutes(app, pool, withTenantClient);
 registerCommunicationRoutes(app, pool, withTenantClient);
 registerReminderRoutes(app, pool, withTenantClient);
+registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
 
 // --- Start Reminder Scheduler ---
 // Only start in production or if explicitly enabled

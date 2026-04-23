@@ -167,7 +167,8 @@ const TENANT_EXEMPT_ROUTES = [
 function isTenantExempt(url: string): boolean {
   const path = url.split('?')[0];
   return TENANT_EXEMPT_ROUTES.some(r => path === r || path.startsWith('/tenants/'))
-    || path.startsWith('/jobber/webhook/'); // Jobber webhook uses tenantId in URL path
+    || path.startsWith('/jobber/webhook/') // Jobber webhook uses tenantId in URL path
+    || path.startsWith('/agent-tools/'); // LiveKit agent tool calls; tenant_id supplied in body
 }
 
 /**
