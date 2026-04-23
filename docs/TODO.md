@@ -1,6 +1,6 @@
 # TODO
 
-**Last updated:** 2026-04-17
+**Last updated:** 2026-04-23
 
 Single source of truth for all remaining work. Organized by priority.
 
@@ -8,9 +8,9 @@ Single source of truth for all remaining work. Organized by priority.
 
 ## Phase 13: Ship It (blocking launch)
 
-- [ ] **Deploy dashboard** to Railway or Vercel (currently local only)
-- [ ] **Set `DASHBOARD_URL`** env var in Railway (needed for Stripe checkout + OAuth redirects)
-- [ ] **Beta testing with DynaTire** (needs dashboard deployed first)
+- [x] **Deploy dashboard** — shipped 2026-04-21 (commit `fb216e0`), live at https://dashboard-production-cee3.up.railway.app/
+- [ ] **Set `DASHBOARD_URL`** env var in Railway backend (needed for Stripe checkout + OAuth redirects)
+- [ ] **Beta testing with DynaTire**
 - [x] **BUG-072**: Front Desk scheduler shift bars not rendering — root cause: seed data populated legacy `employee_shifts` table instead of `employee_schedule`. Fixed seed to use `employee_schedule` (2 weeks of date-based shifts).
 
 ---

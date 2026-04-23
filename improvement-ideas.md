@@ -1061,3 +1061,162 @@
 **What's working:** UX review is correctly staying skipped now that it is complete, and the ideas pass still found a genuinely different architecture area instead of repeating the dashboard and sync themes from the last few cycles.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions are still handling the post-UX-completion phase well, and a fresh agent could still follow this process without confusion.
+
+## Ideas — 2026-04-21 (architecture reviewed)
+
+### Task: Extract reminder ownership verification into a route-local helper in reminders.ts
+**Status:** proposed
+**Files to change:** `src/routes/reminders.ts:L70-L180`
+**What to do:** Pull the repeated reminder lookup and tenant-ownership verification logic into a small helper that returns the reminder row plus any status checks needed by trigger/cancel flows. Keep route behavior unchanged, but stop re-implementing reminder existence/ownership checks in multiple handlers.
+**Done when:**
+- [ ] Trigger and cancel routes no longer each inline their own reminder ownership lookup flow
+- [ ] Not-found and wrong-status behavior remain unchanged
+- [ ] The helper stays local to reminder-route concerns and does not become a generic repository layer
+- [ ] All existing tests pass, new tests cover the helper-driven ownership checks if needed
+**Why it matters:** Shared verification logic is easy to drift when it is repeated across multiple mutation handlers in the same file.
+**Tradeoff:** The helper should stay narrowly scoped so it improves readability without hiding straightforward route behavior.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it reduces duplication in a route file with clearly repeated guard logic.
+
+### Task: Consolidate reminder status transition checks into a small route-local policy helper
+**Status:** proposed
+**Files to change:** `src/routes/reminders.ts:L90-L200`
+**What to do:** Introduce a tiny helper or constant map that defines which reminder statuses can be triggered or cancelled, then have the trigger and cancel endpoints use that instead of embedding status checks separately. Preserve the current error messages and behavior exactly.
+**Done when:**
+- [ ] Trigger and cancel routes no longer inline their own reminder status transition checks independently
+- [ ] Current status-specific error messages and allowed transitions remain unchanged
+- [ ] The transition rules are easy to inspect in one place
+- [ ] All existing tests pass, new tests cover helper-driven transition logic if needed
+**Why it matters:** State-transition rules are policy logic, and centralizing them makes future edits safer and easier to verify.
+**Tradeoff:** The helper should stay tiny and route-local so it does not add unnecessary abstraction for a small policy surface.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, good return because it makes reminder state rules more explicit and less repetitive.
+
+### Task: Extract reminder list query construction into a focused builder helper
+**Status:** proposed
+**Files to change:** `src/routes/reminders.ts:L35-L90`
+**What to do:** Move the dynamic SQL assembly for listing reminders, including optional status filtering and pagination parameter wiring, into a small helper that returns the query text and params. Keep the final SQL behavior unchanged, but make the list route easier to scan by separating query building from response flow.
+**Done when:**
+- [ ] `GET /reminders` no longer assembles dynamic SQL inline inside the route handler
+- [ ] Optional status filtering, ordering, and pagination behavior remain unchanged
+- [ ] The builder stays local to reminders route concerns and does not become a generic SQL abstraction
+- [ ] All existing tests pass, new tests cover builder output if needed
+**Why it matters:** Dynamic query assembly mixed directly into route handlers makes even simple list endpoints noisier and harder to maintain than they need to be.
+**Tradeoff:** The helper should remain narrowly focused on this route’s query needs rather than trying to generalize SQL construction.
+**Size:** small (< 1hr)
+**Impact:** low
+**Effort vs Gain:** Low effort, modest but real gain because it separates query construction from endpoint flow in a readable way.
+
+## Self-Review — 2026-04-21
+**Cycles since last self-review:** 1
+**What's working:** UX review is still correctly staying skipped, and this cycle found a genuinely fresh route family, reminders, instead of stretching another near-duplicate batch out of already heavily reviewed dashboard and sync areas.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still handling the post-UX-completion phase well, and they are not pushing me into repetitive output yet.
+
+## Ideas — 2026-04-22 (architecture reviewed)
+
+### Task: Extract communications send-route execution into one shared helper
+**Status:** proposed
+**Files to change:** `src/routes/communications.ts:L86-L159`
+**What to do:** Introduce one route-local helper that accepts the parsed payload, invokes either `communicationService.sendEmail` or `communicationService.sendSMS`, and emits the shared `{ success, messageId }` or `{ success: false, error }` response envelope. Keep route URLs and validation schemas unchanged, but stop maintaining nearly identical send-flow branches twice.
+**Done when:**
+- [ ] `/communications/email` and `/communications/sms` no longer duplicate the same service-result response handling
+- [ ] Validation behavior and response payload shapes remain unchanged for both routes
+- [ ] The helper stays local to communications route concerns and does not become a generic transport abstraction
+- [ ] All existing tests pass, new tests cover helper-driven email and SMS success/failure behavior if needed
+**Why it matters:** These two mutation routes already share the same orchestration pattern, and keeping them duplicated makes future behavior tweaks drift-prone for no real gain.
+**Tradeoff:** The helper should stay narrow enough that the route file still reads clearly from top to bottom.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Well under an hour of cleanup would remove obvious duplication from two production mutation paths, a solid maintenance win.
+
+### Task: Split Stripe checkout customer lookup from customer creation in billing.ts
+**Status:** proposed
+**Files to change:** `src/routes/billing.ts:L44-L79`
+**What to do:** Extract the tenant lookup plus "find existing Stripe customer or create and persist one" flow into a small billing-local helper that returns the Stripe customer id. Keep the checkout route behavior unchanged, but separate subscription session creation from customer bootstrapping so the route body reads as one checkout flow instead of two mixed concerns.
+**Done when:**
+- [ ] `/billing/checkout` no longer inlines tenant fetch, Stripe customer creation, and tenant persistence inside the main route body
+- [ ] Existing customer reuse and first-time customer creation behavior remain unchanged
+- [ ] Missing-tenant and missing-price error behavior remain unchanged
+- [ ] All existing tests pass, new tests cover helper-driven customer bootstrap behavior if needed
+**Why it matters:** Checkout is a high-consequence route, and pulling customer bootstrap into one named step makes the remaining subscription logic easier to audit safely.
+**Tradeoff:** The helper should stay billing-local and explicit, not become a broad Stripe service layer.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, good return because it makes an important payment path easier to reason about without changing behavior.
+
+### Task: Isolate provisioning status transitions and rollback writes in provisioning.ts
+**Status:** proposed
+**Files to change:** `src/routes/provisioning.ts:L44-L147`, `src/routes/provisioning.ts:L177-L218`
+**What to do:** Add small route-local helpers for the repeated tenant phone-status writes, for example setting `provisioning`, `failed`, `active`, and `deprovisioned`, then reuse them in activate/deactivate flows. Keep all response payloads and Vapi calls unchanged, but make the route’s state-machine behavior explicit instead of burying it inside raw update queries.
+**Done when:**
+- [ ] Activate and deactivate flows no longer inline every phone-status update query separately
+- [ ] Current status values and transition timing remain unchanged
+- [ ] Rollback on activation failure still marks the tenant as `failed`
+- [ ] All existing tests pass, new tests cover helper-driven status transitions if needed
+**Why it matters:** Provisioning is already doing external side effects plus rollback, so naming the status transitions would make a fragile operational path easier to verify and extend safely.
+**Tradeoff:** The helpers should stay tiny and route-local so the flow remains obvious during incident debugging.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it clarifies a stateful integration path where subtle mistakes would be expensive.
+
+## Self-Review — 2026-04-22
+**Cycles since last self-review:** 1
+**What's working:** UX review is correctly staying skipped now that the component backlog is exhausted, and this cycle still found a fresh route cluster instead of circling back to the same dashboard helper files.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The anti-duplication rule added yesterday seems to be doing its job, and the current instructions still give a fresh agent enough structure to keep outputs specific without wasting cycles.
+
+## Ideas — 2026-04-23 (architecture reviewed)
+
+### Task: Extract voice-session list query construction into a route-local helper
+**Status:** proposed
+**Files to change:** `src/routes/voice.ts:L120-L220`
+**What to do:** Move the `whereClause`, params array, optional customer/status filters, and count/list query wiring for `GET /voice/calls` into a small route-local helper that returns the query fragments plus params. Keep SQL behavior and response shape identical, but separate dynamic query construction from endpoint flow.
+**Done when:**
+- [ ] `GET /voice/calls` no longer assembles dynamic where-clause logic inline inside the route handler
+- [ ] Count query and list query still use identical filter inputs and produce unchanged results
+- [ ] Pagination and optional customer/status filters behave exactly as they do today
+- [ ] All existing tests pass, new tests cover helper-driven query construction if needed
+**Why it matters:** Dynamic query assembly mixed directly into route handlers makes even straightforward list endpoints harder to scan and maintain than they need to be.
+**Tradeoff:** The helper should stay route-local and query-specific rather than becoming a generic SQL builder.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it simplifies a moderately dense route without changing behavior.
+
+### Task: Consolidate customer existence checks for voice note and context endpoints into a shared helper
+**Status:** proposed
+**Files to change:** `src/routes/voice.ts:L220-L360`
+**What to do:** Introduce a small route-local helper that verifies customer ownership and returns the key customer fields needed by the customer-context and add-note endpoints. Keep current 404 behavior and query results unchanged, but stop repeating customer existence and tenant-ownership verification inline.
+**Done when:**
+- [ ] Customer context and add-note flows no longer each inline their own customer existence checks
+- [ ] Existing 404 behavior and returned data remain unchanged
+- [ ] The helper stays local to voice-route customer checks and does not become a repository layer
+- [ ] All existing tests pass, new tests cover helper-driven customer lookup if needed
+**Why it matters:** Repeated tenant-ownership checks are easy to drift when multiple handlers in one file need the same guarantee.
+**Tradeoff:** The helper should stay narrowly focused so it improves readability without hiding straightforward logic.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, good return because it reduces duplication in a route file with repeated customer verification logic.
+
+### Task: Split CRM-facing customer routes from phone-context routes in voice.ts
+**Status:** proposed
+**Files to change:** `src/routes/voice.ts:L1-L360`, optional new files such as `src/routes/voice.crm.ts` and `src/routes/voice.context.ts`
+**What to do:** Separate the voice session history and CRM-facing customer note/context endpoints from the Vapi-facing phone-context endpoint so the route file stops mixing dashboard-style customer operations with telephony context delivery in one module. Keep URLs and payloads unchanged.
+**Done when:**
+- [ ] CRM-style voice/customer endpoints are registered separately from the phone-context endpoint
+- [ ] Public route paths and response payloads remain unchanged
+- [ ] Shared helper extraction happens only where it clearly reduces duplication between the split files
+- [ ] All existing tests pass, new tests cover moved registration if needed
+**Why it matters:** This route file already serves distinct consumers, dashboard CRM flows and call-time AI context, and splitting those responsibilities will make future changes safer and easier to reason about.
+**Tradeoff:** File count increases, so the split should follow clear consumer boundaries rather than scattering logic too aggressively.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it clarifies ownership inside a route module that already spans multiple responsibilities.
+
+## Self-Review — 2026-04-23
+**Cycles since last self-review:** 1
+**What's working:** UX is still correctly skipped, and this cycle kept the improvement log fresh by moving into the voice route family instead of repeating the recent reminders, version-history, dashboard, or sync batches.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still handling the post-UX-completion phase well, and they are still steering me away from obviously repetitive output.
