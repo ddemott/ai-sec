@@ -339,7 +339,7 @@ export default function ShiftManagementView() {
             </div>
 
             {/* Day rows */}
-            <div className="flex-1 overflow-hidden flex">
+            <div className="flex-1 overflow-y-auto flex">
               <div className="shrink-0" style={{ width: DAY_LABEL_WIDTH }}>
                 {weekDays.map(day => (
                   <div key={day.dateStr} className="flex items-center px-3 cursor-pointer hover:brightness-110 transition-all" style={{ height: ROW_HEIGHT, borderBottom: '1px solid var(--border-soft)', borderRight: '1px solid var(--border-soft)', backgroundColor: day.isToday ? 'rgba(59,130,246,0.08)' : undefined }} onClick={() => openEditor(day.dateStr)}>
@@ -348,7 +348,7 @@ export default function ShiftManagementView() {
                 ))}
               </div>
 
-              <div ref={gridRef} className="flex-1 overflow-x-auto overflow-y-hidden" onScroll={handleGridScroll}>
+              <div ref={gridRef} className="flex-1 overflow-x-auto" onScroll={handleGridScroll}>
                 <div style={{ width: totalGridWidth }}>
                   {weekDays.map(day => {
                     const shift = shiftForDate(day.dateStr)
