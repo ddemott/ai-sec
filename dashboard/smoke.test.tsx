@@ -7,9 +7,11 @@ import { SessionProvider } from './lib/SessionContext'
 test('Dashboard Page Smoke Test', () => {
   render(<SessionProvider><DashboardPage /></SessionProvider>)
 
-  // Verify that the login portal renders correctly
-  expect(screen.getByText(/Secretary HQ Portal/i)).toBeTruthy()
-  expect(screen.getByText(/Sign In to Dashboard/i)).toBeTruthy()
+  // Verify that the login screen renders correctly.
+  // Copy updated 2026-04-24 from "Secretary HQ Portal" / "Sign In to
+  // Dashboard" to the customer-facing form — "Secretary HQ" + "Sign in".
+  expect(screen.getByRole('heading', { name: /Secretary HQ/i })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /^Sign in$/i })).toBeTruthy()
   // WHO: unauthenticated visitor | WHAT: loads dashboard page | WHEN: first visit, no session | WHERE: DashboardPage | WHY: login portal must render so users can authenticate
 })
 

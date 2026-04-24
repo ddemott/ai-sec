@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Calendar, Lock, Mail, Loader2, Bot } from 'lucide-react'
+import { Lock, Mail, Loader2, Bot, Eye, EyeOff } from 'lucide-react'
 import { API_BASE_URL } from '../lib/api'
 
 interface LoginViewProps {
@@ -11,6 +11,7 @@ interface LoginViewProps {
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -35,10 +36,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         if (data.token) localStorage.setItem('authToken', data.token)
         onLoginSuccess(data)
       } else {
-        setError(data.error || 'Login failed. Please try again.')
+        setError(data.error || 'Sign in failed. Please try again.')
       }
     } catch {
-      setError('Connection error. Is the backend server running?')
+      setError("Couldn't connect. Check your internet and try again.")
     } finally {
       setLoading(false)
     }
@@ -47,14 +48,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}>
-        
+
         {/* Header/Logo */}
         <div className="p-8 flex flex-col items-center" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
           <div className="bg-white/20 p-3 rounded-xl mb-4 backdrop-blur-sm">
             <Bot className="w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-display tracking-tight">Secretary HQ Portal</h1>
-          <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>Multi-Tenant Management Console</p>
+          <h1 className="text-2xl font-display tracking-tight">Secretary HQ</h1>
+          <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>Your AI Receptionist</p>
         </div>
 
         <div className="p-8">
@@ -66,39 +67,52 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
-                Business Email
+              <label htmlFor="login-email" className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
+                Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
                 <input
+                  id="login-email"
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="username"
                   className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
                   style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
-                  placeholder="admin@business.com"
+                  placeholder="you@business.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
+              <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
                 <input
-                  type="password"
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
+                  className="w-full pl-11 pr-12 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
                   style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:brightness-125 transition-all"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
             </div>
 
@@ -110,11 +124,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Verifying...
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" aria-hidden="true" />
+                  Signing in...
                 </>
               ) : (
-                'Sign In to Dashboard'
+                'Sign in'
               )}
             </button>
 
@@ -126,16 +140,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           </form>
 
           <div className="mt-8 pt-6 border-t text-center" style={{ borderColor: 'var(--border-soft)' }}>
-            <p className="text-xs text-gray-400 italic">
-              &quot;Providing human-like AI reception for modern businesses.&quot;
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Don&apos;t have an account?{' '}
+              <a href="/?trial=true" className="font-semibold hover:underline" style={{ color: 'var(--accent-soft)' }}>
+                Start your free trial
+              </a>
             </p>
           </div>
         </div>
-      </div>
-      
-      <div className="mt-8 flex items-center text-gray-400 text-xs">
-        <Calendar className="w-4 h-4 mr-2" />
-        <span>Secretary HQ v0.1.0 • Ready for Live Integration</span>
       </div>
     </div>
   )

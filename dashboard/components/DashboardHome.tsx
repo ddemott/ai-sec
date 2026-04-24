@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Clock, Wrench, ChevronRight, Wand2, ArrowRight } from 'lucide-react'
+import { Calendar, Users, Clock, Wrench, ChevronRight, Wand2, ArrowRight, AlertCircle } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext'
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
@@ -54,6 +54,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const [services, setServices] = useState<DashboardService[]>([])
   const [resources, setResources] = useState<DashboardResource[]>([])
   const [loading, setLoading] = useState(true)
+  // Surface load failures so an empty dashboard can never be confused with
+  // "new tenant with no data yet." The older silent `.catch(() => [])`
+  // pattern left owners unsure whether they had no bookings, or the app
+  // had lost its connection — a trust-eroding ambiguity.
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!tenantId) return
@@ -63,23 +68,35 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   async function loadData() {
     setLoading(true)
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+    setLoadError(null)
+    const today = new Date().toISOString().split('T')[0]
+    const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
 
-      const [appts, emps, svcs, res] = await Promise.all([
-        Api.appointments.list(tenantId, { startDate: today, endDate: weekEnd }).catch(() => []),
-        Api.employees.list(tenantId).catch(() => []),
-        Api.services.list(tenantId).catch(() => []),
-        Api.resources.list(tenantId).catch(() => []),
-      ])
+    // Track whether any of the 4 data calls failed. Promise.all would
+    // reject on first failure and leave partial state unset; Promise
+    // .allSettled lets each call succeed or fail independently so we
+    // render partial data and show a dismissable error for the gaps.
+    const results = await Promise.allSettled([
+      Api.appointments.list(tenantId, { startDate: today, endDate: weekEnd }),
+      Api.employees.list(tenantId),
+      Api.services.list(tenantId),
+      Api.resources.list(tenantId),
+    ])
 
-      setAppointments(Array.isArray(appts) ? appts : [])
-      setEmployees(Array.isArray(emps) ? emps.filter((e: DashboardEmployee) => e.type === 'employee' && e.is_active) : [])
-      setServices(Array.isArray(svcs) ? svcs : [])
-      setResources(Array.isArray(res) ? res : [])
-    } catch (err) {
-      console.error('Dashboard load error', err)
+    const [apptsR, empsR, svcsR, resR] = results
+
+    setAppointments(apptsR.status === 'fulfilled' && Array.isArray(apptsR.value) ? apptsR.value : [])
+    setEmployees(
+      empsR.status === 'fulfilled' && Array.isArray(empsR.value)
+        ? empsR.value.filter((e: DashboardEmployee) => e.type === 'employee' && e.is_active)
+        : []
+    )
+    setServices(svcsR.status === 'fulfilled' && Array.isArray(svcsR.value) ? svcsR.value : [])
+    setResources(resR.status === 'fulfilled' && Array.isArray(resR.value) ? resR.value : [])
+
+    const anyFailed = results.some((r) => r.status === 'rejected')
+    if (anyFailed) {
+      setLoadError("Couldn't load all your data. Check your connection and try again.")
     }
     setLoading(false)
   }
@@ -146,6 +163,34 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </p>
       </div>
 
+      {/* LOAD ERROR — shown when any of the four parallel fetches failed.
+          Retryable in-place so users don't have to reload the whole app. */}
+      {loadError && (
+        <div
+          role="alert"
+          className="rounded-xl border-2 p-4 flex items-start gap-3"
+          style={{ borderColor: 'var(--red, #dc2626)', backgroundColor: 'var(--bg-raised)' }}
+        >
+          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--red, #dc2626)' }} aria-hidden="true" />
+          <div className="flex-1">
+            <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {loadError}
+            </div>
+            <Button variant="secondary" size="sm" className="mt-2" onClick={loadData}>
+              Try again
+            </Button>
+          </div>
+          <button
+            onClick={() => setLoadError(null)}
+            aria-label="Dismiss error"
+            className="text-xs px-2 py-1 rounded hover:brightness-125"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* SETUP PROMPT — shown if wizard was dismissed but setup still incomplete */}
       {needsSetup && wizardDismissed && (
         <div className="rounded-xl border-2 p-5" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' }}>
@@ -211,9 +256,23 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
           </button>
         </div>
         {todayAppointments.length === 0 ? (
-          <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
-            Nothing booked for today.
-          </p>
+          <div className="py-4 text-center">
+            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
+              Nothing booked for today yet.
+            </p>
+            <div className="flex gap-2 justify-center flex-wrap">
+              <Button variant="secondary" size="sm" onClick={() => onNavigate?.('schedule')}>
+                <Calendar className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
+                View this week
+              </Button>
+              {employees.length > 1 && (
+                <Button variant="secondary" size="sm" onClick={() => onNavigate?.('my-team')}>
+                  <Users className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
+                  See staff shifts
+                </Button>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="space-y-1.5">
             {todayAppointments.map((appt) => {

@@ -138,7 +138,7 @@ describe('BUG-005: No dev bypass button in production code', () => {
     render(<LoginView onLoginSuccess={mockLogin} />);
 
     // Should have email and password inputs
-    expect(screen.getByPlaceholderText(/admin@business.com/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/you@business.com/i)).toBeInTheDocument();
 
     // Should have exactly one submit-type action (the sign in button)
     const buttons = screen.getAllByRole('button');
@@ -274,7 +274,7 @@ describe('BUG-012: LoginView stores JWT token', () => {
     render(<LoginView onLoginSuccess={mockLogin} />);
 
     // Fill in the form
-    fireEvent.change(screen.getByPlaceholderText(/admin@business.com/i), {
+    fireEvent.change(screen.getByPlaceholderText(/you@business.com/i), {
       target: { value: 'test@test.com' }
     });
     // Find password input

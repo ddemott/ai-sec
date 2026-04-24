@@ -145,17 +145,19 @@ export function OutlookLayout({
         <>
           {isAdmin && (
             <button
-              title="All Businesses"
+              aria-label="All businesses"
+              title="All businesses"
               onClick={() => setActiveTab('all-businesses')}
               className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
             >
-              <Globe className="w-4 h-4" />
+              <Globe className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
           <select
             value={theme}
             onChange={e => setTheme(e.target.value as typeof theme)}
+            aria-label={`Theme (currently ${themeInfo.name})`}
             title={`Theme: ${themeInfo.name}`}
             className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
             style={{
@@ -172,7 +174,10 @@ export function OutlookLayout({
           </select>
           <button
             ref={profileBtnRef}
-            title={`User: ${userName || 'Profile'}`}
+            aria-label={userName ? `Account menu for ${userName}` : 'Account menu'}
+            aria-expanded={profileMenuOpen}
+            aria-haspopup="menu"
+            title={`Account: ${userName || 'Profile'}`}
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
             className={`p-2 rounded-md transition-all ${
               profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
@@ -185,12 +190,27 @@ export function OutlookLayout({
                 : undefined
             }
           >
-            <User className="w-4 h-4" />
+            <User className="w-4 h-4" aria-hidden="true" />
           </button>
         </>
       }>
         <FolderTab label="Front Desk" icon={Phone} size="lg" isActive={currentMode === 'front-desk'} onClick={() => handleModeSwitch('front-desk')} />
-        <FolderTab label="Back Office" icon={Wrench} size="lg" isActive={currentMode === 'back-office'} onClick={() => handleModeSwitch('back-office')} />
+        <span className="relative">
+          <FolderTab label="Back Office" icon={Wrench} size="lg" isActive={currentMode === 'back-office'} onClick={() => handleModeSwitch('back-office')} />
+          {/* Bubble the unanswered-questions badge up to the Back Office
+              mode tab so Front-Desk-only users still see that there are
+              pending items. Without this, the badge on the AI & Knowledge
+              sub-tab is invisible until the user already swapped modes. */}
+          {unansweredCount > 0 && currentMode !== 'back-office' && (
+            <span
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none pointer-events-none"
+              style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
+              aria-label={`${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'} from callers`}
+            >
+              {unansweredCount > 99 ? '99+' : unansweredCount}
+            </span>
+          )}
+        </span>
       </FolderTabBar>
 
       {/* SECONDARY NAVIGATION — Sub-tabs for current mode */}
