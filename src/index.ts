@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import { collectStartupWarnings } from './services/envWarnings';
 import multipart from '@fastify/multipart';
 import { Pool, PoolClient } from 'pg';
 import fs from 'node:fs';
@@ -66,14 +67,18 @@ if (isProduction) {
     console.error(`FATAL: Missing required env vars: ${missing.join(', ')}`);
     process.exit(1);
   }
-  // Warn for optional but important vars
-  if (!VAPI_API_KEY) console.warn('WARNING: VAPI_API_KEY not set — phone provisioning disabled');
-  if (!VAPI_SERVER_URL_SECRET) console.warn('WARNING: VAPI_SERVER_URL_SECRET not set — webhook auth disabled');
-  if (!process.env.GOOGLE_CLIENT_ID) console.warn('WARNING: GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
-  if (!XAI_API_KEY) console.warn('WARNING: XAI_API_KEY not set — Grok TTS proxy disabled');
-  if (XAI_API_KEY && !XAI_TTS_SECRET) console.warn('WARNING: XAI_TTS_SECRET not set — TTS proxy has no auth');
-  if (XAI_API_KEY && !BACKEND_URL) console.warn('WARNING: BACKEND_URL not set — Vapi custom-voice cannot reach TTS proxy');
-  if (!process.env.AGENT_SECRET) console.warn('WARNING: AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls');
+  // Warn for optional-but-important vars. Logic lives in envWarnings.ts
+  // so the warning list is testable without booting the full server.
+  for (const warning of collectStartupWarnings({
+    env: process.env,
+    VAPI_API_KEY,
+    VAPI_SERVER_URL_SECRET,
+    XAI_API_KEY,
+    XAI_TTS_SECRET,
+    BACKEND_URL,
+  })) {
+    console.warn(`WARNING: ${warning}`);
+  }
 }
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
