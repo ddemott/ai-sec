@@ -206,9 +206,13 @@ describe('BUG-010: ErrorBoundary component', () => {
       </ErrorBoundary>
     );
 
-    expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
-    expect(screen.getByText(/Test component error/i)).toBeInTheDocument();
-    expect(screen.getByText(/Try Again/i)).toBeInTheDocument();
+    // Heading is the stable anchor — the friendly message below was
+    // updated in 2026-04-24 to reassure users without leaking raw errors.
+    expect(screen.getByRole('heading', { name: /Something went wrong/i })).toBeInTheDocument();
+    // Raw error text only appears in the dev-details block (vitest runs
+    // with NODE_ENV=test, not 'production', so the block is visible).
+    expect(screen.getByTestId('error-boundary-dev-details')).toHaveTextContent(/Test component error/i);
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
     // WHO: any user | WHAT: sees error fallback UI | WHEN: child component throws | WHERE: ErrorBoundary | WHY: unhandled crash would show a white screen instead of actionable error message
   });
 
@@ -219,11 +223,12 @@ describe('BUG-010: ErrorBoundary component', () => {
       </ErrorBoundary>
     );
 
-    // Should show error UI
-    expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+    // Should show error UI (heading is the unambiguous marker)
+    expect(screen.getByRole('heading', { name: /Something went wrong/i })).toBeInTheDocument();
 
-    // Try Again button should exist and be clickable
-    const tryAgainBtn = screen.getByText(/Try Again/i);
+    // Use role-based query so we select the button, not the friendly
+    // paragraph that happens to include the phrase "try again"
+    const tryAgainBtn = screen.getByRole('button', { name: /try again/i });
     expect(tryAgainBtn).toBeInTheDocument();
 
     // Clicking it should not throw — it resets hasError internally
