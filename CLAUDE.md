@@ -116,6 +116,33 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
 
 ## Resolved Issues
+### April 24, 2026 UX Review & Polish Batch
+A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped across commits `dac97cb`, `91c9903`, `7042a8e`, `3954d4c` + supporting refactors (`2f74991`). Deferred items need design input (admin-mode color, theme-selector placement, first-run nav callout) or bigger investment (skeleton screens, Remember me refresh tokens).
+
+**P0 trust fixes:**
+- Visible load-error banner + retry on `DashboardHome` — no more empty dashboards on API failure. Uses `Promise.allSettled` so partial data still renders.
+- Login copy stripped of developer-internal terminology ("Multi-Tenant Management Console", "Ready for Live Integration", "Is the backend server running?") — now reads as a customer product.
+- `ErrorBoundary` shows a friendly message in production; raw `Error.message` only renders when `NODE_ENV !== 'production'`.
+
+**P1 affordances:**
+- Login: create-account link, password show/hide toggle, `autoComplete="username"`, label/input a11y wiring.
+- Today's Schedule empty state now offers CTAs ("View this week", "See staff shifts" — latter hidden for solo operators).
+- Unanswered-questions badge bubbles up to the Back Office mode tab so Front-Desk-only users see pending items.
+- Fitts's Law: entire Today's Schedule card header is a single large click target; chevron stays as affordance.
+- Icon-only buttons in `OutlookLayout` top bar carry `aria-label` (tooltips don't work on touch / screen reader). Profile button has `aria-expanded` + `aria-haspopup`.
+- `ErrorBoundary` has a "Reload page" escape hatch for persistent errors.
+
+**P2 polish:**
+- Tenant switcher dropdown uses CSS vars instead of hardcoded `bg-white dark:bg-[#222]` — now themes correctly across all 8 palettes.
+- Quick-actions grid: `md:grid-cols-3` → `md:grid-cols-2 lg:grid-cols-3` so cards breathe at tablet widths.
+- "Setup Assistant" quick action label corrected to "Services & Resources" (the tab it actually opens — wizard button kept its "Open Setup Assistant" label).
+- User-facing "tenant" vocabulary replaced with "business" in error messages. `vocabulary-guard.test.ts` prevents regression.
+
+**Backend hardening:**
+- Startup warnings extracted from `index.ts` into `src/services/envWarnings.ts` (pure function, 10 unit tests). Added a warning for missing `TELNYX_API_KEY` so OTP misconfig is visible at boot instead of mid-call.
+
+**Test coverage added:** +50 dashboard tests (LoginView, DashboardHome, ErrorBoundary, vocabulary-guard), +10 backend tests (envWarnings).
+
 ### April 23, 2026 Phone Verification (SMS OTP)
 - New table `phone_verifications` (tenant_id, phone, code_hash, expires_at, attempt_count, verified_at). RLS + FORCE RLS. Migration `20260423000000_phone_verifications.sql`.
 - New service `src/services/telnyxSms.ts` — Telnyx Messaging API wrapper (single fetch, no SDK) + `generateVerificationCode(digits)` using `crypto.randomInt` for unbiased codes.
@@ -149,7 +176,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,429 backend tests + 465 dashboard tests = 1,894 total passing (verified 2026-04-21). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,527 backend tests + 495 dashboard tests = 2,022 total passing (verified 2026-04-24). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 
