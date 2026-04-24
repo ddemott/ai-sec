@@ -254,7 +254,7 @@ function AppointmentViewInner() {
     }
 
     if (usingMockData) {
-      setError('You are viewing sample data only. Please sign in to a real business tenant to create appointments that persist.')
+      setError('You are viewing sample data only. Sign in to your business account to create appointments that persist.')
       setSaving(false)
       return
     }
@@ -265,7 +265,7 @@ function AppointmentViewInner() {
       if (selectedCustomerObj) {
         targetTenantId = selectedCustomerObj.tenant_id
       } else {
-        setError('Cannot determine target tenant for new appointment.')
+        setError('Could not determine which business this appointment belongs to. Please pick a customer first.')
         setSaving(false)
         return
       }
