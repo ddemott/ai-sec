@@ -291,18 +291,32 @@ export function OutlookLayout({
       </nav>
     </div>
 
-    {/* Tenant switcher dropdown */}
+    {/* Tenant switcher dropdown.
+        Uses CSS vars (not hardcoded bg-white/gray classes) so it theme-
+        matches midnight, nord, sunset, forest, etc. — otherwise the panel
+        pops as a bright-white rectangle in 6 of 8 themes. */}
     {tenantDropdownOpen && (
       <>
         <div className="fixed inset-0 z-[99]" onClick={() => setTenantDropdownOpen(false)} />
         <div
-          className="fixed z-[100] w-64 bg-white dark:bg-[#222] text-gray-900 dark:text-gray-100 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden"
+          data-testid="tenant-switcher-panel"
+          className="fixed z-[100] w-64 rounded-xl shadow-2xl border overflow-hidden"
           style={{
             top: tenantBtnRef.current ? tenantBtnRef.current.getBoundingClientRect().bottom + 4 : 0,
             left: tenantBtnRef.current ? tenantBtnRef.current.getBoundingClientRect().left : 0,
+            backgroundColor: 'var(--bg-raised)',
+            color: 'var(--text-primary)',
+            borderColor: 'var(--border-soft)',
           }}
         >
-          <div className="p-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a] text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <div
+            className="p-2 border-b text-[10px] font-bold uppercase tracking-widest"
+            style={{
+              backgroundColor: 'var(--bg-surface)',
+              borderColor: 'var(--border-soft)',
+              color: 'var(--text-muted)',
+            }}
+          >
             Switch Active Business
           </div>
           <div className="max-h-60 overflow-y-auto" role="listbox" aria-label="Select active business" onKeyDown={(e) => {
@@ -327,8 +341,11 @@ export function OutlookLayout({
                 role="option"
                 aria-selected={managedTenantId === t.id}
                 onClick={() => { if (onSelectTenant) onSelectTenant(t.id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('dashboard'); }}
-                className="w-full text-left px-4 py-3 flex flex-col transition-colors border-b border-gray-50 dark:border-gray-800/50 hover:brightness-125"
-                style={{ backgroundColor: managedTenantId === t.id ? 'var(--accent-muted)' : undefined }}
+                className="w-full text-left px-4 py-3 flex flex-col transition-colors border-b hover:brightness-125"
+                style={{
+                  backgroundColor: managedTenantId === t.id ? 'var(--accent-muted)' : undefined,
+                  borderColor: 'var(--border-soft)',
+                }}
               >
                 <span className="text-sm font-bold">{t.name}</span>
                 <span className="text-[10px] opacity-50 uppercase tracking-tighter">{t.business_type}</span>

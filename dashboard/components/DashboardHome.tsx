@@ -240,21 +240,30 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         <SetupWizard isOpen={true} onClose={handleCloseWizard} />
       )}
 
-      {/* TODAY'S SCHEDULE */}
+      {/* TODAY'S SCHEDULE — the whole header row is a click target
+          (Fitts's Law: larger targets are faster to hit). The 12px
+          "Full schedule" link previously WAS the only affordance but
+          was barely tappable on mobile. Now the entire header behaves
+          as one button; the chevron stays as the visual cue. */}
       <Card>
-        <div className="flex items-center justify-between mb-4">
+        <button
+          type="button"
+          onClick={() => onNavigate?.('schedule')}
+          aria-label="View full schedule"
+          className="w-full flex items-center justify-between mb-4 rounded-md transition-colors hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 group"
+          style={{ '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
+        >
           <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Clock className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
+            <Clock className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
             Today&apos;s Schedule
           </h2>
-          <button
-            onClick={() => onNavigate?.('schedule')}
-            className="text-xs hover:underline flex items-center gap-1"
+          <span
+            className="text-xs flex items-center gap-1 group-hover:underline"
             style={{ color: 'var(--accent-soft)' }}
           >
-            Full schedule <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
+            Full schedule <ChevronRight className="w-3 h-3" aria-hidden="true" />
+          </span>
+        </button>
         {todayAppointments.length === 0 ? (
           <div className="py-4 text-center">
             <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
@@ -337,8 +346,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         />
       </Card>
 
-      {/* QUICK ACTIONS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* QUICK ACTIONS — 1 col on phones, 2 on tablets (cards need space
+          for icon + label + description without truncating), 3 on
+          desktop. The previous md:grid-cols-3 was cramped at 768-900px. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <QuickAction
           icon={Calendar}
           label={`View Schedule`}
@@ -353,7 +364,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         />
         <QuickAction
           icon={Wrench}
-          label="Setup Assistant"
+          label="Services & Resources"
           description={`Services, ${vocab.resource_plural.toLowerCase()}, assignments`}
           onClick={() => onNavigate?.('my-business')}
         />

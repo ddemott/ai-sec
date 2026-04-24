@@ -117,6 +117,32 @@ describe('DashboardHome — load error visibility', () => {
   })
 })
 
+describe('DashboardHome — Today\'s Schedule click target (Fitts\'s Law)', () => {
+  test('HAPPY: entire card header is a single button that navigates to schedule', async () => {
+    // WHO: Owner glancing at Today's Schedule, wants the full view
+    // WHAT: Clicking ANYWHERE on the "Today's Schedule" header (icon,
+    //        title text, or "Full schedule" label) should navigate to the
+    //        schedule tab. Previously only the 12px text link at the end
+    //        was tappable — violates Fitts's Law.
+    // WHY: Touch targets under ~24px are slow to hit and misfire often;
+    //        promoting the whole header to one target (while preserving
+    //        the chevron as visual affordance) is the canonical fix.
+    const onNavigate = vi.fn()
+    render(<DashboardHome onNavigate={onNavigate} />)
+    const target = await screen.findByRole('button', { name: /view full schedule/i })
+    fireEvent.click(target)
+    expect(onNavigate).toHaveBeenCalledWith('schedule')
+  })
+
+  test('HAPPY: click target still has the "Full schedule" label + chevron affordance', async () => {
+    // WHY: Making the whole row tappable is useless if the user can't
+    //        SEE it's tappable. The chevron + text are the visual cue.
+    render(<DashboardHome />)
+    const target = await screen.findByRole('button', { name: /view full schedule/i })
+    expect(target).toHaveTextContent(/full schedule/i)
+  })
+})
+
 describe('DashboardHome — Today\'s Schedule empty state', () => {
   test('HAPPY: no bookings → CTA offers "View this week"', async () => {
     // WHO: Owner checking Monday morning with nothing on the books
