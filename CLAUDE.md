@@ -7,7 +7,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 
 See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 1. **Voice orchestrator: Vapi → LiveKit Agents** — Phase 1 done, Phase 2 ready. Plan at `.claude/plans/federated-snacking-puffin.md`. Blocked on LiveKit API Secret + WSS URL.
-2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — 8 voice AI tools port to `src/routes/agentTools.ts`. Unblocked; part of LiveKit Phase 2.
+2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — 10 voice AI tools (8 original + 2 OTP added 2026-04-23) in `src/routes/agentTools.ts`. All routes gated on `isValidPhone` for bookings. Unblocked; part of LiveKit Phase 2.
 3. **TTS provider: Vapi Clara → xAI Grok** — Shipped as custom-voice proxy (`src/routes/tts.ts`); goes native in LiveKit Phase 4.
 
 ## Architecture (current, pre-migration)
@@ -116,6 +116,15 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
 
 ## Resolved Issues
+### April 23, 2026 Phone Verification (SMS OTP)
+- New table `phone_verifications` (tenant_id, phone, code_hash, expires_at, attempt_count, verified_at). RLS + FORCE RLS. Migration `20260423000000_phone_verifications.sql`.
+- New service `src/services/telnyxSms.ts` — Telnyx Messaging API wrapper (single fetch, no SDK) + `generateVerificationCode(digits)` using `crypto.randomInt` for unbiased codes.
+- New agent tools: `POST /agent-tools/send-verification-code` (rate-limited: 3/phone/hour, 100/tenant/day) and `POST /agent-tools/verify-phone-code` (5 tries max, 10-min TTL, bcrypt-hashed codes).
+- SMS body locked: `Your SecretaryHQ verification code is: 123456. Reply STOP to opt out.` (TCPA opt-out required).
+- Booking routes (`book-appointment`, `book-with-scheduling`) now gate on `isValidPhone(args.phone)`. Invalid phone → route returns the ask-for-phone message; the LLM reads it, asks the caller verbally, then kicks into the OTP flow. Valid caller-ID phone skips verification entirely.
+- 12 new tests in `agentTools.test.ts` (7 send-verification-code, 5 verify-phone-code), 7 in `telnyxSms.test.ts`, 2 book-appointment gate tests, 1 book-with-scheduling gate test.
+- **System prompt TODO (Phase 3):** when `book-appointment` or `book-with-scheduling` returns "I'll need a good phone number" → call `send-verification-code(phone)` → read its `message` to the caller → on spoken code, call `verify-phone-code(phone, code)` → on success, retry the booking tool with the verified phone.
+
 ### April 12, 2026 Improvement Hardening
 - Employee update route missing `AND tenant_id` in WHERE clause — cross-tenant employee updates were possible. Fixed by adding tenant_id scoping + assertRowAffected guard.
 - Zero-row mutation guards added to employees, customers, appointments, tenants, knowledge, resources, services routes — all previously returned `{ success: true }` when UPDATE/DELETE affected 0 rows (silent no-op).

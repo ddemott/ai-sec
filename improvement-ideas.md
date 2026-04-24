@@ -1,5 +1,8 @@
 ## Ideas — 2026-04-20 (architecture reviewed)
 
+### ~~Task: Fix inconsistent phone normalization in agent-tool booking routes~~
+**Status:** resolved 2026-04-23 by the SMS OTP build. Both booking routes now gate on `isValidPhone()` and reject malformed phones before any DB call; the LLM agent handles the rejection by asking verbally and triggering the OTP flow (`send-verification-code` + `verify-phone-code`). See CLAUDE.md "April 23, 2026 Phone Verification" for details.
+
 ### Task: Replace the placeholder /analytics/stats route with an explicit temporary contract
 **Status:** proposed
 **Files to change:** `src/routes/analytics.ts:L8-L12`
@@ -1220,3 +1223,56 @@
 **What's working:** UX is still correctly skipped, and this cycle kept the improvement log fresh by moving into the voice route family instead of repeating the recent reminders, version-history, dashboard, or sync batches.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions are still handling the post-UX-completion phase well, and they are still steering me away from obviously repetitive output.
+
+## Ideas — 2026-04-23 (architecture reviewed)
+
+### Task: Separate TTS request validation and voice resolution from streaming response logic
+**Status:** proposed
+**Files to change:** `src/routes/tts.ts:L1-L220`
+**What to do:** Split the TTS route into small internal steps so request validation, voice selection/defaulting, upstream ElevenLabs request construction, and streaming response handling are not all embedded inline in one handler. Keep the public endpoint and streaming behavior unchanged.
+**Done when:**
+- [ ] Request validation and parameter shaping live outside the main streaming branch
+- [ ] Voice resolution/defaulting is handled in one named helper or clearly separated step
+- [ ] Streaming response behavior and headers remain unchanged
+- [ ] All existing tests pass, new tests cover helper-driven validation/voice resolution if needed
+**Why it matters:** Streaming handlers are already hard to read, and separating setup concerns from stream piping makes future changes much safer.
+**Tradeoff:** The helper extraction should stay local to this route so it improves readability without obscuring the streaming path.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it clarifies a route with multiple responsibilities packed into one handler.
+
+### Task: Extract provider error mapping for TTS failures into a route-local helper
+**Status:** proposed
+**Files to change:** `src/routes/tts.ts:L120-L220`
+**What to do:** Move the logic that translates upstream ElevenLabs failures, missing API key conditions, and unsupported voice cases into a small helper that returns the correct status code and error payload. Keep current response behavior unchanged, but stop mixing provider error mapping directly into the stream handler body.
+**Done when:**
+- [ ] Upstream/provider-specific TTS failure mapping is no longer inlined inside the main route body
+- [ ] Current status codes and error payloads remain unchanged
+- [ ] The helper stays local to TTS route concerns and does not become a generic HTTP error abstraction
+- [ ] All existing tests pass, new tests cover helper-driven failure mapping if needed
+**Why it matters:** Provider-specific failure handling is exactly the kind of detail that becomes hard to reason about when embedded inside streaming control flow.
+**Tradeoff:** The helper should remain tiny and route-specific so it improves clarity rather than adding indirection for its own sake.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it makes a streaming route easier to debug and maintain.
+
+### Task: Isolate TTS response header setup into a dedicated helper
+**Status:** proposed
+**Files to change:** `src/routes/tts.ts:L60-L120`
+**What to do:** Pull the repeated response header setup for audio streaming into one local helper so content type, cache, and transfer semantics are defined in one place before piping begins. Preserve the current headers exactly.
+**Done when:**
+- [ ] Audio-stream response headers are configured through one local helper
+- [ ] Current header values and streaming behavior remain unchanged
+- [ ] The route body reads more clearly from validation to upstream request to piping
+- [ ] All existing tests pass, new tests cover header setup if needed
+**Why it matters:** Streaming response headers are easy to tweak incorrectly, and consolidating them improves both readability and safety.
+**Tradeoff:** The helper should stay narrowly scoped to this one route and not become a general response-builder abstraction.
+**Size:** small (< 1hr)
+**Impact:** low
+**Effort vs Gain:** Low effort, modest but real gain because it makes a delicate streaming path easier to scan safely.
+
+## Self-Review — 2026-04-23
+**Cycles since last self-review:** 1
+**What's working:** UX is still correctly skipped, and this cycle still found one genuinely new route family, TTS, after checking whether other candidate areas would just produce duplicates or dead ends.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still helping me stop and sanity-check freshness before writing, which is the right behavior now that the UX backlog is complete and the ideas log is mature.
