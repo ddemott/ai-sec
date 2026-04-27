@@ -15,6 +15,24 @@ Single source of truth for all remaining work. Organized by priority.
 
 ---
 
+## CI Rot (deferred, not blocking launch)
+
+All 5 remaining GitHub Actions workflows assume a pnpm workspace structure that this repo never adopted (`pnpm-workspace.yaml` doesn't exist — repo uses `npm` at root with separate npm packages in `agent/` and `dashboard/`). Every workflow has been failing on every commit since at least 2026-04-08. `check-docs.yml` was deleted 2026-04-27 to stop email notifications; the rest are still red but quieter.
+
+**What this means:** the 1,468 backend + 495 dashboard tests we run locally are *not* running on push. No automated regression check exists right now.
+
+**To fix (one focused session, ~30-60 min):**
+
+- [ ] Rewrite `ci.yml` for npm: `npm install`, `npx tsc --noEmit`, `npm test`, then `cd dashboard && npm install && npm test`
+- [ ] Delete `pnpm-workspace-sanity.yml` (no workspace to sanity-check)
+- [ ] Rewrite `ci-smoke-assume-tenant.yml`, `ci-smoke-calendar-appointments.yml`, `pr-smoke-servers.yml` to use npm install
+- [ ] Bump `actions/checkout` and `actions/setup-node` to current versions to clear the Node 20 deprecation warning
+- [ ] Optionally add a real "check-docs" gate (e.g., "fail if any non-historical doc mentions Vapi outside the migration index") — useful guardrail given the recent migration
+
+**Why deferred:** doesn't block phone/docs/ship, and rewriting 6 workflows deserves its own focused pass instead of a sidebar.
+
+---
+
 ## Voice AI Migration: Vapi → LiveKit Agents
 
 See `docs/FRAMEWORK_MIGRATIONS.md` for the full list of in-flight framework swaps (LiveKit, Edge Functions → Fastify, TTS).
