@@ -245,43 +245,23 @@ describe("Duration filter for usable slots", () => {
 describe("get_available_slots wiring", () => {
   const fs = require("fs");
 
-  it("tool definition exists in tools.json", () => {
-    const tools = JSON.parse(fs.readFileSync("vapi/tools.json", "utf8"));
-    const slot = tools.find((t: any) => t.function.name === "get_available_slots");
-    expect(slot).toBeTruthy();
-    expect(slot.function.parameters.required).toContain("service_type");
-    expect(slot.function.parameters.required).toContain("date");
+  it("Fastify route exists for /agent-tools/available-slots", () => {
+    // WHO: LiveKit agent calling the tool layer
+    // WHAT: the route handler must exist and accept a service_type + date
+    // WHEN: agent runs the get_available_slots tool during a call
+    // WHERE: src/routes/agentTools.ts
+    // WHY: with Vapi removed this is the only available-slots surface; if the
+    //      route is renamed or deleted the agent silently loses the tool
+    const src = fs.readFileSync("src/routes/agentTools.ts", "utf8");
+    expect(src).toContain("/agent-tools/available-slots");
   });
 
-  it("Zod schema exists in index.ts", () => {
-    const src = fs.readFileSync("supabase/functions/vapi-tools/index.ts", "utf8");
-    expect(src).toContain("GetAvailableSlotsSchema");
-    expect(src).toContain("get_available_slots: GetAvailableSlotsSchema");
-  });
-
-  it("dispatcher routes get_available_slots to service", () => {
-    const src = fs.readFileSync("supabase/functions/vapi-tools/core/dispatcher.ts", "utf8");
-    expect(src).toContain('case "get_available_slots"');
-    expect(src).toContain("this.service.getAvailableSlots");
-  });
-
-  it("agent template includes get_available_slots in tools array", () => {
-    const template = JSON.parse(fs.readFileSync("vapi/agent.template.json", "utf8"));
-    expect(template.model.tools).toContain("get_available_slots");
-  });
-
-  it("agent prompt instructs AI to use get_available_slots before booking", () => {
-    const template = JSON.parse(fs.readFileSync("vapi/agent.template.json", "utf8"));
-    const prompt = template.model.messages[0].content;
-    expect(prompt).toContain("get_available_slots");
-    expect(prompt).toContain("ALWAYS use get_available_slots before booking");
-    expect(prompt).toContain("duration");
-    expect(prompt).toContain("price");
-  });
-
-  it("duplicate break removed from dispatcher book_appointment case", () => {
-    const src = fs.readFileSync("supabase/functions/vapi-tools/core/dispatcher.ts", "utf8");
-    // Should NOT have two breaks after book_appointment
-    expect(src).not.toContain('break;\n        }\n          break;');
+  it("agent tool definition is registered with the LiveKit session", () => {
+    // WHO: LiveKit agent registering its tool surface with the LLM
+    // WHAT: agent/src/tools.ts must declare get_available_slots
+    // WHERE: agent/src/tools.ts
+    // WHY: LLM only knows about tools listed here; missing entry = silent loss
+    const src = fs.readFileSync("agent/src/tools.ts", "utf8");
+    expect(src).toContain("get_available_slots");
   });
 });

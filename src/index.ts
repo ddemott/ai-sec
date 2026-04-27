@@ -30,13 +30,12 @@ import { registerJobberRoutes } from './routes/jobber';
 import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
 import { registerServiceTitanRoutes } from './routes/servicetitan';
-import { registerTtsRoutes } from './routes/tts';
 import { registerAgentToolRoutes } from './routes/agentTools';
 import { registerVoiceRoutes } from './routes/voice';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { registerCommunicationRoutes } from './routes/communications';
 import { registerReminderRoutes } from './routes/reminders';
-import { VapiClient } from './services/vapiClient';
+import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
@@ -49,13 +48,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? '' : 'dev-jwt-secret-change-in-production');
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
-const VAPI_API_KEY = process.env.VAPI_API_KEY || '';
-const VAPI_SERVER_URL = process.env.VAPI_SERVER_URL || 'https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools';
-const VAPI_SERVER_URL_SECRET = process.env.VAPI_SERVER_URL_SECRET || '';
-const XAI_API_KEY = process.env.XAI_API_KEY || '';
-const XAI_TTS_SECRET = process.env.XAI_TTS_SECRET || '';
-const XAI_TTS_VOICE = process.env.XAI_TTS_VOICE || 'ara';
-const BACKEND_URL = process.env.BACKEND_URL || '';
+const TELNYX_API_KEY = process.env.TELNYX_API_KEY || '';
+const TELNYX_SIP_CONNECTION_ID = process.env.TELNYX_SIP_CONNECTION_ID || '';
 
 if (isProduction) {
   const missing: string[] = [];
@@ -71,11 +65,8 @@ if (isProduction) {
   // so the warning list is testable without booting the full server.
   for (const warning of collectStartupWarnings({
     env: process.env,
-    VAPI_API_KEY,
-    VAPI_SERVER_URL_SECRET,
-    XAI_API_KEY,
-    XAI_TTS_SECRET,
-    BACKEND_URL,
+    TELNYX_API_KEY,
+    TELNYX_SIP_CONNECTION_ID,
   })) {
     console.warn(`WARNING: ${warning}`);
   }
@@ -231,8 +222,6 @@ const PUBLIC_ROUTES = [
   '/hubspot/webhook',
   '/square/webhook',
   '/servicetitan/webhook',
-  // TTS proxy (authenticated via shared secret, not JWT)
-  '/tts/synthesize',
 ];
 app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS') return;
@@ -344,15 +333,14 @@ registerAnalyticsRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
 registerBillingRoutes(app, pool);
 
-const vapiClient = VAPI_API_KEY
-  ? new VapiClient(VAPI_API_KEY, VAPI_SERVER_URL, VAPI_SERVER_URL_SECRET, BACKEND_URL, XAI_TTS_SECRET, XAI_TTS_VOICE)
+const telnyxProvisioning = (TELNYX_API_KEY && TELNYX_SIP_CONNECTION_ID)
+  ? { client: new TelnyxNumbersClient(TELNYX_API_KEY), sipConnectionId: TELNYX_SIP_CONNECTION_ID }
   : null;
-registerProvisioningRoutes(app, pool, vapiClient);
+registerProvisioningRoutes(app, pool, telnyxProvisioning);
 registerJobberRoutes(app, pool, withTenantClient);
 registerHubSpotRoutes(app, pool, withTenantClient);
 registerSquareRoutes(app, pool, withTenantClient);
 registerServiceTitanRoutes(app, pool, withTenantClient);
-registerTtsRoutes(app, XAI_API_KEY, XAI_TTS_SECRET, XAI_TTS_VOICE);
 registerVoiceRoutes(app, pool, withTenantClient);
 registerVersionHistoryRoutes(app, pool, withTenantClient);
 registerCommunicationRoutes(app, pool, withTenantClient);

@@ -27,7 +27,7 @@ import { formatHour } from '../lib/utils'
  * 6. No-Show Pattern — which days have the most no-shows
  *
  * Phase 1: Structure + what we can measure from existing data.
- * Phase 2: Vapi call log integration for call-specific metrics.
+ * Phase 2: LiveKit call log integration for call-specific metrics.
  */
 
 interface AppointmentSummary {
@@ -161,7 +161,7 @@ export default function AnalyticsView() {
           <MetricCard
             icon={PhoneIncoming}
             title="Call Volume"
-            subtitle="Requires Vapi call log integration (Phase 2)"
+            subtitle="Requires call log integration (Phase 2)"
             placeholder
           />
 
@@ -169,7 +169,7 @@ export default function AnalyticsView() {
           <MetricCard
             icon={CalendarCheck}
             title="Booking Conversion"
-            subtitle="Requires Vapi call log integration (Phase 2)"
+            subtitle="Requires call log integration (Phase 2)"
             placeholder
           />
 
@@ -219,7 +219,7 @@ export default function AnalyticsView() {
           <MetricCard
             icon={PhoneOff}
             title="Caller Abandonment"
-            subtitle="Requires Vapi call log integration (Phase 2)"
+            subtitle="Requires call log integration (Phase 2)"
             placeholder
           />
 
@@ -307,7 +307,7 @@ export default function AnalyticsView() {
             <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Coming in Phase 2</span>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Call volume trends, booking conversion rates, and caller abandonment analysis require Vapi call log integration.
+            Call volume trends, booking conversion rates, and caller abandonment analysis require call log integration.
             Staff request tracking requires structured data capture during calls.
           </p>
         </div>
@@ -339,7 +339,7 @@ function MetricCard({ icon: Icon, title, subtitle, placeholder, children }: {
       <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>
       {placeholder ? (
         <div className="h-16 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--bg-raised)' }}>
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Coming in Phase 2 — available after Vapi integration</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Coming in Phase 2 — available after call log integration</span>
         </div>
       ) : (
         children

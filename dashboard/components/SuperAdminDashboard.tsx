@@ -28,8 +28,7 @@ type Tenant = {
     voice_id?: string | null
     first_message?: string | null
     system_prompt?: string | null
-    vapi_assistant_id?: string | null
-    vapi_phone_number_id?: string | null
+    telnyx_phone_number_id?: string | null
     phone_status?: string
     system_prompt_template?: string
     first_message_template?: string

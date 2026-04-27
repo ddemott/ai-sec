@@ -1,9 +1,0 @@
-{
-  "imports": {
-    "std/": "https://deno.land/std@0.168.0/",
-    "postgres/": "https://deno.land/x/postgres@v0.17.0/",
-    "zod": "https://deno.land/x/zod@v3.23.8/mod.ts",
-    "pino": "npm:pino@9.0.0"
-  },
-  "nodeModulesDir": "auto"
-}

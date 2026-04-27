@@ -2,23 +2,31 @@ import type { Pool } from 'pg';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
-import { VapiClient } from '../services/vapiClient';
+import { TelnyxNumbersClient } from '../services/telnyxNumbers';
 
 const ActivateSchema = z.object({
   tenant_id: z.string().uuid(),
   area_code: z.string().regex(/^\d{3}$/).optional(),
 });
 
+export interface TelnyxProvisioningConfig {
+  client: TelnyxNumbersClient;
+  sipConnectionId: string;
+}
+
 export function registerProvisioningRoutes(
   app: FastifyInstance<any, any, any>,
   pool: Pool,
-  vapiClient: VapiClient | null
+  telnyx: TelnyxProvisioningConfig | null
 ) {
 
-  // POST /provisioning/activate — provision Vapi assistant + phone number for a tenant
+  // POST /provisioning/activate — purchase a Telnyx number and route it to LiveKit
   app.post('/provisioning/activate', withHandler(async (req: AppRequest, reply) => {
-    if (!vapiClient) {
-      return reply.status(503).send({ success: false, error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
+    if (!telnyx) {
+      return reply.status(503).send({
+        success: false,
+        error: 'Phone provisioning not configured (missing TELNYX_API_KEY or TELNYX_SIP_CONNECTION_ID)',
+      });
     }
 
     const parsed = ActivateSchema.safeParse(req.body);
@@ -29,10 +37,8 @@ export function registerProvisioningRoutes(
 
     const client = await pool.connect();
     try {
-      // Fetch tenant config
       const tenantRes = await client.query(
-        `SELECT id, name, business_type, voice_id, system_prompt, first_message, phone_status
-         FROM tenants WHERE id = $1`,
+        `SELECT id, name, phone_status FROM tenants WHERE id = $1`,
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
@@ -41,22 +47,6 @@ export function registerProvisioningRoutes(
 
       const tenant = tenantRes.rows[0];
 
-      // Validate prerequisites — tell the caller exactly which fields are missing
-      const missingFields: string[] = [];
-      if (!tenant.business_type) missingFields.push('business_type');
-      if (!tenant.voice_id) missingFields.push('voice_id');
-      if (!tenant.system_prompt) missingFields.push('system_prompt');
-      if (missingFields.length > 0) {
-        return reply.status(400).send({
-          error: 'Tenant is missing required configuration for phone activation',
-          missing_fields: missingFields,
-          tenant_id,
-          tenant_name: tenant.name,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Check status
       if (tenant.phone_status === 'active') {
         return reply.status(409).send({
           error: 'Phone is already active for this tenant',
@@ -74,75 +64,69 @@ export function registerProvisioningRoutes(
         });
       }
 
-      // Get default resource for this tenant
-      const resourceRes = await client.query(
-        'SELECT id FROM resources WHERE tenant_id = $1 AND is_deleted = false ORDER BY created_at ASC LIMIT 1',
-        [tenant_id]
-      );
-      const defaultResourceId = resourceRes.rows[0]?.id || tenant_id;
-
-      // Set provisioning status
       await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['provisioning', tenant_id]);
 
-      let assistantId: string | null = null;
+      let purchasedId: string | null = null;
+      let purchasedNumber: string | null = null;
 
       try {
-        // Create Vapi assistant
-        const assistantResult = await vapiClient.createAssistant({
-          id: tenant.id,
-          name: tenant.name,
-          business_type: tenant.business_type,
-          voice_id: tenant.voice_id,
-          system_prompt: tenant.system_prompt,
-          first_message: tenant.first_message || `Thanks for calling ${tenant.name}! How can I help you today?`,
-          default_resource_id: defaultResourceId,
-        });
-        assistantId = assistantResult.id;
+        const available = await telnyx.client.searchAvailable(area_code);
+        if (!available) {
+          throw new Error(area_code
+            ? `No available phone numbers in area code ${area_code}`
+            : 'No available phone numbers in Telnyx inventory'
+          );
+        }
 
-        // Provision phone number
-        const phoneResult = await vapiClient.createPhoneNumber(assistantId, area_code);
+        const ordered = await telnyx.client.orderNumber(available.phone_number);
+        purchasedId = ordered.id;
+        purchasedNumber = ordered.phone_number;
 
-        // Update tenant with all provisioning data
+        await telnyx.client.assignToConnection(ordered.id, telnyx.sipConnectionId);
+
         await client.query(
           `UPDATE tenants SET
-            vapi_assistant_id = $1,
-            vapi_phone_number_id = $2,
-            inbound_phone = $3,
+            telnyx_phone_number_id = $1,
+            inbound_phone = $2,
             phone_status = 'active'
-          WHERE id = $4`,
-          [assistantId, phoneResult.id, phoneResult.number, tenant_id]
+          WHERE id = $3`,
+          [ordered.id, ordered.phone_number, tenant_id]
         );
 
-        logEvent(req, 'phone_provisioned', { tenant_id, phone: phoneResult.number, assistant_id: assistantId });
+        logEvent(req, 'phone_provisioned', {
+          tenant_id,
+          phone: ordered.phone_number,
+          telnyx_phone_number_id: ordered.id,
+        });
 
         return reply.send({
           success: true,
-          phone_number: phoneResult.number,
-          assistant_id: assistantId,
-          phone_number_id: phoneResult.id,
+          phone_number: ordered.phone_number,
+          telnyx_phone_number_id: ordered.id,
         });
 
-      } catch (vapiError: unknown) {
-        // Rollback: delete assistant if it was created
-        if (assistantId) {
+      } catch (err: unknown) {
+        // Best-effort rollback: release the number if it was purchased before
+        // the connection assignment failed.
+        if (purchasedId) {
           try {
-            await vapiClient.deleteAssistant(assistantId);
+            await telnyx.client.release(purchasedId);
           } catch (cleanupError) {
-            logError(req, 'vapi_assistant_cleanup_failed', cleanupError, { assistantId });
+            logError(req, 'telnyx_number_cleanup_failed', cleanupError, { purchasedId, purchasedNumber });
           }
         }
 
         await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['failed', tenant_id]);
 
-        const detail = vapiError instanceof Error ? vapiError.message : String(vapiError);
-        logError(req, 'phone_provisioning_failed', vapiError, { tenant_id, assistantId });
+        const detail = err instanceof Error ? err.message : String(err);
+        logError(req, 'phone_provisioning_failed', err, { tenant_id, purchasedId });
         return reply.status(502).send({
           error: 'Phone provisioning failed',
           detail,
           tenant_id,
           tenant_name: tenant.name,
-          assistant_created: !!assistantId,
-          rolled_back: !!assistantId,
+          number_purchased: !!purchasedId,
+          rolled_back: !!purchasedId,
           timestamp: new Date().toISOString(),
         });
       }
@@ -152,10 +136,13 @@ export function registerProvisioningRoutes(
     }
   }, 'Failed to activate phone'));
 
-  // POST /provisioning/deactivate — remove Vapi assistant + phone number
+  // POST /provisioning/deactivate — release the Telnyx number
   app.post('/provisioning/deactivate', withHandler(async (req: AppRequest, reply) => {
-    if (!vapiClient) {
-      return reply.status(503).send({ success: false, error: 'Phone provisioning not configured (missing VAPI_API_KEY)' });
+    if (!telnyx) {
+      return reply.status(503).send({
+        success: false,
+        error: 'Phone provisioning not configured (missing TELNYX_API_KEY or TELNYX_SIP_CONNECTION_ID)',
+      });
     }
 
     const deactiveParsed = z.object({ tenant_id: z.string().uuid() }).safeParse(req.body);
@@ -167,43 +154,30 @@ export function registerProvisioningRoutes(
     const client = await pool.connect();
     try {
       const tenantRes = await client.query(
-        'SELECT vapi_assistant_id, vapi_phone_number_id FROM tenants WHERE id = $1',
+        'SELECT telnyx_phone_number_id FROM tenants WHERE id = $1',
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
         return reply.status(404).send({ success: false, error: 'Tenant not found' });
       }
 
-      const { vapi_assistant_id, vapi_phone_number_id } = tenantRes.rows[0];
+      const { telnyx_phone_number_id } = tenantRes.rows[0];
       const warnings: string[] = [];
 
-      // Delete phone number first (depends on assistant)
-      if (vapi_phone_number_id) {
+      if (telnyx_phone_number_id) {
         try {
-          await vapiClient.deletePhoneNumber(vapi_phone_number_id);
+          await telnyx.client.release(telnyx_phone_number_id);
         } catch (err) {
-          const msg = `Failed to delete Vapi phone number ${vapi_phone_number_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
+          const msg = `Failed to release Telnyx number ${telnyx_phone_number_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Telnyx portal.`;
           warnings.push(msg);
-          logError(req, 'vapi_phone_delete_failed', err, { vapi_phone_number_id, tenant_id });
+          logError(req, 'telnyx_number_release_failed', err, { telnyx_phone_number_id, tenant_id });
         }
       }
 
-      // Delete assistant
-      if (vapi_assistant_id) {
-        try {
-          await vapiClient.deleteAssistant(vapi_assistant_id);
-        } catch (err) {
-          const msg = `Failed to delete Vapi assistant ${vapi_assistant_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Vapi dashboard.`;
-          warnings.push(msg);
-          logError(req, 'vapi_assistant_delete_failed', err, { vapi_assistant_id, tenant_id });
-        }
-      }
-
-      // Clear tenant columns — DB deactivation always succeeds even if Vapi cleanup failed
+      // Clear tenant columns — DB deactivation always succeeds even if Telnyx cleanup failed
       await client.query(
         `UPDATE tenants SET
-          vapi_assistant_id = NULL,
-          vapi_phone_number_id = NULL,
+          telnyx_phone_number_id = NULL,
           inbound_phone = NULL,
           phone_status = 'deprovisioned'
         WHERE id = $1`,
@@ -232,7 +206,7 @@ export function registerProvisioningRoutes(
     const client = await pool.connect();
     try {
       const res = await client.query(
-        'SELECT phone_status, inbound_phone, vapi_assistant_id FROM tenants WHERE id = $1',
+        'SELECT phone_status, inbound_phone, telnyx_phone_number_id FROM tenants WHERE id = $1',
         [tenant_id]
       );
       if (res.rows.length === 0) {

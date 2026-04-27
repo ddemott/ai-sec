@@ -113,7 +113,6 @@ describe('FastifyInstance typing on route modules', () => {
     skills: 'registerSkillRoutes',
     square: 'registerSquareRoutes',
     tenants: 'registerTenantRoutes',
-    tts: 'registerTtsRoutes',
     versionHistory: 'registerVersionHistoryRoutes',
     vocabulary: 'registerVocabularyRoutes',
     voice: 'registerVoiceRoutes',
@@ -132,13 +131,13 @@ describe('FastifyInstance typing on route modules', () => {
     });
   }
 
-  it('SAD: route count matches expected 25 (catches forgotten registration)', () => {
+  it('SAD: route count matches expected 24 (catches forgotten registration)', () => {
     // WHO: developer adding a new route module
-    // WHAT: total route module count must match the expected 25
+    // WHAT: total route module count must match the expected 24
     // WHEN: new route file added but not registered in index.ts
     // WHERE: src/routes/ directory
     // WHY: if a route module exists but isn't in this list, it won't be tested for typing
-    expect(Object.keys(routeModules).length).toBe(25);
+    expect(Object.keys(routeModules).length).toBe(24);
   });
 });
 

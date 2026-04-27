@@ -569,7 +569,7 @@ export const Api = {
   // --- PHONE PROVISIONING ---
   provisioning: {
     activate: (tenantId: string, areaCode?: string) =>
-      apiMutate<{ success: boolean; phone_number: string; assistant_id: string; phone_number_id: string }>(
+      apiMutate<{ success: boolean; phone_number: string; telnyx_phone_number_id: string }>(
         `/provisioning/activate`, 'POST',
         { tenant_id: tenantId, ...(areaCode ? { area_code: areaCode } : {}) }
       ),
@@ -578,7 +578,7 @@ export const Api = {
       apiMutate<{ success: boolean }>(`/provisioning/deactivate`, 'POST', { tenant_id: tenantId }),
 
     status: (tenantId: string) =>
-      apiFetch<{ phone_status: string; inbound_phone: string | null; vapi_assistant_id: string | null }>(
+      apiFetch<{ phone_status: string; inbound_phone: string | null; telnyx_phone_number_id: string | null }>(
         `/provisioning/status`, { tenant_id: tenantId }
       ),
   },

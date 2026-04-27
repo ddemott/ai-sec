@@ -60,7 +60,7 @@ export function registerVoiceRoutes(
    * POST /voice/session/start
    * Start a voice session and get customer context
    *
-   * Called by Vapi webhook when a call starts
+   * Called by the LiveKit agent when a call starts
    */
   app.post('/voice/session/start', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);
@@ -120,7 +120,7 @@ export function registerVoiceRoutes(
    * POST /voice/session/end
    * End a voice session with outcome tracking
    *
-   * Called by Vapi webhook when a call ends
+   * Called by the LiveKit agent when a call ends
    */
   app.post('/voice/session/end', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);
@@ -423,7 +423,7 @@ export function registerVoiceRoutes(
 
   /**
    * GET /voice/context/:phone
-   * Get customer context by phone number (for Vapi tools)
+   * Get customer context by phone number (used by the LiveKit agent's tool layer)
    * This endpoint can be called during a call to enrich AI context
    */
   app.get('/voice/context/:phone', withHandler(async (req: AppRequest, reply) => {

@@ -17,7 +17,7 @@ export const ERR = {
   TENANT_ID_REQUIRED: 'tenant_id is required',
   VALIDATION_FAILED: 'Validation failed',
   BILLING_NOT_CONFIGURED: 'Billing not configured',
-  PROVISIONING_NOT_CONFIGURED: 'Phone provisioning not configured (missing VAPI_API_KEY)',
+  PROVISIONING_NOT_CONFIGURED: 'Phone provisioning not configured (missing TELNYX_API_KEY or TELNYX_SIP_CONNECTION_ID)',
   PHONE_ALREADY_ACTIVE: 'Phone is already active for this tenant',
   PHONE_PROVISIONING_IN_PROGRESS: 'Phone provisioning is already in progress',
   PHONE_PROVISIONING_FAILED: 'Phone provisioning failed',

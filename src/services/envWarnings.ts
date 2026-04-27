@@ -9,42 +9,29 @@
 export interface EnvWarningContext {
   env: NodeJS.ProcessEnv;
   /** Resolved values the caller already computed (defaults applied). */
-  VAPI_API_KEY: string;
-  VAPI_SERVER_URL_SECRET: string;
-  XAI_API_KEY: string;
-  XAI_TTS_SECRET: string;
-  BACKEND_URL: string;
+  TELNYX_API_KEY: string;
+  TELNYX_SIP_CONNECTION_ID: string;
 }
 
 export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
   const warnings: string[] = [];
-  const { env, VAPI_API_KEY, VAPI_SERVER_URL_SECRET, XAI_API_KEY, XAI_TTS_SECRET, BACKEND_URL } = ctx;
+  const { env, TELNYX_API_KEY, TELNYX_SIP_CONNECTION_ID } = ctx;
 
-  if (!VAPI_API_KEY) {
-    warnings.push('VAPI_API_KEY not set — phone provisioning disabled');
+  if (!TELNYX_API_KEY) {
+    warnings.push(
+      'TELNYX_API_KEY not set — phone provisioning and SMS OTP disabled (voice calls with blocked caller-ID cannot complete bookings)'
+    );
   }
-  if (!VAPI_SERVER_URL_SECRET) {
-    warnings.push('VAPI_SERVER_URL_SECRET not set — webhook auth disabled');
+  if (TELNYX_API_KEY && !TELNYX_SIP_CONNECTION_ID) {
+    warnings.push(
+      'TELNYX_SIP_CONNECTION_ID not set — phone provisioning will return 503 (purchased numbers cannot be routed to LiveKit)'
+    );
   }
   if (!env.GOOGLE_CLIENT_ID) {
     warnings.push('GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
   }
-  if (!XAI_API_KEY) {
-    warnings.push('XAI_API_KEY not set — Grok TTS proxy disabled');
-  }
-  if (XAI_API_KEY && !XAI_TTS_SECRET) {
-    warnings.push('XAI_TTS_SECRET not set — TTS proxy has no auth');
-  }
-  if (XAI_API_KEY && !BACKEND_URL) {
-    warnings.push('BACKEND_URL not set — Vapi custom-voice cannot reach TTS proxy');
-  }
   if (!env.AGENT_SECRET) {
     warnings.push('AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls');
-  }
-  if (!env.TELNYX_API_KEY) {
-    warnings.push(
-      'TELNYX_API_KEY not set — SMS OTP verification (/agent-tools/send-verification-code) will fail and voice calls with blocked caller-ID cannot complete bookings'
-    );
   }
 
   return warnings;

@@ -327,13 +327,6 @@ describe("tenantMiddleware", () => {
     expect(req.tenantId).toBeUndefined();
   });
 
-  it("skips TTS proxy route (WHO: Vapi | WHAT: /tts/synthesize skipped | WHERE: tenantMiddleware isTenantExempt | WHY: TTS proxy called by Vapi without tenant context)", async () => {
-    const hook = setupMiddleware();
-    const req = createMockRequest({ url: '/tts/synthesize' });
-    await hook(req, {});
-    expect(req.tenantId).toBeUndefined();
-  });
-
   it("enriches logger with tenant context (WHO: tenant-scoped request | WHAT: req.log gets tenantId+userId child | WHERE: tenantMiddleware preHandler | WHY: structured logging for log aggregation)", async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({

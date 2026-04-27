@@ -167,8 +167,7 @@ export interface TenantFull extends Tenant {
   subscription_status?: string;
   subscription_plan?: string | null;
   sort_order?: number;
-  vapi_assistant_id?: string | null;
-  vapi_phone_number_id?: string | null;
+  telnyx_phone_number_id?: string | null;
   phone_status?: string;
   created_at?: string;
 }

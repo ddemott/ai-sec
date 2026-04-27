@@ -753,7 +753,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
@@ -777,7 +777,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
@@ -811,7 +811,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
@@ -836,7 +836,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: 'active', inbound_phone: '+1 (312) 555-9999', vapi_assistant_id: 'asst_abc' }),
+          json: async () => ({ phone_status: 'active', inbound_phone: '+1 (312) 555-9999', telnyx_phone_number_id: 'tnum_abc' }),
         })
       }
       return Promise.resolve({ ok: true, json: async () => [] })
@@ -855,7 +855,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
@@ -1185,7 +1185,7 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
@@ -1210,11 +1210,11 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
-        return Promise.reject(new Error('Vapi API error'))
+        return Promise.reject(new Error('Telnyx API error'))
       }
       return Promise.resolve({ ok: true, json: async () => [] })
     })
@@ -1236,7 +1236,7 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {
@@ -1262,7 +1262,7 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
       if (url.includes('/provisioning/status')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ phone_status: null, inbound_phone: null, vapi_assistant_id: null }),
+          json: async () => ({ phone_status: null, inbound_phone: null, telnyx_phone_number_id: null }),
         })
       }
       if (url.includes('/provisioning/activate')) {

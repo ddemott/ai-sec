@@ -892,21 +892,10 @@ describe("Source code correctness checks", () => {
     expect(src).toContain("'Invalid webhook signature'");
   });
 
-  it("edge function uses optional chaining on call-ended", () => {
-    // WHO: edge function dispatcher handling Vapi call-ended event
-    // WHAT: source code must use optional chaining on message.call?.id and message.call?.endedReason
-    // WHEN: Vapi sends call-ended webhook to edge function
-    // WHERE: supabase/functions/vapi-tools/core/dispatcher.ts handleCallEnded
-    // WHY: without optional chaining, missing call object causes TypeError crash in production
-    const src = fs.readFileSync("supabase/functions/vapi-tools/core/dispatcher.ts", "utf8");
-    expect(src).toContain("message.call?.id");
-    expect(src).toContain("message.call?.endedReason");
-  });
-
   it("all CRM/calendar clients have fetch timeouts", () => {
     // WHO: CRM/calendar client services making external API calls
     // WHAT: every fetch() call must have AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    // WHEN: any outbound HTTP request to Jobber, HubSpot, Square, ServiceTitan, Outlook, Vapi
+    // WHEN: any outbound HTTP request to Jobber, HubSpot, Square, ServiceTitan, Outlook
     // WHERE: src/services/*Client.ts and outlookCalendar.ts
     // WHY: without fetch timeouts, hung external APIs block the Node event loop indefinitely
     const files = [
@@ -915,7 +904,6 @@ describe("Source code correctness checks", () => {
       "src/services/squareClient.ts",
       "src/services/servicetitanClient.ts",
       "src/services/outlookCalendar.ts",
-      "src/services/vapiClient.ts",
     ];
     for (const file of files) {
       const src = fs.readFileSync(file, "utf8");
@@ -945,19 +933,6 @@ describe("Source code correctness checks", () => {
     }
     // Calendar sync imports shared types/constants from tokenManagement
     expect(fs.readFileSync("src/services/calendarSync.ts", "utf8")).toContain("TOKEN_BUFFER_MS");
-  });
-
-  it("edge function guards INSERT RETURNING results", () => {
-    // WHO: edge function repository layer inserting entities during voice calls
-    // WHAT: every INSERT RETURNING must check for empty results before proceeding
-    // WHEN: voice AI creates customers, employees, services, or books appointments
-    // WHERE: supabase/functions/vapi-tools/db/repository.ts insert operations
-    // WHY: without null guards, INSERT failures silently return undefined, causing downstream crashes
-    const src = fs.readFileSync("supabase/functions/vapi-tools/db/repository.ts", "utf8");
-    expect(src).toContain("INSERT INTO customers returned no row");
-    expect(src).toContain("INSERT INTO employees returned no row");
-    expect(src).toContain("INSERT INTO services returned no row");
-    expect(src).toContain("book_with_scheduling_atomic returned no result");
   });
 
   it("PUBLIC_ROUTES includes all OAuth callbacks and webhooks", () => {

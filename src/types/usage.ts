@@ -9,7 +9,6 @@
 export enum Provider {
   TWILIO = 'twilio',
   MOCK = 'mock',
-  VAPI = 'vapi',
 }
 
 /**

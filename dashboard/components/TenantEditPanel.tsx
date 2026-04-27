@@ -38,8 +38,7 @@ type Tenant = {
   voice_id?: string | null;
   first_message?: string | null;
   system_prompt?: string | null;
-  vapi_assistant_id?: string | null;
-  vapi_phone_number_id?: string | null;
+  telnyx_phone_number_id?: string | null;
   phone_status?: string;
 };
 
@@ -218,7 +217,7 @@ export function TenantEditPanel({
                                               closeConfirm();
                                               try {
                                                   await Api.provisioning.deactivate(selectedTenant.id)
-                                                  onTenantUpdate({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, vapi_assistant_id: null, vapi_phone_number_id: null})
+                                                  onTenantUpdate({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, telnyx_phone_number_id: null})
                                               } catch (err: unknown) {
                                                   const msg = err instanceof Error ? err.message : 'Failed to deactivate phone';
                                                   showToast(msg, 'error')
@@ -262,8 +261,7 @@ export function TenantEditPanel({
                                               ...selectedTenant,
                                               phone_status: 'active',
                                               inbound_phone: result.phone_number,
-                                              vapi_assistant_id: result.assistant_id,
-                                              vapi_phone_number_id: result.phone_number_id,
+                                              telnyx_phone_number_id: result.telnyx_phone_number_id,
                                           })
                                       } catch (err: unknown) {
                                           onTenantUpdate({...selectedTenant, phone_status: 'failed'})
@@ -296,7 +294,7 @@ export function TenantEditPanel({
           <div className="space-y-6">
               {isEditing ? (
                   <Input
-                      label="Voice ID (Vapi/ElevenLabs)"
+                      label="Voice ID"
                       value={form.voice_id || ''}
                       onChange={e => onFormChange({...form, voice_id: e.target.value})}
                       className="font-mono"
@@ -304,7 +302,7 @@ export function TenantEditPanel({
               ) : (
                   <div className="space-y-1">
                       <label className="text-xs font-bold uppercase ml-1 flex items-center" style={{ color: 'var(--text-secondary)' }}>
-                          <Mic className="w-3 h-3 mr-1" /> Voice ID (Vapi/ElevenLabs)
+                          <Mic className="w-3 h-3 mr-1" /> Voice ID
                       </label>
                       <p className="p-3 rounded-xl font-mono text-xs border" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)', borderColor: 'var(--border-soft)' }}>{selectedTenant.voice_id || 'Not set'}</p>
                   </div>
