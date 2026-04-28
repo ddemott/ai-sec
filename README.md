@@ -13,8 +13,8 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Phase** | 13 — Production Readiness |
 | **Backend** | Live on Railway (`ai-sec-production.up.railway.app`) |
 | **Dashboard** | Local dev (deployment pending) |
-| **Voice AI** | Working end-to-end (Vapi + Clara voice). Migrating to LiveKit Agents — see `docs/FRAMEWORK_MIGRATIONS.md` |
-| **Phone** | Provisioned (DynaTire demo tenant) |
+| **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `TICKET_SUPPORT.md` |
+| **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `TICKET_SUPPORT.md` for current LERG status |
 | **Tests** | 1,894 passing (1,429 backend + 465 dashboard), zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
@@ -43,23 +43,26 @@ See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed 
 ```
 Inbound Call
     |
-Telnyx (telephony) --> Vapi (STT/LLM/TTS) --> Supabase Edge Function (Deno)
-                                                        |
-                                                   PostgreSQL + pgvector
-                                                   (RLS multi-tenancy)
-                                                        |
-                                            Fastify API (25 route modules)
-                                                        |
-                                            Next.js 14 Dashboard
+Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
+                                          |
+                                LiveKit Agent worker (Node)
+                                — Deepgram (STT)
+                                — OpenAI (LLM + TTS today; xAI Grok TTS Phase 4)
+                                          |
+                                Fastify /agent-tools/* (24 route modules)
+                                          |
+                                PostgreSQL + pgvector (RLS multi-tenancy)
+                                          |
+                                Next.js 14 Dashboard
 ```
 
 | Layer | Tech |
 |-------|------|
-| **Voice** | Vapi (Clara voice), Telnyx, OpenAI GPT-4o-mini, Deepgram Nova-2 |
-| **Backend** | Fastify 4.x, 25 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
+| **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (xAI Grok TTS planned for agent Phase 4) |
+| **Backend** | Fastify 4.x, 24 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 74 migrations, Row Level Security, atomic booking RPCs |
-| **Edge Functions** | Deno, Supabase Edge Functions, 8 voice AI tools (being ported to Fastify `/agent-tools/*`) |
+| **Database** | PostgreSQL + pgvector, 76 migrations, Row Level Security, atomic booking RPCs |
+| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes) |
 | **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
 | **Security** | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS |
@@ -118,23 +121,23 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ```
 /
 ├── src/                    Fastify backend
-│   ├── index.ts            Entry point (25 route registrations)
+│   ├── index.ts            Entry point (24 route registrations)
 │   ├── middleware.ts        withHandler, tenant middleware, structured logging
-│   ├── routes/             25 route modules + shared routeHelpers.ts
-│   ├── services/           CRM sync, calendar sync, token management, Vapi client
+│   ├── routes/             24 route modules + shared routeHelpers.ts (incl. agentTools.ts for the LiveKit agent)
+│   ├── services/           CRM sync, calendar sync, token management, telnyxNumbers + telnyxSms
 │   └── database/           DatabaseService interface + Postgres implementation
+├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM/TTS
+│   └── src/                Worker entry, session context, prompt, tool client
 ├── dashboard/              Next.js 14 frontend
 │   ├── components/         60+ components (scheduler, CRM, settings, wizard)
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── functions/vapi-tools/  Deno Edge Functions (voice AI tool handlers)
-│   ├── migrations/            74 SQL migrations
-│   └── seed.sql               Platform admin + DynaTire demo tenant
+│   ├── migrations/         76 SQL migrations
+│   └── seed.sql            Platform admin + DynaTire demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
-├── docs/                   Architecture, plans, deployment, design, TODO
-└── vapi/                   Vapi agent config and tool definitions
+└── docs/                   Architecture, plans, deployment, design, TODO
 ```
 
 ---

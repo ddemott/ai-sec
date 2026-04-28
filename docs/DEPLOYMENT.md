@@ -7,9 +7,10 @@ This guide walks through migrating from the local Docker development environment
 ## Prerequisites
 
 - **Supabase Account**: [supabase.com](https://supabase.com) (free tier works for initial testing)
-- **Vapi Account**: [vapi.ai](https://vapi.ai) (for voice AI orchestration)
-- **Telnyx Account**: [telnyx.com](https://telnyx.com) (for phone numbers and SIP trunking)
-- **OpenAI API Key**: For RAG embeddings and post-call summaries
+- **Telnyx Account**: [telnyx.com](https://telnyx.com) — carrier, SIP trunk, SMS OTP
+- **LiveKit Cloud Account**: [livekit.io](https://livekit.io) — voice agent orchestrator + SIP ingress
+- **Deepgram Account**: [deepgram.com](https://deepgram.com) — STT (Nova-3) used by the LiveKit agent
+- **OpenAI API Key**: LLM (GPT-4o-mini) + TTS in the agent, RAG embeddings, post-call summaries
 - **Vercel Account** (optional): For hosting the Next.js dashboard
 - **Supabase CLI**: `npm install -g supabase` (already in devDependencies)
 
@@ -96,29 +97,9 @@ npx supabase login
 npx supabase link --project-ref <PROJECT_ID>
 ```
 
-### 3.2 Set Edge Function Secrets
-```bash
-npx supabase secrets set OPENAI_API_KEY=sk-proj-...
-npx supabase secrets set VAPI_SERVER_URL_SECRET=your-shared-secret
-npx supabase secrets set DATABASE_URL="postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
-```
+### 3.2 (Removed — no edge functions)
 
-### 3.3 Deploy the vapi-tools Function
-```bash
-npx supabase functions deploy vapi-tools --no-verify-jwt
-```
-
-The `--no-verify-jwt` flag is required because Vapi sends webhook requests directly (not through Supabase Auth). The function has its own secret verification via `x-vapi-secret`.
-
-### 3.4 Test the Edge Function
-```bash
-curl -X POST https://<PROJECT_ID>.functions.supabase.co/vapi-tools \
-  -H "Content-Type: application/json" \
-  -H "x-vapi-secret: your-shared-secret" \
-  -d '{"message": {"type": "function-call", "functionCall": {"name": "ping"}}}'
-```
-
-You should get a response (even if it's an error about unknown function — that confirms the function is running).
+The earlier `vapi-tools` Supabase edge function was deleted in commit `661d21d` (2026-04-27) when the voice stack moved to LiveKit Agents. The 10 voice AI tools now live at Fastify `/agent-tools/*` (see Phase 4 for backend deploy). Skip to Phase 4.
 
 ---
 
@@ -134,7 +115,7 @@ Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 3. **Health check**: `/health` endpoint
 4. **Restart policy**: `ON_FAILURE` with max 10 retries
 
-**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 74 migrations (including `20260323000000_force_rls_single_pool.sql`) to Supabase before deploying.
+**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 76 migrations (including `20260323000000_force_rls_single_pool.sql` and `20260427000000_telnyx_provisioning.sql`) to Supabase before deploying.
 
 **Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -154,8 +135,10 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 | Variable | Required | Description |
 |---|---|---|
 | `DATABASE_URL` | Yes | Supabase Postgres connection string (use session-mode pooler) |
-| `OPENAI_API_KEY` | Yes | For RAG embedding generation |
-| `VAPI_SERVER_URL_SECRET` | Yes | Shared secret for Vapi webhook auth |
+| `OPENAI_API_KEY` | Yes | LLM (used by post-call summaries) + RAG embeddings |
+| `TELNYX_API_KEY` | Yes | Carrier API — phone provisioning + SMS OTP |
+| `TELNYX_SIP_CONNECTION_ID` | Yes | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`) |
+| `AGENT_SECRET` | Yes | Shared secret the LiveKit agent presents on every `/agent-tools/*` call |
 | `JWT_SECRET` | Yes | Secret for signing JWT tokens (change from default!) |
 | `JWT_EXPIRY` | No | Token expiry duration (default: `8h`) |
 | `NODE_ENV` | Yes | Set to `production` |
@@ -186,7 +169,6 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 | `SERVICETITAN_CLIENT_SECRET` | No | ServiceTitan app secret |
 | `SERVICETITAN_APP_KEY` | No | ST-App-Key header for ServiceTitan API |
 | `SERVICETITAN_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/servicetitan/auth/callback`) |
-| `VAPI_API_KEY` | No | Vapi private key (for phone provisioning) |
 
 ---
 
@@ -215,42 +197,44 @@ Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 
 ---
 
-## Phase 6: Telephony Setup (Telnyx + Vapi)
+## Phase 6: Telephony Setup (Telnyx + LiveKit Cloud)
 
-> **Migration note:** Voice orchestration is moving from Vapi to LiveKit Agents. This section documents the **current** (Vapi) setup. Once LiveKit Phase 2+ ships, this phase will be replaced with LiveKit SIP bridge + dispatch rule configuration. See `docs/FRAMEWORK_MIGRATIONS.md` and `.claude/plans/federated-snacking-puffin.md`.
+The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** (SIP ingress) → **LiveKit Agent worker** (Node, deployed on Railway as `ai-sec-agent`). One LiveKit dispatch rule routes every tenant's number to the same agent worker; tenant identity flows in via SIP dispatch metadata. There are no per-tenant orchestrator entities — buying a Telnyx number and pointing it at the SIP Connection is the entire per-tenant config.
 
-### 6.1 Telnyx: Buy a Phone Number
-1. Sign in to [portal.telnyx.com](https://portal.telnyx.com)
-2. Go to **Numbers** > **Search and Buy Numbers**
-3. Purchase a local number for your target area
+### 6.1 LiveKit Cloud: Project + dispatch rule (one-time)
+1. Sign in to [cloud.livekit.io](https://cloud.livekit.io) and create a project (e.g., `AI-Secretary`).
+2. From **Settings → Keys**, copy the WSS URL, API Key, and API Secret. Set them in Railway as `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
+3. Create a SIP inbound trunk and a dispatch rule that routes inbound SIP traffic to agent name `ai-secretary-agent`. The agent worker self-registers with this name when it boots.
+4. Note the SIP FQDN LiveKit gives you (looks like `<project-slug>.sip.livekit.cloud:5060`). You'll point Telnyx at it.
 
-### 6.2 Telnyx: Create a SIP Trunk
-1. Go to **Voice** > **SIP Trunking** > **Create SIP Trunk**
-2. Name it `SecretaryHQ`
-3. Set the **Inbound Webhook URL** to Vapi's SIP endpoint (from Vapi dashboard)
-4. Assign your purchased number to this trunk
+### 6.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
+1. Sign in to [portal.telnyx.com](https://portal.telnyx.com).
+2. **Voice → SIP Connections → Create FQDN Connection** named `livekit-outbound`.
+3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 6.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
+4. **Outbound** tab → use credential authentication. Set a strong username/password (`openssl rand -base64 32`). Store in your secret manager.
+5. **Inbound subdomain receive setting**: tighten to `Only my connections` (default `From Anyone` is a toll-fraud target).
+6. Copy the numeric Connection ID. Set it in Railway as `TELNYX_SIP_CONNECTION_ID`.
+7. Set Telnyx API key in Railway as `TELNYX_API_KEY` (same key handles SMS OTP).
 
-### 6.3 Vapi: Import the Number
-1. Go to [dashboard.vapi.ai](https://dashboard.vapi.ai) > **Phone Numbers**
-2. Click **Import from Provider** and enter the Telnyx number + trunk ID
+### 6.3 Buying a number (per-tenant, automated)
+Buying happens through the backend's `/provisioning/activate` endpoint, not the portal. The flow:
 
-### 6.4 Vapi: Create the Agent
-Use `vapi/agent.template.json` as the base. Replace the Mustache variables:
+1. SuperAdmin clicks **Activate Phone** on a tenant in the dashboard (or `POST /provisioning/activate` directly).
+2. Backend calls `Telnyx /v2/available_phone_numbers` to find a number (optionally filtered by area code).
+3. Backend orders the number via `Telnyx /v2/number_orders`.
+4. Backend `PATCH /v2/phone_numbers/{id}` to assign it to the SIP Connection from 6.2.
+5. Backend writes `telnyx_phone_number_id`, `inbound_phone`, and `phone_status='active'` on the tenant.
 
-| Variable | Value |
-|---|---|
-| `{{TENANT_NAME}}` | e.g., `DynaTire` |
-| `{{BUSINESS_TYPE}}` | e.g., `tire shop` |
-| `{{TENANT_ID}}` | UUID from the `tenants` table |
-| `{{RESOURCE_ID}}` | UUID from the `resources` table |
-| `{{CURRENT_DATE}}` | Today's date (or use Vapi's dynamic date) |
-| `{{VOICE_PROVIDER}}` | `vapi` (built-in Clara voice) |
-| `{{VOICE_ID}}` | Vapi voice ID (e.g., Clara) |
-| `{{SERVER_URL}}` | `https://<PROJECT_ID>.functions.supabase.co/vapi-tools` |
-| `{{SERVER_URL_SECRET}}` | Same secret set in Edge Function secrets |
-| `{{SERVICE_DESCRIPTION}}` | e.g., `tire changes, oil changes, and brake service` |
+After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Telnyx-portal clicks per tenant.
 
-Create the agent in Vapi (via API or dashboard) and assign the imported phone number to it.
+### 6.4 Deploy the LiveKit agent worker
+The agent worker lives in `agent/` and runs as a separate Railway service (`ai-sec-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
+
+- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 6.1
+- `OPENAI_API_KEY` — LLM + TTS used by the agent
+- `DEEPGRAM_API_KEY` — STT (Nova-3)
+- `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://ai-sec-production.up.railway.app`)
+- `AGENT_SECRET` — shared secret the agent presents on every `/agent-tools/*` call (must match the same env var on the backend service)
 
 ---
 
@@ -258,7 +242,7 @@ Create the agent in Vapi (via API or dashboard) and assign the imported phone nu
 
 **n8n has been removed from this project.** All async work runs inline in Fastify route handlers:
 
-- **Post-call summarization** — `src/routes/voice.ts` handles Vapi's `call-ended` webhook, calls OpenAI for summary + sentiment, stores in `call_summaries`.
+- **Post-call summarization** — `src/routes/voice.ts` handles the LiveKit agent's `call-ended` event, calls OpenAI for summary + sentiment, stores in `call_summaries`.
 - **Calendar sync** — `src/services/calendarSync.ts` fires on every appointment mutation (Google + Outlook).
 - **CRM sync** — `src/services/syncOrchestrator.ts` fans out to Jobber/HubSpot/Square/ServiceTitan on appointment + customer mutations.
 - **SMS / reminders** — `src/routes/communications.ts` + `src/routes/reminders.ts` (routes and Zod schemas exist; provider integration stubbed).
@@ -275,26 +259,19 @@ Required env vars for async integrations are all set in Railway (Google/Outlook 
 3. Verify you can see appointments, customers, and resources
 4. Try creating a test appointment through the UI
 
-### 8.2 Edge Function Smoke Test
-Test the booking flow directly:
+### 8.2 Agent-tools Smoke Test
+Test a tool route directly against the deployed backend (the same path the LiveKit agent uses):
 ```bash
-# Get customer context
-curl -X POST https://<PROJECT_ID>.functions.supabase.co/vapi-tools \
+# Get customer context — same payload shape the agent's tool client uses
+curl -X POST https://ai-sec-production.up.railway.app/agent-tools/customer-context \
   -H "Content-Type: application/json" \
-  -H "x-vapi-secret: your-shared-secret" \
+  -H "x-agent-secret: $AGENT_SECRET" \
   -d '{
-    "message": {
-      "type": "tool-calls",
-      "toolCalls": [{
-        "id": "test-1",
-        "function": {
-          "name": "get_customer_context",
-          "arguments": "{\"phone\": \"555-0100\", \"tenant_id\": \"<TENANT_ID>\"}"
-        }
-      }]
-    }
+    "tenant_id": "<TENANT_ID>",
+    "caller_phone": "+15555550100"
   }'
 ```
+A 200 with a JSON body confirms the route is up and the agent secret is correctly configured. A 401 means `AGENT_SECRET` doesn't match between agent and backend.
 
 ### 8.3 Live Call Test
 1. Call the Telnyx phone number
@@ -314,7 +291,9 @@ curl -X POST https://<PROJECT_ID>.functions.supabase.co/vapi-tools \
 Before going live, verify:
 
 - [ ] **JWT_SECRET** is a strong random string (not the default `dev-jwt-secret-change-in-production`)
-- [ ] **VAPI_SERVER_URL_SECRET** is set and matches between Vapi and Edge Functions
+- [ ] **AGENT_SECRET** is a strong random string and matches between the backend and agent services on Railway
+- [ ] **Telnyx outbound SIP credential** is high-entropy (toll-fraud target). `openssl rand -base64 32`. Stored in 1Password / AWS Secrets Manager, never committed.
+- [ ] **Telnyx SIP subdomain** (`<your-subdomain>.sip.telnyx.com`) is set to **Only my connections**, not From Anyone
 - [ ] **Database password** is strong and not committed to source control
 - [ ] **OPENAI_API_KEY** is not exposed in client-side code
 - [ ] **Login credentials** have been changed from the seeded defaults
@@ -327,10 +306,12 @@ Before going live, verify:
 
 | Problem | Solution |
 |---|---|
-| Edge Function returns 500 | Check logs: `npx supabase functions logs vapi-tools` |
+| `/agent-tools/*` returns 401 | `AGENT_SECRET` mismatch — must be identical on the backend and agent Railway services |
+| `/provisioning/activate` returns 503 | `TELNYX_API_KEY` or `TELNYX_SIP_CONNECTION_ID` missing on backend service |
+| LiveKit agent worker disconnects on boot | Check `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` on the agent service; the worker logs the rejection reason |
+| Calls to a Telnyx number return "not in service" | Carrier-side LERG propagation. Verify the number is `active` and bound to the right SIP Connection via Telnyx API; if so, open a Telnyx support ticket — see `TICKET_SUPPORT.md` for template |
 | Database connection refused | Verify connection string and that Supabase allows your IP |
 | Migrations fail on Supabase | `pgvector` extension must be enabled first |
-| Vapi can't reach Edge Function | Ensure `--no-verify-jwt` was used during deploy |
 | CORS errors on dashboard | Update CORS origin in `src/index.ts` to your dashboard domain |
 | JWT errors after deploy | Ensure `JWT_SECRET` is the same across backend restarts |
 | Knowledge base search returns nothing | Verify `pgvector` extension is enabled and documents have embeddings |

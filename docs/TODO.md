@@ -1,6 +1,6 @@
 # TODO
 
-**Last updated:** 2026-04-23
+**Last updated:** 2026-04-27
 
 Single source of truth for all remaining work. Organized by priority.
 
@@ -9,8 +9,10 @@ Single source of truth for all remaining work. Organized by priority.
 ## Phase 13: Ship It (blocking launch)
 
 - [x] **Deploy dashboard** — shipped 2026-04-21 (commit `fb216e0`), live at https://dashboard-production-cee3.up.railway.app/
-- [ ] **Set `DASHBOARD_URL`** env var in Railway backend (needed for Stripe checkout + OAuth redirects)
-- [ ] **Beta testing with DynaTire**
+- [ ] **Set `DASHBOARD_URL`** env var in Railway backend (needed for Stripe checkout + OAuth redirects). Value: `https://dashboard-production-cee3.up.railway.app`. ~2 min via Railway → ai-sec service → Variables.
+- [x] **Apply migration `20260427000000_telnyx_provisioning.sql` to production Supabase.** Done 2026-04-27. Dropped `vapi_assistant_id`/`vapi_phone_number_id` (verified empty across all 3 tenants beforehand), added `telnyx_phone_number_id`. Side effect: also applied `20260423000000_phone_verifications.sql` which had been sitting unapplied — SMS OTP table now exists in prod, fixing a silent runtime gap.
+- [ ] **Telnyx ticket #2850682** — phone number `+1-630-937-9478` returning "not in service" from PSTN. See `TICKET_SUPPORT.md`. Awaiting LERG investigation. Blocks all live-call testing.
+- [ ] **Beta testing with DynaTire** — blocked on phone working
 - [x] **BUG-072**: Front Desk scheduler shift bars not rendering — root cause: seed data populated legacy `employee_shifts` table instead of `employee_schedule`. Fixed seed to use `employee_schedule` (2 weeks of date-based shifts).
 
 ---
@@ -39,13 +41,32 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full list of in-flight framework swap
 
 Plan file: `.claude/plans/federated-snacking-puffin.md`
 
-- [ ] Phase 2: Port 8 edge function tools to `/agent-tools/*` Fastify routes
-- [ ] Phase 3: Build LiveKit agent worker (Node.js, Deepgram STT, OpenAI LLM, xAI Grok TTS)
-- [ ] Phase 4: SIP trunk setup (Telnyx → LiveKit Cloud)
-- [ ] Phase 5: Integration testing with DynaTire
-- [ ] Phase 6: Dashboard updates (call status, live transcription)
-- [ ] Phase 7: Cutover (retire Vapi, update provisioning)
-- **Blocked on**: LiveKit API Secret + WSS URL from Dale
+> **Status note (2026-04-27):** This phase list pre-dates the actual migration work and is now stale. Phases 1a/1b/2/3 shipped (commits `18caffe`, `661d21d`). Vapi account deleted. The list below should be reconciled with `docs/FRAMEWORK_MIGRATIONS.md` during the doc sweep. Truth-of-state: only Phase 4 (TTS native) and Phase 5 (DynaTire integration test) are still open.
+
+- [x] Phase 2: Port 8 edge function tools to `/agent-tools/*` Fastify routes — done in `661d21d`
+- [x] Phase 3: Build LiveKit agent worker (Node.js, Deepgram STT, OpenAI LLM) — done in `18caffe`; agent registers as worker `AW_vPmGExrgTeGn`
+- [x] SIP trunk setup (Telnyx → LiveKit Cloud) — done; FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` wired to connection `livekit-outbound` (ID `2945038451784812111`)
+- [ ] **Phase 4: native xAI Grok TTS in agent worker.** Replace `openai.TTS` at `agent/src/index.ts:122,150` with a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly. Removes the deleted `tts.ts` proxy contract entirely. Validate via unit tests + LiveKit playground call (no PSTN dependency). ~1-2 hr.
+- [ ] Phase 5: Integration testing with DynaTire — blocked on Telnyx ticket #2850682
+- [ ] Phase 6: Dashboard updates (call status, live transcription) — design TBD; currently shows post-call summaries only
+- [x] Phase 7: Cutover (retire Vapi, update provisioning) — done in `661d21d`; Vapi account deleted; provisioning rewritten for Telnyx + LiveKit
+
+---
+
+## Documentation Cleanup (Vapi → Telnyx/LiveKit)
+
+Doc Phase 1 inventory completed 2026-04-27. 17 files contain 177 Vapi references; 76 are historical (leave alone), 101 are actionable. Three classes:
+
+- **Category A — pure renames** (41 hits): stack listings, env var lists, file references. Mechanical.
+- **Category C — stale env vars** (22 hits): `VAPI_API_KEY`, `VAPI_SERVER_URL_SECRET` documented in setup guides. Mechanical removal.
+- **Category B — architectural** (38 hits): `improvement-ideas.md` and `docs/IMPROVEMENT_IDEAS.md` have proposed refactor tasks that assume the old Vapi shape. Need review — some tasks may need rewording, others may need to be dropped entirely now that the architecture changed.
+
+**Files affected** (from inventory): README.md, CLAUDE.md, SUMMARY-2026-04-24-0030.md, improvement-ideas.md, docs/IMPROVEMENT_IDEAS.md, docs/CURRENT_STATUS.md, docs/ARCHITECTURE.md, docs/DEPLOYMENT.md, docs/FRAMEWORK_MIGRATIONS.md, docs/TODO.md, docs/PLAN.md, docs/UI_UX_DESIGN.md, docs/DESIGN_HANDOFF.md, docs/DIAGRAMS.md, docs/BUGS.md, .remember/state.md, src/services/MIGRATED_FROM_AI_SECRETARY.md.
+
+- [ ] **Phase 2a (mechanical, ~45-60 min):** apply Category A + C renames across 17 files. No architectural decisions.
+- [ ] **Phase 2b (~1-2 hr):** review and edit Category B items in `improvement-ideas.md` and `docs/IMPROVEMENT_IDEAS.md`. Some tasks now obsolete, others need new wording for LiveKit shape.
+- [ ] **Reconcile the stale Voice AI Migration section above** with truth from `docs/FRAMEWORK_MIGRATIONS.md` (already partially done with status note).
+- [ ] Consolidate duplicate `improvement-ideas.md` ↔ `docs/IMPROVEMENT_IDEAS.md` (flagged in Phase 1 inventory as duplicates).
 
 ---
 

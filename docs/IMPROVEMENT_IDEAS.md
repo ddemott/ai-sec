@@ -325,9 +325,9 @@
 **Impact:** high
 
 ### Task: Extract Provisioning Tenant-Status Transitions into a Dedicated Service Helper
-**Status:** proposed
-**Files to change:** `src/routes/provisioning.ts:L17-L244`, `src/services/vapiClient.ts:L1-L260`, `src/services/` (new `provisioningService.ts` or similar), `src/routes/provisioning.test.ts:L1-L260`
-**What to do:** Move the tenant fetch, prerequisite checks, phone-status transitions, Vapi create/delete orchestration, and rollback behavior out of the route file into a dedicated provisioning service. Keep the route responsible for request validation and HTTP responses while the service owns the activation/deactivation workflow and returns structured results.
+**Status:** proposed (re-evaluate after migration to Telnyx; original wording assumed the deleted Vapi orchestration)
+**Files to change:** `src/routes/provisioning.ts`, `src/services/telnyxNumbers.ts`, `src/services/` (new `provisioningService.ts` or similar), `src/provisioning.test.ts`
+**What to do:** Move the tenant fetch, prerequisite checks, phone-status transitions, Telnyx number-order/assign/release orchestration, and rollback behavior out of the route file into a dedicated provisioning service. Keep the route responsible for request validation and HTTP responses while the service owns the activation/deactivation workflow and returns structured results.
 **Done when:**
 - [ ] `provisioning.ts` no longer contains the full activation/deactivation orchestration inline
 - [ ] Phone status transitions and rollback behavior live in a dedicated service layer
@@ -341,14 +341,14 @@
 ### Task: Add Explicit Tests for Billing and Provisioning Unhappy Paths
 **Status:** proposed
 **Files to change:** `src/routes/billing.ts:L1-L320`, `src/routes/provisioning.ts:L17-L244`, `src/routes/billing.test.ts:L1-L260` (new if needed), `src/routes/provisioning.test.ts:L1-L260` (new if needed)
-**What to do:** Add focused route tests for missing Stripe/Vapi configuration, invalid activate/deactivate payloads, provisioning conflict states (`active` and `provisioning`), and billing access failures. Assert both status codes and response-body structure so critical operational failures are locked down.
+**What to do:** Add focused route tests for missing Stripe / Telnyx / SIP-connection configuration, invalid activate/deactivate payloads, provisioning conflict states (`active` and `provisioning`), and billing access failures. Assert both status codes and response-body structure so critical operational failures are locked down.
 **Done when:**
 - [ ] Billing routes are tested for missing Stripe configuration and guarded access behavior
 - [ ] Provisioning routes are tested for invalid payloads and conflicting tenant phone states
 - [ ] At least one partial-cleanup warning path in deactivation is covered
 - [ ] All existing tests pass, new tests verify the unhappy-path contracts
 **Why it matters:** These are business-critical flows, and explicit sad-path coverage gives much better confidence than relying on manual checks for payment and phone setup failures.
-**Tradeoff:** Test setup will be heavier because Stripe and Vapi behaviors need to be stubbed carefully.
+**Tradeoff:** Test setup will be heavier because Stripe and the Telnyx Numbers API need to be stubbed carefully.
 **Size:** medium (1-3hr)
 **Impact:** high
 

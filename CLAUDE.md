@@ -3,45 +3,45 @@
 ## Project Overview
 Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded — they do not appear anywhere in the UI.
 
-## Framework Migrations (in flight)
+## Framework Migrations
 
 See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
-1. **Voice orchestrator: Vapi → LiveKit Agents** — Phase 1 done, Phase 2 ready. Plan at `.claude/plans/federated-snacking-puffin.md`. Blocked on LiveKit API Secret + WSS URL.
-2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — 10 voice AI tools (8 original + 2 OTP added 2026-04-23) in `src/routes/agentTools.ts`. All routes gated on `isValidPhone` for bookings. Unblocked; part of LiveKit Phase 2.
-3. **TTS provider: Vapi Clara → xAI Grok** — Shipped as custom-voice proxy (`src/routes/tts.ts`); goes native in LiveKit Phase 4.
+1. **Voice orchestrator: Vapi → LiveKit Agents** — Done (2026-04-27, commit `661d21d`). Vapi account deleted, all Vapi code removed. Telnyx number `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → LiveKit dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn` registered). Awaiting first live call to confirm carrier-side propagation; see `TICKET_SUPPORT.md` (Telnyx ticket #2850682).
+2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — Done. 10 voice AI tools (8 original + 2 OTP) in `src/routes/agentTools.ts`. All booking routes gated on `isValidPhone`. Edge function `supabase/functions/vapi-tools/` deleted in `661d21d`.
+3. **TTS provider: OpenAI TTS → xAI Grok (native in agent)** — Pending. Agent currently uses `openai.TTS` at `agent/src/index.ts:122,150`. Phase 4 swaps to a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly. The earlier Vapi custom-voice proxy at `src/routes/tts.ts` was deleted in `661d21d` along with everything else Vapi-shaped.
 
-## Architecture (current, pre-migration)
-- **Voice AI**: Telnyx (telephony) -> Vapi (orchestrator, STT/LLM/TTS) -> Supabase Edge Function (Deno)
-- **Backend API**: Node.js / Fastify (25 route modules under src/routes/) -> Postgres (Railway deployment)
+## Architecture (current)
+- **Voice AI**: Telnyx (carrier + SIP trunk) -> LiveKit Cloud (SIP ingress) -> LiveKit Agent worker (Node) -> Deepgram (STT) + OpenAI (LLM/TTS) -> Fastify `/agent-tools/*`
+- **Backend API**: Node.js / Fastify (24 route modules under src/routes/) -> Postgres (Railway deployment)
+- **Agent worker**: `agent/` package, deployed on Railway as `ai-sec-agent`. Single worker serves every tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
 - **Async Workers**: Inline in Fastify routes (post-call summaries, calendar sync, SMS)
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 25 route modules under src/routes/)
-- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, tts)
+- `/src` - Fastify backend (slim index.ts entry, 24 route modules under src/routes/)
+- `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, agentTools)
 - `/src/routes/routeHelpers.ts` - Shared route utilities (sendValidationError, sendNotFound, sendSuccess, sendConflict, assertRowAffected, requireValidUUID, parseDateRange, parsePagination)
-- `/src/services` - Service layer (vapiClient.ts, googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts [splitName/joinName/slugify/buildDisplayName], jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts [withSyncContext])
+- `/src/services` - Service layer (telnyxNumbers.ts [provisioning], telnyxSms.ts [OTP], googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts [splitName/joinName/slugify/buildDisplayName], jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts [withSyncContext])
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
+- `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
-- `/supabase/functions/vapi-tools` - Deno Edge Functions (voice AI tool handlers)
-- `/supabase/migrations` - 74 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk)
-- `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts) used by both Node and Deno
+- `/supabase/migrations` - 76 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning)
+- `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts)
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion, `qa-live-test.py` QA suite)
-- `/vapi` - Vapi agent config and tool definitions
 - `/docs` - Architecture, setup, plans, and reference docs
 - `/certs` - Self-signed HTTPS certificates for local dev
 
 ## Tech Stack
 - **Backend**: Fastify 4.x, bcrypt, zod, pg (Node PostgreSQL driver)
 - **Frontend**: Next.js 14, React 18, Tailwind CSS 3.4, Lucide icons, react-big-calendar
-- **Edge Functions**: Deno, Supabase Edge Functions, Pino logger
+- **Voice agent**: LiveKit Agents (Node), `@livekit/agents-plugin-deepgram`, `@livekit/agents-plugin-openai`, `livekit-server-sdk`
 - **Database**: PostgreSQL + pgvector (ankane/pgvector Docker image)
-- **Testing**: Vitest (backend + dashboard), Playwright (e2e), Deno test (edge functions)
-- **Voice**: Vapi (Clara voice), Telnyx, OpenAI GPT-4o-mini, Deepgram Nova-2
-- **QA**: `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live Supabase edge function
+- **Testing**: Vitest (backend + dashboard), Playwright (e2e)
+- **Voice stack**: Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (xAI Grok TTS planned for Phase 4)
+- **QA**: `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes
 
 ## Development
 - Bootstrap: `npm run bootstrap` (installs deps, starts DB, applies migrations, seeds, runs tests)
@@ -93,7 +93,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - All error responses use `{ success: false, error: string, details?: any }` format
 - Name utilities in `src/services/nameUtils.ts`: `splitName()`, `joinName()`, `slugify()`, `buildDisplayName()`
 - Production env validation: server refuses to start if DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, or STRIPE_SECRET_KEY are missing
-- Edge function tool responses use Vapi format: `{ results: [{ toolCallId, result }] }` with status 200
+- `/agent-tools/*` responses use `{ success: true, result }` or `{ success: false, error }` with status 200 — the LLM relays both shapes naturally. Auth via `x-agent-secret` header.
 - Edge function errors return plain `"ERROR: ..."` strings (not nested JSON) so the LLM can relay them naturally
 - Edge function DB pool: lazy init, pool size 2, 5s connection timeout via `connectWithTimeout()`
 - Fetch timeouts on all OpenAI API calls (10s embeddings, 15s normalization) via AbortController
@@ -189,18 +189,16 @@ See `docs/TODO.md` for the unified task list. Key blockers: deploy dashboard, se
 - `FORCE ROW LEVEL SECURITY` migration applied to Supabase (20260323000000)
 - Phone provisioning migration applied to Supabase (20260323000001)
 - Graceful shutdown on SIGTERM/SIGINT
-- All env vars configured in Railway (DB, JWT, OpenAI, Vapi secret, Stripe keys + webhook secret)
+- All env vars configured in Railway (DB, JWT, OpenAI, Telnyx API key + SIP connection ID, Stripe keys + webhook secret, AGENT_SECRET, LIVEKIT_*, DEEPGRAM_API_KEY)
 - Landing page at root URL, `/health` endpoint for monitoring
 - Stripe webhook registered: `https://ai-sec-production.up.railway.app/billing/webhook`
-- **Phone provisioning**: Automated via `POST /provisioning/activate` (creates Vapi assistant + phone number)
-- `src/services/vapiClient.ts` — Vapi REST API client (template substitution + CRUD)
+- **Phone provisioning**: Automated via `POST /provisioning/activate` — searches Telnyx inventory, purchases the number, assigns it to SIP Connection `livekit-outbound` so calls route to the LiveKit agent
+- `src/services/telnyxNumbers.ts` — Telnyx Numbers API client (search/order/assign/release)
 - `src/routes/provisioning.ts` — activate/deactivate/status endpoints
 - SuperAdmin dashboard has "Activate Phone" button with area code input
-- `VAPI_API_KEY` set in Railway
-- Edge functions deployed to Supabase (vapi-tools v9), DB URL secrets updated
-- Phone provisioned: +1 (630) 397-0194 on DynaTire (Vapi voice: Clara, LLM: OpenAI GPT-4o-mini)
-- ~~Supabase pausing bug~~ — Resolved 2026-03-30. Edge functions now reachable.
-- **Still needs**: Dashboard deployment, DASHBOARD_URL env var (see TODO.md)
+- `TELNYX_API_KEY` and `TELNYX_SIP_CONNECTION_ID=2945038451784812111` set in Railway
+- Phone provisioned: `+1-630-937-9478` (Telnyx) — currently unreachable from PSTN, see `TICKET_SUPPORT.md` (ticket #2850682)
+- **Still needs**: DASHBOARD_URL env var on Railway backend (see `docs/TODO.md`); first live call to confirm carrier propagation
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)
 - **12A — Repeatable Setup Wizard**: 7-step guided setup (Services, Resources, Employees, Shifts, Assignments, Review, Go Live), live coverage badges, phone activation on final step.
@@ -240,7 +238,7 @@ A full UI/UX design session was completed. All decisions are documented in `docs
 
 **Coverage Map removed:** Fully deleted. `ServiceCoverageView.tsx` removed. `CoverageBar` and `CoverageStatusBadge` primitives retained (used by SetupWizard, SkillMap, ResourceColumns).
 
-**Analytics rebuilt:** Old version discarded. 6 metrics defined — 3 active from booking data (Busiest Hours, Return Rate, No-Show Pattern), 3 pending Vapi call log integration.
+**Analytics rebuilt:** Old version discarded. 6 metrics defined — 3 active from booking data (Busiest Hours, Return Rate, No-Show Pattern), 3 pending call log integration (LiveKit agent will write call records once the live-call path is validated).
 
 **Logo:** "Secretary HQ" (space between words).
 

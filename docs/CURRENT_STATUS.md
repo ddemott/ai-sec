@@ -5,12 +5,12 @@
 
 ## Where We Are
 
-Phase 13 (Production Readiness) in progress. Backend live on Railway. Phone provisioned. Voice AI working end-to-end on Vapi — **migration to LiveKit Agents in flight** (see `docs/FRAMEWORK_MIGRATIONS.md`).
+Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → LiveKit migration complete (commit `661d21d`, 2026-04-27). Phone provisioned via Telnyx (`+1-630-937-9478`) but currently unreachable from PSTN — see `TICKET_SUPPORT.md` (Telnyx ticket #2850682). Voice AI is wired end-to-end and waiting on the carrier issue to validate live.
 
 ### April 20-21 Session: UX/a11y backlog complete + migration docs
 
 - **All 47 UX/accessibility items resolved** (commit `f9ffa8e`, tracked in `docs/TODO.md`). Clickable divs → semantic buttons with keyboard handlers across 8 components. Hand-rolled modals consolidated onto shared `Modal`. All `confirm()`/`alert()` calls replaced with `ConfirmModal` + `showToast`. ARIA roles, `aria-selected`, `aria-live`, `role="dialog"` added throughout. URL query param sync on sub-tabs. Loading skeletons, empty states. Radiogroup semantics, fieldset grouping, explicit labels.
-- **Framework migration index created** — `docs/FRAMEWORK_MIGRATIONS.md` tracks three in-flight swaps: Vapi→LiveKit (orchestrator), Supabase Edge Functions→Fastify (tool runtime, 8 tools), Vapi Clara→xAI Grok TTS (shipped as proxy, going native in LiveKit Phase 4).
+- **Framework migration index** — `docs/FRAMEWORK_MIGRATIONS.md` tracks three migrations: Vapi→LiveKit (orchestrator, **done**), Supabase Edge Functions→Fastify (tool runtime, 10 tools, **done**), OpenAI TTS→xAI Grok TTS native in agent (**Phase 4 pending**).
 - **Docs audit + sync** — CLAUDE.md, README.md, BUGS.md, ARCHITECTURE.md, DEPLOYMENT.md, PLAN.md all updated to reflect current state.
 
 ### April 9-10 Session: UI/UX Audit + Shift Bar Fix
@@ -82,15 +82,15 @@ See `docs/TODO.md` for the unified task list.
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 25 route modules, Railway auto-deploy from main |
+| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 24 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 74 migrations applied, FORCE RLS on all tables |
-| **Phone provisioning** | Working | `POST /provisioning/activate` creates Vapi assistant + phone number automatically |
-| **DynaTire phone** | Provisioned | +1 (630) 397-0194 — Vapi assistant (Clara voice, GPT-4o-mini), phone assigned |
-| **Voice AI (end-to-end)** | Working | Answers calls, books appointments, answers policy questions, rejects invalid bookings naturally. **Migrating to LiveKit** — see `docs/FRAMEWORK_MIGRATIONS.md` |
-| **Edge functions** | Working | Supabase pausing bug resolved 2026-03-30, all 8 tools operational |
+| **Database** | Live | Supabase Postgres (managed), 76 migrations applied, FORCE RLS on all tables |
+| **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
+| **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
+| **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Telnyx ticket #2850682 open. |
+| **Voice AI (end-to-end)** | Wired, awaiting first live call | Telnyx → LiveKit Cloud → agent worker → `/agent-tools/*` → Postgres. Blocked on the carrier-side LERG/PSTN propagation issue above. |
 | **Knowledge base** | Working | 40 policy Q&A pairs across 9 categories, document upload (PDF/TXT/DOC/DOCX/MD), auto-save |
-| **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against live edge function |
+| **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
 | **Tests** | 1,429 backend + 465 dashboard = 1,894 passing + 88 QA assertions | All green (verified 2026-04-21), zero TS errors |
@@ -176,8 +176,11 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | `JWT_SECRET` | Set |
 | `JWT_EXPIRY` | `8h` |
 | `OPENAI_API_KEY` | Set |
-| `VAPI_SERVER_URL_SECRET` | Set |
-| `VAPI_API_KEY` | Set (Vapi private key) |
+| `TELNYX_API_KEY` | Set (carrier + SMS OTP) |
+| `TELNYX_SIP_CONNECTION_ID` | `2945038451784812111` |
+| `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | Set (project "AI-Secretary") |
+| `DEEPGRAM_API_KEY` | Set (Nova-3 STT in agent) |
+| `AGENT_SECRET` | Set (LiveKit agent → Fastify auth) |
 | `STRIPE_SECRET_KEY` | Set (test mode) |
 | `STRIPE_WEBHOOK_SECRET` | Set |
 | `STRIPE_SOLO_PRICE_ID` | Set |
@@ -205,24 +208,20 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | `SERVICETITAN_APP_KEY` | **NOT SET** (ST-App-Key header) |
 | `SERVICETITAN_CALLBACK_URL` | **NOT SET** (`https://ai-sec-production.up.railway.app/servicetitan/auth/callback`) |
 
-### Supabase Edge Function Secrets — Set
-| Variable | Status |
-|----------|--------|
-| `DATABASE_URL` | Set (transaction pooler, port 6543) |
-| `SUPABASE_DB_URL` | Auto-set by Supabase (may have stale password) |
-| `OPENAI_API_KEY` | Set |
-| `VAPI_SERVER_URL_SECRET` | Set |
+### Supabase Edge Function Secrets
+
+The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge-function secrets are read by the current stack. Tools live at Fastify `/agent-tools/*` and authenticate via `AGENT_SECRET` set on Railway.
 
 ---
 
 ## Remaining TODO (Priority Order)
 
-1. **Deploy dashboard** (Vercel or Railway) — currently local only
+1. ~~Deploy dashboard~~ — Done (commit `fb216e0`, live at https://dashboard-production-cee3.up.railway.app/)
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
-3. ~~Apply new migrations to Supabase~~ — Done. All 74 migrations applied
+3. ~~Apply new migrations to Supabase~~ — Done. All 76 migrations applied (most recent: `20260427000000_telnyx_provisioning.sql`)
 4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit 35 items + April 20 a11y 47 items, commit `f9ffa8e`)
-5. **Voice AI migration**: Vapi → LiveKit Agents (Phase 2 ready, blocked on credentials) — see `docs/FRAMEWORK_MIGRATIONS.md`
-6. **Beta testing with DynaTire** — real-world validation with live calls
+5. ~~**Voice AI migration**: Vapi → LiveKit Agents~~ — Done in commit `661d21d` (2026-04-27). Awaiting Telnyx ticket #2850682 to unblock first live call.
+6. **Beta testing with DynaTire** — blocked on the carrier issue above
 
 ### Done This Session (2026-04-01)
 - ~~BUG-059: Timezone regression~~ — `book_with_scheduling_atomic()` used hardcoded UTC for shift validation; now uses tenant timezone. Migration `20260401000000`
@@ -272,10 +271,10 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 |----------|-------|
 | Railway backend URL | `https://ai-sec-production.up.railway.app/` |
 | Supabase project | `sgibijfchvfuizudrmir` (us-west-2) |
-| Edge function URL | `https://sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools` |
-| DynaTire phone | +1 (630) 397-0194 |
-| DynaTire Vapi assistant ID | `01af2ff0-1fc2-4238-bc84-300674967bef` |
-| DynaTire Vapi phone number ID | `4ddb7650-9ae5-42ec-8ba1-41286c821583` |
+| Active phone number | `+1-630-937-9478` (Telnyx) — see `TICKET_SUPPORT.md` for status |
+| Telnyx SIP connection | `livekit-outbound`, ID `2945038451784812111`, FQDN `daleaisec24.sip.telnyx.com` |
+| LiveKit SIP target | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` |
+| LiveKit dispatch rule | `SDR_if97ky4Zf7e6` (one rule routes all tenants to agent name `ai-secretary-agent`) |
 | Stripe webhook URL | `https://ai-sec-production.up.railway.app/billing/webhook` |
 
 ---
@@ -289,12 +288,11 @@ Supabase project is no longer stuck in "pausing" state. Edge functions are reach
 | HubSpot CRM | 3 files | 74 | Client, sync, routes — happy + sad |
 | Square CRM | 3 files | ~70 | Client, sync, routes — happy + sad |
 | ServiceTitan CRM | 3 files | ~70 | Client, sync, routes — happy + sad |
-| Provisioning | 1 file | 39 | Area codes, Vapi errors, rollback, DB states |
+| Provisioning | 1 file | 8 | Telnyx Numbers API (search/order/assign/release), DB schema, rollback |
 | Scheduling + timezone | 2 files | 34 | Diagnostics, edge cases, UTC drift, DST transitions, midnight boundary, 5W sad paths |
 | Voice AI fixes | 1 file | 22 | Phone normalization (E.164, partial, garbage), date calc (month/year boundary), skill mapping, error codes — all with 5W |
 | OAuth/token management | 2 files | 20+ | Generic callback factory, token refresh |
 | Normalizer | 1 file | 17 | Timeouts, API errors, unicode |
-| Vapi config | 1 file | 18 | Template validation, required fields |
 | Bug fix regression | 6 files | 80+ | April 1 rounds 1-5, comprehensive, regression |
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
