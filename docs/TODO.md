@@ -63,9 +63,9 @@ Doc Phase 1 inventory completed 2026-04-27. 17 files contain 177 Vapi references
 
 **Files affected** (from inventory): README.md, CLAUDE.md, SUMMARY-2026-04-24-0030.md, improvement-ideas.md, docs/IMPROVEMENT_IDEAS.md, docs/CURRENT_STATUS.md, docs/ARCHITECTURE.md, docs/DEPLOYMENT.md, docs/FRAMEWORK_MIGRATIONS.md, docs/TODO.md, docs/PLAN.md, docs/UI_UX_DESIGN.md, docs/DESIGN_HANDOFF.md, docs/DIAGRAMS.md, docs/BUGS.md, .remember/state.md, src/services/MIGRATED_FROM_AI_SECRETARY.md.
 
-- [ ] **Phase 2a (mechanical, ~45-60 min):** apply Category A + C renames across 17 files. No architectural decisions.
+- [x] **Phase 2a (mechanical):** Category A + C renames across the authoritative docs. Done 2026-04-27 in commit `33b685c` — README, CLAUDE.md, docs/CURRENT_STATUS.md, docs/DEPLOYMENT.md (incl. Phase 6 rewrite), docs/IMPROVEMENT_IDEAS.md updated; every remaining Vapi mention in those files is correctly historical.
 - [ ] **Phase 2b (~1-2 hr):** review and edit Category B items in `improvement-ideas.md` and `docs/IMPROVEMENT_IDEAS.md`. Some tasks now obsolete, others need new wording for LiveKit shape.
-- [ ] **Reconcile the stale Voice AI Migration section above** with truth from `docs/FRAMEWORK_MIGRATIONS.md` (already partially done with status note).
+- [ ] **Reconcile the stale Voice AI Migration section above** with truth from `docs/FRAMEWORK_MIGRATIONS.md` (status note added in `33b685c`; still need to delete the stale phase list entirely).
 - [ ] Consolidate duplicate `improvement-ideas.md` ↔ `docs/IMPROVEMENT_IDEAS.md` (flagged in Phase 1 inventory as duplicates).
 
 ---
