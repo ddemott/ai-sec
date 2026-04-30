@@ -50,9 +50,13 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     await ctx.connect();
 
-    // 1. Room metadata → tenant_id
+    // 1. Tenant_id from dispatch metadata (preferred — set on the agent
+    //    job by the LiveKit dispatch rule's "Dispatch metadata" field)
+    //    falling back to room metadata. Robust to either wiring.
+    const jobMetadata = ctx.job.metadata;
     const roomMetadata = ctx.room.metadata;
     const preliminaryCtx = buildSessionContext({
+      jobMetadata,
       roomMetadata,
       participantAttributes: null, // SIP participant not joined yet
     });
@@ -81,6 +85,7 @@ export default defineAgent({
     }
 
     const sessionCtx = buildSessionContext({
+      jobMetadata,
       roomMetadata,
       participantAttributes,
     });
@@ -155,4 +160,12 @@ async function runFallback(ctx: JobContext, message: string): Promise<void> {
   }
 }
 
-cli.runApp(new WorkerOptions({ agent: fileURLToPath(import.meta.url) }));
+cli.runApp(
+  new WorkerOptions({
+    agent: fileURLToPath(import.meta.url),
+    // Must match the agentName in the LiveKit dispatch rule
+    // (SDR_if97ky4Zf7e6 / dynatire-dispatch). If these drift, dispatched
+    // jobs won't route to this worker and calls will hit dead air.
+    agentName: 'ai-secretary-agent',
+  }),
+);

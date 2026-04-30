@@ -78,15 +78,18 @@ function isAnonymousMarker(phone: string): boolean {
 }
 
 /**
- * Build a session context from raw inputs. Returns null if tenant_id is
- * missing — the entry point treats this as a misconfigured dispatch rule
- * and ends the call with a safe message.
+ * Build a session context from raw inputs. Tries job (dispatch) metadata
+ * first, then room metadata — LiveKit puts our tenant_id JSON on whichever
+ * the dispatch rule's "Dispatch metadata" field maps to at runtime, and
+ * we want to be robust to either. Returns null if neither carries a
+ * tenant_id; entry point treats that as a misconfigured dispatch rule.
  */
 export function buildSessionContext(args: {
+  jobMetadata?: string | null | undefined;
   roomMetadata: string | null | undefined;
   participantAttributes: Record<string, string> | null | undefined;
 }): SessionContext | null {
-  const meta = parseRoomMetadata(args.roomMetadata);
+  const meta = parseRoomMetadata(args.jobMetadata) ?? parseRoomMetadata(args.roomMetadata);
   if (!meta) return null;
   const caller = extractCallerInfo(args.participantAttributes);
   return {
