@@ -16,18 +16,28 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - **Agent worker**: `agent/` package, deployed on Railway as `ai-sec-agent`. Single worker serves every tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
-- **Async Workers**: Inline in Fastify routes (post-call summaries, calendar sync, SMS)
+- **Async Workers**: Mostly inline in Fastify routes (post-call summaries, calendar sync, SMS push triggers). Background polling worker for appointment reminders lives in `src/workers/reminderScheduler.ts` (60s tick, multi-channel delivery via CommunicationService).
 - **Auth**: JWT-based authentication (8h expiry, auto-logout on 401), bcrypt password hashing
 
 ## Key Directories
-- `/src` - Fastify backend (slim index.ts entry, 24 route modules under src/routes/)
+- `/src` - Fastify backend (slim index.ts entry, 25 route modules under src/routes/)
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, agentTools)
 - `/src/routes/routeHelpers.ts` - Shared route utilities (sendValidationError, sendNotFound, sendSuccess, sendConflict, assertRowAffected, requireValidUUID, parseDateRange, parsePagination)
-- `/src/services` - Service layer (telnyxNumbers.ts [provisioning], telnyxSms.ts [OTP], googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts [splitName/joinName/slugify/buildDisplayName], jobberClient.ts, jobberSync.ts, hubspotClient.ts, hubspotSync.ts, squareClient.ts, squareSync.ts, servicetitanClient.ts, servicetitanSync.ts, oauthCallbackFactory.ts, tokenManagement.ts [withSyncContext])
+- `/src/services` - Service layer. Flat files at root: telnyxNumbers.ts [provisioning], telnyxSms.ts [OTP], googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts, oauthCallbackFactory.ts, tokenManagement.ts, plus the legacy CRM clients (jobberClient/Sync, hubspotClient/Sync, squareClient/Sync, servicetitanClient/Sync). Subdirectories add migrated layers — see `/src/services` subdirs below.
+- `/src/services/crm/` - 20+ CRM adapter classes (GoHighLevel, Acuity, Booksy, Calendly, Mindbody, Pipedrive, Salesforce, ServiceTitan, Vagaro, Zenoti, Zoho, etc.) with a `BaseCRMAdapter` interface and registry factory `createCRMAdapter(provider, config)`. **Migrated from ai-secretary, not yet wired to any routes.** Will eventually replace the flat legacy clients above.
+- `/src/services/communications/` - Multi-channel comms engine. CommunicationService orchestrator + emailService, smsService, appointmentService, emailTemplates (Handlebars), ProviderRegistry, TwilioAdapter, MockAdapter, TelephonyProvider.interface. Consent-gated via ConsentService, usage-tracked via UsageTrackingService.
+- `/src/services/reminders/` - Appointment reminder pipeline. ReminderService schedules on appointment create; reminderProcessor delivers via CommunicationService; reminderRepository handles DB CRUD. Worker pulls from `reminder_schedules` table.
+- `/src/services/tenants/` - TenantConfigService (in-memory + DB-backed). **Prod implementation not yet wired** — agent worker currently hardcodes DynaTire's name/timezone.
+- `/src/services/usage/` - UsageTrackingService stub. Records SMS/calls/emails in memory only; no DB persistence, no Stripe sync yet (TODO).
+- `/src/database/index.ts` - Lazy-init singleton pool. Bridges native `withTenantClient(pool)` to a `DatabaseService` interface used by communications/reminders/workers. Invisible glue; no routes touch it.
+- `/src/workers/reminderScheduler.ts` - Background job processor. Polls every 60s, batches up to 100 reminders, runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`. Started in `index.ts`, stopped on SIGTERM.
+- `/src/templates/` - 6 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1; medical_v1 exists but unused — HIPAA verticals are excluded). Each bundle: prompt template, first message, voice ID, field labels, example services. Loaded by tenants provisioning route.
+- `/src/types/` - Shared TS interfaces. ConsentRecord, OptOutRecord (GDPR/TCPA), ReminderSchedule/ReminderData/AppointmentForReminder, UsageRecord + Provider enum, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
-- `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`
+- `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
-- `/supabase/migrations` - 76 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning)
+- `/supabase/migrations` - 77 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning)
+- `/supabase/functions` - **Empty.** All Vapi edge functions deleted in commit `661d21d`.
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts)
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
 - `/scripts` - Automation (knowledge ingestion, `qa-live-test.py` QA suite)
@@ -103,6 +113,14 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - All tests include happy + sad paths with 5W diagnostic comments (WHO/WHAT/WHEN/WHERE/WHY)
 - Tab state synced to URL query params (`?tab=schedule`) — shareable links, browser back/forward works
 - Scheduler view tabs (Staff/Resources/List/Calendar) visible from all views including Staff timeline
+
+## Migrated, Not Yet Wired
+Several service layers exist in the codebase but are not yet exposed via routes or fully connected. Reading these dirs may suggest features that don't actually function end-to-end:
+- **`src/services/crm/`** — 20+ adapter classes for booking platforms (Mindbody, Vagaro, Acuity, Calendly, Salesforce, etc.). No `routes/crm.ts` exists; the registry factory has no callers. Will eventually replace the legacy flat clients (`jobberClient.ts`, `hubspotClient.ts`, `squareClient.ts`, `servicetitanClient.ts`).
+- **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing.
+- **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but the agent worker still hardcodes DynaTire's name/timezone in `agent/src/index.ts`. Multi-tenant prod needs this wired.
+- **`src/types/`** — `ConsentRecord` and `OptOutRecord` have full type shapes and DB tables, but no consent management UI exists in the dashboard yet.
+- **`src/templates/medical_v1.yaml`** — Exists but unused; HIPAA verticals are permanently excluded.
 
 ## Known Issues (as of April 2026)
 - OpenAI API quota needs monitoring — edge functions use GPT-4o-mini for LLM + embeddings
