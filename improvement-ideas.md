@@ -269,51 +269,6 @@
 
 ## Ideas — 2026-04-20 (code patterns reviewed)
 
-### Task: Replace resource route validation branches with sendValidationError
-**Status:** proposed
-**Files to change:** `src/routes/resources.ts:L20-L70`, `src/routes/routeHelpers.ts:L1-L40`
-**What to do:** Swap the inline validation-failure branches in resource create and update to use `sendValidationError`, keeping the response payload exactly the same while removing repeated validation envelope boilerplate from the route file.
-**Done when:**
-- [ ] Resource create uses `sendValidationError` for schema parse failures
-- [ ] Resource update uses `sendValidationError` for schema parse failures
-- [ ] Validation response payloads remain unchanged for callers
-- [ ] All existing tests pass, new tests cover validation-failure behavior if needed
-**Why it matters:** Shared helper conventions only help if real CRUD routes adopt them, and this file still repeats the same envelope manually.
-**Tradeoff:** This is a narrow consistency cleanup, so it should stay scoped to the resource file rather than prompting a broad rewrite.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it makes a representative CRUD route more consistent immediately.
-
-### Task: Pilot sendSuccess adoption in resource mutation routes
-**Status:** proposed
-**Files to change:** `src/routes/resources.ts:L40-L110`, `src/routes/routeHelpers.ts:L20-L40`
-**What to do:** Replace a few direct `reply.send({ success: true, ... })` responses in resource mutations with `sendSuccess`, confirming the helper fits real CRUD usage without changing payload shape. Keep the rollout selective and behavior-preserving.
-**Done when:**
-- [ ] Selected resource mutation responses use `sendSuccess`
-- [ ] Response payloads remain unchanged for callers
-- [ ] The route stays readable and helper use does not feel forced
-- [ ] All existing tests pass, new tests cover any helper-adopted paths if needed
-**Why it matters:** It is hard to know whether a shared success helper is genuinely useful unless a few real routes prove it in practice.
-**Tradeoff:** Some responses may still read better inline, so the rollout should stay narrow and pragmatic.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it tests a shared helper under realistic CRUD conditions.
-
-### Task: Extract resource update field assembly into a tiny local helper
-**Status:** proposed
-**Files to change:** `src/routes/resources.ts:L55-L95`
-**What to do:** Pull the dynamic field/value assembly used by resource update into a small local helper that returns the set-clause inputs or throws the same no-fields error. Keep SQL behavior unchanged, but make the route easier to scan by separating update-field shaping from query execution.
-**Done when:**
-- [ ] Resource update no longer inlines all mutable field collection logic inside the query callback
-- [ ] The helper stays local and focused on optional-field assembly rather than generic SQL generation
-- [ ] Existing no-updatable-fields behavior remains unchanged
-- [ ] All existing tests pass, new tests cover field assembly behavior if needed
-**Why it matters:** Optional-field update logic is easy to misread and subtly break when fields change over time.
-**Tradeoff:** The helper should stay small and route-local so it clarifies the code instead of over-abstracting it.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good return because it improves readability in a bug-prone pattern without changing semantics.
-
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
 **What's working:** The rebuilt root log is still continuing cleanly, and this cycle stayed grounded by pairing a practical account/team UX slice with one fully readable CRUD route rather than stretching across clipped files.
@@ -322,52 +277,6 @@
 
 ## Ideas — 2026-04-20 (architecture reviewed)
 
-### Task: Replace duplicated provider arrays in syncOrchestrator with a single capability registry
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L1-L80`
-**What to do:** Introduce one explicit provider registry that records whether each integration participates in appointment sync, customer sync, or both, then derive both fan-out loops from that registry. Preserve current ordering and behavior exactly, but eliminate the need to maintain support rules in two separate arrays.
-**Done when:**
-- [ ] Provider support is declared in one registry instead of separate appointment/customer arrays
-- [ ] `syncAppointmentToAll` and `syncCustomerToAll` derive their loops from that registry
-- [ ] Current provider order and function selection remain unchanged
-- [ ] All existing tests pass, new tests cover registry-driven fan-out if needed
-**Why it matters:** Central integration rules become brittle when support declarations live in more than one place.
-**Tradeoff:** The registry should stay explicit and small so it improves clarity rather than adding abstraction noise.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, strong return because it removes a clear source of integration drift from a shared service.
-
-### Task: Extract shared fan-out execution into a local helper inside syncOrchestrator
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L18-L80`
-**What to do:** Pull the repeated provider iteration and catch-log pattern into a narrow local helper that accepts provider entries plus entity metadata, then use it for both appointment and customer fan-out. Preserve the current fire-and-forget semantics exactly.
-**Done when:**
-- [ ] Appointment and customer sync functions no longer each inline the same provider loop-and-catch pattern
-- [ ] `logSyncError` usage and non-throwing behavior remain unchanged
-- [ ] The helper stays local and specific to sync orchestration behavior
-- [ ] All existing tests pass, new tests cover helper-driven fan-out if needed
-**Why it matters:** Repeated orchestration mechanics make it harder to see the actual domain differences between the two sync paths.
-**Tradeoff:** The helper must stay very small so the file remains easy to audit.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it trims repetition from a central integration file.
-
-### Task: Add lightweight fan-out start logs to syncOrchestrator without provider-level success noise
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L1-L80`
-**What to do:** Emit one structured start log at the beginning of appointment and customer fan-out when a logger is available, while keeping the current provider failure logs unchanged. Avoid adding per-provider success logs.
-**Done when:**
-- [ ] Appointment fan-out emits one structured start log when a logger exists
-- [ ] Customer fan-out emits one structured start log when a logger exists
-- [ ] Existing provider-level failure logging remains unchanged
-- [ ] No noisy provider success logs are introduced
-- [ ] All existing tests pass, new tests cover logger invocation if needed
-**Why it matters:** Fire-and-forget orchestration is otherwise mostly invisible when nothing fails, which makes operational tracing harder.
-**Tradeoff:** Even sparse logs add some noise, so the extra visibility should stay limited to high-value start events.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it improves observability in a mostly silent integration path.
-
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
 **What's working:** The rebuilt root logs are still continuing cleanly, and this cycle stayed grounded by pairing a focused onboarding slice with one fully readable shared service rather than stretching across clipped backend files.
@@ -375,51 +284,6 @@
 **Why:** The current instructions are still producing specific, useful outputs without wasted motion or obvious repetition pressure.
 
 ## Ideas — 2026-04-20 (architecture reviewed)
-
-### Task: Normalize requireTenantId onto the standard API error envelope
-**Status:** proposed
-**Files to change:** `src/middleware.ts:L105-L125`, route tests covering missing-tenant responses
-**What to do:** Update `requireTenantId` so its 400 response uses the same `{ success: false, error: ... }` shape already used by `requireAuth` and `withHandler`. Keep the status code unchanged and limit the change to middleware-level consistency.
-**Done when:**
-- [ ] `requireTenantId` returns `{ success: false, error: 'tenant_id is required' }`
-- [ ] Missing-tenant failures still use status 400
-- [ ] Routes relying on `requireTenantId` continue behaving the same aside from the normalized error body
-- [ ] All existing tests pass, new tests cover the missing-tenant contract if needed
-**Why it matters:** Shared guard behavior should be consistent so the frontend does not need special cases for one common middleware failure.
-**Tradeoff:** Any code depending on the bare `{ error }` shape needs to be checked before the contract is normalized.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it normalizes a central middleware response used across many routes.
-
-### Task: Extract tenant extraction precedence into a named helper inside middleware.ts
-**Status:** proposed
-**Files to change:** `src/middleware.ts:L145-L190`
-**What to do:** Pull the query/body/auth tenant lookup precedence into a small local helper, then have `tenantMiddleware` call it before logger enrichment. Preserve the existing query > body > auth precedence exactly while making the rule easier to read and test.
-**Done when:**
-- [ ] Tenant extraction precedence no longer lives inline inside `tenantMiddleware`
-- [ ] Query > body > auth precedence remains unchanged
-- [ ] `tenantMiddleware` reads more clearly around exemption check, extraction, and logger enrichment
-- [ ] All existing tests pass, new tests cover precedence behavior if needed
-**Why it matters:** Middleware precedence rules are subtle shared behavior, and naming them explicitly makes future changes less risky.
-**Tradeoff:** The helper should stay local and obvious so it does not over-engineer a simple path.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it improves readability in a shared, easy-to-misread path.
-
-### Task: Add a tiny shared guard-response helper for middleware auth and tenant failures
-**Status:** proposed
-**Files to change:** `src/middleware.ts:L105-L140`
-**What to do:** Introduce one small internal helper for common middleware guard failures so `requireTenantId` and `requireAuth` stop assembling their reply bodies independently. Keep status codes and messages unchanged except where intentionally normalized.
-**Done when:**
-- [ ] `requireTenantId` and `requireAuth` share a small response-emission helper
-- [ ] Guard messages and status codes remain unchanged unless deliberately normalized
-- [ ] The helper stays local to middleware guard concerns and does not turn into a generic response abstraction
-- [ ] All existing tests pass, new tests cover helper-driven guard responses if needed
-**Why it matters:** Small shared guard helpers make it easier to evolve middleware response conventions consistently later.
-**Tradeoff:** The helper must stay extremely small so it clarifies rather than hides straightforward logic.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it trims duplication in a central guard layer.
 
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
@@ -497,37 +361,6 @@
 **Impact:** medium
 **Effort vs Gain:** Low effort, strong return because it removes a clear source of integration drift from a shared service.
 
-### Task: Extract shared fan-out execution into a local helper inside syncOrchestrator
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L18-L80`
-**What to do:** Pull the repeated provider iteration and catch-log pattern into a narrow local helper that accepts provider entries plus entity metadata, then use it for both appointment and customer fan-out. Preserve the current fire-and-forget semantics exactly.
-**Done when:**
-- [ ] Appointment and customer sync functions no longer each inline the same provider loop-and-catch pattern
-- [ ] `logSyncError` usage and non-throwing behavior remain unchanged
-- [ ] The helper stays local and specific to sync orchestration behavior
-- [ ] All existing tests pass, new tests cover helper-driven fan-out if needed
-**Why it matters:** Repeated orchestration mechanics make it harder to see the actual domain differences between the two sync paths.
-**Tradeoff:** The helper must stay very small so the file remains easy to audit.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it trims repetition from a central integration file.
-
-### Task: Add lightweight fan-out start logs to syncOrchestrator without provider-level success noise
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L1-L80`
-**What to do:** Emit one structured start log at the beginning of appointment and customer fan-out when a logger is available, while keeping the current provider failure logs unchanged. Avoid adding per-provider success logs.
-**Done when:**
-- [ ] Appointment fan-out emits one structured start log when a logger exists
-- [ ] Customer fan-out emits one structured start log when a logger exists
-- [ ] Existing provider-level failure logging remains unchanged
-- [ ] No noisy provider success logs are introduced
-- [ ] All existing tests pass, new tests cover logger invocation if needed
-**Why it matters:** Fire-and-forget orchestration is otherwise mostly invisible when nothing fails, which makes operational tracing harder.
-**Tradeoff:** Even sparse logs add some noise, so the extra visibility should stay limited to high-value start events.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it improves observability in a mostly silent integration path.
-
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
 **What's working:** The task definitions are still clear, the latest UX and idea entries remain specific rather than generic, and the rebuilt-log workflow is still producing fresh slices without obvious drift.
@@ -535,51 +368,6 @@
 **Why:** The current process is still doing what it should, giving enough structure to keep the outputs useful without adding unnecessary instruction churn.
 
 ## Ideas — 2026-04-20 (code patterns reviewed)
-
-### Task: Replace resource route validation branches with sendValidationError
-**Status:** proposed
-**Files to change:** `src/routes/resources.ts:L20-L70`, `src/routes/routeHelpers.ts:L1-L40`
-**What to do:** Swap the inline validation-failure branches in resource create and update to use `sendValidationError`, keeping the response payload exactly the same while removing repeated validation envelope boilerplate from the route file.
-**Done when:**
-- [ ] Resource create uses `sendValidationError` for schema parse failures
-- [ ] Resource update uses `sendValidationError` for schema parse failures
-- [ ] Validation response payloads remain unchanged for callers
-- [ ] All existing tests pass, new tests cover validation-failure behavior if needed
-**Why it matters:** Shared helper conventions only pay off if real CRUD routes adopt them, and this file still repeats the same validation envelope manually.
-**Tradeoff:** This is a narrow consistency cleanup, so it should stay scoped to the resource file rather than triggering a broad rewrite.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it makes a representative CRUD route more consistent immediately.
-
-### Task: Pilot sendSuccess adoption in resource mutation routes
-**Status:** proposed
-**Files to change:** `src/routes/resources.ts:L40-L110`, `src/routes/routeHelpers.ts:L20-L40`
-**What to do:** Replace a few direct `reply.send({ success: true, ... })` responses in resource mutations with `sendSuccess`, confirming the helper fits real CRUD usage without changing payload shape. Keep the rollout selective and behavior-preserving.
-**Done when:**
-- [ ] Selected resource mutation responses use `sendSuccess`
-- [ ] Response payloads remain unchanged for callers
-- [ ] The route stays readable and helper use does not feel forced
-- [ ] All existing tests pass, new tests cover any helper-adopted paths if needed
-**Why it matters:** Shared success helpers only become meaningful once a few real routes prove they improve clarity without hurting readability.
-**Tradeoff:** Some responses may still read better inline, so the rollout should stay narrow and pragmatic.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it tests a shared helper under realistic CRUD conditions.
-
-### Task: Extract resource update field assembly into a tiny local helper
-**Status:** proposed
-**Files to change:** `src/routes/resources.ts:L55-L95`
-**What to do:** Pull the dynamic field/value assembly used by resource update into a small local helper that returns the set-clause inputs or throws the same no-fields error. Keep SQL behavior unchanged, but make the route easier to scan by separating update-field shaping from query execution.
-**Done when:**
-- [ ] Resource update no longer inlines all mutable field collection logic inside the query callback
-- [ ] The helper stays local and focused on optional-field assembly rather than generic SQL generation
-- [ ] Existing no-updatable-fields behavior remains unchanged
-- [ ] All existing tests pass, new tests cover field assembly behavior if needed
-**Why it matters:** Optional-field update logic is easy to misread and subtly break when fields change over time.
-**Tradeoff:** The helper should stay small and route-local so it clarifies the code instead of over-abstracting it.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good return because it improves readability in a bug-prone pattern without changing semantics.
 
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
@@ -748,51 +536,6 @@
 
 ## Ideas — 2026-04-20 (developer experience reviewed)
 
-### Task: Introduce named appointment request payload types in dashboard/lib/types.ts and use them in Api.appointments
-**Status:** proposed
-**Files to change:** `dashboard/lib/types.ts:L1-L140`, `dashboard/lib/api.ts:L120-L260`
-**What to do:** Add explicit request interfaces for appointment create and update payloads in `dashboard/lib/types.ts`, then replace the current broad appointment helper signatures in `Api.appointments` so they use those named types instead of loose composite payloads. Keep runtime behavior unchanged.
-**Done when:**
-- [ ] Appointment create/update request payloads have named shared types
-- [ ] `Api.appointments.create` and `Api.appointments.update` stop relying on broad intersection payload types
-- [ ] Existing call sites compile cleanly or reveal legitimate typing gaps that are fixed locally
-- [ ] All existing tests pass, TypeScript remains clean
-**Why it matters:** Appointment mutations sit on a hot path, and broad payload typing weakens the strongest safety tool the dashboard has, strict TypeScript.
-**Tradeoff:** Tightening the signatures may expose a few sloppy callers, so there can be a modest cleanup cost.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, strong return because it improves safety and readability at a central dashboard API boundary.
-
-### Task: Rename ScheduleEntry or explicitly document its distinction from EffectiveShift
-**Status:** proposed
-**Files to change:** `dashboard/lib/types.ts:L90-L130`, any scheduler or wizard callers using `ScheduleEntry`
-**What to do:** Resolve the overlap between `ScheduleEntry` and the date-based shift types around it by either renaming `ScheduleEntry` to match the override terminology already used elsewhere or documenting why it represents a different concept. Keep runtime behavior unchanged.
-**Done when:**
-- [ ] The distinction between `ScheduleEntry` and `EffectiveShift` is explicit and easy to understand
-- [ ] Type names or comments align better with the dashboard’s date-based scheduling terminology
-- [ ] Existing call sites compile cleanly after the clarification
-- [ ] All existing tests pass, TypeScript remains clean
-**Why it matters:** Scheduling is already a high-complexity area, and ambiguous type names make safe changes harder than they need to be.
-**Tradeoff:** Renaming shared types creates a small ripple, so the cleanup should stay tightly scoped to genuine ambiguity.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good return because it clarifies a confusing core type without changing behavior.
-
-### Task: Add a shared appointment display model for customer/resource label fallback rules
-**Status:** proposed
-**Files to change:** `dashboard/lib/types.ts:L1-L140`, appointment-facing components such as `dashboard/components/AppointmentListSidebar.tsx:L1-L220`, `dashboard/components/AppointmentDetailPanel.tsx:L1-L260`, and scheduler appointment surfaces if applicable
-**What to do:** Define a small shared display contract or helper type for appointment-facing customer/resource labels so UI code stops reasoning directly about multiple overlapping name shapes, nested `customers` objects, and legacy `name` fields in each component. Keep API payloads unchanged.
-**Done when:**
-- [ ] Appointment-facing UI shares one explicit display-data contract for customer/resource label fallback
-- [ ] Legacy label fallback behavior is defined in one place
-- [ ] The change stays scoped to appointment-facing display concerns rather than broad entity rewrites
-- [ ] All existing tests pass, TypeScript remains clean
-**Why it matters:** Repeated ad hoc label fallback logic makes appointment UI code harder to keep consistent across list-detail and scheduler surfaces.
-**Tradeoff:** The display model should stay thin and view-focused so it does not become a second entity layer.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile gain because it reduces repetitive field ambiguity across several important appointment surfaces.
-
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
 **What's working:** The remaining UX backlog is small enough that each cycle can stay sharply focused, and this pass kept the ideas log fresh by returning to the dashboard type/api layer instead of repeating recent backend helper patterns.
@@ -801,52 +544,6 @@
 
 ## Ideas — 2026-04-20 (architecture reviewed)
 
-### Task: Replace duplicated provider arrays in syncOrchestrator with one capability registry
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L1-L80`
-**What to do:** Define one explicit provider registry that records whether each integration supports appointment sync, customer sync, or both, then derive both fan-out loops from that registry. Preserve current provider ordering and behavior exactly, but eliminate the need to maintain support rules in two separate arrays.
-**Done when:**
-- [ ] Provider support is declared in one registry instead of separate appointment/customer arrays
-- [ ] `syncAppointmentToAll` and `syncCustomerToAll` derive their loops from that registry
-- [ ] Current provider order and function selection remain unchanged
-- [ ] All existing tests pass, new tests cover registry-driven fan-out if needed
-**Why it matters:** Central integration rules become brittle when support declarations live in more than one place.
-**Tradeoff:** The registry should stay explicit and small so it improves clarity rather than adding abstraction noise.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, strong return because it removes a clear source of integration drift from a shared service.
-
-### Task: Extract shared fan-out execution into a local helper inside syncOrchestrator
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L18-L80`
-**What to do:** Pull the repeated provider iteration and catch-log pattern into a narrow local helper that accepts provider entries plus entity metadata, then use it for both appointment and customer fan-out. Preserve the current fire-and-forget semantics exactly.
-**Done when:**
-- [ ] Appointment and customer sync functions no longer each inline the same provider loop-and-catch pattern
-- [ ] `logSyncError` usage and non-throwing behavior remain unchanged
-- [ ] The helper stays local and specific to sync orchestration behavior
-- [ ] All existing tests pass, new tests cover helper-driven fan-out if needed
-**Why it matters:** Repeated orchestration mechanics make it harder to see the actual domain differences between the two sync paths.
-**Tradeoff:** The helper must stay very small so the file remains easy to audit.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it trims repetition from a central integration file.
-
-### Task: Add lightweight fan-out start logs to syncOrchestrator without provider-level success noise
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L1-L80`
-**What to do:** Emit one structured start log at the beginning of appointment and customer fan-out when a logger is available, while keeping the current provider failure logs unchanged. Avoid adding per-provider success logs.
-**Done when:**
-- [ ] Appointment fan-out emits one structured start log when a logger exists
-- [ ] Customer fan-out emits one structured start log when a logger exists
-- [ ] Existing provider-level failure logging remains unchanged
-- [ ] No noisy provider success logs are introduced
-- [ ] All existing tests pass, new tests cover logger invocation if needed
-**Why it matters:** Fire-and-forget orchestration is otherwise mostly invisible when nothing fails, which makes operational tracing harder.
-**Tradeoff:** Even sparse logs add some noise, so the extra visibility should stay limited to high-value start events.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it improves observability in a mostly silent integration path.
-
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
 **What's working:** The remaining UX backlog is now small enough that each cycle can stay sharply focused, and the ideas pass remains useful because it is still tied to fully readable shared service code rather than guesswork.
@@ -854,21 +551,6 @@
 **Why:** The current instructions are still producing specific, bounded outputs without obvious repetition or wasted effort in the endgame.
 
 ## Ideas — 2026-04-20 (developer experience reviewed)
-
-### Task: Rename ScheduleEntry or explicitly document its distinction from EffectiveShift
-**Status:** proposed
-**Files to change:** `dashboard/lib/types.ts:L90-L130`, any scheduler or wizard callers using `ScheduleEntry`
-**What to do:** Resolve the overlap between `ScheduleEntry` and the date-based shift types around it by either renaming `ScheduleEntry` to match the override terminology already used elsewhere or documenting why it represents a different concept. Keep runtime behavior unchanged.
-**Done when:**
-- [ ] The distinction between `ScheduleEntry` and `EffectiveShift` is explicit and easy to understand
-- [ ] Type names or comments align better with the dashboard’s date-based scheduling terminology
-- [ ] Existing call sites compile cleanly after the clarification
-- [ ] All existing tests pass, TypeScript remains clean
-**Why it matters:** Scheduling is already a high-complexity area, and ambiguous type names make safe changes harder than they need to be.
-**Tradeoff:** Renaming shared types creates a small ripple, so the cleanup should stay tightly scoped to genuine ambiguity.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good return because it clarifies a confusing core type without changing behavior.
 
 ### Task: Add a shared scheduler display model for appointment and employee label fallback rules
 **Status:** proposed
