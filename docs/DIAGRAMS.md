@@ -2,14 +2,14 @@
 
 Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders natively on GitHub and on claude.ai (paste into chat, or upload this file and ask for an artifact).
 
-**Last synced to architecture doc:** 2026-04-21
+**Last synced to architecture doc:** 2026-04-30
 
 ## Contents
 
 1. [Deployment Topology](#1-deployment-topology)
 2. [Data Model (ER)](#2-data-model-er)
-3. [Voice Call — Current (Vapi + Edge Function)](#3-voice-call--current-vapi--edge-function)
-4. [Voice Call — Target (LiveKit Agent)](#4-voice-call--target-livekit-agent)
+3. [Voice Call Flow — Current (LiveKit Agent)](#3-voice-call-flow--current-livekit-agent)
+4. [Voice Call Flow — Historical (pre-661d21d, Vapi + Edge Function)](#4-voice-call-flow--historical-pre-661d21d-vapi--edge-function)
 5. [Booking — 7-Layer Atomic Check](#5-booking--7-layer-atomic-check)
 6. [OAuth Flow (Generic, 6 Providers)](#6-oauth-flow-generic-6-providers)
 7. [Calendar + CRM Sync Fan-out](#7-calendar--crm-sync-fan-out)
@@ -22,58 +22,44 @@ Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders nat
 
 ## 1. Deployment Topology
 
-Shows the physical layout: what runs where, and the current-state vs. LiveKit-target-state voice path.
+Physical layout post-LiveKit migration (`661d21d`, 2026-04-27).
 
 ```mermaid
 flowchart TB
   Caller([Caller phone])
-  Telnyx["Telnyx SIP Trunk<br/>+1 630 397 0194"]
+  Telnyx["Telnyx SIP Trunk<br/>+1 630 937 9478"]
   Caller -->|PSTN| Telnyx
 
-  subgraph curr["CURRENT — Vapi + Edge Function"]
-    direction TB
-    Vapi["Vapi Orchestrator<br/>STT Deepgram + LLM OpenAI + TTS Clara"]
-    TTSProxy["src/routes/tts.ts<br/>TTS proxy"]
-    XAI["xAI Grok TTS"]
-    EdgeFn["Supabase Edge Function<br/>vapi-tools (Deno)"]
-    Vapi -->|TTS provider=custom-voice| TTSProxy
-    TTSProxy --> XAI
-    Vapi -->|POST + x-vapi-secret| EdgeFn
-  end
+  LiveKit["LiveKit Cloud<br/>SIP bridge + rooms<br/>dispatch rule SDR_if97ky4Zf7e6"]
+  Telnyx -->|SIP via livekit-outbound| LiveKit
 
-  subgraph tgt["TARGET — LiveKit Agent"]
+  subgraph agentBox["Agent Worker — Railway: ai-sec-agent"]
     direction TB
-    LiveKit["LiveKit Cloud<br/>SIP bridge + rooms"]
-    Agent["Agent Worker (Node)<br/>separate Railway service"]
-    DG["Deepgram STT"]
-    OAI["OpenAI LLM"]
-    XAINative["xAI Grok TTS<br/>native plugin"]
-    LiveKit -->|WebSocket| Agent
+    Agent["Node + LiveKit Agents SDK<br/>worker AW_vPmGExrgTeGn"]
+    DG["Deepgram Nova-3 STT"]
+    OAI["OpenAI GPT-4o-mini LLM"]
+    TTS["OpenAI TTS<br/>(xAI Grok pending — see NEEDS-REFACTORING #9)"]
     Agent --> DG
     Agent --> OAI
-    Agent --> XAINative
+    Agent --> TTS
   end
 
-  Telnyx -.current.-> Vapi
-  Telnyx -.target.-> LiveKit
+  LiveKit -->|WebSocket| Agent
 
   Fastify["Fastify Backend<br/>25 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
-
-  EdgeFn --> Fastify
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>77 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook<br/>Jobber / HubSpot<br/>Square / ServiceTitan"]
-  Dashboard["Next.js 14 Dashboard<br/>(Vercel pending)"]
+  Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
 
   Fastify --> Postgres
   Fastify --> Stripe
   Fastify --> Integrations
   Dashboard -->|Api.* calls| Fastify
 
-  style curr fill:#2a1a1a,stroke:#884
-  style tgt fill:#1a2a1a,stroke:#484
+  style agentBox fill:#1a2a1a,stroke:#484
 ```
 
 ---
@@ -230,9 +216,62 @@ erDiagram
 
 ---
 
-## 3. Voice Call — Current (Vapi + Edge Function)
+## 3. Voice Call Flow — Current (LiveKit Agent)
 
-The live path as of 2026-04-21. Includes the xAI TTS proxy hop.
+Post-migration (`661d21d`, 2026-04-27). Tool calls hit Fastify `/agent-tools/*` directly. TTS is currently OpenAI's; the xAI Grok native plugin is the open follow-up (NEEDS-REFACTORING.md #9).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Caller
+  participant Telnyx
+  participant LK as LiveKit Cloud
+  participant Agent as Agent Worker<br/>(Node on Railway)
+  participant DG as Deepgram STT
+  participant OAI as OpenAI LLM
+  participant TTS as OpenAI TTS<br/>(Grok pending)
+  participant API as Fastify<br/>/agent-tools/*
+  participant DB as Postgres
+
+  Caller->>Telnyx: Dial +1 (630) 937-9478
+  Telnyx->>LK: SIP INVITE → inbound trunk
+  LK->>LK: dispatch rule SDR_if97ky4Zf7e6<br/>→ create room, metadata = { tenant_id }
+  LK->>Agent: room.created event (WebSocket)
+  Agent->>LK: join room
+  Agent->>Caller: greeting (TTS audio)
+
+  loop each turn
+    Caller->>LK: audio frames
+    LK->>Agent: audio stream
+    Agent->>DG: STT (Nova-3)
+    DG-->>Agent: transcript
+    Agent->>OAI: LLM (GPT-4o-mini)
+    OAI-->>Agent: text + tool calls
+    opt tool call
+      Agent->>API: POST /agent-tools/{name}<br/>+ x-agent-secret<br/>body contains tenant_id
+      API->>DB: withTenantClient → RPC
+      DB-->>API: result
+      API-->>Agent: { success: true, result: ... }
+    end
+    Agent->>TTS: synthesize
+    TTS-->>Agent: audio
+    Agent->>LK: publish audio
+    LK->>Caller: audio
+  end
+
+  Caller--xLK: hangup
+  LK->>Agent: room.closed
+  Agent->>API: POST /voice/session/end
+  API->>API: generate summary + embedding
+  API->>DB: INSERT call_summaries<br/>link_orphaned_transcripts()
+  API-)API: fire-and-forget CRM + calendar sync
+```
+
+---
+
+## 4. Voice Call Flow — Historical (pre-`661d21d`, Vapi + Edge Function)
+
+> **Retired 2026-04-27.** The Vapi orchestration and `supabase/functions/vapi-tools/` Deno edge function were both deleted in commit `661d21d`. Section retained as a reference for anyone debugging old call recordings or transcript schemas.
 
 ```mermaid
 sequenceDiagram
@@ -275,57 +314,6 @@ sequenceDiagram
   API->>API: generate summary + embedding
   API->>DB: INSERT call_summaries<br/>link_orphaned_transcripts()
   API-)API: fire-and-forget CRM + calendar sync
-```
-
----
-
-## 4. Voice Call — Target (LiveKit Agent)
-
-Post-migration. Tool calls move from Deno edge function to Fastify `/agent-tools/*`. TTS proxy is retired.
-
-```mermaid
-sequenceDiagram
-  autonumber
-  actor Caller
-  participant Telnyx
-  participant LK as LiveKit Cloud
-  participant Agent as Agent Worker<br/>(Node on Railway)
-  participant DG as Deepgram STT
-  participant OAI as OpenAI LLM
-  participant XAI as xAI Grok TTS
-  participant API as Fastify<br/>/agent-tools/*
-  participant DB as Postgres
-
-  Caller->>Telnyx: Dial number
-  Telnyx->>LK: SIP INVITE → inbound trunk
-  LK->>LK: dispatch rule → create room<br/>metadata = { tenant_id }
-  LK->>Agent: room.created event (WebSocket)
-  Agent->>LK: join room
-  Agent->>Caller: greeting (TTS audio)
-
-  loop each turn
-    Caller->>LK: audio frames
-    LK->>Agent: audio stream
-    Agent->>DG: STT
-    DG-->>Agent: transcript
-    Agent->>OAI: LLM
-    OAI-->>Agent: text + tool calls
-    opt tool call
-      Agent->>API: POST /agent-tools/{name}<br/>+ x-agent-secret<br/>body contains tenant_id
-      API->>DB: withTenantClient → RPC
-      DB-->>API: result
-      API-->>Agent: { success: true, result: ... }
-    end
-    Agent->>XAI: TTS (native plugin)
-    XAI-->>Agent: audio
-    Agent->>LK: publish audio
-    LK->>Caller: audio
-  end
-
-  Caller--xLK: hangup
-  LK->>Agent: room.closed
-  Agent->>API: POST /voice/call-ended
-  API->>DB: same summary + sync path as today
 ```
 
 ---

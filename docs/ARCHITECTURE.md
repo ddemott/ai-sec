@@ -13,8 +13,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + CRM.
 
 **Layering:**
-- **Edge**: Telnyx (PSTN + SIP) → Vapi today / LiveKit tomorrow (orchestrator + STT/LLM/TTS glue)
-- **Tools**: 8 voice tools that run against the tenant's Postgres — today on Supabase Edge Functions (Deno), tomorrow on Fastify (Node) at `/agent-tools/*`
+- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI pending swap to xAI Grok)
+- **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (25 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
 - **DB**: Postgres + pgvector on Supabase, 74 migrations, RLS on every tenant-scoped table
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
@@ -40,17 +40,15 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
-│   ├── functions/vapi-tools/     Deno edge function — 8 tools (current)
-│   │   ├── index.ts              Dispatcher + Zod schemas
-│   │   ├── core/                 dispatcher.ts, service.ts
-│   │   └── db/                   repository.ts
-│   ├── migrations/               74 SQL migrations
+│   ├── functions/                Empty post-661d21d (former vapi-tools deleted with the Vapi rip-out)
+│   ├── migrations/               77 SQL migrations
 │   └── seed.sql                  Platform admin + DynaTire tenant
-├── shared/                       Cross-runtime code (Node + Deno)
+├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
+│   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
+├── shared/                       Cross-runtime code
 │   ├── getEmbedding.ts           OpenAI text-embedding-3-small wrapper
 │   ├── normalizeForEmbedding.ts  gpt-4o-mini normalization before pgvector storage
 │   └── scheduling.ts             Core scheduling algorithm (shared between booking RPC caller and UI)
-├── vapi/                         Vapi assistant template + tool definitions (current orchestrator)
 ├── scripts/                      bootstrap, setup-db, seed-db, preflight-cloud, deploy, qa-live-test.py
 ├── docs/                         Architecture, deployment, UI/UX, TODO, migrations, bugs, plans
 ├── certs/                        Self-signed HTTPS certs for local dev
@@ -75,26 +73,23 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                ▼
                        ┌──────────────────┐
                        │  Telnyx (SIP)    │  +1 (630) 937-9478
-                       └───────┬──────────┘
-                               │
-               current ────────┼──────── target (in flight)
-                               │
-                     ▼                         ▼
-           ┌───────────────┐           ┌──────────────────┐
-           │    Vapi       │           │  LiveKit Cloud   │
-           │ (orchestrator)│           │ (orchestrator +  │
-           └───────┬───────┘           │   SIP bridge)    │
-                   │                   └────────┬─────────┘
-                   │ webhook                    │ WebSocket
-                   ▼                            ▼
-         ┌─────────────────┐         ┌────────────────────┐
-         │ Supabase Edge   │         │  Agent Worker       │
-         │ Function (Deno) │         │  (Node on Railway)  │
-         │  vapi-tools     │         │  /agent-tools/*     │
-         └────────┬────────┘         └─────────┬──────────┘
-                  │                            │ HTTP + x-agent-secret
-                  └────────────┬───────────────┘
-                               ▼
+                       └────────┬─────────┘
+                                │ SIP trunk
+                                ▼
+                       ┌──────────────────┐
+                       │  LiveKit Cloud   │
+                       │ (SIP bridge +    │
+                       │  orchestrator)   │
+                       └────────┬─────────┘
+                                │ WebSocket (room dispatch)
+                                ▼
+                      ┌────────────────────┐
+                      │  Agent Worker      │  Railway: ai-sec-agent
+                      │  (Node, LiveKit    │  worker AW_vPmGExrgTeGn
+                      │   Agents SDK)      │
+                      └─────────┬──────────┘
+                                │ HTTP + x-agent-secret
+                                ▼
                     ┌─────────────────────┐
                     │  Fastify Backend    │  ai-sec-production.up.railway.app
                     │  25 route modules   │  Railway (Nixpacks, Node 20)
@@ -122,13 +117,12 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 | Service | Platform | Region / URL | Deploy mechanism |
 |---|---|---|---|
 | Backend (Fastify) | Railway | `ai-sec-production.up.railway.app` | Nixpacks auto-deploy from `main` |
+| Agent worker | Railway (service `ai-sec-agent`) | WebSocket long-runner, worker `AW_vPmGExrgTeGn` | Node.js package under `agent/` |
 | Database | Supabase (managed Postgres + pgvector) | `sgibijfchvfuizudrmir` (us-west-2) | Migrations applied via `npm run db:migrate` |
-| Edge functions (current) | Supabase Edge Functions (Deno) | `sgibijfchvfuizudrmir.functions.supabase.co/vapi-tools` | `npx supabase functions deploy` |
-| Dashboard | Vercel (planned) / Railway | not yet live | Next.js build via `dashboard/server.js` |
-| Telephony | Telnyx | US local number | Portal-configured SIP trunk to Vapi (today) / LiveKit (target) |
-| Voice orchestrator | Vapi (today) / LiveKit Cloud (target) | Managed | Provisioned per-tenant via `POST /provisioning/activate` |
+| Dashboard | Railway | `dashboard-production-cee3.up.railway.app` | Next.js build via `dashboard/server.js` |
+| Telephony | Telnyx | `+1 (630) 937-9478` | SIP Connection `livekit-outbound` (ID `2945038451784812111`); provisioned per tenant via `POST /provisioning/activate` |
+| Voice orchestrator | LiveKit Cloud | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` (SIP); WebSocket for agent | Dispatch rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent` |
 | Stripe | Hosted | Webhook: `/billing/webhook` on Railway | Products + price IDs in Stripe dashboard |
-| Agent worker (target) | Railway (separate service) | WebSocket long-runner | Node.js package under `agent/` |
 
 **Graceful shutdown:** Backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -218,7 +212,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - Every tenant-scoped row has `tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE`.
 - Soft-deletable tables carry `is_deleted BOOLEAN DEFAULT false` + `deleted_at TIMESTAMPTZ` with partial indexes (e.g., `WHERE is_deleted = false`).
 - `customers.phone` is stored in E.164 format (`+1...`). `normalizePhone()` rejects anything with < 10 digits.
-- `appointments` has CHECK constraint `start_time < end_time`, indexes on `(tenant_id, start_time)` + `(resource_id, start_time)` for availability checks, and partial index on `call_id WHERE call_id IS NOT NULL` for Vapi back-reference.
+- `appointments` has CHECK constraint `start_time < end_time`, indexes on `(tenant_id, start_time)` + `(resource_id, start_time)` for availability checks, and partial index on `call_id WHERE call_id IS NOT NULL` for back-reference to the originating call (LiveKit room ID; was Vapi call ID pre-`661d21d`).
 
 ### 4.4 Stored procedures (key RPCs)
 
@@ -300,32 +294,25 @@ Currently the agent uses `openai.TTS` at `agent/src/index.ts:122,150`. The pendi
 | `get_service_catalog` | Service list + pricing + duration | `SELECT * FROM services WHERE is_deleted = false` |
 | `get_available_slots` | Consolidated slot aggregator (replaces multiple round trips) | `service.ts:getAvailableSlots()` — single query |
 
-**Response contract (current):** Vapi-wrapped `{ results: [{ toolCallId, result }] }` on success, plain `"ERROR: ..."` string on failure.
-
-**Response contract (target):** Plain `{ success: true, result: ... }` JSON. Agent worker is responsible for translating failures into LLM-friendly prose.
+**Response contract:** `{ success: true, result: ... }` or `{ success: false, error: ... }` JSON, all served with HTTP 200 — the LLM relays both shapes naturally. The earlier Vapi-wrapped envelope (`{ results: [{ toolCallId, result }] }`) and plain `"ERROR: ..."` string format were retired with the agent runtime move in `661d21d`.
 
 ---
 
 ## 8. Phone Provisioning
 
-### 8.1 Current flow (`POST /provisioning/activate`)
+### 8.1 Activation flow (`POST /provisioning/activate`)
 
 1. Owner clicks "Activate Phone" in the setup wizard with an area code.
-2. Backend calls **Vapi API** `POST /phone-number` to provision a Telnyx number via Vapi's BYO-Telnyx integration.
-3. Backend calls Vapi `POST /assistant` with the tenant's template (from `vapi/agent.template.json`) — substitutes `{{TENANT_NAME}}`, `{{TENANT_ID}}`, `{{SERVER_URL}}`, `{{VOICE_PROVIDER}}`, `{{VOICE_ID}}`, `{{SERVICE_DESCRIPTION}}`, etc.
-4. Backend links phone number to assistant via Vapi API.
-5. Tenant row updated with `phone_number`, `vapi_assistant_id`, `vapi_phone_number_id`, `phone_status = 'active'`.
+2. Backend calls **Telnyx Numbers API** to search inventory + purchase a number (`src/services/telnyxNumbers.ts`).
+3. Backend assigns the number to SIP Connection `livekit-outbound` (ID `2945038451784812111`) so Telnyx routes inbound calls to LiveKit Cloud's SIP ingress.
+4. LiveKit dispatch rule `SDR_if97ky4Zf7e6` (already configured at the project level, not per-tenant) routes inbound calls to a room with metadata `{ tenant_id }`. The agent worker `ai-sec-agent` picks up rooms with agent name `ai-secretary-agent`.
+5. Tenant row updated: `inbound_phone`, `telnyx_phone_number_id`, `phone_status = 'active'`.
 
-Rollback on any failure — if step 3 fails, step 2's number is released.
+Rollback on failure — if step 3 fails, step 2's number is released. (No Vapi assistant creation step — that was retired with the LiveKit migration in `661d21d`.)
 
-### 8.2 Target flow (post-LiveKit)
+### 8.2 Deactivation flow (`POST /provisioning/deactivate`)
 
-1. Backend calls **Telnyx Portal API** directly to search + purchase numbers.
-2. Backend creates a SIP trunk pointing to LiveKit Cloud's SIP inbound endpoint.
-3. Backend creates a LiveKit dispatch rule keyed to the phone number: route inbound calls to a room with metadata `{ tenant_id }`.
-4. Agent worker is already running — picks up the new room automatically.
-
-Tenant row schema stays similar (`phone_number`, `livekit_dispatch_rule_id`, `telnyx_trunk_id`).
+Releases the Telnyx number via the API and clears `telnyx_phone_number_id`, `inbound_phone`, `phone_status = 'deprovisioned'`. DB deactivation always succeeds even when the Telnyx release call fails (warning surfaced in the response).
 
 ---
 
@@ -735,7 +722,7 @@ Vitest + React Testing Library (jsdom). 22 test files, 465 tests. Contexts are p
 
 | Concern | Trigger point | Runs in |
 |---|---|---|
-| Post-call summary | `POST /voice/call-ended` webhook from Vapi | `src/routes/voice.ts` |
+| Post-call summary | LiveKit room close event → `POST /voice/session/end` | `src/routes/voice.ts` |
 | Call summary embedding | After summary insert | `src/routes/voice.ts` (OpenAI embedding call) |
 | Calendar sync | Appointment mutation routes | `src/services/calendarSync.ts` |
 | CRM push | Appointment + customer mutation routes | `src/services/syncOrchestrator.ts` |
