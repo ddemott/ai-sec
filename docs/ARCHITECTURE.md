@@ -281,20 +281,50 @@ Currently the agent uses `openai.TTS` at `agent/src/index.ts:122,150`. The pendi
 
 ## 7. Voice AI Tools Catalog
 
-10 tools exposed to the LLM (8 originals + `send-verification-code` + `verify-phone-code`). Implemented in `src/routes/agentTools.ts` as 10 POST routes. Auth via `x-agent-secret` header. (The earlier `supabase/functions/vapi-tools/core/dispatcher.ts` switch statement was deleted in `661d21d`.)
+10 tools exposed to the LLM. Implemented in `src/routes/agentTools.ts` as 10 POST routes. Verified against code 2026-04-30.
 
-| Tool | Purpose | Backing logic |
-|---|---|---|
-| `get_customer_context` | Caller phone lookup — returns known customer + last appointment + recent call summaries | `service.ts:getCustomerContextWithRouting()` |
-| `check_availability` | Is a specific start/end window free? | `check_availability_with_tz()` RPC |
-| `book_appointment` | Legacy atomic booking (no scheduling layer) | `book_appointment_atomic()` RPC |
-| `get_scheduling_options` | Propose open slots within a date range + service duration | Pure algorithm in `service.ts` + `shared/scheduling.ts` |
-| `book_with_scheduling` | **Production booking path** — atomic with full shift/skill/resource validation | `book_with_scheduling_atomic()` RPC |
-| `get_company_policy_answer` | RAG over `tenant_docs` (pgvector) | `search_tenant_docs()` RPC + OpenAI embedding of query |
-| `get_service_catalog` | Service list + pricing + duration | `SELECT * FROM services WHERE is_deleted = false` |
-| `get_available_slots` | Consolidated slot aggregator (replaces multiple round trips) | `service.ts:getAvailableSlots()` — single query |
+### 7.1 Auth contract
 
-**Response contract:** `{ success: true, result: ... }` or `{ success: false, error: ... }` JSON, all served with HTTP 200 — the LLM relays both shapes naturally. The earlier Vapi-wrapped envelope (`{ results: [{ toolCallId, result }] }`) and plain `"ERROR: ..."` string format were retired with the agent runtime move in `661d21d`.
+- **Header:** `x-agent-secret: <AGENT_SECRET>` (must match the backend's env var, ≥32 chars). The shared `preHandler` at `src/routes/agentTools.ts:187` rejects anything else with `401` for any URL starting with `/agent-tools/`.
+- **Tenant scoping:** every body carries `tenant_id` (UUID). These routes are exempt from `tenantMiddleware` because the agent worker isn't logged in as a tenant user; tenant enforcement is at the SQL/RPC layer via `withTenantClient(tenant_id)`.
+- **Validation:** every body parsed with Zod (schemas at `src/routes/agentTools.ts:43-122`). Failures return `success: false` with the field paths.
+
+### 7.2 Response envelope
+
+Every route returns HTTP 200 with one of:
+
+```json
+{ "success": true, "result": <tool-specific> }
+{ "success": false, "error": "<human-readable message>" }
+```
+
+200-on-failure is deliberate — the LLM paraphrases the `error` string conversationally for the caller, instead of the HTTP client throwing.
+
+### 7.3 The 10 tools
+
+| Route | Input (Zod) | Return shape | Backing logic |
+|---|---|---|---|
+| `POST /agent-tools/service-catalog` | `{ tenant_id }` | `{ services: [{ id, name, duration_minutes, price, description }] }` | `SELECT * FROM services WHERE is_deleted = false` |
+| `POST /agent-tools/customer-context` | `{ tenant_id, phone }` | `{ customer, last_appointment, recent_calls }` (or `{ customer: null }` for new caller) | Caller phone lookup; routing to existing customer record + history |
+| `POST /agent-tools/check-availability` | `{ tenant_id, resource_id, start_time, end_time }` | `{ available: boolean, conflicts?: [...] }` | `check_availability_with_tz()` RPC (timezone-aware) |
+| `POST /agent-tools/policy-answer` | `{ tenant_id, question }` | `{ answer: string \| null, source_doc_ids: string[] }` | `search_tenant_docs()` RPC over pgvector + OpenAI embedding of the question |
+| `POST /agent-tools/book-appointment` | `{ tenant_id, resource_id, start_time, end_time, phone, name?, description?, employee_id?, location?, call_id? }` | `{ appointment_id, status }` or `{ ask_for_phone: true, message }` | Legacy atomic booking — `book_appointment_atomic()` RPC. Gates on `isValidPhone(phone)` before the RPC. |
+| `POST /agent-tools/scheduling-options` | `{ tenant_id, requirements: { serviceType, requiredResourceCapabilities?, requiredEmployeeSkills? }, window: { from, to } }` | `{ options: [{ start_time, end_time, resource_id, employee_id }, ...] }` | Pure algorithm in `shared/scheduling.ts:selectAssignments()` — no DB write |
+| `POST /agent-tools/book-with-scheduling` | `{ tenant_id, requirements, window, phone, name?, description?, location?, call_id? }` | `{ appointment_id, status }` or `{ ask_for_phone: true, message }` or specific error code (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY) | **Production booking path** — `book_with_scheduling_atomic()` RPC with 7-layer validation. Gates on `isValidPhone(phone)`. |
+| `POST /agent-tools/available-slots` | `{ tenant_id, service_type, date }` (date `YYYY-MM-DD`) | `{ slots: [{ start_time, end_time }, ...] }` | Consolidated slot aggregator, single query — replaces multi-round-trip discovery |
+| `POST /agent-tools/send-verification-code` | `{ tenant_id, phone }` | `{ message: "I just sent a verification code to <phone>..." }` | OTP send via `telnyxSms.sendSms`. 6-digit code, 10-min TTL, bcrypt-hashed. Rate-limited 3/phone/hour, 100/tenant/day. |
+| `POST /agent-tools/verify-phone-code` | `{ tenant_id, phone, code }` (code numeric) | `{ verified: boolean, message }` | Verifies hashed code from `phone_verifications` table. 5 attempts max per code. |
+
+### 7.4 OTP flow integration
+
+`book-appointment` and `book-with-scheduling` reject invalid/missing phones with `{ ask_for_phone: true, message: "..." }`. The agent prompt instructs the LLM:
+
+1. Read the message to the caller (asks for a callback number).
+2. On the spoken phone number, call `send-verification-code(phone)` and read its `message` to the caller.
+3. On the spoken 6-digit code, call `verify-phone-code(phone, code)`.
+4. On `verified: true`, retry the original booking tool with the verified phone.
+
+Caller-ID phones that pass `isValidPhone()` skip the OTP loop entirely.
 
 ---
 
