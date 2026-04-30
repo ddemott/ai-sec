@@ -5,6 +5,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, type AppRequest } from '../middleware';
 import { sendPasswordResetEmail } from '../services/communications/systemEmail';
+import { createTenantWithOwner } from '../services/tenants/bootstrap';
 
 const RESET_TTL_MINUTES = 30;
 
@@ -77,42 +78,17 @@ export function registerAuthRoutes(
     }
     const { business_name, business_type, owner_name, email, password } = parsed.data;
 
-    const result = await withPoolClient(pool, async (client) => {
-      await client.query('BEGIN');
-      try {
-        // Check if email already exists globally (for helpful error message)
-        const existingUser = await client.query('SELECT id FROM users WHERE email = $1', [email]);
-        if (existingUser.rows.length > 0) {
-          await client.query('ROLLBACK');
-          return { conflict: true };
-        }
-
-        // Create tenant (triggers apply template defaults + create default resource)
-        const tenantRes = await client.query(
-          "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
-          [business_name, business_type]
-        );
-        const tenantId = tenantRes.rows[0].id;
-
-        // Hash password and create user
-        const bcrypt = await import('bcrypt');
-        const hash = await bcrypt.hash(password, 10);
-
-        const userRes = await client.query(
-          "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING id, full_name",
-          [tenantId, email, hash, owner_name]
-        );
-
-        await client.query('COMMIT');
-        return { tenantId, userId: userRes.rows[0].id };
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      }
+    const result = await createTenantWithOwner(pool, {
+      tenantName: business_name,
+      businessType: business_type,
+      ownerEmail: email,
+      ownerPassword: password,
+      ownerFullName: owner_name,
+      duplicateCheck: 'email',
     });
 
-    if ('conflict' in result) {
-      return reply.status(409).send({ success: false, error: 'An account with this email already exists' });
+    if (!result.ok) {
+      return reply.status(409).send({ success: false, error: result.conflictMessage });
     }
 
     const token = generateToken({

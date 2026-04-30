@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, logEvent, requireAuth, type AppRequest } from '../middleware';
 import { assertRowAffected } from './routeHelpers';
+import { createTenantWithOwner } from '../services/tenants/bootstrap';
 
 const CreateTenantSchema = z.object({
   tenant_name: z.string().min(1).max(200),
@@ -129,46 +130,26 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
     const body = parsed.data;
     const firstName = body.owner_first_name.trim();
     const lastName = body.owner_last_name.trim();
+    const tenantName = body.tenant_name.trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(' ');
 
-    const result = await withPoolClient(pool, async (client) => {
-      await client.query('BEGIN');
-      try {
-        // Prevent duplicate tenant names
-        const existing = await client.query(
-          'SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)',
-          [body.tenant_name.trim()]
-        );
-        if (existing.rows.length > 0) {
-          await client.query('ROLLBACK');
-          return { error: `A business named "${body.tenant_name.trim()}" already exists.` };
-        }
-
-        const tenantRes = await client.query(
-          'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
-          [body.tenant_name.trim(), body.business_type]
-        );
-        const tenantId = tenantRes.rows[0].id;
-
-        const fullName = [firstName, lastName].filter(Boolean).join(' ');
-        const bcrypt = await import('bcrypt');
-        const hashedPass = await bcrypt.hash(body.owner_pass, 10);
-        await client.query(
-          'INSERT INTO users (tenant_id, email, password_hash, full_name, first_name, last_name) VALUES ($1, $2, $3, $4, $5, $6)',
-          [tenantId, body.owner_email, hashedPass, fullName, firstName || null, lastName || null]
-        );
-
-        await client.query('COMMIT');
-        return tenantId;
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      }
+    const result = await createTenantWithOwner(pool, {
+      tenantName,
+      businessType: body.business_type,
+      ownerEmail: body.owner_email,
+      ownerPassword: body.owner_pass,
+      ownerFullName: fullName,
+      ownerFirstName: firstName || null,
+      ownerLastName: lastName || null,
+      duplicateCheck: 'tenant_name',
     });
-    if (result && typeof result === 'object' && 'error' in result) {
-      return reply.status(409).send({ success: false, error: result.error });
+
+    if (!result.ok) {
+      return reply.status(409).send({ success: false, error: result.conflictMessage });
     }
-    logEvent(req, 'tenant_created', { tenantId: result, name: body.tenant_name });
-    return reply.send({ success: true, tenant_id: result });
+
+    logEvent(req, 'tenant_created', { tenantId: result.tenantId, name: tenantName });
+    return reply.send({ success: true, tenant_id: result.tenantId });
   }, 'Failed to create tenant'));
 
   // Save tenant sort order (admin drag-and-drop reordering)

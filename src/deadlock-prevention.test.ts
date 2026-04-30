@@ -224,25 +224,33 @@ describe('Deadlock Prevention: Application Lock Ordering', () => {
 
   it('HAPPY: tenant creation follows tenants → users order', async () => {
     // WHO: super-admin creating a new tenant, or new user self-registering
-    // WHAT: transaction inserts into tenants first, then users
-    // WHEN: POST /tenants/create or POST /register
-    // WHERE: src/routes/tenants.ts and src/routes/auth.ts — both create tenant + user in a transaction
-    // WHY: both routes must follow the same lock order (tenants → users) because they could
-    //      run concurrently. If auth.ts inserted users first then tenants, while tenants.ts
-    //      inserted tenants first then users, concurrent registration + admin creation would
-    //      deadlock on the circular wait. Consistent order prevents this.
+    // WHAT: shared transactional helper inserts into tenants first, then users
+    // WHEN: POST /tenants/create or POST /register — both routes call createTenantWithOwner
+    // WHERE: src/services/tenants/bootstrap.ts — single source of truth for the
+    //         tenant+user transaction (extracted from both routes to remove duplicate
+    //         transactional logic; the lock-order invariant lives here now)
+    // WHY: both routes must follow the same lock order (tenants → users) because they
+    //      can run concurrently. Consolidating the transaction into one helper makes
+    //      the invariant easier to enforce — there's no second copy that could drift.
+    //      If the helper inserted users before tenants, concurrent /register +
+    //      /tenants/create would deadlock on circular waits.
     const fs = require('fs');
+    const helperSrc = fs.readFileSync('src/services/tenants/bootstrap.ts', 'utf8');
+
+    const tenantInsertIdx = helperSrc.indexOf('INSERT INTO tenants');
+    const userInsertIdx = helperSrc.indexOf('INSERT INTO users');
+    expect(tenantInsertIdx).toBeGreaterThan(-1);
+    expect(userInsertIdx).toBeGreaterThan(-1);
+    expect(tenantInsertIdx).toBeLessThan(userInsertIdx);
+
+    // Guardrail: neither route file should inline its own tenant+user INSERT
+    // sequence anymore — that would mean we forgot to route through the helper.
     const authSrc = fs.readFileSync('src/routes/auth.ts', 'utf8');
     const tenantsSrc = fs.readFileSync('src/routes/tenants.ts', 'utf8');
-
-    // Both files should INSERT INTO tenants before INSERT INTO users
-    const authTenantIdx = authSrc.indexOf("INSERT INTO tenants");
-    const authUserIdx = authSrc.indexOf("INSERT INTO users");
-    expect(authTenantIdx).toBeLessThan(authUserIdx);
-
-    const tenantsTenantIdx = tenantsSrc.indexOf("INSERT INTO tenants");
-    const tenantsUserIdx = tenantsSrc.indexOf("INSERT INTO users");
-    expect(tenantsTenantIdx).toBeLessThan(tenantsUserIdx);
+    expect(authSrc).not.toContain('INSERT INTO tenants');
+    expect(authSrc).not.toContain('INSERT INTO users');
+    expect(tenantsSrc).not.toContain('INSERT INTO tenants');
+    expect(tenantsSrc).not.toContain('INSERT INTO users');
   });
 });
 
