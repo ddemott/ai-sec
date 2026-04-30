@@ -1329,3 +1329,56 @@
 **What's working:** UX review is correctly staying skipped now that the component backlog is exhausted, and the latest idea entries are still concrete enough to hand to an engineer without extra interpretation.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions already handle the finished-UX phase well, and this cycle still produced fresh, bounded work without obvious duplication pressure.
+
+## Ideas — 2026-04-30 (architecture reviewed)
+
+### Task: Extract Google OAuth client creation and config guards into one shared access helper
+**Status:** proposed
+**Files to change:** `src/services/googleCalendar.ts:L1-L80`
+**What to do:** Replace the repeated `getConfig()` plus `createOAuth2Client()` null-check pattern with one small internal helper that either returns a configured OAuth client plus config or throws a route/service-friendly error. Preserve all current behavior, including `isGoogleCalendarEnabled`, but reduce the number of places that have to remember the same config guard sequence.
+**Done when:**
+- [ ] Google Calendar helper functions no longer each repeat the same config/client null-check pattern
+- [ ] `isGoogleCalendarEnabled` still works exactly as it does today
+- [ ] Current thrown error behavior remains unchanged where configuration is missing
+- [ ] All existing tests pass, new tests cover helper-driven config access if needed
+**Why it matters:** Repeated setup guards around external clients are easy to drift subtly, and consolidating them makes the service easier to modify safely.
+**Tradeoff:** The helper should stay tiny and service-local so it improves clarity without hiding obvious behavior.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it reduces repeated configuration plumbing in a shared integration client.
+
+### Task: Extract shared Google event requestBody shaping for createEvent and updateEvent
+**Status:** proposed
+**Files to change:** `src/services/googleCalendar.ts:L90-L170`
+**What to do:** Move the repeated `summary/description/location/start/end/timeZone` requestBody construction into one helper used by both `createEvent` and `updateEvent`. Keep the exact Google API payload unchanged, but stop duplicating event-body shaping logic in two separate functions.
+**Done when:**
+- [ ] `createEvent` and `updateEvent` share one helper for Google Calendar requestBody construction
+- [ ] Default timezone behavior remains unchanged
+- [ ] The generated payload sent to Google is identical to current behavior
+- [ ] All existing tests pass, new tests cover helper-driven event-body shaping if needed
+**Why it matters:** Duplicated outbound payload construction is a classic source of subtle drift when new fields or defaults are added later.
+**Tradeoff:** The helper should stay narrowly scoped to Google event-body shaping and not become a generic calendar abstraction.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it consolidates a repeated integration detail with almost no risk.
+
+### Task: Split Google OAuth token lifecycle helpers from calendar event CRUD helpers
+**Status:** proposed
+**Files to change:** `src/services/googleCalendar.ts:L1-L170`, optional new files such as `src/services/googleCalendarAuth.ts` and `src/services/googleCalendarEvents.ts`
+**What to do:** Separate auth-url/state/token lifecycle helpers from event create/update/delete helpers so the file stops mixing OAuth flow management with event CRUD in one module. Keep public behavior and exports stable if possible, but draw a clearer boundary between auth concerns and calendar event operations.
+**Done when:**
+- [ ] OAuth URL/state/token helpers are separated from event CRUD helpers by file or clearly isolated module sections
+- [ ] Existing public behavior and caller expectations remain unchanged
+- [ ] Shared helper extraction happens only where it clearly reduces duplication between the split concerns
+- [ ] All existing tests pass, new tests cover any moved exports if needed
+**Why it matters:** Auth lifecycle and event CRUD are distinct responsibilities, and separating them makes future changes easier to reason about and test.
+**Tradeoff:** The split adds a little indirection, so it should follow a clear concern boundary rather than scattering tiny files.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it clarifies one of the codebase’s core external integration clients without expanding scope.
+
+## Self-Review — 2026-04-30
+**Cycles since last self-review:** 1
+**What's working:** UX is still correctly skipped, and even this late in the process there are still a few genuinely different integration-service slices left if I sanity-check freshness before writing.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still steering me toward a good stop rule, only keep going when a materially fresh slice exists, and this cycle still met that bar.
