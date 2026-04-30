@@ -158,14 +158,12 @@ Last updated: 2026-04-28.
 ## P3 — Housekeeping
 
 ### 14. Investigate and resolve `pw.txt`
-**File.** Single-line file at repo root from 2026-03-01. Either a password (should not be in repo, even gitignored), a placeholder, or a lost note. Read once, decide, delete.
+**Status: open — needs user judgment.** File is already gitignored (`pw.txt` is in `.gitignore`'s sensitive-files block) and was never committed to the repo. Cleanup pass on 2026-04-30 deliberately did NOT delete it: contents could be a real password or a deliberate local note, and that's the user's call. Single-line, 17 bytes, on disk only.
 
 ---
 
-### 15. Stop tracking `.log` files at repo root
-**Files.** `backend.log` (24KB), `dashboard.log` (1.7KB).
-
-**What to do.** Add `*.log` to `.gitignore` if not already there. `git rm` the existing tracked logs.
+### ~~15. Stop tracking `.log` files at repo root~~
+**Status: done 2026-04-30.** `*.log` was already in `.gitignore` and the working-tree `backend.log` / `dashboard.log` were untracked stragglers from a prior dev session. Both deleted from disk; CI/local runs regenerate as needed.
 
 ---
 
@@ -178,17 +176,13 @@ Last updated: 2026-04-28.
 
 ---
 
-### 17. Decide the fate of `.Clairvoyance/` and `.gemini/`
-**Problem.** Two abandoned IDE/agent workspace directories sitting next to `.claude/`. Either tracked by mistake or kept intentionally for archival.
-
-**What to do.** Add to `.gitignore` if abandoned, delete from history if sensitive. Confirm whether `.gemini/` is still referenced by anything.
+### ~~17. Decide the fate of `.Clairvoyance/` and `.gemini/`~~
+**Status: done 2026-04-30.** Both were abandoned. `.Clairvoyance/` already had a `.gitignore` entry but 3 stale tracked JSON files (editor-session, ui-state, workspace-session) and a never-filled-in LIBRARY.md boilerplate. `.gemini/settings.json` was also tracked. `git rm --cached` on all 4, added `.gemini/` to `.gitignore`, deleted both directories from disk.
 
 ---
 
-### 18. Clean `coverage/` and `coverage_data/` from the working tree
-**Files.** `coverage/` (NYC reports), `coverage_data/` (raw NYC JSON).
-
-**What to do.** Verify both are in `.gitignore`. If not, add and `git rm -rf --cached`. CI/local test runs will regenerate them.
+### ~~18. Clean `coverage/` and `coverage_data/` from the working tree~~
+**Status: done 2026-04-30.** Both were already in `.gitignore` (`/coverage` and `/coverage_data` lines). The working-tree `coverage/` directory (test-run output from 2026-04-12) was untracked; deleted from disk. `coverage_data/` did not exist on disk.
 
 ---
 

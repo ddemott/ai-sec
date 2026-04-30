@@ -38,6 +38,7 @@ output.txt
 *.swp
 *.bak
 .Clairvoyance/
+.gemini/
 
 # Deno
 .deno
