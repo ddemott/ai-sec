@@ -2005,51 +2005,6 @@
 
 ## Ideas — 2026-04-12 (developer experience reviewed)
 
-### Task: Extract shared validation and not-found responders across shifts, mappings, and skills routes
-**Status:** proposed
-**Files to change:** `src/routes/shifts.ts:L1-L263`, `src/routes/mappings.ts:L1-L107`, `src/routes/skills.ts:L1-L60`, `src/middleware.ts:L1-L260`
-**What to do:** Introduce a thin set of shared helpers for the repeated validation-failure responses, tenant-id requirement checks, and not-found mutation responses used across these setup-oriented route modules. Keep each route’s SQL and branching logic in place, but centralize the request/response scaffold so the handlers read more consistently.
-**Done when:**
-- [ ] Shifts, mappings, and skills routes no longer hand-roll the same validation and not-found response patterns independently
-- [ ] Shared helpers cover only request/response scaffolding, not the domain SQL itself
-- [ ] Success and failure payloads remain compatible but follow one clearer route convention
-- [ ] All existing tests pass, new tests cover helper behavior where appropriate
-**Why it matters:** These modules are small enough to feel easy now, but the repeated scaffolding already creates maintenance drag and makes parity drift harder to spot.
-**Tradeoff:** The abstraction has to stay very small or it will make simple route handlers feel more indirect than helpful.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile maintainability gain by reducing low-value route boilerplate across several setup modules.
-
-### Task: Centralize skill-name normalization with the same utility path used by other setup entities
-**Status:** proposed
-**Files to change:** `src/routes/skills.ts:L27-L42`, `src/services/nameUtils.ts:L1-L220`, `src/routes/services.ts:L1-L200`
-**What to do:** Move the inline `toLowerCase().trim().replace(/\s+/g, '-')` normalization in the skills create route into a shared helper in `nameUtils.ts`, then align at least one comparable service-name normalization path to use the same utility. Keep the resulting stored value unchanged unless tests reveal a deliberate exception.
-**Done when:**
-- [ ] Skill creation no longer normalizes names inline in the route handler
-- [ ] A shared helper in `nameUtils.ts` owns the slug-style normalization behavior
-- [ ] At least one comparable service normalization path uses the same helper
-- [ ] All existing tests pass, new tests cover spacing, casing, and special-character normalization behavior
-**Why it matters:** String normalization drift is easy to miss, and putting it behind one tested helper reduces duplicated logic in setup routes.
-**Tradeoff:** Requires a careful check that existing stored names and client expectations really match the extracted helper output.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, solid gain by removing a quiet source of normalization drift.
-
-### Task: Add route tests for shift, mapping, and skill unhappy-path parity
-**Status:** proposed
-**Files to change:** `src/routes/shifts.ts:L1-L263`, `src/routes/mappings.ts:L1-L107`, `src/routes/skills.ts:L1-L60`, route test files for each module (new if needed)
-**What to do:** Add focused tests that assert validation failures, missing-tenant guards, invalid-id handling, and not-found mutation responses across these three modules. Use a shared assertion style so response-shape drift shows up immediately when one route family starts behaving differently from the others.
-**Done when:**
-- [ ] Shifts routes are tested for validation and branch-specific unhappy paths
-- [ ] Mapping routes are tested for invalid ids and tenant-scoped failure behavior
-- [ ] Skills routes are tested for validation and delete not-found behavior
-- [ ] All existing tests pass, new tests lock unhappy-path parity across the three modules
-**Why it matters:** These routes support operational setup screens where small inconsistencies become repetitive UI edge cases, and parity tests are an efficient way to keep them aligned.
-**Tradeoff:** Adds several similar tests, so shared fixtures and helpers will matter to keep the suite readable.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, high gain because it prevents small setup-route inconsistencies from becoming repeated dashboard bugs.
-
 ## Self-Review — 2026-04-12
 **Cycles since last self-review:** 1
 **What's working:** The append-only structure is still keeping the history easy to audit, and the current format is continuing to surface concrete route-level work instead of recycling broad generic refactor themes.
@@ -2129,51 +2084,6 @@
 
 ## Ideas — 2026-04-12 (integration workflow reviewed)
 
-### Task: Extract shared OAuth state-token helper for Google and Outlook calendar services
-**Status:** proposed
-**Files to change:** `src/services/googleCalendar.ts:L32-L63`, `src/services/outlookCalendar.ts:L39-L70`, `src/services/tokenManagement.ts:L1-L320` (or new `src/services/oauthState.ts`)
-**What to do:** Move the duplicated JWT state-signing and verification logic out of the Google and Outlook calendar service modules into one shared helper that accepts the provider purpose string and tenant id. Keep each service responsible for provider-specific auth URLs and token exchange, but stop repeating nearly identical OAuth state handling in both files.
-**Done when:**
-- [ ] Google and Outlook calendar services no longer inline their own JWT state creation and verification logic
-- [ ] One shared helper owns state signing, verification, expiry handling, and purpose validation
-- [ ] Provider-specific auth URL generation still stays inside each calendar service module
-- [ ] All existing tests pass, new tests cover valid, expired, and wrong-purpose state tokens
-**Why it matters:** This is clear duplication in a security-sensitive path, and centralizing it reduces the chance of the two calendar integrations drifting on CSRF-state behavior.
-**Tradeoff:** The helper has to stay narrowly scoped to OAuth state handling so it does not become a generic auth catch-all.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good consistency gain in a security-sensitive shared flow.
-
-### Task: Extract shared token-refresh response normalization for Google and Outlook calendar services
-**Status:** proposed
-**Files to change:** `src/services/googleCalendar.ts:L92-L120`, `src/services/outlookCalendar.ts:L108-L156`, `src/services/tokenManagement.ts:L1-L320` (or new `src/services/calendarRefreshNormalization.ts`)
-**What to do:** Move the parallel refresh-response handling in the Google and Outlook calendar service modules into one helper that normalizes provider refresh results into `{ access_token, expiry_date }` and applies consistent error phrasing. Keep provider-specific HTTP/token exchange logic in each service, but centralize the post-refresh normalization path.
-**Done when:**
-- [ ] Google and Outlook calendar services no longer inline similar refresh-response normalization logic
-- [ ] One helper returns a consistent normalized token-refresh shape for both providers
-- [ ] Provider-specific HTTP/token exchange logic remains inside each calendar service
-- [ ] All existing tests pass, new tests cover normalized refresh success and failure cases
-**Why it matters:** Calendar refresh handling is duplicated in two security-sensitive modules, and centralizing the normalization step reduces drift without over-abstracting provider APIs.
-**Tradeoff:** The shared helper must stay narrowly scoped to response normalization so the provider modules remain easy to inspect.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good consistency gain in a token-handling path where subtle drift is costly.
-
-### Task: Add shared-service tests for calendar OAuth state handling and refresh normalization parity
-**Status:** proposed
-**Files to change:** `src/services/googleCalendar.ts:L1-L220`, `src/services/outlookCalendar.ts:L1-L260`, service test files for these modules (new if needed)
-**What to do:** Add focused tests that verify Google and Outlook state-token generation/verification use the same expiry and purpose semantics, and that refresh success/failure normalize into the same shape and messaging expectations. Mock provider HTTP calls so the tests assert shared behavior without hitting real Google or Microsoft endpoints.
-**Done when:**
-- [ ] Google and Outlook tests cover valid, expired, and wrong-purpose OAuth state tokens
-- [ ] Google and Outlook tests cover refresh success and refresh-failure normalization behavior
-- [ ] Shared behavior expectations are asserted in the same style for both providers
-- [ ] All existing tests pass, new tests lock parity for calendar auth and refresh handling
-**Why it matters:** These calendar services are parallel integrations, and explicit parity tests make it much easier to catch subtle auth-flow drift before it reaches users.
-**Tradeoff:** The tests require provider mock setup, though the payoff is strong because the behavior is shared and security-sensitive.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, high gain because it secures shared calendar auth behavior that would be painful to debug live.
-
 ## Self-Review — 2026-04-12
 **Cycles since last self-review:** 1
 **What's working:** The append-only structure is still keeping the history easy to audit, and the current format is continuing to make repeated integration work stay concrete instead of collapsing into vague cleanup suggestions.
@@ -2187,21 +2097,6 @@
 **Why:** The current instructions are still producing clear, bounded output with useful prioritization signals, so I do not see a worthwhile tweak right now.
 
 ## Ideas — 2026-04-12 (platform contract review)
-
-### Task: Extract shared tenant bootstrap helper across auth register and admin tenant create flows
-**Status:** proposed
-**Files to change:** `src/routes/auth.ts:L56-L115`, `src/routes/tenants.ts:L119-L167`, `src/middleware.ts:L1-L260` (or new `src/services/accountBootstrap.ts`)
-**What to do:** Move the duplicated tenant-plus-owner creation transaction out of `/register` and `/tenants/create` into one helper that accepts business info, owner info, and password, then handles duplicate checks, tenant insert, password hashing, user insert, and transaction control. Preserve each route’s endpoint contract and auth posture, but stop maintaining two near-parallel bootstrap flows.
-**Done when:**
-- [ ] Auth register and admin tenant create no longer inline the full tenant/user bootstrap transaction separately
-- [ ] Shared helper owns duplicate detection, password hashing, and transaction control
-- [ ] Route-specific response payloads remain unchanged for public register versus admin create
-- [ ] All existing tests pass, new tests cover the shared bootstrap helper success and conflict cases
-**Why it matters:** These two routes create the same core records with slightly different inputs, and centralizing that workflow reduces duplication in a sensitive account-creation path.
-**Tradeoff:** The helper needs to stay explicit about the small differences between self-serve registration and admin provisioning so the abstraction does not hide policy decisions.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, high gain because it removes duplicated transactional logic from foundational account-creation flows.
 
 ### Task: Normalize billing and provisioning status envelopes with auth-style platform contracts
 **Status:** proposed
@@ -2294,21 +2189,6 @@
 
 ## Ideas — 2026-04-12 (architecture reviewed)
 
-### Task: Extract shared tenant-scoped collection route helpers for calendar, resources, and services
-**Status:** proposed
-**Files to change:** `src/routes/calendar.ts:L12-L120`, `src/routes/resources.ts:L35-L126`, `src/routes/services.ts:L25-L53`, `src/middleware.ts:L1-L260` (or new `src/routes/collectionHelpers.ts`)
-**What to do:** Pull the repeated tenant-id resolution, limit/offset parsing, and tenant-scoped query wrapper patterns used by these list-style route modules into a small helper layer. Keep each route’s SQL domain-specific, but centralize the scaffolding that decides tenant scope, validates common query params, and returns the query result consistently.
-**Done when:**
-- [ ] Calendar, resources, and services list handlers no longer inline the same tenant/query scaffolding independently
-- [ ] Shared helpers handle common pagination and tenant resolution without changing route-specific result shapes
-- [ ] Route SQL stays local to each module instead of being over-generalized
-- [ ] All existing tests pass, new tests cover the shared collection helper behavior
-**Why it matters:** These are foundational dashboard reads, and reducing repeated scaffolding lowers maintenance overhead while making route parity easier to spot.
-**Tradeoff:** The helper needs to stay thin so it improves consistency without obscuring straightforward route logic.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile maintainability gain across several core collection routes.
-
 ### Task: Extend assertRowAffected coverage across resources and services delete flows
 **Status:** proposed
 **Files to change:** `src/routes/resources.ts:L121-L156`, `src/routes/services.ts:L93-L116`, `src/routes/routeHelpers.ts:L1-L220`
@@ -2323,21 +2203,6 @@
 **Size:** small (< 1hr)
 **Impact:** high
 **Effort vs Gain:** Low effort, high gain by making setup mutations more trustworthy and consistent.
-
-### Task: Add route tests for collection and mutation parity across calendar, resources, and services
-**Status:** proposed
-**Files to change:** `src/routes/calendar.ts:L12-L220`, `src/routes/resources.ts:L35-L156`, `src/routes/services.ts:L25-L116`, route test files for each module (new if needed)
-**What to do:** Add focused tests that assert tenant scoping, pagination behavior where applicable, and zero-row update/delete handling across these three route groups. Use one shared assertion style so parity issues in success and failure payloads show up clearly in the test output.
-**Done when:**
-- [ ] Calendar collection routes are tested for tenant scope and query-param handling
-- [ ] Resources and services routes are tested for list behavior plus update/delete not-found outcomes
-- [ ] Success and failure payload shapes are asserted consistently across the three modules
-- [ ] All existing tests pass, new tests lock the parity contract
-**Why it matters:** These routes support core schedule and setup surfaces, and explicit parity tests are the fastest way to catch drift before it leaks into the dashboard.
-**Tradeoff:** Adds some repetitive fixture setup, though shared helpers can keep the suite readable.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, high gain because it protects multiple core route families from subtle contract drift.
 
 ## Self-Review — 2026-04-12
 **Cycles since last self-review:** 1
@@ -2374,21 +2239,6 @@
 **Impact:** medium
 **Effort vs Gain:** Moderate effort, worthwhile consistency gain across frequently consumed read endpoints.
 
-### Task: Extract shared validation-failure responders for voice and communications mutation routes
-**Status:** proposed
-**Files to change:** `src/routes/voice.ts:L44-L370`, `src/routes/communications.ts:L78-L250`, `src/middleware.ts:L1-L260`
-**What to do:** Introduce a tiny helper for common Zod validation failure responses so voice and communications mutation handlers stop rebuilding the same `{ success: false, error: 'Validation failed', details }` branches inline. Keep schema definitions local to each route module, but route parse failures through one shared responder.
-**Done when:**
-- [ ] Voice and communications mutation handlers no longer hand-roll duplicate validation-failure payloads
-- [ ] The shared helper preserves the current status code and error-body shape
-- [ ] Route-local schemas remain readable and unchanged in scope
-- [ ] All existing tests pass, new tests cover the shared validation responder if added
-**Why it matters:** This repeated boilerplate appears in route modules that already have a lot of branching, and centralizing it makes parity easier to maintain.
-**Tradeoff:** The helper must stay tiny so it does not hide simple route flow behind unnecessary abstraction.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain through cleaner and more consistent route code.
-
 ### Task: Add parity tests for vocabulary, voice, and communications read/write contracts
 **Status:** proposed
 **Files to change:** `src/routes/vocabulary.ts:L8-L33`, `src/routes/voice.ts:L44-L370`, `src/routes/communications.ts:L78-L250`, route test files for these modules (new if needed)
@@ -2411,36 +2261,6 @@
 **Why:** The current instructions are still producing clear, bounded output with useful prioritization signals, so I do not see a worthwhile tweak right now.
 
 ## Ideas — 2026-04-12 (platform contract review)
-
-### Task: Extract shared tenant bootstrap helper across auth register and admin tenant create flows
-**Status:** proposed
-**Files to change:** `src/routes/auth.ts:L56-L115`, `src/routes/tenants.ts:L119-L167`, `src/middleware.ts:L1-L260` (or new `src/services/accountBootstrap.ts`)
-**What to do:** Move the duplicated tenant-plus-owner creation transaction out of `/register` and `/tenants/create` into one helper that accepts business info, owner info, and password, then handles duplicate checks, tenant insert, password hashing, user insert, and transaction control. Preserve each route’s endpoint contract and auth posture, but stop maintaining two near-parallel bootstrap flows.
-**Done when:**
-- [ ] Auth register and admin tenant create no longer inline the full tenant/user bootstrap transaction separately
-- [ ] Shared helper owns duplicate detection, password hashing, and transaction control
-- [ ] Route-specific response payloads remain unchanged for public register versus admin create
-- [ ] All existing tests pass, new tests cover the shared bootstrap helper success and conflict cases
-**Why it matters:** These two routes create the same core records with slightly different inputs, and centralizing that workflow reduces duplication in a sensitive account-creation path.
-**Tradeoff:** The helper needs to stay explicit about the small differences between self-serve registration and admin provisioning so the abstraction does not hide policy decisions.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, high gain because it removes duplicated transactional logic from foundational account-creation flows.
-
-### Task: Normalize billing and provisioning status envelopes with auth-style platform contracts
-**Status:** proposed
-**Files to change:** `src/routes/billing.ts:L162-L175`, `src/routes/provisioning.ts:L188-L214`, `src/routes/auth.ts:L24-L129`, `src/middleware.ts:L1-L260`
-**What to do:** Update the billing and provisioning status endpoints so they return the same top-level success envelope pattern used by the rest of the platform-route family, while preserving their existing domain fields. Keep tenant-not-found behavior explicit, but remove the current raw-row response shape mismatch across these admin surfaces.
-**Done when:**
-- [ ] Billing and provisioning status endpoints return a consistent `{ success: true, ... }` style envelope
-- [ ] Tenant-not-found failures remain explicit and consistent with sibling platform routes
-- [ ] Existing domain fields like subscription status, plan, and phone state remain intact inside the envelope
-- [ ] All existing tests pass, new tests cover the normalized status contracts
-**Why it matters:** These endpoints back high-visibility admin status surfaces, and consistent envelopes reduce client branching in the parts of the app that should feel most predictable.
-**Tradeoff:** Must be checked against current dashboard callers so the envelope cleanup does not introduce accidental regressions.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good consistency gain in a business-critical route family.
 
 ### Task: Normalize provisioning prerequisite and failure responses with auth/billing contracts
 **Status:** proposed
@@ -2523,36 +2343,6 @@
 **Why:** The current instructions are still producing clear, prioritized output with useful effort-vs-gain framing, so I do not see a worthwhile tweak right now.
 
 ## Ideas — 2026-04-12 (architecture reviewed)
-
-### Task: Extract shared date and tenant query parsing for analytics coverage endpoints
-**Status:** proposed
-**Files to change:** `src/routes/analytics.ts:L15-L43`, `src/middleware.ts:L1-L260` (or new `src/routes/queryParsers.ts`), `src/routes/calendar.ts:L1-L220`
-**What to do:** Move the `/coverage` route’s inline date regex, fallback logic, and tenant-scoped query parsing into a shared helper that also matches the calendar route’s date-range parsing conventions. Keep the analytics SQL in place, but make date validation and default handling come from one typed parser used by both scheduler-adjacent route families.
-**Done when:**
-- [ ] Analytics coverage route no longer defines date regex and fallback logic inline
-- [ ] Shared date-range parsing is reusable by both analytics and calendar route code
-- [ ] Invalid or missing date params follow one consistent parsing policy
-- [ ] All existing tests pass, new tests cover the shared date parser behavior
-**Why it matters:** Date handling is easy to let drift across scheduling endpoints, and one parser reduces duplicate logic in routes that should agree on time-window behavior.
-**Tradeoff:** The helper needs to stay narrow so it improves consistency without turning simple handlers into indirection puzzles.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, good consistency gain in scheduling-adjacent route parsing.
-
-### Task: Fix employee update tenant scoping and zero-row mutation handling
-**Status:** proposed
-**Files to change:** `src/routes/employees.ts:L90-L123`, `src/middleware.ts:L1-L260`, `src/routes/employees.test.ts:L1-L320` (new if needed)
-**What to do:** Update the employee update query so it scopes by both `id` and `tenant_id`, then return a 404-style failure when no row is updated. Keep the existing payload shape for successful updates, but stop allowing cross-tenant or missing-record updates to fall through as implicit success with an undefined employee payload.
-**Done when:**
-- [ ] Employee update query filters on both employee id and tenant id
-- [ ] Zero-row employee updates return a not-found response instead of `success: true`
-- [ ] Successful updates preserve the current response payload shape
-- [ ] All existing tests pass, new tests cover out-of-scope and missing-record update cases
-**Why it matters:** This is a real data-safety edge in a core admin flow, and tightening it removes a subtle cross-tenant mutation risk while making the API contract more honest.
-**Tradeoff:** The stricter behavior may expose frontend code that assumed update success without checking for missing targets, so regression tests are important.
-**Size:** small (< 1hr)
-**Impact:** high
-**Effort vs Gain:** Low effort, high gain because it closes a real tenant-safety gap in a core admin route.
 
 ### Task: Extend shared zero-row guards across resource update and delete flows
 **Status:** proposed
@@ -3213,21 +3003,6 @@
 
 ## Ideas — 2026-04-18 (UI/UX patterns reviewed)
 
-### Task: Replace blocking confirm/alert flows in EmployeeManagementView with shared modal and toast feedback
-**Status:** proposed
-**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`, `dashboard/components/ui/ConfirmModal.tsx:L1-L220`, `dashboard/components/ui/Toast.tsx:L1-L220`, `dashboard/components/ui/useConfirm.tsx:L1-L220` if present
-**What to do:** Refactor employee delete and service-mapping failure flows so they use the shared confirm-modal and non-blocking feedback patterns instead of browser `confirm()` and `alert()`. Keep the current delete and service-toggle behavior, but make destructive confirmation and error reporting consistent with the rest of the dashboard’s UI system.
-**Done when:**
-- [ ] EmployeeManagementView no longer uses browser `confirm()` for delete confirmation
-- [ ] Delete and service-toggle failures no longer use blocking `alert()` dialogs
-- [ ] Confirmation, success, and failure feedback use the shared modal/toast approach already present elsewhere in the dashboard
-- [ ] All existing tests pass, new tests cover confirm/cancel/delete and mapping-failure feedback
-**Why it matters:** Browser-native dialogs feel jarring on a polished admin surface, and blocking error popups make staffing edits feel less trustworthy and less consistent than the rest of the app.
-**Tradeoff:** This should stay scoped to feedback mechanics, not a larger redesign of the employee-management workflow.
-**Size:** small (< 1hr)
-**Impact:** high
-**Effort vs Gain:** Low effort, high gain because it removes the last bits of browser-native friction from a frequently used management screen.
-
 ### Task: Add explicit mapping-load and empty-assignment states to EmployeeManagementView cards and quick-edit modal
 **Status:** proposed
 **Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`
@@ -3242,21 +3017,6 @@
 **Size:** medium (1-3hr)
 **Impact:** medium
 **Effort vs Gain:** Moderate effort, worthwhile gain because it clarifies a common setup workflow that currently has ambiguous silent fallbacks.
-
-### Task: Add workforce-screen tests for employee delete confirmation, mapping feedback, and empty assignment states
-**Status:** proposed
-**Files to change:** `dashboard/components/EmployeeManagementView.tsx:L1-L360`, corresponding dashboard test files (new if needed)
-**What to do:** Add focused component tests that pin delete confirmation behavior, mapping-toggle error feedback, unmapped/no-services messaging, and quick-edit modal assignment-state handling in EmployeeManagementView. Keep the suite focused on visible interaction states so staffing-screen feedback stays reliable as the implementation evolves.
-**Done when:**
-- [ ] EmployeeManagementView is tested for confirm/cancel delete behavior
-- [ ] Mapping-toggle failures are tested for visible non-blocking feedback
-- [ ] Empty assignment and no-services states are tested in both the card list and quick-edit modal where relevant
-- [ ] All existing tests pass, new tests protect the employee-management UX contract
-**Why it matters:** Employee management is a high-frequency admin surface, and regressions in destructive actions or assignment feedback create day-to-day friction quickly.
-**Tradeoff:** The tests should stay centered on visible UI states and not expand into deeper mapping business logic coverage.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile gain because it protects a key workforce-management workflow with focused UI-state coverage.
 
 ## Self-Review — 2026-04-18
 **Cycles since last self-review:** 1
