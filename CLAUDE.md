@@ -6,7 +6,7 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 ## Framework Migrations
 
 See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
-1. **Voice orchestrator: Vapi → LiveKit Agents** — Done (2026-04-27, commit `661d21d`). Vapi account deleted, all Vapi code removed. Telnyx number `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → LiveKit dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn` registered). Awaiting first live call to confirm carrier-side propagation; see `TICKET_SUPPORT.md` (Telnyx ticket #2850682).
+1. **Voice orchestrator: Vapi → LiveKit Agents** — Done (2026-04-27, commit `661d21d`). Vapi account deleted, all Vapi code removed. Telnyx number `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → LiveKit dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn` registered). Awaiting first live call to confirm carrier-side propagation; see `docs/TICKET_SUPPORT.md` (Telnyx ticket #2850682).
 2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — Done. 10 voice AI tools (8 original + 2 OTP) in `src/routes/agentTools.ts`. All booking routes gated on `isValidPhone`. Edge function `supabase/functions/vapi-tools/` deleted in `661d21d`.
 3. **TTS provider: OpenAI TTS → xAI Grok (native in agent)** — Pending. Agent currently uses `openai.TTS` at `agent/src/index.ts:122,150`. Phase 4 swaps to a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly. The earlier Vapi custom-voice proxy at `src/routes/tts.ts` was deleted in `661d21d` along with everything else Vapi-shaped.
 
@@ -215,7 +215,7 @@ See `docs/TODO.md` for the unified task list. Key blockers: deploy dashboard, se
 - `src/routes/provisioning.ts` — activate/deactivate/status endpoints
 - SuperAdmin dashboard has "Activate Phone" button with area code input
 - `TELNYX_API_KEY` and `TELNYX_SIP_CONNECTION_ID=2945038451784812111` set in Railway
-- Phone provisioned: `+1-630-937-9478` (Telnyx) — currently unreachable from PSTN, see `TICKET_SUPPORT.md` (ticket #2850682)
+- Phone provisioned: `+1-630-937-9478` (Telnyx) — currently unreachable from PSTN, see `docs/TICKET_SUPPORT.md` (ticket #2850682)
 - **Still needs**: DASHBOARD_URL env var on Railway backend (see `docs/TODO.md`); first live call to confirm carrier propagation
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)

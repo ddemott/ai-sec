@@ -13,8 +13,8 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Phase** | 13 — Production Readiness |
 | **Backend** | Live on Railway (`ai-sec-production.up.railway.app`) |
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
-| **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `TICKET_SUPPORT.md` |
-| **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `TICKET_SUPPORT.md` for current LERG status |
+| **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
+| **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status |
 | **Tests** | 2,022 passing (1,527 backend + 495 dashboard), zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
