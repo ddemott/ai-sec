@@ -4,6 +4,7 @@ import { withHandler, logEvent, requireTenantId, type AppRequest } from '../midd
 import * as jobberClient from '../services/jobberClient';
 import * as jobberSync from '../services/jobberSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
+import { getCrmSyncStatus } from '../services/crmSyncStatus';
 
 export function registerJobberRoutes(
   app: FastifyInstance<any, any, any>,
@@ -153,33 +154,9 @@ export function registerJobberRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      const settingsRes = await client.query(
-        `SELECT last_sync_at FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
-        [tenantId]
-      );
-
-      const countsRes = await client.query(
-        `SELECT entity_type, sync_status, COUNT(*)::int as count
-         FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'jobber'
-         GROUP BY entity_type, sync_status`,
-        [tenantId]
-      );
-
-      const counts = countsRes.rows;
-      const customerTotal = counts.filter(r => r.entity_type === 'customer').reduce((s, r) => s + r.count, 0);
-      const appointmentTotal = counts.filter(r => r.entity_type === 'appointment').reduce((s, r) => s + r.count, 0);
-      const pendingCount = counts.filter(r => r.sync_status === 'pending').reduce((s, r) => s + r.count, 0);
-      const errorCount = counts.filter(r => r.sync_status === 'error').reduce((s, r) => s + r.count, 0);
-
-      return {
-        last_sync_at: settingsRes.rows[0]?.last_sync_at || null,
-        pending_count: pendingCount,
-        error_count: errorCount,
-        total_mapped: { customers: customerTotal, appointments: appointmentTotal },
-      };
-    });
-
+    const res = await withTenantClient(tenantId, (client) =>
+      getCrmSyncStatus(client, tenantId, 'jobber')
+    );
     return reply.send(res);
   }, 'Failed to get Jobber sync status'));
 }

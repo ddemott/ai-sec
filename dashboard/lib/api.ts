@@ -3,7 +3,7 @@ import type {
   Appointment, Customer, Resource, Employee, Service, Shift, ScheduleEntry, EffectiveShift, BulkEffectiveShift, Skill,
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
   CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
-  CallSummary, JobberSettings, JobberSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
+  CallSummary, JobberSettings, CrmSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
   VoiceSession, VoiceSessionDisplay, CustomerContext,
   RecordHistoryResponse, DeletedRecordsResponse, RecordRestorePreview, RecentChangesResponse,
   VersionedTable, ChangeSource, RecordVersion, VersionComparison,
@@ -598,7 +598,7 @@ export const Api = {
       apiMutate<{ clientsSynced: number; visitsSynced: number; errors: number }>(`/jobber/sync`, 'POST', { tenant_id: tenantId }),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<JobberSyncStatus>(`/jobber/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(`/jobber/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- HUBSPOT CRM ---
@@ -616,7 +616,7 @@ export const Api = {
       apiMutate<{ contactsSynced: number; meetingsSynced: number; errors: number }>(`/hubspot/sync`, 'POST', { tenant_id: tenantId }),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<JobberSyncStatus>(`/hubspot/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(`/hubspot/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- SQUARE CRM ---
@@ -634,7 +634,7 @@ export const Api = {
       apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(`/square/sync`, 'POST', { tenant_id: tenantId }),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<JobberSyncStatus>(`/square/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(`/square/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- SERVICETITAN CRM ---
@@ -652,7 +652,7 @@ export const Api = {
       apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(`/servicetitan/sync`, 'POST', { tenant_id: tenantId }),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<JobberSyncStatus>(`/servicetitan/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(`/servicetitan/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- VOICE CRM (Call Context) ---

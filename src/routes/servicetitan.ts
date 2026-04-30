@@ -4,6 +4,7 @@ import { withHandler, logEvent, requireTenantId, type AppRequest } from '../midd
 import * as servicetitanClient from '../services/servicetitanClient';
 import * as servicetitanSync from '../services/servicetitanSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
+import { getCrmSyncStatus } from '../services/crmSyncStatus';
 
 export function registerServiceTitanRoutes(
   app: FastifyInstance<any, any, any>,
@@ -136,31 +137,9 @@ export function registerServiceTitanRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      const settingsRes = await client.query(
-        `SELECT last_sync_at FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'servicetitan'`,
-        [tenantId]
-      );
-
-      const countsRes = await client.query(
-        `SELECT entity_type, sync_status, COUNT(*)::int as count
-         FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'servicetitan'
-         GROUP BY entity_type, sync_status`,
-        [tenantId]
-      );
-
-      const counts = countsRes.rows;
-      return {
-        last_sync_at: settingsRes.rows[0]?.last_sync_at || null,
-        pending_count: counts.filter((r: any) => r.sync_status === 'pending').reduce((s: number, r: any) => s + r.count, 0),
-        error_count: counts.filter((r: any) => r.sync_status === 'error').reduce((s: number, r: any) => s + r.count, 0),
-        total_mapped: {
-          customers: counts.filter((r: any) => r.entity_type === 'customer').reduce((s: number, r: any) => s + r.count, 0),
-          appointments: counts.filter((r: any) => r.entity_type === 'appointment').reduce((s: number, r: any) => s + r.count, 0),
-        },
-      };
-    });
-
+    const res = await withTenantClient(tenantId, (client) =>
+      getCrmSyncStatus(client, tenantId, 'servicetitan')
+    );
     return reply.send(res);
   }, 'Failed to get ServiceTitan sync status'));
 }

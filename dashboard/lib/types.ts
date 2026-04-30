@@ -191,7 +191,12 @@ export interface JobberSettings {
   updated_at?: string;
 }
 
-export interface JobberSyncStatus {
+/**
+ * Sync-status shape returned by /jobber/sync/status, /hubspot/sync/status,
+ * /square/sync/status, and /servicetitan/sync/status. Backend builds it
+ * via `getCrmSyncStatus()` in src/services/crmSyncStatus.ts.
+ */
+export interface CrmSyncStatus {
   last_sync_at: string | null;
   pending_count: number;
   error_count: number;
