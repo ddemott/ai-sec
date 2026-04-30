@@ -1153,7 +1153,7 @@
 ### Task: Isolate provisioning status transitions and rollback writes in provisioning.ts
 **Status:** proposed
 **Files to change:** `src/routes/provisioning.ts:L44-L147`, `src/routes/provisioning.ts:L177-L218`
-**What to do:** Add small route-local helpers for the repeated tenant phone-status writes, for example setting `provisioning`, `failed`, `active`, and `deprovisioned`, then reuse them in activate/deactivate flows. Keep all response payloads and Vapi calls unchanged, but make the route’s state-machine behavior explicit instead of burying it inside raw update queries.
+**What to do:** Add small route-local helpers for the repeated tenant phone-status writes, for example setting `provisioning`, `failed`, `active`, and `deprovisioned`, then reuse them in activate/deactivate flows. Keep all response payloads and Telnyx calls unchanged, but make the route’s state-machine behavior explicit instead of burying it inside raw update queries.
 **Done when:**
 - [ ] Activate and deactivate flows no longer inline every phone-status update query separately
 - [ ] Current status values and transition timing remain unchanged
@@ -1206,7 +1206,7 @@
 ### Task: Split CRM-facing customer routes from phone-context routes in voice.ts
 **Status:** proposed
 **Files to change:** `src/routes/voice.ts:L1-L360`, optional new files such as `src/routes/voice.crm.ts` and `src/routes/voice.context.ts`
-**What to do:** Separate the voice session history and CRM-facing customer note/context endpoints from the Vapi-facing phone-context endpoint so the route file stops mixing dashboard-style customer operations with telephony context delivery in one module. Keep URLs and payloads unchanged.
+**What to do:** Separate the voice session history and CRM-facing customer note/context endpoints from the agent-facing phone-context endpoint (`GET /voice/context/:phone`, called by the LiveKit agent at call time) so the route file stops mixing dashboard-style customer operations with telephony context delivery in one module. Keep URLs and payloads unchanged.
 **Done when:**
 - [ ] CRM-style voice/customer endpoints are registered separately from the phone-context endpoint
 - [ ] Public route paths and response payloads remain unchanged
@@ -1226,50 +1226,10 @@
 
 ## Ideas — 2026-04-23 (architecture reviewed)
 
-### Task: Separate TTS request validation and voice resolution from streaming response logic
-**Status:** proposed
-**Files to change:** `src/routes/tts.ts:L1-L220`
-**What to do:** Split the TTS route into small internal steps so request validation, voice selection/defaulting, upstream ElevenLabs request construction, and streaming response handling are not all embedded inline in one handler. Keep the public endpoint and streaming behavior unchanged.
-**Done when:**
-- [ ] Request validation and parameter shaping live outside the main streaming branch
-- [ ] Voice resolution/defaulting is handled in one named helper or clearly separated step
-- [ ] Streaming response behavior and headers remain unchanged
-- [ ] All existing tests pass, new tests cover helper-driven validation/voice resolution if needed
-**Why it matters:** Streaming handlers are already hard to read, and separating setup concerns from stream piping makes future changes much safer.
-**Tradeoff:** The helper extraction should stay local to this route so it improves readability without obscuring the streaming path.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it clarifies a route with multiple responsibilities packed into one handler.
-
-### Task: Extract provider error mapping for TTS failures into a route-local helper
-**Status:** proposed
-**Files to change:** `src/routes/tts.ts:L120-L220`
-**What to do:** Move the logic that translates upstream ElevenLabs failures, missing API key conditions, and unsupported voice cases into a small helper that returns the correct status code and error payload. Keep current response behavior unchanged, but stop mixing provider error mapping directly into the stream handler body.
-**Done when:**
-- [ ] Upstream/provider-specific TTS failure mapping is no longer inlined inside the main route body
-- [ ] Current status codes and error payloads remain unchanged
-- [ ] The helper stays local to TTS route concerns and does not become a generic HTTP error abstraction
-- [ ] All existing tests pass, new tests cover helper-driven failure mapping if needed
-**Why it matters:** Provider-specific failure handling is exactly the kind of detail that becomes hard to reason about when embedded inside streaming control flow.
-**Tradeoff:** The helper should remain tiny and route-specific so it improves clarity rather than adding indirection for its own sake.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it makes a streaming route easier to debug and maintain.
-
-### Task: Isolate TTS response header setup into a dedicated helper
-**Status:** proposed
-**Files to change:** `src/routes/tts.ts:L60-L120`
-**What to do:** Pull the repeated response header setup for audio streaming into one local helper so content type, cache, and transfer semantics are defined in one place before piping begins. Preserve the current headers exactly.
-**Done when:**
-- [ ] Audio-stream response headers are configured through one local helper
-- [ ] Current header values and streaming behavior remain unchanged
-- [ ] The route body reads more clearly from validation to upstream request to piping
-- [ ] All existing tests pass, new tests cover header setup if needed
-**Why it matters:** Streaming response headers are easy to tweak incorrectly, and consolidating them improves both readability and safety.
-**Tradeoff:** The helper should stay narrowly scoped to this one route and not become a general response-builder abstraction.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest but real gain because it makes a delicate streaming path easier to scan safely.
+### ~~Task: Separate TTS request validation and voice resolution from streaming response logic~~
+### ~~Task: Extract provider error mapping for TTS failures into a route-local helper~~
+### ~~Task: Isolate TTS response header setup into a dedicated helper~~
+**Status:** dropped 2026-04-30 — `src/routes/tts.ts` was deleted in commit `661d21d` along with the rest of the Vapi custom-voice proxy. Phase 4 of the LiveKit migration replaces it with a native `GrokTTS` class inside the agent worker (`agent/src/index.ts`), so the route-level refactor targets no longer exist.
 
 ## Self-Review — 2026-04-23
 **Cycles since last self-review:** 1

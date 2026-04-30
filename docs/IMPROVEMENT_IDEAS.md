@@ -325,7 +325,7 @@
 **Impact:** high
 
 ### Task: Extract Provisioning Tenant-Status Transitions into a Dedicated Service Helper
-**Status:** proposed (re-evaluate after migration to Telnyx; original wording assumed the deleted Vapi orchestration)
+**Status:** proposed
 **Files to change:** `src/routes/provisioning.ts`, `src/services/telnyxNumbers.ts`, `src/services/` (new `provisioningService.ts` or similar), `src/provisioning.test.ts`
 **What to do:** Move the tenant fetch, prerequisite checks, phone-status transitions, Telnyx number-order/assign/release orchestration, and rollback behavior out of the route file into a dedicated provisioning service. Keep the route responsible for request validation and HTTP responses while the service owns the activation/deactivation workflow and returns structured results.
 **Done when:**
