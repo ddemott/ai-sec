@@ -116,7 +116,7 @@ See `docs/TODO.md` for the unified task list.
 
 ### ~~Edge Functions Not Responding~~ — RESOLVED (2026-03-30)
 
-Supabase project is no longer stuck in "pausing" state. Edge functions are reachable and fully operational. See `TRIAGE.md` for historical context.
+Supabase project is no longer stuck in "pausing" state. Edge functions were reachable until commit `661d21d` (2026-04-27) deleted them entirely as part of the LiveKit migration; tool execution now lives in `src/routes/agentTools.ts`.
 
 ### Minor Issues (non-blocking)
 - **OpenAI API quota** — Edge functions use GPT-4o-mini for LLM + embeddings. Monitor usage as call volume grows.
@@ -261,7 +261,7 @@ The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge
 - ~~Comprehensive sad path coverage~~ — 1,319 total tests with 5W diagnostics
 - ~~30 unused variable warnings cleaned~~ — zero TS errors with strict checks
 - ~~Scheduling diagnostics~~ — `selectAssignments()` returns reason strings ("all 3 bays busy", etc.)
-- ~~All refactoring items complete~~ — 24/24 done (SUGGESTED_REFACTORINGS.md)
+- ~~All refactoring items complete~~ — 24/24 done in March 2026 sweep; that tracking file has since been removed from the repo
 
 ---
 

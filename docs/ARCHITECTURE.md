@@ -1,8 +1,8 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-04-21 (1,894 tests passing, 25 route modules, 74 migrations, 8 edge function tools)
+**Last verified:** 2026-04-30 (25 route modules, 77 migrations, 10 voice-AI tools)
 
-> **Migration in flight:** The voice-AI stack is moving from **Vapi + Supabase Edge Functions** to **LiveKit Agents + Fastify**. Sections that describe the voice loop (§6), tools catalog (§7), phone provisioning (§8), and deployment topology (§3) call out both current and target states. See `docs/FRAMEWORK_MIGRATIONS.md` for the migration index and `.claude/plans/federated-snacking-puffin.md` for the implementation plan.
+> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. See `docs/FRAMEWORK_MIGRATIONS.md` for the migration index. The remaining open swap is OpenAI TTS → xAI Grok native (NEEDS-REFACTORING.md item #9).
 
 ---
 
@@ -59,9 +59,9 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 └── .env.* + package.json         Config + deps
 ```
 
-**Coming in LiveKit migration:**
-- `agent/` — separate Node.js package for the LiveKit agent worker (deployed as a second Railway service)
-- `src/routes/agentTools.ts` — 8 ported tools (deprecates `supabase/functions/vapi-tools/`)
+**Shipped in LiveKit migration (commit `661d21d`):**
+- `agent/` — separate Node.js package for the LiveKit agent worker (deployed as Railway service `ai-sec-agent`)
+- `src/routes/agentTools.ts` — 10 voice-AI tools (8 originals + 2 OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
 
 ---
 
@@ -74,7 +74,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                │ PSTN / SIP
                                ▼
                        ┌──────────────────┐
-                       │  Telnyx (SIP)    │  +1 (630) 397-0194
+                       │  Telnyx (SIP)    │  +1 (630) 937-9478
                        └───────┬──────────┘
                                │
                current ────────┼──────── target (in flight)
@@ -267,47 +267,27 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 
 ## 6. Voice Loop
 
-### 6.1 Current (Vapi + Supabase Edge Function)
-
-1. **Inbound call** — Caller dials Telnyx number → Telnyx SIP trunk → Vapi.
-2. **Warm-up** — Vapi sends "Call Started" webhook (not required, improves cold-start latency).
-3. **Conversation** — Vapi runs STT (Deepgram Nova-2), LLM (OpenAI GPT-4o-mini), TTS (Vapi Clara) internally. TTS is proxied through `src/routes/tts.ts` to xAI Grok when `provider: "custom-voice"` is configured.
-4. **Tool execution** — LLM issues tool calls → HTTP POST to `https://<project>.functions.supabase.co/vapi-tools` with `x-vapi-secret` header.
-5. **Business logic** — Edge function dispatcher → service layer → Postgres RPC or pgvector search.
-6. **Response** — Plain `"ERROR: ..."` strings on failure (so the LLM can paraphrase naturally), or Vapi-format JSON `{ results: [{ toolCallId, result }] }` on success.
-7. **Call end** — Vapi sends "call ended" webhook → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
-8. **Post-call async** — Appointment mutations trigger fire-and-forget sync to Google/Outlook/CRMs from route handlers.
-
-### 6.2 Target (LiveKit Agents)
+### 6.1 Current flow (LiveKit Agents, shipped in `661d21d`)
 
 1. **Inbound call** — Telnyx SIP trunk → LiveKit Cloud SIP inbound trunk.
-2. **Room creation** — LiveKit dispatch rule creates a room with metadata `{ tenant_id }`.
-3. **Agent worker** — Node.js worker (separate Railway service) joins the room, runs `VoicePipelineAgent`.
-4. **Conversation** — Deepgram STT → OpenAI LLM → xAI Grok TTS (native plugins, no proxy).
+2. **Room creation** — LiveKit dispatch rule `SDR_if97ky4Zf7e6` creates a room with metadata `{ tenant_id }` (agent name `ai-secretary-agent`).
+3. **Agent worker** — Node.js worker (Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn`) joins the room, runs `VoicePipelineAgent`.
+4. **Conversation** — Deepgram Nova-3 (STT) → OpenAI GPT-4o-mini (LLM) → OpenAI TTS (TTS — pending swap to xAI Grok, see §6.2).
 5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://ai-sec-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
-6. **Business logic** — Fastify route → `withTenantClient()` → same RPCs and pgvector queries as today.
-7. **Response** — Plain JSON `{ success: true, result: ... }`.
-8. **Call end** — LiveKit room close event → `src/routes/voice.ts` same path.
+6. **Business logic** — Fastify route → `withTenantClient()` → Postgres RPCs and pgvector queries.
+7. **Response** — JSON `{ success: true, result: ... }` or `{ success: false, error: ... }` with HTTP 200 — the LLM relays both shapes naturally.
+8. **Call end** — LiveKit room close event → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
+9. **Post-call async** — Appointment mutations trigger fire-and-forget sync to Google/Outlook/CRMs from route handlers.
 
-**What stays the same:** Phone number, STT (Deepgram), LLM (OpenAI GPT-4o-mini), TTS (xAI Grok), all 8 tool behaviors, Postgres RPCs, dashboard UI.
+### 6.2 Open TTS swap (OpenAI TTS → xAI Grok)
 
-**What changes:** Orchestrator layer (Vapi → LiveKit), tool runtime (Deno edge → Node Fastify), phone provisioning (Vapi API → LiveKit dispatch rules + Telnyx direct).
-
-### 6.3 TTS proxy (`src/routes/tts.ts`)
-
-Vapi's custom-voice config points at our TTS proxy. Each synthesis request:
-
-1. Vapi POSTs `{ message: { type: 'voice-request', text, sampleRate, timestamp } }` to `/tts/synthesize` with `x-vapi-secret` header.
-2. Proxy validates secret, forwards text to `https://api.x.ai/v1/tts` with 15s abort timeout.
-3. Streams audio response back as the HTTP body.
-
-After the LiveKit migration this proxy is retired — the xAI plugin lives natively in the agent worker.
+Currently the agent uses `openai.TTS` at `agent/src/index.ts:122,150`. The pending swap replaces it with a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly from the agent worker. No proxy involved — the earlier Vapi-era TTS proxy at `src/routes/tts.ts` was deleted in `661d21d`. Estimate: 1–2 hours, validatable via LiveKit playground without PSTN dependency. Tracked as `NEEDS-REFACTORING.md` item #9.
 
 ---
 
 ## 7. Voice AI Tools Catalog
 
-8 tools exposed to the LLM. Current implementation in `supabase/functions/vapi-tools/core/dispatcher.ts` switch statement. Target implementation in `src/routes/agentTools.ts`.
+10 tools exposed to the LLM (8 originals + `send-verification-code` + `verify-phone-code`). Implemented in `src/routes/agentTools.ts` as 10 POST routes. Auth via `x-agent-secret` header. (The earlier `supabase/functions/vapi-tools/core/dispatcher.ts` switch statement was deleted in `661d21d`.)
 
 | Tool | Purpose | Backing logic |
 |---|---|---|

@@ -1,4 +1,10 @@
-# Improvement Ideas
+# Improvement Ideas — Curated Backlog
+
+> Curated review-phase backlog: ~160 refactoring tasks across 10 review phases, dated 2026-04-10/11. Each phase reviews one area (Developer Experience, Architecture, UI/UX Patterns, Code Patterns, Backend Consistency, etc.). Capitalized task titles. No `Self-Review` footers — this file is organized for review, not chronologically.
+>
+> **For the automated daily journal, see [`/improvement-ideas.md`](../improvement-ideas.md).** That file is a chronological feed (2026-04-20 onward) of newer task suggestions. The two files are deliberately distinct — see `docs/TODO.md` "Role clarity for improvement-ideas files" for the rationale.
+
+---
 
 ## Ideas — 2026-04-10 (Developer Experience Reviewed)
 

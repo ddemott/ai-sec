@@ -1,3 +1,11 @@
+# Improvement Ideas — Daily Journal Feed
+
+> Automated daily journal of refactoring suggestions. Each batch is dated and labelled by area (`## Ideas — DATE (X reviewed)`) and ends with a `## Self-Review — DATE` footer. Tasks include `Tradeoff` and `Effort vs Gain` blocks beyond the standard Status/Files/Done-when fields.
+>
+> **For the curated review-phase backlog, see [`docs/IMPROVEMENT_IDEAS.md`](docs/IMPROVEMENT_IDEAS.md).** That file holds tasks organized for review (10 phases, ~160 tasks, dated 2026-04-10/11). The two files are deliberately distinct — see `docs/TODO.md` "Role clarity for improvement-ideas files" for the rationale.
+
+---
+
 ## Ideas — 2026-04-20 (architecture reviewed)
 
 ### ~~Task: Fix inconsistent phone normalization in agent-tool booking routes~~

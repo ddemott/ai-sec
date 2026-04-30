@@ -298,7 +298,6 @@ Bays for tire shops. Chairs for salons. Technicians vs Stylists vs Mechanics. Th
 ## Files Referenced
 
 - `secretaryhq-demo.html` — the interactive demo built during this session
-- `DECISIONS.md` — earlier decision log (some decisions superseded by this document)
 - `ARCHITECTURE.md` — system architecture reference
 - `UI_UX_DESIGN.md` — existing UI/UX documentation (apply this document's decisions on top of it)
 

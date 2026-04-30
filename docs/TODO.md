@@ -51,19 +51,12 @@ appointment tests live under `src/` and run via the new backend job).
 
 ## Voice AI Migration: Vapi → LiveKit Agents
 
-See `docs/FRAMEWORK_MIGRATIONS.md` for the full list of in-flight framework swaps (LiveKit, Edge Functions → Fastify, TTS).
+Migration shipped in `661d21d` (2026-04-27). Vapi account deleted. Truth-of-state lives in `docs/FRAMEWORK_MIGRATIONS.md`.
 
-Plan file: `.claude/plans/federated-snacking-puffin.md`
-
-> **Status note (2026-04-27):** This phase list pre-dates the actual migration work and is now stale. Phases 1a/1b/2/3 shipped (commits `18caffe`, `661d21d`). Vapi account deleted. The list below should be reconciled with `docs/FRAMEWORK_MIGRATIONS.md` during the doc sweep. Truth-of-state: only Phase 4 (TTS native) and Phase 5 (DynaTire integration test) are still open.
-
-- [x] Phase 2: Port 8 edge function tools to `/agent-tools/*` Fastify routes — done in `661d21d`
-- [x] Phase 3: Build LiveKit agent worker (Node.js, Deepgram STT, OpenAI LLM) — done in `18caffe`; agent registers as worker `AW_vPmGExrgTeGn`
-- [x] SIP trunk setup (Telnyx → LiveKit Cloud) — done; FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` wired to connection `livekit-outbound` (ID `2945038451784812111`)
-- [ ] **Phase 4: native xAI Grok TTS in agent worker.** Replace `openai.TTS` at `agent/src/index.ts:122,150` with a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly. Removes the deleted `tts.ts` proxy contract entirely. Validate via unit tests + LiveKit playground call (no PSTN dependency). ~1-2 hr.
-- [ ] Phase 5: Integration testing with DynaTire — blocked on Telnyx ticket #2850682
-- [ ] Phase 6: Dashboard updates (call status, live transcription) — design TBD; currently shows post-call summaries only
-- [x] Phase 7: Cutover (retire Vapi, update provisioning) — done in `661d21d`; Vapi account deleted; provisioning rewritten for Telnyx + LiveKit
+**Open follow-ups:**
+- **Phase 4 — native xAI Grok TTS in agent worker.** Replace `openai.TTS` at `agent/src/index.ts:122,150` with a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly. Validatable via LiveKit playground (no PSTN dependency). ~1–2 hr. Tracked as `NEEDS-REFACTORING.md` item #9.
+- **Phase 5 — integration testing with DynaTire.** Blocked on Telnyx ticket #2850682 (PSTN reachability for `+1-630-937-9478`). See `TICKET_SUPPORT.md`.
+- **Phase 6 — dashboard updates** (call status, live transcription). Design TBD; currently shows post-call summaries only.
 
 ---
 
