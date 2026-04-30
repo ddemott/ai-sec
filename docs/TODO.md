@@ -17,21 +17,35 @@ Single source of truth for all remaining work. Organized by priority.
 
 ---
 
-## CI Rot (deferred, not blocking launch)
+## CI Rot — RESOLVED (2026-04-30)
 
-All 5 remaining GitHub Actions workflows assume a pnpm workspace structure that this repo never adopted (`pnpm-workspace.yaml` doesn't exist — repo uses `npm` at root with separate npm packages in `agent/` and `dashboard/`). Every workflow has been failing on every commit since at least 2026-04-08. `check-docs.yml` was deleted 2026-04-27 to stop email notifications; the rest are still red but quieter.
+Done in a focused pass. Two-job CI gate now runs on every push/PR to main:
 
-**What this means:** the 1,468 backend + 495 dashboard tests we run locally are *not* running on push. No automated regression check exists right now.
+- **Backend job:** `npm ci`, `npx tsc --noEmit`, `npm test` (1,477 tests).
+- **Dashboard job:** `npm ci`, `npm test` (495 tests). Typecheck step
+  intentionally skipped — see follow-up below.
 
-**To fix (one focused session, ~30-60 min):**
+**Deleted as zombies** (referenced paths/scripts that don't exist in this
+repo, leftover from the ai-secretary import):
 
-- [ ] Rewrite `ci.yml` for npm: `npm install`, `npx tsc --noEmit`, `npm test`, then `cd dashboard && npm install && npm test`
-- [ ] Delete `pnpm-workspace-sanity.yml` (no workspace to sanity-check)
-- [ ] Rewrite `ci-smoke-assume-tenant.yml`, `ci-smoke-calendar-appointments.yml`, `pr-smoke-servers.yml` to use npm install
-- [ ] Bump `actions/checkout` and `actions/setup-node` to current versions to clear the Node 20 deprecation warning
-- [ ] Optionally add a real "check-docs" gate (e.g., "fail if any non-historical doc mentions Vapi outside the migration index") — useful guardrail given the recent migration
+- `pnpm-workspace-sanity.yml` — no `pnpm-workspace.yaml` exists.
+- `ci-smoke-assume-tenant.yml` — references `__tests__/auth.assume-tenant.test.ts`.
+- `ci-smoke-calendar-appointments.yml` — references `__tests__/calendar.test.ts`.
+- `pr-smoke-servers.yml` — references `seed-demo.sh`, port 3000, `admin@test.com`.
 
-**Why deferred:** doesn't block phone/docs/ship, and rewriting 6 workflows deserves its own focused pass instead of a sidebar.
+The smoke workflows' value is subsumed by the unit suite (calendar, auth,
+appointment tests live under `src/` and run via the new backend job).
+
+### Follow-up
+
+- [ ] **Re-enable dashboard typecheck in CI.** Currently dropped because
+  `npx tsc --noEmit` fails on pre-existing test-file type errors:
+  `process.env.NODE_ENV` writes (read-only since newer @types/node),
+  `Boom` JSX return type (`void` not assignable to `ReactNode`),
+  `window.location` assignment in `BusinessSettingsView.test.tsx`.
+  Vitest tolerates them via SWC transform; `tsc` doesn't. Fix in a
+  focused dashboard-tests cleanup pass, then add `npx tsc --noEmit` to
+  the dashboard CI job.
 
 ---
 
