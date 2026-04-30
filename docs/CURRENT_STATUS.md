@@ -15,30 +15,10 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 
 ### April 9-10 Session: UI/UX Audit + Shift Bar Fix
 
-**Front Desk shift bars fixed** — Root cause: scheduler called `Api.shifts.schedule.list()` (raw overrides only), missing employees with weekly patterns. Fixed with:
-- New `get_effective_shifts_bulk()` RPC for single-query all-employee shift lookup
-- Both `get_effective_shifts()` and `get_effective_shifts_bulk()` now date-based only (no weekly pattern fallback)
-- Shift bar styling matched between Front Desk and Working Hours (solid blue, white labels)
-
-**Full UI/UX audit completed** — 35 items across Critical (7), High (13), Medium (15), all resolved:
-- Wizard step guards prevent skipping ahead without data
-- Toast system: dismissable, configurable duration, max 5 visible
-- All `confirm()` calls replaced with styled ConfirmModal
-- Time validation in shift editor and QuickBook panel
-- Keyboard accessibility (role/tabIndex/onKeyDown) on interactive elements
-- Mobile responsive QuickBookPanel, scrollable mobile nav
-- VoiceCallsView theme compliance (CSS variables replace hardcoded colors)
-- Tab state synced to URL query params (?tab=schedule)
-- Loading spinner on auth check (was blank white screen)
-- Empty states for scheduler (no staff) and CRM (no results)
-- Staff view now shows view tab bar (Staff/Resources/List/Calendar)
-
-**Playwright e2e testing added**:
-- 7 critical fix tests (toast, validation, NaN guard, unsaved changes warning)
-- 12-step functional audit (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav)
-- All tests pass with 0 issues
-
-**5W diagnostic compliance**: All 465 dashboard tests now have WHO/WHAT/WHEN/WHERE/WHY comments. 12 new sad path tests added to previously non-compliant files.
+- **Front Desk shift bars fixed** (BUG-072): scheduler now uses `get_effective_shifts_bulk()` RPC (single-query, date-based only); shift bar styling matches Front Desk and Working Hours.
+- **UI/UX audit** — 35 items resolved (Critical 7, High 13, Medium 15): wizard guards, ConfirmModal rollout, keyboard a11y, mobile responsive, theme compliance, URL-synced tab state, empty/loading states. See `docs/BUGS.md` for the per-item record.
+- **Playwright e2e** — 7 fix tests + 12-step functional audit. All pass.
+- **5W diagnostic compliance** — All 465 dashboard tests carry WHO/WHAT/WHEN/WHERE/WHY comments.
 
 ### April 3-4 Session: Architecture Review + Scheduling Overhaul
 
