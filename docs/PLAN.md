@@ -1,5 +1,7 @@
 # SecretaryHQ — Project Roadmap
 
+> **Scope of this file:** historical phases 1–12 (shipped) + post-launch backlog (future features, not currently in flight). Active Phase 13 work and short-term task tracking live in [`docs/TODO.md`](TODO.md). Current-state snapshots live in [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md).
+
 ## Completed Phases
 
 ### Phase 1: Foundation & TDD Setup
@@ -37,7 +39,7 @@
 - UUID standardization throughout, shared `scheduling.ts` and `getEmbedding.ts`
 - Dead code cleanup, audit logging with before/after snapshots, soft deletes with partial indexes
 - ARIA accessibility labels, customer timezone support, agent template with Mustache variables
-- Route extraction: 25 focused modules under `src/routes/` with shared middleware layer (expanded with CRM integration routes, communications, reminders, versionHistory, tts)
+- Route extraction: 25 focused modules under `src/routes/` with shared middleware layer (expanded with CRM integration routes, communications, reminders, versionHistory, and the LiveKit `agentTools` runtime)
 
 ### Phase 10: CRM & Dashboard Enhancements
 - Unified CRM detail view with appointments, call summaries, transcripts, notes, and search
@@ -58,36 +60,9 @@
 
 ---
 
-## Phase 13: UI/UX Polish & Production Readiness (Current)
+## Phase 13: Production Readiness (Current)
 
-- [ ] **UI/UX Flow Improvements**: Ongoing — finding issues through hands-on testing
-- [x] **Vocabulary Wiring**: Done — 21 business-facing components use `useVocabulary()` hook
-- [x] **Google Calendar Sync**: Done — OAuth flow, token refresh, auto-sync on appointment mutations
-- [x] **Cloud Migration**: Done — Supabase project active, edge functions deployed and reachable
-- [x] **Secrets Management**: Done — `OPENAI_API_KEY`, `DATABASE_URL`, `VAPI_SERVER_URL_SECRET` set in Supabase
-- [x] **Vapi Agent**: Done — Agent configured with GPT-4o-mini LLM, Deepgram Nova-2 STT, Clara voice, pointing to production Edge Function
-- [x] **Telephony Wiring**: Done — +1 (630) 397-0194 provisioned and operational for DynaTire
-- [x] **n8n removed**: Done — all async work (post-call summaries, calendar sync, CRM sync) runs inline in Fastify route handlers. `n8n/` directory deleted.
-- [x] **Outlook Sync**: Done — Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel
-- [x] **Token Refresh**: Done — 5-minute buffer proactive refresh for both Google and Outlook
-- [x] **Call Summary Embeddings**: Done — generated inline after call summary creation (BUG-032)
-- [x] **Live RAG Testing**: Done — Knowledge base questionnaire built (40 questions, 9 categories), POST /knowledge/add, PUT /knowledge/:id
-- [x] **Live Shift Testing**: Done — Business hours validation and past-time rejection verified in production
-- [x] **Scheduling Timezone Fix**: Done (2026-04-01) — BUG-059: `book_with_scheduling_atomic()` timezone regression fixed. Migration `20260401000000` applied to production.
-- [x] **Voice AI Phone/Date/Employee Fixes**: Done (2026-04-01) — BUG-060/061/062: Phone validation, dynamic date prompt, service-to-skill mapping in Vapi assistant.
-- [x] **Booking Error Handling**: Done (2026-04-01) — BUG-063/064: Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) via migration `20260401000001`.
-- [x] **OAuth Callback Refactoring**: Done (2026-04-01) — Generic `oauthCallbackFactory.ts` + shared `tokenManagement.ts` eliminate duplication across 4 CRM integrations.
-- [x] **UI/UX Audit**: Done (2026-04-09) — 35 issues identified and resolved across Critical (7), High (13), Medium (15). ConfirmModal + useConfirm hook, Toast improvements, wizard step guards, keyboard accessibility, mobile responsiveness.
-- [x] **Playwright E2E Testing**: Done (2026-04-09) — 19 Playwright tests covering 12-step functional audit across every major view.
-- [x] **Front Desk Shift Bars**: Done (2026-04-09) — BUG-072 resolved, shift bars rendering correctly in NewSchedulerView.
-- [x] **Scheduler View Tabs**: Done (2026-04-09) — Staff view now includes scheduler sub-tabs.
-- [x] **5W Diagnostic Compliance**: Done (2026-04-09) — All 465 dashboard tests include 5W diagnostic context.
-- [x] **UX/a11y Backlog**: Done (2026-04-20, commit `f9ffa8e`) — all 47 items from April 10-11 review resolved.
-- [ ] **Deploy Dashboard**: Vercel or Railway. Set `DASHBOARD_URL` in Railway env vars.
-- [ ] **Voice AI Migration (Vapi → LiveKit)**: Phase 2+ of the plan in `.claude/plans/federated-snacking-puffin.md`. Phase 1 complete. See `docs/FRAMEWORK_MIGRATIONS.md`.
-- [ ] **Stripe Test Products**: Recreate 4 products (Solo/Growth/Professional/Enterprise) in Stripe test mode. Update Price IDs in `.env.production`. Live mode products already created.
-- [ ] **Rotate Exposed Keys**: Supabase DB password, OpenAI API key, Supabase access token were exposed in chat. Regenerate all and update `.env.production`.
-- [ ] **Beta Testing**: Real-world call tests with DynaTire
+In flight. The full checklist used to live here but it tracked Vapi-era state and conflicted with the canonical task list. Phase 13 work is now tracked exclusively in [`docs/TODO.md`](TODO.md). Verified status snapshots live in [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md).
 
 ---
 
@@ -117,17 +92,9 @@
 
 ### Infrastructure
 
-#### Automated Phone Provisioning
-Manual phone provisioning (10 min per customer in Telnyx/Vapi dashboards) works for the first 10-20 customers. Automate when manual onboarding becomes the bottleneck.
+#### ~~Automated Phone Provisioning~~ — Shipped (LiveKit migration)
 
-- [ ] `src/services/telnyx.ts` — search numbers by area code, purchase, configure SIP trunk via Telnyx REST API.
-- [ ] Vapi agent auto-creation from `vapi/agent.template.json` with tenant vocabulary, system prompt, voice ID, and Edge Function URL injected.
-- [ ] Area code wizard step (Step 10 of onboarding) — owner picks area code, selects from available numbers.
-- [ ] `POST /tenants/provision-phone` — orchestrates Telnyx purchase + SIP trunk + Vapi agent atomically. Rolls back if any step fails.
-- [ ] Tenant schema: `phone_number`, `vapi_agent_id`, `telnyx_trunk_id`.
-- [ ] Confirmation screen with "Call it right now" CTA.
-- [ ] Suggest nearby area codes if requested code has no availability.
-- [ ] Env vars: `TELNYX_API_KEY`, `VAPI_API_KEY`.
+Phone provisioning ships in `src/services/telnyxNumbers.ts` (search/order/assign/release Telnyx Numbers API) and `src/routes/provisioning.ts` (POST `/provisioning/activate`, /deactivate, /status). The SuperAdmin dashboard has an "Activate Phone" button with area-code input. The original plan referenced Vapi assistant creation, which no longer applies after the LiveKit migration — incoming numbers are assigned directly to SIP Connection `livekit-outbound` and routed via dispatch rule to the agent worker.
 
 #### Platform Adapter Architecture (Analysis Required)
 
@@ -223,7 +190,7 @@ CREATE TABLE tenant_integrations (
 | 4 | SMS/Notifications (Telnyx > Twilio) | 1 week |
 | 5 | Payment Provider (Stripe > Square) | 1-2 weeks |
 | 6 | Data Access Layer (PostgreSQL abstraction) | 4-8 weeks |
-| 7 | ~~Voice AI Provider (Vapi > alternatives)~~ **ACTIVE** — migrating to LiveKit Agents, see `docs/FRAMEWORK_MIGRATIONS.md` | 8-12 days |
+| 7 | ~~Voice AI Provider (Vapi → LiveKit Agents)~~ — Shipped in `661d21d`. Vapi account deleted. See `docs/FRAMEWORK_MIGRATIONS.md`. | Done |
 
 **What NOT to abstract:** Auth (add OAuth/SSO as feature, not adapter), frontend framework (Next.js/React), Edge Functions runtime (Deno/Supabase).
 
