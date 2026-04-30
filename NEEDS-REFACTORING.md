@@ -50,12 +50,22 @@ Last updated: 2026-04-28.
 
 ## P1 — Dead code / unused layers eating mental overhead
 
-### 4. Drop the legacy `employee_shifts` table
-**Status.** CLAUDE.md confirms: "LEGACY (weekly patterns, day_of_week 0-6) — NOT used by any production code." All scheduling reads from `employee_schedule`.
+### 4. Decide the `employee_shifts` ↔ `employee_schedule` story (was: drop legacy table)
+**Status updated 2026-04-30.** Audit found CLAUDE.md's "NOT used by any production code" claim is wrong. `employee_shifts` is actively read/written by:
 
-**Why.** Dead schema is a footgun. Someone — including a future agent — will eventually write a query against the wrong table.
+- `src/routes/shifts.ts:51-119` — full CRUD endpoints (GET /shifts, POST /shifts/create, /shifts/:id/update, DELETE /shifts/:id)
+- `src/routes/analytics.ts:58` — `/coverage/staffing` JOIN (the service-employee skill matrix)
+- `dashboard/components/SetupWizard/SoloWizard.tsx` and `useWizardCrud.ts` — onboarding wizard writes initial weekly patterns here
+- `dashboard/lib/hooks.ts` `useShifts()` + `Api.shifts.list/create/update/delete`
 
-**What to do.** Verify zero production references (grep `employee_shifts` excluding `employee_schedule`). If clean, write a migration that drops the table and any orphaned indexes/constraints. If references remain, fix them first.
+**Reality check.** The two tables coexist by design: `employee_shifts` holds weekly base patterns (the wizard's "Mon–Fri 9–5" affordance), `employee_schedule` holds date-specific entries (overrides + the source of truth booking RPCs read). CLAUDE.md's `employee_shifts` description (lines around 88) needs to be corrected.
+
+**Real decision.** Either:
+- **A — eliminate weekly patterns.** Wizard fans out the 7-day grid into `employee_schedule` rows for each onboarded employee + a recurring template. Drops the second table cleanly. Loses the "set once, forget" UX unless the wizard becomes a generator.
+- **B — keep both, document accurately.** Update CLAUDE.md to reflect the dual-table reality, add a note that weekly patterns are the *base* and date-specific overrides win. No code changes; clears the misleading "LEGACY" label so future agents stop trying to drop it.
+- **C — flip authority.** Make `employee_shifts` weekly the single source for booking, deprecate `employee_schedule`. Probably wrong — `employee_schedule` was added later with timezone fixes and night-shift support.
+
+**Blocked on user pick.** Cannot do autonomously — affects setup wizard UX, analytics, 8+ test files, seed data. Originally listed as a mechanical drop; turns out to be a product decision.
 
 ---
 
