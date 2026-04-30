@@ -59,10 +59,8 @@ Last updated: 2026-04-28.
 
 ---
 
-### 5. Delete `src/templates/medical_v1.yaml`
-**Status.** HIPAA verticals are permanently excluded per CLAUDE.md. The template loads a domain we will never serve.
-
-**What to do.** `git rm src/templates/medical_v1.yaml`. Verify no provisioning code references it by name.
+### ~~5. Delete `src/templates/medical_v1.yaml`~~
+**Status: done 2026-04-30.** Verified the YAML files in `src/templates/` are reference/seed material only — runtime template loading goes through the `business_templates` Postgres table, populated by `supabase/migrations/20260321000001_template_categories.sql`. No code path imports or reads `medical_v1.yaml`, and the migration's `med-spa` entry is aesthetic services (not HIPAA-regulated), distinct from the deleted clinic template. File deleted; CLAUDE.md and `src/services/MIGRATED_FROM_AI_SECRETARY.md` updated to reflect 5 industry templates instead of 6 with the medical one called out as dead.
 
 ---
 

@@ -31,7 +31,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/services/usage/` - UsageTrackingService stub. Records SMS/calls/emails in memory only; no DB persistence, no Stripe sync yet (TODO).
 - `/src/database/index.ts` - Lazy-init singleton pool. Bridges native `withTenantClient(pool)` to a `DatabaseService` interface used by communications/reminders/workers. Invisible glue; no routes touch it.
 - `/src/workers/reminderScheduler.ts` - Background job processor. Polls every 60s, batches up to 100 reminders, runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`. Started in `index.ts`, stopped on SIGTERM.
-- `/src/templates/` - 6 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1; medical_v1 exists but unused — HIPAA verticals are excluded). Each bundle: prompt template, first message, voice ID, field labels, example services. Loaded by tenants provisioning route.
+- `/src/templates/` - 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). HIPAA verticals are permanently excluded — there is no medical_v1. Each bundle: prompt template, first message, voice ID, field labels, example services. Loaded by tenants provisioning route.
 - `/src/types/` - Shared TS interfaces. ConsentRecord, OptOutRecord (GDPR/TCPA), ReminderSchedule/ReminderData/AppointmentForReminder, UsageRecord + Provider enum, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
 - `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`)
@@ -120,7 +120,6 @@ Several service layers exist in the codebase but are not yet exposed via routes 
 - **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing.
 - **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but the agent worker still hardcodes DynaTire's name/timezone in `agent/src/index.ts`. Multi-tenant prod needs this wired.
 - **`src/types/`** — `ConsentRecord` and `OptOutRecord` have full type shapes and DB tables, but no consent management UI exists in the dashboard yet.
-- **`src/templates/medical_v1.yaml`** — Exists but unused; HIPAA verticals are permanently excluded.
 
 ## Known Issues (as of April 2026)
 - OpenAI API quota needs monitoring — edge functions use GPT-4o-mini for LLM + embeddings

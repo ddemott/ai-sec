@@ -65,7 +65,6 @@ Multi-channel communication system:
 Industry-specific configuration templates:
 
 - `salon_v1.yaml` - Salon/Spa businesses
-- `medical_v1.yaml` - Medical/Healthcare
 - `automotive_v1.yaml` - Auto shops
 - `auto_bays_v1.yaml` - Bay-based auto services
 - `mobile_tire_v1.yaml` - Mobile tire services
