@@ -4,6 +4,8 @@
 **To:** Claude Code  
 **Purpose:** Full context on every UI/UX decision made during a live design session. You were not in this conversation — this document is written so you feel like you were. Do not second-guess these decisions without explicit instruction from Dale.
 
+> **Role of this file (vs. `UI_UX_DESIGN.md`):** this is the **frozen** snapshot of decisions reached on 2026-03-24. Treat it as historical record-of-decision: do not edit content unless Dale explicitly reopens a decision. For the **living design brief** that evolves over time, see [`UI_UX_DESIGN.md`](UI_UX_DESIGN.md).
+
 ---
 
 ## About This Document
