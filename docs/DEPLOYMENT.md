@@ -131,44 +131,91 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 
 **Important**: In production (`NODE_ENV=production`), the backend skips HTTPS/TLS (the platform handles TLS termination). The `x-forwarded-proto` hook redirects HTTP to HTTPS when behind a proxy.
 
-### Backend Environment Variables Reference
+### Environment Variables — Canonical Reference
+
+This is the single source of truth for environment variables across all three deployable services. Verified against code 2026-04-30.
+
+#### Backend (Fastify) — required at boot
+The backend exits on startup if any of these are missing in production (see `src/services/envWarnings.ts`).
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Supabase Postgres connection string (use session-mode pooler) |
+| `JWT_SECRET` | Secret for signing JWT tokens (change from default!) |
+| `OPENAI_API_KEY` | LLM (post-call summaries, normalization) + RAG embeddings |
+| `STRIPE_SECRET_KEY` | Stripe API key (test or live) |
+| `NODE_ENV` | Set to `production` (skips local TLS, trusts `x-forwarded-proto`) |
+
+#### Backend — required for full functionality
+The backend boots without these but specific features fail or warn loudly.
+
+| Variable | Required for | Description |
+|---|---|---|
+| `AGENT_SECRET` | Voice AI tools | Shared secret the LiveKit agent presents on every `/agent-tools/*` call. Must match the agent's `AGENT_SECRET`. Min 32 chars. |
+| `TELNYX_API_KEY` | Phone provisioning + SMS OTP | Carrier API key. Boot warns if missing. |
+| `TELNYX_SIP_CONNECTION_ID` | Phone provisioning | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`). |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook | Signing secret created after deploy. Webhook handler rejects unsigned requests. |
+| `STRIPE_SOLO_PRICE_ID` | Billing checkout | Stripe price ID for Solo plan ($129/mo). |
+| `STRIPE_GROWTH_PRICE_ID` | Billing checkout | Stripe price ID for Growth plan ($279/mo). |
+| `STRIPE_PRO_PRICE_ID` | Billing checkout | Stripe price ID for Professional plan ($449/mo, backlog tier). |
+| `DASHBOARD_URL` | Stripe checkout + OAuth redirects | Public URL of the dashboard. Default `https://localhost:4000`. **Phase 13 blocker if not set in prod.** |
+
+#### Backend — optional / tuning
+
+| Variable | Default | Description |
+|---|---|---|
+| `JWT_EXPIRY` | `8h` | Token expiry duration |
+| `PORT` | `4001` | Server port |
+| `CORS_ORIGIN` | (none) | Permitted CORS origin for cross-domain dashboard requests |
+| `STRIPE_ENTERPRISE_PRICE_ID` | (none) | Stripe price ID for Enterprise plan (not yet shipped) |
+| `ENABLE_REMINDER_SCHEDULER` | `false` outside prod | Forces the appointment-reminder background worker on in dev |
+| `TELEPHONY_PROVIDER` | `telnyx` | Switch SMS provider (`telnyx` or `twilio`) |
+| `TELEPHONY_SIMULATION_MODE` | `false` | If `true`, voice/SMS providers no-op (test/dev) |
+| `SMS_SIMULATION_MODE` | `false` | If `true`, SMS service no-ops (test/dev) |
+| `EMAIL_USER`, `EMAIL_PASS` | (none) | nodemailer SMTP creds for transactional email |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | (none) | Used only when `TELEPHONY_PROVIDER=twilio` |
+
+#### Backend — CRM + Calendar OAuth (set per integration you use)
+
+Each integration is independent — set the trio for the ones you wire up. All optional at boot.
+
+| Provider | Variables |
+|---|---|
+| Google Calendar | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` (e.g. `https://your-backend/calendar/auth/google/callback`) |
+| Outlook Calendar | `OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`, `OUTLOOK_CALLBACK_URL` |
+| Jobber | `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_CALLBACK_URL` |
+| HubSpot | `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`, `HUBSPOT_CALLBACK_URL` |
+| Square | `SQUARE_CLIENT_ID`, `SQUARE_CLIENT_SECRET`, `SQUARE_CALLBACK_URL`, `SQUARE_WEBHOOK_SIGNATURE_KEY` |
+| ServiceTitan | `SERVICETITAN_CLIENT_ID`, `SERVICETITAN_CLIENT_SECRET`, `SERVICETITAN_APP_KEY` (ST-App-Key header), `SERVICETITAN_CALLBACK_URL`, `SERVICETITAN_WEBHOOK_SECRET` |
+| GoHighLevel | `GHL_CLIENT_ID`, `GHL_CLIENT_SECRET`, `GHL_REDIRECT_URI` (adapter exists but not yet wired to a route) |
+
+#### Agent worker (`agent/`) — validated by Zod at startup
+
+The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in that order. Missing/invalid → process exits with the failed Zod issue. See `agent/src/config.ts` for the schema.
+
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | Yes | Supabase Postgres connection string (use session-mode pooler) |
-| `OPENAI_API_KEY` | Yes | LLM (used by post-call summaries) + RAG embeddings |
-| `TELNYX_API_KEY` | Yes | Carrier API — phone provisioning + SMS OTP |
-| `TELNYX_SIP_CONNECTION_ID` | Yes | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`) |
-| `AGENT_SECRET` | Yes | Shared secret the LiveKit agent presents on every `/agent-tools/*` call |
-| `JWT_SECRET` | Yes | Secret for signing JWT tokens (change from default!) |
-| `JWT_EXPIRY` | No | Token expiry duration (default: `8h`) |
-| `NODE_ENV` | Yes | Set to `production` |
-| `PORT` | No | Server port (default: `4001`) |
-| `STRIPE_SECRET_KEY` | Yes | Stripe API key (test or live) |
-| `STRIPE_WEBHOOK_SECRET` | Yes | Stripe webhook signing secret (create after deploy) |
-| `STRIPE_SOLO_PRICE_ID` | Yes | Stripe price ID for Solo plan |
-| `STRIPE_GROWTH_PRICE_ID` | Yes | Stripe price ID for Growth plan |
-| `STRIPE_PRO_PRICE_ID` | Yes | Stripe price ID for Pro plan |
-| `STRIPE_ENTERPRISE_PRICE_ID` | No | Stripe price ID for Enterprise plan |
-| `DASHBOARD_URL` | No | Dashboard URL for Stripe checkout redirects (default: `https://localhost:4000`) |
-| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID (for Google Calendar sync) |
-| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
-| `GOOGLE_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/calendar/auth/google/callback`) |
-| `OUTLOOK_CLIENT_ID` | No | Azure AD app registration (for Outlook Calendar sync) |
-| `OUTLOOK_CLIENT_SECRET` | No | Azure AD app secret |
-| `OUTLOOK_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/calendar/auth/outlook/callback`) |
-| `JOBBER_CLIENT_ID` | No | Jobber developer app (for Jobber CRM sync) |
-| `JOBBER_CLIENT_SECRET` | No | Jobber app secret |
-| `JOBBER_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/jobber/auth/callback`) |
-| `HUBSPOT_CLIENT_ID` | No | HubSpot developer app (for HubSpot CRM sync) |
-| `HUBSPOT_CLIENT_SECRET` | No | HubSpot app secret |
-| `HUBSPOT_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/hubspot/auth/callback`) |
-| `SQUARE_CLIENT_ID` | No | Square developer app (for Square CRM sync) |
-| `SQUARE_CLIENT_SECRET` | No | Square app secret |
-| `SQUARE_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/square/auth/callback`) |
-| `SERVICETITAN_CLIENT_ID` | No | ServiceTitan developer app (for ServiceTitan CRM sync) |
-| `SERVICETITAN_CLIENT_SECRET` | No | ServiceTitan app secret |
-| `SERVICETITAN_APP_KEY` | No | ST-App-Key header for ServiceTitan API |
-| `SERVICETITAN_CALLBACK_URL` | No | OAuth callback URL (e.g., `https://your-backend/servicetitan/auth/callback`) |
+| `LIVEKIT_URL` | Yes | LiveKit Cloud WSS URL (must start with `wss://`) |
+| `LIVEKIT_API_KEY` | Yes | LiveKit Cloud API key |
+| `LIVEKIT_API_SECRET` | Yes | LiveKit Cloud API secret |
+| `AGENT_SECRET` | Yes | Min 32 chars. Must match backend's `AGENT_SECRET`. |
+| `OPENAI_API_KEY` | Yes | LLM (GPT-4o-mini) + TTS (until xAI Grok migration) |
+| `DEEPGRAM_API_KEY` | Yes | STT (Nova-3) |
+| `BACKEND_URL` | No | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`. |
+| `LOG_LEVEL` | No | `trace` \| `debug` \| `info` (default) \| `warn` \| `error` |
+
+#### Dashboard (Next.js)
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | Yes | Backend public URL. Compiled into the bundle at build time. |
+| `NODE_ENV` | (auto) | Next.js sets this; check for production-only code paths only. |
+
+#### Pending
+
+| Variable | Status | Description |
+|---|---|---|
+| `XAI_API_KEY` | Not yet wired | Will be required by the agent once Phase 4 (xAI Grok TTS) ships. Tracked in `NEEDS-REFACTORING.md` item #9. |
 
 ---
 
