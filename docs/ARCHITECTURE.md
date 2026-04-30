@@ -16,7 +16,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI pending swap to xAI Grok)
 - **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (25 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 74 migrations, RLS on every tenant-scoped table
+- **DB**: Postgres + pgvector on Supabase, 77 migrations, RLS on every tenant-scoped table
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
@@ -117,7 +117,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 | Service | Platform | Region / URL | Deploy mechanism |
 |---|---|---|---|
 | Backend (Fastify) | Railway | `ai-sec-production.up.railway.app` | Nixpacks auto-deploy from `main` |
-| Agent worker | Railway (service `ai-sec-agent`) | WebSocket long-runner, worker `AW_vPmGExrgTeGn` | Node.js package under `agent/` |
+| Agent worker | Railway (service `ai-sec-agent`) | WebSocket long-runner, worker ID `AW_vPmGExrgTeGn`, registers with LiveKit under agent name `ai-secretary-agent` | Node.js package under `agent/` |
 | Database | Supabase (managed Postgres + pgvector) | `sgibijfchvfuizudrmir` (us-west-2) | Migrations applied via `npm run db:migrate` |
 | Dashboard | Railway | `dashboard-production-cee3.up.railway.app` | Next.js build via `dashboard/server.js` |
 | Telephony | Telnyx | `+1 (630) 937-9478` | SIP Connection `livekit-outbound` (ID `2945038451784812111`); provisioned per tenant via `POST /provisioning/activate` |
@@ -742,13 +742,13 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
                   ╱╲
                  ╱19╲        Playwright e2e (full-stack, browser)
                 ╱────╲
-               ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real Supabase edge function)
+               ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real `/agent-tools/*` Fastify routes)
               ╱────────╲
-             ╱  1,894   ╲    Vitest unit + integration (real DB, real RLS)
+             ╱  2,022   ╲    Vitest unit + integration (real DB, real RLS)
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 1,429 tests, 75 files)
+### 18.2 Backend (`npm test` — 1,527 tests)
 
 Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, CRM sync clients, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: DynaTire caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 

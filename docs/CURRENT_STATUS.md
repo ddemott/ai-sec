@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-04-21
+**Last updated:** 2026-04-30 (test count from CLAUDE.md verification 2026-04-24; doc-sweep refresh 2026-04-30)
 
 ---
 
@@ -50,8 +50,8 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 
 See `docs/TODO.md` for the unified task list.
 
-### Test Count (verified 2026-04-21)
-- **1,429 backend tests + 465 dashboard tests = 1,894 total**, 0 failures
+### Test Count (verified 2026-04-24)
+- **1,527 backend tests + 495 dashboard tests = 2,022 total**, 0 failures
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean)
@@ -73,7 +73,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,429 backend + 465 dashboard = 1,894 passing + 88 QA assertions | All green (verified 2026-04-21), zero TS errors |
+| **Tests** | 1,527 backend + 495 dashboard = 2,022 passing + 88 QA assertions | All green (verified 2026-04-24), zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
@@ -276,5 +276,5 @@ The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge
 | Bug fix regression | 6 files | 80+ | April 1 rounds 1-5, comprehensive, regression |
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
-| QA live tests | 1 file | 29 calls / 88 assertions | Live edge function tool calls with DB verification |
-| **Total** | **75 backend + 22 dashboard + 1 QA** | **1,894 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration (verified 2026-04-21) |
+| QA live tests | 1 file | 29 calls / 88 assertions | Live `/agent-tools/*` Fastify route calls with DB verification |
+| **Total** | **75 backend + 22 dashboard + 1 QA** | **2,022 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration (verified 2026-04-24) |

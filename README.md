@@ -12,10 +12,10 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 |---|---|
 | **Phase** | 13 — Production Readiness |
 | **Backend** | Live on Railway (`ai-sec-production.up.railway.app`) |
-| **Dashboard** | Local dev (deployment pending) |
+| **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
 | **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `TICKET_SUPPORT.md` |
 | **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `TICKET_SUPPORT.md` for current LERG status |
-| **Tests** | 1,894 passing (1,429 backend + 465 dashboard), zero TypeScript errors |
+| **Tests** | 2,022 passing (1,527 backend + 495 dashboard), zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
@@ -145,9 +145,8 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,429 tests)
-cd dashboard && npx vitest run        # Dashboard (465 tests)
-deno task test --no-check             # Edge functions
+npm test                              # Backend (1,527 tests)
+cd dashboard && npx vitest run        # Dashboard (495 tests)
 cd dashboard && npx playwright test   # E2e (19 Playwright tests)
 python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)
 ```
@@ -231,13 +230,17 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | `CLAUDE.md` | Developer conventions, code patterns, project context |
 | `docs/TODO.md` | Unified task list — all remaining work |
 | `docs/ARCHITECTURE.md` | Full technical architecture deep-dive |
+| `docs/DIAGRAMS.md` | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.) |
 | `docs/DEPLOYMENT.md` | Step-by-step deployment guide |
-| `docs/CURRENT_STATUS.md` | Living work journal — what's working, what's broken |
-| `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions |
-| `docs/UI_UX_DESIGN.md` | Interaction design + UX principles |
-| `docs/PLAN.md` | Roadmap (phases 1-13+) |
+| `docs/CURRENT_STATUS.md` | Current-state snapshot — what's working, what's broken |
+| `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions (frozen — March 24 session) |
+| `docs/UI_UX_DESIGN.md` | Living design brief — interaction design + UX principles |
+| `docs/PLAN.md` | Historical phases (1-12) + post-launch backlog |
 | `docs/BUGS.md` | Historical bug tracker (72 bugs + 47 UX items, all resolved) |
-| `docs/FRAMEWORK_MIGRATIONS.md` | Index of in-flight migrations (Vapi→LiveKit, Edge Functions→Fastify, Clara→xAI Grok) |
+| `docs/FRAMEWORK_MIGRATIONS.md` | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (pending) |
+| `NEEDS-REFACTORING.md` | Code-cleanup backlog — dormant layers, dead code, conventions to enforce |
+| `improvement-ideas.md` (root) | Automated daily-journal feed of refactor proposals (2026-04-20+) |
+| `docs/IMPROVEMENT_IDEAS.md` | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11) — distinct from the journal feed above |
 
 ---
 
