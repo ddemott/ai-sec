@@ -4,6 +4,30 @@
 
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. See `docs/FRAMEWORK_MIGRATIONS.md` for the migration index. The remaining open swap is OpenAI TTS → xAI Grok native (NEEDS-REFACTORING.md item #9).
 
+## Contents
+- [1. Overview](#1-overview)
+- [2. Directory Structure](#2-directory-structure)
+- [3. Deployment Topology](#3-deployment-topology)
+- [4. Data Model](#4-data-model)
+- [5. Multi-Tenancy & Row-Level Security](#5-multi-tenancy-row-level-security)
+- [6. Voice Loop](#6-voice-loop)
+- [7. Voice AI Tools Catalog](#7-voice-ai-tools-catalog)
+- [8. Phone Provisioning](#8-phone-provisioning)
+- [9. Backend API (Fastify)](#9-backend-api-fastify)
+- [10. Authentication & Authorization](#10-authentication-authorization)
+- [11. Scheduling Engine](#11-scheduling-engine)
+- [12. Knowledge Base (RAG)](#12-knowledge-base-rag)
+- [13. Calendar Sync (Push-only)](#13-calendar-sync-push-only)
+- [14. CRM Sync (Bidirectional)](#14-crm-sync-bidirectional)
+- [15. Billing (Stripe Lite)](#15-billing-stripe-lite)
+- [16. Dashboard Architecture](#16-dashboard-architecture)
+- [17. Async Work (no n8n)](#17-async-work-no-n8n)
+- [18. Testing Strategy](#18-testing-strategy)
+- [19. Observability](#19-observability)
+- [20. Error Handling & Retry](#20-error-handling-retry)
+- [21. Security Summary](#21-security-summary)
+- [22. Known Gaps / Future Work](#22-known-gaps-future-work)
+
 ---
 
 ## 1. Overview
