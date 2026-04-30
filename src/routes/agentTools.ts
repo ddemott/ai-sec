@@ -601,6 +601,7 @@ export function registerAgentToolRoutes(
            SELECT name, duration_minutes, price
              FROM services
             WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
+              AND (is_deleted IS NULL OR is_deleted = false)
             LIMIT 1
          ),
          active_employees AS (

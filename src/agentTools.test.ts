@@ -896,6 +896,17 @@ describe('agentTools /available-slots', () => {
     expect(text).toMatch(/8 AM to 12 PM/);
     expect(text).toMatch(/1 PM to 5 PM/);
     expect(queries[0].params).toEqual([TENANT_ID, 'Oil Change', '2030-01-01']);
+
+    // WHO: Voice agent quoting an open slot for a service that may have
+    //      been soft-deleted in the dashboard mid-call.
+    // WHAT: The svc CTE inside the union-all query must filter is_deleted —
+    //      otherwise the agent would price + schedule a removed service.
+    // WHERE: src/routes/agentTools.ts:602 (svc CTE in available-time-slots).
+    // WHEN: Every /agent-tools/available-slots tool call.
+    // WHY: A deleted service has no current price/duration — quoting it
+    //      back to the caller would mis-set expectations and might fail
+    //      the booking RPC's service validation.
+    expect(queries[0].text).toMatch(/svc AS[\s\S]*is_deleted IS NULL OR is_deleted = false/);
   });
 
   it('HAPPY: no shifts for the day returns "no one scheduled" message', async () => {

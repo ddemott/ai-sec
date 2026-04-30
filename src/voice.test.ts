@@ -334,6 +334,30 @@ describe('Voice Routes — Happy Paths', () => {
     expect(countQuery).toContain('customer_id');
   });
 
+  it('8a. GET /voice/customer/:customerId/context filters soft-deleted customers in phone lookup', async () => {
+    // WHO: Voice agent fetching CRM context for a customer the dashboard
+    //      already soft-deleted (is_deleted = true).
+    // WHAT: The phone lookup must include `is_deleted = false`; otherwise
+    //      we'd hand the agent a phone for a deleted record and call
+    //      get_customer_context_for_call() with stale data.
+    // WHERE: src/routes/voice.ts:321 — the SELECT phone FROM customers query.
+    // WHEN: Every /voice/customer/:customerId/context request, before the
+    //       context-builder RPC fires.
+    // WHY: BUG-038 partial fix — soft-deletable tables must filter is_deleted
+    //      in SELECT to avoid leaking deleted records into voice flows.
+    queryResponses.push({ rows: [{ phone: '+1-555-123-4567' }] });
+    queryResponses.push({ rows: [{ context: { is_known_customer: true, customer: null, appointment_history: { total: 0, completed: 0, cancelled: 0, last_appointment: null, upcoming_appointments: [] }, notes: [], preferences: {}, tags: [] } }] });
+
+    await app.inject({
+      method: 'GET',
+      url: `/voice/customer/${CUSTOMER_ID}/context?tenant_id=${TENANT_ID}`,
+    });
+
+    const phoneLookupSql = mockClient.query.mock.calls[0][0] as string;
+    expect(phoneLookupSql).toContain('FROM customers');
+    expect(phoneLookupSql).toContain('is_deleted = false');
+  });
+
   it('8. GET /voice/customer/:customerId/context returns CRM context', async () => {
     const mockContext = {
       is_known_customer: true,
@@ -398,6 +422,30 @@ describe('Voice Routes — Happy Paths', () => {
     const body = res.json();
     expect(body.calls).toHaveLength(1);
     expect(body.calls[0].customer_id).toBe(CUSTOMER_ID);
+  });
+
+  it('10a. POST /voice/customer/note filters soft-deleted customers in existence check', async () => {
+    // WHO: Voice agent attempting to attach a note to a customer that was
+    //      soft-deleted between when the agent loaded the customer and now.
+    // WHAT: The customer-existence check must reject soft-deleted rows; the
+    //      add_customer_note RPC would otherwise tag a tombstoned record.
+    // WHERE: src/routes/voice.ts:393 — the SELECT id FROM customers query.
+    // WHEN: Every POST /voice/customer/note, before invoking add_customer_note.
+    // WHY: Prevents notes from being attached to deleted customers, which
+    //      would hide audit trail in the dashboard (deleted view excludes
+    //      them from default filters).
+    queryResponses.push({ rows: [{ id: CUSTOMER_ID }] });
+    queryResponses.push({ rows: [{ added: true }] });
+
+    await app.inject({
+      method: 'POST',
+      url: `/voice/customer/note?tenant_id=${TENANT_ID}`,
+      payload: { customer_id: CUSTOMER_ID, note: 'Likes morning slots', note_type: 'preference' },
+    });
+
+    const existenceCheckSql = mockClient.query.mock.calls[0][0] as string;
+    expect(existenceCheckSql).toContain('FROM customers');
+    expect(existenceCheckSql).toContain('is_deleted = false');
   });
 
   it('10. POST /voice/customer/note adds note to customer', async () => {

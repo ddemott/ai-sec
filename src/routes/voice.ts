@@ -318,7 +318,7 @@ export function registerVoiceRoutes(
     const context = await withTenantClient(tenantId, async (client) => {
       // Get customer phone to use with context function
       const customerResult = await client.query<{ phone: string }>(
-        'SELECT phone FROM customers WHERE id = $1 AND tenant_id = $2',
+        'SELECT phone FROM customers WHERE id = $1 AND tenant_id = $2 AND is_deleted = false',
         [customerId, tenantId]
       );
 
@@ -390,7 +390,7 @@ export function registerVoiceRoutes(
     const added = await withTenantClient(tenantId, async (client) => {
       // Verify customer belongs to tenant
       const checkResult = await client.query(
-        'SELECT id FROM customers WHERE id = $1 AND tenant_id = $2',
+        'SELECT id FROM customers WHERE id = $1 AND tenant_id = $2 AND is_deleted = false',
         [customer_id, tenantId]
       );
 

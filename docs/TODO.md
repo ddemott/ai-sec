@@ -84,8 +84,9 @@ Doc Phase 1 inventory completed 2026-04-27. 17 files contain 177 Vapi references
 - [x] `n8n/` directory + `docs/N8N_WORKFLOWS.md` — deleted (functionality built into Fastify routes)
 - [x] `shift_overrides` → `employee_schedule` rename, `employee_shifts` fallback removed from booking RPCs
 
-### Soft Delete Filtering (BUG-038 partial)
-- [ ] Add `WHERE is_deleted = false` to SELECT queries in routes touching soft-deletable tables (appointments, customers, resources, employees) — only 2 of 20 routes currently filter
+### Soft Delete Filtering (BUG-038)
+- [x] Add `WHERE is_deleted = false` to SELECT queries in routes touching soft-deletable tables. Audit done 2026-04-30 — most routes already filter (appointments, customers, employees, resources, services, agentTools). Four remaining gaps fixed: `voice.ts:321` (customer phone lookup), `voice.ts:393` (customer ID verify for note add), `agentTools.ts:602` (services CTE in available-time-slots), `analytics.ts:55` (service-employee skill matrix). All 1,468 backend tests pass.
+- [ ] Service-layer SELECT queries in CRM/calendar sync code (`hubspotSync`, `squareSync`, `jobberSync`, `servicetitanSync`, `calendarSync`, `syncMapHelpers`) currently include soft-deleted records. Decide whether sync should push deletions to external systems (push the soft-delete state) or just exclude — needs a product call before changing.
 
 ---
 

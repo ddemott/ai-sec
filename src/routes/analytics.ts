@@ -57,7 +57,7 @@ export function registerAnalyticsRoutes(
         LEFT JOIN employees e ON e.id = se.employee_id AND e.is_deleted = false
         LEFT JOIN employee_shifts es ON es.employee_id = e.id AND es.tenant_id = s.tenant_id
           AND es.day_of_week = $2 AND es.is_active = true
-        WHERE s.tenant_id = $1
+        WHERE s.tenant_id = $1 AND (s.is_deleted IS NULL OR s.is_deleted = false)
         ORDER BY s.name, e.name
       `, [tenantId, dayOfWeek]);
     });
