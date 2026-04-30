@@ -1236,3 +1236,406 @@
 **What's working:** UX is still correctly skipped, and this cycle still found one genuinely new route family, TTS, after checking whether other candidate areas would just produce duplicates or dead ends.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions are still helping me stop and sanity-check freshness before writing, which is the right behavior now that the UX backlog is complete and the ideas log is mature.
+
+## Ideas — 2026-04-24 (code patterns reviewed)
+
+### Task: Replace skill-route validation and delete miss handling with shared route helpers
+**Status:** proposed
+**Files to change:** `src/routes/skills.ts:L1-L55`, `src/routes/routeHelpers.ts:L1-L80`
+**What to do:** Update `POST /skills/create` to use `sendValidationError` instead of assembling its own validation-failure envelope, and update `DELETE /skills/:id` to use `assertRowAffected` or the same shared not-found path used by the other CRUD routes. Keep response payloads unchanged where practical, but stop leaving this small route on older one-off patterns.
+**Done when:**
+- [ ] Skill create no longer hand-builds its validation failure response
+- [ ] Skill delete no longer checks `res.rows.length === 0` inline
+- [ ] Success and not-found behavior stay consistent with the rest of the route layer
+- [ ] All existing tests pass, new tests cover skill validation and missing-delete behavior if needed
+**Why it matters:** `skills.ts` is a tiny route module, which makes it a good cleanup target for finishing the shared-helper rollout without much risk.
+**Tradeoff:** The cleanup is mostly about consistency, so it should stay behavior-preserving and avoid broader skill-domain changes.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Well under an hour of cleanup would remove obvious legacy response patterns from a small CRUD file, a good maintenance return.
+
+### Task: Extract employee name shaping into shared name utilities before create and update writes
+**Status:** proposed
+**Files to change:** `src/routes/employees.ts:L1-L120`, `src/services/nameUtils.ts:L1-L80`
+**What to do:** Replace the route-local `firstName` / `lastName` / `displayName` assembly in employee create and update with the existing name utility layer, adding any tiny helper needed there for the current fallback rules. Preserve current persisted values and API behavior, but stop maintaining employee name composition logic separately from the rest of the backend’s name helpers.
+**Done when:**
+- [ ] Employee create no longer assembles display names inline in the route
+- [ ] Employee update no longer recomputes display names inline in the route
+- [ ] Persisted `name`, `first_name`, and `last_name` values stay unchanged for current inputs
+- [ ] All existing tests pass, new tests cover helper-driven employee name shaping if needed
+**Why it matters:** Name composition rules are easy to drift when some routes use shared utilities and others quietly keep local fallback logic.
+**Tradeoff:** The helper change should stay narrowly focused on employee-name shaping and not turn `nameUtils` into a grab bag for unrelated field normalization.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it aligns a common write path with an existing shared utility instead of preserving another local variation.
+
+### Task: Split date-specific schedule endpoints away from legacy weekly shift endpoints in shifts.ts
+**Status:** proposed
+**Files to change:** `src/routes/shifts.ts:L1-L260`, optional new files such as `src/routes/shifts.legacy.ts` and `src/routes/shifts.schedule.ts`
+**What to do:** Separate the legacy `employee_shifts` CRUD endpoints from the date-specific `employee_schedule` and `copy-week` endpoints so the route file no longer mixes deprecated weekly-pattern flows with the production schedule model. Keep URLs and payloads unchanged, but make the file structure reflect the current architecture described in `CLAUDE.md`.
+**Done when:**
+- [ ] Legacy weekly-shift endpoints are registered separately from date-specific schedule/override endpoints
+- [ ] Public route paths and response payloads remain unchanged
+- [ ] Shared validation or helper extraction happens only where it clearly reduces duplication between the split files
+- [ ] All existing tests pass, new tests cover moved registration if needed
+**Why it matters:** `shifts.ts` currently mixes a legacy model with the live scheduling model, which makes one of the project’s trickiest domains harder to reason about than it should be.
+**Tradeoff:** File count increases, so the split should follow the real domain boundary, legacy weekly shifts versus production date-specific scheduling, rather than scattering handlers too aggressively.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** A couple of careful hours would pay off well here because it would make a high-complexity scheduling file match the product’s actual architecture more honestly.
+
+## Self-Review — 2026-04-24
+**Cycles since last self-review:** 1
+**What's working:** UX review is still correctly skipped, the latest idea batches remain bounded and file-specific, and the anti-duplication rule is still steering the work toward fresh route families instead of rehashing the same helper cleanups.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The process is still clear for a fresh agent, the output quality is holding up, and nothing in the current instructions looks stale enough to justify a tweak yet.
+
+## Ideas — 2026-04-25 (architecture reviewed)
+
+### Task: Extract shared CRM integration settings and disconnect route registration
+**Status:** proposed
+**Files to change:** `src/routes/jobber.ts:L41-L75`, `src/routes/hubspot.ts:L41-L74`, `src/routes/square.ts`, `src/routes/servicetitan.ts`, `src/routes/integrationRouteHelpers.ts` (new)
+**What to do:** Add one narrow helper that registers the common `GET /<provider>/settings` and `POST /<provider>/settings/disconnect` handlers for CRM-style integrations. Pass in the provider name, event names, and any provider-specific cleanup hook if needed. Keep each route file responsible for OAuth initiation, callback wiring, webhook handling, and full sync, but stop duplicating the same settings read and disconnect flow across Jobber and HubSpot, then apply the same helper to Square and ServiceTitan if their route shape matches.
+**Done when:**
+- [ ] Jobber and HubSpot no longer hand-write identical settings and disconnect handlers
+- [ ] The helper stays limited to settings fetch and disconnect cleanup, not OAuth or webhook behavior
+- [ ] Response payloads and audit event names remain unchanged for existing routes
+- [ ] All existing tests pass, new tests cover helper-driven settings/disconnect behavior if needed
+**Why it matters:** These integration routes already share a stable mini-contract, and keeping the same CRUD-like plumbing in four files raises the chance of one provider drifting from the others.
+**Tradeoff:** Pulling out too much would make provider routes harder to read, so the helper needs to stay tightly scoped to the truly identical parts.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** A couple of careful hours would remove obvious duplication from multiple integration routes, a solid return as long as the helper stays intentionally small.
+
+### Task: Centralize integration sync-status aggregation for CRM providers
+**Status:** proposed
+**Files to change:** `src/routes/jobber.ts:L151-L184`, `src/routes/hubspot.ts:L156-L187`, `src/routes/square.ts`, `src/routes/servicetitan.ts`, `src/routes/integrationRouteHelpers.ts` (new or same helper module)
+**What to do:** Extract the repeated `entity_sync_map` counting and `last_sync_at` shaping into one helper that accepts `tenantId`, provider name, and a tenant-scoped client, then returns the common `{ last_sync_at, pending_count, error_count, total_mapped }` payload. Preserve the current query semantics and response shape exactly, but stop recomputing the same counts inline in each provider route.
+**Done when:**
+- [ ] Jobber and HubSpot sync-status routes share one aggregation helper instead of repeating the same count/filter/reduce logic
+- [ ] Returned payload shape remains unchanged for current clients
+- [ ] Any additional provider route using the same sync-status contract can adopt the helper without changing its endpoint URL
+- [ ] All existing tests pass, new tests cover helper-driven sync-status aggregation if needed
+**Why it matters:** Sync status is part of the operational contract for every CRM integration, and duplicated aggregation logic makes it too easy for one provider to quietly report counts differently.
+**Tradeoff:** The helper should stay explicit about the fixed payload contract rather than turning into a generic reporting abstraction.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Under an hour of extraction would buy better consistency across several operational endpoints, a strong maintenance win.
+
+### Task: Separate webhook acknowledgement from provider-specific event processing in CRM routes
+**Status:** proposed
+**Files to change:** `src/routes/jobber.ts:L77-L140`, `src/routes/hubspot.ts:L76-L145`
+**What to do:** In each webhook route, split the flow into three named steps: request validation/signature verification, immediate acknowledgement decision, and provider-specific async event processing. Keep the current URLs, status codes, and fire-and-forget behavior unchanged, but move the async post-ack work into small route-local functions like `processJobberWebhookEvent` and `processHubSpotWebhookEvent` so the handlers read as ingress flows instead of mixed ingress-plus-sync logic.
+**Done when:**
+- [ ] Jobber webhook route has a clearly separated async processing function after the immediate reply path
+- [ ] HubSpot webhook route has a clearly separated async processing function after the immediate reply path
+- [ ] Existing signature validation, status codes, and async sync behavior remain unchanged
+- [ ] All existing tests pass, new tests cover helper-driven webhook processing if needed
+**Why it matters:** Webhook endpoints are easiest to debug when request admission and background work are clearly separated, especially once signature checks, tenant lookup, and sync fan-out accumulate in the same handler.
+**Tradeoff:** The extraction adds a couple of local helper functions, so it should stop at readability and not try to force both providers into one shared webhook framework.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Less than an hour of restructuring would make two high-sensitivity ingress routes easier to audit and debug, a worthwhile return.
+
+## Self-Review — 2026-04-25
+**Cycles since last self-review:** 1
+**What's working:** UX review is correctly staying skipped now that the component backlog is done, and the improvement pass can still stay concrete when it deliberately moves into a fresh integration route family.
+**What I changed in HEARTBEAT.md:** Added one Continuous Improvement rule to prefer a different review area than the most recent idea entry unless other areas do not yield enough concrete, non-duplicate tasks.
+**Why:** The duplicate-file guard helped, but the recent log still leaned too heavily on architecture batches in a row. This small rotation nudge should keep the improvement pass fresher without weakening the existing constraints.
+
+## Ideas — 2026-04-25 (code patterns reviewed)
+
+### Task: Replace repeated shift-route validation branches with sendValidationError
+**Status:** proposed
+**Files to change:** `src/routes/shifts.ts:L1-L260`, `src/routes/routeHelpers.ts:L1-L40`
+**What to do:** Swap the repeated inline validation-failure branches across shift create, update, override create/update, and copy-week routes to use `sendValidationError`, keeping the payloads identical while removing duplicated error-envelope boilerplate from the file.
+**Done when:**
+- [ ] Shift create/update routes use `sendValidationError`
+- [ ] Shift override create/update routes use `sendValidationError`
+- [ ] Copy-week validation uses `sendValidationError`
+- [ ] Validation response payloads remain unchanged for callers
+- [ ] All existing tests pass, new tests cover validation-failure behavior if needed
+**Why it matters:** This file repeats the same validation envelope pattern many times, and adopting the shared helper would make it easier to keep behavior consistent.
+**Tradeoff:** The cleanup should stay scoped to envelope reuse and not turn into a larger shift-route refactor.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it removes repeated boilerplate from one of the denser CRUD route files.
+
+### Task: Standardize zero-row not-found handling in shift and override mutations on assertRowAffected
+**Status:** proposed
+**Files to change:** `src/routes/shifts.ts:L60-L220`, `src/routes/routeHelpers.ts:L40-L70`
+**What to do:** Replace the repeated `res.rows.length === 0` checks in shift and override update/delete routes with `assertRowAffected` or an equivalent shared helper path, preserving current 404 behavior and messages while aligning these mutations with the backend’s shared zero-row handling pattern.
+**Done when:**
+- [ ] Shift update/delete routes use shared zero-row mutation handling
+- [ ] Shift override update/delete routes use shared zero-row mutation handling
+- [ ] Current not-found behavior remains unchanged for callers
+- [ ] All existing tests pass, new tests cover zero-row mutation cases if needed
+**Why it matters:** Repeated zero-row handling is exactly the kind of thing that drifts subtly across multiple mutation endpoints in one file.
+**Tradeoff:** The rollout should stay behavior-preserving and not broaden into unrelated route cleanup.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, solid gain because it aligns several closely related mutation routes with an existing shared convention.
+
+### Task: Extract target-week override write loop from copy-week into a route-local helper
+**Status:** proposed
+**Files to change:** `src/routes/shifts.ts:L220-L320`
+**What to do:** Pull the loop that transforms effective shifts into target-week override upserts into a small route-local helper that accepts tenant, employee, day offset, and effective rows. Keep copy-week behavior unchanged, but separate the transformation/upsert mechanics from the endpoint flow.
+**Done when:**
+- [ ] The copy-week route no longer inlines the full effective-row transform and upsert loop
+- [ ] The helper stays local to shift copy-week behavior and does not become a generic scheduling abstraction
+- [ ] Current copied-count behavior and upsert semantics remain unchanged
+- [ ] All existing tests pass, new tests cover helper-driven copy-week behavior if needed
+**Why it matters:** The copy-week route mixes validation, date math, data fetching, transformation, and writes in one flow, and splitting out the write loop would make it easier to reason about safely.
+**Tradeoff:** The helper should stay tight and file-local so it clarifies the endpoint instead of hiding important scheduling details.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, worthwhile gain because it simplifies the densest part of a multi-step scheduling mutation without changing behavior.
+
+## Self-Review — 2026-04-25
+**Cycles since last self-review:** 1
+**What's working:** UX is still correctly skipped, and this cycle found another concrete, non-duplicate code-pattern slice in shifts without falling back to the heavily used api/hooks/sync families.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still giving enough guidance to find fresh route families and avoid repetitive output in the post-UX phase.
+
+## Ideas — 2026-04-25 (architecture reviewed)
+
+### Task: Extract tenant provisioning preflight checks into a route-local helper in provisioning.ts
+**Status:** proposed
+**Files to change:** `src/routes/provisioning.ts:L15-L80`
+**What to do:** Pull the tenant lookup, missing-field detection, and phone-status conflict checks in `/provisioning/activate` into a small helper that returns either a normalized tenant provisioning context or the exact current error payload. Keep all behavior and messages unchanged, but separate preflight validation from the provisioning transaction flow.
+**Done when:**
+- [ ] `/provisioning/activate` no longer inlines tenant lookup plus prerequisite/status validation in one long block
+- [ ] Missing-field and already-active/provisioning responses remain unchanged
+- [ ] The helper stays local to provisioning-route concerns and does not become a service layer
+- [ ] All existing tests pass, new tests cover helper-driven preflight behavior if needed
+**Why it matters:** Provisioning already has a multi-step external side-effect flow, so pulling preflight checks out of the happy path will make the route safer and easier to reason about.
+**Tradeoff:** The helper should stay narrowly scoped so it improves clarity without obscuring the actual provisioning sequence.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it shortens the riskiest route in the file without changing behavior.
+
+### ~~Task: Extract Vapi cleanup and warning aggregation from provisioning deactivation into a local helper~~
+**Status:** dropped 2026-04-30 — original task assumed a two-step external cleanup (delete phone number + delete assistant). After the LiveKit migration deactivation only releases the Telnyx number, so the body is one try/catch around `telnyx.client.release()` plus a DB update. Extracting a helper for a single external call is friction without payoff. Reopen if a second cleanup step ever returns.
+
+### Task: Align provisioning status query validation with shared helper conventions
+**Status:** proposed
+**Files to change:** `src/routes/provisioning.ts:L200-L235`, `src/routes/routeHelpers.ts:L1-L160` if a tiny helper addition is warranted
+**What to do:** Replace the ad hoc `tenant_id` query check in `/provisioning/status` with an existing shared validation helper or a very small addition to the helper layer so query-parameter validation looks like the rest of the backend. Preserve the current error payload and status unless a consciously shared contract is adopted.
+**Done when:**
+- [ ] `/provisioning/status` no longer uses a one-off inline query-param validation pattern if a shared helper can express it cleanly
+- [ ] Current validation behavior remains unchanged unless deliberately normalized
+- [ ] The solution stays small and does not invent a broad new abstraction for one route
+- [ ] All existing tests pass, new tests cover provisioning status validation if needed
+**Why it matters:** Small validation inconsistencies accumulate quickly across route files, and this endpoint is a clean place to validate a lightweight shared approach.
+**Tradeoff:** If a shared helper would feel more awkward than the inline check, the change is not worth forcing.
+**Size:** small (< 1hr)
+**Impact:** low
+**Effort vs Gain:** Low effort, modest gain because it can reduce another small source of route-level inconsistency.
+
+## Self-Review — 2026-04-25
+**Cycles since last self-review:** 1
+**What's working:** UX is still correctly skipped, and this cycle found one last clearly worthwhile route family, provisioning, without falling back to increasingly repetitive dashboard or helper-only variants.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still handling the mature post-UX phase well, and I do not see a process problem that needs fixing right now.
+
+## Ideas — 2026-04-26 (UI/UX patterns reviewed)
+
+### Task: Sync AI insights subtabs to the URL query state
+**Status:** proposed
+**Files to change:** `dashboard/components/AIInsightsView.tsx:L1-L30`, any shared tab/query helper already used by dashboard view shells if applicable
+**What to do:** Replace the local `useState('persona')` tab selection with the same query-param pattern used elsewhere in the dashboard, for example `?subtab=persona` and `?subtab=analytics`. Validate the incoming value against the two allowed subtabs, default safely to `persona`, and keep back/forward navigation working when users switch between the AI Persona and Analytics panes.
+**Done when:**
+- [ ] Reloading the page preserves the active AI insights subtab
+- [ ] Browser back/forward restores prior AI insights subtab changes
+- [ ] Invalid or missing query values fall back cleanly to `persona`
+- [ ] All existing tests pass, new tests cover the query-backed tab behavior
+**Why it matters:** The rest of the dashboard already treats tab state as navigable state, so this view currently feels less consistent and easier to lose your place in.
+**Tradeoff:** This adds a little routing plumbing to a tiny component, so the gain is mostly consistency and recoverability rather than new capability.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Less than an hour of small shell-state wiring would make this view behave like the rest of the dashboard, a good return for a high-visibility navigation surface.
+
+### ~~Task: Replace stale Vapi-specific analytics placeholders with source-aware availability messaging~~
+**Status:** dropped 2026-04-30 — `dashboard/components/AnalyticsView.tsx` already references "LiveKit call log integration" in its header comment, placeholder subtitles, and Phase 2 notice. Spot-checked 2026-04-30: zero remaining Vapi mentions in the file.
+
+### Task: Add explicit filtered-empty and detail-loading states to VoiceCallsView
+**Status:** proposed
+**Files to change:** `dashboard/components/VoiceCallsView.tsx:L69-L139`, `dashboard/components/VoiceCallsView.tsx:L160-L260`, `dashboard/components/VoiceCallsView.tsx:L271-L420`
+**What to do:** Introduce a derived filtered-history array before render, then use it to show a dedicated empty state when the selected outcome filter returns zero visible calls even though history exists. In the same pass, add a small loading and failure state for `Api.voice.getSession()` when an active call row is clicked, so the right pane can show “loading details” or a retry affordance instead of silently leaving stale details on screen if the fetch is slow or fails.
+**Done when:**
+- [ ] Outcome filtering shows an explicit no-matching-calls state instead of an empty list with no explanation
+- [ ] The call-history header or body reflects the filtered result count clearly
+- [ ] Clicking an active call shows a visible detail-loading state until the full session arrives
+- [ ] Active-call detail fetch failures surface a retry path instead of only logging to the console
+- [ ] All existing tests pass, new tests cover filtered-empty and detail-loading/error states
+**Why it matters:** This screen is operational and time-sensitive, so silent filter results and silent detail fetches make it feel less trustworthy exactly when someone is trying to move quickly.
+**Tradeoff:** The component will carry a bit more local UI state, so the implementation should stay disciplined and avoid turning into a larger refactor.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** A couple of focused hours would remove two of the most confusing silent states in an operations view, a strong payoff for a screen people read under pressure.
+
+## Self-Review — 2026-04-26
+**Cycles since last self-review:** 1
+**What's working:** UX review is now correctly staying skipped, and the output quality is still strongest when the improvement pass picks a concrete front-end slice instead of defaulting back to route-helper cleanup.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions are still clear for a fresh agent, and today’s pass did not show a process problem severe enough to justify another tweak.
+
+## Ideas — 2026-04-27 (developer experience reviewed)
+
+### Task: Extract session persistence keys and hydration logic into a dedicated dashboard session-storage helper
+**Status:** proposed
+**Files to change:** `dashboard/lib/SessionContext.tsx:L6-L89`, optional new helper file such as `dashboard/lib/sessionStorage.ts`
+**What to do:** Move the raw `localStorage` key names and the repeated read/write/clear logic for `tenantId`, `userName`, `userEmail`, `managedTenantId`, and `managedTenantName` into one small helper module. Have `SessionProvider` call that helper for initial hydration, managed-tenant selection persistence, and logout cleanup so the context focuses on session state transitions rather than browser storage plumbing.
+**Done when:**
+- [ ] `SessionContext.tsx` no longer hardcodes the session-related localStorage keys in multiple places
+- [ ] Initial session hydration, managed-tenant persistence, and logout cleanup all flow through one small helper API
+- [ ] Existing super-admin and regular-user behavior remains unchanged
+- [ ] All existing tests pass, new tests cover the helper-driven persistence behavior if needed
+**Why it matters:** Session persistence is core dashboard infrastructure, and centralizing the storage contract would make future auth or tenant-selection changes easier to follow safely.
+**Tradeoff:** This is mostly structural cleanup, so the helper needs to stay small and behavior-preserving instead of becoming a second session layer.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Less than an hour of focused extraction would remove a lot of quiet duplication from a critical context module, a solid maintenance return.
+
+### Task: Make ThemeContext and VocabularyContext fail loudly when used outside their providers
+**Status:** proposed
+**Files to change:** `dashboard/lib/ThemeContext.tsx:L25-L75`, `dashboard/lib/VocabularyContext.tsx:L23-L79`
+**What to do:** Change both contexts from default-value `createContext(...)` patterns to nullable contexts plus guarded hooks, matching the existing `useSessionContext` style. Keep `ThemeProvider` and `VocabularyProvider` behavior the same, but make `useTheme`, `useVocabulary`, and `useVocabularyRefresh` throw a clear error if someone forgets the provider instead of silently falling back to no-op state.
+**Done when:**
+- [ ] `ThemeContext` no longer exposes a silent default `setTheme: () => {}` fallback
+- [ ] `VocabularyContext` no longer exposes a silent default refresh no-op fallback
+- [ ] `useTheme`, `useVocabulary`, and `useVocabularyRefresh` throw descriptive provider-missing errors
+- [ ] Existing runtime behavior remains unchanged when the providers are mounted correctly
+- [ ] All existing tests pass, new tests cover the guard behavior
+**Why it matters:** Silent context fallbacks make wiring mistakes harder to catch, especially in shared dashboard infrastructure that many views depend on.
+**Tradeoff:** Missing-provider mistakes will fail fast instead of degrading quietly, which is the right developer experience but may require a couple of tests to be updated if they were mounting hooks incorrectly.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Very low effort for a worthwhile safety win, because it turns subtle integration mistakes into immediate, obvious failures.
+
+### Task: Add provider-level tests for managed-tenant vocabulary refresh behavior
+**Status:** proposed
+**Files to change:** `dashboard/lib/SessionContext.tsx:L25-L127`, `dashboard/lib/VocabularyContext.tsx:L30-L79`, new tests such as `dashboard/lib/SessionContext.test.tsx` and `dashboard/lib/VocabularyContext.test.tsx`
+**What to do:** Add focused tests that mount the real providers together and verify the behavior that is easiest to regress here: super-admin hydration from saved managed-tenant keys, regular-user fallback to their own tenant, vocabulary reset to defaults when no effective tenant exists, and vocabulary fallback to defaults when the fetch fails. Mock `Api.vocabulary.get` in the vocabulary tests, but keep the assertions at the provider contract level rather than unit-testing implementation details.
+**Done when:**
+- [ ] Session-provider tests cover super-admin managed-tenant hydration and regular-user effective-tenant behavior
+- [ ] Vocabulary-provider tests cover default reset when no tenant is active
+- [ ] Vocabulary-provider tests cover API failure fallback and refresh-triggered re-fetch behavior
+- [ ] All existing tests pass, new tests exercise the provider contracts directly
+**Why it matters:** These providers sit under most of the dashboard, and a small amount of contract-level coverage would catch regressions that are currently easy to miss until much later in UI testing.
+**Tradeoff:** The cost is some provider test setup and mocking, so the value is mostly regression protection rather than immediate user-facing improvement.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** A couple of hours of targeted test setup would meaningfully harden dashboard infrastructure that many screens quietly depend on, a strong return.
+
+## Self-Review — 2026-04-27
+**Cycles since last self-review:** 1
+**What's working:** The output format is still useful and the improvement pass stayed fresh by moving into dashboard context infrastructure instead of repeating another backend route family.
+**What I changed in HEARTBEAT.md:** Clarified the UX file-selection rule to exclude `*.test.tsx` files when listing review targets.
+**Why:** The UX review is already complete, but the old wording still technically pulled test components into the file list, which could make a fresh agent think the review was unfinished when only test files remained.
+
+## Ideas — 2026-04-28 (architecture reviewed)
+
+### Task: Split session auth endpoints from password-recovery flows in auth.ts
+**Status:** proposed
+**Files to change:** `src/routes/auth.ts:L35-L227`, optional new files such as `src/routes/auth.session.ts` and `src/routes/auth.passwordRecovery.ts`
+**What to do:** Separate the login/register/refresh handlers from the forgot-password/reset-password handlers so the auth route registration stops mixing session issuance with recovery-token lifecycle management in one module. Keep URLs, rate limits, payloads, and token/email behavior unchanged, but move the password-reset token hashing and email-link flow into a dedicated route module or clearly isolated registration function.
+**Done when:**
+- [ ] Login, register, and refresh routes are registered separately from forgot-password and reset-password routes
+- [ ] Public endpoint paths, rate limits, and response payloads remain unchanged
+- [ ] Password-reset token hashing and email dispatch still behave exactly as they do today
+- [ ] All existing tests pass, new tests cover moved route registration if needed
+**Why it matters:** `auth.ts` currently spans two distinct responsibilities, normal session auth and recovery-token workflows, which makes a security-sensitive file harder to scan and audit than it needs to be.
+**Tradeoff:** File count goes up slightly, so the split should follow the real domain boundary instead of creating a generic auth framework.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** A couple of careful hours would make one of the more security-sensitive route files easier to reason about without changing any public contract, a worthwhile return.
+
+### Task: Separate tenant management routes from business-template administration in tenants.ts
+**Status:** proposed
+**Files to change:** `src/routes/tenants.ts:L52-L256`, optional new files such as `src/routes/tenants.templates.ts` and `src/routes/tenants.admin.ts`
+**What to do:** Split the tenant CRUD/config/reorder handlers from the business-template listing and upsert handlers so the file structure matches the two different domains it currently serves. Keep all route paths and payloads unchanged, but stop maintaining tenant operations and template-catalog administration in one long route module.
+**Done when:**
+- [ ] Tenant CRUD/config/reorder handlers are registered separately from template list/create handlers
+- [ ] `/tenants*` and `/templates*` URLs and payloads remain unchanged
+- [ ] Shared schemas or helpers are extracted only where they clearly reduce duplication between the split files
+- [ ] All existing tests pass, new tests cover moved registration if needed
+**Why it matters:** Tenant administration and business-template administration have different consumers and different change rhythms, so keeping them interleaved makes a central admin route file noisier than it should be.
+**Tradeoff:** The split adds a little navigation overhead, so it should follow the existing domain boundary cleanly rather than scattering logic too aggressively.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate effort, good return because it aligns a busy admin module with the product’s actual domain split and should make future edits safer.
+
+### Task: Replace the tenant-exempt path list with route-local preHandler guards for truly public endpoints
+**Status:** proposed
+**Files to change:** `src/middleware.ts:L147-L200`, `src/routes/auth.ts:L35-L227`, `src/routes/tenants.ts:L52-L256`, plus any other route modules that intentionally stay public
+**What to do:** Reduce reliance on the global `TENANT_EXEMPT_ROUTES` string list by moving public-route intent closer to route registration, for example through small route-local `preHandler` guards or a narrow helper that marks routes as tenant-exempt when they are declared. Keep current public behavior unchanged, but stop making middleware correctness depend on one growing central list of hardcoded paths and prefixes.
+**Done when:**
+- [ ] Public auth/template routes no longer depend solely on a central hardcoded exemption list for tenant bypass
+- [ ] Tenant middleware still skips the same public endpoints it skips today
+- [ ] The replacement stays small and explicit, not a broad metadata system
+- [ ] All existing tests pass, new tests cover tenant-middleware behavior for public and tenant-scoped routes
+**Why it matters:** The current exemption list is easy to drift because every new public route requires remembering one far-away middleware file, which is exactly the sort of coupling that causes accidental auth or tenant-context regressions.
+**Tradeoff:** This introduces a little route-registration ceremony, so it is only worth doing if the helper stays simple and makes intent more obvious than the current string list.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** A small amount of careful plumbing would remove a subtle cross-file maintenance hazard from the request pipeline, a strong payoff for core infrastructure.
+
+## Self-Review — 2026-04-28
+**Cycles since last self-review:** 1
+**What's working:** UX review is correctly staying skipped now that every component file has been logged, and this pass stayed fresh by moving into auth and admin route boundaries instead of repeating another helper-adoption batch.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already handled the finished-UX state cleanly, and today’s outputs were still specific, non-duplicate, and easy for a fresh agent to reproduce.
+
+## Ideas — 2026-04-30 (code patterns reviewed)
+
+### Task: Extract communications send-result handling into one route-local helper
+**Status:** proposed
+**Files to change:** `src/routes/communications.ts:L86-L159`
+**What to do:** Add one small helper in `communications.ts` that accepts the `CommunicationService` result and the fallback error message, then emits the shared `{ success: true, messageId }` or `{ success: false, error }` reply used by both `/communications/email` and `/communications/sms`. Keep the schemas, route URLs, and service calls unchanged, but stop maintaining the same success/failure reply branches twice.
+**Done when:**
+- [ ] `/communications/email` and `/communications/sms` no longer duplicate the same result-to-reply mapping
+- [ ] Validation behavior and response payloads remain unchanged for both routes
+- [ ] The helper stays local to communications route concerns and does not become a generic response abstraction
+- [ ] All existing tests pass, new tests cover helper-driven email and SMS success/failure behavior if needed
+**Why it matters:** These two mutation routes already share the same orchestration pattern, and leaving the reply handling duplicated makes small behavior tweaks drift-prone for no real benefit.
+**Tradeoff:** The helper should stay narrow enough that the route file still reads clearly from schema to service call.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Well under an hour of cleanup would remove obvious duplication from two production mutation paths, a solid maintenance win.
+
+### Task: Replace billing checkout plan parsing with a narrow Zod request schema
+**Status:** proposed
+**Files to change:** `src/routes/billing.ts:L21-L42`
+**What to do:** Add a small `CheckoutSchema` near the top of `billing.ts` that validates `plan` against the existing `solo | growth | professional` set, then use `safeParse(req.body)` instead of the current `(req.body as any)` extraction and inline inclusion check. Keep the accepted plans, error message intent, and downstream Stripe logic unchanged.
+**Done when:**
+- [ ] `/billing/checkout` no longer casts `req.body` to `any` to read `plan`
+- [ ] Plan validation is handled through a route-local schema rather than an inline array check
+- [ ] Accepted plan values and billing behavior remain unchanged
+- [ ] All existing tests pass, new tests cover invalid and valid plan payloads if needed
+**Why it matters:** This route is security- and money-adjacent, so using the same schema-first pattern as the rest of the backend makes its request contract easier to trust and maintain.
+**Tradeoff:** The gain is mostly consistency and type safety, so the change should stay tightly scoped to request validation rather than broader billing refactors.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, good return because it removes one of the file’s few `any`-shaped request paths from a high-consequence endpoint.
+
+### Task: Reuse one provisioning validation schema for deactivate and status tenant lookup
+**Status:** proposed
+**Files to change:** `src/routes/provisioning.ts:L7-L10`, `src/routes/provisioning.ts:L148-L152`, `src/routes/provisioning.ts:L199-L204`
+**What to do:** Add a shared `TenantIdSchema` or `TenantIdBodySchema` beside `ActivateSchema`, then use it for `/provisioning/deactivate` body validation and for `/provisioning/status` query validation. Keep the existing response behavior as close as possible, but stop defining one-off validation logic for the same tenant-id requirement in multiple places.
+**Done when:**
+- [ ] `/provisioning/deactivate` no longer inlines its own one-use `z.object({ tenant_id: ... })` schema
+- [ ] `/provisioning/status` validates `tenant_id` through a schema instead of an ad hoc presence check
+- [ ] Current error semantics remain unchanged unless a deliberately shared validation envelope is adopted
+- [ ] All existing tests pass, new tests cover deactivate/status validation behavior if needed
+**Why it matters:** Repeated tiny validation patterns are easy to let drift, and provisioning is exactly the kind of operational route file where small inconsistencies add up over time.
+**Tradeoff:** This is a narrow consistency cleanup, so it should stay local to provisioning validation rather than expanding into a larger route rewrite.
+**Size:** small (< 1hr)
+**Impact:** low
+**Effort vs Gain:** Very low effort, modest but real gain because it removes two little validation inconsistencies from a stateful route family.
+
+## Self-Review — 2026-04-30
+**Cycles since last self-review:** 1
+**What's working:** UX review is correctly staying skipped now that the component backlog is exhausted, and the latest idea entries are still concrete enough to hand to an engineer without extra interpretation.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already handle the finished-UX phase well, and this cycle still produced fresh, bounded work without obvious duplication pressure.
