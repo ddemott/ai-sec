@@ -931,8 +931,10 @@ describe("Source code correctness checks", () => {
     ]) {
       expect(fs.readFileSync(file, "utf8")).toContain("getIntegrationTokens");
     }
-    // Calendar sync imports shared types/constants from tokenManagement
-    expect(fs.readFileSync("src/services/calendarSync.ts", "utf8")).toContain("TOKEN_BUFFER_MS");
+    // Calendar sync delegates token refresh to the shared helper too.
+    // (Previously imported TOKEN_BUFFER_MS for an inline copy of the
+    // refresh logic; now the helper owns both.)
+    expect(fs.readFileSync("src/services/calendarSync.ts", "utf8")).toContain("getCalendarTokens");
   });
 
   it("PUBLIC_ROUTES includes all OAuth callbacks and webhooks", () => {

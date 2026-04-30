@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import * as gcal from './googleCalendar';
 import * as outlook from './outlookCalendar';
-import { type SyncLogger, defaultSyncLogger, TOKEN_BUFFER_MS } from './tokenManagement';
+import { type SyncLogger, defaultSyncLogger, getCalendarTokens } from './tokenManagement';
 
 type CalendarProvider = typeof gcal | typeof outlook;
 
@@ -11,13 +11,27 @@ function ctx(tenantId: string, appointmentId: string, action: string) {
 }
 
 /**
+ * Maps the stored provider string to the matching provider module.
+ * Centralized so the file picks Google vs Outlook in one place.
+ */
+function pickProviderModule(provider: 'google' | 'outlook'): {
+  module: CalendarProvider;
+  name: string;
+} {
+  return provider === 'outlook'
+    ? { module: outlook, name: 'Outlook' }
+    : { module: gcal, name: 'Google' };
+}
+
+/**
  * Sync an appointment to the tenant's connected external calendar.
  * Non-blocking: sync failures are logged but never fail the appointment operation.
  *
- * Note: calendarSync keeps its own single-client pattern because it uses
- * tenant_calendar_settings (not tenant_integration_settings) and the sync
- * action queries share the same DB client as the token refresh.
- * The SyncLogger type and TOKEN_BUFFER_MS constant are shared via tokenManagement.ts.
+ * Token acquisition + refresh + persist + deactivate-on-failure is handled
+ * by `getCalendarTokens()` in tokenManagement.ts (same helper the sync
+ * services use, single source of truth for the FOR UPDATE / refresh /
+ * persist pattern). The action-specific work below uses a separate
+ * connection — it doesn't need the row lock on tenant_calendar_settings.
  */
 export async function syncAppointmentToCalendar(
   pool: Pool,
@@ -29,64 +43,26 @@ export async function syncAppointmentToCalendar(
   const log: SyncLogger = logger || defaultSyncLogger;
   const prefix = ctx(tenantId, appointmentId, action);
 
+  // 1. Token acquisition + refresh via shared helper.
+  const tokens = await getCalendarTokens(
+    pool,
+    tenantId,
+    { google: gcal.refreshAccessToken, outlook: outlook.refreshAccessToken },
+    log
+  );
+  if (!tokens) {
+    // Helper logs the specific reason (no row, inactive, missing tokens,
+    // unsupported provider, refresh failure). Nothing more to do here.
+    return;
+  }
+
+  const { accessToken, refreshToken, calendarId, provider: providerKey } = tokens;
+  const { module: provider, name: providerName } = pickProviderModule(providerKey);
+
+  // 2. Run the action-specific work on a fresh connection — none of these
+  //    queries need the FOR UPDATE lock on tenant_calendar_settings.
   const client = await pool.connect();
   try {
-    // 1. Get calendar settings (direct query, no RLS — backend service context)
-    // FOR UPDATE locks the row to prevent concurrent token refresh races
-    const settingsRes = await client.query(
-      `SELECT provider, external_calendar_id, access_token, refresh_token, token_expires_at, is_active
-       FROM tenant_calendar_settings WHERE tenant_id = $1
-       FOR UPDATE`,
-      [tenantId]
-    );
-
-    const settings = settingsRes.rows[0];
-    if (!settings) return; // WHO: tenant has no calendar connected — silent no-op
-    if (!settings.is_active) {
-      log.warn(`${prefix} — skipped: calendar marked inactive (WHY: previous token refresh failed, user needs to reconnect)`);
-      return;
-    }
-    if (settings.provider !== 'google' && settings.provider !== 'outlook') {
-      log.warn(`${prefix} — skipped: provider="${settings.provider}" not supported (HOW: only Google and Outlook Calendar are implemented)`);
-      return;
-    }
-    if (!settings.access_token || !settings.refresh_token) {
-      log.warn(`${prefix} — skipped: missing tokens (WHY: OAuth flow was interrupted or tokens were revoked)`);
-      return;
-    }
-
-    // 2. Select the provider module
-    const provider: CalendarProvider = settings.provider === 'outlook' ? outlook : gcal;
-    const providerName = settings.provider === 'outlook' ? 'Outlook' : 'Google';
-
-    // 3. Refresh token if expired (uses shared buffer constant)
-    let accessToken = settings.access_token;
-    const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
-    if (Date.now() > expiresAt - TOKEN_BUFFER_MS.STANDARD) {
-      try {
-        const refreshed = await provider.refreshAccessToken(settings.refresh_token);
-        accessToken = refreshed.access_token;
-        await client.query(
-          `UPDATE tenant_calendar_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
-           WHERE tenant_id = $3`,
-          [refreshed.access_token, new Date(refreshed.expiry_date).toISOString(), tenantId]
-        );
-        log.info(`${prefix} — token refreshed (WHY: access_token expired or within 5min buffer)`);
-      } catch (err) {
-        // Token refresh failed — mark as disconnected so user sees "Reconnect"
-        await client.query(
-          `UPDATE tenant_calendar_settings SET is_active = false, updated_at = NOW() WHERE tenant_id = $1`,
-          [tenantId]
-        );
-        log.error(`${prefix} — token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked by user | HOW: is_active set to false, user will see "Reconnect" in dashboard | ERROR: ${err})`);
-        return;
-      }
-    }
-
-    const calendarId = settings.external_calendar_id;
-    const refreshToken = settings.refresh_token;
-
-    // 4. Execute the sync action
     if (action === 'create') {
       // Fetch appointment details
       const apptRes = await client.query(
@@ -115,7 +91,7 @@ export async function syncAppointmentToCalendar(
         `INSERT INTO appointment_sync_map (appointment_id, external_event_id, provider, last_synced_at)
          VALUES ($1, $2, $3, NOW())
          ON CONFLICT (appointment_id) DO UPDATE SET external_event_id = $2, provider = $3, last_synced_at = NOW()`,
-        [appointmentId, eventId, settings.provider]
+        [appointmentId, eventId, providerKey]
       );
       log.info(`${prefix} — event created in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${eventId} customer=${appt.customer_name || 'unknown'})`);
 

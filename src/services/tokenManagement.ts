@@ -233,20 +233,36 @@ export async function withSyncContext<T>(
 }
 
 /**
+ * Refresh-function map keyed by calendar provider name. Lets
+ * `getCalendarTokens` pick the right provider's refresh after it reads
+ * the row — the caller can't know which provider applies until then,
+ * so a single `refreshFn` parameter (the old shape) couldn't actually
+ * serve both providers from one call site.
+ */
+export interface CalendarRefreshMap {
+  google: RefreshFn;
+  outlook: RefreshFn;
+}
+
+/**
  * Token refresh for calendar settings (tenant_calendar_settings table).
  * Separate from integration settings because calendars use a different table.
+ *
+ * The caller passes refresh functions for both supported providers; this
+ * helper reads the row, decides which one to invoke based on the stored
+ * provider, and returns a discriminated result. Marks the calendar
+ * inactive on refresh failure so the dashboard can surface "Reconnect".
  */
 export async function getCalendarTokens(
   pool: Pool,
   tenantId: string,
-  refreshFn: RefreshFn,
-  providerName: string,
+  refreshMap: CalendarRefreshMap,
   logger?: SyncLogger,
 ): Promise<{
   accessToken: string;
   refreshToken: string;
   calendarId: string;
-  provider: string;
+  provider: 'google' | 'outlook';
 } | null> {
   const log = logger || defaultSyncLogger;
   const prefix = `[calendar-sync] tenant=${tenantId}`;
@@ -276,6 +292,10 @@ export async function getCalendarTokens(
       return null;
     }
 
+    const provider = settings.provider as 'google' | 'outlook';
+    const providerName = provider === 'google' ? 'Google' : 'Outlook';
+    const refreshFn = refreshMap[provider];
+
     let accessToken = settings.access_token;
     const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
 
@@ -303,7 +323,7 @@ export async function getCalendarTokens(
       accessToken,
       refreshToken: settings.refresh_token,
       calendarId: settings.external_calendar_id,
-      provider: settings.provider,
+      provider,
     };
   } finally {
     client.release();

@@ -137,7 +137,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(insertCall[1]).toEqual([APPOINTMENT_ID, EXTERNAL_EVENT_ID, 'google']);
 
     // Client released
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event created'));
   });
 
@@ -178,7 +178,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(updateCall[0]).toContain('UPDATE appointment_sync_map');
     expect(updateCall[1]).toEqual([APPOINTMENT_ID]);
 
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event updated'));
   });
 
@@ -215,7 +215,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
     expect(deleteCall[1]).toEqual([APPOINTMENT_ID]);
 
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted'));
   });
 
@@ -398,7 +398,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(gcal.createEvent).not.toHaveBeenCalled();
     expect(gcal.updateEvent).not.toHaveBeenCalled();
     expect(gcal.deleteEvent).not.toHaveBeenCalled();
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("INACTIVE-CALENDAR: When tenant's calendar integration is marked inactive (is_active=false), system skips sync so disabled calendars don't receive events", async () => {
@@ -415,7 +415,7 @@ describe("Calendar Sync — Sad Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     expect(gcal.createEvent).not.toHaveBeenCalled();
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("UNSUPPORTED-PROVIDER: When calendar provider is not 'google' or 'outlook', system logs warning and skips sync to handle misconfigured integrations gracefully", async () => {
@@ -432,7 +432,7 @@ describe("Calendar Sync — Sad Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     expect(gcal.createEvent).not.toHaveBeenCalled();
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("MISSING-ACCESS-TOKEN: When calendar integration has no access_token (incomplete OAuth), system skips sync to prevent API calls with invalid credentials", async () => {
@@ -449,7 +449,7 @@ describe("Calendar Sync — Sad Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     expect(gcal.createEvent).not.toHaveBeenCalled();
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("MISSING-REFRESH-TOKEN: When calendar integration has no refresh_token (incomplete OAuth), system skips sync because token refresh would fail", async () => {
@@ -466,7 +466,7 @@ describe("Calendar Sync — Sad Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     expect(gcal.createEvent).not.toHaveBeenCalled();
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Google authorization), system marks calendar inactive in DB to prevent repeated failed API calls", async () => {
@@ -505,7 +505,8 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('WHO:'));
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('WHY:'));
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Token revoked'));
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    // Refresh failure happens inside getCalendarTokens — only its connect/release
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("DELETE-NO-SYNC-MAP: When delete triggered for appointment with no sync_map entry (never synced to calendar), system skips API call and logs info since there's nothing to delete", async () => {
@@ -528,7 +529,7 @@ describe("Calendar Sync — Sad Paths", () => {
 
     // Should not attempt to delete from Google
     expect(gcal.deleteEvent).not.toHaveBeenCalled();
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("DELETE-API-ERROR: When Google Calendar delete fails (e.g., event already deleted manually), system logs warning but doesn't throw so appointment deletion completes", async () => {
@@ -561,7 +562,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
     expect(deleteCall[1]).toEqual([APPOINTMENT_ID]);
 
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted'));
   });
 
@@ -596,7 +597,7 @@ describe("Calendar Sync — Sad Paths", () => {
     }
 
     // The important thing: client is always released even on error
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
@@ -618,7 +619,9 @@ describe("Calendar Sync — Sad Paths", () => {
     }
 
     // Client is released via finally block
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    // (only 1 connect happens — settings SELECT throws inside getCalendarTokens
+    // before the action work block can acquire its own client)
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("PROACTIVE-REFRESH: When token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync", async () => {
@@ -735,7 +738,7 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(insertCall[0]).toContain('INSERT INTO appointment_sync_map');
     expect(insertCall[1]).toEqual([APPOINTMENT_ID, OUTLOOK_EVENT_ID, 'outlook']);
 
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('Outlook Calendar'));
   });
 
@@ -909,7 +912,8 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('refresh FAILED'));
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Outlook'));
     expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Token revoked'));
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    // Refresh failure happens inside getCalendarTokens — only its connect/release
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("OUTLOOK-DELETE-NO-MAP: When Outlook delete triggered for appointment with no sync_map entry (never synced), system skips API call since there's nothing to delete", async () => {
@@ -928,7 +932,7 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
 
     expect(outlookCal.deleteEvent).not.toHaveBeenCalled();
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('Outlook Calendar'));
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("OUTLOOK-DELETE-API-ERROR: When Graph API delete fails (e.g., event already deleted manually), system logs warning but doesn't throw so appointment deletion completes", async () => {
@@ -958,7 +962,7 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
     // Warning logged with Outlook context
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Outlook deleteEvent failed'));
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted from Outlook'));
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("OUTLOOK-FIRE-AND-FORGET: When Outlook API call fails during sync, system logs error but doesn't throw so appointment CRUD operations complete regardless of calendar status", async () => {
@@ -981,7 +985,7 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
       // Expected
     }
 
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("OUTLOOK-APPOINTMENT-NOT-FOUND: When Outlook create triggered for appointment_id that doesn't exist in DB (e.g., race condition), system skips sync to avoid creating orphan calendar events", async () => {
@@ -1000,7 +1004,7 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
 
     expect(outlookCal.createEvent).not.toHaveBeenCalled();
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('appointment not found'));
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("OUTLOOK-UPDATE-NOT-FOUND: When Outlook update triggered for appointment_id that doesn't exist in DB (e.g., deleted before sync), system skips sync gracefully", async () => {
@@ -1020,7 +1024,7 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
 
     expect(outlookCal.updateEvent).not.toHaveBeenCalled();
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('appointment not found'));
-    expect(mockClient.release).toHaveBeenCalledOnce();
+    expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
   it("OUTLOOK-PROACTIVE-REFRESH: When Outlook token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync", async () => {

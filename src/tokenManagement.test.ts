@@ -289,7 +289,11 @@ describe("getCalendarTokens — happy paths", () => {
 
     queryResponses.push({ rows: [makeCalendarRow()] });
 
-    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google", logger);
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: vi.fn(), outlook: vi.fn() },
+      logger
+    );
 
     expect(result).not.toBeNull();
     expect(result!.accessToken).toBe("cal-access-token");
@@ -309,15 +313,22 @@ describe("getCalendarTokens — happy paths", () => {
     })] });
     queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE response
 
-    const refreshFn = vi.fn().mockResolvedValue({
+    const googleRefresh = vi.fn().mockResolvedValue({
       access_token: "refreshed-cal-token",
       expiry_date: Date.now() + 3600_000,
     });
+    const outlookRefresh = vi.fn();
 
-    const result = await getCalendarTokens(pool, TENANT_ID, refreshFn, "Google", logger);
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: googleRefresh, outlook: outlookRefresh },
+      logger
+    );
 
     expect(result!.accessToken).toBe("refreshed-cal-token");
-    expect(refreshFn).toHaveBeenCalledWith("cal-refresh-token");
+    expect(googleRefresh).toHaveBeenCalledWith("cal-refresh-token");
+    // WHY: helper must pick the google refresh, not outlook, based on the row
+    expect(outlookRefresh).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Google token refreshed"));
   });
 
@@ -325,10 +336,28 @@ describe("getCalendarTokens — happy paths", () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
-    queryResponses.push({ rows: [makeCalendarRow({ provider: "outlook" })] });
+    queryResponses.push({
+      rows: [makeCalendarRow({
+        provider: "outlook",
+        token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      })],
+    });
+    queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE response
 
-    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Outlook");
+    const googleRefresh = vi.fn();
+    const outlookRefresh = vi.fn().mockResolvedValue({
+      access_token: "outlook-refreshed",
+      expiry_date: Date.now() + 3600_000,
+    });
+
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: googleRefresh, outlook: outlookRefresh }
+    );
     expect(result!.provider).toBe("outlook");
+    // WHY: helper must pick outlook refresh based on the row's provider, not google
+    expect(outlookRefresh).toHaveBeenCalledWith("cal-refresh-token");
+    expect(googleRefresh).not.toHaveBeenCalled();
   });
 });
 
@@ -343,7 +372,10 @@ describe("getCalendarTokens — sad paths", () => {
 
     queryResponses.push({ rows: [] });
 
-    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google");
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: vi.fn(), outlook: vi.fn() }
+    );
     expect(result).toBeNull();
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
@@ -355,7 +387,11 @@ describe("getCalendarTokens — sad paths", () => {
 
     queryResponses.push({ rows: [makeCalendarRow({ is_active: false })] });
 
-    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google", logger);
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: vi.fn(), outlook: vi.fn() },
+      logger
+    );
     expect(result).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("calendar marked inactive"));
   });
@@ -367,7 +403,11 @@ describe("getCalendarTokens — sad paths", () => {
 
     queryResponses.push({ rows: [makeCalendarRow({ provider: "yahoo" })] });
 
-    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Yahoo", logger);
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: vi.fn(), outlook: vi.fn() },
+      logger
+    );
     expect(result).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("not supported"));
   });
@@ -379,7 +419,11 @@ describe("getCalendarTokens — sad paths", () => {
 
     queryResponses.push({ rows: [makeCalendarRow({ access_token: null })] });
 
-    const result = await getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google", logger);
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: vi.fn(), outlook: vi.fn() },
+      logger
+    );
     expect(result).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("missing tokens"));
   });
@@ -394,9 +438,13 @@ describe("getCalendarTokens — sad paths", () => {
     })] });
     queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE is_active=false
 
-    const refreshFn = vi.fn().mockRejectedValue(new Error("OAuth revoked"));
+    const googleRefresh = vi.fn().mockRejectedValue(new Error("OAuth revoked"));
 
-    const result = await getCalendarTokens(pool, TENANT_ID, refreshFn, "Google", logger);
+    const result = await getCalendarTokens(
+      pool, TENANT_ID,
+      { google: googleRefresh, outlook: vi.fn() },
+      logger
+    );
     expect(result).toBeNull();
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("token refresh FAILED"));
 
@@ -410,7 +458,9 @@ describe("getCalendarTokens — sad paths", () => {
 
     mockClient.query.mockRejectedValueOnce(new Error("DB down"));
 
-    await expect(getCalendarTokens(pool, TENANT_ID, vi.fn(), "Google")).rejects.toThrow("DB down");
+    await expect(
+      getCalendarTokens(pool, TENANT_ID, { google: vi.fn(), outlook: vi.fn() })
+    ).rejects.toThrow("DB down");
     expect(mockClient.release).toHaveBeenCalledOnce();
   });
 });
