@@ -10,6 +10,9 @@
 /dashboard/build
 /agent/dist
 
+# supabase CLI version cache (auto-managed by `supabase` binary)
+/supabase/.temp/
+
 # logs
 *.log
 npm-debug.log*
