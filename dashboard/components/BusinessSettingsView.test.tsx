@@ -118,7 +118,9 @@ describe('BusinessSettingsView', () => {
     mockGetShiftSchedule.mockResolvedValue([])
 
     // Mock window.location for OAuth redirect tests
-    delete (window as typeof window & { location?: Location }).location
+    // @ts-expect-error — intentional test-only override; window.location is read-only in DOM lib
+    delete window.location
+    // @ts-expect-error — intentional test-only override
     window.location = { ...window.location, href: '', search: '' } as Location
   })
 

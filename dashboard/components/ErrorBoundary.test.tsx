@@ -13,7 +13,7 @@ import '@testing-library/jest-dom'
 import React from 'react'
 import { ErrorBoundary } from './ErrorBoundary'
 
-function Boom({ message = 'internal error: cannot read property x of undefined' }: { message?: string }) {
+function Boom({ message = 'internal error: cannot read property x of undefined' }: { message?: string }): never {
   throw new Error(message)
 }
 
@@ -46,8 +46,7 @@ describe('ErrorBoundary — user-facing message', () => {
     // WHY: Raw error strings leak implementation details, scare users,
     //        and sometimes reveal PII or internal paths. Production
     //        must hide them.
-    const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
+    vi.stubEnv('NODE_ENV', 'production')
     try {
       render(
         <ErrorBoundary>
@@ -60,7 +59,7 @@ describe('ErrorBoundary — user-facing message', () => {
       expect(screen.queryByText(/cannot read property x/)).not.toBeInTheDocument()
       expect(screen.queryByText(/secret-path/)).not.toBeInTheDocument()
     } finally {
-      process.env.NODE_ENV = originalEnv
+      vi.unstubAllEnvs()
     }
   })
 
@@ -69,8 +68,7 @@ describe('ErrorBoundary — user-facing message', () => {
     // WHAT: The dev-details block renders with the actual error message
     // WHY: Hiding the error entirely would hurt debugging. The dev
     //        branch is gated on process.env.NODE_ENV !== 'production'.
-    const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
     try {
       render(
         <ErrorBoundary>
@@ -81,7 +79,7 @@ describe('ErrorBoundary — user-facing message', () => {
         /dev-only diagnostic detail/
       )
     } finally {
-      process.env.NODE_ENV = originalEnv
+      vi.unstubAllEnvs()
     }
   })
 })

@@ -38,14 +38,14 @@ appointment tests live under `src/` and run via the new backend job).
 
 ### Follow-up
 
-- [ ] **Re-enable dashboard typecheck in CI.** Currently dropped because
-  `npx tsc --noEmit` fails on pre-existing test-file type errors:
-  `process.env.NODE_ENV` writes (read-only since newer @types/node),
-  `Boom` JSX return type (`void` not assignable to `ReactNode`),
-  `window.location` assignment in `BusinessSettingsView.test.tsx`.
-  Vitest tolerates them via SWC transform; `tsc` doesn't. Fix in a
-  focused dashboard-tests cleanup pass, then add `npx tsc --noEmit` to
-  the dashboard CI job.
+- [x] **Re-enable dashboard typecheck in CI.** Done 2026-04-30. Fixed
+  the three pre-existing test-file type errors that had been blocking
+  the gate: `Boom` now declares `: never` return type;
+  `process.env.NODE_ENV` writes replaced with `vi.stubEnv`/`vi.unstubAllEnvs`;
+  `BusinessSettingsView.test.tsx` `window.location` override now uses
+  `@ts-expect-error` (matching the existing pattern in
+  `ErrorBoundary.test.tsx`). Dashboard CI job now runs `npx tsc --noEmit`
+  + `npm test` (495 tests, all passing).
 
 ---
 

@@ -31,7 +31,7 @@ jobs:
         run: npm test
 
   dashboard:
-    name: Dashboard (tests)
+    name: Dashboard (typecheck + tests)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -51,11 +51,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      # NOTE: dashboard typecheck (npx tsc --noEmit) currently fails on
-      # pre-existing test-file type errors (process.env.NODE_ENV writes,
-      # Boom JSX return type, window.location assignment). Vitest tolerates
-      # them; the CI gate doesn't. Re-add the typecheck step after those
-      # are cleaned up in a focused pass — see docs/TODO.md.
+      - name: TypeScript check
+        run: npx tsc --noEmit
 
       - name: Run dashboard tests
         run: npm test
