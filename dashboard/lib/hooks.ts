@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Api } from './api';
 import { useActiveTenantId } from '@/lib/SessionContext';
-import type { Customer, Resource, Employee, Service, Shift, Skill } from './types';
+import type { Customer, Resource, Employee, Service, Skill } from './types';
 
 /**
  * Generic form state hook. Manages form fields, dirty tracking, and reset.
@@ -41,7 +41,6 @@ export function useStaticData(tenantIdOverride?: string | null) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,12 +54,11 @@ export function useStaticData(tenantIdOverride?: string | null) {
     setLoading(true);
     setError(null);
 
-    const [cRes, rRes, eRes, sRes, shRes, skRes] = await Promise.allSettled([
+    const [cRes, rRes, eRes, sRes, skRes] = await Promise.allSettled([
       Api.customers.list(tenantId),
       Api.resources.list(tenantId),
       Api.employees.list(tenantId),
       Api.services.list(tenantId),
-      Api.shifts.list(tenantId),
       Api.skills.list(tenantId),
     ]);
 
@@ -68,10 +66,9 @@ export function useStaticData(tenantIdOverride?: string | null) {
     setResources(rRes.status === 'fulfilled' && Array.isArray(rRes.value) ? rRes.value : []);
     setEmployees(eRes.status === 'fulfilled' && Array.isArray(eRes.value) ? eRes.value : []);
     setServices(sRes.status === 'fulfilled' && Array.isArray(sRes.value) ? sRes.value : []);
-    setShifts(shRes.status === 'fulfilled' && Array.isArray(shRes.value) ? shRes.value : []);
     setSkills(skRes.status === 'fulfilled' && Array.isArray(skRes.value) ? skRes.value : []);
 
-    const failures = [cRes, rRes, eRes, sRes, shRes, skRes].filter(r => r.status === 'rejected');
+    const failures = [cRes, rRes, eRes, sRes, skRes].filter(r => r.status === 'rejected');
     if (failures.length > 0) {
       const firstError = (failures[0] as PromiseRejectedResult).reason;
       console.error('Some data fetches failed', failures);
@@ -90,7 +87,6 @@ export function useStaticData(tenantIdOverride?: string | null) {
     resources,
     employees,
     services,
-    shifts,
     skills,
     loading,
     error,
@@ -143,10 +139,6 @@ export function useEmployees(tenantId?: string | null) {
 
 export function useServices(tenantId?: string | null) {
   return useEntityList<Service>(Api.services.list, tenantId);
-}
-
-export function useShifts(tenantId?: string | null) {
-  return useEntityList<Shift>(Api.shifts.list, tenantId);
 }
 
 export function useSkills(tenantId?: string | null) {

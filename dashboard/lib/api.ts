@@ -1,6 +1,6 @@
 import { normalizePhone } from './phone'
 import type {
-  Appointment, Customer, Resource, Employee, Service, Shift, ScheduleEntry, EffectiveShift, BulkEffectiveShift, Skill,
+  Appointment, Customer, Resource, Employee, Service, ScheduleEntry, EffectiveShift, BulkEffectiveShift, Skill,
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
   CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
   CallSummary, JobberSettings, CrmSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
@@ -373,19 +373,11 @@ export const Api = {
   },
 
   // --- SHIFTS ---
+  // No legacy weekly-pattern CRUD anymore — the wizard collects the
+  // weekly pattern in form state and posts it directly to expandWeekly.
+  // Date-specific entries are managed via `schedule` below
+  // (employee_schedule table) and the copy-week + expand-weekly RPCs.
   shifts: {
-    list: (tenantId: string | null) =>
-      apiFetch<Shift[]>(`/shifts`, tenantId ? { tenant_id: tenantId } : undefined),
-
-    create: (tenantId: string | null, data: Partial<Shift>) =>
-      apiMutate<{ shift: Shift }>(`/shifts/create`, 'POST', { tenant_id: tenantId, ...data }),
-
-    update: (id: string, tenantId: string | null, data: Partial<Shift>) =>
-      apiMutate<{ shift: Shift }>(`/shifts/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
-
-    delete: (id: string, tenantId: string | null) =>
-      apiMutate(`/shifts/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
-
     schedule: {
       list: (tenantId: string | null) =>
         apiFetch<ScheduleEntry[]>(`/shifts/overrides`, tenantId ? { tenant_id: tenantId } : undefined),
