@@ -1950,3 +1950,56 @@
 **What's working:** The recreated UX backlog is now fully cleared again, and prioritizing the remaining skill-map cluster over another low-value improvement batch was the right endgame move.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions already supported the right finish, keep focusing on the highest-value remaining task until the canonical UX log is complete again.
+
+## Ideas — 2026-05-01 (code patterns reviewed)
+
+### Task: Introduce a shared agent-tool response contract across route, client, and agent formatter
+**Status:** proposed
+**Files to change:** `src/routes/agentTools.ts:L124-L167`, `src/routes/agentTools.ts:L566-L571`, `agent/src/toolsClient.ts:L17-L118`, `agent/src/tools.ts:L23-L33`
+**What to do:** Add one small shared contract for `/agent-tools/*` success and failure envelopes, including the optional `error_code` field, then update the Fastify route helpers, the `ToolsClient` envelope parsing, and `formatResponse()` so they all consume the same shape instead of each re-declaring it locally. Keep runtime payloads unchanged, but stop making the route, client, and agent formatter each carry their own parallel idea of the response contract.
+**Done when:**
+- [ ] `/agent-tools/*` success and failure envelope types are declared in one shared location
+- [ ] `ok()`, `fail()`, and the `book-with-scheduling` error branch use that shared contract
+- [ ] `ToolsClient.call()` parses the shared envelope shape without its own inline envelope type literal
+- [ ] `formatResponse()` still preserves `error_code` for the LLM and all existing tests pass, new tests cover the shared contract if needed
+**Why it matters:** This is a three-hop boundary, route to HTTP client to LLM formatter, and duplicated envelope definitions make subtle drift easy when one side adds or changes a field.
+**Tradeoff:** The shared contract should stay tiny and transport-focused, not turn into a large cross-runtime abstraction layer.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Under an hour of shared typing would remove a real drift risk from one of the app’s most sensitive integration seams, a strong return.
+
+### Task: Extract repetitive LiveKit tool execute wiring into small helper builders in agent/src/tools.ts
+**Status:** proposed
+**Files to change:** `agent/src/tools.ts:L35-L306`
+**What to do:** Add one or two tiny local helpers in `agent/src/tools.ts` for the common execute patterns, for example no-arg passthrough tools and argument-mapping tools that end with `client.call(...)` plus `formatResponse(res)`. Keep every tool name, description, and parameter schema unchanged, but stop repeating the same execute boilerplate across the whole tool map.
+**Done when:**
+- [ ] No-arg tools like `get_service_catalog` and `get_customer_context` share one obvious execute helper where it improves clarity
+- [ ] Argument-mapping tools use a small helper only when it reduces repetition without hiding request-shaping details
+- [ ] Tool names, descriptions, parameter schemas, and request bodies remain unchanged
+- [ ] All existing tests pass, and the file is easier to scan from tool description to request shape
+**Why it matters:** The interesting parts of this file are the tool contracts and payload mapping, but the repeated async-call-format wrapper makes those differences harder to see than they need to be.
+**Tradeoff:** The helpers must stay very small and local, otherwise they will obscure the request-shaping logic they are meant to clarify.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it trims boilerplate from a central agent boundary without changing behavior.
+
+### Task: Reuse one scheduling-window parser across availability and booking agent-tool routes
+**Status:** proposed
+**Files to change:** `src/routes/agentTools.ts:L245-L276`, `src/routes/agentTools.ts:L399-L408`, `src/routes/agentTools.ts:L514-L525`
+**What to do:** Extract the repeated date parsing and range validation for agent scheduling routes into a narrow helper, for example one path for `start/end` validation and one for `{ from, to }` windows. Preserve the current conversational error messages and the existing `dateStr` derivation behavior, but stop open-coding `Date.parse`, `new Date(...)`, and end-after-start checks in multiple handlers.
+**Done when:**
+- [ ] `check-availability`, `scheduling-options`, and `book-with-scheduling` no longer each inline their own date parsing and end-after-start checks
+- [ ] Current conversational validation messages remain unchanged for callers
+- [ ] `dateStr` and ISO window behavior remain unchanged for scheduling lookups and RPC calls
+- [ ] All existing tests pass, new tests cover the shared parsing helper behavior if needed
+**Why it matters:** Time-window validation is subtle shared policy in the live-call path, and repeating it makes future timezone or validation edits easier to miss in one route than another.
+**Tradeoff:** The helper should stay route-local and specific to these agent-tool handlers, not become a generic date utility grab bag.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, good return because it consolidates a bug-prone validation pattern in a live-call codepath.
+
+## Self-Review — 2026-05-01
+**Cycles since last self-review:** 1
+**What's working:** The UX notes are useful again now that the last unreviewed SetupWizard/settings files have been covered, and the improvement pass stayed fresh by moving into the LiveKit agent-tool boundary instead of rehashing another CRUD helper family.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already handled the finished-UX state correctly, and this cycle still produced a concrete, non-duplicate improvement slice without extra steering.
