@@ -27,7 +27,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/services/crm/` - 20+ CRM adapter classes (GoHighLevel, Acuity, Booksy, Calendly, Mindbody, Pipedrive, Salesforce, ServiceTitan, Vagaro, Zenoti, Zoho, etc.) with a `BaseCRMAdapter` interface and registry factory `createCRMAdapter(provider, config)`. **Migrated from ai-secretary, not yet wired to any routes.** Will eventually replace the flat legacy clients above.
 - `/src/services/communications/` - Multi-channel comms engine. CommunicationService orchestrator + emailService, smsService, appointmentService, emailTemplates (Handlebars), ProviderRegistry, TwilioAdapter, MockAdapter, TelephonyProvider.interface. Consent-gated via ConsentService, usage-tracked via UsageTrackingService.
 - `/src/services/reminders/` - Appointment reminder pipeline. ReminderService schedules on appointment create; reminderProcessor delivers via CommunicationService; reminderRepository handles DB CRUD. Worker pulls from `reminder_schedules` table.
-- `/src/services/tenants/` - TenantConfigService (in-memory + DB-backed). **Prod implementation not yet wired** — agent worker currently hardcodes DynaTire's name/timezone.
+- `/src/services/tenants/` - TenantConfigService (in-memory + DB-backed). The class is still dormant (no callers), but the *need* it was meant to address is now solved — agent worker fetches `name`/`timezone` per call via `/agent-tools/tenant-config` (2026-05-01).
 - `/src/services/usage/` - UsageTrackingService stub. Records SMS/calls/emails in memory only; no DB persistence, no Stripe sync yet (TODO).
 - `/src/database/index.ts` - Lazy-init singleton pool. Bridges native `withTenantClient(pool)` to a `DatabaseService` interface used by communications/reminders/workers. Invisible glue; no routes touch it.
 - `/src/workers/reminderScheduler.ts` - Background job processor. Polls every 60s, batches up to 100 reminders, runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`. Started in `index.ts`, stopped on SIGTERM.
@@ -129,7 +129,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 Several service layers exist in the codebase but are not yet exposed via routes or fully connected. Reading these dirs may suggest features that don't actually function end-to-end:
 - **`src/services/crm/`** — 20+ adapter classes for booking platforms (Mindbody, Vagaro, Acuity, Calendly, Salesforce, etc.). No `routes/crm.ts` exists; the registry factory has no callers. Will eventually replace the legacy flat clients (`jobberClient.ts`, `hubspotClient.ts`, `squareClient.ts`, `servicetitanClient.ts`).
 - **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing.
-- **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but the agent worker still hardcodes DynaTire's name/timezone in `agent/src/index.ts`. Multi-tenant prod needs this wired.
+- **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but no caller routes through it. The agent worker no longer hardcodes DynaTire — a per-call `/agent-tools/tenant-config` lookup reads `tenants` directly (2026-05-01). Decision pending: either route the agent through `DatabaseTenantConfigService`, or delete the class.
 - **`src/types/`** — `ConsentRecord` and `OptOutRecord` have full type shapes and DB tables, but no consent management UI exists in the dashboard yet.
 
 ## Known Issues (as of April 2026)

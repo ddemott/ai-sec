@@ -24,14 +24,22 @@ Last updated: 2026-04-28.
 
 ---
 
-### 2. Wire `TenantConfigService` into the agent worker
-**Problem.** `agent/src/index.ts` hardcodes DynaTire's tenant name and timezone at runtime. Any other tenant falls back to "this business" with no timezone. `src/services/tenants/` already implements `DatabaseTenantConfigService`; nothing calls it from the agent.
+### ~~2. Wire `TenantConfigService` into the agent worker~~
+**Status: done 2026-05-01.**
 
-**Why P0.** Hard blocker on multi-tenant production. Agent cannot serve a second tenant correctly.
+The hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block in `agent/src/index.ts` is gone. The agent now calls a new `POST /agent-tools/tenant-config` route during session bootstrap (right before `buildSystemPrompt`), and the system prompt + greeting use the returned `name` and `timezone`. Soft-fails to "this business" / America/Chicago on backend error so a config blip never hangs up a live caller.
 
-**What to do.** Add a `/agent-tools/tenant-context` route (or extend an existing one) that returns `{ name, timezone, ... }` for a given tenant_id. Have the agent worker call it during session bootstrap (right after parsing dispatch metadata). Delete the hardcoded DynaTire constants.
+10 new tests cover both sides: 4 backend (`src/agentTools.test.ts` — happy, null-tz fallback, unknown tenant, non-UUID) and 6 agent-side (`agent/src/tenantConfig.test.ts` — happy plus 5 fallback paths).
 
-**Files.** `agent/src/index.ts`, `agent/src/sessionContext.ts`, new endpoint in `src/routes/agentTools.ts`, wire to `src/services/tenants/`.
+**Caveat.** The route reads `tenants` directly via `withTenantClient`, not through `DatabaseTenantConfigService`. The class in `src/services/tenants/` remains dormant. A separate decision is still open: route the agent through that service for caching/extension, or delete the class as YAGNI. Tracked in CLAUDE.md "Migrated, Not Yet Wired" — not blocking multi-tenant production any longer.
+
+#### Original audit notes (kept for context)
+
+> `agent/src/index.ts` hardcodes DynaTire's tenant name and timezone at runtime. Any other tenant falls back to "this business" with no timezone. `src/services/tenants/` already implements `DatabaseTenantConfigService`; nothing calls it from the agent.
+>
+> **Why P0.** Hard blocker on multi-tenant production. Agent cannot serve a second tenant correctly.
+>
+> **What to do.** Add a `/agent-tools/tenant-context` route (or extend an existing one) that returns `{ name, timezone, ... }` for a given tenant_id. Have the agent worker call it during session bootstrap (right after parsing dispatch metadata). Delete the hardcoded DynaTire constants.
 
 ---
 
