@@ -8,7 +8,6 @@ import {
   PhoneOff,
   Repeat,
   UserX,
-  Loader2,
   TrendingUp,
 } from 'lucide-react'
 import { Api } from '../lib/api'

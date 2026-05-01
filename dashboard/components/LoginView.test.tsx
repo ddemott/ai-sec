@@ -9,7 +9,7 @@
  * Each test has happy + sad paths with 5W comments.
  */
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import React from 'react'
 import LoginView from './LoginView'
