@@ -212,3 +212,16 @@
 
 ### SkillRelationshipMap (dashboard/components/skill-map/SkillRelationshipMap.tsx)
 - **[high]** The overall map experience is visually strong, but the interaction model still depends heavily on pointer behavior, tiny affordances, and sparse-state interpretation, which makes the feature harder to trust as the graph gets dense or empty → Add stronger keyboard-operable structure plus clearer top-level empty/loading guidance so the map remains understandable beyond mouse-driven exploration.
+
+## Review — 2026-05-01
+
+### SettingsView (dashboard/components/SettingsView.tsx)
+- **[medium]** The calendar connection cards are hand-rolled `<button>` elements with inline hover mutation instead of the shared Button/Card primitives, which makes this settings surface more likely to drift in focus styling, disabled treatment, and theme behavior than similar actions elsewhere → Rebuild the Google and Outlook connect affordances with the shared UI primitives and CSS-variable styling so they inherit consistent keyboard, loading, and theme behavior.
+- **[medium]** Resource create and toggle failures fall back to `console.error` with no user-facing error state, so a failed save or status change can look like the click simply did nothing → Surface inline or toast error feedback for resource mutations and preserve the pending state long enough for operators to tell whether the action succeeded.
+
+### SetupWizard.tsx (dashboard/components/SetupWizard.tsx)
+- **[low]** This file is only a one-line re-export of `./SetupWizard/index`, which leaves two parallel component entry paths to maintain and review for the same shell → Collapse to one canonical import path or add a clear convention so future edits and review passes do not treat this alias as a separate UX surface.
+
+### StepReview (dashboard/components/SetupWizard/StepReview.tsx)
+- **[high]** When services exist but `coverageData` is still empty after loading, the review step drops the entire coverage section and status message, which makes a high-stakes final check feel incomplete instead of clearly blocked or unavailable → Add an explicit no-coverage-yet state that explains whether assignments were not checked, coverage could not be calculated, or setup is still incomplete.
+- **[medium]** The review step hardcodes `gray` and `dark:bg-[#222]` colors instead of leaning on the theme CSS variables used elsewhere, so this summary screen is more likely to look off-brand or inconsistent across the project’s eight dark themes → Move these surfaces onto the shared theme tokens so the final setup review stays visually consistent with the rest of the dashboard.

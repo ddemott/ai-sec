@@ -1,193 +1,186 @@
-# Session state — 2026-04-29 (Wednesday)
+# Session state — 2026-05-01 (Friday), America/Chicago
 
 Last updated by `/remember` skill. Pairs with `/recall-memory` for resume.
 
 ## Where we stopped
 
-Doc-only working session. Mapped the codebase end-to-end, surfaced
-~10 architectural surprises CLAUDE.md hadn't captured, updated CLAUDE.md
-with surgical edits, and created `NEEDS-REFACTORING.md` (18 prioritized
-items across P0–P3). Last action was inserting the Grok TTS migration
-as item #9 (P2) per user request.
+Mid-session doc sweep. User asked "Update all *.md files. Make sure they
+are all relevant... statuses/dates etc... up to date." The sweep is
+complete in the working tree but **not committed**. After the sweep, user
+asked for a customer-hat critique of what's missing/broken in the
+product — that report was delivered verbally in chat and is mirrored at
+the end of this snapshot under "Customer-hat punchlist."
 
-**No code commits today.** No live-call testing was attempted.
-The Telnyx PSTN reachability blocker from Saturday's session
-(`+1 (630) 937-9478` → "not in service" from PSTN) is still open
-unless the user resolved it offline; this session didn't touch it.
+No external blockers tied to today's work. The standing blocker
+(Telnyx number `+1-630-937-9478` PSTN-unreachable) is unchanged from
+yesterday — see external state below.
 
 ## What shipped today
 
-**No git commits.** Everything below is uncommitted working-tree changes.
-
-- **CLAUDE.md updated** (28 line delta) — fixed route count (24 → 25),
-  migration count (76 → 77), added 8 missing directories under
-  Key Directories (`/src/services/crm/`, `/src/services/communications/`,
-  `/src/services/reminders/`, `/src/services/tenants/`, `/src/services/usage/`,
-  `/src/database/`, `/src/workers/`, `/src/templates/`, `/src/types/`),
-  noted `/supabase/functions/` is empty post-Vapi-rip-out, expanded the
-  `/agent` entry to mention `tools.ts`, updated Async Workers line in
-  Architecture to acknowledge the reminder scheduler, added a new
-  "Migrated, Not Yet Wired" section above Known Issues calling out
-  CRM adapters, UsageTrackingService stub, TenantConfigService unwired,
-  consent UI gap, and the dead `medical_v1.yaml` template.
-
-- **NEEDS-REFACTORING.md created** (~230 lines, 18 items) — new file
-  at repo root, structured P0–P3:
-  - P0 (3 items): CRM adapter layer fate, wire TenantConfigService into
-    agent, resolve UsageTrackingService stub.
-  - P1 (5 items): drop `employee_shifts` legacy table, delete
-    `medical_v1.yaml`, resolve `src/core/`, reconcile
-    `MIGRATED_FROM_AI_SECRETARY.md`, consolidate bug-named test files.
-  - P2 (5 items): switch agent TTS OpenAI → Grok (Phase 4) [#9, added
-    last per user], extract shared CRM sync structure, audit `src/index.ts`
-    (385 lines), prune/split `improvement-ideas.md` (142KB), CLAUDE.md
-    drift detection.
-  - P3 (5 items): `pw.txt` mystery, `.log` files at root, archive
-    session-summary docs, `.Clairvoyance/`+`.gemini/` cleanup,
-    `coverage/` from working tree.
+**Nothing committed.** Everything below is uncommitted in the working
+tree. The session was pure doc reconciliation.
 
 ## Decisions made
 
-- **NEEDS-REFACTORING.md is for structural cleanup of existing code,
-  not new features.** Feature/improvement items continue to live in
-  `improvement-ideas.md`. Footer makes the split explicit so future
-  contributors don't dump unrelated items here.
-- **Grok TTS migration placed at P2, not P0/P1.** Current OpenAI TTS
-  works (not a blocker); the code is in active use (not dead). Treated
-  it as planned vendor migration with cost/risk implications. Noted in
-  the file that the user can bump priority on request.
-- **Did NOT recommend consolidating the two booking RPCs** —
-  verified both `book_appointment_atomic()` and
-  `book_with_scheduling_atomic()` are in active use in
-  `src/routes/agentTools.ts` for distinct purposes. Initial assumption
-  they were redundant was wrong.
-- **Did NOT recommend deleting `src/types/voiceCrm.ts`** — verified
-  `src/routes/voice.ts` imports from it. Not legacy.
-- **CLAUDE.md route count is 25, not 27** as the Explore agent
-  initially claimed. Verified by `ls src/routes/*.ts | grep -v test |
-  grep -v routeHelpers | wc -l` = 25.
-- **CLAUDE.md migration count is 77.** `ls supabase/migrations/*.sql |
-  wc -l` = 77 today.
-- **The dormant CRM adapter layer in `src/services/crm/` is real
-  code, not stubs.** ~20 adapter classes (Mindbody, Vagaro, Acuity,
-  Salesforce, etc.) with a `BaseCRMAdapter` interface and registry
-  factory. Zero routes consume them. P0 item with three explicit options
-  (migrate flat clients, delete adapters, or park explicitly).
+- Kept session memory files frozen — only updated current-truth files
+  (CLAUDE.md, README.md, etc.) since session-* files are intentionally
+  point-in-time records.
+- Marked NEEDS-REFACTORING #6 (`src/core/`) as done after verifying
+  directory was already deleted and tests live at `src/scheduling.test.ts`.
+  Option A from the original options block was effectively chosen.
+- Kept historical FIXED entries in `docs/BUGS.md` untouched — those are
+  audit trail, not current state.
 
 ## Mistakes and corrections
 
-- **Initial Explore-agent claim of "27 route modules" was wrong.**
-  Caught by running `ls src/routes/*.ts | grep -v test | grep -v
-  routeHelpers | wc -l` myself before writing CLAUDE.md. Actual count
-  is 25. Lesson: verify counts directly when the source is an agent
-  summary, not a primary measurement.
-- **Wrote "80 SQL migrations" in the first CLAUDE.md edit; corrected
-  to 77.** Same root cause as above — the Explore agent gave a number
-  without me verifying. Fixed in a follow-up edit before finishing.
-- **Initially considered recommending `voiceCrm.ts` deletion as
-  "legacy".** Pre-flight grep showed `src/routes/voice.ts` imports it.
-  Removed from the refactor list before publishing. Lesson: grep before
-  classifying anything as "legacy" — type files especially are easy to
-  miss because they don't show up in service-flow tracing.
-- **Initially considered recommending consolidation of the two
-  booking RPCs.** Pre-flight grep showed both are wired into
-  `agentTools.ts` for different purposes. Removed before publishing.
+- **Initially missed CLAUDE.md line 207 "Project Status" block** during
+  the count refresh. Found it via grep and updated to 1,991 tests
+  (1,493 backend + 498 dashboard, verified 2026-04-30).
+- **Tried to edit `docs/DEPLOYMENT.md` without reading it first** —
+  Edit tool errored. Read first, then edited.
+- **Briefly looked for `SUMMARY-2026-04-24-0030.md` in repo root** based
+  on the stale git status snapshot from session start. It was archived
+  to `docs/sessions/2026-04-24-summary.md` in commit `bea6129` (one of
+  yesterday's). No action needed — the archive is the right state.
 
 ## In flight / uncommitted
 
-All low-risk. None block walking away.
+```
+ M CLAUDE.md              (route count 24→25, migration count 77→80,
+                           test count line 207 → 1,991)
+ M NEEDS-REFACTORING.md   (#6 src/core/ marked done)
+ M README.md              (status table tests 2,022→1,991, route count
+                           24→25, migration count 76→80, test invocation
+                           counts updated)
+ M docs/ARCHITECTURE.md   (last-verified line, line 43 migration count,
+                           §18.1 pyramid, §18.2/3 test counts)
+ M docs/CURRENT_STATUS.md (5W diag count, migration apply note, test
+                           summary table)
+ M docs/DEPLOYMENT.md     (migration count + recent migration list)
+ M docs/DIAGRAMS.md       (Postgres node migration count)
+ M docs/PLAN.md           (already touched yesterday: /coverage/staffing
+                           note about employee_shifts rip-out)
+ M docs/TODO.md           (last-updated date 2026-04-27→2026-04-30,
+                           CI test counts)
+```
 
-- **`CLAUDE.md`** — today's surgical edits (route/migration counts,
-  Key Directories additions, "Migrated, Not Yet Wired" section). Clean,
-  reviewed in this session, ready to commit whenever the user wants.
-- **`NEEDS-REFACTORING.md`** — new file, ~230 lines, 18 prioritized
-  items. Untracked (`??` in git status). Ready to commit.
-- **`agent/src/index.ts`** — Saturday's `agentName` + `jobMetadata`
-  changes, still uncommitted. Critical to LiveKit dispatch wiring.
-  Per the prior `/remember` snapshot, plan is to commit after first
-  successful PSTN call. Today's session did not touch this file.
-- **`agent/src/sessionContext.ts`** — Saturday's `buildSessionContext`
-  jobMetadata fallback. Same status as above.
-- **`SUMMARY-2026-04-24-0030.md`** — touched but not reviewed by me
-  this session. Likely Saturday's doc adjustments. Safe.
-- **`improvement-ideas.md`** — 374 lines added by automated process,
-  not this session. Same as prior snapshots. Safe to leave.
-- **`supabase/.temp/cli-latest`** — transient. Ignore.
-- **`.remember/`** — this snapshot. Untracked by design.
+Plus untracked:
+```
+?? .remember/        (this file — intentionally untracked per skill)
+```
+
+Safe to leave overnight. Pure doc edits, no half-finished refactors.
+Commit recommendation: single commit, message like
+`docs: reconcile counts and statuses after employee_shifts rip-out`.
 
 ## Next steps — in order
 
-1. **USER (~5 min, anytime):** Test the Telnyx number `+1 (630)
-   937-9478` from a non-cell source (Google Voice / different carrier).
-   Open from Saturday's session. Outcomes are the same as that snapshot
-   described — connect = LNP cache lag (wait); fail = open Telnyx
-   support ticket Monday-style with the same diagnostic ("Number Active,
-   SIP Connection routed, zero inbound attempts on Reports for 4+ days").
+1. **(Claude or user, ~1 min)** Commit the doc sweep. Single commit,
+   no overhead. **Done signal:** `git status` clean except `.remember/`.
 
-2. **CLAUDE (~5 min, after first successful call):** Commit the
-   uncommitted agent/src changes as planned in Saturday's snapshot.
-   Files: `agent/src/index.ts`, `agent/src/sessionContext.ts`. Suggested
-   message: *"feat(agent): wire agentName + job metadata fallback for
-   LiveKit dispatch."*
+2. **(User, ~2 min)** Set `DASHBOARD_URL` env var on Railway backend
+   service to `https://dashboard-production-cee3.up.railway.app`. This
+   is a 5+ day outstanding 2-min fix that breaks Stripe checkout and
+   every OAuth redirect for real customers. **Done signal:** Railway
+   variable visible, backend redeployed.
 
-3. **CLAUDE (~5 min, anytime — independent of the call):** Commit
-   today's documentation work. Suggested groupings:
-   - `docs(claude): expand Key Directories, add "Migrated, Not Yet
-     Wired" section`
-   - `docs: add NEEDS-REFACTORING.md backlog (18 items, P0–P3)`
-   These are clean and reviewable; no reason to wait on the live call.
+3. **(User, blocking external)** Follow up on Telnyx ticket #2850682.
+   Number `+1-630-937-9478` still unreachable from PSTN; Telnyx Reports
+   shows zero inbound attempts ever. Without this, no live call can ever
+   complete — beta testing with DynaTire blocked. **Done signal:** test
+   call from any cell phone reaches the LiveKit agent.
 
-4. **CLAUDE (~5 min, after first successful call):** Update DynaTire's
-   `tenants.inbound_phone` from `+16303970194` to `+16309379478` (carried
-   over from Saturday's snapshot).
+4. **(Claude, ~30 min once #3 unblocks)** Wire
+   `DatabaseTenantConfigService` into the agent worker. Today, the
+   agent hardcodes DynaTire's name and timezone in `agent/src/index.ts`.
+   Multi-tenant prod is theatrical until this lands. **Done signal:**
+   second tenant call greets with their business name, not "DynaTire."
 
-5. **USER decision (~5 min, blocking the next two refactor items):**
-   Decide CRM adapter fate (NEEDS-REFACTORING #1) — A migrate, B delete,
-   or C park. The decision sequences any extraction work on
-   jobber/hubspot/square/servicetitan sync (#10), since option A
-   subsumes #10.
+5. **(Claude, ~1-2 hours)** Update voice AI system prompt to teach the
+   LLM the OTP dance (Phase 3 TODO from CLAUDE.md / session-20260423-otp).
+   Without this, first call with partial caller-ID will hang on the
+   booking gate. **Done signal:** simulated call where caller-ID is `+1`
+   triggers send-verification-code → verify-phone-code → retry booking.
 
-6. **CLAUDE (~30 min, post-stable, easy P3 wins):** NEEDS-REFACTORING
-   items #14 (`pw.txt`), #15 (`.log` files), #17 (`.Clairvoyance/`,
-   `.gemini/`), #18 (`coverage/` cleanup). All are <10 min each, no
-   external dependencies. Could batch into one chore commit.
-
-7. **CLAUDE (variable):** Phase 4 — Grok TTS migration (NEEDS-REFACTORING
-   #9). The full plan is in that file's #9 entry.
+6. **(Claude, longer)** NEEDS-REFACTORING P2 items: Grok TTS swap (#9),
+   adapter wiring decisions, etc. Lower priority until 2-5 done.
 
 ## Open questions / unresolved
 
-- **Is the Telnyx number reachable from PSTN yet?** Saturday's blocker
-  was 8+ hours into "Active but zero inbound attempts on Reports".
-  Today is +4 days. Not checked this session — the user parked it.
-- **Did the user open the email yet?** Mentioned at session start that
-  it was outside business hours; we parked it. Unrelated to code work.
-- **CRM adapter fate (NEEDS-REFACTORING #1).** Three live options;
-  the user hasn't picked. Sequences task #10.
-- **`pw.txt`** — single-line file at repo root from 2026-03-01. Did
-  not read its contents (might be sensitive). Needs a 30-second
-  user-driven check.
-- **Should `medical_v1.yaml` actually be deleted, or kept as a "we
-  considered medical and ruled it out" historical artifact?**
-  CLAUDE.md says HIPAA verticals are permanently excluded. Deleting
-  is safe, but a one-line rationale comment in a remaining template
-  might preserve the policy intent.
+- Whether the within-file dedup of `docs/IMPROVEMENT_IDEAS.md` /
+  `improvement-ideas.md` needs a generator-side fix to stop the
+  recurrence. Both files were dedup'd yesterday but the journal-loop
+  process that writes them will reintroduce duplicates on next run.
+  No owner identified for the generator fix yet.
+- CRM service-layer SELECT queries (hubspotSync/squareSync/jobberSync/
+  servicetitanSync/calendarSync) still include soft-deleted records.
+  Per yesterday's TODO: needs product call on whether sync should push
+  deletions or just exclude.
+- Whether to ever wire the 20+ CRM adapters in `src/services/crm/` —
+  they exist in code, marketing implies they work, but no routes
+  register them. Decision: wire them, drop them, or document as "Pro
+  tier roadmap"?
 
 ## External state to be aware of
 
-- **Telnyx account** — number `+1 (630) 937-9478` purchased and
-  Active. SIP Connection `livekit-outbound` configured. Status as of
-  Saturday: PSTN unreachable, zero inbound attempts in Telnyx Reports.
-  Not re-checked today.
-- **LiveKit Cloud "AI-Secretary" project (US Central)** — trunk
-  `ST_Li58t3gXgo4N`, dispatch rule `SDR_if97ky4Zf7e6`, worker
-  `AW_vPmGExrgTeGn` registered. Untouched today.
-- **Railway** — `ai-sec` (backend) and `ai-sec-agent` (worker)
-  services in `joyful-spontaneity` project. No deploys today.
-- **Supabase** — production DB. `tenants.inbound_phone` for DynaTire
-  still has the old `+16303970194`. Pending step #4 above.
-- **Vapi account** — still deleted. No residual state.
-- **Local DB** (Docker port 5433) — untouched today.
-- **Dashboard** (Railway: dashboard-production-cee3.up.railway.app) —
-  untouched today. Still needs `DASHBOARD_URL` env var on the backend
-  Railway service for Stripe/OAuth redirects (carried-over open item).
+- **Telnyx ticket #2850682** — open, awaiting LERG investigation.
+  Last touch over a week ago in conversation. May need re-poke.
+  See `docs/TICKET_SUPPORT.md` (archived from repo root in commit
+  `62eef5b`).
+- **Railway** — backend (`ai-sec-production`) and agent
+  (`ai-sec-agent`) services running. Worker `AW_vPmGExrgTeGn`
+  registered with LiveKit. Awaiting first live call to confirm
+  carrier propagation.
+- **LiveKit Cloud** — project "AI-Secretary", US Central. Dispatch
+  rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent`.
+- **Supabase** — production DB at 80 migrations, most recent applied
+  is `20260430000002_drop_employee_shifts.sql`.
+- **Stripe** — webhook registered at backend `/billing/webhook`.
+  Will silently fail OAuth/checkout redirects until `DASHBOARD_URL`
+  is set on backend Railway env.
+
+## Customer-hat punchlist (delivered to user verbally; mirrored here)
+
+These are the gaps a paying customer would hit. Ordered by severity.
+
+**🔴 Showstoppers**
+
+1. Phone doesn't answer. Telnyx number unreachable from PSTN, 5+ days.
+2. `DASHBOARD_URL` env var missing → Stripe checkout + OAuth break.
+3. Multi-tenancy theatrical. Agent hardcodes DynaTire's name + tz.
+
+**🟠 First-call failure modes**
+
+4. Voice path never validated end-to-end in production.
+5. OTP gate boxes callers in — system prompt missing the dance.
+6. Reminders worker logic correct but never validated against
+   real Telnyx delivery.
+
+**🟡 Half-systems**
+
+7. UsageTrackingService is in-memory only — no metered billing.
+8. No subscription management UI; users must email to cancel.
+9. Consent / TCPA / GDPR types and tables exist; **no UI** for opt-outs.
+10. Marketing claims 6 verticals; only 5 templates, 3 generic-mapped.
+11. 20+ CRM adapters in code, none wired.
+12. Analytics 3/6 metrics live; the other 3 still placeholders.
+
+**🟢 Polish**
+
+13. No password reset, no "Remember me" with refresh tokens.
+14. No skeleton screens, no first-run nav callout.
+15. No production error tracking (Sentry/etc).
+16. No `/health` alerting.
+17. No DB backup runbook.
+18. `setup-db.sh` heredoc bug documented, not fixed.
+
+## Cross-references
+
+- Yesterday's massive day: 30+ commits ending in `127f48e` (drop
+  employee_shifts). Full commit log this week is in conversation context.
+- Authoritative numbers (verified 2026-04-30): **80 migrations,
+  25 route modules, 1,991 tests (1,493 backend + 498 dashboard,
+  2 documented skips)**, zero TypeScript errors.
+- Memory entry for today: not creating one — session was a doc-only
+  reconciliation, doesn't add knowledge that future-me needs in
+  permanent memory beyond what CLAUDE.md/MEMORY.md already track.

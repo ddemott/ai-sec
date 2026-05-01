@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-04-30 (25 route modules, 77 migrations, 10 voice-AI tools)
+**Last verified:** 2026-04-30 (25 route modules, 80 migrations, 10 voice-AI tools)
 
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. See `docs/FRAMEWORK_MIGRATIONS.md` for the migration index. The remaining open swap is OpenAI TTS → xAI Grok native (NEEDS-REFACTORING.md item #9).
 
@@ -40,7 +40,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI pending swap to xAI Grok)
 - **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (25 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 77 migrations, RLS on every tenant-scoped table
+- **DB**: Postgres + pgvector on Supabase, 80 migrations, RLS on every tenant-scoped table
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
@@ -227,8 +227,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Global / platform:**
 `business_templates` (vocabulary per business type), `audit_log`, `record_versions` (version history), `voice_sessions`, `consent_records`, `opt_out_records`.
 
-**Legacy (unused in production):**
-`employee_shifts` (weekly patterns, day_of_week 0-6) — replaced by `employee_schedule` in April 2026. No booking RPC or UI code references it.
+**Dropped 2026-04-30:**
+`employee_shifts` (weekly patterns) was retired entirely (NEEDS-REFACTORING #4 Phase 2). Setup wizard now collects weekly availability in form state and posts the pattern to `POST /shifts/expand-weekly`, which fans it into `employee_schedule` for 4 weeks at finalize. The `/shifts` legacy CRUD routes, `/coverage/staffing` analytics, and `Api.shifts.list/create/update/delete` are all gone.
 
 ### 4.3 Key columns
 
@@ -517,7 +517,7 @@ CREATE TABLE employee_schedule (
 );
 ```
 
-Date-based only — no weekly patterns, no overrides. Owners copy a week forward from the UI. `employee_shifts` (weekly patterns) still exists as a table but is never read by production code.
+Date-based only — no weekly patterns, no overrides. The `employee_shifts` weekly-pattern table that previously coexisted was dropped 2026-04-30 (NEEDS-REFACTORING #4 Phase 2). The setup wizard collects a weekly grid in form state and posts it to `POST /shifts/expand-weekly`, which fans the pattern into `employee_schedule` for 4 weeks at finalize. Owners then extend coverage forward via the Front Desk scheduler's copy-week button.
 
 ### 11.2 Effective shifts
 
@@ -798,15 +798,15 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
                 ╱────╲
                ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real `/agent-tools/*` Fastify routes)
               ╱────────╲
-             ╱  2,022   ╲    Vitest unit + integration (real DB, real RLS)
+             ╱  1,991   ╲    Vitest unit + integration (real DB, real RLS)
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 1,527 tests)
+### 18.2 Backend (`npm test` — 1,493 tests)
 
 Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, CRM sync clients, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: DynaTire caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 
-### 18.3 Dashboard (`cd dashboard && npm test` — 465 tests, 22 files)
+### 18.3 Dashboard (`cd dashboard && npm test` — 498 tests, 23 files)
 
 Vitest + React Testing Library (jsdom). Renders components with all 4 providers (Session, Theme, Vocabulary, AppointmentDetail). Tests interactions (click, keyboard, form submission), accessibility (role/tabIndex/aria attributes), and error states.
 

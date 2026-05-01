@@ -98,12 +98,8 @@ Pre-Phase-2, `employee_shifts` was actively read/written by:
 
 ---
 
-### 6. Resolve `src/core/`
-**Problem.** Directory contains test files (`scheduling.test.ts`, `scheduling-overrides.test.ts`) but no implementation — the actual scheduling code lives in `shared/scheduling.ts`. New readers see a `core/` dir and assume it's load-bearing.
-
-**Options.**
-- **A — Move the tests** next to their subject (`shared/scheduling.test.ts`) and delete the empty `src/core/` directory.
-- **B — Promote `core/` to a real module** by moving `shared/scheduling.ts` into it. Pick whichever direction matches the project's intended layout.
+### ~~6. Resolve `src/core/`~~
+**Status: done 2026-04-30.** Option A taken — tests live alongside `src/` (e.g. `src/scheduling.test.ts`), `src/core/` directory deleted. Scheduling implementation remains at `shared/scheduling.ts`. Only stale reference is a historical entry in `docs/BUGS.md` (FIXED record), kept as part of the bug log.
 
 ---
 

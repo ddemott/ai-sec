@@ -54,7 +54,7 @@
 - **Setup Wizard**: 7-step repeatable guided setup (Services, Resources, Employees, Shifts, Assignments, Review, Go Live) with live coverage feedback, phone activation, re-entry logic, first-run vs return modes
 - **Scheduler**: Staff swimlane view, resource columns view, appointment list view, date navigation, employee day focus panel, quick book panel (under 30 seconds)
 - **Skill Relationship Map**: Interactive 3-column layout (Employees | Skills | Resources) with animated SVG connection lines, broken chain detection, coverage badges
-- **Coverage Visibility**: `check_coverage_gaps()` Postgres function, coverage triggers, reusable coverage bar and badge components, `GET /coverage` and `GET /coverage/staffing` endpoints
+- **Coverage Visibility**: `check_coverage_gaps()` Postgres function, coverage triggers, reusable coverage bar and badge components, `GET /coverage` endpoint (`/coverage/staffing` was deleted 2026-04-30 with the `employee_shifts` rip-out — nothing in the dashboard consumed it)
 - **RAG Normalization**: `shared/normalizeForEmbedding.ts` normalizes text before embedding into pgvector; integrated with ingestion, call summaries, customer notes, and query lookup; raw text preserved alongside normalized
 - **Stripe Lite**: Solo ($129/mo), Growth ($279/mo), Professional ($449/mo) plans with Stripe Checkout, webhook handler, subscription gate middleware, onboarding integration
 

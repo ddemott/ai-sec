@@ -18,7 +18,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 - **Front Desk shift bars fixed** (BUG-072): scheduler now uses `get_effective_shifts_bulk()` RPC (single-query, date-based only); shift bar styling matches Front Desk and Working Hours.
 - **UI/UX audit** — 35 items resolved (Critical 7, High 13, Medium 15): wizard guards, ConfirmModal rollout, keyboard a11y, mobile responsive, theme compliance, URL-synced tab state, empty/loading states. See `docs/BUGS.md` for the per-item record.
 - **Playwright e2e** — 7 fix tests + 12-step functional audit. All pass.
-- **5W diagnostic compliance** — All 465 dashboard tests carry WHO/WHAT/WHEN/WHERE/WHY comments.
+- **5W diagnostic compliance** — All 498 dashboard tests carry WHO/WHAT/WHEN/WHERE/WHY comments.
 
 ### April 3-4 Session: Architecture Review + Scheduling Overhaul
 
@@ -39,7 +39,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 - Data lives in `employee_schedule` table (API: `Api.shifts.schedule.*`)
 - Both Working Hours and Front Desk scheduler read from same table
 - Default times: 8:00 AM - 5:00 PM
-- `employee_shifts` (weekly patterns) still exists in DB but no longer used by UI
+- `employee_shifts` (weekly patterns) was dropped 2026-04-30 (NEEDS-REFACTORING #4 Phase 2). Setup wizard now collects the weekly grid in form state and posts the pattern to `POST /shifts/expand-weekly`, which fans it into `employee_schedule` for 4 weeks at finalize.
 
 ### Other UI Work Done
 - Landing page `public/index.html`: added "Log in" button (was missing entirely)
@@ -50,11 +50,13 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 
 See `docs/TODO.md` for the unified task list.
 
-### Test Count (verified 2026-04-24)
-- **1,527 backend tests + 495 dashboard tests = 2,022 total**, 0 failures
+### Test Count (verified 2026-04-30 against real Postgres + dashboard)
+- **1,493 backend tests + 498 dashboard tests = 1,991 total**, 0 failures, 2 documented skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
-- Zero TypeScript errors (`npx tsc --noEmit` clean)
+- Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
+- CI now provisions Postgres 16 + applies migrations, so DB-level tests
+  actually run on every push (previously they silently skipped without Docker)
 
 ---
 
@@ -62,9 +64,9 @@ See `docs/TODO.md` for the unified task list.
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 24 route modules, Railway auto-deploy from main |
+| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 25 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 76 migrations applied, FORCE RLS on all tables |
+| **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables |
 | **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
 | **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
 | **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Telnyx ticket #2850682 open. |
@@ -73,7 +75,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,527 backend + 495 dashboard = 2,022 passing + 88 QA assertions | All green (verified 2026-04-24), zero TS errors |
+| **Tests** | 1,493 backend + 498 dashboard = 1,991 passing + 88 QA assertions | All green (verified 2026-04-30 against real DB + dashboard), zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
@@ -198,7 +200,7 @@ The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge
 
 1. ~~Deploy dashboard~~ — Done (commit `fb216e0`, live at https://dashboard-production-cee3.up.railway.app/)
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
-3. ~~Apply new migrations to Supabase~~ — Done. All 76 migrations applied (most recent: `20260427000000_telnyx_provisioning.sql`)
+3. ~~Apply new migrations to Supabase~~ — Done. All 80 migrations applied (most recent: `20260430000002_drop_employee_shifts.sql`)
 4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit 35 items + April 20 a11y 47 items, commit `f9ffa8e`)
 5. ~~**Voice AI migration**: Vapi → LiveKit Agents~~ — Done in commit `661d21d` (2026-04-27). Awaiting Telnyx ticket #2850682 to unblock first live call.
 6. **Beta testing with DynaTire** — blocked on the carrier issue above
@@ -277,4 +279,4 @@ The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge
 | Dashboard (all) | 16 files | 313 | Components, wizards, scheduler, CRM, settings |
 | Other backend | 11+ files | 281 | Auth, CRUD, billing, bugs, middleware, etc. |
 | QA live tests | 1 file | 29 calls / 88 assertions | Live `/agent-tools/*` Fastify route calls with DB verification |
-| **Total** | **75 backend + 22 dashboard + 1 QA** | **2,022 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration (verified 2026-04-24) |
+| **Total** | **75 backend + 23 dashboard + 1 QA** | **1,991 + 88 QA** | Happy + sad paths, 5W diagnostics, live integration (verified 2026-04-30) |

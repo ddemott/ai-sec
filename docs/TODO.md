@@ -1,6 +1,6 @@
 # TODO
 
-**Last updated:** 2026-04-27
+**Last updated:** 2026-04-30
 
 Single source of truth for all remaining work. Organized by priority.
 
@@ -21,9 +21,8 @@ Single source of truth for all remaining work. Organized by priority.
 
 Done in a focused pass. Two-job CI gate now runs on every push/PR to main:
 
-- **Backend job:** `npm ci`, `npx tsc --noEmit`, `npm test` (1,477 tests).
-- **Dashboard job:** `npm ci`, `npm test` (495 tests). Typecheck step
-  intentionally skipped — see follow-up below.
+- **Backend job:** `npm ci`, `npx tsc --noEmit`, `npm test` (1,493 tests, real Postgres service container).
+- **Dashboard job:** `npm ci`, `npx tsc --noEmit`, `npm test` (498 tests).
 
 **Deleted as zombies** (referenced paths/scripts that don't exist in this
 repo, leftover from the ai-secretary import):
@@ -45,7 +44,7 @@ appointment tests live under `src/` and run via the new backend job).
   `BusinessSettingsView.test.tsx` `window.location` override now uses
   `@ts-expect-error` (matching the existing pattern in
   `ErrorBoundary.test.tsx`). Dashboard CI job now runs `npx tsc --noEmit`
-  + `npm test` (495 tests, all passing).
+  + `npm test` (498 tests, all passing).
 
 ---
 

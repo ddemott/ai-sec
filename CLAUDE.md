@@ -12,7 +12,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 
 ## Architecture (current)
 - **Voice AI**: Telnyx (carrier + SIP trunk) -> LiveKit Cloud (SIP ingress) -> LiveKit Agent worker (Node) -> Deepgram (STT) + OpenAI (LLM/TTS) -> Fastify `/agent-tools/*`
-- **Backend API**: Node.js / Fastify (24 route modules under src/routes/) -> Postgres (Railway deployment)
+- **Backend API**: Node.js / Fastify (25 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Agent worker**: `agent/` package, deployed on Railway as `ai-sec-agent`. Single worker serves every tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - **Database**: Postgres with pgvector, RLS multi-tenancy, atomic booking RPCs
@@ -36,7 +36,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
 - `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
-- `/supabase/migrations` - 77 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning)
+- `/supabase/migrations` - 80 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning, RPC + table cleanup for the employee_shifts retirement)
 - `/supabase/functions` - **Empty.** All Vapi edge functions deleted in commit `661d21d`.
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts)
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
@@ -204,7 +204,7 @@ A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped a
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,527 backend tests + 495 dashboard tests = 2,022 total passing (verified 2026-04-24). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,493 backend tests + 498 dashboard tests = 1,991 total passing (verified 2026-04-30 against real DB + dashboard, 2 documented skips). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 

@@ -15,7 +15,7 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
 | **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
 | **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status |
-| **Tests** | 2,022 passing (1,527 backend + 495 dashboard), zero TypeScript errors |
+| **Tests** | 1,991 passing (1,493 backend + 498 dashboard), zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
@@ -49,7 +49,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 — Deepgram (STT)
                                 — OpenAI (LLM + TTS today; xAI Grok TTS Phase 4)
                                           |
-                                Fastify /agent-tools/* (24 route modules)
+                                Fastify /agent-tools/* (25 route modules)
                                           |
                                 PostgreSQL + pgvector (RLS multi-tenancy)
                                           |
@@ -59,9 +59,9 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 | Layer | Tech |
 |-------|------|
 | **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (xAI Grok TTS planned for agent Phase 4) |
-| **Backend** | Fastify 4.x, 24 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
+| **Backend** | Fastify 4.x, 25 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 76 migrations, Row Level Security, atomic booking RPCs |
+| **Database** | PostgreSQL + pgvector, 80 migrations, Row Level Security, atomic booking RPCs |
 | **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes) |
 | **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
@@ -121,9 +121,9 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ```
 /
 ├── src/                    Fastify backend
-│   ├── index.ts            Entry point (24 route registrations)
+│   ├── index.ts            Entry point (25 route registrations)
 │   ├── middleware.ts        withHandler, tenant middleware, structured logging
-│   ├── routes/             24 route modules + shared routeHelpers.ts (incl. agentTools.ts for the LiveKit agent)
+│   ├── routes/             25 route modules + shared routeHelpers.ts (incl. agentTools.ts for the LiveKit agent)
 │   ├── services/           CRM sync, calendar sync, token management, telnyxNumbers + telnyxSms
 │   └── database/           DatabaseService interface + Postgres implementation
 ├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM/TTS
@@ -133,7 +133,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── migrations/         76 SQL migrations
+│   ├── migrations/         80 SQL migrations
 │   └── seed.sql            Platform admin + DynaTire demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -145,8 +145,8 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,527 tests)
-cd dashboard && npx vitest run        # Dashboard (495 tests)
+npm test                              # Backend (1,493 tests)
+cd dashboard && npx vitest run        # Dashboard (498 tests)
 cd dashboard && npx playwright test   # E2e (19 Playwright tests)
 python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)
 ```
