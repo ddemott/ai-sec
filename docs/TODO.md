@@ -17,6 +17,52 @@ Single source of truth for all remaining work. Organized by priority.
 
 ---
 
+## Pre-launch hardening (from external review, 2026-05-01)
+
+Reconciled from `GROK-SUGGESTIONS.md`. Items already tracked elsewhere are not duplicated here — only the genuinely additive entries live in this section. See GROK-SUGGESTIONS.md for the full reconciliation table.
+
+### UX simplification — directional feedback (NEW, blocking beta)
+
+External review flagged the dashboard as **complex and hard to understand for non-technical users**. The target audience is shop owners and front-desk staff, not sysadmins. Today the app exposes a lot of its internal model (resources, skills, coverage gaps, RLS-aware tenant switcher, version history, audit fields) directly to those users.
+
+Treat this as a launch-blocker for beta with DynaTire — the carrier propagation question gets us a working voice path, but if the front-desk UI doesn't fit the staff member's day, the demo fails.
+
+- [ ] **Audit Front Desk view for non-technical operators.** Walk every primary task (book a call-in customer, look up tomorrow's schedule, mark someone unavailable, find a customer) and count clicks + decisions. Anything > 3 decisions for a daily task is a candidate for simplification.
+- [ ] **Hide "Back Office" surface from Front-Desk-only logins.** Today the two-tab nav is visible to every user. Front-desk staff don't need Resources/Services/Skills/Vocabulary/Version History tabs.
+- [ ] **Vocabulary pass on UI strings.** "Tenant", "RLS", "RPC", "embedding", "skill matrix", "coverage gap" all surface in user-facing copy. Replace with operator vocabulary ("business", "skill match", "uncovered shift").
+- [ ] **First-run guided tour for new tenants.** Today's setup wizard handles initial config but there's no "now that you're set up, here's what you do every morning" walkthrough.
+- [ ] **Mobile responsiveness validated for shop owners.** Tire shop / salon owners check schedules on their phone between customers. Today the dashboard targets desktop primarily; verify the daily-use flows (today's schedule, quick book, customer lookup) on iOS Safari + Android Chrome at common screen sizes.
+
+### Pre-launch validation
+
+- [ ] **Atomic booking RPC load test under concurrent calls.** Simulate N concurrent `book_with_scheduling_atomic` calls competing for the same slot/employee. Verify the row-lock contract holds and TIMESLOT_OCCUPIED is returned (not double-booked).
+- [ ] **Timezone / DST edge case audit.** BUG-059 fixed one regression in March 2026. Sweep all booking, reminder, and shift code paths for DST boundaries (spring-forward 2am→3am, fall-back duplicate hour) and tenant-timezone vs UTC mixups.
+- [ ] **Skill + resource matching reliability sweep.** End-to-end test: caller books service X requiring skill Y on resource Z. Verify the RPC's 7-layer constraint check rejects mismatches and accepts valid bookings across all 5 industry templates (automotive, salon, mobile_tire, auto_bays, ai_platform).
+- [ ] **Coverage gap detection backend↔UI consistency.** `check_coverage_gaps()` RPC and the dashboard's coverage bars both compute coverage. Verify they agree on edge cases (employee on leave, shift starting before business hours, day with zero scheduled employees).
+- [ ] **Multi-tenant isolation verification in production-like environment.** Run an explicit cross-tenant probe against Supabase production (with a throwaway second tenant): every endpoint, every RPC, every read path. RLS + FORCE RLS should hold, but verify rather than trust.
+
+### Observability
+
+Today the agent worker logs to stdout via Pino, the backend logs via Fastify, and the dashboard logs via Next.js. Nothing aggregates them or alerts on regression. Beta-blocker for support — when a customer says "the call dropped at 2:14pm", we need a way to find that call.
+
+- [ ] **Structured-log aggregation.** Pick one (Railway logs, Logtail, Axiom, etc.) and forward backend + agent + dashboard logs there. Filter by `tenant_id` + `call_id` for support cases.
+- [ ] **Basic metrics: call success rate, booking success rate, tool-call latency.** No PromQL / Grafana needed — a daily cron-emitted summary to email or Slack covers MVP.
+- [ ] **Error rate monitoring for first beta users.** Sentry (or similar) on dashboard + backend + agent. Alert on error-rate spike, not on individual errors.
+- [ ] **Expanded live QA suite.** `scripts/qa-live-test.py` covers 29 tool calls today. Add coverage for the OTP flow, the 5 specific booking error codes, and the timezone edge cases above.
+
+### Launch prep
+
+- [ ] **Security review of the production surface.** Specifically: webhook signature verification (Stripe + future), RLS coverage on every new table since 2026-03, JWT lifetime + refresh story, and the `/agent-tools/*` shared-secret rotation plan.
+- [ ] **Beta customer onboarding guide.** Setup wizard + first-call walkthrough + how to extend coverage forward. Currently nothing exists — first beta customer would need a screen-share with the founder.
+- [ ] **Pricing tiers finalized.** Solo ($129/mo) and Growth ($279/mo) are wired in Stripe. The Pro and Enterprise price IDs are present in env but no product/positioning. Decide before pricing is shown to a public-facing customer.
+
+### Voice validation (additive to Phase 13)
+
+- [ ] **Voice fallback path validation.** `runFallback()` exists but has never been invoked under real conditions. Force the failure modes (bad tenant_id, missing config, agent-tools/* unreachable) and verify the caller hears the fallback message rather than dead air.
+- [ ] **Call transcript + summary flow confirmed end-to-end.** Post-call summary write-back (`call_summaries` + embedding) was wired for Vapi; verify the LiveKit-side dispatcher does the equivalent on call end.
+
+---
+
 ## CI Rot — RESOLVED (2026-04-30)
 
 Done in a focused pass. Two-job CI gate now runs on every push/PR to main:
@@ -53,7 +99,7 @@ appointment tests live under `src/` and run via the new backend job).
 Migration shipped in `661d21d` (2026-04-27). Vapi account deleted. **Truth-of-state lives in `docs/FRAMEWORK_MIGRATIONS.md`** — don't duplicate it here.
 
 **Open work (TODO-tracked, not in FRAMEWORK_MIGRATIONS.md):**
-- **Phase 4 — native xAI Grok TTS in agent worker.** Tracked in detail at `NEEDS-REFACTORING.md` #9 and `FRAMEWORK_MIGRATIONS.md` #3.
+- **Phase 4 — native xAI Grok TTS in agent worker.** Code-complete 2026-05-01 (`agent/src/grokTTS.ts`). End-to-end PSTN validation pending Phase 5 below. Tracked at `NEEDS-REFACTORING.md` #9 and `FRAMEWORK_MIGRATIONS.md` #3.
 - **Phase 5 — first live PSTN call + DynaTire integration testing.** Blocked on Telnyx ticket #2850682 (`+1-630-937-9478` PSTN reachability). See `TICKET_SUPPORT.md`.
 - **Phase 6 — dashboard updates** (call status, live transcription). Design TBD; currently shows post-call summaries only. Only tracked here.
 
