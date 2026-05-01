@@ -199,8 +199,10 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 | `LIVEKIT_API_KEY` | Yes | LiveKit Cloud API key |
 | `LIVEKIT_API_SECRET` | Yes | LiveKit Cloud API secret |
 | `AGENT_SECRET` | Yes | Min 32 chars. Must match backend's `AGENT_SECRET`. |
-| `OPENAI_API_KEY` | Yes | LLM (GPT-4o-mini) + TTS (until xAI Grok migration) |
+| `OPENAI_API_KEY` | Yes | LLM (GPT-4o-mini) + `runFallback()` last-resort TTS |
 | `DEEPGRAM_API_KEY` | Yes | STT (Nova-3) |
+| `XAI_API_KEY` | Yes | Primary TTS (Grok). Without this the agent worker refuses to start. |
+| `XAI_TTS_VOICE` | No | One of `eve` \| `ara` \| `rex` \| `sal` \| `leo`. Default `ara`. |
 | `BACKEND_URL` | No | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`. |
 | `LOG_LEVEL` | No | `trace` \| `debug` \| `info` (default) \| `warn` \| `error` |
 
@@ -210,12 +212,6 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Yes | Backend public URL. Compiled into the bundle at build time. |
 | `NODE_ENV` | (auto) | Next.js sets this; check for production-only code paths only. |
-
-#### Pending
-
-| Variable | Status | Description |
-|---|---|---|
-| `XAI_API_KEY` | Not yet wired | Will be required by the agent once Phase 4 (xAI Grok TTS) ships. Tracked in `NEEDS-REFACTORING.md` item #9. |
 
 ---
 

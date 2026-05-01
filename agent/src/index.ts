@@ -27,6 +27,7 @@ import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 
 import { config } from './config.js';
+import { GrokTTS } from './grokTTS.js';
 import { buildSessionContext } from './sessionContext.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
@@ -119,7 +120,7 @@ export default defineAgent({
       vad: ctx.proc.userData.vad as silero.VAD,
       stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
       llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-      tts: new openai.TTS({ apiKey: config.OPENAI_API_KEY }),
+      tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
     });
 
     const agent = new voice.Agent({
@@ -147,7 +148,7 @@ async function runFallback(ctx: JobContext, message: string): Promise<void> {
       vad: ctx.proc.userData.vad as silero.VAD,
       stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
       llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-      tts: new openai.TTS({ apiKey: config.OPENAI_API_KEY }),
+      tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
     });
     const agent = new voice.Agent({
       instructions: 'Say the provided message and end the call politely.',

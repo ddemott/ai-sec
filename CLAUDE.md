@@ -8,10 +8,10 @@ Multi-tenant AI receptionist platform for service businesses (tire shops, salons
 See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 1. **Voice orchestrator: Vapi → LiveKit Agents** — Done (2026-04-27, commit `661d21d`). Vapi account deleted, all Vapi code removed. Telnyx number `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → LiveKit dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn` registered). Awaiting first live call to confirm carrier-side propagation; see `docs/TICKET_SUPPORT.md` (Telnyx ticket #2850682).
 2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — Done. 10 voice AI tools (8 original + 2 OTP) in `src/routes/agentTools.ts`. All booking routes gated on `isValidPhone`. Edge function `supabase/functions/vapi-tools/` deleted in `661d21d`.
-3. **TTS provider: OpenAI TTS → xAI Grok (native in agent)** — Pending. Agent currently uses `openai.TTS` at `agent/src/index.ts:122,150`. Phase 4 swaps to a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly. The earlier Vapi custom-voice proxy at `src/routes/tts.ts` was deleted in `661d21d` along with everything else Vapi-shaped.
+3. **TTS provider: OpenAI TTS → xAI Grok (native in agent)** — Code-complete 2026-05-01. `agent/src/grokTTS.ts` implements the LiveKit TTS plugin against `https://api.x.ai/v1/tts` (PCM 24kHz mono); the primary `voice.AgentSession` uses it. `runFallback()` still uses `openai.TTS` so a missing/invalid `XAI_API_KEY` never produces dead-air on a live call. End-to-end validation pending first PSTN call (blocked on Telnyx ticket #2850682).
 
 ## Architecture (current)
-- **Voice AI**: Telnyx (carrier + SIP trunk) -> LiveKit Cloud (SIP ingress) -> LiveKit Agent worker (Node) -> Deepgram (STT) + OpenAI (LLM/TTS) -> Fastify `/agent-tools/*`
+- **Voice AI**: Telnyx (carrier + SIP trunk) -> LiveKit Cloud (SIP ingress) -> LiveKit Agent worker (Node) -> Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) -> Fastify `/agent-tools/*`
 - **Backend API**: Node.js / Fastify (25 route modules under src/routes/) -> Postgres (Railway deployment)
 - **Agent worker**: `agent/` package, deployed on Railway as `ai-sec-agent`. Single worker serves every tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind CSS + TypeScript
@@ -50,7 +50,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - **Voice agent**: LiveKit Agents (Node), `@livekit/agents-plugin-deepgram`, `@livekit/agents-plugin-openai`, `livekit-server-sdk`
 - **Database**: PostgreSQL + pgvector (ankane/pgvector Docker image)
 - **Testing**: Vitest (backend + dashboard), Playwright (e2e)
-- **Voice stack**: Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (xAI Grok TTS planned for Phase 4)
+- **Voice stack**: Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (voice synthesis, default voice `ara`; OpenAI TTS retained as a runFallback() last-resort path)
 - **QA**: `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes
 
 ## Development

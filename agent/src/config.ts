@@ -18,6 +18,8 @@ const envSchema = z.object({
 
   OPENAI_API_KEY: z.string().min(1),
   DEEPGRAM_API_KEY: z.string().min(1),
+  XAI_API_KEY: z.string().min(1),
+  XAI_TTS_VOICE: z.enum(['eve', 'ara', 'rex', 'sal', 'leo']).default('ara'),
 
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });

@@ -1,0 +1,201 @@
+/**
+ * Tests for the xAI Grok TTS plugin. Fetch is mocked end-to-end; we never
+ * hit the real xAI endpoint.
+ *
+ * Covers: constructor validation, request shape (URL, headers, body), and
+ * audio frame emission (final-flag, abort handling, upstream error path).
+ */
+import { describe, it, expect, beforeAll } from 'vitest';
+import { initializeLogger } from '@livekit/agents';
+import { GrokTTS } from './grokTTS.js';
+
+// LiveKit's tts.ChunkedStream constructs a logger eagerly; the test runner
+// has no agent CLI to do that for us.
+beforeAll(() => {
+  initializeLogger({ pretty: false, level: 'silent' });
+});
+
+const API_KEY = 'xai-test-key';
+const SAMPLE_RATE = 24_000;
+
+/**
+ * Build a Response that returns `byteLength` bytes of zeroed PCM. AudioByteStream
+ * needs ≥ 2 bytes (one Int16 sample) per frame. By default we pass 100ms worth
+ * of audio (one frame at 24kHz mono = sampleRate/10 * 2 bytes = 4800).
+ */
+function pcmResponse(byteLength = 4800, status = 200): Response {
+  const buf = new ArrayBuffer(byteLength);
+  return new Response(buf, { status, headers: { 'content-type': 'audio/pcm' } });
+}
+
+describe('GrokTTS constructor', () => {
+  it('SAD: missing apiKey throws synchronously', () => {
+    // WHO: Operator forgot to set XAI_API_KEY in Railway env
+    // WHAT: Constructor throws immediately rather than failing on first call
+    // WHY: Surfaces config errors at agent startup, not mid-call dead air
+    // @ts-expect-error testing the runtime guard
+    expect(() => new GrokTTS({})).toThrow(/XAI_API_KEY/);
+  });
+
+  it('HAPPY: declares 24kHz mono, non-streaming capabilities', () => {
+    // WHY: voice.AgentSession asks the TTS for sample rate / channels to
+    //       size its audio pipeline; if these drift the playback warps
+    const t = new GrokTTS({ apiKey: API_KEY });
+    expect(t.sampleRate).toBe(SAMPLE_RATE);
+    expect(t.numChannels).toBe(1);
+    expect(t.capabilities.streaming).toBe(false);
+    expect(t.model).toBe('grok-tts');
+    expect(t.provider).toBe('api.x.ai');
+  });
+});
+
+describe('GrokTTS.synthesize', () => {
+  it('HAPPY: posts the documented xAI payload (URL, auth, body)', async () => {
+    // WHO: Live caller hears the agent greeting; that string flows through here
+    // WHAT: Verify the request shape matches xAI's /v1/tts contract exactly —
+    //        endpoint, bearer token, JSON body keys, PCM 24kHz output_format
+    // WHY: A drift in any of these silently fails — request gets rejected
+    //        by xAI and the caller hears dead air. Pin every field.
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: typeof fetch = async (url, init) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return pcmResponse();
+    };
+    const t = new GrokTTS({ apiKey: API_KEY, voice: 'rex', fetchImpl });
+
+    const stream = t.synthesize('Hello caller');
+    // Drain the stream so run() executes
+    for await (const _frame of stream) {
+      // no-op
+    }
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe('https://api.x.ai/v1/tts');
+    expect(calls[0].init.method).toBe('POST');
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe(`Bearer ${API_KEY}`);
+    expect(headers['Content-Type']).toBe('application/json');
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body).toEqual({
+      text: 'Hello caller',
+      voice_id: 'rex',
+      language: 'en',
+      output_format: { codec: 'pcm', sample_rate: SAMPLE_RATE },
+    });
+  });
+
+  it('HAPPY: emits frames; the LAST frame is marked final:true', async () => {
+    // WHO: AgentSession playback consumes frames and uses final:true to
+    //       decide when a segment is complete (end-of-utterance for VAD)
+    // WHAT: Two frames worth of PCM in → two frames out, only the last final
+    // WHY: If we marked every frame final the playback would chop. If we
+    //       never marked final, downstream silence detection would hang.
+    const fetchImpl: typeof fetch = async () => pcmResponse(9_600); // 200ms = 2 frames
+    const t = new GrokTTS({ apiKey: API_KEY, fetchImpl });
+
+    const collected: Array<{ final: boolean }> = [];
+    for await (const frame of t.synthesize('two-frame greeting')) {
+      collected.push({ final: frame.final });
+    }
+
+    expect(collected.length).toBeGreaterThanOrEqual(2);
+    // Only the trailing frame should carry final:true
+    expect(collected[collected.length - 1].final).toBe(true);
+    expect(collected.slice(0, -1).every((f) => f.final === false)).toBe(true);
+  });
+
+  it('SAD: upstream non-2xx surfaces via the error event with status + body', async () => {
+    // WHO: xAI rate-limit, bad voice ID, or expired API key
+    // WHAT: Stream emits an `error` event carrying the HTTP status + xAI
+    //        body so AgentSession's metrics pipeline can log it. The
+    //        iteration itself ends cleanly (parent class swallows the
+    //        throw and closes the queue).
+    // WHY: AgentSession listens for `error` to mark the segment failed;
+    //        if we lost the status code there it would be impossible to
+    //        tell auth failure from rate-limit from bad voice in prod logs
+    const fetchImpl: typeof fetch = async () =>
+      new Response('{"error":"invalid voice_id"}', {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    const t = new GrokTTS({ apiKey: API_KEY, fetchImpl });
+    const errorEvents: Array<{ error: Error }> = [];
+    t.on('error', (e) => errorEvents.push(e as { error: Error }));
+
+    let frameCount = 0;
+    for await (const _frame of t.synthesize('bad call')) {
+      frameCount++;
+    }
+
+    expect(frameCount).toBe(0);
+    expect(errorEvents.length).toBe(1);
+    expect(errorEvents[0].error).toBeInstanceOf(Error);
+    expect(errorEvents[0].error.message).toContain('400');
+    expect(errorEvents[0].error.message).toContain('invalid voice_id');
+  });
+
+  it('SAD: AbortError mid-fetch ends the stream cleanly (no throw)', async () => {
+    // WHO: Caller hangs up while a TTS chunk is in flight, AgentSession
+    //       aborts the synth to free resources
+    // WHAT: Stream returns without throwing — the parent class still
+    //        closes the queue downstream
+    // WHY: An uncaught abort would crash the worker and drop unrelated
+    //        concurrent calls. Aborts are normal call-end signals.
+    const fetchImpl: typeof fetch = async () => {
+      const err = new Error('aborted');
+      err.name = 'AbortError';
+      throw err;
+    };
+    const t = new GrokTTS({ apiKey: API_KEY, fetchImpl });
+
+    const stream = t.synthesize('will-be-aborted');
+    let frameCount = 0;
+    let threw = false;
+    try {
+      for await (const _frame of stream) {
+        frameCount++;
+      }
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(false);
+    expect(frameCount).toBe(0);
+  });
+
+  it('HAPPY: updateOptions changes the voice on the next call', async () => {
+    // WHY: A future "per-tenant voice" feature will swap voice between
+    //       calls on the same TTS instance; verify the option is picked up
+    let observedVoice: string | undefined;
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      observedVoice = JSON.parse(init!.body as string).voice_id;
+      return pcmResponse();
+    };
+    const t = new GrokTTS({ apiKey: API_KEY, voice: 'ara', fetchImpl });
+
+    t.updateOptions({ voice: 'leo' });
+    for await (const _f of t.synthesize('after update')) {
+      // drain
+    }
+    expect(observedVoice).toBe('leo');
+  });
+});
+
+describe('GrokTTS.stream', () => {
+  it('SAD: throws — xAI does not expose a streaming endpoint', () => {
+    // WHY: Capabilities advertise streaming:false, but defense-in-depth:
+    //       if anything calls stream() it should fail loud, not return a
+    //       broken stream that emits no frames
+    const t = new GrokTTS({ apiKey: API_KEY });
+    expect(() => t.stream()).toThrow(/Streaming is not supported/);
+  });
+});
+
+describe('GrokTTS.close', () => {
+  it('HAPPY: resolves without error', async () => {
+    // WHY: AgentSession calls close() during teardown; if we threw, the
+    //       worker would log noisy errors on every call end
+    const t = new GrokTTS({ apiKey: API_KEY });
+    await expect(t.close()).resolves.toBeUndefined();
+  });
+});
+

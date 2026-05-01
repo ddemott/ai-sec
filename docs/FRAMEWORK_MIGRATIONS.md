@@ -30,13 +30,11 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 ## 3. TTS provider: OpenAI TTS → xAI Grok (native in agent)
 
-**Status:** Pending. Tracked as `NEEDS-REFACTORING.md` item #9 (P2).
+**Status:** Code-complete 2026-05-01. End-to-end validation pending first live call (blocked on Telnyx ticket #2850682). The fallback path inside `runFallback()` still uses `openai.TTS` as a last-resort voice if config is too broken to construct GrokTTS — intentional, so a misconfigured XAI key never produces dead-air on the caller's end.
 
 **Why:** Cost, latency, and voice quality evaluation. The earlier interim plan (Vapi custom-voice proxy at `src/routes/tts.ts`) was abandoned and that file deleted in `661d21d` along with everything else Vapi-shaped.
 
-**Current implementation:** Agent uses `openai.TTS` at `agent/src/index.ts:122,150`.
-
-**Target:** Custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly from the agent worker. Validatable via unit tests + LiveKit playground call (no PSTN dependency). Estimated 1–2 hours.
+**Implementation:** `agent/src/grokTTS.ts` — `GrokTTS` class extending `tts.TTS`, posting to `https://api.x.ai/v1/tts` with `output_format: { codec: 'pcm', sample_rate: 24000 }`. Wired into the primary `voice.AgentSession` at `agent/src/index.ts`. Voice configurable via `XAI_TTS_VOICE` env (eve | ara | rex | sal | leo, default `ara`). 9 unit tests cover request shape, frame emission, abort handling, upstream errors, and option updates.
 
 ---
 

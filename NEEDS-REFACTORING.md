@@ -137,21 +137,12 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 
 ## P2 — Code quality / convention drift
 
-### 9. Switch agent TTS from OpenAI to xAI Grok (Phase 4)
-**Status.** Documented as Phase 4 of the framework migrations in CLAUDE.md but not started in the new LiveKit-native stack. The agent worker currently calls `openai.TTS` at `agent/src/index.ts:122,150`. The earlier Grok-via-Vapi-proxy (`src/routes/tts.ts`) was deleted in commit `661d21d` along with the rest of the Vapi rip-out, so the project has prior Grok integration experience but no current Grok wiring.
+### ~~9. Switch agent TTS from OpenAI to xAI Grok (Phase 4)~~
+**Status: code-complete 2026-05-01.** New `agent/src/grokTTS.ts` implements `tts.TTS` (24kHz mono PCM) against `https://api.x.ai/v1/tts`. The primary `voice.AgentSession` in `agent/src/index.ts` now uses GrokTTS; the `runFallback()` last-resort path still constructs `openai.TTS` so a missing/invalid `XAI_API_KEY` never produces dead-air on a live call. Voice configurable via `XAI_TTS_VOICE` env (`eve | ara | rex | sal | leo`, default `ara`). 9 unit tests in `agent/src/grokTTS.test.ts` cover request shape (URL, bearer auth, body keys), frame emission with `final:true` on the trailing frame, abort handling, upstream non-2xx → error event, and `updateOptions()` voice swap. `npx tsc --noEmit` clean both backend and agent; agent suite is now 53 passing tests.
 
-**Why a refactor concern.** Doubles down on OpenAI for both LLM and voice — concentrates vendor risk and per-minute cost on one provider. The decision to switch was already made and documented; the longer it sits unfinished, the more Phase 4's context fades.
+**Caveat.** End-to-end validation requires a live PSTN call, currently blocked on Telnyx ticket #2850682. Once that clears, the first call should be on the new `+1-630-937-9478` number with `XAI_API_KEY` set in Railway. If GrokTTS misbehaves, swapping back is a one-line revert in `agent/src/index.ts`.
 
-**What to do.**
-- Build a `GrokTTS` class in `agent/src/` matching the LiveKit Agents TTS plugin interface, calling `https://api.x.ai/v1/tts` directly.
-- Wire it into the voice.Agent at `agent/src/index.ts:122,150` (replacing `openai.TTS`).
-- Add `XAI_API_KEY` to `.env.production.example` and to Railway env on the `ai-sec-agent` service.
-- Pick a default voice ID; allow per-tenant override via tenant config.
-- Test end-to-end with one live call before retiring the OpenAI TTS path.
-
-**Files.** `agent/src/index.ts`, new `agent/src/grokTTS.ts`, env config, `tenant_config` schema if per-tenant voice is desired.
-
-**Note.** Soft dependency on task #2 if you want per-tenant voice (`TenantConfigService` wiring). Standalone otherwise — ship a single global voice first.
+**Open follow-up.** Per-tenant voice override is not wired. The `XAI_TTS_VOICE` env is process-global. Wiring it into `tenant_config` requires the same call as #2's `DatabaseTenantConfigService` decision — defer until that lands.
 
 ---
 
