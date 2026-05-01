@@ -107,10 +107,8 @@ Pre-Phase-2, `employee_shifts` was actively read/written by:
 
 ---
 
-### 7. Reconcile `src/services/MIGRATED_FROM_AI_SECRETARY.md`
-**Problem.** A migration-progress marker checked into the source tree. Either the migration is done or it isn't.
-
-**What to do.** Confirm completion status, fold any still-relevant notes into `docs/` (not the source tree), delete the file.
+### ~~7. Reconcile `src/services/MIGRATED_FROM_AI_SECRETARY.md`~~
+**Status: done 2026-04-30.** File deleted. The migration was complete; the doc had drifted into stale-marker territory (referenced Vapi, deleted CI workflows like `pnpm-workspace-sanity.yml`, etc.). Useful content was already mirrored elsewhere: CLAUDE.md's "Migrated, Not Yet Wired" section covers the dormant CRM adapter layer, and NEEDS-REFACTORING #1/#2/#3 own the open decisions about adapter fate, TenantConfigService wiring, and UsageTrackingService. The dangling `docs/PLAN_COMMUNICATIONS_REMINDERS_INTEGRATION.md` reference fixed in the same commit.
 
 ---
 

@@ -251,5 +251,6 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 ## Related Documentation
 
 - `docs/ARCHITECTURE_REVIEW_20260403.md` - Overall architecture
-- `src/services/communications/MIGRATED_FROM_AI_SECRETARY.md` - Migration notes
-- `CLAUDE.md` - Project conventions
+- `CLAUDE.md` - Project conventions (incl. "Migrated, Not Yet Wired" section)
+- `NEEDS-REFACTORING.md` #1, #2, #3 — open decisions about CRM adapters,
+  TenantConfigService wiring, and UsageTrackingService
