@@ -1,8 +1,16 @@
 /**
- * Tests for voice AI fixes (phone capture, date parsing, employee assignment)
- * Issues found April 1, 2026 during live test call
+ * Regression tests for the April 1, 2026 voice-AI live-call sweep.
  *
- * Coverage: BUG-060 (phone), BUG-061 (date), BUG-062 (employee skills)
+ * Feature areas covered (search here when touching any of these):
+ *   - **Voice booking**: phone capture from caller-ID (BUG-060)
+ *   - **Voice booking**: natural-language date parsing
+ *     ("next Tuesday", "tomorrow", etc.) (BUG-061)
+ *   - **Voice booking**: employee skill matching when service requires
+ *     a specific skill (BUG-062)
+ *
+ * Why bug-numbered, not feature-named: keeps the live-call findings
+ * together so a future audit can verify the voice path stays solid.
+ *
  * Each section has happy + sad paths with 5W diagnostic context.
  */
 

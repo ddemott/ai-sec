@@ -1,3 +1,19 @@
+/**
+ * Regression tests for the Medium bug-fix sweep.
+ *
+ * Feature areas covered (search here when touching any of these):
+ *   - **Soft-reservation cleanup**: purge_expired RPC behavior (BUG-013)
+ *   - **Booking**: assignment_id error handling on book_appointment_atomic
+ *     (BUG-014)
+ *   - **Customers / Employees / Users**: name-sync triggers and
+ *     compound-name splitting (BUG-022, BUG-023)
+ *   - **Scheduling**: day-of-week conversion edge cases (BUG-029)
+ *   - **List routes**: pagination shape (BUG-020)
+ *
+ * Why bug-numbered, not feature-named: keeps the full regression set
+ * for the Medium sweep together so a future audit can verify all
+ * bugs stay closed. Feature-area work should still grep here.
+ */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction } from './test-utils';
 import { Client } from 'pg';

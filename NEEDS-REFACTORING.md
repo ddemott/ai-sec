@@ -112,14 +112,22 @@ Pre-Phase-2, `employee_shifts` was actively read/written by:
 
 ---
 
-### 8. Consolidate the bug-named test files
-**Files.** `medium-bugs.test.ts`, `low-bugs.test.ts`, `high-bugs.test.ts`, `critical-bugs.test.ts`, `voice-ai-fixes.test.ts`, `architecture-review-fixes.test.ts`, `bugfix-comprehensive.test.ts`, `bugfix-regression.test.ts`.
+### ~~8. Consolidate the bug-named test files~~
+**Status: addressed differently 2026-04-30.** The original recommendation was to redistribute test cases by feature into feature-named files. Audit found the actual problem was *discoverability* — naming them after the historical bug sweep made them harder to find when working on a feature. The redistribute itself was moderate risk: each bug-named file spans many features, and splitting them by feature loses the "all the BUG-XXX cases live together" context that's useful for retro/audit.
 
-**Problem.** These were created during specific bug-fix sweeps. The bugs are long fixed; the tests now just describe behaviors the system should keep. Naming them after the historical sweep makes them harder to discover when working on a feature.
+Cheaper fix that solves the discoverability problem: every bug-named file now opens with a "Feature areas covered" header listing the surfaces the file touches. Searching by feature finds the file via the header comment. Files affected:
 
-**What to do.** Read each test file, redistribute the cases into the feature-named test files they actually relate to (e.g., a scheduling assertion goes in `scheduling-atomic.test.ts`). Delete the bug-named files when empty.
+- `critical-bugs.test.ts` (BUG-001 timezone booking, BUG-002 email tenant scoping, BUG-006 RLS)
+- `high-bugs.test.ts` (BUG-007/8 RLS + api_user, BUG-009/27 booking validation, BUG-012 JWT, BUG-010/11/26 input validation)
+- `medium-bugs.test.ts` (BUG-013 reservation cleanup, BUG-014 booking, BUG-022/23 names, BUG-029 day-of-week, BUG-020 pagination)
+- `low-bugs.test.ts` (BUG-040 booking duration, BUG-052 schema, BUG-057 timezones)
+- `voice-ai-fixes.test.ts` (BUG-060/61/62 voice booking)
+- `architecture-review-fixes.test.ts` (Fix #1 booking, #2 coverage, #4 RLS, #5 rate limit, #6 helmet)
+- `bugfix-comprehensive.test.ts` (tenant isolation, DELETE 404, Zod validation, HubSpot webhook, knowledge upload)
 
-**Risk.** Moderate. Need to make sure no test loses coverage during the move.
+`bugfix-regression.test.ts` from the original list never existed.
+
+If a true redistribute is wanted later, the entry can be reopened — but the discoverability cost the entry actually flagged is now resolved.
 
 ---
 

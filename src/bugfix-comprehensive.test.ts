@@ -1,5 +1,17 @@
 /**
- * Comprehensive happy + sad path tests for all bug fixes (April 1, 2026).
+ * Comprehensive happy + sad path tests for the April 1, 2026 bug
+ * fixes — broad coverage across feature surfaces.
+ *
+ * Feature areas covered (search here when touching any of these):
+ *   - **Tenant isolation**: DELETE/UPDATE queries scope to tenant_id
+ *   - **DELETE routes**: 404 (not 200) when row missing
+ *   - **Validation**: Zod schemas + UUID/date param parsing across routes
+ *   - **HubSpot integration**: webhook timestamp validation
+ *   - **Knowledge ingestion**: file upload validation
+ *   - **Scheduling**: day-of-week range guards
+ *
+ * Why bug-numbered, not feature-named: keeps the April 1 sweep
+ * together. Feature-area work should still grep here.
  *
  * Every test includes:
  * - Happy path: valid inputs → correct behavior

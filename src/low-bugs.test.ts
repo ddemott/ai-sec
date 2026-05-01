@@ -1,3 +1,16 @@
+/**
+ * Regression tests for the Low bug-fix sweep.
+ *
+ * Feature areas covered (search here when touching any of these):
+ *   - **Booking**: auto-calculate end_time from service duration
+ *     (BUG-040)
+ *   - **Schema**: JSONB metadata CHECK constraints (BUG-052)
+ *   - **Timezones**: extended detection across browsers (BUG-057)
+ *
+ * Why bug-numbered, not feature-named: keeps the full regression set
+ * for the Low sweep together so a future audit can verify all bugs
+ * stay closed. Feature-area work should still grep here.
+ */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { getRootClient, clearDB, setupBasicTenant, createService, beginTestTransaction, rollbackTestTransaction } from './test-utils';
 import { Client } from 'pg';

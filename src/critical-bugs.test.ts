@@ -1,3 +1,19 @@
+/**
+ * Regression tests for the Critical bug-fix sweep.
+ *
+ * Feature areas covered (search here when touching any of these):
+ *   - **Booking**: timezone-aware shift validation
+ *     (BUG-001 — book_appointment_atomic uses tenant timezone, not UTC)
+ *   - **Auth / users**: per-tenant email uniqueness
+ *     (BUG-002 — same email allowed across different tenants)
+ *   - **RLS**: users table tenant scoping via `app.current_tenant_id`
+ *     (BUG-006 — RLS policy on users)
+ *
+ * Why bug-numbered, not feature-named: this file captures the full
+ * regression set for the original Critical sweep so a future audit can
+ * verify all three bugs stay closed together. Feature-area work should
+ * still grep here.
+ */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, getApiClient, clearDB, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull } from "./test-utils";
 import { Client } from "pg";

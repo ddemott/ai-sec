@@ -1,6 +1,20 @@
 /**
- * Tests for Architecture Review Critical Fixes (#1, #2, #4, #5, #6)
- * Each fix has happy + sad paths with 5W diagnostic context.
+ * Regression tests for the Architecture Review Critical Fixes
+ * (Fix #1, #2, #4, #5, #6 — happy + sad with 5W diagnostics).
+ *
+ * Feature areas covered (search here when touching any of these):
+ *   - **Booking**: is_off override correctly blocks bookings on
+ *     scheduled days (Fix #1)
+ *   - **Coverage**: check_coverage_gaps reads employee_schedule
+ *     correctly (Fix #2)
+ *   - **RLS**: admin bypass policy guard (Fix #4)
+ *   - **Auth / surfaces**: rate limiting on hot routes (Fix #5)
+ *   - **HTTP**: security headers via Helmet (Fix #6)
+ *   - **Scheduling**: get_effective_shifts RPC behavior under
+ *     date-specific entries
+ *
+ * Why fix-numbered, not feature-named: keeps the architecture-review
+ * regression set together. Feature-area work should still grep here.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { Pool, PoolClient } from 'pg';

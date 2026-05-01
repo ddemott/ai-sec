@@ -1,3 +1,20 @@
+/**
+ * Regression tests for the High bug-fix sweep.
+ *
+ * Feature areas covered (search here when touching any of these):
+ *   - **Auth / JWT**: token shape, tenant claims on login, JWT
+ *     middleware tenant scoping (BUG-012)
+ *   - **RLS**: api_user privilege restrictions and `set_tenant_context`
+ *     enforcement (BUG-007, BUG-008)
+ *   - **Booking**: required-skill validation in booking RPCs (BUG-009),
+ *     customer upsert path during booking (BUG-027)
+ *   - **Validation**: input shape guards across routes
+ *     (BUG-010, BUG-011, BUG-026)
+ *
+ * Why bug-numbered, not feature-named: keeps the full regression set
+ * for the High sweep together so a future audit can verify all bugs
+ * stay closed together. Feature-area work should still grep here.
+ */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword } from "./test-utils";
 import { Client } from "pg";
