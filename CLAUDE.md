@@ -78,7 +78,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `employee_schedule` table: date-specific employee schedules (replaces weekly patterns in UI). Both Working Hours and Front Desk scheduler read from this table. API: `GET/POST /shifts/overrides`
 - `get_effective_shifts()` and `get_effective_shifts_bulk()` RPCs: return entries from `employee_schedule` table (which IS the schedule). Date-based scheduling only.
 - `get_effective_shifts_bulk()` RPC: returns effective shifts for all employees in a date range (single query) — used by scheduler for efficient bulk loading
-- `employee_shifts` table: LEGACY (weekly patterns, day_of_week 0-6) — NOT used by any production code. All scheduling uses `employee_schedule` only. Owners copy weeks forward via the UI.
+- `employee_shifts` table: weekly base pattern (day_of_week 0-6). Setup wizard writes here; the `/coverage/staffing` analytics joins on it. **Booking RPCs read only `employee_schedule`** (date-specific rows). The two are bridged by `expandWeeklyToSchedule()` (`src/services/expandWeeklyToSchedule.ts`), called from the setup wizard at finalize via `POST /shifts/expand-weekly`. Owners then extend coverage forward via the copy-week button. Phase 2 may consolidate to a single date-specific table — see `NEEDS-REFACTORING.md` #4.
 - `search_tenant_docs()` RPC: cosine similarity over pgvector embeddings
 - Polymorphic assignment: `p_assignment_id` is UUID
 - All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { expandWeeklyToSchedule } from '../services/expandWeeklyToSchedule';
 
 const CreateShiftSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -41,6 +42,12 @@ const CopyWeekSchema = z.object({
   employee_id: z.string().uuid(),
   source_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   target_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const ExpandWeeklySchema = z.object({
+  tenant_id: z.string().uuid(),
+  employee_id: z.string().uuid(),
+  weeks_ahead: z.number().int().min(1).max(52).optional(),
 });
 
 export function registerShiftRoutes(
@@ -267,4 +274,33 @@ export function registerShiftRoutes(
     logEvent(req, 'shifts_copied', { employeeId: employee_id, from: source_start, to: target_start, count: created });
     return reply.send({ success: true, copied: created });
   }, 'Failed to copy week'));
+
+  // POST /shifts/expand-weekly — fan out an employee's weekly pattern
+  // (employee_shifts) into N weeks of date-specific employee_schedule
+  // rows. Called by the setup wizard at finalize so booking RPCs (which
+  // read only employee_schedule) honor the owner's weekly availability
+  // immediately after onboarding. Idempotent — ON CONFLICT DO NOTHING
+  // preserves any date-specific edits the owner already made.
+  app.post('/shifts/expand-weekly', withHandler(async (req: AppRequest, reply) => {
+    const parsed = ExpandWeeklySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    }
+    const { tenant_id, employee_id, weeks_ahead } = parsed.data;
+
+    const result = await withTenantClient(tenant_id, (client) =>
+      expandWeeklyToSchedule(client, {
+        tenantId: tenant_id,
+        employeeId: employee_id,
+        weeksAhead: weeks_ahead,
+      })
+    );
+
+    logEvent(req, 'shifts_expanded_weekly', {
+      employeeId: employee_id,
+      weeksAhead: weeks_ahead ?? 4,
+      inserted: result.inserted,
+    });
+    return reply.send({ success: true, ...result });
+  }, 'Failed to expand weekly schedule'));
 }

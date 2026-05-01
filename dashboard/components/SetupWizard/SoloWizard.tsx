@@ -295,7 +295,14 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         await Api.mappings.assignServiceResource(String(svc.id), resourceId, tenantId)
       }
 
-      // 3. Fetch coverage
+      // 3. Fan weekly availability out into 4 weeks of date-specific
+      //    schedule rows so booking RPCs (which only read
+      //    employee_schedule) honor what the owner just set.
+      //    Without this, finalize succeeds but every booking attempt
+      //    returns EMPLOYEE_NOT_SCHEDULED.
+      await Api.shifts.expandWeekly(tenantId, ownerEmployeeId)
+
+      // 4. Fetch coverage
       const coverage = await Api.coverage.check(tenantId)
       setCoverageData(Array.isArray(coverage) ? coverage : [])
 

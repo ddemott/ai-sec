@@ -420,6 +420,19 @@ export const Api = {
         source_start: sourceStart,
         target_start: targetStart,
       }),
+
+    /**
+     * Fan out an employee's weekly pattern (employee_shifts) into N
+     * weeks of date-specific employee_schedule rows. Booking RPCs read
+     * only employee_schedule, so this is the bridge that makes
+     * post-onboarding bookings work. Idempotent — safe to re-call.
+     */
+    expandWeekly: (tenantId: string | null, employeeId: string, weeksAhead?: number) =>
+      apiMutate<{ inserted: number; rangeStart: string; rangeEnd: string }>(
+        `/shifts/expand-weekly`,
+        'POST',
+        { tenant_id: tenantId, employee_id: employeeId, weeks_ahead: weeksAhead }
+      ),
   },
 
   // --- CALENDAR SYNC ---

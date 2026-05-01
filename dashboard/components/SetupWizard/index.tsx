@@ -99,10 +99,28 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     return true
   }
 
-  const goNext = () => {
+  const goNext = async () => {
     const next = Math.min(step + 1, 7) as WizardStep
-    if (canAdvanceTo(next)) setStep(next)
-    else showToast('Complete this step before continuing', 'warning')
+    if (!canAdvanceTo(next)) {
+      showToast('Complete this step before continuing', 'warning')
+      return
+    }
+    // On the way into step 7 (Go Live), fan each employee's weekly
+    // availability into 4 weeks of date-specific employee_schedule
+    // rows. Booking RPCs read only employee_schedule, so without this
+    // a tenant could activate the phone and still have every booking
+    // attempt return EMPLOYEE_NOT_SCHEDULED. Errors are non-fatal —
+    // we log and continue so a flaky network doesn't strand the user.
+    if (next === 7 && tenantId) {
+      for (const emp of activeEmployees) {
+        try {
+          await Api.shifts.expandWeekly(tenantId, String(emp.id))
+        } catch (err) {
+          console.warn(`Failed to expand weekly schedule for employee ${emp.id}:`, err)
+        }
+      }
+    }
+    setStep(next)
   }
   const goBack = () => setStep(s => Math.max(s - 1, 1) as WizardStep)
   const goToStep = (s: WizardStep) => {

@@ -50,8 +50,22 @@ Last updated: 2026-04-28.
 
 ## P1 — Dead code / unused layers eating mental overhead
 
-### 4. Decide the `employee_shifts` ↔ `employee_schedule` story (was: drop legacy table)
-**Status updated 2026-04-30.** Audit found CLAUDE.md's "NOT used by any production code" claim is wrong. `employee_shifts` is actively read/written by:
+### 4. Phase 2: consolidate `employee_shifts` ↔ `employee_schedule` (Phase 1 shipped)
+**Phase 1 shipped 2026-04-30.** The original "drop the legacy table" framing was wrong — audit found `employee_shifts` was actively used. But the actual bug it pointed at was real and worse: setup wizard wrote to `employee_shifts` and booking RPCs read only `employee_schedule`, with nothing bridging them. Owners who finished onboarding could not book.
+
+**Phase 1 fix:** new `expandWeeklyToSchedule()` service helper + `POST /shifts/expand-weekly` endpoint, called by both the SoloWizard's `handleFinalize` and the team wizard's transition into step 7. Fans the weekly pattern into 4 weeks of date-specific `employee_schedule` rows on completion. Idempotent via ON CONFLICT DO NOTHING. 7 helper tests + 1 wizard integration test cover happy + sad paths.
+
+**Phase 2 (still open):** decide whether to retire `employee_shifts` entirely. Old context preserved below — the dual-table architecture is intentional now (weekly base + date overrides), but a future cleanup could:
+
+- Switch the wizard's read-back from `Api.shifts.list` to the existing `Api.shifts.overrides.bulk` endpoint
+- Reframe `/coverage/staffing` analytics against `employee_schedule` directly
+- Drop `Api.shifts.list/create/update/delete`, `/shifts` legacy CRUD, and the table itself
+
+That's a larger refactor; not currently blocking anything.
+
+#### Original audit notes (kept for context)
+
+`employee_shifts` is actively read/written by:
 
 - `src/routes/shifts.ts:51-119` — full CRUD endpoints (GET /shifts, POST /shifts/create, /shifts/:id/update, DELETE /shifts/:id)
 - `src/routes/analytics.ts:58` — `/coverage/staffing` JOIN (the service-employee skill matrix)

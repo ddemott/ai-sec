@@ -727,6 +727,55 @@ describe('SetupWizard: Step 7 Go Live', () => {
     expect(screen.getByText('Step 7 of 7')).toBeInTheDocument()
   })
 
+  test('fans weekly availability into employee_schedule on transition to step 7', async () => {
+    // WHO: owner who finished setting weekly hours in step 4 and is
+    //      progressing through Review → Go Live.
+    // WHAT: transitioning into step 7 must POST /shifts/expand-weekly
+    //      once per active employee. Without this the booking RPCs
+    //      (which only read employee_schedule) reject every request
+    //      from the just-onboarded tenant with EMPLOYEE_NOT_SCHEDULED.
+    // WHERE: dashboard/components/SetupWizard/index.tsx goNext() —
+    //      the if (next === 7) hook that calls Api.shifts.expandWeekly.
+    // WHEN: on the click that advances from step 6 (Review) to step 7.
+    // WHY: this is the bridge between weekly-pattern onboarding and
+    //      date-specific booking storage. Pre-fix, owners hit a
+    //      silent failure mode after completing the wizard.
+    render(<SetupWizard isOpen={true} onClose={() => {}} />)
+
+    // Wait for static data to load — without this, activeEmployees is
+    // captured empty in the goNext closure and the fan-out loop runs
+    // zero iterations (the actual production code is gated on
+    // activeEmployees so this matches the live behavior).
+    await waitFor(() => {
+      expect(screen.getByText('Add a service')).toBeInTheDocument()
+    })
+
+    // Step 1 → 6 via Next, awaiting between clicks so each async
+    // goNext settles before the next click reads stale state.
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(screen.getByText('Next'))
+      // Tick the microtask queue
+      await Promise.resolve()
+    }
+
+    // Step 6 → 7 via the footer "Go Live" button. The fan-out fires
+    // here (next === 7 branch in goNext).
+    const goLiveBtns = screen.getAllByText('Go Live')
+    fireEvent.click(goLiveBtns[goLiveBtns.length - 1])
+
+    await waitFor(() => {
+      expect(screen.getByText('Step 7 of 7')).toBeInTheDocument()
+    })
+
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>
+    const expandCalls = fetchMock.mock.calls.filter((call) => {
+      const url = String(call[0] ?? '')
+      const init = call[1] as RequestInit | undefined
+      return url.includes('/shifts/expand-weekly') && init?.method === 'POST'
+    })
+    expect(expandCalls.length).toBe(MOCK_EMPLOYEES.length)
+  })
+
   test('shows area code input and activate button', () => {
     goToStep7()
     expect(screen.getByPlaceholderText('e.g. 312')).toBeInTheDocument()
