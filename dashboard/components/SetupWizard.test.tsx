@@ -435,7 +435,19 @@ describe('SetupWizard: Step 4 Shifts', () => {
     })
   })
 
-  test('shows employee selector and schedule grid with data', async () => {
+  test('shows employee selector and schedule grid (ephemeral form state)', async () => {
+    // WHO: owner stepping into Step 4 (Shifts) of the team wizard.
+    // WHAT: employee selector lists active employees; schedule grid
+    //       shows 7 day rows for the selected employee. Step 4 is now
+    //       ephemeral form state — no shifts are pre-loaded from any
+    //       server call. The user toggles days locally and the whole
+    //       pattern is sent to /shifts/expand-weekly when they cross
+    //       into step 7.
+    // WHY: post-rip-out of employee_shifts (NEEDS-REFACTORING #4
+    //       Phase 2), there's no backend representation of the wizard's
+    //       weekly grid until finalize. This test pins the new
+    //       ephemeral contract so a regression that re-introduces a
+    //       fetch on step entry would be caught.
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({ ok: true, json: async () => MOCK_SERVICES })
@@ -446,15 +458,6 @@ describe('SetupWizard: Step 4 Shifts', () => {
           json: async () => [
             { id: 'e1', first_name: 'Mike', last_name: 'Smith', name: 'Mike Smith', is_active: true },
             { id: 'e2', first_name: 'Sarah', last_name: 'Jones', name: 'Sarah Jones', is_active: true },
-          ],
-        })
-      }
-      if (url.includes('/shifts')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => [
-            { id: 1, employee_id: 'e1', day_of_week: 1, start_time: '08:00:00', end_time: '17:00:00', is_active: true },
-            { id: 2, employee_id: 'e1', day_of_week: 2, start_time: '09:00:00', end_time: '15:00:00', is_active: true },
           ],
         })
       }
@@ -480,8 +483,9 @@ describe('SetupWizard: Step 4 Shifts', () => {
     // Prompt before selection
     expect(screen.getByText('Select an employee above to set their schedule.')).toBeInTheDocument()
 
-    // Mike has 2 shifts — badge shows (2d)
-    expect(screen.getByText('(2d)')).toBeInTheDocument()
+    // Step 4 is ephemeral — no day-count badges should appear because
+    // both employees start with zero shifts in form state.
+    expect(screen.queryByText(/\(\dd\)/)).not.toBeInTheDocument()
 
     // Select Mike
     fireEvent.click(screen.getAllByText(/Mike Smith/)[0])
@@ -493,9 +497,9 @@ describe('SetupWizard: Step 4 Shifts', () => {
       expect(screen.getByText('Sat')).toBeInTheDocument()
     })
 
-    // Mike works Mon and Tue — other 5 days show "Off"
+    // All 7 days start as "Off" — ephemeral state begins empty.
     const offLabels = screen.getAllByText('Off')
-    expect(offLabels.length).toBe(5)
+    expect(offLabels.length).toBe(7)
   })
 })
 

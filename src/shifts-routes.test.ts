@@ -88,25 +88,19 @@ beforeEach(() => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('POST /shifts/expand-weekly — happy paths', () => {
-  it('1. fans the weekly pattern and returns inserted count + range', async () => {
+  it('1. fans the supplied weekly pattern and returns inserted count + range', async () => {
     // WHO: setup wizard finalizing onboarding for an employee whose
-    //      weekly availability was just configured in step 4.
-    // WHAT: route delegates to expandWeeklyToSchedule, returns
-    //      { success: true, inserted, rangeStart, rangeEnd } so the
-    //      dashboard can confirm "Schedule extends through May 24".
-    // WHERE: src/routes/shifts.ts — the new handler appended after
-    //      the existing copy-week endpoint.
+    //      weekly availability was just configured in the Hours step.
+    // WHAT: route validates the pattern array, delegates to
+    //      expandWeeklyToSchedule, returns { success: true, inserted,
+    //      rangeStart, rangeEnd } so the dashboard can confirm
+    //      "Schedule extends through May 24".
+    // WHERE: src/routes/shifts.ts /shifts/expand-weekly.
     // WHEN: SoloWizard handleFinalize and team wizard goNext at the
     //      step-6 → step-7 transition.
     // WHY: the response shape is what the wizard's success path keys
     //      on — adding fields is fine, removing or renaming is not.
-    queryResponses.push({
-      rows: [
-        { day_of_week: 1, start_time: '09:00:00', end_time: '17:00:00' },
-        { day_of_week: 3, start_time: '09:00:00', end_time: '17:00:00' },
-      ],
-    });
-    // Subsequent INSERT responses default to rowCount: 1 in the mock.
+    // INSERT responses default to rowCount: 1 in the mock.
 
     const res = await app.inject({
       method: 'POST',
@@ -114,6 +108,10 @@ describe('POST /shifts/expand-weekly — happy paths', () => {
       payload: {
         tenant_id: TENANT_ID,
         employee_id: EMPLOYEE_ID,
+        pattern: [
+          { day_of_week: 1, start_time: '09:00:00', end_time: '17:00:00' },
+          { day_of_week: 3, start_time: '09:00:00', end_time: '17:00:00' },
+        ],
         weeks_ahead: 2,
       },
     });
@@ -137,12 +135,10 @@ describe('POST /shifts/expand-weekly — happy paths', () => {
     // WHY: explicit nullability test prevents accidental tightening
     //      of the schema (e.g., dropping .optional()) which would
     //      silently break wizard finalize.
-    queryResponses.push({ rows: [] }); // empty pattern → no INSERTs
-
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID },
+      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, pattern: [] },
     });
 
     expect(res.statusCode).toBe(200);
@@ -167,7 +163,7 @@ describe('POST /shifts/expand-weekly — validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { employee_id: EMPLOYEE_ID },
+      payload: { employee_id: EMPLOYEE_ID, pattern: [] },
     });
 
     expect(res.statusCode).toBe(400);
@@ -181,12 +177,12 @@ describe('POST /shifts/expand-weekly — validation', () => {
     // WHAT: Same shape as #3, different field — guards against the
     //       fan-out happening for an entire tenant by accident.
     // WHY: if the schema permitted a missing employee_id, the helper
-    //      would still need an employee — but its SELECT would crash
-    //      the request mid-flight. Zod-level rejection is cleaner.
+    //      would have nowhere to attribute the inserted rows.
+    //      Zod-level rejection is cleaner than a downstream FK error.
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { tenant_id: TENANT_ID },
+      payload: { tenant_id: TENANT_ID, pattern: [] },
     });
 
     expect(res.statusCode).toBe(400);
@@ -203,7 +199,7 @@ describe('POST /shifts/expand-weekly — validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { tenant_id: 'not-a-uuid', employee_id: EMPLOYEE_ID },
+      payload: { tenant_id: 'not-a-uuid', employee_id: EMPLOYEE_ID, pattern: [] },
     });
 
     expect(res.statusCode).toBe(400);
@@ -221,7 +217,7 @@ describe('POST /shifts/expand-weekly — validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, weeks_ahead: 0 },
+      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, pattern: [], weeks_ahead: 0 },
     });
 
     expect(res.statusCode).toBe(400);
@@ -243,7 +239,7 @@ describe('POST /shifts/expand-weekly — validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, weeks_ahead: 53 },
+      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, pattern: [], weeks_ahead: 53 },
     });
 
     expect(res.statusCode).toBe(400);
@@ -259,7 +255,7 @@ describe('POST /shifts/expand-weekly — validation', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/shifts/expand-weekly',
-      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, weeks_ahead: 4.5 },
+      payload: { tenant_id: TENANT_ID, employee_id: EMPLOYEE_ID, pattern: [], weeks_ahead: 4.5 },
     });
 
     expect(res.statusCode).toBe(400);

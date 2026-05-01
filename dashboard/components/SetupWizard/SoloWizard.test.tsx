@@ -225,7 +225,7 @@ describe('SoloWizard — finalize fans weekly availability', () => {
       if (typeof url === 'string' && url.includes('/shifts/expand-weekly')) {
         return Promise.reject(new Error('expand-weekly failed'))
       }
-      return originalImpl!(url, init)
+      return (originalImpl as (u: string, i?: RequestInit) => Promise<unknown>)(url, init)
     })
 
     render(<SoloWizard isOpen={true} onClose={() => {}} />)

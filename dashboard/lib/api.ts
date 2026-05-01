@@ -422,16 +422,25 @@ export const Api = {
       }),
 
     /**
-     * Fan out an employee's weekly pattern (employee_shifts) into N
-     * weeks of date-specific employee_schedule rows. Booking RPCs read
-     * only employee_schedule, so this is the bridge that makes
+     * Fan a caller-supplied weekly pattern out into N weeks of
+     * date-specific employee_schedule rows. Booking RPCs read only
+     * employee_schedule, so this is the bridge that makes
      * post-onboarding bookings work. Idempotent — safe to re-call.
+     *
+     * Pattern is `{ day_of_week, start_time, end_time }[]`. The wizard
+     * collects it in form state and posts it here at finalize; there
+     * is no separate weekly-pattern table anymore.
      */
-    expandWeekly: (tenantId: string | null, employeeId: string, weeksAhead?: number) =>
+    expandWeekly: (
+      tenantId: string | null,
+      employeeId: string,
+      pattern: Array<{ day_of_week: number; start_time: string; end_time: string }>,
+      weeksAhead?: number
+    ) =>
       apiMutate<{ inserted: number; rangeStart: string; rangeEnd: string }>(
         `/shifts/expand-weekly`,
         'POST',
-        { tenant_id: tenantId, employee_id: employeeId, weeks_ahead: weeksAhead }
+        { tenant_id: tenantId, employee_id: employeeId, pattern, weeks_ahead: weeksAhead }
       ),
   },
 

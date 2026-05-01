@@ -1,27 +1,36 @@
 /**
- * Fan-out helper: weekly `employee_shifts` rows → date-specific `employee_schedule` rows.
+ * Fan-out helper: caller-supplied weekly pattern → date-specific
+ * `employee_schedule` rows.
  *
- * Background: the setup wizard writes weekly availability patterns to
- * `employee_shifts` (day_of_week 0-6). The booking RPCs only read
- * `employee_schedule` (date-specific rows). Without this fan-out, an
- * owner finishing onboarding could not book — the booking flow would
- * return EMPLOYEE_NOT_SCHEDULED for every date.
+ * The setup wizard collects the owner's weekly availability in form
+ * state and passes it directly to this helper at finalize. There is
+ * no separate `employee_shifts` table involved — `employee_schedule`
+ * is the only schedule storage the booking RPCs read, and this helper
+ * is the only place that fans a weekly pattern into it.
  *
- * This module is the bridge: it reads the employee's current weekly
- * pattern and inserts matching date-specific rows for the next N weeks.
  * Idempotent via ON CONFLICT DO NOTHING — re-running won't overwrite
  * existing date-specific entries (which the owner may have edited in
  * the Front Desk scheduler).
- *
- * Phase 2 (separate session) will retire `employee_shifts` entirely
- * once the wizard reads + writes `employee_schedule` directly.
  */
 
 import type { PoolClient } from 'pg';
 
+/**
+ * One row of the weekly pattern. day_of_week is 0-6 (Sun=0).
+ * start_time / end_time are 'HH:MM' or 'HH:MM:SS' strings — the
+ * Postgres TIME column accepts either.
+ */
+export interface WeeklyShiftRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
 export interface ExpandWeeklyParams {
   tenantId: string;
   employeeId: string;
+  /** Caller-supplied weekly pattern. Empty array → no-op (no inserts). */
+  pattern: WeeklyShiftRow[];
   /**
    * How many weeks of date-specific entries to generate, starting from
    * `startDate`. Default 4 — gives the owner a month of bookable
@@ -46,12 +55,6 @@ export interface ExpandWeeklyResult {
   rangeEnd: string;
 }
 
-interface WeeklyShiftRow {
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-}
-
 /**
  * Returns YYYY-MM-DD in UTC for a given Date. Postgres `DATE` columns
  * are timezone-naïve — using UTC keeps day boundaries consistent
@@ -68,17 +71,7 @@ export async function expandWeeklyToSchedule(
   const weeksAhead = params.weeksAhead ?? 4;
   const startDate = params.startDate ?? new Date();
 
-  // Read this employee's current weekly pattern. Only active rows —
-  // an owner who toggled a day off shouldn't see it re-fanned.
-  const weeklyRes = await client.query<WeeklyShiftRow>(
-    `SELECT day_of_week, start_time::text AS start_time, end_time::text AS end_time
-     FROM employee_shifts
-     WHERE tenant_id = $1 AND employee_id = $2
-       AND (is_active IS NULL OR is_active = true)`,
-    [params.tenantId, params.employeeId]
-  );
-
-  if (weeklyRes.rows.length === 0) {
+  if (params.pattern.length === 0) {
     // Nothing to fan out. Not an error — owner may not have set hours yet.
     return {
       inserted: 0,
@@ -101,8 +94,10 @@ export async function expandWeeklyToSchedule(
   }
 
   // Index the weekly pattern by day_of_week for O(1) lookup.
+  // Last write wins — defensive against a caller supplying duplicate
+  // rows for the same day.
   const patternByDow = new Map<number, WeeklyShiftRow>();
-  for (const row of weeklyRes.rows) {
+  for (const row of params.pattern) {
     patternByDow.set(row.day_of_week, row);
   }
 

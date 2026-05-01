@@ -27,7 +27,9 @@ export const EMPTY_EMPLOYEE: EmployeeForm = { first_name: '', last_name: '', ema
 
 export interface WizardShift {
   id: string | number
-  employee_id: string | number
+  /** Optional in SoloWizard (no per-row employee context) — required in
+   *  the team wizard where one shifts array spans multiple employees. */
+  employee_id?: string | number
   day_of_week: number
   start_time: string
   end_time: string

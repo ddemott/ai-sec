@@ -44,9 +44,16 @@ const CopyWeekSchema = z.object({
   target_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+const WeeklyPatternRowSchema = z.object({
+  day_of_week: z.number().int().min(0).max(6),
+  start_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+});
+
 const ExpandWeeklySchema = z.object({
   tenant_id: z.string().uuid(),
   employee_id: z.string().uuid(),
+  pattern: z.array(WeeklyPatternRowSchema),
   weeks_ahead: z.number().int().min(1).max(52).optional(),
 });
 
@@ -275,29 +282,30 @@ export function registerShiftRoutes(
     return reply.send({ success: true, copied: created });
   }, 'Failed to copy week'));
 
-  // POST /shifts/expand-weekly — fan out an employee's weekly pattern
-  // (employee_shifts) into N weeks of date-specific employee_schedule
-  // rows. Called by the setup wizard at finalize so booking RPCs (which
-  // read only employee_schedule) honor the owner's weekly availability
-  // immediately after onboarding. Idempotent — ON CONFLICT DO NOTHING
+  // POST /shifts/expand-weekly — fan out a caller-supplied weekly
+  // pattern into N weeks of date-specific employee_schedule rows.
+  // The setup wizard collects the weekly grid in form state and calls
+  // this once at finalize. Idempotent — ON CONFLICT DO NOTHING
   // preserves any date-specific edits the owner already made.
   app.post('/shifts/expand-weekly', withHandler(async (req: AppRequest, reply) => {
     const parsed = ExpandWeeklySchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
-    const { tenant_id, employee_id, weeks_ahead } = parsed.data;
+    const { tenant_id, employee_id, pattern, weeks_ahead } = parsed.data;
 
     const result = await withTenantClient(tenant_id, (client) =>
       expandWeeklyToSchedule(client, {
         tenantId: tenant_id,
         employeeId: employee_id,
+        pattern,
         weeksAhead: weeks_ahead,
       })
     );
 
     logEvent(req, 'shifts_expanded_weekly', {
       employeeId: employee_id,
+      patternDays: pattern.length,
       weeksAhead: weeks_ahead ?? 4,
       inserted: result.inserted,
     });

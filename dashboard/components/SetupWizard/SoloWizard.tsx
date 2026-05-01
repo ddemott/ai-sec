@@ -31,9 +31,9 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Step 2 — Hours
+  // Step 2 — Hours (ephemeral form state — persisted to
+  // employee_schedule on finalize via Api.shifts.expandWeekly)
   const [shifts, setShifts] = useState<WizardShift[]>([])
-  const [shiftsLoading, setShiftsLoading] = useState(false)
   const [ownerEmployeeId, setOwnerEmployeeId] = useState<string | null>(null)
 
   // Step 3 — Finalization
@@ -85,7 +85,8 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tenantId, loading, services.length])
 
-  // When moving to Step 2, ensure owner employee exists and load shifts
+  // When moving to Step 2, ensure owner employee exists. The hours
+  // grid is ephemeral form state — it persists only at finalize.
   useEffect(() => {
     if (step === 2 && tenantId) {
       ensureOwnerEmployee()
@@ -94,10 +95,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   }, [step, tenantId])
 
   async function ensureOwnerEmployee() {
-    if (ownerEmployeeId) {
-      loadShifts(ownerEmployeeId)
-      return
-    }
+    if (ownerEmployeeId) return
 
     setSaving(true)
     setError(null)
@@ -113,9 +111,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         skills: [],
       })
       if (res.success && res.employee) {
-        const empId = String(res.employee.id)
-        setOwnerEmployeeId(empId)
-        await loadShifts(empId)
+        setOwnerEmployeeId(String(res.employee.id))
       } else {
         setError(res.error || 'Failed to create your staff profile')
       }
@@ -123,21 +119,6 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
       setError('Failed to create your staff profile')
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function loadShifts(employeeId: string) {
-    setShiftsLoading(true)
-    try {
-      const data = await Api.shifts.list(tenantId)
-      const ownerShifts = (Array.isArray(data) ? data : [])
-        .filter(s => String(s.employee_id) === employeeId)
-        .map(s => ({ ...s, id: s.id ?? `${s.day_of_week}` })) as WizardShift[]
-      setShifts(ownerShifts)
-    } catch {
-      setError('Failed to load shifts')
-    } finally {
-      setShiftsLoading(false)
     }
   }
 
@@ -180,98 +161,60 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
     }
   }
 
-  // --- Shift toggle ---
-  async function handleToggleDay(dayOfWeek: number) {
-    if (!ownerEmployeeId || !tenantId) return
-    const existing = shifts.find(s => s.day_of_week === dayOfWeek)
-    setSaving(true)
-    setError(null)
-    try {
+  // --- Shift handlers (mutate local React state only). The whole
+  //     pattern is sent to Api.shifts.expandWeekly at finalize. ---
+
+  function upsertLocalShift(dow: number, startTime: string, endTime: string) {
+    setShifts(prev => {
+      const existing = prev.find(s => s.day_of_week === dow)
       if (existing) {
-        await Api.shifts.delete(String(existing.id), tenantId)
-      } else {
-        await Api.shifts.create(tenantId, {
-          employee_id: ownerEmployeeId,
-          day_of_week: dayOfWeek,
-          start_time: '08:00',
-          end_time: '17:00',
-        })
+        return prev.map(s => s.day_of_week === dow ? { ...s, start_time: startTime, end_time: endTime } : s)
       }
-      await loadShifts(ownerEmployeeId)
-    } catch {
-      setError('Failed to update shift')
-    } finally {
-      setSaving(false)
-    }
+      return [...prev, { id: String(dow), day_of_week: dow, start_time: startTime, end_time: endTime }]
+    })
   }
 
-  async function handleUpdateTime(shiftId: string | number, startTime: string, endTime: string) {
-    if (!tenantId) return
-    setSaving(true)
-    try {
-      await Api.shifts.update(String(shiftId), tenantId, { start_time: startTime, end_time: endTime })
-      await loadShifts(ownerEmployeeId!)
-    } catch {
-      setError('Failed to update shift time')
-    } finally {
-      setSaving(false)
-    }
+  function handleToggleDay(dayOfWeek: number) {
+    setShifts(prev => {
+      const existing = prev.find(s => s.day_of_week === dayOfWeek)
+      if (existing) return prev.filter(s => s.day_of_week !== dayOfWeek)
+      return [...prev, { id: String(dayOfWeek), day_of_week: dayOfWeek, start_time: '08:00', end_time: '17:00' }]
+    })
+  }
+
+  function handleUpdateTime(_shiftId: string | number, startTime: string, endTime: string) {
+    // shiftId here is just the day_of_week string (we use it as a stable
+    // local key). Pull the day off the existing row and update.
+    setShifts(prev => prev.map(s =>
+      String(s.id) === String(_shiftId)
+        ? { ...s, start_time: startTime, end_time: endTime }
+        : s
+    ))
   }
 
   // Apply one day's hours to all weekdays (Mon-Fri = 1-5)
-  async function handleApplyToWeekdays(sourceDow: number) {
-    if (!ownerEmployeeId || !tenantId) return
+  function handleApplyToWeekdays(sourceDow: number) {
     const source = shifts.find(s => s.day_of_week === sourceDow)
     if (!source) return
     const startTime = source.start_time?.slice(0, 5) || '08:00'
     const endTime = source.end_time?.slice(0, 5) || '17:00'
-    setSaving(true)
-    setError(null)
-    try {
-      for (const dow of [1, 2, 3, 4, 5]) {
-        if (dow === sourceDow) continue
-        const existing = shifts.find(s => s.day_of_week === dow)
-        if (existing) {
-          await Api.shifts.update(String(existing.id), tenantId, { start_time: startTime, end_time: endTime })
-        } else {
-          await Api.shifts.create(tenantId, { employee_id: ownerEmployeeId, day_of_week: dow, start_time: startTime, end_time: endTime })
-        }
-      }
-      await loadShifts(ownerEmployeeId)
-    } catch {
-      setError('Failed to apply hours to weekdays')
-    } finally {
-      setSaving(false)
+    for (const dow of [1, 2, 3, 4, 5]) {
+      if (dow === sourceDow) continue
+      upsertLocalShift(dow, startTime, endTime)
     }
   }
 
-  // Copy one day's hours to all days below it
-  async function handleCopyDown(sourceDow: number) {
-    if (!ownerEmployeeId || !tenantId) return
+  // Copy one day's hours to all days below it.
+  function handleCopyDown(sourceDow: number) {
     const source = shifts.find(s => s.day_of_week === sourceDow)
     if (!source) return
     const startTime = source.start_time?.slice(0, 5) || '08:00'
     const endTime = source.end_time?.slice(0, 5) || '17:00'
-    setSaving(true)
-    setError(null)
-    try {
-      // Days are ordered Mon(1)..Sat(6),Sun(0) in the UI — copy to all after source
-      const dayOrder = [1, 2, 3, 4, 5, 6, 0]
-      const sourceIdx = dayOrder.indexOf(sourceDow)
-      for (let i = sourceIdx + 1; i < dayOrder.length; i++) {
-        const dow = dayOrder[i]
-        const existing = shifts.find(s => s.day_of_week === dow)
-        if (existing) {
-          await Api.shifts.update(String(existing.id), tenantId, { start_time: startTime, end_time: endTime })
-        } else {
-          await Api.shifts.create(tenantId, { employee_id: ownerEmployeeId, day_of_week: dow, start_time: startTime, end_time: endTime })
-        }
-      }
-      await loadShifts(ownerEmployeeId)
-    } catch {
-      setError('Failed to copy hours')
-    } finally {
-      setSaving(false)
+    // Days are ordered Mon(1)..Sat(6),Sun(0) in the UI — copy to all after source.
+    const dayOrder = [1, 2, 3, 4, 5, 6, 0]
+    const sourceIdx = dayOrder.indexOf(sourceDow)
+    for (let i = sourceIdx + 1; i < dayOrder.length; i++) {
+      upsertLocalShift(dayOrder[i], startTime, endTime)
     }
   }
 
@@ -295,12 +238,19 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         await Api.mappings.assignServiceResource(String(svc.id), resourceId, tenantId)
       }
 
-      // 3. Fan weekly availability out into 4 weeks of date-specific
-      //    schedule rows so booking RPCs (which only read
-      //    employee_schedule) honor what the owner just set.
-      //    Without this, finalize succeeds but every booking attempt
-      //    returns EMPLOYEE_NOT_SCHEDULED.
-      await Api.shifts.expandWeekly(tenantId, ownerEmployeeId)
+      // 3. Fan the in-memory weekly pattern out into 4 weeks of
+      //    date-specific employee_schedule rows so booking RPCs
+      //    honor what the owner just set. Without this, finalize
+      //    succeeds but every booking attempt returns
+      //    EMPLOYEE_NOT_SCHEDULED.
+      const pattern = shifts
+        .filter(s => s.start_time && s.end_time)
+        .map(s => ({
+          day_of_week: s.day_of_week,
+          start_time: s.start_time!.slice(0, 5),
+          end_time: s.end_time!.slice(0, 5),
+        }))
+      await Api.shifts.expandWeekly(tenantId, ownerEmployeeId, pattern)
 
       // 4. Fetch coverage
       const coverage = await Api.coverage.check(tenantId)
@@ -388,7 +338,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
           {step === 2 && (
             <SoloStepHours
               shifts={shifts}
-              loading={shiftsLoading}
+              loading={false}
               saving={saving}
               error={error}
               onToggleDay={handleToggleDay}

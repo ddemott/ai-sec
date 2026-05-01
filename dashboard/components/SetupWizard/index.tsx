@@ -112,9 +112,18 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     // attempt return EMPLOYEE_NOT_SCHEDULED. Errors are non-fatal —
     // we log and continue so a flaky network doesn't strand the user.
     if (next === 7 && tenantId) {
+      // Group the in-memory shift form-state by employee so each
+      // employee's pattern is fanned independently.
       for (const emp of activeEmployees) {
+        const empPattern = crud.shifts
+          .filter(s => String(s.employee_id) === String(emp.id) && s.start_time && s.end_time)
+          .map(s => ({
+            day_of_week: s.day_of_week,
+            start_time: s.start_time.slice(0, 5),
+            end_time: s.end_time.slice(0, 5),
+          }))
         try {
-          await Api.shifts.expandWeekly(tenantId, String(emp.id))
+          await Api.shifts.expandWeekly(tenantId, String(emp.id), empPattern)
         } catch (err) {
           console.warn(`Failed to expand weekly schedule for employee ${emp.id}:`, err)
         }

@@ -37,9 +37,9 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
   const [editingEmployee, setEditingEmployee] = useState<EmployeeForm | null>(null)
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null)
 
-  // Step 4 — Shifts
+  // Step 4 — Shifts (ephemeral form state — persisted to
+  // employee_schedule on transition to step 7 via Api.shifts.expandWeekly)
   const [shifts, setShifts] = useState<WizardShift[]>([])
-  const [shiftsLoading, setShiftsLoading] = useState(false)
   const [selectedShiftEmployee, setSelectedShiftEmployee] = useState<string | null>(null)
 
   // Step 5 — Assignments
@@ -51,15 +51,9 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
   const [coverageData, setCoverageData] = useState<CoverageItem[]>([])
   const [coverageLoading, setCoverageLoading] = useState(false)
 
-  // Fetch shifts when entering step 4
-  useEffect(() => {
-    if (step === 4 && tenantId) {
-      setShiftsLoading(true)
-      Api.shifts.list(tenantId).then((data: WizardShift[]) => {
-        setShifts(Array.isArray(data) ? data : [])
-      }).catch(() => setShifts([])).finally(() => setShiftsLoading(false))
-    }
-  }, [step, tenantId])
+  // Step 4 (Shifts) is now ephemeral form state — no fetch on entry.
+  // All toggling/updating happens in-memory until the wizard finalizes
+  // and goNext() (in index.tsx) sends the pattern to expand-weekly.
 
   // Fetch mappings when entering step 5
   useEffect(() => {
@@ -190,30 +184,38 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     finally { setSaving(false) }
   }
 
-  // --- Shift CRUD ---
-  async function refreshShifts() {
-    if (!tenantId) return
-    const data = await Api.shifts.list(tenantId)
-    setShifts(Array.isArray(data) ? data : [])
+  // --- Shift handlers (mutate local state only — pattern is sent to
+  //     expand-weekly when the user crosses into step 7). ---
+
+  function toggleShift(employeeId: string, dayOfWeek: number, startTime: string, endTime: string) {
+    setShifts(prev => {
+      const existingIdx = prev.findIndex(
+        s => String(s.employee_id) === String(employeeId) && s.day_of_week === dayOfWeek
+      )
+      if (existingIdx >= 0) {
+        // Toggle off → remove the row
+        return prev.filter((_, i) => i !== existingIdx)
+      }
+      // Toggle on → add a fresh row keyed on employee+day
+      return [
+        ...prev,
+        {
+          id: `${employeeId}-${dayOfWeek}`,
+          employee_id: employeeId,
+          day_of_week: dayOfWeek,
+          start_time: startTime,
+          end_time: endTime,
+        },
+      ]
+    })
   }
 
-  async function toggleShift(employeeId: string, dayOfWeek: number, startTime: string, endTime: string) {
-    if (!tenantId) return
-    const existing = shifts.find((s: WizardShift) => String(s.employee_id) === String(employeeId) && s.day_of_week === dayOfWeek)
-    setSaving(true); setError(null)
-    try {
-      if (existing) { await Api.shifts.delete(String(existing.id), tenantId) }
-      else { await Api.shifts.create(tenantId, { employee_id: employeeId, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime }) }
-      await refreshShifts()
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err) || 'Failed to update shift') }
-    finally { setSaving(false) }
-  }
-
-  async function updateShiftTime(shiftId: string | number, startTime: string, endTime: string) {
-    if (!tenantId) return; setSaving(true); setError(null)
-    try { await Api.shifts.update(String(shiftId), tenantId, { start_time: startTime, end_time: endTime }); await refreshShifts() }
-    catch (err: unknown) { setError(err instanceof Error ? err.message : String(err) || 'Failed to update shift time') }
-    finally { setSaving(false) }
+  function updateShiftTime(shiftId: string | number, startTime: string, endTime: string) {
+    setShifts(prev => prev.map(s =>
+      String(s.id) === String(shiftId)
+        ? { ...s, start_time: startTime, end_time: endTime }
+        : s
+    ))
   }
 
   // --- Assignment toggle ---
@@ -255,7 +257,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     editingEmployee, editingEmployeeId, setEditingEmployee,
     startAddEmployee, startEditEmployee, cancelEditEmployee, saveEmployee, deleteEmployee,
     // Shifts
-    shifts, shiftsLoading, selectedShiftEmployee, setSelectedShiftEmployee,
+    shifts, shiftsLoading: false, selectedShiftEmployee, setSelectedShiftEmployee,
     toggleShift, updateShiftTime,
     // Assignments
     serviceEmployeeMappings, serviceResourceMappings, mappingsLoading,

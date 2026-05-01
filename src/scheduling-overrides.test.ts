@@ -11,7 +11,7 @@ import {
   type TimeWindow,
   type Shift,
   type ShiftOverride,
-} from '../../shared/scheduling';
+} from '../shared/scheduling';
 
 // Monday June 1, 2026 is a Monday (getUTCDay() = 1)
 const MONDAY_10AM = '2026-06-01T10:00:00Z';
