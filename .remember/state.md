@@ -1,186 +1,80 @@
-# Session state — 2026-05-01 (Friday), America/Chicago
+# Session state — 2026-05-01 (Friday) ~05:15 CDT, America/Chicago
 
 Last updated by `/remember` skill. Pairs with `/recall-memory` for resume.
 
 ## Where we stopped
 
-Mid-session doc sweep. User asked "Update all *.md files. Make sure they
-are all relevant... statuses/dates etc... up to date." The sweep is
-complete in the working tree but **not committed**. After the sweep, user
-asked for a customer-hat critique of what's missing/broken in the
-product — that report was delivered verbally in chat and is mirrored at
-the end of this snapshot under "Customer-hat punchlist."
-
-No external blockers tied to today's work. The standing blocker
-(Telnyx number `+1-630-937-9478` PSTN-unreachable) is unchanged from
-yesterday — see external state below.
+Two commits landed clean. Working tree is clean except
+`improvement-ideas.md`, which the user intentionally left uncommitted to
+review the 3 proposed task entries the journal-loop process added.
+Branch is `main`, ahead of `origin/main` by **2 commits** — neither has
+been pushed yet. No external action in flight; both remaining external
+blockers (Telnyx PSTN, Railway env var) are unchanged from yesterday.
 
 ## What shipped today
 
-**Nothing committed.** Everything below is uncommitted in the working
-tree. The session was pure doc reconciliation.
+- **`d90c776`** — `docs: reconcile counts and statuses after employee_shifts rip-out`. The doc sweep recommended by yesterday's snapshot. 11 files, +213/-210. Aligned route counts (24→25), migration counts (76/77→80), and test counts (1,991 = 1,493 backend + 498 dashboard) across CLAUDE.md, README.md, NEEDS-REFACTORING.md, docs/ARCHITECTURE.md, docs/CURRENT_STATUS.md, docs/DEPLOYMENT.md, docs/DIAGRAMS.md, docs/PLAN.md, docs/TODO.md.
+- **`e92b3bf`** — `feat(agent): fetch tenant display config from backend at call start`. Closes NEEDS-REFACTORING #2 (P0 multi-tenant blocker). 5 files, +217/-19. New route `POST /agent-tools/tenant-config` reads `name`+`timezone` from `tenants`; new agent module `agent/src/tenantConfig.ts` calls it on connect; `agent/src/index.ts` hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block deleted; system prompt + spoken greeting use the fetched values. 10 new tests (4 backend route + 6 agent module), soft-fails to "this business" / America/Chicago on any backend error.
 
 ## Decisions made
 
-- Kept session memory files frozen — only updated current-truth files
-  (CLAUDE.md, README.md, etc.) since session-* files are intentionally
-  point-in-time records.
-- Marked NEEDS-REFACTORING #6 (`src/core/`) as done after verifying
-  directory was already deleted and tests live at `src/scheduling.test.ts`.
-  Option A from the original options block was effectively chosen.
-- Kept historical FIXED entries in `docs/BUGS.md` untouched — those are
-  audit trail, not current state.
+- **Bypassed `DatabaseTenantConfigService`** in `src/services/tenants/`. The new route reads `tenants` directly via `withTenantClient`. Adds caching/extension later if a need shows up; for now the dormant class stays dormant. Documented in CLAUDE.md "Migrated, Not Yet Wired" with a follow-up call to wire-or-delete.
+- **Route name is `/agent-tools/tenant-config`**, not `/agent-tools/tenant-context` (the original NEEDS-REFACTORING wording). "Config" matches the on-disk module name and the shape (display config, not session context).
+- **Left `improvement-ideas.md` out of commit `e92b3bf`.** User said they'd review the 3 proposed task entries the journal-loop added. Keeping it separate lets the tenant-config commit stay narrow and the journal entries stay reviewable independently.
+- **Marked NEEDS-REFACTORING #2 done in place**, kept the original audit notes inside a quoted block for context (mirrors how #4 was handled when `employee_shifts` retired).
 
 ## Mistakes and corrections
 
-- **Initially missed CLAUDE.md line 207 "Project Status" block** during
-  the count refresh. Found it via grep and updated to 1,991 tests
-  (1,493 backend + 498 dashboard, verified 2026-04-30).
-- **Tried to edit `docs/DEPLOYMENT.md` without reading it first** —
-  Edit tool errored. Read first, then edited.
-- **Briefly looked for `SUMMARY-2026-04-24-0030.md` in repo root** based
-  on the stale git status snapshot from session start. It was archived
-  to `docs/sessions/2026-04-24-summary.md` in commit `bea6129` (one of
-  yesterday's). No action needed — the archive is the right state.
+- **First commit attempt failed** — ran `git add agent/src/index.ts ...` from `cwd=agent/` because the previous `cd agent && npx vitest run` had moved the shell. Got `pathspec 'agent/src/index.ts' did not match any files`. Fixed by prefixing the retry with `cd /home/dale/projects/ai-sec`. Lesson: the `Bash` shell's cwd persists across calls — earlier `cd <subdir>` will trip later commands.
+- **Yesterday's `d90c776` accidentally committed `.remember/state.md`** alongside the doc sweep. The `/remember` skill spec says it should remain untracked. Not worth reverting now — future `/remember` runs will update the tracked file in place. Just noting so the rule isn't quietly forgotten.
 
 ## In flight / uncommitted
 
 ```
- M CLAUDE.md              (route count 24→25, migration count 77→80,
-                           test count line 207 → 1,991)
- M NEEDS-REFACTORING.md   (#6 src/core/ marked done)
- M README.md              (status table tests 2,022→1,991, route count
-                           24→25, migration count 76→80, test invocation
-                           counts updated)
- M docs/ARCHITECTURE.md   (last-verified line, line 43 migration count,
-                           §18.1 pyramid, §18.2/3 test counts)
- M docs/CURRENT_STATUS.md (5W diag count, migration apply note, test
-                           summary table)
- M docs/DEPLOYMENT.md     (migration count + recent migration list)
- M docs/DIAGRAMS.md       (Postgres node migration count)
- M docs/PLAN.md           (already touched yesterday: /coverage/staffing
-                           note about employee_shifts rip-out)
- M docs/TODO.md           (last-updated date 2026-04-27→2026-04-30,
-                           CI test counts)
+ M improvement-ideas.md   (53 lines added by the journal-loop process —
+                           3 proposed "Task" entries + a Self-Review block.
+                           Safe to leave; user is reviewing.)
 ```
 
-Plus untracked:
-```
-?? .remember/        (this file — intentionally untracked per skill)
-```
+`.remember/state.md` itself is now tracked (by yesterday's commit) — this
+edit will show up as a tracked-file modification on next `git status`.
+Per skill rules, do NOT commit it.
 
-Safe to leave overnight. Pure doc edits, no half-finished refactors.
-Commit recommendation: single commit, message like
-`docs: reconcile counts and statuses after employee_shifts rip-out`.
+Both commits are local-only; not pushed. Pushing is a user call.
 
 ## Next steps — in order
 
-1. **(Claude or user, ~1 min)** Commit the doc sweep. Single commit,
-   no overhead. **Done signal:** `git status` clean except `.remember/`.
+1. **(User, ~30 sec)** `git push` if you're ready to publish today's two commits. Done signal: `origin/main` advances, `git status -sb` no longer says "ahead 2".
 
-2. **(User, ~2 min)** Set `DASHBOARD_URL` env var on Railway backend
-   service to `https://dashboard-production-cee3.up.railway.app`. This
-   is a 5+ day outstanding 2-min fix that breaks Stripe checkout and
-   every OAuth redirect for real customers. **Done signal:** Railway
-   variable visible, backend redeployed.
+2. **(User, ~2 min)** Set `DASHBOARD_URL` on the Railway backend (`ai-sec-production`) to `https://dashboard-production-cee3.up.railway.app`. Carries over from yesterday — 6+ days outstanding now. Breaks Stripe checkout + every OAuth redirect. Done signal: Railway env var visible, backend redeployed, OAuth callback URLs no longer 404.
 
-3. **(User, blocking external)** Follow up on Telnyx ticket #2850682.
-   Number `+1-630-937-9478` still unreachable from PSTN; Telnyx Reports
-   shows zero inbound attempts ever. Without this, no live call can ever
-   complete — beta testing with DynaTire blocked. **Done signal:** test
-   call from any cell phone reaches the LiveKit agent.
+3. **(User, blocking external)** Follow up on Telnyx ticket #2850682. Number `+1-630-937-9478` still PSTN-unreachable; Telnyx Reports shows zero inbound attempts ever. No live call possible until this clears. Done signal: test call from any cell phone reaches the LiveKit agent.
 
-4. **(Claude, ~30 min once #3 unblocks)** Wire
-   `DatabaseTenantConfigService` into the agent worker. Today, the
-   agent hardcodes DynaTire's name and timezone in `agent/src/index.ts`.
-   Multi-tenant prod is theatrical until this lands. **Done signal:**
-   second tenant call greets with their business name, not "DynaTire."
+4. **(Claude, ~1-2 hr once #3 clears)** OTP dance in the system prompt. Per `session-20260423-otp.md` Phase 3: when `book-appointment` / `book-with-scheduling` returns the "I'll need a good phone number" gate response, the LLM should call `send-verification-code(phone)`, read its `message` to the caller, on spoken code call `verify-phone-code(phone, code)`, and on success retry the booking with the verified phone. Edit `agent/src/prompt.ts`. Done signal: simulated call where caller-ID is `+1` triggers the OTP flow end-to-end.
 
-5. **(Claude, ~1-2 hours)** Update voice AI system prompt to teach the
-   LLM the OTP dance (Phase 3 TODO from CLAUDE.md / session-20260423-otp).
-   Without this, first call with partial caller-ID will hang on the
-   booking gate. **Done signal:** simulated call where caller-ID is `+1`
-   triggers send-verification-code → verify-phone-code → retry booking.
+5. **(Claude, ~10 min)** Decide the fate of `src/services/tenants/DatabaseTenantConfigService`. Options: route the new `/agent-tools/tenant-config` handler through it (caching layer), or delete the class. Recommendation: delete unless caching shows up as a real need — YAGNI. Done signal: NEEDS-REFACTORING #2 caveat resolved one way or the other.
 
-6. **(Claude, longer)** NEEDS-REFACTORING P2 items: Grok TTS swap (#9),
-   adapter wiring decisions, etc. Lower priority until 2-5 done.
+6. **(Claude, longer)** P2 NEEDS-REFACTORING items: Grok TTS swap (#9), CRM adapter wiring decision (#1), UsageTrackingService decision (#3). All non-urgent.
 
 ## Open questions / unresolved
 
-- Whether the within-file dedup of `docs/IMPROVEMENT_IDEAS.md` /
-  `improvement-ideas.md` needs a generator-side fix to stop the
-  recurrence. Both files were dedup'd yesterday but the journal-loop
-  process that writes them will reintroduce duplicates on next run.
-  No owner identified for the generator fix yet.
-- CRM service-layer SELECT queries (hubspotSync/squareSync/jobberSync/
-  servicetitanSync/calendarSync) still include soft-deleted records.
-  Per yesterday's TODO: needs product call on whether sync should push
-  deletions or just exclude.
-- Whether to ever wire the 20+ CRM adapters in `src/services/crm/` —
-  they exist in code, marketing implies they work, but no routes
-  register them. Decision: wire them, drop them, or document as "Pro
-  tier roadmap"?
+- **`improvement-ideas.md` journal-loop dedup.** Yesterday's snapshot flagged that the loop reintroduces duplicates on each run; today's run added 3 proposed-task entries plus a self-review block but no observed dup yet. Still no owner identified for fixing the generator side.
+- **`DatabaseTenantConfigService` fate.** See step 5 — wire it or delete it. Documented in CLAUDE.md but no decision recorded.
+- **CRM service-layer SELECTs still don't filter `is_deleted`.** Carries over from yesterday's snapshot — needs a product call on whether sync should push deletions or just exclude.
+- **20+ CRM adapters in `src/services/crm/`** still dormant. Wire / drop / "Pro tier roadmap" decision still open. NEEDS-REFACTORING #1 P0.
 
 ## External state to be aware of
 
-- **Telnyx ticket #2850682** — open, awaiting LERG investigation.
-  Last touch over a week ago in conversation. May need re-poke.
-  See `docs/TICKET_SUPPORT.md` (archived from repo root in commit
-  `62eef5b`).
-- **Railway** — backend (`ai-sec-production`) and agent
-  (`ai-sec-agent`) services running. Worker `AW_vPmGExrgTeGn`
-  registered with LiveKit. Awaiting first live call to confirm
-  carrier propagation.
-- **LiveKit Cloud** — project "AI-Secretary", US Central. Dispatch
-  rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent`.
-- **Supabase** — production DB at 80 migrations, most recent applied
-  is `20260430000002_drop_employee_shifts.sql`.
-- **Stripe** — webhook registered at backend `/billing/webhook`.
-  Will silently fail OAuth/checkout redirects until `DASHBOARD_URL`
-  is set on backend Railway env.
-
-## Customer-hat punchlist (delivered to user verbally; mirrored here)
-
-These are the gaps a paying customer would hit. Ordered by severity.
-
-**🔴 Showstoppers**
-
-1. Phone doesn't answer. Telnyx number unreachable from PSTN, 5+ days.
-2. `DASHBOARD_URL` env var missing → Stripe checkout + OAuth break.
-3. Multi-tenancy theatrical. Agent hardcodes DynaTire's name + tz.
-
-**🟠 First-call failure modes**
-
-4. Voice path never validated end-to-end in production.
-5. OTP gate boxes callers in — system prompt missing the dance.
-6. Reminders worker logic correct but never validated against
-   real Telnyx delivery.
-
-**🟡 Half-systems**
-
-7. UsageTrackingService is in-memory only — no metered billing.
-8. No subscription management UI; users must email to cancel.
-9. Consent / TCPA / GDPR types and tables exist; **no UI** for opt-outs.
-10. Marketing claims 6 verticals; only 5 templates, 3 generic-mapped.
-11. 20+ CRM adapters in code, none wired.
-12. Analytics 3/6 metrics live; the other 3 still placeholders.
-
-**🟢 Polish**
-
-13. No password reset, no "Remember me" with refresh tokens.
-14. No skeleton screens, no first-run nav callout.
-15. No production error tracking (Sentry/etc).
-16. No `/health` alerting.
-17. No DB backup runbook.
-18. `setup-db.sh` heredoc bug documented, not fixed.
+- **Telnyx ticket #2850682** — open, awaiting LERG investigation. Last conversation a week+ ago; may need re-poke. See `docs/TICKET_SUPPORT.md`.
+- **Railway** — backend (`ai-sec-production`) and agent (`ai-sec-agent`) services running. Worker `AW_vPmGExrgTeGn` registered with LiveKit. Today's commits **not yet deployed** (Railway auto-deploys on push to main; not pushed yet).
+- **LiveKit Cloud** — project "AI-Secretary", US Central. Dispatch rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent`.
+- **Supabase** — production DB at 80 migrations, no schema changes today.
+- **Stripe** — webhook registered at backend `/billing/webhook`. Will silently fail OAuth/checkout redirects until `DASHBOARD_URL` is set (step 2 above).
+- **Origin not pushed.** `main` is 2 commits ahead of `origin/main`. CI will run on push.
 
 ## Cross-references
 
-- Yesterday's massive day: 30+ commits ending in `127f48e` (drop
-  employee_shifts). Full commit log this week is in conversation context.
-- Authoritative numbers (verified 2026-04-30): **80 migrations,
-  25 route modules, 1,991 tests (1,493 backend + 498 dashboard,
-  2 documented skips)**, zero TypeScript errors.
-- Memory entry for today: not creating one — session was a doc-only
-  reconciliation, doesn't add knowledge that future-me needs in
-  permanent memory beyond what CLAUDE.md/MEMORY.md already track.
+- Yesterday's snapshot: `d90c776` committed `.remember/state.md` alongside the doc sweep. The "before" state.md is in that commit's diff if needed.
+- New memory entry: `~/.claude/projects/-home-dale-projects-ai-sec/memory/session-20260501.md` (added to MEMORY.md index).
+- NEEDS-REFACTORING.md: item #2 marked done with implementation note. Item #4 (`employee_shifts` retirement) was already done yesterday.
+- Authoritative numbers (no change today): **80 migrations, 25 route modules, 1,991 tests** (1,493 backend + 498 dashboard, 2 documented skips), zero TypeScript errors. Today added 10 backend+agent tests on top — verified locally but not yet reflected in the totals doc; deferred to next batch update.
