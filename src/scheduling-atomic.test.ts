@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { Client } from "pg";
 import {
     getRootClient, clearDB, createTenant, createResource, createEmployee,
-    createService, createShift, createCustomerFull, createAppointment,
+    createService, createShift, createScheduleEntry, createCustomerFull, createAppointment,
     beginTestTransaction, rollbackTestTransaction
 } from "./test-utils";
 
@@ -154,8 +154,10 @@ describe("book_with_scheduling_atomic()", () => {
             const tenantId = await createTenant(root, "Auto Pro", "auto-shop");
             const bayId = await createResource(root, tenantId, "Bay 1");
             const empId = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
-            // Monday shift (DOW=1), 8am-5pm
+            // Monday shift (DOW=1), 8am-5pm — booking RPCs read only
+            // employee_schedule, so seed both for the booking date.
             await createShift(root, tenantId, empId, 1, '08:00', '17:00');
+            await createScheduleEntry(root, tenantId, empId, '2026-04-06', '08:00', '17:00');
 
             // 2026-04-06 is a Monday
             const result = await bookWithScheduling({
@@ -220,6 +222,8 @@ describe("book_with_scheduling_atomic()", () => {
             const emp2 = await createEmployee(root, tenantId, "Bob", ["oil-change"]);
             await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
             await createShift(root, tenantId, emp2, 1, '08:00', '17:00');
+            await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
+            await createScheduleEntry(root, tenantId, emp2, '2026-04-06', '08:00', '17:00');
 
             const result = await bookWithScheduling({
                 tenant_id: tenantId,
@@ -242,6 +246,8 @@ describe("book_with_scheduling_atomic()", () => {
             const emp2 = await createEmployee(root, tenantId, "Bob", ["oil-change"]);
             await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
             await createShift(root, tenantId, emp2, 1, '08:00', '17:00');
+            await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
+            await createScheduleEntry(root, tenantId, emp2, '2026-04-06', '08:00', '17:00');
 
             const result = await bookWithScheduling({
                 tenant_id: tenantId,

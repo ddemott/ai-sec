@@ -72,9 +72,15 @@ describe("Appointment Update & Cancel", () => {
                 "INSERT INTO service_employee (tenant_id, service_id, employee_id) VALUES ($1, $2, $3)",
                 [tenantId, svcId, empId]
             );
-            // Create shift for the booking day (Monday = 1)
+            // Create shift for the booking day (Monday = 1) AND a
+            // date-specific schedule entry — booking RPCs read only
+            // employee_schedule post-migration 20260420000000.
             await client.query(
                 "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, 1, '08:00', '17:00')",
+                [tenantId, empId]
+            );
+            await client.query(
+                "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, '2026-03-16', '08:00', '17:00', false)",
                 [tenantId, empId]
             );
         }

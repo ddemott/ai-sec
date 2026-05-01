@@ -78,6 +78,9 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         );
 
         expect(result.rows[0].success).toBe(false);
-        expect(result.rows[0].error_message).toBe("Resource slot already booked");
+        // Updated 2026-04-30: see tools.test.ts comment — RPC error
+        // message renamed from "slot already booked" to the current
+        // "during this timeslot" form.
+        expect(result.rows[0].error_message).toBe("Resource already booked during this timeslot");
     });
 });

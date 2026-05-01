@@ -125,6 +125,55 @@ export async function createShift(client: Client, tenantId: string, employeeId: 
     return res.rows[0].id;
 }
 
+/**
+ * Insert one date-specific schedule entry into `employee_schedule`.
+ * Booking RPCs (book_appointment_atomic, book_with_scheduling_atomic,
+ * check_availability_with_tz) read employee_schedule exclusively as of
+ * migration 20260420000000 — the weekly `employee_shifts` table is
+ * input for the wizard but is NOT consulted at booking time.
+ *
+ * Tests that need an employee to be bookable on a specific date should
+ * seed via this helper (or createShiftForDate below). Pre-rename tests
+ * that only call createShift will see EMPLOYEE_NOT_SCHEDULED errors.
+ */
+export async function createScheduleEntry(
+    client: Client,
+    tenantId: string,
+    employeeId: string,
+    shiftDate: string,
+    startTime: string,
+    endTime: string,
+    isOff: boolean = false
+): Promise<string> {
+    const res = await client.query(
+        `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+         VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, $6) RETURNING id`,
+        [tenantId, employeeId, shiftDate, isOff ? null : startTime, isOff ? null : endTime, isOff]
+    );
+    return res.rows[0].id;
+}
+
+/**
+ * Create both a weekly pattern (employee_shifts) AND a date-specific
+ * schedule row (employee_schedule) for the given date. Use when a test
+ * wants the employee to be visible in BOTH the wizard's weekly grid
+ * (via createShift) AND bookable on a specific date (via
+ * createScheduleEntry). Day-of-week is derived from shiftDate.
+ */
+export async function createShiftForDate(
+    client: Client,
+    tenantId: string,
+    employeeId: string,
+    shiftDate: string,
+    startTime: string,
+    endTime: string
+): Promise<{ shiftId: string; scheduleId: string }> {
+    const dow = new Date(shiftDate + 'T00:00:00.000Z').getUTCDay();
+    const shiftId = await createShift(client, tenantId, employeeId, dow, startTime, endTime);
+    const scheduleId = await createScheduleEntry(client, tenantId, employeeId, shiftDate, startTime, endTime);
+    return { shiftId, scheduleId };
+}
+
 export async function createService(client: Client, tenantId: string, name: string, durationMinutes: number, price?: number): Promise<string> {
     const res = await client.query(
         "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, $2, $3, $4) RETURNING id",

@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { Client } from 'pg';
 import {
   getRootClient, clearDB, createTenant, createEmployee, createShift,
+  createScheduleEntry,
   createResource, createService, createCustomer, createAppointment,
   beginTestTransaction, rollbackTestTransaction,
 } from './test-utils';
@@ -53,8 +54,11 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     // WHY: Night shifts cross midnight — time comparison must handle start > end
     if (!dbAvailable) return;
 
-    // Create night shift pattern for Monday (DOW=1)
+    // Create night shift pattern for Monday (DOW=1) AND a date-specific
+    // schedule row for the booking date. Post-migration 20260420000000,
+    // booking RPCs read only employee_schedule.
     await createShift(client, tenantId, employeeId, 1, '23:00', '06:00');
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '23:00', '06:00');
 
     // Book at 1am Tuesday (but shift started Monday night)
     // Use Monday 23:30 to be within the shift
@@ -78,6 +82,7 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     if (!dbAvailable) return;
 
     await createShift(client, tenantId, employeeId, 1, '08:00', '17:00');
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
 
     const result = await client.query(
       "SELECT * FROM book_with_scheduling_atomic($1, '+15551110002', 'Day Test', 'Day repair', NULL, NULL, $2::TIMESTAMPTZ, $3::TIMESTAMPTZ, NULL, NULL, '{repair}', '{}', NULL, NULL, NULL, 30)",

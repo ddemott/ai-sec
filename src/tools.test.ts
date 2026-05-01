@@ -83,7 +83,10 @@ describe("AI Tools: Modular Integration", () => {
             [tenantId, resourceId, customerId, "2026-06-01T10:30:00Z", "2026-06-01T11:30:00Z", "Conflict", "call_2", null]
         );
         expect(bookRes.rows[0].success).toBe(false);
-        expect(bookRes.rows[0].error_message).toBe("Resource slot already booked");
+        // Updated 2026-04-30: book_appointment_atomic now returns
+        // "Resource already booked during this timeslot" (renamed from
+        // "Resource slot already booked" in an earlier RPC iteration).
+        expect(bookRes.rows[0].error_message).toBe("Resource already booked during this timeslot");
     });
 
     it("Multi-bay: overlapping slots allowed on different resources", async () => {

@@ -8,9 +8,27 @@ on:
 
 jobs:
   backend:
-    name: Backend (typecheck + tests)
+    name: Backend (typecheck + tests + integration)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # Provision Postgres so DB-level integration tests run for real
+      # instead of silently skipping. Without this service, ~80 tests
+      # under src/*.test.ts that gate on `dbAvailable` from getRootClient()
+      # would always pass with zero assertions executed.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d test_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +41,23 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Bootstrap schema_migrations table
+        # Workaround for a bug in scripts/setup-db.sh — its bootstrap step
+        # uses psql -c "SET ..." together with a heredoc, and -c takes
+        # priority so the heredoc CREATE TABLE never runs. Doing it
+        # explicitly here keeps the script's later "SELECT version FROM
+        # schema_migrations" from erroring.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -p 5433 -U postgres -d test_db -c \
+            "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, filename TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());"
+
+      - name: Apply migrations
+        run: bash scripts/setup-db.sh
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: TypeScript check
         run: npx tsc --noEmit

@@ -168,46 +168,40 @@ Full backlog: see `docs/IMPROVEMENT_IDEAS.md` (160 tasks across 10 review phases
 
 ---
 
-## Local DB integration tests — backlog (added 2026-04-30)
+## Local DB integration tests — RESOLVED (2026-04-30)
 
-Local test_db on `localhost:5433` was cleaned + re-migrated from
-scratch this session. Migration `20260430000000` shipped (fixes
-`check_coverage_gaps` + `check_availability_with_tz` referencing the
-dropped `shift_overrides` table — a real prod bug from the
-`20260420000000` rename).
+Local test_db cleaned + re-migrated from scratch. Two migration fixes
+shipped:
 
-After the cleanup, `npm test` against a fresh DB shows **20 failing
-DB-level tests**, all triaged as known issues (NOT regressions from
-recent work):
+- `20260430000000` — `check_coverage_gaps` + `check_availability_with_tz`
+  referencing the dropped `shift_overrides` table (real prod bug from
+  the `20260420000000` rename — the function-rewrite step missed two
+  RPCs).
+- `20260430000001` — `auto_version_trigger` cascade-delete guard. Same
+  pattern as `20260319000003` for `fn_audit_trigger`. Tenant deletion
+  was failing on FK violation when `record_versions` tried to insert
+  rows for a tenant being cascade-deleted.
 
-### Stale tests (19) — assume the pre-rename `book_*_atomic` fallback to `employee_shifts`
+19 stale tests updated to seed `employee_schedule` directly (booking
+RPCs read it exclusively post-`20260420000000`). 2 tests pinning the
+removed `get_effective_shifts` pattern fallback `it.skip`'d with
+explanatory comments — they need redesign before re-enabling.
 
-These insert weekly shifts only. Post-`20260420000000`, booking RPCs
-read `employee_schedule` exclusively; the weekly `employee_shifts`
-fallback was deliberately removed. Tests need updating to seed
-`employee_schedule` directly (a new `createScheduleEntry` helper in
-`test-utils.ts` would fix most of them).
+Test-utils gained `createScheduleEntry()` and `createShiftForDate()`
+helpers so future DB tests have a clean way to seed date-specific
+schedule rows.
 
-- [ ] `src/appointment-mutations.test.ts` (6 tests — update_appointment_customer, cancel)
-- [ ] `src/critical-bugs.test.ts` BUG-001 (2 — timezone shift validation)
-- [ ] `src/high-bugs.test.ts` BUG-009 (1 — service skill requirement)
-- [ ] `src/medium-bugs.test.ts` BUG-014 (1 — assignment_id)
-- [ ] `src/night-shift-availability.test.ts` Fix #30 (2 — booking with shifts)
-- [ ] `src/scheduling-atomic.test.ts` Multi-employee shop (3)
-- [ ] `src/schema.test.ts` (1 — overlapping booking)
-- [ ] `src/shift-overrides-edge.test.ts` (2 — `get_effective_shifts` pattern fallback expectation)
-- [ ] `src/tools.test.ts` (1 — overlapping booking)
+**CI wired** to provision Postgres 16, apply migrations, and run the
+full backend suite on every push — these tests are no longer silent
+skips. 1,511 backend tests pass + 2 documented skips.
 
-### Real bugs (1)
+**Follow-ups:**
 
-- [ ] `src/unanswered-questions.test.ts` CASCADE-DELETE: `record_versions` FK
-  violation when deleting a tenant — audit trigger on tenants tries to
-  insert into `record_versions` with the about-to-be-deleted tenant_id.
-  Either tighten the trigger to skip DELETEs on `tenants`, or add `ON
-  DELETE CASCADE` to the FK.
-
-### CI integration-test wiring (deferred)
-
-Adding Postgres to `ci.yml` is the right next step — would gate every
-push on the DB tests. **Do this AFTER** the 19 stale tests are
-updated; otherwise CI is permanently red.
+- [ ] **Bug in `scripts/setup-db.sh` bootstrap step.** The script uses
+  `psql -c "SET ..."` together with a heredoc to create `schema_migrations`,
+  but psql's `-c` and stdin are mutually exclusive — `-c` wins, the
+  CREATE TABLE in the heredoc never runs. CI works around this with
+  an explicit pre-step. Fix: split into two psql invocations or use
+  `psql -v ON_ERROR_STOP=1 -f -` with the heredoc only.
+- [ ] Re-enable the 2 skipped `get_effective_shifts` tests by
+  redesigning them against the new "employee_schedule only" contract.
