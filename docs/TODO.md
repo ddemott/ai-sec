@@ -165,3 +165,49 @@ All 47 items from April 10-11 UX review resolved in commit `f9ffa8e`. Key change
 - [ ] Normalize response envelopes across CRM disconnect/sync-status routes
 
 Full backlog: see `docs/IMPROVEMENT_IDEAS.md` (160 tasks across 10 review phases)
+
+---
+
+## Local DB integration tests — backlog (added 2026-04-30)
+
+Local test_db on `localhost:5433` was cleaned + re-migrated from
+scratch this session. Migration `20260430000000` shipped (fixes
+`check_coverage_gaps` + `check_availability_with_tz` referencing the
+dropped `shift_overrides` table — a real prod bug from the
+`20260420000000` rename).
+
+After the cleanup, `npm test` against a fresh DB shows **20 failing
+DB-level tests**, all triaged as known issues (NOT regressions from
+recent work):
+
+### Stale tests (19) — assume the pre-rename `book_*_atomic` fallback to `employee_shifts`
+
+These insert weekly shifts only. Post-`20260420000000`, booking RPCs
+read `employee_schedule` exclusively; the weekly `employee_shifts`
+fallback was deliberately removed. Tests need updating to seed
+`employee_schedule` directly (a new `createScheduleEntry` helper in
+`test-utils.ts` would fix most of them).
+
+- [ ] `src/appointment-mutations.test.ts` (6 tests — update_appointment_customer, cancel)
+- [ ] `src/critical-bugs.test.ts` BUG-001 (2 — timezone shift validation)
+- [ ] `src/high-bugs.test.ts` BUG-009 (1 — service skill requirement)
+- [ ] `src/medium-bugs.test.ts` BUG-014 (1 — assignment_id)
+- [ ] `src/night-shift-availability.test.ts` Fix #30 (2 — booking with shifts)
+- [ ] `src/scheduling-atomic.test.ts` Multi-employee shop (3)
+- [ ] `src/schema.test.ts` (1 — overlapping booking)
+- [ ] `src/shift-overrides-edge.test.ts` (2 — `get_effective_shifts` pattern fallback expectation)
+- [ ] `src/tools.test.ts` (1 — overlapping booking)
+
+### Real bugs (1)
+
+- [ ] `src/unanswered-questions.test.ts` CASCADE-DELETE: `record_versions` FK
+  violation when deleting a tenant — audit trigger on tenants tries to
+  insert into `record_versions` with the about-to-be-deleted tenant_id.
+  Either tighten the trigger to skip DELETEs on `tenants`, or add `ON
+  DELETE CASCADE` to the FK.
+
+### CI integration-test wiring (deferred)
+
+Adding Postgres to `ci.yml` is the right next step — would gate every
+push on the DB tests. **Do this AFTER** the 19 stale tests are
+updated; otherwise CI is permanently red.
