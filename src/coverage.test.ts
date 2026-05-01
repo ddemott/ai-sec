@@ -37,7 +37,15 @@ describe("Coverage Gap Detection", () => {
         await rollbackTestTransaction(client);
     });
 
-    // Helper: seed an employee with shifts and service assignment
+    // Helper: seed an employee with date-specific schedule rows and a
+    // service assignment. The check_coverage_gaps RPC reads
+    // employee_schedule directly, so for each day-of-week passed in we
+    // emit one employee_schedule row at the matching date in the
+    // 2026-03-16..2026-03-22 test window (Mon..Sun).
+    const TEST_WEEK_BY_DOW: Record<number, string> = {
+        0: '2026-03-22', 1: '2026-03-16', 2: '2026-03-17', 3: '2026-03-18',
+        4: '2026-03-19', 5: '2026-03-20', 6: '2026-03-21',
+    };
     async function seedEmployee(
         name: string,
         skills: string[],
@@ -53,9 +61,10 @@ describe("Coverage Gap Detection", () => {
         const empId = res.rows[0].id;
 
         for (const dow of shiftDays) {
+            const shiftDate = TEST_WEEK_BY_DOW[dow];
             await client.query(
-                "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, $3, $4, $5)",
-                [tenantId, empId, dow, shiftStart, shiftEnd]
+                "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, false)",
+                [tenantId, empId, shiftDate, shiftStart, shiftEnd]
             );
         }
 
@@ -259,7 +268,7 @@ describe("Coverage Gap Detection", () => {
         expect(res.rows.length).toBe(0);
     });
 
-    it("should respect is_active=false on employee shifts", async () => {
+    it("should respect is_off=true on employee_schedule rows", async () => {
         // WHO: Employee with deactivated shifts
         // WHAT: Coverage should show closed (no active shifts = no open hours)
         // WHY: Inactive shifts should not count as coverage
@@ -268,7 +277,10 @@ describe("Coverage Gap Detection", () => {
         const svcId = await seedService("Paint", 90);
         const empId = await seedEmployee("Painter", [], [1, 2, 3, 4, 5], '08:00', '17:00', [svcId]);
 
-        await client.query("UPDATE employee_shifts SET is_active = false WHERE employee_id = $1", [empId]);
+        // Mark every schedule row as is_off — the equivalent of the old
+        // employee_shifts.is_active=false toggle now that the platform
+        // only stores date-specific entries.
+        await client.query("UPDATE employee_schedule SET is_off = true, start_time = NULL, end_time = NULL WHERE employee_id = $1", [empId]);
 
         const res = await client.query(
             "SELECT * FROM check_coverage_gaps($1, '2026-03-16'::DATE, '2026-03-22'::DATE)",

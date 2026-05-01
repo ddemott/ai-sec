@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
 import {
-  getRootClient, clearDB, createTenant, createEmployee, createShift,
+  getRootClient, clearDB, createTenant, createEmployee,
   createScheduleEntry,
   createResource, createService, createCustomer, createAppointment,
   beginTestTransaction, rollbackTestTransaction,
@@ -54,10 +54,8 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     // WHY: Night shifts cross midnight — time comparison must handle start > end
     if (!dbAvailable) return;
 
-    // Create night shift pattern for Monday (DOW=1) AND a date-specific
-    // schedule row for the booking date. Post-migration 20260420000000,
-    // booking RPCs read only employee_schedule.
-    await createShift(client, tenantId, employeeId, 1, '23:00', '06:00');
+    // Schedule a night shift for 2026-06-01. Booking RPCs read
+    // employee_schedule directly.
     await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '23:00', '06:00');
 
     // Book at 1am Tuesday (but shift started Monday night)
@@ -81,7 +79,6 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     // WHY: Night shift logic must not break normal shifts
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '08:00', '17:00');
     await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
 
     const result = await client.query(
@@ -102,7 +99,9 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     // WHY: Night shift employees are only available during their shift
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '22:00', '06:00');
+    // Schedule the night shift for 2026-06-01 (Monday). Booking at 2pm
+    // local should still fail because 2pm is outside 22:00-06:00.
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '22:00', '06:00');
 
     const result = await client.query(
       "SELECT * FROM book_with_scheduling_atomic($1, '+15551110003', 'Out of range', 'Fail test', NULL, NULL, $2::TIMESTAMPTZ, $3::TIMESTAMPTZ, NULL, NULL, '{repair}', '{}', NULL, $4, NULL, 30)",
@@ -155,7 +154,7 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
     // WHY: Both conditions met — slot is bookable
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '08:00', '17:00'); // Monday
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
 
     const result = await client.query(
       "SELECT * FROM check_availability_with_tz($1, $2, '2026-06-01T10:00:00-05:00'::TIMESTAMPTZ, '2026-06-01T10:30:00-05:00'::TIMESTAMPTZ)",
@@ -171,7 +170,7 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
     // WHY: Resource conflict
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '08:00', '17:00');
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
     const custId = await createCustomer(client, tenantId, 'Existing', '+15559990001');
     await createAppointment(client, tenantId, resourceId, custId,
       '2026-06-01T10:00:00-05:00', '2026-06-01T11:00:00-05:00', 'Existing booking');
@@ -184,13 +183,14 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
     expect(result.rows[0].available).toBe(false);
   });
 
-  it('SAD: unavailable when no employee on shift (no pattern, no override)', async () => {
-    // WHO: Saturday with no shifts defined
+  it('SAD: unavailable when no employee_schedule row exists for the date', async () => {
+    // WHO: Date with no schedule rows
     // WHAT: Should return available=false (no staff)
-    // WHY: Resource is free but nobody is working
+    // WHY: Resource is free but nobody is working that date
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '08:00', '17:00'); // Monday only
+    // Seed a Monday-only schedule and check Saturday — no Saturday row.
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
 
     const result = await client.query(
       "SELECT * FROM check_availability_with_tz($1, $2, '2026-06-06T10:00:00-05:00'::TIMESTAMPTZ, '2026-06-06T10:30:00-05:00'::TIMESTAMPTZ)",
@@ -200,13 +200,12 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
     expect(result.rows[0].available).toBe(false);
   });
 
-  it('SAD: unavailable when employee has is_off override despite pattern', async () => {
-    // WHO: Employee with Monday pattern BUT is_off override
+  it('SAD: unavailable when employee has an is_off schedule entry for that date', async () => {
+    // WHO: Employee whose date-specific schedule says is_off=true
     // WHAT: Should return available=false
-    // WHY: Override takes precedence — employee is off
+    // WHY: is_off rows mark the employee as not working on that date
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '08:00', '17:00');
     await client.query(
       "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, '2026-06-01', true)",
       [tenantId, employeeId]
@@ -245,7 +244,7 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
     // WHY: Caller needs timezone for display
     if (!dbAvailable) return;
 
-    await createShift(client, tenantId, employeeId, 1, '08:00', '17:00');
+    await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
 
     const result = await client.query(
       "SELECT * FROM check_availability_with_tz($1, $2, '2026-06-01T10:00:00-05:00'::TIMESTAMPTZ, '2026-06-01T10:30:00-05:00'::TIMESTAMPTZ)",

@@ -15,7 +15,7 @@ import {
   getRootClient, clearDB, setupBasicTenant,
   beginTestTransaction, rollbackTestTransaction,
   createTenant, createCustomer, createEmployee, createResource, createService,
-  createShift, createAppointment,
+  createAppointment,
 } from "./test-utils";
 
 let client: Client;
@@ -220,41 +220,9 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("DELETE routes return 404 for missing entities", () => {
-  // --- Happy path ---
-  it("DELETE existing shift succeeds and returns the id", async () => {
-    // WHO: tenant owner deleting a shift from Working Hours view
-    // WHAT: DELETE with valid shift id and matching tenant_id
-    // WHEN: shift removal via dashboard Working Hours UI
-    // WHERE: employee_shifts table, tenant-scoped DELETE RETURNING query
-    // WHY: BUG-034 — confirms shift deletion returns the deleted id for UI feedback
-    if (!dbAvailable) return;
-    const emp = await createEmployee(client, tenantA, "John");
-    const shiftId = await createShift(client, tenantA, emp, 1, "09:00", "17:00");
-
-    const res = await client.query(
-      "DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2 RETURNING id",
-      [shiftId, tenantA]
-    );
-    expect(res.rows).toHaveLength(1);
-    expect(res.rows[0].id).toBe(shiftId);
-  });
-
-  // --- Sad path: shift not found ---
-  it("DELETE non-existent shift returns 0 rows (WHO: tenantA, WHAT: delete shift, WHERE: employee_shifts, WHEN: ID not found, HOW: RETURNING id yields empty result)", async () => {
-    // WHO: tenant owner attempting to delete an already-removed shift
-    // WHAT: DELETE with a fake/stale UUID that no longer exists
-    // WHEN: double-click delete or stale UI state
-    // WHERE: employee_shifts table, DELETE RETURNING query
-    // WHY: BUG-034 — route must return 404 (not 200) when shift not found, requires checking rowCount
-    if (!dbAvailable) return;
-    const fakeId = "00000000-0000-0000-0000-000000000099";
-
-    const res = await client.query(
-      "DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2 RETURNING id",
-      [fakeId, tenantA]
-    );
-    expect(res.rows).toHaveLength(0);
-  });
+  // BUG-034 was about the now-deleted /shifts/:id DELETE route + the
+  // employee_shifts table. Both removed in NEEDS-REFACTORING #4
+  // Phase 2; the BUG-034 shift cases are obsolete. Skill cases remain.
 
   // --- Sad path: skill not found ---
   it("DELETE non-existent skill returns 0 rows (WHO: tenantA, WHAT: delete skill, WHERE: tenant_skills, WHEN: ID not found, HOW: RETURNING id yields empty result)", async () => {

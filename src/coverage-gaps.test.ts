@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createEmployee, createResource, createShift, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createEmployee, createResource, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 describe("Coverage Gaps", () => {
@@ -148,50 +148,14 @@ describe("Coverage Gaps", () => {
     });
 
     // ---------------------------------------------------------------
-    // 3. Shift Split (overlap detection / frontend pattern)
-    // ---------------------------------------------------------------
-    describe("Shift Split", () => {
-        let employeeId: string;
-
-        beforeEach(async () => {
-            if (!dbAvailable) return;
-            employeeId = await createEmployee(client, tenantId, "Split Worker");
-        });
-
-        it("should allow two non-overlapping shifts on the same day", async () => {
-            if (!dbAvailable) return;
-            await createShift(client, tenantId, employeeId, 1, "08:00", "12:00");
-            await createShift(client, tenantId, employeeId, 1, "13:00", "17:00");
-
-            const res = await client.query(
-                "SELECT * FROM employee_shifts WHERE employee_id = $1 AND day_of_week = 1 ORDER BY start_time",
-                [employeeId]
-            );
-            expect(res.rows.length).toBe(2);
-            expect(res.rows[0].start_time).toBe("08:00:00");
-            expect(res.rows[1].start_time).toBe("13:00:00");
-        });
-
-        it("should support delete-and-recreate pattern for replacing an overlapping shift", async () => {
-            if (!dbAvailable) return;
-            const oldShiftId = await createShift(client, tenantId, employeeId, 1, "08:00", "17:00");
-
-            // Frontend pattern: delete old shift, create new one
-            await client.query("DELETE FROM employee_shifts WHERE id = $1", [oldShiftId]);
-            await createShift(client, tenantId, employeeId, 1, "09:00", "18:00");
-
-            const res = await client.query(
-                "SELECT * FROM employee_shifts WHERE employee_id = $1 AND day_of_week = 1",
-                [employeeId]
-            );
-            expect(res.rows.length).toBe(1);
-            expect(res.rows[0].start_time).toBe("09:00:00");
-            expect(res.rows[0].end_time).toBe("18:00:00");
-            // Old shift should be gone
-            const oldRes = await client.query("SELECT * FROM employee_shifts WHERE id = $1", [oldShiftId]);
-            expect(oldRes.rows.length).toBe(0);
-        });
-    });
+    // 3. Shift Split — REMOVED 2026-04-30
+    // The two tests previously here exercised the old employee_shifts
+    // weekly-CRUD frontend pattern (split a day into two ranges,
+    // delete-and-recreate to replace an overlap). Both the table and
+    // the routes are gone (NEEDS-REFACTORING #4 Phase 2). Date-specific
+    // schedule overlap is enforced at the employee_schedule UNIQUE
+    // (tenant, employee, shift_date) constraint and tested via the
+    // /shifts/overrides endpoints.
 
     // ---------------------------------------------------------------
     // 4. Appointment Cancel

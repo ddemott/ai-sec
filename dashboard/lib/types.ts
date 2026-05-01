@@ -257,13 +257,6 @@ export interface CoverageItem {
   details: Record<string, unknown>;
 }
 
-export interface StaffingEntry {
-  service_id: string;
-  service_name: string;
-  duration_minutes: number;
-  employees: Array<{ id: string; name: string; shift_start: string | null; shift_end: string | null }>;
-}
-
 export interface CallSummary {
   id: string;
   tenant_id: string;

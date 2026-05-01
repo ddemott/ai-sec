@@ -50,22 +50,32 @@ Last updated: 2026-04-28.
 
 ## P1 — Dead code / unused layers eating mental overhead
 
-### 4. Phase 2: consolidate `employee_shifts` ↔ `employee_schedule` (Phase 1 shipped)
-**Phase 1 shipped 2026-04-30.** The original "drop the legacy table" framing was wrong — audit found `employee_shifts` was actively used. But the actual bug it pointed at was real and worse: setup wizard wrote to `employee_shifts` and booking RPCs read only `employee_schedule`, with nothing bridging them. Owners who finished onboarding could not book.
+### ~~4. Retire `employee_shifts`~~
+**Status: done 2026-04-30 (Phase 1 + Phase 2 both shipped).**
 
-**Phase 1 fix:** new `expandWeeklyToSchedule()` service helper + `POST /shifts/expand-weekly` endpoint, called by both the SoloWizard's `handleFinalize` and the team wizard's transition into step 7. Fans the weekly pattern into 4 weeks of date-specific `employee_schedule` rows on completion. Idempotent via ON CONFLICT DO NOTHING. 7 helper tests + 1 wizard integration test cover happy + sad paths.
+**Phase 1** (commit `2f3c911`): bridged the wizard's weekly pattern
+to bookings via the new `expandWeeklyToSchedule()` helper and
+`POST /shifts/expand-weekly` endpoint. Fixed a silent post-onboarding
+bug where finished tenants couldn't book.
 
-**Phase 2 (still open):** decide whether to retire `employee_shifts` entirely. Old context preserved below — the dual-table architecture is intentional now (weekly base + date overrides), but a future cleanup could:
+**Phase 2** (today): wizard's hours grid is now ephemeral form state
+that posts the pattern to expand-weekly at finalize; the legacy
+`/shifts` CRUD routes + `Api.shifts.list/create/update/delete` are
+deleted; `/coverage/staffing` (which joined on `employee_shifts`) is
+gone since nothing in the dashboard consumed it; `check_coverage_gaps`
+and `check_availability_with_tz` rewritten to read employee_schedule
+directly; the `employee_shifts` table dropped via migration
+`20260430000002`. Test suite updated (createShift removed from
+test-utils, ~17 obsolete CRUD tests deleted, all booking tests now
+seed `employee_schedule` directly).
 
-- Switch the wizard's read-back from `Api.shifts.list` to the existing `Api.shifts.overrides.bulk` endpoint
-- Reframe `/coverage/staffing` analytics against `employee_schedule` directly
-- Drop `Api.shifts.list/create/update/delete`, `/shifts` legacy CRUD, and the table itself
+The platform now has one schedule table. The end state is what
+NEEDS-REFACTORING #4 originally described in the "drop the legacy
+table" framing — the path there just turned out to be longer.
 
-That's a larger refactor; not currently blocking anything.
+#### Original audit notes (kept for context — preceded the Phase 1+2 split)
 
-#### Original audit notes (kept for context)
-
-`employee_shifts` is actively read/written by:
+Pre-Phase-2, `employee_shifts` was actively read/written by:
 
 - `src/routes/shifts.ts:51-119` — full CRUD endpoints (GET /shifts, POST /shifts/create, /shifts/:id/update, DELETE /shifts/:id)
 - `src/routes/analytics.ts:58` — `/coverage/staffing` JOIN (the service-employee skill matrix)

@@ -25,7 +25,7 @@ export async function clearDB(client: Client) {
     const tables = [
         'tenants', 'resources', 'customers', 'appointments', 'call_summaries',
         'call_transcripts', 'soft_reservations', 'users', 'services', 'employees',
-        'employee_shifts', 'employee_schedule', 'service_employee', 'service_resource',
+        'employee_schedule', 'service_employee', 'service_resource',
         'tenant_docs', 'tenant_skills',
     ];
     for (const table of tables) {
@@ -117,24 +117,14 @@ export async function createEmployee(client: Client, tenantId: string, name: str
     return res.rows[0].id;
 }
 
-export async function createShift(client: Client, tenantId: string, employeeId: string, dayOfWeek: number, startTime: string, endTime: string): Promise<string> {
-    const res = await client.query(
-        "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-        [tenantId, employeeId, dayOfWeek, startTime, endTime]
-    );
-    return res.rows[0].id;
-}
-
 /**
  * Insert one date-specific schedule entry into `employee_schedule`.
- * Booking RPCs (book_appointment_atomic, book_with_scheduling_atomic,
- * check_availability_with_tz) read employee_schedule exclusively as of
- * migration 20260420000000 — the weekly `employee_shifts` table is
- * input for the wizard but is NOT consulted at booking time.
- *
- * Tests that need an employee to be bookable on a specific date should
- * seed via this helper (or createShiftForDate below). Pre-rename tests
- * that only call createShift will see EMPLOYEE_NOT_SCHEDULED errors.
+ * Booking + availability RPCs (book_appointment_atomic,
+ * book_with_scheduling_atomic, check_availability_with_tz,
+ * check_coverage_gaps) read employee_schedule exclusively — there is
+ * no weekly-pattern table anymore (employee_shifts was dropped in
+ * migration 20260430000002). Tests that need an employee to be
+ * bookable on a specific date seed it here.
  */
 export async function createScheduleEntry(
     client: Client,
@@ -151,27 +141,6 @@ export async function createScheduleEntry(
         [tenantId, employeeId, shiftDate, isOff ? null : startTime, isOff ? null : endTime, isOff]
     );
     return res.rows[0].id;
-}
-
-/**
- * Create both a weekly pattern (employee_shifts) AND a date-specific
- * schedule row (employee_schedule) for the given date. Use when a test
- * wants the employee to be visible in BOTH the wizard's weekly grid
- * (via createShift) AND bookable on a specific date (via
- * createScheduleEntry). Day-of-week is derived from shiftDate.
- */
-export async function createShiftForDate(
-    client: Client,
-    tenantId: string,
-    employeeId: string,
-    shiftDate: string,
-    startTime: string,
-    endTime: string
-): Promise<{ shiftId: string; scheduleId: string }> {
-    const dow = new Date(shiftDate + 'T00:00:00.000Z').getUTCDay();
-    const shiftId = await createShift(client, tenantId, employeeId, dow, startTime, endTime);
-    const scheduleId = await createScheduleEntry(client, tenantId, employeeId, shiftDate, startTime, endTime);
-    return { shiftId, scheduleId };
 }
 
 export async function createService(client: Client, tenantId: string, name: string, durationMinutes: number, price?: number): Promise<string> {

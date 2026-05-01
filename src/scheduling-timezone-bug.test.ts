@@ -145,11 +145,13 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
       );
       testEmployeeId = employeeRes.rows[0].id;
 
-      // Friday shift only (day_of_week = 5), 8 AM - 6 PM
+      // Schedule the test Friday (2026-04-03) 8 AM - 6 PM. Booking
+      // RPCs read employee_schedule directly; weekly patterns are
+      // not part of the platform's data model anymore.
       await client.query(
-        `INSERT INTO employee_shifts (employee_id, tenant_id, day_of_week, start_time, end_time, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [testEmployeeId, testTenantId, 5, '08:00', '18:00', true]
+        `INSERT INTO employee_schedule (employee_id, tenant_id, shift_date, start_time, end_time, is_off)
+         VALUES ($1, $2, '2026-04-03'::DATE, '08:00'::TIME, '18:00'::TIME, false)`,
+        [testEmployeeId, testTenantId]
       );
     } catch {
       dbAvailable = false;

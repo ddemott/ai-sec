@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createShift, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction } from './test-utils';
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction } from './test-utils';
 import { Client } from 'pg';
 // Day-of-week conversion utilities (inlined from deleted core/models.ts)
 const DAY_STRING_TO_NUM: Record<string, number> = {
@@ -110,8 +110,7 @@ describe('Medium Bug Fixes', () => {
         test('accepts valid integer assignment_id', async () => {
             if (!dbAvailable) return;
             const empId = await createEmployee(client, tenantId, 'BugTest Employee');
-            // Wednesday DOW=3 — booking RPCs read only employee_schedule.
-            await createShift(client, tenantId, empId, 3, '08:00', '20:00');
+            // 2026-04-15 is a Wednesday. Booking RPCs read only employee_schedule.
             await createScheduleEntry(client, tenantId, empId, '2026-04-15', '08:00', '20:00');
 
             const res = await client.query(

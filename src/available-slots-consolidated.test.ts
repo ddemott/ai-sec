@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
 import {
-  getRootClient, clearDB, createTenant, createEmployee, createShift, createResource, createService,
+  getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource, createService,
   createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction,
 } from './test-utils';
 
@@ -64,23 +64,15 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
       ),
       effective_shifts AS (
         SELECT DISTINCT
-          COALESCE(so.start_time, es.start_time)::text AS start_time,
-          COALESCE(so.end_time, es.end_time)::text AS end_time
+          es.start_time::text AS start_time,
+          es.end_time::text AS end_time
         FROM active_employees ae
-        LEFT JOIN employee_schedule so
-          ON so.employee_id = ae.id
-          AND so.tenant_id = $1
-          AND so.shift_date = $3::date
-        LEFT JOIN employee_shifts es
+        JOIN employee_schedule es
           ON es.employee_id = ae.id
-          AND es.day_of_week = EXTRACT(DOW FROM $3::date)::integer
-          AND es.is_active = true
-          AND so.id IS NULL
-        WHERE (
-          (so.id IS NOT NULL AND so.is_off = false AND so.start_time IS NOT NULL)
-          OR
-          (so.id IS NULL AND es.id IS NOT NULL)
-        )
+          AND es.tenant_id = $1
+          AND es.shift_date = $3::date
+          AND es.is_off = false
+          AND es.start_time IS NOT NULL
       ),
       day_appointments AS (
         SELECT start_time::text, end_time::text
@@ -123,7 +115,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
 
     const svcId = await createService(client, tenantId, 'Oil Change', 30, 39.99);
     const empId = await createEmployee(client, tenantId, 'Mike', ['oil-change']);
-    await createShift(client, tenantId, empId, 1, '08:00', '17:00'); // Monday
+    await createScheduleEntry(client, tenantId, empId, TEST_DATE, '08:00', '17:00');
     const custId = await createCustomer(client, tenantId, 'Alice', '+15551234567');
     await createAppointment(client, tenantId, resourceId, custId,
       `${TEST_DATE}T10:00:00-05:00`, `${TEST_DATE}T10:30:00-05:00`, 'Oil Change');
@@ -146,8 +138,8 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     await createService(client, tenantId, 'Tire Rotation', 45);
     const emp1 = await createEmployee(client, tenantId, 'Mike', []);
     const emp2 = await createEmployee(client, tenantId, 'Sarah', []);
-    await createShift(client, tenantId, emp1, 1, '08:00', '17:00');
-    await createShift(client, tenantId, emp2, 1, '08:00', '17:00'); // same hours
+    await createScheduleEntry(client, tenantId, emp1, TEST_DATE, '08:00', '17:00');
+    await createScheduleEntry(client, tenantId, emp2, TEST_DATE, '08:00', '17:00'); // same hours
 
     const result = await queryAvailableSlots('tire', TEST_DATE);
 
@@ -166,8 +158,8 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     await createService(client, tenantId, 'Brakes', 60);
     const emp1 = await createEmployee(client, tenantId, 'Early Bird', []);
     const emp2 = await createEmployee(client, tenantId, 'Late Owl', []);
-    await createShift(client, tenantId, emp1, 1, '06:00', '14:00');
-    await createShift(client, tenantId, emp2, 1, '12:00', '20:00');
+    await createScheduleEntry(client, tenantId, emp1, TEST_DATE, '06:00', '14:00');
+    await createScheduleEntry(client, tenantId, emp2, TEST_DATE, '12:00', '20:00');
 
     const result = await queryAvailableSlots('brakes', TEST_DATE);
 
@@ -182,9 +174,8 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
 
     await createService(client, tenantId, 'Alignment', 60);
     const empId = await createEmployee(client, tenantId, 'Mike', []);
-    await createShift(client, tenantId, empId, 1, '08:00', '17:00'); // pattern
 
-    // Override: shorter hours on this specific date
+    // Schedule shorter hours on this specific date.
     await client.query(
       "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '10:00', '14:00')",
       [tenantId, empId, TEST_DATE]
@@ -205,8 +196,9 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
 
     await createService(client, tenantId, 'Paint', 90);
     const empId = await createEmployee(client, tenantId, 'Mike', []);
-    await createShift(client, tenantId, empId, 1, '08:00', '17:00'); // pattern
 
+    // Mark the employee off for the queried date — no shifts should
+    // be returned for them.
     await client.query(
       "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
       [tenantId, empId, TEST_DATE]
@@ -224,7 +216,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     if (!dbAvailable) return;
 
     const empId = await createEmployee(client, tenantId, 'Mike', []);
-    await createShift(client, tenantId, empId, 1, '08:00', '17:00');
+    await createScheduleEntry(client, tenantId, empId, TEST_DATE, '08:00', '17:00');
 
     const result = await queryAvailableSlots('nonexistent-service-xyz', TEST_DATE);
 
@@ -247,15 +239,15 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     expect(result.appointments.length).toBe(0);
   });
 
-  it('SAD: weekend with no pattern or override returns no shifts', async () => {
-    // WHO: Employee with Mon-Fri pattern, querying Saturday
+  it('SAD: querying a date with no employee_schedule rows returns no shifts', async () => {
+    // WHO: Employee scheduled only on Monday, query Saturday
     // WHAT: No shifts for Saturday
-    // WHY: Employee doesn't work weekends
+    // WHY: No employee_schedule row for Saturday → nobody available
     if (!dbAvailable) return;
 
     await createService(client, tenantId, 'Quick Fix', 15);
     const empId = await createEmployee(client, tenantId, 'Weekday Worker', []);
-    await createShift(client, tenantId, empId, 1, '08:00', '17:00'); // Monday only
+    await createScheduleEntry(client, tenantId, empId, TEST_DATE, '08:00', '17:00'); // Monday only
 
     const result = await queryAvailableSlots('quick', '2026-06-06'); // Saturday
 

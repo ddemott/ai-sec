@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, createShift, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
 describe("CRUD Routes - Database Level", () => {
@@ -403,112 +403,12 @@ describe("CRUD Routes - Database Level", () => {
         });
     });
 
-    // ── Shifts ───────────────────────────────────────────────────────────
-
-    describe("Shifts", () => {
-        let employeeId: string;
-
-        beforeEach(async () => {
-            if (!dbAvailable) return;
-            employeeId = await createEmployee(client, tenantId, "Shift Worker");
-        });
-
-        it("should create employee shift", async () => {
-            // WHO: dashboard user adding a shift via Working Hours view
-            // WHAT: INSERT shift for Monday (day 1) 09:00-17:00, defaults is_active=true
-            // WHEN: POST /shifts from the Working Hours detail panel
-            // WHERE: employee_shifts table INSERT
-            // WHY: without shifts, the scheduler shows no staff availability and booking RPC rejects all times
-            if (!dbAvailable) return;
-
-            const res = await client.query(
-                "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-                [tenantId, employeeId, 1, "09:00", "17:00"]
-            );
-
-            expect(res.rows[0].tenant_id).toBe(tenantId);
-            expect(res.rows[0].employee_id).toBe(employeeId);
-            expect(res.rows[0].day_of_week).toBe(1);
-            expect(res.rows[0].is_active).toBe(true);
-        });
-
-        it("should list shifts for a tenant ordered by day and time", async () => {
-            if (!dbAvailable) return;
-
-            await client.query(
-                "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, 3, '09:00', '17:00')",
-                [tenantId, employeeId]
-            );
-            await client.query(
-                "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, 1, '08:00', '16:00')",
-                [tenantId, employeeId]
-            );
-
-            const res = await client.query(
-                "SELECT * FROM employee_shifts WHERE tenant_id = $1 ORDER BY day_of_week, start_time",
-                [tenantId]
-            );
-
-            expect(res.rows).toHaveLength(2);
-            expect(res.rows[0].day_of_week).toBe(1);
-            expect(res.rows[1].day_of_week).toBe(3);
-        });
-
-        it("should update shift times", async () => {
-            if (!dbAvailable) return;
-
-            const insertRes = await client.query(
-                "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, 1, '09:00', '17:00') RETURNING id",
-                [tenantId, employeeId]
-            );
-            const shiftId = insertRes.rows[0].id;
-
-            const res = await client.query(
-                `UPDATE employee_shifts SET
-                    start_time = COALESCE($1, start_time), end_time = COALESCE($2, end_time),
-                    day_of_week = COALESCE($3, day_of_week), is_active = COALESCE($4, is_active)
-                 WHERE id = $5 AND tenant_id = $6 RETURNING *`,
-                ["10:00", "18:00", null, null, shiftId, tenantId]
-            );
-
-            expect(res.rows).toHaveLength(1);
-            expect(res.rows[0].start_time).toBe("10:00:00");
-            expect(res.rows[0].end_time).toBe("18:00:00");
-            expect(res.rows[0].day_of_week).toBe(1); // unchanged
-        });
-
-        it("should delete shift", async () => {
-            if (!dbAvailable) return;
-
-            const insertRes = await client.query(
-                "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, 1, '09:00', '17:00') RETURNING id",
-                [tenantId, employeeId]
-            );
-            const shiftId = insertRes.rows[0].id;
-
-            await client.query(
-                "DELETE FROM employee_shifts WHERE id = $1 AND tenant_id = $2",
-                [shiftId, tenantId]
-            );
-
-            const check = await client.query(
-                "SELECT * FROM employee_shifts WHERE id = $1",
-                [shiftId]
-            );
-            expect(check.rows).toHaveLength(0);
-        });
-
-        it("should reject day_of_week outside 0-6 range", async () => {
-            if (!dbAvailable) return;
-
-            await expect(
-                client.query(
-                    "INSERT INTO employee_shifts (tenant_id, employee_id, day_of_week, start_time, end_time) VALUES ($1, $2, 7, '09:00', '17:00')",
-                    [tenantId, employeeId]
-                )
-            ).rejects.toThrow();
-        });
-    });
+    // ── Shifts: REMOVED 2026-04-30 ──────────────────────────────────────
+    // The CRUD tests for the old /shifts routes + employee_shifts table
+    // were deleted with the table itself (NEEDS-REFACTORING #4 Phase 2).
+    // Date-specific schedule CRUD tests live alongside the
+    // /shifts/overrides routes; coverage of the booking-time invariants
+    // moved into scheduling-atomic.test.ts and shift-overrides-edge.test.ts.
 
     // ── Service Mappings ─────────────────────────────────────────────────
 
@@ -767,45 +667,8 @@ describe("CRUD Routes - Database Level", () => {
 
     // ── UUID Shifts (moved from coverage-gaps.test.ts) ────────────────
 
-    describe("UUID Shifts", () => {
-        let employeeId: string;
-
-        beforeEach(async () => {
-            if (!dbAvailable) return;
-            employeeId = await createEmployee(client, tenantId, "Shift Worker UUID");
-        });
-
-        it("should create a shift with a valid UUID id", async () => {
-            if (!dbAvailable) return;
-            const shiftId = await createShift(client, tenantId, employeeId, 1, "08:00", "17:00");
-            expect(shiftId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-            expect(shiftId.length).toBe(36);
-        });
-
-        it("should delete a shift by UUID id", async () => {
-            if (!dbAvailable) return;
-            const shiftId = await createShift(client, tenantId, employeeId, 2, "09:00", "18:00");
-
-            await client.query("DELETE FROM employee_shifts WHERE id = $1", [shiftId]);
-
-            const res = await client.query("SELECT * FROM employee_shifts WHERE id = $1", [shiftId]);
-            expect(res.rows.length).toBe(0);
-        });
-
-        it("should update a shift by UUID id", async () => {
-            if (!dbAvailable) return;
-            const shiftId = await createShift(client, tenantId, employeeId, 3, "08:00", "12:00");
-
-            await client.query(
-                "UPDATE employee_shifts SET start_time = '07:00', end_time = '15:00' WHERE id = $1",
-                [shiftId]
-            );
-
-            const res = await client.query("SELECT start_time, end_time FROM employee_shifts WHERE id = $1", [shiftId]);
-            expect(res.rows[0].start_time).toBe("07:00:00");
-            expect(res.rows[0].end_time).toBe("15:00:00");
-        });
-    });
+    // ── UUID Shifts: REMOVED 2026-04-30 ──────────────────────────────
+    // Same reason as the "Shifts" describe block above — table dropped.
 
     // ── UUID Skills (moved from coverage-gaps.test.ts) ────────────────
 

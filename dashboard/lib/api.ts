@@ -2,7 +2,7 @@ import { normalizePhone } from './phone'
 import type {
   Appointment, Customer, Resource, Employee, Service, ScheduleEntry, EffectiveShift, BulkEffectiveShift, Skill,
   ServiceMapping, TenantFull, BusinessTemplate, Tenant,
-  CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem, StaffingEntry,
+  CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem,
   CallSummary, JobberSettings, CrmSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
   VoiceSession, VoiceSessionDisplay, CustomerContext,
   RecordHistoryResponse, DeletedRecordsResponse, RecordRestorePreview, RecentChangesResponse,
@@ -511,16 +511,6 @@ export const Api = {
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
       return apiFetch<CoverageItem[]>(`/coverage`, params);
-    },
-  },
-
-  // --- STAFFING MAP ---
-  staffing: {
-    get: (tenantId: string | null, dayOfWeek?: number) => {
-      const params: Record<string, string> = {};
-      if (tenantId) params.tenant_id = tenantId;
-      if (dayOfWeek !== undefined) params.day_of_week = String(dayOfWeek);
-      return apiFetch<StaffingEntry[]>(`/coverage/staffing`, params);
     },
   },
 

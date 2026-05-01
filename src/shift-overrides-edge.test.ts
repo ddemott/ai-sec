@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
 import {
-  getRootClient, clearDB, createTenant, createEmployee, createShift, createResource,
+  getRootClient, clearDB, createTenant, createEmployee, createResource,
   beginTestTransaction, rollbackTestTransaction,
 } from './test-utils';
 
@@ -28,10 +28,10 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       await clearDB(client);
       tenantId = await createTenant(client, 'Override Test Co', 'auto-repair', 'America/Chicago');
       employeeId = await createEmployee(client, tenantId, 'Mike Mechanic', ['oil-change']);
-      // Create Mon-Fri 8-5 pattern
-      for (let dow = 1; dow <= 5; dow++) {
-        await createShift(client, tenantId, employeeId, dow, '08:00', '17:00');
-      }
+      // No global setup needed — tests that need a schedule entry seed
+      // it themselves inside their savepoint. The two tests that
+      // expected a Mon-Fri pattern fallback are .skip'd (the
+      // get_effective_shifts function no longer falls back).
       dbAvailable = true;
     } catch (err) {
       console.warn('[shift-overrides-edge] DB not available:', err);

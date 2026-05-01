@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { Client } from "pg";
 import {
     getRootClient, clearDB, createTenant, createResource, createEmployee,
-    createService, createShift, createScheduleEntry, createCustomerFull, createAppointment,
+    createService, createScheduleEntry, createCustomerFull, createAppointment,
     beginTestTransaction, rollbackTestTransaction
 } from "./test-utils";
 
@@ -154,9 +154,7 @@ describe("book_with_scheduling_atomic()", () => {
             const tenantId = await createTenant(root, "Auto Pro", "auto-shop");
             const bayId = await createResource(root, tenantId, "Bay 1");
             const empId = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
-            // Monday shift (DOW=1), 8am-5pm — booking RPCs read only
-            // employee_schedule, so seed both for the booking date.
-            await createShift(root, tenantId, empId, 1, '08:00', '17:00');
+            // 2026-04-06 is a Monday. Booking RPCs read only employee_schedule.
             await createScheduleEntry(root, tenantId, empId, '2026-04-06', '08:00', '17:00');
 
             // 2026-04-06 is a Monday
@@ -178,7 +176,8 @@ describe("book_with_scheduling_atomic()", () => {
             const tenantId = await createTenant(root, "Auto Pro", "auto-shop");
             await createResource(root, tenantId, "Bay 1");
             const emp1 = await createEmployee(root, tenantId, "Bob", ["brakes"]);
-            await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
+            // Bob is scheduled on 2026-04-06 but lacks the required skill.
+            await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
 
             const result = await bookWithScheduling({
                 tenant_id: tenantId,
@@ -197,8 +196,8 @@ describe("book_with_scheduling_atomic()", () => {
             const tenantId = await createTenant(root, "Auto Pro", "auto-shop");
             await createResource(root, tenantId, "Bay 1");
             const empId = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
-            // Only works Tuesday (DOW=2)
-            await createShift(root, tenantId, empId, 2, '08:00', '17:00');
+            // Only works Tuesday (2026-04-07), not Monday (2026-04-06).
+            await createScheduleEntry(root, tenantId, empId, '2026-04-07', '08:00', '17:00');
 
             // Try Monday (DOW=1)
             const result = await bookWithScheduling({
@@ -220,8 +219,6 @@ describe("book_with_scheduling_atomic()", () => {
             await createResource(root, tenantId, "Bay 2");
             const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
             const emp2 = await createEmployee(root, tenantId, "Bob", ["oil-change"]);
-            await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
-            await createShift(root, tenantId, emp2, 1, '08:00', '17:00');
             await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
             await createScheduleEntry(root, tenantId, emp2, '2026-04-06', '08:00', '17:00');
 
@@ -244,8 +241,6 @@ describe("book_with_scheduling_atomic()", () => {
             await createResource(root, tenantId, "Bay 1");
             const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
             const emp2 = await createEmployee(root, tenantId, "Bob", ["oil-change"]);
-            await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
-            await createShift(root, tenantId, emp2, 1, '08:00', '17:00');
             await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
             await createScheduleEntry(root, tenantId, emp2, '2026-04-06', '08:00', '17:00');
 
@@ -303,9 +298,10 @@ describe("book_with_scheduling_atomic()", () => {
             const emp3 = await createEmployee(root, tenantId, "Carol", ["tires", "alignment"]);
             const emp4 = await createEmployee(root, tenantId, "Dave", ["oil-change", "brakes", "tires"]);
 
-            // Monday shifts for all
+            // 2026-04-06 (Monday) schedule for all four — booking RPCs
+            // read employee_schedule, not weekly patterns.
             for (const empId of [emp1, emp2, emp3, emp4]) {
-                await createShift(root, tenantId, empId, 1, '08:00', '17:00');
+                await createScheduleEntry(root, tenantId, empId, '2026-04-06', '08:00', '17:00');
             }
 
             // Add some existing appointments to make it realistic
@@ -362,18 +358,19 @@ describe("book_with_scheduling_atomic()", () => {
             const bay1 = await createResource(root, tenantId, "Bay 1");
             await root.query("UPDATE resources SET capabilities = $1 WHERE id = $2", ['{lift}', bay1]);
             const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
-            await createShift(root, tenantId, emp1, 1, '08:00', '17:00');
+            await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
 
             const runs = 5;
             const oldTimes: number[] = [];
             const newTimes: number[] = [];
 
             for (let i = 0; i < runs; i++) {
-                // OLD approach: 4 separate queries
+                // OLD approach: 4 separate queries (kept as a perf
+                // baseline; the third now reads employee_schedule).
                 const oldStart = performance.now();
                 await root.query("SELECT id, capabilities FROM resources WHERE tenant_id = $1 AND is_active = true", [tenantId]);
                 await root.query("SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true", [tenantId]);
-                await root.query("SELECT employee_id, day_of_week, start_time, end_time FROM employee_shifts WHERE tenant_id = $1 AND is_active = true", [tenantId]);
+                await root.query("SELECT employee_id, shift_date, start_time, end_time FROM employee_schedule WHERE tenant_id = $1 AND is_off = false", [tenantId]);
                 await root.query("SELECT resource_id, start_time, end_time FROM appointments WHERE tenant_id = $1 AND status = 'scheduled'", [tenantId]);
                 oldTimes.push(performance.now() - oldStart);
 

@@ -34,66 +34,13 @@ export function registerAnalyticsRoutes(
     return reply.send(res.rows);
   }, 'Failed to check coverage gaps'));
 
-  // Service staffing map — per-service employee availability for a given day of week
-  app.get('/coverage/staffing', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
-
-    const rawDow = parseInt((req.query as Record<string, string>).day_of_week || String(new Date().getDay()), 10);
-    const dayOfWeek = (Number.isNaN(rawDow) || rawDow < 0 || rawDow > 6) ? new Date().getDay() : rawDow;
-
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query(`
-        SELECT
-          s.id as service_id,
-          s.name as service_name,
-          s.duration_minutes,
-          e.id as employee_id,
-          e.name as employee_name,
-          es.start_time::text as shift_start,
-          es.end_time::text as shift_end
-        FROM services s
-        LEFT JOIN service_employee se ON se.service_id = s.id AND se.tenant_id = s.tenant_id
-        LEFT JOIN employees e ON e.id = se.employee_id AND e.is_deleted = false
-        LEFT JOIN employee_shifts es ON es.employee_id = e.id AND es.tenant_id = s.tenant_id
-          AND es.day_of_week = $2 AND es.is_active = true
-        WHERE s.tenant_id = $1 AND (s.is_deleted IS NULL OR s.is_deleted = false)
-        ORDER BY s.name, e.name
-      `, [tenantId, dayOfWeek]);
-    });
-
-    // Group by service with employee shift details
-    const serviceMap = new Map<string, {
-      service_id: string;
-      service_name: string;
-      duration_minutes: number;
-      employees: { id: string; name: string; shift_start: string | null; shift_end: string | null }[];
-    }>();
-
-    for (const row of res.rows) {
-      if (!serviceMap.has(row.service_id)) {
-        serviceMap.set(row.service_id, {
-          service_id: row.service_id,
-          service_name: row.service_name,
-          duration_minutes: row.duration_minutes,
-          employees: [],
-        });
-      }
-      const svc = serviceMap.get(row.service_id)!;
-      if (row.employee_id && row.shift_start) {
-        if (!svc.employees.some(e => e.id === row.employee_id && e.shift_start === row.shift_start)) {
-          svc.employees.push({
-            id: row.employee_id,
-            name: row.employee_name,
-            shift_start: row.shift_start,
-            shift_end: row.shift_end,
-          });
-        }
-      }
-    }
-
-    return reply.send(Array.from(serviceMap.values()));
-  }, 'Failed to fetch staffing map'));
+  // GET /coverage/staffing was removed 2026-04-30 along with the
+  // employee_shifts table (NEEDS-REFACTORING #4 Phase 2). It joined on
+  // weekly patterns to answer "for this day-of-week, who works?" — a
+  // question that no longer has a stable answer now that the platform
+  // only stores date-specific schedule entries. The dashboard never
+  // called it. If we ever need a reframed version it should take a
+  // date and read employee_schedule.
 
   app.get('/call-summaries', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);

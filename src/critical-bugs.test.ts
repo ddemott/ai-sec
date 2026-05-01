@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, getApiClient, clearDB, createTenant, createResource, createEmployee, createShift, createScheduleEntry, createCustomerFull } from "./test-utils";
+import { getRootClient, getApiClient, clearDB, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull } from "./test-utils";
 import { Client } from "pg";
 
 describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
@@ -40,8 +40,7 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
             const resourceId = await createResource(root, tenantId, "Bay 1");
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
             const employeeId = await createEmployee(root, tenantId, "Mike", ["oil-change"]);
-            await createShift(root, tenantId, employeeId, 1, "09:00", "17:00");
-            // Booking RPCs read only employee_schedule post-20260420000000.
+            // 2026-03-02 is a Monday. Booking RPCs read only employee_schedule.
             await createScheduleEntry(root, tenantId, employeeId, '2026-03-02', '09:00', '17:00');
 
             // Book for Monday 10 AM - 11 AM Eastern (= 15:00 - 16:00 UTC)
@@ -67,7 +66,8 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
             const resourceId = await createResource(root, tenantId, "Bay 1");
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
             const employeeId = await createEmployee(root, tenantId, "Mike", ["oil-change"]);
-            await createShift(root, tenantId, employeeId, 1, "09:00", "17:00");
+            // 2026-03-02 is a Monday. Booking RPCs read only employee_schedule.
+            await createScheduleEntry(root, tenantId, employeeId, '2026-03-02', '09:00', '17:00');
 
             // Book for Monday 6 PM Eastern (= 23:00 UTC) — OUTSIDE shift
             const result = await root.query(
@@ -92,7 +92,6 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
             const resourceId = await createResource(root, tenantId, "Bay 1");
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
             const employeeId = await createEmployee(root, tenantId, "Steve", ["tire-install"]);
-            await createShift(root, tenantId, employeeId, 1, "09:00", "21:00");
             // Booking is local 2026-03-02 (Monday 8 PM Pacific). Seed
             // employee_schedule for that local date.
             await createScheduleEntry(root, tenantId, employeeId, '2026-03-02', '09:00', '21:00');

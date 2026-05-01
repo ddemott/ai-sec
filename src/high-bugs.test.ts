@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createShift, createScheduleEntry, createCustomerFull, createUser, hashPassword } from "./test-utils";
+import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword } from "./test-utils";
 import { Client } from "pg";
 import jwt from "jsonwebtoken";
 
@@ -152,7 +152,8 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const resourceId = await createResource(root, tenantId, "Bay 1");
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
             const employeeId = await createEmployee(root, tenantId, "Bob", ["oil-change"]);
-            await createShift(root, tenantId, employeeId, 3, "08:00", "18:00");
+            // 2026-04-01 is a Wednesday. Booking RPCs read only employee_schedule.
+            await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
                 "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING id",
@@ -375,9 +376,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const resourceId = await createResource(root, tenantId, "Bay 1");
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
             const employeeId = await createEmployee(root, tenantId, "Expert Mike", ["tire-install", "oil-change"]);
-            // 2026-04-01 is a Wednesday (DOW=3). Booking RPCs read only
-            // employee_schedule, so seed both for the booking date.
-            await createShift(root, tenantId, employeeId, 3, "08:00", "18:00");
+            // 2026-04-01 is a Wednesday. Booking RPCs read only employee_schedule.
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
@@ -581,7 +580,8 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const resourceId = await createResource(root, tenantId, "Bay 1");
             const customerId = await createCustomerFull(root, tenantId, "+15550005555", "Diag Alice");
             const employeeId = await createEmployee(root, tenantId, "Junior", ["sweeping"]);
-            await createShift(root, tenantId, employeeId, 3, "08:00", "18:00");
+            // 2026-04-01 is a Wednesday. Booking RPCs read only employee_schedule.
+            await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
                 "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Expert Service', 60, ARRAY['advanced-repair']) RETURNING id",

@@ -98,40 +98,28 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
     });
   });
 
-  test('SAD: booking fails when employee has is_off override despite having a weekly pattern', async () => {
-    // WHO: Employee with weekly pattern BUT is_off override for specific date
-    // WHAT: book_with_scheduling_atomic should reject — day off
-    // WHEN: On a date where is_off=true override exists
+  test('SAD: booking fails when employee has is_off=true on the requested date', async () => {
+    // WHO: Employee marked is_off on the booking date
+    // WHAT: book_with_scheduling_atomic should reject
+    // WHEN: On a date where is_off=true entry exists
     // WHERE: book_with_scheduling_atomic RPC
-    // WHY: is_off override must block pattern fallback (FIX #1)
+    // WHY: is_off must block bookings — that's the whole point of the column
     await withClient(async (client) => {
       const empRes = await client.query(
-        "SELECT e.id, e.skills FROM employees e JOIN employee_shifts es ON es.employee_id = e.id WHERE e.tenant_id = $1 AND e.is_active = true AND (e.is_deleted IS NULL OR e.is_deleted = false) AND es.is_active = true LIMIT 1",
+        "SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (empRes.rows.length === 0) return;
       const emp = empRes.rows[0];
       if (!emp.skills || emp.skills.length === 0) return;
 
-      // Find a day this employee has a pattern shift
-      const shiftRes = await client.query(
-        "SELECT day_of_week FROM employee_shifts WHERE employee_id = $1 AND is_active = true LIMIT 1",
-        [emp.id]
-      );
-      if (shiftRes.rows.length === 0) return;
-      const dow = shiftRes.rows[0].day_of_week;
-
-      // Find the next occurrence of that day of week
-      const today = new Date();
-      let target = new Date(today);
-      while (target.getDay() !== dow) {
-        target.setDate(target.getDate() + 1);
-      }
-      // Go one more week out to avoid today edge cases
-      target.setDate(target.getDate() + 7);
+      // Pick a date 14 days out (avoids colliding with the seeded
+      // schedule data this file's setUp has scattered around).
+      const target = new Date();
+      target.setDate(target.getDate() + 14);
       const dateStr = target.toISOString().slice(0, 10);
 
-      // Create is_off override for that date
+      // Create is_off entry for that date
       await client.query(
         "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
         [TEST_TENANT_ID, emp.id, dateStr]
@@ -380,7 +368,7 @@ describe('get_effective_shifts RPC integration', () => {
   test('HAPPY: override takes precedence over pattern', async () => {
     await withClient(async (client) => {
       const emp = await client.query(
-        "SELECT e.id FROM employees e JOIN employee_shifts es ON es.employee_id = e.id WHERE e.tenant_id = $1 AND e.is_active = true AND es.is_active = true LIMIT 1",
+        "SELECT id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (emp.rows.length === 0) return;
@@ -416,7 +404,7 @@ describe('get_effective_shifts RPC integration', () => {
   test('SAD: is_off override shows as off, not pattern hours', async () => {
     await withClient(async (client) => {
       const emp = await client.query(
-        "SELECT e.id FROM employees e JOIN employee_shifts es ON es.employee_id = e.id WHERE e.tenant_id = $1 AND e.is_active = true AND es.is_active = true LIMIT 1",
+        "SELECT id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (emp.rows.length === 0) return;
