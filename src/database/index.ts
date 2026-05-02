@@ -88,6 +88,53 @@ async function clearTenantContext(client: PoolClient): Promise<void> {
   await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
 }
 
+// ── withTenantClient Factory ─────────────────────────────────────────
+
+/**
+ * Per-request RLS scope. The shape route handlers consume.
+ */
+export type WithTenantClient = <T>(
+  tenantId: string,
+  fn: (client: PoolClient) => Promise<T>
+) => Promise<T>;
+
+/**
+ * Build the `withTenantClient` helper that every Fastify route uses to
+ * acquire a tenant-scoped DB client. Verifies the tenant exists, sets the
+ * `app.current_tenant_id` GUC for the duration of the callback, and clears
+ * it on the way out.
+ *
+ * Curried over the pool so tests can inject a fixture pool while production
+ * binds against `getPool()`. Routes treat the returned function as opaque.
+ *
+ * Throws an error tagged `code: 'TENANT_NOT_FOUND'` / `statusCode: 404` for
+ * an unknown tenant — the global error handler in src/index.ts maps that
+ * to a 404 response.
+ */
+export function createWithTenantClient(pool: Pool): WithTenantClient {
+  return async function withTenantClient<T>(
+    tenantId: string,
+    fn: (client: PoolClient) => Promise<T>
+  ): Promise<T> {
+    const client = await pool.connect();
+    try {
+      // Validate tenant exists (before setting context, so RLS doesn't block the check)
+      const tenantCheck = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+      if (tenantCheck.rows.length === 0) {
+        const err = new Error(`Tenant ${tenantId} not found`);
+        (err as unknown as { statusCode: number }).statusCode = 404;
+        (err as unknown as { code: string }).code = 'TENANT_NOT_FOUND';
+        throw err;
+      }
+      await setTenantContext(client, tenantId);
+      return await fn(client);
+    } finally {
+      await clearTenantContext(client);
+      client.release();
+    }
+  };
+}
+
 // ── DatabaseService Interface ────────────────────────────────────────
 
 /**

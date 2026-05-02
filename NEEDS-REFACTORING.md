@@ -162,8 +162,10 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 
 **Pool config drift fixed 2026-05-02.** The two-pool problem was the real safety win — `src/database/index.ts` `getPool()` was building a separate pool *without* the deadlock-prevention timeouts, so anything routed through the reminder scheduler / communications service had a softer safety net than the Fastify route surface. Consolidated: `getPool()` now applies `statement_timeout=30000` / `lock_timeout=10000` / `idle_in_transaction_session_timeout=60000` and `max=10`, and `src/index.ts` calls `getPool()` instead of constructing its own pool. Both consumers now share one singleton.
 
+**`withTenantClient` factory extracted 2026-05-02.** The function body moved to `src/database/index.ts` as `createWithTenantClient(pool)`; `src/index.ts` now reads `const withTenantClient = createWithTenantClient(pool);`. Routes and tests are unchanged — they keep receiving `withTenantClient` as injected, which preserved the test-mocking pattern (route tests inject a closure that returns a mock `PoolClient`). The duplication of the function body is gone.
+
 **Still open:**
-- **`withTenantClient` extraction.** Still lives as a closure in `src/index.ts`. Moving it to `src/database/index.ts` (or a sibling) would let every `register*Routes(app, pool, withTenantClient)` drop one or both parameters — 25 mechanical signature changes. Defer until the next reason to touch route signatures, or take it as its own focused refactor.
+- **Drop the `withTenantClient` parameter from `register*Routes` signatures.** Would let routes import the factory directly, but tests inject a mocked `withTenantClient` to avoid spinning up a real DB — switching to a singleton-based version means rewriting many test files around `vi.mock` or seeded test DBs. Real work, ~3-4h, defer until there's a separate reason to touch the test surface.
 - **Reminder-scheduler start/stop** is now ~3 lines of conditional + ~5 lines of signal handler. Extracting adds more boilerplate than it removes. Skip unless other lifecycle work joins it.
 
 ---

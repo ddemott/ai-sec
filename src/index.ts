@@ -5,8 +5,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { collectStartupWarnings } from './services/envWarnings';
 import multipart from '@fastify/multipart';
-import { PoolClient } from 'pg';
-import { getPool, closePool } from './database';
+import { getPool, closePool, createWithTenantClient } from './database';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -149,26 +148,7 @@ app.addContentTypeParser(
 // GUC. Works on both local Docker and Supabase.
 
 const pool = getPool();
-
-async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try {
-    // Validate tenant exists (before setting context, so RLS doesn't block the check)
-    const tenantCheck = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
-    if (tenantCheck.rows.length === 0) {
-      const err = new Error(`Tenant ${tenantId} not found`);
-      (err as unknown as { statusCode: number }).statusCode = 404;
-      (err as unknown as { code: string }).code = 'TENANT_NOT_FOUND';
-      throw err;
-    }
-    // Set tenant context — RLS policies filter by this GUC
-    await client.query('SELECT set_tenant_context($1::UUID)', [tenantId]);
-    return await fn(client);
-  } finally {
-    await client.query("SELECT set_config('app.current_tenant_id', '', false)").catch(() => {});
-    client.release();
-  }
-}
+const withTenantClient = createWithTenantClient(pool);
 
 // --- Auth + Tenant Middleware ---
 registerJwtAuthHook(app as any, pool);
