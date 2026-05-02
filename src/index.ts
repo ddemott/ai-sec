@@ -8,7 +8,6 @@ import multipart from '@fastify/multipart';
 import { Pool, PoolClient } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
-import jwt from 'jsonwebtoken';
 
 import { registerAuthRoutes } from './routes/auth';
 import { registerTenantRoutes } from './routes/tenants';
@@ -39,22 +38,20 @@ import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
-import { tenantMiddleware } from './middleware';
+import { tenantMiddleware, generateToken, registerJwtAuthHook } from './middleware';
 
 // --- Environment Validation ---
 // Fail fast on missing required env vars in production
 const isProduction = process.env.NODE_ENV === 'production';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const JWT_SECRET = process.env.JWT_SECRET || (isProduction ? '' : 'dev-jwt-secret-change-in-production');
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY || '';
 const TELNYX_SIP_CONNECTION_ID = process.env.TELNYX_SIP_CONNECTION_ID || '';
 
 if (isProduction) {
   const missing: string[] = [];
   if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
-  if (!JWT_SECRET) missing.push('JWT_SECRET');
+  if (!process.env.JWT_SECRET) missing.push('JWT_SECRET');
   if (!OPENAI_API_KEY) missing.push('OPENAI_API_KEY');
   if (!process.env.STRIPE_SECRET_KEY) missing.push('STRIPE_SECRET_KEY');
   if (missing.length > 0) {
@@ -194,70 +191,8 @@ async function withTenantClient<T>(tenantId: string, fn: (client: PoolClient) =>
   }
 }
 
-// --- Auth ---
-
-function generateToken(payload: { tenant_id: string; user_id: string; email: string }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as any });
-}
-
-function verifyToken(token: string): { tenant_id: string; user_id: string; email: string; iat?: number } | null {
-  try {
-    return jwt.verify(token, JWT_SECRET) as any;
-  } catch {
-    return null;
-  }
-}
-
-const PUBLIC_ROUTES = [
-  '/health', '/login', '/forgot-password', '/reset-password', '/', '/demo',
-  '/billing/webhook',
-  // OAuth callbacks (redirects from external providers — no JWT available)
-  '/calendar/auth/google/callback',
-  '/calendar/auth/outlook/callback',
-  '/hubspot/auth/callback',
-  '/jobber/auth/callback',
-  '/square/auth/callback',
-  '/servicetitan/auth/callback',
-  // CRM webhooks (authenticated via HMAC/signature, not JWT)
-  '/hubspot/webhook',
-  '/square/webhook',
-  '/servicetitan/webhook',
-];
-app.addHook('onRequest', async (request, reply) => {
-  if (request.method === 'OPTIONS') return;
-  const urlPath = request.url.split('?')[0];
-  if (PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/')) return;
-
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return;
-  }
-
-  const token = authHeader.slice(7);
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    request.log.warn({ url: request.url, ip: request.ip }, 'JWT verification failed — invalid or expired token');
-    return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
-  }
-
-  // Reject tokens issued before the user's most recent password change
-  if (decoded.iat) {
-    const client = await pool.connect();
-    try {
-      const r = await client.query('SELECT password_changed_at FROM users WHERE id = $1', [decoded.user_id]);
-      const changedAt = r.rows[0]?.password_changed_at as Date | undefined;
-      if (changedAt && Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
-        return reply.status(401).send({ success: false, error: 'Session expired — please log in again' });
-      }
-    } finally {
-      client.release();
-    }
-  }
-
-  (request as any).auth = decoded;
-});
-
-// --- Tenant Context Middleware (extracts tenant_id, enriches logger) ---
+// --- Auth + Tenant Middleware ---
+registerJwtAuthHook(app as any, pool);
 tenantMiddleware(app as any);
 
 // --- Subscription Gate (after auth, before routes) ---

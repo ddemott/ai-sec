@@ -921,9 +921,10 @@ describe("Source code correctness checks", () => {
     // WHO: external services (Google, Outlook, HubSpot, Jobber, Square, ServiceTitan) calling back
     // WHAT: all OAuth callback and webhook routes must be in PUBLIC_ROUTES (skip JWT auth)
     // WHEN: OAuth redirect after user authorizes, or CRM sends webhook event
-    // WHERE: src/index.ts PUBLIC_ROUTES array
+    // WHERE: src/middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
+    //        Moved from src/index.ts during NEEDS-REFACTORING #11 cleanup.
     // WHY: OAuth callbacks and webhooks come from external services without JWT — blocking them breaks all integrations
-    const src = fs.readFileSync("src/index.ts", "utf8");
+    const src = fs.readFileSync("src/middleware.ts", "utf8");
     for (const route of [
       "/calendar/auth/google/callback",
       "/calendar/auth/outlook/callback",

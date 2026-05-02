@@ -158,14 +158,11 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 ---
 
 ### 11. Audit `src/index.ts` (385 lines) for extraction opportunities
-**Problem.** Backend entry has grown to 385 lines including pool config, middleware chain, JWT decoder, route registration, reminder-scheduler lifecycle, and graceful shutdown. Some of this is irreducible Fastify plumbing; some of it can move out.
+**Status: partially done 2026-05-02.** JWT preHandler extracted — `JWT_SECRET`/`JWT_EXPIRY`/`generateToken`/`verifyToken`/`PUBLIC_ROUTES` and the onRequest auth hook now live in `src/middleware.ts` as `registerJwtAuthHook(app, pool)`. `src/index.ts` shrank 385 → 320 lines. Two existing tests were updated to read from middleware.ts instead of index.ts. 1,495 backend tests still green.
 
-**Candidates.**
-- Pool creation (`new Pool(...)` + `withTenantClient`) → `src/database/pool.ts`
-- JWT preHandler logic → `src/middleware.ts` (already exists)
-- Reminder-scheduler start/stop → its own `src/workers/index.ts` lifecycle module
-
-**Effort.** Small per extraction. Worth doing once the file crosses ~500 lines or the next reader spends real time finding things.
+**Still open:**
+- **Pool extraction** is genuinely a 25-route signature change — every `register*Routes(app, pool, withTenantClient)` would need to change as `withTenantClient` migrates out of the index.ts closure. Defer until route signatures are touched for another reason, or until the file again crosses the readability threshold. Note: there is real duplication — `src/database/index.ts` `getPool()` builds a separate pool *without* the `statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout` settings the production pool has. If a reminder/communications path ever exercises that pool under load, deadlock risk is real. Worth fixing as its own focused commit.
+- **Reminder-scheduler start/stop** is now ~3 lines of conditional + ~5 lines of signal handler. Extracting adds more boilerplate than it removes. Skip unless other lifecycle work joins it.
 
 ---
 

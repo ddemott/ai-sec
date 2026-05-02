@@ -71,7 +71,9 @@ describe('Fix #23: JWT failure logging', () => {
     // WHO: Backend middleware
     // WHAT: Should call request.log.warn when JWT verification fails
     // WHY: Failed auth attempts need to be visible in production logs
-    const src = fs.readFileSync('src/index.ts', 'utf8');
+    // WHERE: The JWT auth hook lives in src/middleware.ts (registerJwtAuthHook),
+    //        extracted from src/index.ts during the NEEDS-REFACTORING #11 cleanup.
+    const src = fs.readFileSync('src/middleware.ts', 'utf8');
     expect(src).toContain('request.log.warn');
     expect(src).toContain('JWT verification failed');
   });

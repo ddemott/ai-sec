@@ -15,7 +15,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 /** Extended request with tenant context and structured logger */
 export interface AppRequest extends FastifyRequest {
   tenantId?: string;
-  auth?: { tenant_id: string; user_id: string; email: string };
+  auth?: { tenant_id: string; user_id: string; email: string; iat?: number };
 }
 
 /** Known error codes the system can produce */
@@ -247,4 +247,97 @@ export function logError(
     timestamp: new Date().toISOString(),
     ...data,
   }, `${event}: ${error.message}`);
+}
+
+// ── JWT Auth Hook ────────────────────────────────────────────────────
+
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  (process.env.NODE_ENV === 'production' ? '' : 'dev-jwt-secret-change-in-production');
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
+
+type JwtPayload = { tenant_id: string; user_id: string; email: string; iat?: number };
+
+/**
+ * Sign a session token. Exported so the auth route can mint tokens on
+ * login/register; nothing else should need to call this.
+ */
+export function generateToken(payload: { tenant_id: string; user_id: string; email: string }): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as any });
+}
+
+function verifyToken(token: string): JwtPayload | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+/** Routes that bypass JWT verification entirely (no Bearer token expected). */
+const PUBLIC_ROUTES = [
+  '/health', '/login', '/forgot-password', '/reset-password', '/', '/demo',
+  '/billing/webhook',
+  // OAuth callbacks (redirects from external providers — no JWT available)
+  '/calendar/auth/google/callback',
+  '/calendar/auth/outlook/callback',
+  '/hubspot/auth/callback',
+  '/jobber/auth/callback',
+  '/square/auth/callback',
+  '/servicetitan/auth/callback',
+  // CRM webhooks (authenticated via HMAC/signature, not JWT)
+  '/hubspot/webhook',
+  '/square/webhook',
+  '/servicetitan/webhook',
+];
+
+/**
+ * Register the onRequest JWT verification hook.
+ *
+ * Behavior:
+ *  - OPTIONS, public routes, and Jobber webhook subpaths bypass.
+ *  - No Authorization header → request proceeds anonymously (downstream
+ *    handlers can still gate via requireAuth()).
+ *  - Invalid/expired token → 401.
+ *  - Token issued before the user's password_changed_at → 401 (so password
+ *    rotation invalidates outstanding sessions).
+ *  - Valid token → decoded payload attached as `request.auth`.
+ *
+ * The pool parameter is needed for the password_changed_at lookup.
+ */
+export function registerJwtAuthHook(app: FastifyInstance, pool: Pool) {
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.method === 'OPTIONS') return;
+    const urlPath = request.url.split('?')[0];
+    if (PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/')) return;
+
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      request.log.warn({ url: request.url, ip: request.ip }, 'JWT verification failed — invalid or expired token');
+      return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
+    }
+
+    if (decoded.iat) {
+      const client = await pool.connect();
+      try {
+        const r = await client.query('SELECT password_changed_at FROM users WHERE id = $1', [decoded.user_id]);
+        const changedAt = r.rows[0]?.password_changed_at as Date | undefined;
+        if (changedAt && Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
+          return reply.status(401).send({ success: false, error: 'Session expired — please log in again' });
+        }
+      } finally {
+        client.release();
+      }
+    }
+
+    (request as AppRequest).auth = decoded;
+  });
 }
