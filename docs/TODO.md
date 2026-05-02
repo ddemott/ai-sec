@@ -243,11 +243,12 @@ skips. 1,511 backend tests pass + 2 documented skips.
 
 **Follow-ups:**
 
-- [ ] **Bug in `scripts/setup-db.sh` bootstrap step.** The script uses
-  `psql -c "SET ..."` together with a heredoc to create `schema_migrations`,
-  but psql's `-c` and stdin are mutually exclusive — `-c` wins, the
-  CREATE TABLE in the heredoc never runs. CI works around this with
-  an explicit pre-step. Fix: split into two psql invocations or use
-  `psql -v ON_ERROR_STOP=1 -f -` with the heredoc only.
+- [x] **Bug in `scripts/setup-db.sh` bootstrap step.** Done 2026-05-02.
+  Removed the `-c "SET ..."` flag and moved the `SET client_min_messages`
+  into the heredoc as its first statement; smoke-tested against a
+  throwaway local DB (old pattern: table not created, new pattern:
+  table created). CI workaround step in `.github/workflows/ci.yml`
+  deleted in the same commit since the script bootstraps correctly
+  on its own now.
 - [ ] Re-enable the 2 skipped `get_effective_shifts` tests by
   redesigning them against the new "employee_schedule only" contract.

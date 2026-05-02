@@ -42,18 +42,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Bootstrap schema_migrations table
-        # Workaround for a bug in scripts/setup-db.sh — its bootstrap step
-        # uses psql -c "SET ..." together with a heredoc, and -c takes
-        # priority so the heredoc CREATE TABLE never runs. Doing it
-        # explicitly here keeps the script's later "SELECT version FROM
-        # schema_migrations" from erroring.
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h localhost -p 5433 -U postgres -d test_db -c \
-            "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, filename TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());"
-
       - name: Apply migrations
         run: bash scripts/setup-db.sh
         env:

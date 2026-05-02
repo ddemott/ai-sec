@@ -45,7 +45,10 @@ if ! psql "$DB_URL" -c "SELECT 1" >/dev/null 2>&1; then
 fi
 
 # Bootstrap the tracking table. Idempotent.
-psql "$DB_URL" -v ON_ERROR_STOP=1 -q -c "SET client_min_messages=warning" <<'SQL' >/dev/null
+# psql's -c and stdin are mutually exclusive — -c wins and stdin is ignored —
+# so the SET runs as the first heredoc statement instead of as a -c flag.
+psql "$DB_URL" -v ON_ERROR_STOP=1 -q <<'SQL' >/dev/null
+SET client_min_messages=warning;
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version     TEXT PRIMARY KEY,
   filename    TEXT NOT NULL,
