@@ -1,8 +1,8 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-04-30 (25 route modules, 80 migrations, 10 voice-AI tools)
+**Last verified:** 2026-05-02 (25 route modules, 82 migrations, 10 voice-AI tools)
 
-> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. See `docs/FRAMEWORK_MIGRATIONS.md` for the migration index. The remaining open swap is OpenAI TTS → xAI Grok native (NEEDS-REFACTORING.md item #9).
+> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
 
 ## Contents
 - [1. Overview](#1-overview)
@@ -37,10 +37,10 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + CRM.
 
 **Layering:**
-- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI pending swap to xAI Grok)
+- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
 - **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (25 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 80 migrations, RLS on every tenant-scoped table
+- **DB**: Postgres + pgvector on Supabase, 82 migrations, RLS on every tenant-scoped table
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
@@ -50,11 +50,11 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 ```
 /
 ├── src/                          Fastify backend (Node)
-│   ├── index.ts                  Entry — registers 25 route modules
-│   ├── middleware.ts             withHandler, tenantMiddleware, AppError, logEvent
+│   ├── index.ts                  Entry — registers 25 route modules (~280 lines)
+│   ├── middleware.ts             withHandler, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, logEvent
 │   ├── routes/                   25 route modules + routeHelpers.ts
-│   ├── services/                 21 files (CRM clients + sync, calendar sync, OAuth, TTS, name/token utilities)
-│   └── database/                 DB pool, withTenantClient()
+│   ├── services/                 24 flat files (CRM clients + sync, calendar sync, OAuth, name/token/SMS utilities) + crm/, communications/, reminders/, tenants/, usage/ subdirs
+│   └── database/                 getPool() singleton + createWithTenantClient(pool) factory + DatabaseService adapter
 ├── dashboard/                    Next.js 14 App Router
 │   ├── app/                      page.tsx (landing), dashboard/page.tsx (app shell), layout.tsx, globals.css
 │   ├── components/               ~60 feature components + ui/ primitives
@@ -65,7 +65,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
 │   ├── functions/                Empty post-661d21d (former vapi-tools deleted with the Vapi rip-out)
-│   ├── migrations/               77 SQL migrations
+│   ├── migrations/               82 SQL migrations
 │   └── seed.sql                  Platform admin + DynaTire tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
@@ -262,10 +262,10 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 Every tenant-scoped table has RLS policies using `current_setting('app.current_tenant_id', true)::uuid`. Before any query that touches tenant data, the backend sets this session variable:
 
 ```ts
-// src/database/withTenantClient.ts
+// src/database/index.ts — createWithTenantClient(pool) factory
 await client.query(`SELECT set_tenant_context($1)`, [tenantId]);
 // query runs here, RLS auto-filters
-await client.query(`SELECT set_tenant_context(NULL)`);
+await client.query(`SELECT set_config('app.current_tenant_id', '', false)`);
 client.release();
 ```
 
@@ -290,16 +290,16 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 1. **Inbound call** — Telnyx SIP trunk → LiveKit Cloud SIP inbound trunk.
 2. **Room creation** — LiveKit dispatch rule `SDR_if97ky4Zf7e6` creates a room with metadata `{ tenant_id }` (agent name `ai-secretary-agent`).
 3. **Agent worker** — Node.js worker (Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn`) joins the room, runs `VoicePipelineAgent`.
-4. **Conversation** — Deepgram Nova-3 (STT) → OpenAI GPT-4o-mini (LLM) → OpenAI TTS (TTS — pending swap to xAI Grok, see §6.2).
+4. **Conversation** — Deepgram Nova-3 (STT) → OpenAI GPT-4o-mini (LLM) → xAI Grok TTS (default voice `ara`, default-fallback to `openai.TTS` only inside `runFallback()` so a missing `XAI_API_KEY` never produces dead air).
 5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://ai-sec-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
 6. **Business logic** — Fastify route → `withTenantClient()` → Postgres RPCs and pgvector queries.
 7. **Response** — JSON `{ success: true, result: ... }` or `{ success: false, error: ... }` with HTTP 200 — the LLM relays both shapes naturally.
 8. **Call end** — LiveKit room close event → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
 9. **Post-call async** — Appointment mutations trigger fire-and-forget sync to Google/Outlook/CRMs from route handlers.
 
-### 6.2 Open TTS swap (OpenAI TTS → xAI Grok)
+### 6.2 TTS swap — OpenAI TTS → xAI Grok (code-complete 2026-05-01)
 
-Currently the agent uses `openai.TTS` at `agent/src/index.ts:122,150`. The pending swap replaces it with a custom `GrokTTS` class hitting `https://api.x.ai/v1/tts` directly from the agent worker. No proxy involved — the earlier Vapi-era TTS proxy at `src/routes/tts.ts` was deleted in `661d21d`. Estimate: 1–2 hours, validatable via LiveKit playground without PSTN dependency. Tracked as `NEEDS-REFACTORING.md` item #9.
+Done in commit `f6cc1d4`. `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts` (PCM 24kHz mono); the primary `voice.AgentSession` uses GrokTTS, with `runFallback()` retaining `openai.TTS` so a missing/invalid `XAI_API_KEY` never produces dead air on a live call. Voice configurable via `XAI_TTS_VOICE` env (`eve | ara | rex | sal | leo`, default `ara`). End-to-end PSTN validation pending the Telnyx ticket — see `TICKET_SUPPORT.md`.
 
 ---
 
@@ -378,15 +378,17 @@ Releases the Telnyx number via the API and clears `telnyx_phone_number_id`, `inb
 auth, tenants, appointments, customers, employees, shifts, resources,
 services, mappings, skills, calendar, knowledge, analytics, vocabulary,
 billing, provisioning, jobber, hubspot, square, servicetitan, voice,
-communications, reminders, versionHistory, tts
+communications, reminders, versionHistory, agentTools
 ```
 
-`src/index.ts` is slim — imports each `register*Routes(app, pool, withTenantClient)` and wires them.
+`src/index.ts` is slim — imports each `register*Routes(app, pool, withTenantClient)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
 
 ### 9.2 Middleware layer (`src/middleware.ts`)
 
 - **`withHandler(fn)`** — Decorator wrapping every route handler. Catches thrown `AppError`, converts to consistent `{ success: false, error, details? }` response. Logs request + response with structured fields.
-- **`tenantMiddleware`** — Validates tenant context from JWT, calls `withTenantClient` to ensure the tenant row still exists (triggers auto-logout on `TENANT_NOT_FOUND`).
+- **`registerJwtAuthHook(app, pool)`** — onRequest hook that decodes Bearer tokens, rejects expired/forged ones with 401, and rejects tokens issued before the user's `password_changed_at` (so a password rotation invalidates outstanding sessions). Public routes + Jobber webhook subpaths bypass.
+- **`tenantMiddleware`** — Reads `tenant_id` from query/body/JWT, attaches it to `request.tenantId`, and enriches the request logger with `{ tenantId, userId }` so every downstream log line carries tenant context. The tenant existence check happens inside `withTenantClient` when the route runs (returns `TENANT_NOT_FOUND` → 404).
+- **`generateToken({ tenant_id, user_id, email })`** — Signs an 8h JWT. Used by the auth route on login/register.
 - **`AppError`** — Typed error class with HTTP status + error code. Preferred over `throw new Error()`.
 - **`requireAuth`** / **`requireTenantId`** — Per-route guards.
 - **`logEvent(req, name, fields)`** / **`logWarning` / `logError`** — Structured JSON logging via Pino.
@@ -798,11 +800,11 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
                 ╱────╲
                ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real `/agent-tools/*` Fastify routes)
               ╱────────╲
-             ╱  1,991   ╲    Vitest unit + integration (real DB, real RLS)
+             ╱  1,993   ╲    Vitest unit + integration (real DB, real RLS)
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 1,493 tests)
+### 18.2 Backend (`npm test` — 1,495 tests)
 
 Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, CRM sync clients, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: DynaTire caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 

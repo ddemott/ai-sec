@@ -157,8 +157,13 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 
 ---
 
-### 11. Audit `src/index.ts` (385 lines) for extraction opportunities
-**Status: partially done 2026-05-02.** JWT preHandler extracted — `JWT_SECRET`/`JWT_EXPIRY`/`generateToken`/`verifyToken`/`PUBLIC_ROUTES` and the onRequest auth hook now live in `src/middleware.ts` as `registerJwtAuthHook(app, pool)`. `src/index.ts` shrank 385 → 320 lines. Two existing tests were updated to read from middleware.ts instead of index.ts. 1,495 backend tests still green.
+### 11. Audit `src/index.ts` for extraction opportunities (385 → 279 lines, partially done)
+**Status: partially done 2026-05-02.** Three extractions shipped in this order:
+1. `fbc1eaf` — JWT preHandler extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)` (also `generateToken`, `verifyToken`, `PUBLIC_ROUTES`).
+2. `9b78030` — Pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with the deadlock-prevention timeouts, so reminders + communications inherit the same safety net as routes.
+3. `5077fd6` — `withTenantClient` factory extracted as `createWithTenantClient(pool)` in `src/database/index.ts`. Routes and tests untouched (still receive it injected).
+
+Net: `src/index.ts` 385 → 279 lines. 1,495 backend tests green throughout.
 
 **Pool config drift fixed 2026-05-02.** The two-pool problem was the real safety win — `src/database/index.ts` `getPool()` was building a separate pool *without* the deadlock-prevention timeouts, so anything routed through the reminder scheduler / communications service had a softer safety net than the Fastify route surface. Consolidated: `getPool()` now applies `statement_timeout=30000` / `lock_timeout=10000` / `idle_in_transaction_session_timeout=60000` and `max=10`, and `src/index.ts` calls `getPool()` instead of constructing its own pool. Both consumers now share one singleton.
 

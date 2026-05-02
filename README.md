@@ -15,7 +15,7 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
 | **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
 | **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status |
-| **Tests** | 1,991 passing (1,493 backend + 498 dashboard), zero TypeScript errors |
+| **Tests** | 1,993 passing (1,495 backend + 498 dashboard) + 2 documented skips, zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
@@ -25,7 +25,7 @@ See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed 
 ## What It Does
 
 - **Voice AI Reception** — Answers inbound calls with a low-latency, human-like voice. Greets callers, identifies intent, books appointments, answers policy questions, and handles rejections naturally.
-- **Atomic Booking** — Checks staff shifts, expertise, resource capabilities, and timeslot availability in a single database transaction. DST-safe, race-condition-proof, with specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED).
+- **Atomic Booking** — Checks staff shifts, expertise, resource capabilities, and timeslot availability in a single database transaction. DST-safe; concurrent-call-safe via GiST exclusion constraints on `(resource_id, time-range)` and `(employee_id, time-range)` so the find-then-insert race surfaces as `TIMESLOT_OCCUPIED` rather than a double-booking. Specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) drive the agent's spoken response.
 - **Two-Layer Knowledge** — Database tool calls for facts (pricing, availability) with zero hallucination. RAG over uploaded documents (PDF/TXT/DOC/DOCX/MD) for policies (cancellation, service area, payment terms).
 - **Multi-Tenant Dashboard** — Owners manage staff, resources, services, shifts, AI persona, and knowledge base. Vocabulary adapts per business type (Bays/Technicians for tire shops, Chairs/Stylists for salons).
 - **Scheduler** — Staff swimlane view (24hr, zoom), resource columns, appointment list, calendar sub-view. Quick book panel for walk-ins. Employee day focus with utilisation stats.
@@ -58,10 +58,10 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 
 | Layer | Tech |
 |-------|------|
-| **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (xAI Grok TTS planned for agent Phase 4) |
-| **Backend** | Fastify 4.x, 25 route modules, JWT auth, Zod validation, RLS via `withTenantClient()` |
+| **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara`; OpenAI TTS retained as `runFallback()` dead-air guard) |
+| **Backend** | Fastify 4.x, 25 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`) |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 80 migrations, Row Level Security, atomic booking RPCs |
+| **Database** | PostgreSQL + pgvector, 82 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race |
 | **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes) |
 | **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
@@ -133,7 +133,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── migrations/         80 SQL migrations
+│   ├── migrations/         82 SQL migrations
 │   └── seed.sql            Platform admin + DynaTire demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -145,7 +145,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,493 tests)
+npm test                              # Backend (1,495 tests)
 cd dashboard && npx vitest run        # Dashboard (498 tests)
 cd dashboard && npx playwright test   # E2e (19 Playwright tests)
 python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)

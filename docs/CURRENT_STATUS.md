@@ -1,11 +1,23 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-04-30 (test count from CLAUDE.md verification 2026-04-24; doc-sweep refresh 2026-04-30)
+**Last updated:** 2026-05-02 (architecture refactors landed in src/index.ts; atomic-booking concurrency closed)
 
 ---
 
 ## Where We Are
 
-Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → LiveKit migration complete (commit `661d21d`, 2026-04-27). Phone provisioned via Telnyx (`+1-630-937-9478`) but currently unreachable from PSTN — see `TICKET_SUPPORT.md` (Telnyx ticket #2850682). Voice AI is wired end-to-end and waiting on the carrier issue to validate live.
+Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → LiveKit migration complete (commit `661d21d`, 2026-04-27). Phone provisioned via Telnyx (`+1-630-937-9478`) but currently unreachable from PSTN — see `TICKET_SUPPORT.md` (Telnyx ticket re-submitted 2026-05-01 after the original #2850682 went 4 days without a human response). Voice AI is wired end-to-end and waiting on the carrier issue to validate live.
+
+### May 1-2 Sessions: concurrency fix + structural refactors
+
+- **Atomic-booking concurrency hole closed** (commit `55be6dc`). Race confirmed under READ COMMITTED — find-then-insert in `book_appointment_atomic` / `book_with_scheduling_atomic` could pass two `NOT EXISTS` checks before either committed (9/20 winners on resource race, 20/20 on employee race). Closed by two GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`, migration `20260501000000`) plus `exclusion_violation` handlers in both RPCs (`20260501000001`). Race losers receive `TIMESLOT_OCCUPIED` and the agent prompt's "that time just got taken" mapping continues to apply. **Migration not yet applied to production Supabase** — see TODO.md Phase 13 entry for the pre-flight overlap-scan step.
+- **xAI Grok TTS shipped** (commit `f6cc1d4`, 2026-05-01). `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts`; primary session uses Grok, `runFallback()` keeps OpenAI TTS as the dead-air guard. End-to-end PSTN validation pending Telnyx.
+- **Tenant config wired through `/agent-tools/tenant-config`** (commit `e92b3bf`, 2026-05-01). Closes NEEDS-REFACTORING #2 (P0). Agent worker no longer hardcodes DynaTire — fetches `{ name, timezone }` per call.
+- **`src/index.ts` slimmed 385 → 279 lines** across three commits:
+  - `fbc1eaf` — JWT preHandler + PUBLIC_ROUTES + generateToken/verifyToken extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)`.
+  - `9b78030` — Pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with the deadlock-prevention timeouts (`statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout`); reminder scheduler + communications no longer get a softer pool than routes.
+  - `5077fd6` — `withTenantClient` factory extracted to `src/database/index.ts` as `createWithTenantClient(pool)`. Routes and tests unchanged (still receive it as injected).
+- **`scripts/setup-db.sh` bootstrap bug fixed** (commit `c9f40c6`). The `psql -c "SET ..."` + heredoc combo silently dropped the `CREATE TABLE schema_migrations` because `-c` and stdin are mutually exclusive. CI workaround removed.
+- **OTP system prompt status truthed up** (commit `6f91b7b`). The "Phase 3 TODO" line in CLAUDE.md was stale — Phase 3 had already shipped in the LiveKit `agent/src/prompt.ts` since commit `18caffe`.
 
 ### April 20-21 Session: UX/a11y backlog complete + migration docs
 
@@ -50,8 +62,8 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 
 See `docs/TODO.md` for the unified task list.
 
-### Test Count (verified 2026-04-30 against real Postgres + dashboard)
-- **1,493 backend tests + 498 dashboard tests = 1,991 total**, 0 failures, 2 documented skips
+### Test Count (verified 2026-05-02 against real Postgres + dashboard)
+- **1,495 backend tests + 498 dashboard tests = 1,993 total**, 0 failures, 2 documented skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
@@ -66,7 +78,7 @@ See `docs/TODO.md` for the unified task list.
 |-----------|--------|---------|
 | **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 25 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables |
+| **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables. Two new migrations (`20260501000000` exclusion constraints + `20260501000001` RPC handlers) shipped to repo 2026-05-02 but not yet applied to prod — pre-flight overlap-scan needed first. |
 | **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
 | **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
 | **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Telnyx ticket #2850682 open. |
@@ -75,7 +87,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,493 backend + 498 dashboard = 1,991 passing + 88 QA assertions | All green (verified 2026-04-30 against real DB + dashboard), zero TS errors |
+| **Tests** | 1,495 backend + 498 dashboard = 1,993 passing + 88 QA assertions | All green (verified 2026-05-02 against real DB + dashboard), 2 documented skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
@@ -200,7 +212,7 @@ The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge
 
 1. ~~Deploy dashboard~~ — Done (commit `fb216e0`, live at https://dashboard-production-cee3.up.railway.app/)
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
-3. ~~Apply new migrations to Supabase~~ — Done. All 80 migrations applied (most recent: `20260430000002_drop_employee_shifts.sql`)
+3. ~~Apply new migrations to Supabase~~ — Done through `20260430000002_drop_employee_shifts.sql`. **Two newer migrations** (`20260501000000_atomic_booking_exclusion_constraints.sql` + `20260501000001_booking_rpcs_handle_exclusion.sql`) shipped 2026-05-02 but not yet applied to prod — pre-flight overlap scan needed first. See TODO.md Phase 13.
 4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit 35 items + April 20 a11y 47 items, commit `f9ffa8e`)
 5. ~~**Voice AI migration**: Vapi → LiveKit Agents~~ — Done in commit `661d21d` (2026-04-27). Awaiting Telnyx ticket #2850682 to unblock first live call.
 6. **Beta testing with DynaTire** — blocked on the carrier issue above

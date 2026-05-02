@@ -2,7 +2,7 @@
 
 Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `NEEDS-REFACTORING.md`.
 
-**Last updated:** 2026-04-30
+**Last updated:** 2026-05-02
 
 ---
 
@@ -12,9 +12,9 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 **Why:** Vapi charged a $0.05/min orchestration tax. LiveKit Cloud free tier covers 1,000 SIP minutes/month at $0.
 
-**Current stack:** Telnyx (carrier + SIP trunk) → LiveKit Cloud (SIP ingress) → LiveKit Agent worker (Node) → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (TTS — see migration #3) → Fastify `/agent-tools/*`.
+**Current stack:** Telnyx (carrier + SIP trunk) → LiveKit Cloud (SIP ingress) → LiveKit Agent worker (Node) → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + xAI Grok TTS (default voice `ara`; OpenAI TTS retained inside `runFallback()` only — see migration #3) → Fastify `/agent-tools/*`.
 
-**Open follow-up:** First live PSTN call still pending — Telnyx ticket `#2850682`. See `TICKET_SUPPORT.md`.
+**Open follow-up:** First live PSTN call still pending — Telnyx ticket re-submitted 2026-05-01 (original `#2850682` abandoned after 4 days without a human response). See `TICKET_SUPPORT.md`.
 
 ---
 

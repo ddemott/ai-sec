@@ -29,11 +29,11 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/services/reminders/` - Appointment reminder pipeline. ReminderService schedules on appointment create; reminderProcessor delivers via CommunicationService; reminderRepository handles DB CRUD. Worker pulls from `reminder_schedules` table.
 - `/src/services/tenants/` - TenantConfigService (in-memory + DB-backed). The class is still dormant (no callers), but the *need* it was meant to address is now solved — agent worker fetches `name`/`timezone` per call via `/agent-tools/tenant-config` (2026-05-01).
 - `/src/services/usage/` - UsageTrackingService stub. Records SMS/calls/emails in memory only; no DB persistence, no Stripe sync yet (TODO).
-- `/src/database/index.ts` - Lazy-init singleton pool. Bridges native `withTenantClient(pool)` to a `DatabaseService` interface used by communications/reminders/workers. Invisible glue; no routes touch it.
+- `/src/database/index.ts` - Canonical pool + RLS scope. `getPool()` is a lazy singleton with the deadlock-prevention timeouts (`statement_timeout=30000`, `lock_timeout=10000`, `idle_in_transaction_session_timeout=60000`, `max=10`) — Fastify routes, the reminder scheduler, and the communications service all share this one instance so the safety net is uniform. `createWithTenantClient(pool)` factory returns the per-request RLS-scoped helper that `src/index.ts` injects into every route module. Also exposes the `DatabaseService` interface used by communications/reminders.
 - `/src/workers/reminderScheduler.ts` - Background job processor. Polls every 60s, batches up to 100 reminders, runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`. Started in `index.ts`, stopped on SIGTERM.
 - `/src/templates/` - 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). HIPAA verticals are permanently excluded — there is no medical_v1. Each bundle: prompt template, first message, voice ID, field labels, example services. Loaded by tenants provisioning route.
 - `/src/types/` - Shared TS interfaces. ConsentRecord, OptOutRecord (GDPR/TCPA), ReminderSchedule/ReminderData/AppointmentForReminder, UsageRecord + Provider enum, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
-- `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
+- `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError). The JWT preHandler — PUBLIC_ROUTES bypass list, Bearer token decode, password-rotation check — lives here, not in `src/index.ts`.
 - `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/migrations` - 82 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning, RPC + table cleanup for the employee_shifts retirement, atomic-booking exclusion constraints)
@@ -204,7 +204,7 @@ A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped a
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,493 backend tests + 498 dashboard tests = 1,991 total passing (verified 2026-04-30 against real DB + dashboard, 2 documented skips). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,495 backend tests + 498 dashboard tests = 1,993 total passing (verified 2026-05-02 against real DB + dashboard, 2 documented skips). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 
