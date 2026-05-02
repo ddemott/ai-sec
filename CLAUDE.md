@@ -178,7 +178,7 @@ A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped a
 - SMS body locked: `Your SecretaryHQ verification code is: 123456. Reply STOP to opt out.` (TCPA opt-out required).
 - Booking routes (`book-appointment`, `book-with-scheduling`) now gate on `isValidPhone(args.phone)`. Invalid phone → route returns the ask-for-phone message; the LLM reads it, asks the caller verbally, then kicks into the OTP flow. Valid caller-ID phone skips verification entirely.
 - 12 new tests in `agentTools.test.ts` (7 send-verification-code, 5 verify-phone-code), 7 in `telnyxSms.test.ts`, 2 book-appointment gate tests, 1 book-with-scheduling gate test.
-- **System prompt TODO (Phase 3):** when `book-appointment` or `book-with-scheduling` returns "I'll need a good phone number" → call `send-verification-code(phone)` → read its `message` to the caller → on spoken code, call `verify-phone-code(phone, code)` → on success, retry the booking tool with the verified phone.
+- **System prompt (Phase 3):** Done in commit `18caffe` (2026-04-24) when the LiveKit `agent/src/prompt.ts` was created. The Phone Verification section walks the LLM through the full OTP dance — booking returns "I'll need a good phone number" → `send_verification_code(phone)` → read returned `message` verbatim → on spoken code call `verify_phone_code(phone, code)` → on success retry the booking. Pinned by `agent/src/prompt.test.ts` so a future prompt refactor can't silently drop it.
 
 ### April 12, 2026 Improvement Hardening
 - Employee update route missing `AND tenant_id` in WHERE clause — cross-tenant employee updates were possible. Fixed by adding tenant_id scoping + assertRowAffected guard.
