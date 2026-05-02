@@ -21,9 +21,25 @@ import type {
 let _pool: Pool | null = null;
 
 /**
- * Get or create the database pool.
- * Uses same configuration as index.ts for consistency.
- * Lazy initialization - pool is created on first call.
+ * Deadlock-prevention session settings applied to every pool connection.
+ *
+ * Without these a single deadlocked connection can hold locks indefinitely
+ * and exhaust the pool (default 10 connections), blocking every other
+ * request. Applied via the per-connection `options` parameter so they take
+ * effect for every backend pg session this pool spawns — both for the
+ * Fastify route surface and the reminder / communications workers.
+ *
+ *   - statement_timeout: kill queries that run too long
+ *   - lock_timeout: fail fast if a row/table lock is contested
+ *   - idle_in_transaction_session_timeout: close idle txns holding locks
+ */
+const POOL_TIMEOUT_OPTIONS =
+  '-c statement_timeout=30000 -c lock_timeout=10000 -c idle_in_transaction_session_timeout=60000';
+
+/**
+ * Get or create the database pool. Lazy singleton; the same instance is
+ * shared by Fastify routes, the reminder scheduler, and the communications
+ * service so they all benefit from the same safety timeouts.
  */
 export function getPool(): Pool {
   if (!_pool) {
@@ -35,10 +51,14 @@ export function getPool(): Pool {
           database: 'postgres',
           password: 'postgres',
           port: 5433,
+          max: 10,
+          options: POOL_TIMEOUT_OPTIONS,
         })
       : new Pool({
           connectionString: process.env.DATABASE_URL,
           ssl: { rejectUnauthorized: false },
+          max: 10,
+          options: POOL_TIMEOUT_OPTIONS,
         });
   }
   return _pool;

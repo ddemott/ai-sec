@@ -259,15 +259,17 @@ describe('Deadlock Prevention: Pool Configuration', () => {
     // WHO: the Fastify server starting up and creating its connection pool
     // WHAT: the pg Pool constructor should include statement_timeout, lock_timeout,
     //       and idle_in_transaction_session_timeout in the options string
-    // WHEN: server startup in src/index.ts
-    // WHERE: src/index.ts pool configuration
+    // WHEN: server startup via getPool() in src/database/index.ts
+    // WHERE: src/database/index.ts pool configuration. Consolidated from
+    //        src/index.ts during the pool-deduplication cleanup so the
+    //        reminder/communications pool inherits the same timeouts.
     // WHY: these three timeouts form the deadlock safety net:
     //      - statement_timeout prevents runaway queries from holding locks indefinitely
     //      - lock_timeout makes contested lock acquisitions fail fast instead of queueing
     //      - idle_in_transaction_session_timeout kills abandoned transactions that hold locks
     //      Without ALL THREE, there are gaps in the safety net that can cause pool exhaustion.
     const fs = require('fs');
-    const src = fs.readFileSync('src/index.ts', 'utf8');
+    const src = fs.readFileSync('src/database/index.ts', 'utf8');
     expect(src).toContain('statement_timeout');
     expect(src).toContain('lock_timeout');
     expect(src).toContain('idle_in_transaction_session_timeout');

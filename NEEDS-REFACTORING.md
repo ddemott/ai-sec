@@ -160,8 +160,10 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 ### 11. Audit `src/index.ts` (385 lines) for extraction opportunities
 **Status: partially done 2026-05-02.** JWT preHandler extracted — `JWT_SECRET`/`JWT_EXPIRY`/`generateToken`/`verifyToken`/`PUBLIC_ROUTES` and the onRequest auth hook now live in `src/middleware.ts` as `registerJwtAuthHook(app, pool)`. `src/index.ts` shrank 385 → 320 lines. Two existing tests were updated to read from middleware.ts instead of index.ts. 1,495 backend tests still green.
 
+**Pool config drift fixed 2026-05-02.** The two-pool problem was the real safety win — `src/database/index.ts` `getPool()` was building a separate pool *without* the deadlock-prevention timeouts, so anything routed through the reminder scheduler / communications service had a softer safety net than the Fastify route surface. Consolidated: `getPool()` now applies `statement_timeout=30000` / `lock_timeout=10000` / `idle_in_transaction_session_timeout=60000` and `max=10`, and `src/index.ts` calls `getPool()` instead of constructing its own pool. Both consumers now share one singleton.
+
 **Still open:**
-- **Pool extraction** is genuinely a 25-route signature change — every `register*Routes(app, pool, withTenantClient)` would need to change as `withTenantClient` migrates out of the index.ts closure. Defer until route signatures are touched for another reason, or until the file again crosses the readability threshold. Note: there is real duplication — `src/database/index.ts` `getPool()` builds a separate pool *without* the `statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout` settings the production pool has. If a reminder/communications path ever exercises that pool under load, deadlock risk is real. Worth fixing as its own focused commit.
+- **`withTenantClient` extraction.** Still lives as a closure in `src/index.ts`. Moving it to `src/database/index.ts` (or a sibling) would let every `register*Routes(app, pool, withTenantClient)` drop one or both parameters — 25 mechanical signature changes. Defer until the next reason to touch route signatures, or take it as its own focused refactor.
 - **Reminder-scheduler start/stop** is now ~3 lines of conditional + ~5 lines of signal handler. Extracting adds more boilerplate than it removes. Skip unless other lifecycle work joins it.
 
 ---
