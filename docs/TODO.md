@@ -14,6 +14,7 @@ Single source of truth for all remaining work. Organized by priority.
 - [ ] **Telnyx ticket #2850682** — phone number `+1-630-937-9478` returning "not in service" from PSTN. See `TICKET_SUPPORT.md`. Awaiting LERG investigation. Blocks all live-call testing.
 - [ ] **Beta testing with DynaTire** — blocked on phone working
 - [x] **BUG-072**: Front Desk scheduler shift bars not rendering — root cause: seed data populated legacy `employee_shifts` table instead of `employee_schedule`. Fixed seed to use `employee_schedule` (2 weeks of date-based shifts).
+- [ ] **Apply migrations `20260501000000` + `20260501000001` to production Supabase** (atomic-booking exclusion constraints + RPC exception handlers). Pre-flight: query prod for any existing overlapping `appointments` rows on `(resource_id, time-range)` or `(employee_id, time-range)` where `status='scheduled'` AND `is_deleted=false`. If any exist they must be reconciled first or the `ALTER TABLE` will fail. Apply via `npm run db:migrate -- "$SUPABASE_URL"`.
 
 ---
 
@@ -35,7 +36,7 @@ Treat this as a launch-blocker for beta with DynaTire — the carrier propagatio
 
 ### Pre-launch validation
 
-- [ ] **Atomic booking RPC load test under concurrent calls.** Simulate N concurrent `book_with_scheduling_atomic` calls competing for the same slot/employee. Verify the row-lock contract holds and TIMESLOT_OCCUPIED is returned (not double-booked).
+- [x] **Atomic booking RPC load test under concurrent calls.** Done 2026-05-01. Concurrency hole confirmed (9/20 winners on resource race, 20/20 on employee race) then closed by two GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`) in migration `20260501000000`, paired with `exclusion_violation` handlers in both booking RPCs (migration `20260501000001`). New test file `src/booking-concurrency.test.ts` (2 tests, real-DB). Race losers receive `TIMESLOT_OCCUPIED` and the agent prompt maps it to "That time just got taken — could we try a different slot?". 1,495 backend tests pass. Migration not yet applied to production Supabase — see Phase 13 entry below.
 - [ ] **Timezone / DST edge case audit.** BUG-059 fixed one regression in March 2026. Sweep all booking, reminder, and shift code paths for DST boundaries (spring-forward 2am→3am, fall-back duplicate hour) and tenant-timezone vs UTC mixups.
 - [ ] **Skill + resource matching reliability sweep.** End-to-end test: caller books service X requiring skill Y on resource Z. Verify the RPC's 7-layer constraint check rejects mismatches and accepts valid bookings across all 5 industry templates (automotive, salon, mobile_tire, auto_bays, ai_platform).
 - [ ] **Coverage gap detection backend↔UI consistency.** `check_coverage_gaps()` RPC and the dashboard's coverage bars both compute coverage. Verify they agree on edge cases (employee on leave, shift starting before business hours, day with zero scheduled employees).

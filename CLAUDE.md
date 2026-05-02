@@ -36,7 +36,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError)
 - `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`)
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
-- `/supabase/migrations` - 80 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning, RPC + table cleanup for the employee_shifts retirement)
+- `/supabase/migrations` - 82 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning, RPC + table cleanup for the employee_shifts retirement, atomic-booking exclusion constraints)
 - `/supabase/functions` - **Empty.** All Vapi edge functions deleted in commit `661d21d`.
 - `/shared` - Cross-runtime shared code (getEmbedding.ts, scheduling.ts)
 - `/supabase/seed.sql` - Seed data (platform admin + DynaTire tenant)
