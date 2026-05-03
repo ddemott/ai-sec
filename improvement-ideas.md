@@ -2044,3 +2044,56 @@
 **What's working:** UX review is genuinely complete now, and the latest improvement entries are still actionable, but the file-completion check was a little too stem-based for alias components like `SetupWizard.tsx` and `SetupWizard/index.tsx`.
 **What I changed in HEARTBEAT.md:** Added a UX-review note to match reviewed items by full file path, not just component name.
 **Why:** That keeps future agents from wasting a cycle on false “unreviewed” results when two files share the same component stem.
+
+## Ideas — 2026-05-03 (UI/UX patterns reviewed)
+
+### Task: Separate live booking metrics from Phase 2 placeholders in AnalyticsView
+**Status:** proposed
+**Files to change:** `dashboard/components/AnalyticsView.tsx:L147-L295`
+**What to do:** Split the current six-card grid into two clearly labeled groups inside the same page: one section for booking-data metrics that are live today, and one section for metrics that are intentionally unavailable until call-log integration lands. Keep the existing metric content and copy style, but stop mixing interactive live data and placeholder cards in one undifferentiated grid. Use the existing card styling and theme tokens rather than introducing a new visual system.
+**Done when:**
+- [ ] AnalyticsView renders a clearly labeled live-data section and a clearly labeled coming-later section
+- [ ] The three booking-backed metrics stay visible without placeholder cards visually competing with them
+- [ ] Phase 2 metrics still explain why they are unavailable, but no longer read like half-working cards in the main results grid
+- [ ] All existing tests pass, new tests cover the grouped render states
+**Why it matters:** The current layout makes the screen feel more incomplete than it is, because real insights and deferred metrics share the same visual weight.
+**Tradeoff:** This is mostly presentation restructuring, so it improves clarity without increasing capability, and it carries some regression risk around spacing and responsive layout.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Under an hour of layout cleanup would make this page feel much more intentional, a good return for a high-visibility dashboard surface.
+
+### Task: Replace silent mock fallback in AIConfigView with explicit load-failure and retry states
+**Status:** proposed
+**Files to change:** `dashboard/components/AIConfigView.tsx:L24-L89`, `dashboard/components/AIConfigView.tsx:L118-L141`
+**What to do:** Remove the current "failed fetch means show `MOCK_TENANT`" behavior for persona settings and replace it with explicit shell states: loading, loaded, and load failed with a retry action. Keep template browsing available only when the real config is present, or clearly mark it unavailable during failure. Preserve the existing save flow, but stop rendering fake tenant data that can be mistaken for the business’s real prompt and greeting.
+**Done when:**
+- [ ] AIConfigView no longer falls back to `MOCK_TENANT` when config loading fails
+- [ ] The screen shows a clear retryable failure state for config fetch problems
+- [ ] Save controls are disabled or withheld until real tenant config has loaded
+- [ ] All existing tests pass, new tests cover config-load failure and retry behavior
+**Why it matters:** Showing mock content on fetch failure is a trust problem on a settings screen, because operators can believe they are editing live AI behavior when they are not.
+**Tradeoff:** This adds a little shell-state branching and may leave the screen temporarily less populated during failures, but that honesty is preferable to silent fake data.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** 1-2 hours of shell-state cleanup would remove a misleading fallback from a high-stakes configuration surface, a strong return.
+
+### Task: Move AIConfigView preview and test surfaces onto shared theme-token styling
+**Status:** proposed
+**Files to change:** `dashboard/components/AIConfigView.tsx:L267-L351`
+**What to do:** Replace the hardcoded `bg-gray-*`, `text-gray-*`, `dark:bg-[#1a1a1a]`, and raw close `<button>` styling in the test card and template-preview modal with the same CSS-variable surfaces and shared button treatment used elsewhere in the dashboard. Keep the structure and copy the same, but make the card and modal match the project’s eight dark themes and primitive conventions.
+**Done when:**
+- [ ] The "Ready to test?" card uses theme-token backgrounds and text colors instead of hardcoded gray values
+- [ ] Template preview sections use theme-token surfaces consistently across all preview blocks
+- [ ] The modal close action uses shared button styling or a clearly consistent primitive treatment
+- [ ] All existing tests pass, and the screen remains visually consistent across themes
+**Why it matters:** This file currently drifts from the rest of the dashboard in one of the more visible persona-management flows, which weakens visual consistency across themes.
+**Tradeoff:** The gain is polish and consistency rather than new behavior, so the work should stay tightly scoped and avoid turning into a broader AIConfig refactor.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Less than an hour of styling cleanup would remove obvious theme drift from a prominent settings view, a solid payoff.
+
+## Self-Review — 2026-05-03
+**Cycles since last self-review:** 1
+**What's working:** UX review is now correctly skippable, and the strongest improvement output comes from concrete front-end slices like the AI insights cluster, where the tasks can be specific without repeating old backend helper cleanups.
+**What I changed in HEARTBEAT.md:** Added a Continuous Improvement note to treat recently shipped or dropped file clusters as recent churn and move to a different slice unless the next task is materially different.
+**Why:** The improvement log is mature enough now that stale or already-invalidated ideas are a bigger risk than under-specification, so this small rule should cut down on rediscovering work that just changed.

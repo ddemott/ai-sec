@@ -1,20 +1,32 @@
 # TODO
 
-**Last updated:** 2026-04-30
+**Last updated:** 2026-05-03
 
 Single source of truth for all remaining work. Organized by priority.
+
+## In-flight markers
+
+This file uses these prefixes to make state explicit:
+
+- **IN FLIGHT (external):** waiting on an external party (vendor, third-party support, etc.) — we can't move it; we can only escalate or work around.
+- **IN FLIGHT (user):** waiting on a user action (set an env var, log into a console) that Claude can't take — needs Dale.
+- **IN FLIGHT (prod-apply):** code/migration shipped to repo and CI; production Supabase / Railway hasn't received it yet. Action is "apply this against prod."
+- **IN FLIGHT (decision pending):** technical or product call needed before code work can start.
+- **IN FLIGHT (validation pending):** code shipped + unit tests green, but a real-world condition (live PSTN call, real CRM credentials, etc.) hasn't exercised it yet.
+
+If an item has none of these prefixes, it's either complete (`[x]`) or unstarted (`[ ]` with no in-flight marker — pickable today).
 
 ---
 
 ## Phase 13: Ship It (blocking launch)
 
 - [x] **Deploy dashboard** — shipped 2026-04-21 (commit `fb216e0`), live at https://dashboard-production-cee3.up.railway.app/
-- [ ] **Set `DASHBOARD_URL`** env var in Railway backend (needed for Stripe checkout + OAuth redirects). Value: `https://dashboard-production-cee3.up.railway.app`. ~2 min via Railway → ai-sec service → Variables.
+- [ ] **IN FLIGHT (user) — Set `DASHBOARD_URL` env var** in Railway backend (needed for Stripe checkout + OAuth redirects). Value: `https://dashboard-production-cee3.up.railway.app`. ~2 min via Railway → ai-sec service → Variables. Outstanding 6+ days as of 2026-05-03.
 - [x] **Apply migration `20260427000000_telnyx_provisioning.sql` to production Supabase.** Done 2026-04-27. Dropped `vapi_assistant_id`/`vapi_phone_number_id` (verified empty across all 3 tenants beforehand), added `telnyx_phone_number_id`. Side effect: also applied `20260423000000_phone_verifications.sql` which had been sitting unapplied — SMS OTP table now exists in prod, fixing a silent runtime gap.
-- [ ] **Telnyx ticket #2850682** — phone number `+1-630-937-9478` returning "not in service" from PSTN. See `TICKET_SUPPORT.md`. Awaiting LERG investigation. Blocks all live-call testing.
-- [ ] **Beta testing with DynaTire** — blocked on phone working
+- [ ] **IN FLIGHT (external) — Telnyx PSTN ticket** — phone number `+1-630-937-9478` returning "not in service" from PSTN. Original ticket `#2850682` (2026-04-27) abandoned 2026-05-01 after 4 days without a human response; new ticket re-submitted 2026-05-01 to LERG/porting team. Zero inbound CDRs at Telnyx across the entire 2026-04-25 → 2026-05-03 window. See `TICKET_SUPPORT.md` for the submitted text + escalation plan. **Blocks every voice-validation item below.** Diagnostic fallback if it stalls again: provision a second DID (different DID works → this one is uniquely stuck → push for release+reissue; second also fails → wider Telnyx issue).
+- [ ] **IN FLIGHT (external, transitive) — Beta testing with DynaTire** — blocked on phone working.
 - [x] **BUG-072**: Front Desk scheduler shift bars not rendering — root cause: seed data populated legacy `employee_shifts` table instead of `employee_schedule`. Fixed seed to use `employee_schedule` (2 weeks of date-based shifts).
-- [ ] **Apply migrations `20260501000000` + `20260501000001` to production Supabase** (atomic-booking exclusion constraints + RPC exception handlers). Pre-flight: query prod for any existing overlapping `appointments` rows on `(resource_id, time-range)` or `(employee_id, time-range)` where `status='scheduled'` AND `is_deleted=false`. If any exist they must be reconciled first or the `ALTER TABLE` will fail. Apply via `npm run db:migrate -- "$SUPABASE_URL"`.
+- [ ] **IN FLIGHT (prod-apply) — Apply migrations `20260501000000` + `20260501000001` to production Supabase** (atomic-booking exclusion constraints + RPC exception handlers). Code + unit tests green on main; CI applies them on every push against the test DB. Pre-flight on prod: query for any existing overlapping `appointments` rows on `(resource_id, time-range)` or `(employee_id, time-range)` where `status='scheduled'` AND `is_deleted=false`. If any exist they must be reconciled first or the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE` will fail. Apply via `npm run db:migrate -- "$SUPABASE_URL"`.
 
 ---
 
@@ -59,8 +71,8 @@ Today the agent worker logs to stdout via Pino, the backend logs via Fastify, an
 
 ### Voice validation (additive to Phase 13)
 
-- [x] **Voice fallback path validation.** Done 2026-05-03. The validation surfaced a real dead-air gap: docs across CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code used GrokTTS in both the primary and the fallback path — meaning a Grok outage would leave the fallback unable to speak either. Closed in one focused refactor: extracted `runFallback()` to `agent/src/fallback.ts` with injectable provider deps, wired it to use OpenAI TTS (matching what docs already claimed), awaited `say()` so synthesis-time failures are caught inside the try block, and pinned the contract with 13 new 5W-annotated tests in `agent/src/fallback.test.ts` covering the happy path, the OpenAI-not-Grok provider choice, and the never-throw contract under each failure mode (session ctor / STT ctor / LLM ctor / TTS ctor / start() reject / say() reject). Agent suite: 53 → 66 tests, all green. Typecheck clean.
-- [ ] **Call transcript + summary flow confirmed end-to-end.** Post-call summary write-back (`call_summaries` + embedding) was wired for Vapi; verify the LiveKit-side dispatcher does the equivalent on call end.
+- [x] **Voice fallback path validation.** Unit-level done 2026-05-03 (commit `6488dc4`). The validation surfaced a real dead-air gap: docs across CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code used GrokTTS in both the primary and the fallback path — meaning a Grok outage would leave the fallback unable to speak either. Closed in one focused refactor: extracted `runFallback()` to `agent/src/fallback.ts` with injectable provider deps, wired it to use OpenAI TTS (matching what docs already claimed), awaited `say()` so synthesis-time failures are caught inside the try block, and pinned the contract with 13 new 5W-annotated tests in `agent/src/fallback.test.ts` covering the happy path, the OpenAI-not-Grok provider choice, and the never-throw contract under each failure mode (session ctor / STT ctor / LLM ctor / TTS ctor / start() reject / say() reject). Agent suite: 53 → 66 tests, all green. Typecheck clean. **IN FLIGHT (validation pending)** — live-PSTN exercise of the fallback message still requires the Telnyx unblock above.
+- [ ] **IN FLIGHT (validation pending) — Call transcript + summary flow confirmed end-to-end.** Post-call summary write-back (`call_summaries` + embedding) was wired for Vapi; verify the LiveKit-side dispatcher does the equivalent on call end. Blocked on the same Telnyx unblock.
 
 ---
 

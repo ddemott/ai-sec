@@ -1,11 +1,27 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-03 (voice fallback dead-air guard validated; tenant-config commit found unmerged on a branch)
+**Last updated:** 2026-05-03 (voice fallback dead-air guard validated; tenant-config wiring redone on main; doc in-flight markers added)
 
 ---
 
 ## Where We Are
 
 Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → LiveKit migration complete (commit `661d21d`, 2026-04-27). Phone provisioned via Telnyx (`+1-630-937-9478`) but currently unreachable from PSTN — see `TICKET_SUPPORT.md` (Telnyx ticket re-submitted 2026-05-01 after the original #2850682 went 4 days without a human response). Voice AI is wired end-to-end and waiting on the carrier issue to validate live.
+
+## What's in flight (between repo and prod)
+
+Code shipped to `main` and merged on origin, but not yet exercised in production. Each item has an explicit reason it's still in flight rather than complete.
+
+| Item | State | Why it's in flight | Action to close |
+|---|---|---|---|
+| **Telnyx PSTN reachability** | IN FLIGHT (external) | Re-submitted 2026-05-01 to LERG/porting team after the original ticket went 4 days without a human response. Zero inbound CDRs at Telnyx 2026-04-25 → 2026-05-03. | Telnyx reviewer responds; or fallback diagnostic = provision a second DID. |
+| **`DASHBOARD_URL` env var** | IN FLIGHT (user) | Outstanding 6+ days. Stripe checkout + OAuth redirects depend on it. | User sets it on Railway → ai-sec service → Variables (~2 min). |
+| **Atomic-booking migrations `20260501000000` + `20260501000001`** | IN FLIGHT (prod-apply) | Code green on main; CI applies them on every push against the test DB. Pre-flight on prod: scan `appointments` for existing overlapping rows on `(resource_id, time-range)` or `(employee_id, time-range)` where `status='scheduled'` AND `is_deleted=false`. Any overlap blocks the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE`. | User runs `npm run db:migrate -- "$SUPABASE_URL"` after the pre-flight. |
+| **Voice fallback dead-air guard** | IN FLIGHT (validation pending) | Unit-level closed 2026-05-03 (commit `6488dc4`); 13 5W tests pin the contract. Live-PSTN exercise of the fallback message still blocked on the Telnyx unblock above. | Live call once Telnyx clears. |
+| **Tenant-config display path** | IN FLIGHT (validation pending) | Code on main 2026-05-03 (commit `2119451`); 10 tests green. Live-PSTN exercise pending Telnyx. | Live call once Telnyx clears. |
+| **Beta with DynaTire** | IN FLIGHT (external, transitive) | Blocked transitively on the Telnyx unblock. | Auto-unblocks when Telnyx clears. |
+| **NEEDS-REFACTORING #3 (UsageTrackingService)** | IN FLIGHT (decision pending) | Default disposition under "test or delete" lens is delete. Claude can execute in ~30 min. | User green-lights the deletion. |
+| **NEEDS-REFACTORING #14 (`pw.txt`)** | IN FLIGHT (decision pending) | Gitignored, never committed; could be a real password or a deliberate scratch note. | User confirms whether to keep or delete. |
+| **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
 
 ### May 3 Session: voice fallback path validation + tenant-config redo on main
 
@@ -87,7 +103,7 @@ See `docs/TODO.md` for the unified task list.
 | **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables. Two new migrations (`20260501000000` exclusion constraints + `20260501000001` RPC handlers) shipped to repo 2026-05-02 but not yet applied to prod — pre-flight overlap-scan needed first. |
 | **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
 | **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
-| **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Telnyx ticket #2850682 open. |
+| **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Original ticket `#2850682` superseded 2026-05-01 after 4 days without a human response; new ticket awaiting LERG/porting reviewer. |
 | **Voice AI (end-to-end)** | Wired, awaiting first live call | Telnyx → LiveKit Cloud → agent worker → `/agent-tools/*` → Postgres. Blocked on the carrier-side LERG/PSTN propagation issue above. |
 | **Knowledge base** | Working | 40 policy Q&A pairs across 9 categories, document upload (PDF/TXT/DOC/DOCX/MD), auto-save |
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
@@ -220,7 +236,7 @@ The Supabase edge function `vapi-tools` was deleted in commit `661d21d`. No edge
 2. **Set `DASHBOARD_URL`** in Railway — for Stripe checkout + OAuth redirects
 3. ~~Apply new migrations to Supabase~~ — Done through `20260430000002_drop_employee_shifts.sql`. **Two newer migrations** (`20260501000000_atomic_booking_exclusion_constraints.sql` + `20260501000001_booking_rpcs_handle_exclusion.sql`) shipped 2026-05-02 but not yet applied to prod — pre-flight overlap scan needed first. See TODO.md Phase 13.
 4. ~~**UI/UX flow improvements**~~ — Done (April 9-10 audit 35 items + April 20 a11y 47 items, commit `f9ffa8e`)
-5. ~~**Voice AI migration**: Vapi → LiveKit Agents~~ — Done in commit `661d21d` (2026-04-27). Awaiting Telnyx ticket #2850682 to unblock first live call.
+5. ~~**Voice AI migration**: Vapi → LiveKit Agents~~ — Done in commit `661d21d` (2026-04-27). Awaiting Telnyx (original ticket `#2850682` superseded 2026-05-01; new ticket open) to unblock first live call.
 6. **Beta testing with DynaTire** — blocked on the carrier issue above
 
 ### Done This Session (2026-04-01)

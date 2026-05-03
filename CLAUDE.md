@@ -3,12 +3,18 @@
 ## Project Overview
 Multi-tenant AI receptionist platform for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Handles inbound calls via voice AI, books appointments, answers policy questions via RAG, and syncs with external calendars. HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded — they do not appear anywhere in the UI.
 
+## What's in flight
+
+For a comprehensive list of code shipped to main but not yet exercised in production, see `docs/CURRENT_STATUS.md` → "What's in flight (between repo and prod)". Today's two persistent in-flight items are the Telnyx PSTN ticket (external, blocking voice validation) and the unset `DASHBOARD_URL` env var on Railway (user action, blocking Stripe/OAuth redirects).
+
+`docs/TODO.md` and `NEEDS-REFACTORING.md` use a shared in-flight marker convention: `IN FLIGHT (external)`, `IN FLIGHT (user)`, `IN FLIGHT (prod-apply)`, `IN FLIGHT (decision pending)`, `IN FLIGHT (validation pending)`. Items without a marker are either complete or pickable today.
+
 ## Framework Migrations
 
 See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
-1. **Voice orchestrator: Vapi → LiveKit Agents** — Done (2026-04-27, commit `661d21d`). Vapi account deleted, all Vapi code removed. Telnyx number `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → LiveKit dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn` registered). Awaiting first live call to confirm carrier-side propagation; see `docs/TICKET_SUPPORT.md` (Telnyx ticket #2850682).
+1. **Voice orchestrator: Vapi → LiveKit Agents** — Done (2026-04-27, commit `661d21d`). Vapi account deleted, all Vapi code removed. Telnyx number `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → LiveKit dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn` registered). **IN FLIGHT (external)** — awaiting first live call to confirm carrier-side propagation; see `docs/TICKET_SUPPORT.md` (Telnyx ticket re-submitted 2026-05-01 after the original `#2850682` went 4 days without a human response).
 2. **Tool runtime: Supabase Edge Functions (Deno) → Fastify (Node)** — Done. 10 voice AI tools (8 original + 2 OTP) in `src/routes/agentTools.ts`. All booking routes gated on `isValidPhone`. Edge function `supabase/functions/vapi-tools/` deleted in `661d21d`.
-3. **TTS provider: OpenAI TTS → xAI Grok (native in agent)** — Code-complete 2026-05-01. `agent/src/grokTTS.ts` implements the LiveKit TTS plugin against `https://api.x.ai/v1/tts` (PCM 24kHz mono); the primary `voice.AgentSession` uses it. `runFallback()` still uses `openai.TTS` so a missing/invalid `XAI_API_KEY` never produces dead-air on a live call. End-to-end validation pending first PSTN call (blocked on Telnyx ticket #2850682).
+3. **TTS provider: OpenAI TTS → xAI Grok (native in agent)** — Code-complete 2026-05-01 (commit `f6cc1d4`). `agent/src/grokTTS.ts` implements the LiveKit TTS plugin against `https://api.x.ai/v1/tts` (PCM 24kHz mono); the primary `voice.AgentSession` uses it. `runFallback()` uses `openai.TTS` so a Grok outage / missing / invalid `XAI_API_KEY` never produces dead-air on a live call — actually wired through 2026-05-03 (commit `6488dc4`); was aspirational between 2026-05-01 and 2026-05-03. **IN FLIGHT (validation pending)** — end-to-end validation against PSTN blocked on Telnyx unblock above.
 
 ## Architecture (current)
 - **Voice AI**: Telnyx (carrier + SIP trunk) -> LiveKit Cloud (SIP ingress) -> LiveKit Agent worker (Node) -> Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) -> Fastify `/agent-tools/*`
@@ -201,7 +207,7 @@ A 12-commit unblocked-work session that closed a real launch blocker, slimmed `s
 - `65b0cc2` — Yesterday's journal-loop batch committed; one already-shipped entry flagged STATUS: ALREADY SHIPPED inline.
 - `444dad1` — Last three pre-existing test files (`index.test.ts`, `normalizer.test.ts`, `scheduling.test.ts`) gained 5W diagnostic comments — 47 tests annotated; the 5W convention is now universal.
 
-**Test state at session close (May 2):** 1,475 backend + 498 dashboard = 1,973 passing + 2 documented skips, 0 failures, typecheck clean both surfaces. Working tree clean, all 12 commits pushed to `origin/main`. (May 3 work added 4 backend + 19 agent tests on top — see the May 3 entry above.)
+**Test state at session close (May 2):** 1,475 backend + 498 dashboard = 1,973 passing + 2 documented skips, 0 failures, typecheck clean both surfaces. Working tree clean, all 12 commits pushed to `origin/main`. (May 3 work added 4 backend + 19 agent tests on top — final state at May 3 close: 1,479 backend + 498 dashboard = 1,977 passing, 72 agent tests.)
 
 ### April 24, 2026 UX Review & Polish Batch
 A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped across commits `dac97cb`, `91c9903`, `7042a8e`, `3954d4c` + supporting refactors (`2f74991`). Deferred items need design input (admin-mode color, theme-selector placement, first-run nav callout) or bigger investment (skeleton screens, Remember me refresh tokens).
@@ -284,7 +290,7 @@ See `docs/TODO.md` for the unified task list. Key blockers: deploy dashboard, se
 - `src/routes/provisioning.ts` — activate/deactivate/status endpoints
 - SuperAdmin dashboard has "Activate Phone" button with area code input
 - `TELNYX_API_KEY` and `TELNYX_SIP_CONNECTION_ID=2945038451784812111` set in Railway
-- Phone provisioned: `+1-630-937-9478` (Telnyx) — currently unreachable from PSTN, see `docs/TICKET_SUPPORT.md` (ticket #2850682)
+- Phone provisioned: `+1-630-937-9478` (Telnyx) — currently unreachable from PSTN, see `docs/TICKET_SUPPORT.md` (original ticket `#2850682` superseded 2026-05-01; new ticket awaiting reviewer)
 - **Still needs**: DASHBOARD_URL env var on Railway backend (see `docs/TODO.md`); first live call to confirm carrier propagation
 
 ### Phase 12: Scheduler, Assignments & Coverage Visibility (Complete)

@@ -53,7 +53,7 @@
 ### I. Voice & Telephony (Blocking)
 
 - [ ] First successful live PSTN inbound call test — `[tracked]` TODO.md Phase 13
-- [ ] Telnyx ticket #2850682 resolved — `[tracked]` TODO.md Phase 13, `docs/TICKET_SUPPORT.md`
+- [ ] Telnyx PSTN reachability resolved — `[tracked]` TODO.md Phase 13, `docs/TICKET_SUPPORT.md`. Original ticket `#2850682` superseded 2026-05-01 after 4 days without a human response; new ticket awaiting LERG/porting reviewer.
 - [x] Grok TTS fully wired and tested in agent — `[shipped]` 2026-05-01, `agent/src/grokTTS.ts`. End-to-end PSTN test still pending (blocked on Telnyx).
 - [ ] Voice fallback messages and error handling validated — `[lifted → TODO.md]` "Voice validation (additive to Phase 13)"
 - [ ] Call transcript + summary flow confirmed — `[lifted → TODO.md]` same section

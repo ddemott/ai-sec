@@ -6,6 +6,15 @@ This is for **structural cleanup of existing code** — dead code to delete, dor
 
 Last updated: 2026-05-03.
 
+## In-flight markers
+
+Same convention as `docs/TODO.md`. Every open entry below uses one of:
+
+- **IN FLIGHT (decision pending)** — needs user judgment / green-light before code work can start.
+- **IN FLIGHT (partially shipped)** — some pieces shipped to main, others deferred (with explicit reasoning). The remaining pieces are pickable when the deferral conditions change.
+- **open, not started** — Claude can pick this up today without further discussion.
+- Strikethrough title + `**Status: done <date> <commit>**` — fully shipped on main, kept for context.
+
 ## Resolution lens
 
 Every "wire this dormant layer or delete it" entry below resolves through the same lens (see `CLAUDE.md` → Build Principles):
@@ -53,7 +62,9 @@ The hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block in `agent/src/index
 
 ---
 
-### 3. Resolve `UsageTrackingService` (in-memory stub vs. real billing)
+### 3. Resolve `UsageTrackingService` (in-memory stub vs. real billing) — IN FLIGHT (decision pending)
+**Status: IN FLIGHT (decision pending) — needs user green-light before execution.** The Build Principles "test or delete" lens marks Option B (delete) as the default disposition; Claude can execute it in ~30 min the same way the CRM-adapter deletion (#1) was executed on 2026-05-02. Just needs an explicit go-ahead.
+
 **Problem.** `src/services/usage/UsageTrackingService.ts` records SMS/calls/emails to an in-memory map. No DB persistence, no Stripe sync. CommunicationService thinks it's tracking usage; nothing downstream actually reads the result.
 
 **Why P0.** Pretends to support per-tenant billing. The longer it lives in this state, the more callers couple to a stub interface that will need to change when real persistence lands.
@@ -152,13 +163,15 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 ### ~~9. Switch agent TTS from OpenAI to xAI Grok (Phase 4)~~
 **Status: code-complete 2026-05-01, dead-air guard validated 2026-05-03.** New `agent/src/grokTTS.ts` implements `tts.TTS` (24kHz mono PCM) against `https://api.x.ai/v1/tts`. The primary `voice.AgentSession` in `agent/src/index.ts` now uses GrokTTS. The `runFallback()` last-resort path uses `openai.TTS` so a Grok outage / missing / invalid `XAI_API_KEY` never produces dead-air on a live call. **Important caveat caught during validation:** between 2026-05-01 and 2026-05-03, this entry's "OpenAI TTS in fallback" claim was aspirational — the actual `runFallback()` on main wired GrokTTS in both paths, leaving the dead-air guard non-functional. Closed 2026-05-03 by extracting `runFallback()` to `agent/src/fallback.ts`, switching its TTS to OpenAI, and pinning the OpenAI-not-Grok contract with 13 new 5W-annotated tests in `agent/src/fallback.test.ts`. Voice configurable via `XAI_TTS_VOICE` env (`eve | ara | rex | sal | leo`, default `ara`). 9 unit tests in `agent/src/grokTTS.test.ts` cover request shape (URL, bearer auth, body keys), frame emission with `final:true` on the trailing frame, abort handling, upstream non-2xx → error event, and `updateOptions()` voice swap. `npx tsc --noEmit` clean both backend and agent; agent suite is now 72 passing tests (was 66 before #2's tenant-config redo on 2026-05-03 added 6 more).
 
-**Caveat.** End-to-end validation requires a live PSTN call, currently blocked on Telnyx ticket #2850682. Once that clears, the first call should be on the new `+1-630-937-9478` number with `XAI_API_KEY` set in Railway. If GrokTTS misbehaves, swapping back is a one-line revert in `agent/src/index.ts`.
+**Caveat.** End-to-end validation requires a live PSTN call, currently blocked on the open Telnyx ticket (original `#2850682` superseded 2026-05-01; new ticket awaiting reviewer). Once that clears, the first call should be on the new `+1-630-937-9478` number with `XAI_API_KEY` set in Railway. If GrokTTS misbehaves, swapping back is a one-line revert in `agent/src/index.ts`.
 
 **Open follow-up.** Per-tenant voice override is not wired. The `XAI_TTS_VOICE` env is process-global. Wiring it into `tenant_config` requires the same call as #2's `DatabaseTenantConfigService` decision — defer until that lands.
 
 ---
 
-### 10. Extract shared CRM sync structure
+### 10. Extract shared CRM sync structure — open, not started
+**Status: open, not started.** Worth verifying with a real diff first (see "Worth verifying first" below); skip if the shared structure turns out to be smaller than expected.
+
 **Problem.** `jobberSync.ts`, `hubspotSync.ts`, `squareSync.ts`, `servicetitanSync.ts` likely share a strong push-pull-merge skeleton (timestamp-based merge, COALESCE non-conflicting fields, sync-map upsert). `oauthCallbackFactory.ts` and `tokenManagement.ts` already extracted the OAuth bits; the sync orchestration itself is probably still copy-pasted.
 
 **What to do.** Read all four sync modules side-by-side. Identify the shared shape. Extract into `src/services/crmSyncBase.ts` (or fold into the existing `syncOrchestrator.ts`). Each provider keeps only its provider-specific mapping function.
@@ -169,8 +182,8 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 
 ---
 
-### 11. Audit `src/index.ts` for extraction opportunities (385 → 279 lines, partially done)
-**Status: partially done 2026-05-02.** Three extractions shipped in this order:
+### 11. Audit `src/index.ts` for extraction opportunities (385 → 279 lines, partially done) — IN FLIGHT (partially shipped)
+**Status: IN FLIGHT (partially shipped) 2026-05-02.** Three extractions shipped in this order:
 1. `fbc1eaf` — JWT preHandler extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)` (also `generateToken`, `verifyToken`, `PUBLIC_ROUTES`).
 2. `9b78030` — Pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with the deadlock-prevention timeouts, so reminders + communications inherit the same safety net as routes.
 3. `5077fd6` — `withTenantClient` factory extracted as `createWithTenantClient(pool)` in `src/database/index.ts`. Routes and tests untouched (still receive it injected).
@@ -187,7 +200,9 @@ Net: `src/index.ts` 385 → 279 lines. 1,495 backend tests green throughout.
 
 ---
 
-### 12. Prune or split `improvement-ideas.md` (142KB, 156 sections)
+### 12. Prune or split `improvement-ideas.md` (142KB, 156 sections) — open, not started
+**Status: open, not started.** Pickable today.
+
 **Problem.** A backlog file this large stops being a working document and becomes archaeology. Resolved-but-not-removed entries (e.g., "phone normalization" marked resolved 2026-04-23) still occupy space.
 
 **What to do.**
@@ -197,7 +212,9 @@ Net: `src/index.ts` 385 → 279 lines. 1,495 backend tests green throughout.
 
 ---
 
-### 13. CLAUDE.md and MEMORY.md drift detection
+### 13. CLAUDE.md and MEMORY.md drift detection — open, not started (now extra-relevant after 2026-05-03)
+**Status: open, not started.** Pickable today. **Extra weight:** the 2026-05-03 voice-fallback validation found two separate "claimed shipped, actually wasn't" doc lies (the OpenAI-TTS-fallback claim, and the tenant-config commit on `hold-tenant-config`). A `verify-claude-md.ts` drift-detector at the *commit-on-main* level (not just file-counts) would have caught both — for example, a check that asserts each `commit \`<hash>\`` reference in the docs is reachable from `main`.
+
 **Problem.** Both files are hand-maintained. Today's edit caught the route count off by one (24 vs 25), the migration count off by one (76 vs 77), and 8 missing directories. This drift will recur every time someone adds a route or service.
 
 **Options.**
@@ -208,8 +225,8 @@ Net: `src/index.ts` 385 → 279 lines. 1,495 backend tests green throughout.
 
 ## P3 — Housekeeping
 
-### 14. Investigate and resolve `pw.txt`
-**Status: open — needs user judgment.** File is already gitignored (`pw.txt` is in `.gitignore`'s sensitive-files block) and was never committed to the repo. Cleanup pass on 2026-04-30 deliberately did NOT delete it: contents could be a real password or a deliberate local note, and that's the user's call. Single-line, 17 bytes, on disk only.
+### 14. Investigate and resolve `pw.txt` — IN FLIGHT (decision pending)
+**Status: IN FLIGHT (decision pending) — needs user judgment.** File is already gitignored (`pw.txt` is in `.gitignore`'s sensitive-files block) and was never committed to the repo. Cleanup pass on 2026-04-30 deliberately did NOT delete it: contents could be a real password or a deliberate local note, and that's the user's call. Single-line, 17 bytes, on disk only.
 
 ---
 
