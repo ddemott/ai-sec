@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-02 (architecture refactors landed in src/index.ts; atomic-booking concurrency closed)
+**Last updated:** 2026-05-03 (voice fallback dead-air guard validated; tenant-config commit found unmerged on a branch)
 
 ---
 
@@ -7,11 +7,16 @@
 
 Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → LiveKit migration complete (commit `661d21d`, 2026-04-27). Phone provisioned via Telnyx (`+1-630-937-9478`) but currently unreachable from PSTN — see `TICKET_SUPPORT.md` (Telnyx ticket re-submitted 2026-05-01 after the original #2850682 went 4 days without a human response). Voice AI is wired end-to-end and waiting on the carrier issue to validate live.
 
+### May 3 Session: voice fallback path validation + doc-vs-reality findings
+
+- **Voice fallback path validation** (queue #9). The validation surfaced a real dead-air gap: docs across CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code on main wired GrokTTS in both the primary path AND the fallback — meaning a Grok outage would leave the fallback unable to speak either. Closed by extracting `runFallback()` to `agent/src/fallback.ts` (injectable provider deps), switching its TTS to OpenAI, awaiting `say()` so synthesis failures are caught, and pinning the contract with 13 new 5W tests. Agent suite: 53 → 66 tests, all green.
+- **Doc-vs-reality finding: tenant-config wiring is NOT on main.** The session-20260501 memory (and the May 1-2 entries below) claimed commit `e92b3bf` ("feat(agent): fetch tenant display config from backend at call start") shipped the tenant-config wiring on main. It actually lives on a `hold-tenant-config` branch and was never merged. The agent worker on main still hardcodes `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` at lines 41-44 of `agent/src/index.ts`. **NEEDS-REFACTORING #2 should be reopened** — the work is done on the branch but the prod path doesn't have it. Either merge `hold-tenant-config` or redo the work on main.
+
 ### May 1-2 Sessions: concurrency fix + structural refactors
 
 - **Atomic-booking concurrency hole closed** (commit `55be6dc`). Race confirmed under READ COMMITTED — find-then-insert in `book_appointment_atomic` / `book_with_scheduling_atomic` could pass two `NOT EXISTS` checks before either committed (9/20 winners on resource race, 20/20 on employee race). Closed by two GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`, migration `20260501000000`) plus `exclusion_violation` handlers in both RPCs (`20260501000001`). Race losers receive `TIMESLOT_OCCUPIED` and the agent prompt's "that time just got taken" mapping continues to apply. **Migration not yet applied to production Supabase** — see TODO.md Phase 13 entry for the pre-flight overlap-scan step.
-- **xAI Grok TTS shipped** (commit `f6cc1d4`, 2026-05-01). `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts`; primary session uses Grok, `runFallback()` keeps OpenAI TTS as the dead-air guard. End-to-end PSTN validation pending Telnyx.
-- **Tenant config wired through `/agent-tools/tenant-config`** (commit `e92b3bf`, 2026-05-01). Closes NEEDS-REFACTORING #2 (P0). Agent worker no longer hardcodes DynaTire — fetches `{ name, timezone }` per call.
+- **xAI Grok TTS shipped** (commit `f6cc1d4`, 2026-05-01). `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts`; primary session uses Grok, `runFallback()` claimed (but pre-2026-05-03, did not actually) use OpenAI TTS as the dead-air guard — see May 3 entry above. End-to-end PSTN validation still pending Telnyx.
+- **Tenant config wiring (claimed shipped, actually on a branch).** Commit `e92b3bf` ("feat(agent): fetch tenant display config from backend at call start") was claimed to close NEEDS-REFACTORING #2 P0 on 2026-05-01, but the commit lives on a `hold-tenant-config` branch and is not on main. The agent worker on main still hardcodes DynaTire. See May 3 entry above for the doc-vs-reality reconciliation.
 - **`src/index.ts` slimmed 385 → 279 lines** across three commits:
   - `fbc1eaf` — JWT preHandler + PUBLIC_ROUTES + generateToken/verifyToken extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)`.
   - `9b78030` — Pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with the deadlock-prevention timeouts (`statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout`); reminder scheduler + communications no longer get a softer pool than routes.

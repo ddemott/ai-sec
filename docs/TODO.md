@@ -59,7 +59,7 @@ Today the agent worker logs to stdout via Pino, the backend logs via Fastify, an
 
 ### Voice validation (additive to Phase 13)
 
-- [ ] **Voice fallback path validation.** `runFallback()` exists but has never been invoked under real conditions. Force the failure modes (bad tenant_id, missing config, agent-tools/* unreachable) and verify the caller hears the fallback message rather than dead air.
+- [x] **Voice fallback path validation.** Done 2026-05-03. The validation surfaced a real dead-air gap: docs across CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code used GrokTTS in both the primary and the fallback path — meaning a Grok outage would leave the fallback unable to speak either. Closed in one focused refactor: extracted `runFallback()` to `agent/src/fallback.ts` with injectable provider deps, wired it to use OpenAI TTS (matching what docs already claimed), awaited `say()` so synthesis-time failures are caught inside the try block, and pinned the contract with 13 new 5W-annotated tests in `agent/src/fallback.test.ts` covering the happy path, the OpenAI-not-Grok provider choice, and the never-throw contract under each failure mode (session ctor / STT ctor / LLM ctor / TTS ctor / start() reject / say() reject). Agent suite: 53 → 66 tests, all green. Typecheck clean.
 - [ ] **Call transcript + summary flow confirmed end-to-end.** Post-call summary write-back (`call_summaries` + embedding) was wired for Vapi; verify the LiveKit-side dispatcher does the equivalent on call end.
 
 ---

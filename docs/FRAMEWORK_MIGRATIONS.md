@@ -2,7 +2,7 @@
 
 Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `NEEDS-REFACTORING.md`.
 
-**Last updated:** 2026-05-02
+**Last updated:** 2026-05-03
 
 ---
 
@@ -30,7 +30,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 ## 3. TTS provider: OpenAI TTS → xAI Grok (native in agent)
 
-**Status:** Code-complete 2026-05-01. End-to-end validation pending first live call (blocked on Telnyx ticket #2850682). The fallback path inside `runFallback()` still uses `openai.TTS` as a last-resort voice if config is too broken to construct GrokTTS — intentional, so a misconfigured XAI key never produces dead-air on the caller's end.
+**Status:** Code-complete 2026-05-01, dead-air guard validated 2026-05-03. End-to-end validation against PSTN still pending first live call (blocked on Telnyx ticket). The fallback path inside `runFallback()` uses `openai.TTS` as a last-resort voice if config is too broken to construct GrokTTS — intentional, so a misconfigured XAI key never produces dead-air on the caller's end. **Caveat:** between 2026-05-01 and 2026-05-03 this guard was aspirational — the actual `runFallback()` on main wired GrokTTS in both paths. Closed 2026-05-03 by extracting `runFallback()` to `agent/src/fallback.ts`, switching the TTS to OpenAI, and pinning the contract with 13 new 5W tests in `agent/src/fallback.test.ts`.
 
 **Why:** Cost, latency, and voice quality evaluation. The earlier interim plan (Vapi custom-voice proxy at `src/routes/tts.ts`) was abandoned and that file deleted in `661d21d` along with everything else Vapi-shaped.
 

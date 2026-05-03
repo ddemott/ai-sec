@@ -27,6 +27,7 @@ import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 
 import { config } from './config.js';
+import { runFallback } from './fallback.js';
 import { GrokTTS } from './grokTTS.js';
 import { buildSessionContext } from './sessionContext.js';
 import { ToolsClient } from './toolsClient.js';
@@ -64,7 +65,7 @@ export default defineAgent({
     if (!preliminaryCtx) {
       // Dispatch rule misconfigured — no tenant_id means we can't safely
       // do anything. Start a bare session and say a fallback message.
-      await runFallback(ctx, "I'm sorry, we're having a system issue. Please try calling back in a moment.");
+      await runFallback(ctx, "I'm sorry, we're having a system issue. Please try calling back in a moment.", config);
       return;
     }
 
@@ -92,7 +93,7 @@ export default defineAgent({
     });
     if (!sessionCtx) {
       // Shouldn't happen — preliminaryCtx already succeeded — but be safe
-      await runFallback(ctx, "I'm sorry, we're having a system issue.");
+      await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
       return;
     }
 
@@ -136,30 +137,6 @@ export default defineAgent({
     });
   },
 });
-
-/**
- * Start a minimal session and say a fallback message when the job context
- * is too broken to run the full agent (no tenant_id, etc.). Still better
- * than silent dead-air on the caller's end.
- */
-async function runFallback(ctx: JobContext, message: string): Promise<void> {
-  try {
-    const session = new voice.AgentSession({
-      vad: ctx.proc.userData.vad as silero.VAD,
-      stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
-      llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-      tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
-    });
-    const agent = new voice.Agent({
-      instructions: 'Say the provided message and end the call politely.',
-    });
-    await session.start({ agent, room: ctx.room });
-    session.say(message, { allowInterruptions: false });
-  } catch {
-    // Swallow — at this point any crash just ends the call, which is
-    // already the least-bad outcome
-  }
-}
 
 cli.runApp(
   new WorkerOptions({

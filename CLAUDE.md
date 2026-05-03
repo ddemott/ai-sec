@@ -33,7 +33,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/templates/` - 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). HIPAA verticals are permanently excluded — there is no medical_v1. Each bundle: prompt template, first message, voice ID, field labels, example services. Loaded by tenants provisioning route.
 - `/src/types/` - Shared TS interfaces. ConsentRecord, OptOutRecord (GDPR/TCPA), ReminderSchedule/ReminderData/AppointmentForReminder, UsageRecord + Provider enum, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError). The JWT preHandler — PUBLIC_ROUTES bypass list, Bearer token decode, password-rotation check — lives here, not in `src/index.ts`.
-- `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`)
+- `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`), fallback voice path `src/fallback.ts` (OpenAI TTS — dead-air guard for when the primary GrokTTS path can't run).
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
 - `/supabase/migrations` - 82 SQL migrations (schema, RLS, RPCs, coverage, billing, provisioning, CRM integrations, timezone fix, specific booking errors, employee_schedule, night shifts, get_effective_shifts_bulk, phone_verifications, telnyx_provisioning, RPC + table cleanup for the employee_shifts retirement, atomic-booking exclusion constraints)
 - `/supabase/functions` - **Empty.** All Vapi edge functions deleted in commit `661d21d`.
@@ -151,6 +151,48 @@ Several service layers exist in the codebase but are not yet exposed via routes 
 - BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
 
 ## Resolved Issues
+### May 3, 2026 Voice Fallback Path Validation
+The validation (queue item #9) surfaced a real dead-air gap. CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had all claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code on main wired GrokTTS in both the primary path and the fallback — meaning a Grok outage would leave the fallback unable to speak. Three closures shipped:
+
+- **Extracted `runFallback()` to `agent/src/fallback.ts`** with injectable provider deps (the previous inline closure in `agent/src/index.ts` couldn't be unit-tested without standing up a LiveKit runtime).
+- **Switched the fallback TTS to OpenAI** (matches what docs already claimed), keeping GrokTTS in the primary path. Provider keys are passed in as a `FallbackConfig` arg rather than imported, so the function is testable without going through the env-validation `process.exit(1)` path in `./config.js`.
+- **Awaited `session.say()`** so a synthesis-time TTS failure is caught inside the try block instead of escaping as an unhandled promise rejection on the worker.
+
+Pinned by 13 new 5W-annotated tests in `agent/src/fallback.test.ts` covering: happy path message + interruption blocking + start-before-say ordering + VAD wiring; the OpenAI-not-Grok provider-choice contract (3 tests, including a dedicated negative test that proves no GrokTTS instance is constructed); the never-throw contract under each failure mode (session ctor / STT ctor / LLM ctor / TTS ctor / start() reject / say() reject). Agent suite: 53 → 66 tests, all green. Typecheck clean both surfaces.
+
+### May 2, 2026 Concurrency Fix + Structural Refactors + Test-or-Delete Policy
+A 12-commit unblocked-work session that closed a real launch blocker, slimmed `src/index.ts` by 28%, and captured the underlying decision principle as a durable rule.
+
+**Booking concurrency hole closed** (commit `55be6dc`):
+- Race confirmed under READ COMMITTED with a 20-caller load test: 9/20 winners on the resource race, 20/20 on the employee race. The find-then-insert pattern in `book_appointment_atomic` / `book_with_scheduling_atomic` could pass two `NOT EXISTS` checks before either committed.
+- Closed by two GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`) scoped to scheduled, non-deleted appointments, paired with `exclusion_violation` handlers in both RPCs that return the existing `TIMESLOT_OCCUPIED` error code so the agent prompt's "that time just got taken" mapping continues to apply.
+- New test file `src/booking-concurrency.test.ts` (2 real-DB race tests).
+- Migrations `20260501000000` + `20260501000001` shipped to repo, **NOT yet applied to prod Supabase** — pre-flight overlap-scan needed first.
+
+**`src/index.ts` 385 → 279 lines** across three commits:
+- `fbc1eaf` — JWT preHandler extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)`. Includes `JWT_SECRET`/`JWT_EXPIRY`/`generateToken`/`verifyToken`/`PUBLIC_ROUTES` and the password-rotation check.
+- `9b78030` — DB pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with deadlock-prevention timeouts; reminder + communications consumers no longer get a softer pool than routes.
+- `5077fd6` — `withTenantClient` factory moved to `src/database/index.ts` as `createWithTenantClient(pool)`. Routes + tests untouched (still receive it injected).
+
+**`src/services/crm/` deleted** (commit `2cc782a`, NEEDS-REFACTORING #1):
+- 21 dormant CRM adapters + `BaseCRMAdapter` interface + `createCRMAdapter()` factory + the mocked-API test file removed (3,480 lines).
+- Two of the deleted adapters (`dentrix.ts`, `eaglesoft.ts`) were dental-practice CRMs that violated the platform's HIPAA-excluded-vertical policy.
+- Decision policy locked: anything we can't test against gets deleted; CRMs we don't have a flat client for get wired up when a beta customer brings one. The four working flat clients (jobber/hubspot/square/servicetitan) are unaffected.
+
+**Build Principles captured in CLAUDE.md** (commit `18181bc`):
+- Test it or delete it. Build for real customers, not the imagined Pro tier. Working flat code beats a dormant abstraction. HIPAA verticals permanently excluded.
+- NEEDS-REFACTORING.md gained a "Resolution lens" preamble. NEEDS-REFACTORING #3 (UsageTrackingService) re-evaluated under the lens — Option B (delete) marked default.
+
+**Other landings:**
+- `c9f40c6` — `scripts/setup-db.sh` bootstrap bug fixed (psql `-c` and stdin heredoc were mutually exclusive); CI workaround removed.
+- `6f91b7b` — OTP Phase 3 status truthed up in CLAUDE.md (the work had already shipped in commit `18caffe` 2026-04-24).
+- `c18c996` — Telnyx PSTN ticket re-submitted to LERG/porting team after the original `#2850682` went 4 days without a human response.
+- `889d25b` — All *.md files aligned with the day's refactor + concurrency landings.
+- `65b0cc2` — Yesterday's journal-loop batch committed; one already-shipped entry flagged STATUS: ALREADY SHIPPED inline.
+- `444dad1` — Last three pre-existing test files (`index.test.ts`, `normalizer.test.ts`, `scheduling.test.ts`) gained 5W diagnostic comments — 47 tests annotated; the 5W convention is now universal.
+
+**Test state at session close:** 1,475 backend + 498 dashboard = 1,973 passing + 2 documented skips, 0 failures, typecheck clean both surfaces. Working tree clean, all 12 commits pushed to `origin/main`.
+
 ### April 24, 2026 UX Review & Polish Batch
 A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped across commits `dac97cb`, `91c9903`, `7042a8e`, `3954d4c` + supporting refactors (`2f74991`). Deferred items need design input (admin-mode color, theme-selector placement, first-run nav callout) or bigger investment (skeleton screens, Remember me refresh tokens).
 
