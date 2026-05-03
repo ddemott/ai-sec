@@ -2003,3 +2003,44 @@
 **What's working:** The UX notes are useful again now that the last unreviewed SetupWizard/settings files have been covered, and the improvement pass stayed fresh by moving into the LiveKit agent-tool boundary instead of rehashing another CRUD helper family.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions already handled the finished-UX state correctly, and this cycle still produced a concrete, non-duplicate improvement slice without extra steering.
+
+## Ideas — 2026-05-02 (architecture reviewed)
+
+### Task: Fetch live tenant prompt config before starting the agent session
+**Status:** ALREADY SHIPPED — closed by commit `e92b3bf` on 2026-05-01 (NEEDS-REFACTORING #2 P0). The journal-loop run that produced this entry was scheduled before that commit landed and didn't see the change. New `POST /agent-tools/tenant-config` route reads `name`+`timezone` from `tenants`; `agent/src/tenantConfig.ts` calls it on connect; the hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block is gone. 10 new tests cover the route + agent fallback. Leaving this entry in place as a marker of the duplicate so the loop generator's behavior is auditable later — see the Self-Review at the bottom of this batch.
+
+### Task: Extract agent session construction into a shared worker helper
+**Status:** proposed
+**Files to change:** `agent/src/index.ts:L118-L156`, optional new helper such as `agent/src/sessionFactory.ts`
+**What to do:** Move the repeated `new voice.AgentSession({ vad, stt, llm, tts })` construction used in both the normal entry path and `runFallback()` into one small helper that accepts `ctx.proc.userData.vad` and returns the configured session. Keep model choices, TTS voice selection, and runtime behavior unchanged, but stop maintaining the primary and fallback session wiring in two places.
+**Done when:**
+- [ ] Normal startup and fallback startup both create their `voice.AgentSession` through one shared helper
+- [ ] Deepgram, OpenAI, and Grok TTS config remain identical to current behavior
+- [ ] The fallback path still says the provided message and the normal path still starts the full tool-backed agent
+- [ ] All existing tests pass, new tests cover the shared session-construction helper if added
+**Why it matters:** The worker’s most important runtime wiring currently exists in duplicate, which makes future model or provider changes easy to apply to one path and forget in the other.
+**Tradeoff:** The helper should stay tiny and worker-local so it removes duplication without hiding the bootstrap flow.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Well under an hour would remove a meaningful drift risk from the worker’s two startup paths, a solid maintenance return.
+
+### Task: Isolate SIP participant wait logic from the rest of agent bootstrap
+**Status:** proposed
+**Files to change:** `agent/src/index.ts:L71-L97`, `agent/src/sessionContext.ts:L1-L88`, optional new tests alongside existing session-context tests
+**What to do:** Extract the `Promise.race([ctx.waitForParticipant(), timeout])` block and the follow-up attribute normalization into one small bootstrap helper that returns `participantAttributes` plus any timeout outcome needed for logging. Keep the 5-second timeout and current non-fatal fallback behavior unchanged, but separate caller-info acquisition from the rest of the entry flow so tenant parsing, tool construction, and prompt assembly are easier to read.
+**Done when:**
+- [ ] `entry()` no longer inlines the full SIP participant wait and timeout block
+- [ ] The 5-second timeout and non-fatal null-participant behavior remain unchanged
+- [ ] Caller phone and call ID extraction still flow through `buildSessionContext` exactly as they do today
+- [ ] All existing tests pass, new tests cover the helper’s timeout and success paths if added
+**Why it matters:** The agent bootstrap currently mixes transport waiting, metadata parsing, prompt setup, and session startup in one function, which makes the entry path harder to reason about than it needs to be.
+**Tradeoff:** This is mostly readability work, so the helper should stay narrow and avoid turning the worker bootstrap into a mini-framework.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Low effort, worthwhile gain because it makes the live-call bootstrap easier to audit without changing behavior.
+
+## Self-Review — 2026-05-02
+**Cycles since last self-review:** 1
+**What's working:** UX review is genuinely complete now, and the latest improvement entries are still actionable, but the file-completion check was a little too stem-based for alias components like `SetupWizard.tsx` and `SetupWizard/index.tsx`.
+**What I changed in HEARTBEAT.md:** Added a UX-review note to match reviewed items by full file path, not just component name.
+**Why:** That keeps future agents from wasting a cycle on false “unreviewed” results when two files share the same component stem.
