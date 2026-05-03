@@ -800,11 +800,11 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
                 ╱────╲
                ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real `/agent-tools/*` Fastify routes)
               ╱────────╲
-             ╱  1,993   ╲    Vitest unit + integration (real DB, real RLS)
+             ╱  1,973   ╲    Vitest unit + integration (real DB, real RLS)
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 1,495 tests)
+### 18.2 Backend (`npm test` — 1,475 tests)
 
 Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, CRM sync clients, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: DynaTire caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 

@@ -15,7 +15,7 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
 | **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
 | **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status |
-| **Tests** | 1,993 passing (1,495 backend + 498 dashboard) + 2 documented skips, zero TypeScript errors |
+| **Tests** | 1,973 passing (1,475 backend + 498 dashboard) + 2 documented skips, zero TypeScript errors |
 | **E2e** | 19 Playwright tests + 29 live QA tool calls (88 assertions) |
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
@@ -145,7 +145,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,495 tests)
+npm test                              # Backend (1,475 tests)
 cd dashboard && npx vitest run        # Dashboard (498 tests)
 cd dashboard && npx playwright test   # E2e (19 Playwright tests)
 python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)

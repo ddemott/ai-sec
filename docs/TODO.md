@@ -68,7 +68,7 @@ Today the agent worker logs to stdout via Pino, the backend logs via Fastify, an
 
 Done in a focused pass. Two-job CI gate now runs on every push/PR to main:
 
-- **Backend job:** `npm ci`, `npx tsc --noEmit`, `npm test` (1,495 tests, real Postgres service container).
+- **Backend job:** `npm ci`, `npx tsc --noEmit`, `npm test` (1,475 tests, real Postgres service container).
 - **Dashboard job:** `npm ci`, `npx tsc --noEmit`, `npm test` (498 tests).
 
 **Deleted as zombies** (referenced paths/scripts that don't exist in this

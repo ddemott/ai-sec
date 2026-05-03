@@ -24,7 +24,6 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, agentTools)
 - `/src/routes/routeHelpers.ts` - Shared route utilities (sendValidationError, sendNotFound, sendSuccess, sendConflict, assertRowAffected, requireValidUUID, parseDateRange, parsePagination)
 - `/src/services` - Service layer. Flat files at root: telnyxNumbers.ts [provisioning], telnyxSms.ts [OTP], googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts, oauthCallbackFactory.ts, tokenManagement.ts, plus the legacy CRM clients (jobberClient/Sync, hubspotClient/Sync, squareClient/Sync, servicetitanClient/Sync). Subdirectories add migrated layers — see `/src/services` subdirs below.
-- `/src/services/crm/` - 20+ CRM adapter classes (GoHighLevel, Acuity, Booksy, Calendly, Mindbody, Pipedrive, Salesforce, ServiceTitan, Vagaro, Zenoti, Zoho, etc.) with a `BaseCRMAdapter` interface and registry factory `createCRMAdapter(provider, config)`. **Migrated from ai-secretary, not yet wired to any routes.** Will eventually replace the flat legacy clients above.
 - `/src/services/communications/` - Multi-channel comms engine. CommunicationService orchestrator + emailService, smsService, appointmentService, emailTemplates (Handlebars), ProviderRegistry, TwilioAdapter, MockAdapter, TelephonyProvider.interface. Consent-gated via ConsentService, usage-tracked via UsageTrackingService.
 - `/src/services/reminders/` - Appointment reminder pipeline. ReminderService schedules on appointment create; reminderProcessor delivers via CommunicationService; reminderRepository handles DB CRUD. Worker pulls from `reminder_schedules` table.
 - `/src/services/tenants/` - TenantConfigService (in-memory + DB-backed). The class is still dormant (no callers), but the *need* it was meant to address is now solved — agent worker fetches `name`/`timezone` per call via `/agent-tools/tenant-config` (2026-05-01).
@@ -127,7 +126,6 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 
 ## Migrated, Not Yet Wired
 Several service layers exist in the codebase but are not yet exposed via routes or fully connected. Reading these dirs may suggest features that don't actually function end-to-end:
-- **`src/services/crm/`** — 20+ adapter classes for booking platforms (Mindbody, Vagaro, Acuity, Calendly, Salesforce, etc.). No `routes/crm.ts` exists; the registry factory has no callers. Will eventually replace the legacy flat clients (`jobberClient.ts`, `hubspotClient.ts`, `squareClient.ts`, `servicetitanClient.ts`).
 - **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing.
 - **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but no caller routes through it. The agent worker no longer hardcodes DynaTire — a per-call `/agent-tools/tenant-config` lookup reads `tenants` directly (2026-05-01). Decision pending: either route the agent through `DatabaseTenantConfigService`, or delete the class.
 - **`src/types/`** — `ConsentRecord` and `OptOutRecord` have full type shapes and DB tables, but no consent management UI exists in the dashboard yet.
@@ -204,7 +202,7 @@ A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped a
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,495 backend tests + 498 dashboard tests = 1,993 total passing (verified 2026-05-02 against real DB + dashboard, 2 documented skips). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,475 backend tests + 498 dashboard tests = 1,973 total passing (verified 2026-05-02 against real DB + dashboard, 2 documented skips). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 

@@ -18,6 +18,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
   - `5077fd6` — `withTenantClient` factory extracted to `src/database/index.ts` as `createWithTenantClient(pool)`. Routes and tests unchanged (still receive it as injected).
 - **`scripts/setup-db.sh` bootstrap bug fixed** (commit `c9f40c6`). The `psql -c "SET ..."` + heredoc combo silently dropped the `CREATE TABLE schema_migrations` because `-c` and stdin are mutually exclusive. CI workaround removed.
 - **OTP system prompt status truthed up** (commit `6f91b7b`). The "Phase 3 TODO" line in CLAUDE.md was stale — Phase 3 had already shipped in the LiveKit `agent/src/prompt.ts` since commit `18caffe`.
+- **`src/services/crm/` deleted** (NEEDS-REFACTORING #1, P0). 21 dormant adapters + `BaseCRMAdapter` interface + factory + the mocked-API test file removed (3,480 lines). Decision policy locked: anything we can't validate against a real CRM gets deleted; when a beta customer brings a CRM we don't have a flat client for, we wire it then. The four working flat clients (jobber/hubspot/square/servicetitan) are unaffected. Two of the deleted adapters (`dentrix.ts`, `eaglesoft.ts`) violated the platform's HIPAA-excluded-vertical policy. Backend test count: 1,495 → 1,475.
 
 ### April 20-21 Session: UX/a11y backlog complete + migration docs
 
@@ -63,7 +64,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 See `docs/TODO.md` for the unified task list.
 
 ### Test Count (verified 2026-05-02 against real Postgres + dashboard)
-- **1,495 backend tests + 498 dashboard tests = 1,993 total**, 0 failures, 2 documented skips
+- **1,475 backend tests + 498 dashboard tests = 1,973 total**, 0 failures, 2 documented skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
@@ -87,7 +88,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,495 backend + 498 dashboard = 1,993 passing + 88 QA assertions | All green (verified 2026-05-02 against real DB + dashboard), 2 documented skips, zero TS errors |
+| **Tests** | 1,475 backend + 498 dashboard = 1,973 passing + 88 QA assertions | All green (verified 2026-05-02 against real DB + dashboard), 2 documented skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

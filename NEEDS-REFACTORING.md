@@ -10,17 +10,8 @@ Last updated: 2026-04-28.
 
 ## P0 — Compounding debt or production blockers
 
-### 1. Decide the fate of `src/services/crm/` (20+ dormant adapter classes)
-**Problem.** `src/services/crm/` ships a `BaseCRMAdapter` interface and ~20 concrete adapters (GoHighLevel, Acuity, Booksy, Calendly, Mindbody, Pipedrive, Salesforce, Vagaro, Zenoti, Zoho, etc.) plus a `createCRMAdapter()` registry factory. **Zero routes consume any of it.** Meanwhile, the CRM integrations actually used in production (`jobberClient.ts`, `hubspotClient.ts`, `squareClient.ts`, `servicetitanClient.ts`) live as flat files alongside it, in a different shape.
-
-**Why P0.** Two parallel CRM patterns rot fast. Every new contributor wonders which one to extend. Each new flat-client integration makes the eventual migration to the adapter pattern bigger.
-
-**Options.**
-- **A — Migrate flat clients to the adapter pattern.** Refactor jobber/hubspot/square/servicetitan into adapters under `crm/`, route them through the registry, delete the flat files. Significant work but resolves the duplication permanently.
-- **B — Delete the unused adapters.** If the migration plan no longer applies, `git rm -r src/services/crm/` and continue with the flat pattern. Smallest change, accepts the current shape as the shape.
-- **C — Park explicitly.** Add a top-of-file note in each adapter explaining the dormant status and projected wire-up date.
-
-**Files.** `src/services/crm/*` (all), `src/services/jobberClient.ts`, `src/services/hubspotClient.ts`, `src/services/squareClient.ts`, `src/services/servicetitanClient.ts`.
+### ~~1. Fate of `src/services/crm/` (20+ dormant adapter classes)~~
+**Status: done 2026-05-02.** Option B — entire directory deleted (`git rm -r src/services/crm/`). 21 adapters + `BaseCRMAdapter` interface + `createCRMAdapter()` factory + the mocked-API test file removed; 3,480 lines net. Decision policy locked: **anything we can't test against gets deleted; when a beta customer brings a CRM we don't have a flat client for, we wire it up at that point.** The 20+ adapters had never been exercised against real CRM credentials (write-only code), and two of them (`dentrix.ts`, `eaglesoft.ts`) were dental-practice CRMs that violated the platform's HIPAA-excluded-vertical policy. The four working flat clients (jobber/hubspot/square/servicetitan) are unaffected. Test count: 1,495 → 1,475 (the 20-test drop is the deleted `crm-adapters.test.ts`, which mocked the CRM APIs rather than exercising them — exactly the validation gap that drove the decision).
 
 ---
 
@@ -112,7 +103,7 @@ Pre-Phase-2, `employee_shifts` was actively read/written by:
 ---
 
 ### ~~7. Reconcile `src/services/MIGRATED_FROM_AI_SECRETARY.md`~~
-**Status: done 2026-04-30.** File deleted. The migration was complete; the doc had drifted into stale-marker territory (referenced Vapi, deleted CI workflows like `pnpm-workspace-sanity.yml`, etc.). Useful content was already mirrored elsewhere: CLAUDE.md's "Migrated, Not Yet Wired" section covers the dormant CRM adapter layer, and NEEDS-REFACTORING #1/#2/#3 own the open decisions about adapter fate, TenantConfigService wiring, and UsageTrackingService. The dangling `docs/PLAN_COMMUNICATIONS_REMINDERS_INTEGRATION.md` reference fixed in the same commit.
+**Status: done 2026-04-30.** File deleted. The migration was complete; the doc had drifted into stale-marker territory (referenced Vapi, deleted CI workflows like `pnpm-workspace-sanity.yml`, etc.). Useful content was already mirrored elsewhere; the open decisions it pointed at have since closed (the dormant CRM adapter layer was deleted 2026-05-02 — see #1; tenant config was wired 2026-05-01 — see #2; UsageTrackingService remains open — see #3). The dangling `docs/PLAN_COMMUNICATIONS_REMINDERS_INTEGRATION.md` reference fixed in the same commit.
 
 ---
 
@@ -153,7 +144,7 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 
 **Worth verifying first.** Do a real diff of the four files before committing to this — extraction only pays off if the shared structure is genuinely large.
 
-**Note.** Conflicts with task #1 if option A there is chosen (the adapter pattern would subsume this). Sequence: decide #1 first.
+**Note.** No longer conflicts with #1 — that was closed 2026-05-02 with the dormant adapter layer deleted. The flat-client pattern is the only pattern, so a shared sync skeleton would extract from those four files directly.
 
 ---
 
