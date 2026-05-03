@@ -83,13 +83,13 @@
 ### V. Integrations & Billing
 
 - [ ] Calendar sync (Google + Outlook) fully tested — `[partial]` Services + tests exist; "fully tested" against real OAuth tokens is informally tracked in CLAUDE.md "Integration Summary". No new entry — informal verification when first beta runs.
-- [ ] CRM syncs (Jobber, HubSpot, etc.) stable — `[partial]` 4 CRMs wired (Jobber, HubSpot, Square, ServiceTitan). 20+ adapters dormant in `src/services/crm/` — see NEEDS-REFACTORING #1. "Stable" in production sense piggybacks on first-beta validation.
+- [ ] CRM syncs (Jobber, HubSpot, etc.) stable — `[partial]` 4 CRMs wired (Jobber, HubSpot, Square, ServiceTitan); they are the only CRMs in the codebase. The dormant adapter library at `src/services/crm/` was deleted 2026-05-02 (commit `2cc782a`, NEEDS-REFACTORING #1) under a new policy: anything we can't test against gets deleted; CRMs we don't have a flat client for get wired up when a beta customer brings one. "Stable" in production sense piggybacks on first-beta validation.
 - [ ] Stripe subscription + webhook handling confirmed — `[partial]` Wired in commit history; webhook registered at `/billing/webhook`. End-to-end test (real test-mode checkout → webhook → subscription gate) not formalized. No new entry — runs implicitly during beta.
 - [ ] Multi-tenant isolation verified in production-like environment — `[lifted → TODO.md]` "Pre-launch validation". RLS + FORCE RLS should hold but explicit cross-tenant probe hasn't been run against Supabase production.
 
 ### VI. Testing & Observability
 
-- [x] All tests passing (backend + dashboard + e2e) — `[shipped]` continuously enforced. 1,991 tests + 19 Playwright e2e + 29 live QA passing as of 2026-04-30. CI gate runs them on every push.
+- [x] All tests passing (backend + dashboard + e2e) — `[shipped]` continuously enforced. 1,973 tests + 19 Playwright e2e + 29 live QA passing as of 2026-05-02 (1,475 backend + 498 dashboard, with 2 documented skips). CI gate runs them on every push.
 - [ ] Live QA suite expanded — `[lifted → TODO.md]` "Observability". Add OTP flow, specific booking error codes, DST edge cases.
 - [ ] Structured logging and basic metrics in place — `[lifted → TODO.md]` "Observability". Today: stdout via Pino/Fastify/Next.js with no aggregation. Beta-blocker for support.
 - [ ] Error rates monitored for first beta users — `[lifted → TODO.md]` "Observability". Sentry-or-equivalent on dashboard + backend + agent.

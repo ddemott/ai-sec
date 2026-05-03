@@ -61,7 +61,7 @@ Both commits are local-only; not pushed. Pushing is a user call.
 - **`improvement-ideas.md` journal-loop dedup.** Yesterday's snapshot flagged that the loop reintroduces duplicates on each run; today's run added 3 proposed-task entries plus a self-review block but no observed dup yet. Still no owner identified for fixing the generator side.
 - **`DatabaseTenantConfigService` fate.** See step 5 — wire it or delete it. Documented in CLAUDE.md but no decision recorded.
 - **CRM service-layer SELECTs still don't filter `is_deleted`.** Carries over from yesterday's snapshot — needs a product call on whether sync should push deletions or just exclude.
-- **20+ CRM adapters in `src/services/crm/`** still dormant. Wire / drop / "Pro tier roadmap" decision still open. NEEDS-REFACTORING #1 P0.
+- ~~**20+ CRM adapters in `src/services/crm/`** still dormant.~~ **Closed 2026-05-02** — entire directory deleted (commit `2cc782a`). Decision policy locked: anything we can't test against gets deleted; CRMs we don't have a flat client for get wired up when a beta customer brings one. NEEDS-REFACTORING #1 marked done.
 
 ## External state to be aware of
 

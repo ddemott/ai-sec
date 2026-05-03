@@ -4,7 +4,16 @@ Living refactor backlog for the AI Secretary codebase. Items are ordered highest
 
 This is for **structural cleanup of existing code** — dead code to delete, dormant layers to wire-or-remove, conventions to enforce. New features and improvements live in `improvement-ideas.md`.
 
-Last updated: 2026-04-28.
+Last updated: 2026-05-02.
+
+## Resolution lens
+
+Every "wire this dormant layer or delete it" entry below resolves through the same lens (see `CLAUDE.md` → Build Principles):
+
+1. **Can it be tested against a real external surface today?** A real CRM account, a real Stripe metered-billing event, a real provider API. Mocked-API tests don't count.
+2. **Is there a real customer or sales conversation asking for it?** "Pro tier roadmap" and "we might need this someday" don't qualify.
+
+If the answer to both is no, the entry resolves to *delete*. Speculative scaffolding is more expensive than re-adding the layer when a real consumer arrives. Resolved that way for #1 (CRM adapters, deleted 2026-05-02). The same lens applies to #3 (UsageTrackingService) and to any future "dormant layer" entries.
 
 ---
 
@@ -39,9 +48,11 @@ The hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block in `agent/src/index
 
 **Why P0.** Pretends to support per-tenant billing. The longer it lives in this state, the more callers couple to a stub interface that will need to change when real persistence lands.
 
+**Resolution lens applied.** Following the rule from #1: *can it be tested against a real Stripe metered-billing event today?* No — there's no `usage_events` table, no metered-billing reporter, no Stripe metered prices configured. *Is a customer asking for usage-based pricing?* Solo and Growth tiers are flat-rate ($129/$279/mo). Pro/Enterprise IDs sit in env without positioning. **Default disposition: delete.** Re-add when a real customer signs up for a metered tier.
+
 **Options.**
-- **A — Implement.** Add a `usage_events` table, swap the in-memory map for DB inserts, add a Stripe metered-billing reporter that batches events on a cron. Real work — track separately as a feature.
-- **B — Delete and unwire.** Remove the service, drop the calls from `CommunicationService` and any other callers. Re-add when real billing becomes a near-term need.
+- **A — Implement.** Add a `usage_events` table, swap the in-memory map for DB inserts, add a Stripe metered-billing reporter that batches events on a cron. Justified only by a real metered-tier customer.
+- **B — Delete and unwire.** Remove the service, drop the calls from `CommunicationService` and any other callers. Re-add when real billing becomes a near-term need. **This is the default under the resolution lens.**
 
 **Files.** `src/services/usage/`, all callers (search for `UsageTrackingService`).
 

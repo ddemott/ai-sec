@@ -93,6 +93,15 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - Polymorphic assignment: `p_assignment_id` is UUID
 - All entity IDs are UUID (services and employees migrated from SERIAL to UUID in Phase 9)
 
+## Build Principles
+
+These are durable rules-of-engagement that override the urge to add code "for the future." They apply to every refactor, feature proposal, and integration request.
+
+- **Test it or delete it.** If a layer of code can't be exercised against a real external surface (a real CRM account, a real provider's API, a real metered-billing event), it doesn't ship. Mocked-API tests are not validation — they prove the mock works, not the integration. Speculative integrations get deleted; we re-add them when a real customer brings the credentials. Origin: deleted 21 dormant CRM adapters at NEEDS-REFACTORING #1 on 2026-05-02 because none had ever touched a real CRM, and two violated the platform's HIPAA-excluded-vertical policy.
+- **Build for real customers, not the imagined Pro tier.** Don't add provider integrations, billing tiers, dashboard sections, or service layers because we *might* need them. Wait for a beta customer or sales conversation that names the need. Working code with one consumer beats a generic interface with zero.
+- **Working flat code beats a dormant abstraction.** When a "shared interface" or "registry pattern" exists alongside the working flat-file equivalent, the flat files are the source of truth. Don't migrate working code into an unproven abstraction; extract a shared shape only after the third or fourth real consumer asks for it.
+- **HIPAA verticals are permanently excluded.** Medical, dental, chiropractic, optometry, veterinary. They do not appear in templates, adapters, UI, or marketing copy. Anything that surfaces them gets deleted on sight.
+
 ## Code Conventions
 - Dashboard navigation: Front Desk / Back Office two-tab layout with sub-views in each tab
 - Toast notification system (dashboard/components/ui/Toast.tsx)
@@ -125,9 +134,9 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - Scheduler view tabs (Staff/Resources/List/Calendar) visible from all views including Staff timeline
 
 ## Migrated, Not Yet Wired
-Several service layers exist in the codebase but are not yet exposed via routes or fully connected. Reading these dirs may suggest features that don't actually function end-to-end:
-- **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing.
-- **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but no caller routes through it. The agent worker no longer hardcodes DynaTire — a per-call `/agent-tools/tenant-config` lookup reads `tenants` directly (2026-05-01). Decision pending: either route the agent through `DatabaseTenantConfigService`, or delete the class.
+Several service layers exist in the codebase but are not yet exposed via routes or fully connected. Reading these dirs may suggest features that don't actually function end-to-end. **Each entry here is on borrowed time** — under the Build Principles above, a layer that can't be tested against a real external surface and isn't requested by a real customer resolves to *delete*. Each entry below is awaiting that call.
+- **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing. Lens result: *delete by default* (see NEEDS-REFACTORING #3); re-add when a metered-tier customer signs up.
+- **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but no caller routes through it. The agent worker no longer hardcodes DynaTire — a per-call `/agent-tools/tenant-config` lookup reads `tenants` directly (2026-05-01). Lens result: *delete by default* unless the per-call lookup shows up as a measurable hot spot worth caching; re-add the class then.
 - **`src/types/`** — `ConsentRecord` and `OptOutRecord` have full type shapes and DB tables, but no consent management UI exists in the dashboard yet.
 
 ## Known Issues (as of April 2026)
