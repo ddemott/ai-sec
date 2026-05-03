@@ -194,6 +194,92 @@ describe('agentTools /service-catalog', () => {
   });
 });
 
+describe('agentTools /tenant-config', () => {
+  it('HAPPY: returns name + timezone for known tenant', async () => {
+    // WHO: LiveKit agent worker on connect, before building the system prompt
+    // WHAT: Route returns the tenant's display name and IANA timezone in
+    //        the standard `{ success: true, result }` envelope
+    // WHEN: Once per call, right after the agent has parsed dispatch metadata
+    //        and decided it can run the full agent
+    // WHERE: src/routes/agentTools.ts /agent-tools/tenant-config route
+    // WHY: Without this, the prompt would greet with "this business" and
+    //       reason about "today" in the wrong zone for any tenant other
+    //       than DynaTire — multi-tenant production was theatrical until
+    //       this route existed and was actually called by the agent
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ name: 'DynaTire', timezone: 'America/Chicago' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.result).toEqual({ name: 'DynaTire', timezone: 'America/Chicago' });
+    expect(queries[0].text).toContain('FROM tenants');
+    expect(queries[0].params).toEqual([TENANT_ID]);
+  });
+
+  it('HAPPY: null timezone falls back to America/Chicago', async () => {
+    // WHO: A tenant row that pre-dates the timezone column having a
+    //       NOT NULL default (legacy seed data)
+    // WHAT: Route substitutes 'America/Chicago' so the agent always
+    //        receives a usable IANA zone string
+    // WHEN: Any call routed for a legacy tenant
+    // WHERE: The `row.timezone || 'America/Chicago'` coalesce in the route
+    // WHY: `Intl.DateTimeFormat` (used by formatDateForPrompt in the
+    //       agent worker) throws on null/empty timezone — would crash the
+    //       agent's prompt assembly for legacy rows and dump the call
+    //       into runFallback. Coalescing here is cheaper than fixing
+    //       every legacy row.
+    const { app } = buildApp({
+      queryResponses: [{ rows: [{ name: 'Legacy Co', timezone: null }] }],
+    });
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
+    expect(res.json().result).toEqual({ name: 'Legacy Co', timezone: 'America/Chicago' });
+  });
+
+  it('SAD: unknown tenant returns success:false with explanatory error', async () => {
+    // WHO: A dispatch rule misconfigured to point at a deleted tenant_id
+    //       (e.g., tenant got soft-deleted but the dispatch rule was never
+    //       cleaned up)
+    // WHAT: Route returns `{ success: false, error: 'Tenant not found' }`
+    //        with HTTP 200 (per /agent-tools/* envelope convention)
+    // WHEN: A call is dispatched for an ID that doesn't exist
+    // WHERE: The empty-rows guard in the route handler
+    // WHY: The agent's `fetchTenantConfig` helper treats any non-success
+    //       envelope as a soft failure → falls back to "this business" /
+    //       America/Chicago. This keeps the call answering coherently
+    //       even when dispatch state has drifted from tenant state.
+    //       Hanging up on the caller because of a stale dispatch rule
+    //       would be much worse than a generic greeting.
+    const { app } = buildApp({ queryResponses: [{ rows: [] }] });
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('Tenant not found');
+  });
+
+  it('SAD: non-UUID tenant_id fails Zod validation before any DB call', async () => {
+    // WHO: A worker bug or LLM hallucination that puts a non-UUID into
+    //       the request body (defense-in-depth — should never happen in
+    //       practice because tenant_id comes from dispatch metadata, but
+    //       a regression in dispatch metadata parsing could surface here)
+    // WHAT: Validation rejects with the route's standard validation
+    //        envelope; queries array stays empty (no DB hit attempted)
+    // WHEN: Any malformed tenant_id reaching the route
+    // WHERE: The Zod GetTenantConfigSchema applied by toolRoute()
+    // WHY: A non-UUID would bypass the prepared statement's UUID type
+    //       check at the DB layer and fail with a confusing pg error.
+    //       Catching it at Zod gives the agent's helper a clean
+    //       success:false envelope to fall back from.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: 'not-a-uuid' });
+    expectValidationFailure(res, queries);
+  });
+});
+
 describe('agentTools /customer-context', () => {
   it('HAPPY: existing customer returns name + joined summaries', async () => {
     // WHO: Returning customer calling back about their oil change

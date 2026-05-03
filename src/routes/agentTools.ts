@@ -104,6 +104,10 @@ const GetServiceCatalogSchema = z.object({
   tenant_id: z.string().uuid(),
 });
 
+const GetTenantConfigSchema = z.object({
+  tenant_id: z.string().uuid(),
+});
+
 const GetAvailableSlotsSchema = z.object({
   tenant_id: z.string().uuid(),
   service_type: z.string().min(1),
@@ -190,6 +194,27 @@ export function registerAgentToolRoutes(
       return reply.status(401).send({ success: false, error: 'Unauthorized' });
     }
   });
+
+  // tenant-config — minimal display info the agent worker needs at the
+  // start of every call (business name + IANA timezone). Read on connect
+  // before the system prompt is built so the LLM greets with the real
+  // business name and reasons about "today" in the tenant's local zone.
+  toolRoute(app, '/agent-tools/tenant-config', GetTenantConfigSchema, async (args, reply) => {
+    const row = await withTenantClient(args.tenant_id, async (client) => {
+      const res = await client.query<{ name: string; timezone: string | null }>(
+        `SELECT name, timezone FROM tenants WHERE id = $1`,
+        [args.tenant_id]
+      );
+      return res.rows[0] ?? null;
+    });
+    if (!row) {
+      return fail(reply, 'Tenant not found');
+    }
+    return ok(reply, {
+      name: row.name,
+      timezone: row.timezone || 'America/Chicago',
+    });
+  }, 'Failed to fetch tenant config');
 
   // get_service_catalog — list public services for the tenant.
   toolRoute(app, '/agent-tools/service-catalog', GetServiceCatalogSchema, async (args, reply) => {

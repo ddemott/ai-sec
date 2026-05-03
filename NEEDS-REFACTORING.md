@@ -24,19 +24,20 @@ If the answer to both is no, the entry resolves to *delete*. Speculative scaffol
 
 ---
 
-### 2. Wire `TenantConfigService` into the agent worker — **REOPENED 2026-05-03**
+### ~~2. Wire `TenantConfigService` into the agent worker~~
 
-**Status: REOPENED 2026-05-03.** Was marked done on 2026-05-01 against commit `e92b3bf`. The 2026-05-03 voice-fallback validation surfaced that this commit lives on a `hold-tenant-config` branch and was **never merged to main**. The agent worker on main (`agent/src/index.ts` lines 41-44) still has the hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block. **Multi-tenant production is still blocked** until either the branch is merged or the work is redone on main.
+**Status: done on main 2026-05-03 (path B from the reopened-on-2026-05-03 entry).** Multi-tenant production no longer blocked by the agent worker's display path.
 
-Path forward — pick one:
-- **A.** Merge `hold-tenant-config` to main. Quick if the branch is still clean against current main; verify no conflicts after the May 2-3 refactors (JWT extraction, pool consolidation, withTenantClient extraction, fallback extraction touched the same `agent/src/index.ts`).
-- **B.** Redo the work directly on main. Reuses the design (the `/agent-tools/tenant-config` route shape, the `agent/src/tenantConfig.ts` module, soft-fail semantics) from the branch as a reference but writes it cleanly against current main.
+The hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block in `agent/src/index.ts` is gone. The agent now calls a new `POST /agent-tools/tenant-config` route during session bootstrap (right after building the tools client, right before `buildSystemPrompt`), and the system prompt + greeting use the returned `name` and `timezone`. Soft-fails to "this business" / America/Chicago on backend error so a config blip never hangs up a live caller.
 
-The 2026-05-01 status text claimed "10 new tests cover both sides: 4 backend + 6 agent-side." Those tests live on the branch only. A merge brings them; a redo needs them rewritten.
+10 new tests cover both sides: 4 backend (`src/agentTools.test.ts` — happy, null-tz fallback, unknown tenant, non-UUID) and 6 agent-side (`agent/src/tenantConfig.test.ts` — happy plus 5 fallback paths: success:false, HTTP 500, missing name, missing timezone, HTTP 401).
 
-#### Original 2026-05-01 status text (kept for context — IT'S NOT TRUE OF MAIN)
+#### History
 
-> The hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block in `agent/src/index.ts` is gone. The agent now calls a new `POST /agent-tools/tenant-config` route during session bootstrap (right before `buildSystemPrompt`), and the system prompt + greeting use the returned `name` and `timezone`. Soft-fails to "this business" / America/Chicago on backend error so a config blip never hangs up a live caller.
+- **2026-05-01:** Originally implemented as commit `e92b3bf` on a `hold-tenant-config` branch. CLAUDE.md and session memory claimed this had landed on main, but the branch was never merged — the agent worker on main still hardcoded DynaTire. Discovered 2026-05-03 during the voice-fallback validation work (NEEDS-REFACTORING #9).
+- **2026-05-03 (path B):** Redone directly on main, reusing the branch's design (route shape, agent module API, soft-fail semantics) as a reference. The branch is now superseded; nothing on it is uniquely valuable. The redo took ~30 minutes because the design was already proven on the branch.
+
+**Caveat (carried over from the original entry).** The route reads `tenants` directly via `withTenantClient`, not through `DatabaseTenantConfigService`. The class in `src/services/tenants/` remains dormant. A separate decision is open: route the agent through that service for caching/extension, or delete the class. The Build Principles "test or delete" lens marks delete as the default unless caching shows up as a measurable hot spot — see CLAUDE.md "Migrated, Not Yet Wired".
 
 10 new tests cover both sides: 4 backend (`src/agentTools.test.ts` — happy, null-tz fallback, unknown tenant, non-UUID) and 6 agent-side (`agent/src/tenantConfig.test.ts` — happy plus 5 fallback paths).
 
@@ -149,7 +150,7 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 ## P2 — Code quality / convention drift
 
 ### ~~9. Switch agent TTS from OpenAI to xAI Grok (Phase 4)~~
-**Status: code-complete 2026-05-01, dead-air guard validated 2026-05-03.** New `agent/src/grokTTS.ts` implements `tts.TTS` (24kHz mono PCM) against `https://api.x.ai/v1/tts`. The primary `voice.AgentSession` in `agent/src/index.ts` now uses GrokTTS. The `runFallback()` last-resort path uses `openai.TTS` so a Grok outage / missing / invalid `XAI_API_KEY` never produces dead-air on a live call. **Important caveat caught during validation:** between 2026-05-01 and 2026-05-03, this entry's "OpenAI TTS in fallback" claim was aspirational — the actual `runFallback()` on main wired GrokTTS in both paths, leaving the dead-air guard non-functional. Closed 2026-05-03 by extracting `runFallback()` to `agent/src/fallback.ts`, switching its TTS to OpenAI, and pinning the OpenAI-not-Grok contract with 13 new 5W-annotated tests in `agent/src/fallback.test.ts`. Voice configurable via `XAI_TTS_VOICE` env (`eve | ara | rex | sal | leo`, default `ara`). 9 unit tests in `agent/src/grokTTS.test.ts` cover request shape (URL, bearer auth, body keys), frame emission with `final:true` on the trailing frame, abort handling, upstream non-2xx → error event, and `updateOptions()` voice swap. `npx tsc --noEmit` clean both backend and agent; agent suite is now 66 passing tests.
+**Status: code-complete 2026-05-01, dead-air guard validated 2026-05-03.** New `agent/src/grokTTS.ts` implements `tts.TTS` (24kHz mono PCM) against `https://api.x.ai/v1/tts`. The primary `voice.AgentSession` in `agent/src/index.ts` now uses GrokTTS. The `runFallback()` last-resort path uses `openai.TTS` so a Grok outage / missing / invalid `XAI_API_KEY` never produces dead-air on a live call. **Important caveat caught during validation:** between 2026-05-01 and 2026-05-03, this entry's "OpenAI TTS in fallback" claim was aspirational — the actual `runFallback()` on main wired GrokTTS in both paths, leaving the dead-air guard non-functional. Closed 2026-05-03 by extracting `runFallback()` to `agent/src/fallback.ts`, switching its TTS to OpenAI, and pinning the OpenAI-not-Grok contract with 13 new 5W-annotated tests in `agent/src/fallback.test.ts`. Voice configurable via `XAI_TTS_VOICE` env (`eve | ara | rex | sal | leo`, default `ara`). 9 unit tests in `agent/src/grokTTS.test.ts` cover request shape (URL, bearer auth, body keys), frame emission with `final:true` on the trailing frame, abort handling, upstream non-2xx → error event, and `updateOptions()` voice swap. `npx tsc --noEmit` clean both backend and agent; agent suite is now 72 passing tests (was 66 before #2's tenant-config redo on 2026-05-03 added 6 more).
 
 **Caveat.** End-to-end validation requires a live PSTN call, currently blocked on Telnyx ticket #2850682. Once that clears, the first call should be on the new `+1-630-937-9478` number with `XAI_API_KEY` set in Railway. If GrokTTS misbehaves, swapping back is a one-line revert in `agent/src/index.ts`.
 

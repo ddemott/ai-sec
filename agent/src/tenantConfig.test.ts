@@ -1,0 +1,143 @@
+/**
+ * Tests for `fetchTenantConfig` — the agent worker's per-call lookup of
+ * the tenant's display name + IANA timezone. Verifies the success path
+ * and each fallback path so a misconfigured / unreachable backend never
+ * crashes a live call.
+ *
+ * The contract under test is fail-soft: anything other than a clean
+ * `{ success: true, result: { name, timezone } }` envelope must yield
+ * the `TENANT_FALLBACK` constant. The whole point of this helper is
+ * that going silent on the caller is worse than greeting with a
+ * generic name.
+ *
+ * Per project convention, every test below carries a 5W
+ * (WHO/WHAT/WHEN/WHERE/WHY) header so a sad-path failure tells the
+ * debugger what behavior was expected and why.
+ */
+import { describe, it, expect } from 'vitest';
+import { ToolsClient } from './toolsClient.js';
+import { fetchTenantConfig, TENANT_FALLBACK } from './tenantConfig.js';
+
+const BACKEND = 'http://localhost:4001';
+const SECRET = 'test-secret';
+const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+
+function clientWith(response: { status: number; body: unknown }) {
+  const fetchImpl: typeof fetch = async () =>
+    new Response(JSON.stringify(response.body), { status: response.status });
+  return new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
+}
+
+describe('fetchTenantConfig', () => {
+  it('HAPPY: returns name + timezone from a successful response', async () => {
+    // WHO: Agent worker on connect for a known tenant
+    // WHAT: Returns the values straight from the envelope's result
+    // WHEN: Once per call, after dispatch metadata parses cleanly and
+    //        the agent has decided it can run the full agent
+    // WHERE: agent/src/tenantConfig.ts fetchTenantConfig() success path
+    // WHY: The system prompt and greeting both depend on these — a
+    //       wrong value here means the caller hears the wrong business
+    //       name or "today" reasoned about in the wrong zone.
+    const client = clientWith({
+      status: 200,
+      body: { success: true, result: { name: 'DynaTire', timezone: 'America/Chicago' } },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg).toEqual({ name: 'DynaTire', timezone: 'America/Chicago' });
+  });
+
+  it('SAD: backend success:false → fallback', async () => {
+    // WHO: A dispatch rule pointing at a deleted or never-existed tenant_id
+    // WHAT: Backend returns { success: false, error: 'Tenant not found' };
+    //        we don't crash — we use TENANT_FALLBACK so the call still
+    //        proceeds with a generic greeting
+    // WHEN: A call routed for a tenant that's been deleted but whose
+    //        dispatch rule wasn't cleaned up
+    // WHERE: The `if (res.ok && ...)` guard in fetchTenantConfig
+    // WHY: Hanging up the caller because of a stale dispatch config is
+    //       a much worse experience than greeting "Thanks for calling
+    //       this business." Soft-fail is the right shape.
+    const client = clientWith({
+      status: 200,
+      body: { success: false, error: 'Tenant not found' },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg).toEqual(TENANT_FALLBACK);
+  });
+
+  it('SAD: HTTP 500 from backend → fallback', async () => {
+    // WHO: Backend mid-deploy, DB connection blip, or any 5xx
+    // WHAT: Treat as a soft failure — fall back so the call still answers
+    // WHEN: Backend has a transient outage during a live call
+    // WHERE: Same fail-soft branch as the success:false case
+    // WHY: A 5xx is always recoverable from the *worker's* perspective
+    //       — we just lose the display config for this one call. The
+    //       LLM-facing tools that follow may also fail loudly (which
+    //       is correct for those), but this lookup specifically should
+    //       never be the reason a call drops.
+    const client = clientWith({
+      status: 500,
+      body: { error: 'Internal Server Error' },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg).toEqual(TENANT_FALLBACK);
+  });
+
+  it('SAD: result missing name → fallback', async () => {
+    // WHO: Defensive guard against a future route refactor that drops
+    //       the name field from the envelope
+    // WHAT: Falls back so `undefined` never reaches the prompt builder
+    // WHEN: A future backend change accidentally removes the field
+    // WHERE: The truthy-check on `res.result?.name` in fetchTenantConfig
+    // WHY: Without this guard, a missing field would surface in the
+    //       greeting as "Thanks for calling undefined" — a louder
+    //       failure than a generic greeting, but a worse one (it
+    //       betrays the broken state to the caller). The fallback is
+    //       quieter and more recoverable.
+    const client = clientWith({
+      status: 200,
+      body: { success: true, result: { timezone: 'America/Chicago' } },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg).toEqual(TENANT_FALLBACK);
+  });
+
+  it('SAD: result missing timezone → fallback', async () => {
+    // WHO: Same defensive shape as the missing-name case
+    // WHAT: Falls back to TENANT_FALLBACK
+    // WHEN: A future route change forgets the timezone field
+    // WHERE: The truthy-check on `res.result?.timezone`
+    // WHY: `Intl.DateTimeFormat(undefined)` doesn't throw but uses the
+    //       *system* default zone, which on Railway is UTC — wrong for
+    //       every actual tenant. Falling back to America/Chicago is at
+    //       least the right zone for our current beta tenant. (If we
+    //       later have non-Central tenants, that's a different fix
+    //       — the route should never lose the field in the first place.)
+    const client = clientWith({
+      status: 200,
+      body: { success: true, result: { name: 'DynaTire' } },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg).toEqual(TENANT_FALLBACK);
+  });
+
+  it('SAD: HTTP 401 (bad agent secret) → fallback', async () => {
+    // WHO: A worker with the wrong AGENT_SECRET (Railway env var rotated
+    //       upstream but not redeployed, or a config typo)
+    // WHAT: Backend responds 401; ToolsClient surfaces ok:false; helper
+    //        falls back so the call doesn't hang
+    // WHEN: Right after deploy of a misconfigured worker
+    // WHERE: Same fail-soft branch as the 5xx case
+    // WHY: An auth misconfig will be caught by other tools that
+    //       hard-fail anyway (book_appointment will refuse, etc.). The
+    //       greeting itself shouldn't be the breakage point — it's the
+    //       least information-bearing utterance and the most user-
+    //       facing. Fall back here, fail loudly elsewhere.
+    const client = clientWith({
+      status: 401,
+      body: { success: false, error: 'Unauthorized' },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg).toEqual(TENANT_FALLBACK);
+  });
+});

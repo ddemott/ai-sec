@@ -30,19 +30,10 @@ import { config } from './config.js';
 import { runFallback } from './fallback.js';
 import { GrokTTS } from './grokTTS.js';
 import { buildSessionContext } from './sessionContext.js';
+import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
-
-// ── Tenant display/timezone lookup ─────────────────────────────────────
-// TODO (Phase 3 polish): fetch tenant name + timezone from the backend on
-// connect so the prompt has real values. For the first live test call we
-// hard-code DynaTire's values — matches the only tenant we can actually
-// SIP-route today.
-const DYNATIRE_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
-const TENANT_DEFAULTS: Record<string, { name: string; timezone: string }> = {
-  [DYNATIRE_TENANT_ID]: { name: 'DynaTire', timezone: 'America/Chicago' },
-};
 
 export default defineAgent({
   prewarm: async (proc) => {
@@ -97,23 +88,24 @@ export default defineAgent({
       return;
     }
 
-    // 3. Build tools with context injected
+    // 3. Build tools client + fetch the tenant's display config. The
+    //    fetch is a single round-trip to /agent-tools/tenant-config; on
+    //    any failure (5xx, 401, missing fields, unknown tenant) it
+    //    soft-falls to "this business" / America/Chicago so a config
+    //    blip never hangs up a live caller. See agent/src/tenantConfig.ts.
     const client = new ToolsClient({
       backendUrl: config.BACKEND_URL,
       agentSecret: config.AGENT_SECRET,
     });
     const tools = buildTools(sessionCtx, client);
+    const tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
 
     // 4. Build prompt with runtime context
-    const defaults = TENANT_DEFAULTS[sessionCtx.tenantId] ?? {
-      name: 'this business',
-      timezone: 'America/Chicago',
-    };
     const instructions = buildSystemPrompt({
-      tenantName: defaults.name,
+      tenantName: tenantConfig.name,
       callerPhone: sessionCtx.callerPhone,
-      currentDate: formatDateForPrompt(new Date(), defaults.timezone),
-      timezone: defaults.timezone,
+      currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
+      timezone: tenantConfig.timezone,
     });
 
     // 5. Start the voice session
@@ -132,7 +124,7 @@ export default defineAgent({
     await session.start({ agent, room: ctx.room });
 
     // 6. Greeting. Kept short — the LLM will warm up from here.
-    session.say(`Thanks for calling ${defaults.name}. How can I help you today?`, {
+    session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
       allowInterruptions: true,
     });
   },

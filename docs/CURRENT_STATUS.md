@@ -7,16 +7,16 @@
 
 Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → LiveKit migration complete (commit `661d21d`, 2026-04-27). Phone provisioned via Telnyx (`+1-630-937-9478`) but currently unreachable from PSTN — see `TICKET_SUPPORT.md` (Telnyx ticket re-submitted 2026-05-01 after the original #2850682 went 4 days without a human response). Voice AI is wired end-to-end and waiting on the carrier issue to validate live.
 
-### May 3 Session: voice fallback path validation + doc-vs-reality findings
+### May 3 Session: voice fallback path validation + tenant-config redo on main
 
 - **Voice fallback path validation** (queue #9). The validation surfaced a real dead-air gap: docs across CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code on main wired GrokTTS in both the primary path AND the fallback — meaning a Grok outage would leave the fallback unable to speak either. Closed by extracting `runFallback()` to `agent/src/fallback.ts` (injectable provider deps), switching its TTS to OpenAI, awaiting `say()` so synthesis failures are caught, and pinning the contract with 13 new 5W tests. Agent suite: 53 → 66 tests, all green.
-- **Doc-vs-reality finding: tenant-config wiring is NOT on main.** The session-20260501 memory (and the May 1-2 entries below) claimed commit `e92b3bf` ("feat(agent): fetch tenant display config from backend at call start") shipped the tenant-config wiring on main. It actually lives on a `hold-tenant-config` branch and was never merged. The agent worker on main still hardcodes `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` at lines 41-44 of `agent/src/index.ts`. **NEEDS-REFACTORING #2 should be reopened** — the work is done on the branch but the prod path doesn't have it. Either merge `hold-tenant-config` or redo the work on main.
+- **Tenant-config wiring redone on main** (closes NEEDS-REFACTORING #2). The voice-fallback validation surfaced that commit `e92b3bf` ("feat(agent): fetch tenant display config from backend at call start"), claimed on 2026-05-01 to close NEEDS-REFACTORING #2, actually lived on a `hold-tenant-config` branch and was never merged to main. Path B taken: redone directly on main, reusing the branch's design as a reference. New `POST /agent-tools/tenant-config` route in `src/routes/agentTools.ts` (4 backend tests). New `agent/src/tenantConfig.ts` module (6 agent-side tests). Hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block deleted from `agent/src/index.ts`. The agent now greets with the real business name and reasons about "today" in the tenant's IANA zone. Soft-fails to "this business" / America/Chicago on any backend error so a config blip never hangs up a live caller. Agent suite: 66 → 72 tests. Backend: 1,475 → 1,479 tests. Multi-tenant production no longer blocked by the agent worker's display path.
 
 ### May 1-2 Sessions: concurrency fix + structural refactors
 
 - **Atomic-booking concurrency hole closed** (commit `55be6dc`). Race confirmed under READ COMMITTED — find-then-insert in `book_appointment_atomic` / `book_with_scheduling_atomic` could pass two `NOT EXISTS` checks before either committed (9/20 winners on resource race, 20/20 on employee race). Closed by two GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`, migration `20260501000000`) plus `exclusion_violation` handlers in both RPCs (`20260501000001`). Race losers receive `TIMESLOT_OCCUPIED` and the agent prompt's "that time just got taken" mapping continues to apply. **Migration not yet applied to production Supabase** — see TODO.md Phase 13 entry for the pre-flight overlap-scan step.
 - **xAI Grok TTS shipped** (commit `f6cc1d4`, 2026-05-01). `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts`; primary session uses Grok, `runFallback()` claimed (but pre-2026-05-03, did not actually) use OpenAI TTS as the dead-air guard — see May 3 entry above. End-to-end PSTN validation still pending Telnyx.
-- **Tenant config wiring (claimed shipped, actually on a branch).** Commit `e92b3bf` ("feat(agent): fetch tenant display config from backend at call start") was claimed to close NEEDS-REFACTORING #2 P0 on 2026-05-01, but the commit lives on a `hold-tenant-config` branch and is not on main. The agent worker on main still hardcodes DynaTire. See May 3 entry above for the doc-vs-reality reconciliation.
+- **Tenant config wiring** — commit `e92b3bf` originally claimed to close NEEDS-REFACTORING #2 P0 on 2026-05-01 actually lived on a `hold-tenant-config` branch and was never merged. Properly redone on main 2026-05-03 — see the May 3 entry above for the actual landing.
 - **`src/index.ts` slimmed 385 → 279 lines** across three commits:
   - `fbc1eaf` — JWT preHandler + PUBLIC_ROUTES + generateToken/verifyToken extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)`.
   - `9b78030` — Pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with the deadlock-prevention timeouts (`statement_timeout`/`lock_timeout`/`idle_in_transaction_session_timeout`); reminder scheduler + communications no longer get a softer pool than routes.
@@ -69,7 +69,7 @@ Phase 13 (Production Readiness) in progress. Backend live on Railway. Vapi → L
 See `docs/TODO.md` for the unified task list.
 
 ### Test Count (verified 2026-05-02 against real Postgres + dashboard)
-- **1,475 backend tests + 498 dashboard tests = 1,973 total**, 0 failures, 2 documented skips
+- **1,479 backend tests + 498 dashboard tests = 1,977 total**, 0 failures, 2 documented skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
@@ -93,7 +93,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,475 backend + 498 dashboard = 1,973 passing + 88 QA assertions | All green (verified 2026-05-02 against real DB + dashboard), 2 documented skips, zero TS errors |
+| **Tests** | 1,479 backend + 498 dashboard = 1,977 passing + 88 QA assertions | All green (verified 2026-05-03 against real DB + dashboard), 2 documented skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

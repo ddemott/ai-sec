@@ -151,14 +151,24 @@ Several service layers exist in the codebase but are not yet exposed via routes 
 - BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
 
 ## Resolved Issues
-### May 3, 2026 Voice Fallback Path Validation
-The validation (queue item #9) surfaced a real dead-air gap. CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had all claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code on main wired GrokTTS in both the primary path and the fallback — meaning a Grok outage would leave the fallback unable to speak. Three closures shipped:
+### May 3, 2026 Voice Fallback Validation + Tenant-Config Redo on Main
+A two-part day. The fallback validation surfaced a documented-but-not-actually-shipped feature, and the same investigation found that NEEDS-REFACTORING #2 (tenant-config wiring) was in the same shape — claimed shipped, actually on a forgotten branch. Both closed.
+
+**Voice fallback path validation** (queue #9). The validation surfaced a real dead-air gap. CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had all claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code on main wired GrokTTS in both the primary path and the fallback — meaning a Grok outage would leave the fallback unable to speak. Three closures shipped:
 
 - **Extracted `runFallback()` to `agent/src/fallback.ts`** with injectable provider deps (the previous inline closure in `agent/src/index.ts` couldn't be unit-tested without standing up a LiveKit runtime).
 - **Switched the fallback TTS to OpenAI** (matches what docs already claimed), keeping GrokTTS in the primary path. Provider keys are passed in as a `FallbackConfig` arg rather than imported, so the function is testable without going through the env-validation `process.exit(1)` path in `./config.js`.
 - **Awaited `session.say()`** so a synthesis-time TTS failure is caught inside the try block instead of escaping as an unhandled promise rejection on the worker.
 
-Pinned by 13 new 5W-annotated tests in `agent/src/fallback.test.ts` covering: happy path message + interruption blocking + start-before-say ordering + VAD wiring; the OpenAI-not-Grok provider-choice contract (3 tests, including a dedicated negative test that proves no GrokTTS instance is constructed); the never-throw contract under each failure mode (session ctor / STT ctor / LLM ctor / TTS ctor / start() reject / say() reject). Agent suite: 53 → 66 tests, all green. Typecheck clean both surfaces.
+Pinned by 13 new 5W-annotated tests in `agent/src/fallback.test.ts` covering: happy path message + interruption blocking + start-before-say ordering + VAD wiring; the OpenAI-not-Grok provider-choice contract (3 tests, including a dedicated negative test that proves no GrokTTS instance is constructed); the never-throw contract under each failure mode (session ctor / STT ctor / LLM ctor / TTS ctor / start() reject / say() reject).
+
+**Tenant-config wiring redone on main** (closes NEEDS-REFACTORING #2). The fallback validation surfaced that commit `e92b3bf` ("feat(agent): fetch tenant display config from backend at call start"), claimed on 2026-05-01 to close NEEDS-REFACTORING #2 P0, actually lived on a `hold-tenant-config` branch and was never merged to main. The agent worker on main still hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS`. Path B (redo on main) taken — reused the branch's design as a reference, wrote it cleanly against current main:
+
+- **New `POST /agent-tools/tenant-config` route** in `src/routes/agentTools.ts` returns `{ name, timezone }` for a given tenant_id; null timezone falls back to `'America/Chicago'`. 4 backend tests cover happy + null-tz + unknown tenant + non-UUID validation.
+- **New `agent/src/tenantConfig.ts` module** with `fetchTenantConfig(client, tenantId)` and a `TENANT_FALLBACK` constant. Returns the fallback on any non-success envelope (success:false / 5xx / 401 / missing fields). 6 agent-side tests cover the happy path and all 5 fallback paths.
+- **Agent worker wired** — `agent/src/index.ts` now calls `await fetchTenantConfig(client, sessionCtx.tenantId)` after building tools and uses the result for both `buildSystemPrompt({ tenantName, timezone, ... })` and the spoken greeting. The hardcoded DynaTire block is deleted. Multi-tenant production no longer blocked by the agent worker's display path.
+
+Backend: 1,475 → 1,479 tests. Agent suite: 53 → 66 → 72 tests. All green. Typecheck clean both surfaces.
 
 ### May 2, 2026 Concurrency Fix + Structural Refactors + Test-or-Delete Policy
 A 12-commit unblocked-work session that closed a real launch blocker, slimmed `src/index.ts` by 28%, and captured the underlying decision principle as a durable rule.
@@ -191,7 +201,7 @@ A 12-commit unblocked-work session that closed a real launch blocker, slimmed `s
 - `65b0cc2` — Yesterday's journal-loop batch committed; one already-shipped entry flagged STATUS: ALREADY SHIPPED inline.
 - `444dad1` — Last three pre-existing test files (`index.test.ts`, `normalizer.test.ts`, `scheduling.test.ts`) gained 5W diagnostic comments — 47 tests annotated; the 5W convention is now universal.
 
-**Test state at session close:** 1,475 backend + 498 dashboard = 1,973 passing + 2 documented skips, 0 failures, typecheck clean both surfaces. Working tree clean, all 12 commits pushed to `origin/main`.
+**Test state at session close (May 2):** 1,475 backend + 498 dashboard = 1,973 passing + 2 documented skips, 0 failures, typecheck clean both surfaces. Working tree clean, all 12 commits pushed to `origin/main`. (May 3 work added 4 backend + 19 agent tests on top — see the May 3 entry above.)
 
 ### April 24, 2026 UX Review & Polish Batch
 A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped across commits `dac97cb`, `91c9903`, `7042a8e`, `3954d4c` + supporting refactors (`2f74991`). Deferred items need design input (admin-mode color, theme-selector placement, first-run nav callout) or bigger investment (skeleton screens, Remember me refresh tokens).
@@ -253,7 +263,7 @@ A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped a
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,475 backend tests + 498 dashboard tests = 1,973 total passing (verified 2026-05-02 against real DB + dashboard, 2 documented skips). 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,479 backend tests + 498 dashboard tests = 1,977 total passing (verified 2026-05-03 against real DB + dashboard, 2 documented skips). 72 agent tests. 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 
