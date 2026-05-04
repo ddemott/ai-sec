@@ -50,6 +50,9 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      - name: Verify CLAUDE.md (drift detector — NEEDS-REFACTORING #13)
+        run: npm run verify:claude-md
+
       - name: Run backend tests
         run: npm test
 

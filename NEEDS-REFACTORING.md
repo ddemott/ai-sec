@@ -196,14 +196,23 @@ Net: `src/index.ts` 385 → 279 lines. 1,495 backend tests green throughout.
 
 ---
 
-### 13. CLAUDE.md and MEMORY.md drift detection — open, not started (now extra-relevant after 2026-05-03)
-**Status: open, not started.** Pickable today. **Extra weight:** the 2026-05-03 voice-fallback validation found two separate "claimed shipped, actually wasn't" doc lies (the OpenAI-TTS-fallback claim, and the tenant-config commit on `hold-tenant-config`). A `verify-claude-md.ts` drift-detector at the *commit-on-main* level (not just file-counts) would have caught both — for example, a check that asserts each `commit \`<hash>\`` reference in the docs is reachable from `main`.
+### ~~13. CLAUDE.md and MEMORY.md drift detection~~
+**Status: done 2026-05-04.** Option A shipped — `scripts/verify-claude-md.ts` is a drift-detector that runs on every backend CI job (`.github/workflows/ci.yml` → "Verify CLAUDE.md" step) and is also runnable locally via `npm run verify:claude-md`.
 
-**Problem.** Both files are hand-maintained. Today's edit caught the route count off by one (24 vs 25), the migration count off by one (76 vs 77), and 8 missing directories. This drift will recur every time someone adds a route or service.
+Five checks land:
 
-**Options.**
-- **A — Scripted derivation.** A `scripts/verify-claude-md.ts` that compares CLAUDE.md's claims (route count, migration count, listed dirs) against the filesystem and exits non-zero on drift. Wire to a pre-commit hook or CI job.
-- **B — Trim the auto-rotting parts.** Remove specific counts/lists from CLAUDE.md and let readers run `ls src/routes` themselves. Keep CLAUDE.md to genuinely durable architectural facts.
+1. **Route count** — every `(N) route modules?` claim in the current-state portion of CLAUDE.md must match the live count of `.ts` files under `src/routes/` (excluding tests + `routeHelpers.ts`).
+2. **Migration count** — `(N) SQL migrations?` claims must match `supabase/migrations/*.sql`.
+3. **Industry templates** — `(N) industry YAML bundles?` must match `src/templates/*.{yaml,yml}`.
+4. **Directory existence** — every `\`/path\`` in the `## Key Directories` section must resolve on disk.
+5. **Commit reachability** — every `commit \`<hash>\`` reference (and every bare backticked 7-12-hex-with-letter token) must be reachable from `main` via `git merge-base --is-ancestor`. This is the headline win — it would have caught the 2026-05-03 lie where `e92b3bf` was claimed shipped on 2026-05-01 but actually lived on the never-merged `hold-tenant-config` branch.
+
+Two design calls worth noting:
+
+- **Numeric counts skip the `## Resolved Issues` archive** (via `stripHistoricalSections`). Historical post-mortems are date-locked — "BUG-017 split the monolith into 20 route modules" was true in March 2026 and re-flagging it every time routes grow is the wrong signal. Commit-reachability still scans the FULL document because historical "I shipped X in commit Y" claims are exactly the kind that can lie.
+- **`<!-- verify-claude-md: unmerged -->` opt-out marker.** A backticked hash followed by that HTML comment is recognized as expected-unreachable — used today on the `e92b3bf` reference itself, which the doc legitimately mentions to explain the 2026-05-03 incident. The marker renders as nothing in Markdown so prose stays clean.
+
+Pure check functions are exported and tested in `scripts/verify-claude-md.test.ts` — 25 tests, happy + sad with 5W diagnostic comments, no I/O (filesystem and git access are injected).
 
 ---
 
