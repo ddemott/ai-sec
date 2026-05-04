@@ -58,18 +58,7 @@ function findRoute(routes: RouteCapture[], path: string) {
   return routes.find(r => r.path === path)!;
 }
 
-function createMockPoolClient() {
-  const queryResponses: Array<{ rows: any[]; rowCount?: number }> = [];
-  const client = {
-    query: vi.fn(async () => queryResponses.shift() || { rows: [], rowCount: 0 }),
-    release: vi.fn(),
-  };
-  return { client, queryResponses };
-}
-
-function createMockPool(mockClient: any) {
-  return { connect: vi.fn(async () => mockClient) } as any;
-}
+import { createMockClient, createMockPool } from './test-utils-mock';
 
 describe("Auth Routes — Handler-Level", () => {
   let registerAuthRoutes: any;
@@ -87,7 +76,7 @@ describe("Auth Routes — Handler-Level", () => {
 
   describe("POST /login handler", () => {
     it("returns token on valid credentials (WHO: user | WHAT: email+password → JWT | WHERE: /login handler | WHY: successful auth grants session)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -124,7 +113,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)", async () => {
-      const { client } = createMockPoolClient();
+      const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -140,7 +129,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 401 when user not found (WHO: unknown email | WHAT: no DB row | WHERE: /login | WHY: generic error prevents email enumeration)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -158,7 +147,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 401 on wrong password (WHO: user | WHAT: bcrypt compare fails | WHERE: /login | WHY: generic error doesn't reveal valid emails)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -195,7 +184,7 @@ describe("Auth Routes — Handler-Level", () => {
 
   describe("POST /register handler", () => {
     it("returns 400 on missing fields (WHO: incomplete form | WHAT: Zod rejects | WHERE: /register | WHY: prevents partial tenant creation)", async () => {
-      const { client } = createMockPoolClient();
+      const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -211,7 +200,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 400 on short password (WHO: new user | WHAT: password < 6 chars | WHERE: /register | WHY: minimum password strength)", async () => {
-      const { client } = createMockPoolClient();
+      const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -229,7 +218,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 409 on duplicate email (WHO: returning user | WHAT: email exists in users table | WHERE: /register | WHY: prevents duplicate accounts)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -255,7 +244,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("creates tenant+user and returns 201 (WHO: new business | WHAT: full registration | WHERE: /register | WHY: self-service onboarding)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -329,7 +318,7 @@ describe("Auth Routes — Handler-Level", () => {
       const sysmail = await import('./services/communications/systemEmail');
       vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
 
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -357,7 +346,7 @@ describe("Auth Routes — Handler-Level", () => {
       const sysmail = await import('./services/communications/systemEmail');
       vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
 
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -376,7 +365,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 400 when email is malformed (WHO: garbage input | WHAT: Zod rejects | WHERE: /forgot-password | WHY: skip DB lookup on bad data)", async () => {
-      const { client } = createMockPoolClient();
+      const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -403,7 +392,7 @@ describe("Auth Routes — Handler-Level", () => {
 
   describe("POST /reset-password handler", () => {
     it("updates password + marks token used on valid token (WHO: user with reset link | WHAT: completes reset | WHERE: /reset-password | WHY: changes credentials and forces re-login of other sessions)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -438,7 +427,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 400 when token is invalid/expired (WHO: stale link clicker | WHAT: token not found | WHERE: /reset-password | WHY: don't change password on bad token)", async () => {
-      const { client, queryResponses } = createMockPoolClient();
+      const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -461,7 +450,7 @@ describe("Auth Routes — Handler-Level", () => {
     });
 
     it("returns 400 when password is too short (WHO: user picks weak password | WHAT: Zod rejects <6 chars | WHERE: /reset-password | WHY: enforce minimum strength)", async () => {
-      const { client } = createMockPoolClient();
+      const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);

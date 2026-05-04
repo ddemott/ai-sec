@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import Fastify from 'fastify';
 import crypto from 'crypto';
 import type { FastifyInstance } from 'fastify';
-import type { PoolClient } from 'pg';
+import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock jobberClient and jobberSync modules before importing routes ---
 vi.mock('./services/jobberClient', () => ({
@@ -34,32 +34,6 @@ const WEBHOOK_SECRET = 'whsec_test_secret_123';
 
 // --- Mock helpers ---
 
-interface MockQuery {
-  text: string;
-  params: unknown[];
-}
-
-function createMockClient() {
-  const queries: MockQuery[] = [];
-  const queryResponses: Array<{ rows: unknown[]; rowCount?: number }> = [];
-
-  const mockClient = {
-    query: vi.fn(async (text: string, params?: unknown[]) => {
-      queries.push({ text, params: params || [] });
-      return queryResponses.shift() || { rows: [], rowCount: 0 };
-    }),
-    release: vi.fn(),
-  };
-
-  return { mockClient, queries, queryResponses };
-}
-
-function createMockPool(mockClient: ReturnType<typeof createMockClient>['mockClient']) {
-  return {
-    connect: vi.fn(async () => mockClient),
-  } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-}
-
 function computeHmac(body: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(body, 'utf8').digest('hex');
 }
@@ -76,13 +50,7 @@ function buildApp() {
   queryResponses = created.queryResponses;
 
   const mockPool = createMockPool(mockClient);
-
-  // withTenantClient mock: calls fn with mockClient directly (no RLS setup needed)
-  const mockWithTenantClient = vi.fn(
-    async <T>(_tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> => {
-      return fn(mockClient as unknown as PoolClient);
-    }
-  );
+  const mockWithTenantClient = createMockWithTenantClient(mockClient);
 
   const fastify = Fastify({ logger: false });
 

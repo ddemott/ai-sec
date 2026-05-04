@@ -57,31 +57,7 @@ function makeAppointment(overrides: Record<string, any> = {}) {
   };
 }
 
-interface MockQuery {
-  text: string;
-  params: any[];
-}
-
-function createMockClient() {
-  const queries: MockQuery[] = [];
-  const queryResponses: Array<{ rows: any[]; rowCount?: number }> = [];
-
-  const mockClient = {
-    query: vi.fn(async (text: string, params?: any[]) => {
-      queries.push({ text, params: params || [] });
-      return queryResponses.shift() || { rows: [], rowCount: 0 };
-    }),
-    release: vi.fn(),
-  };
-
-  return { mockClient, queries, queryResponses };
-}
-
-function createMockPool(mockClient: any) {
-  return {
-    connect: vi.fn(async () => mockClient),
-  } as any;
-}
+import { createMockClient, createMockPool } from './test-utils-mock';
 
 const silentLogger = {
   warn: vi.fn(),

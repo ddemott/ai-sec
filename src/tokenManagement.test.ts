@@ -16,20 +16,9 @@ import {
   type SyncLogger,
 } from "./services/tokenManagement";
 
+import { createMockClient, createMockPool } from './test-utils-mock';
+
 // ── Mock helpers ─────────────────────────────────────────────────────
-
-function createMockClient() {
-  const queryResponses: Array<{ rows: any[]; rowCount?: number }> = [];
-  const mockClient = {
-    query: vi.fn(async () => queryResponses.shift() || { rows: [], rowCount: 0 }),
-    release: vi.fn(),
-  };
-  return { mockClient, queryResponses };
-}
-
-function createMockPool(mockClient: any) {
-  return { connect: vi.fn(async () => mockClient) } as any;
-}
 
 function makeSilentLogger(): SyncLogger & { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> } {
   return { warn: vi.fn(), error: vi.fn(), info: vi.fn() };

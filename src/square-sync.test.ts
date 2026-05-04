@@ -82,39 +82,17 @@ function makeSquareCustomerData(overrides: Record<string, any> = {}): square.Squ
   };
 }
 
-interface MockQuery {
-  text: string;
-  params: any[];
-}
+import { createMockClient as createBaseMockClient, createMockPool } from './test-utils-mock';
 
+// Wrap the shared mock client with a getDataQueries() helper that filters out
+// session-variable queries (vi-mock-calls shape, indexed positionally).
 function createMockClient() {
-  const queries: MockQuery[] = [];
-  const queryResponses: Array<{ rows: any[]; rowCount?: number }> = [];
-
-  const mockClient = {
-    query: vi.fn(async (text: string, params?: any[]) => {
-      queries.push({ text, params: params || [] });
-      // Handle session variable queries (version tracking context) - these don't consume from queue
-      if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
-        return { rows: [], rowCount: 0 };
-      }
-      return queryResponses.shift() || { rows: [], rowCount: 0 };
-    }),
-    release: vi.fn(),
-  };
-
-  // Helper to get non-session-variable queries (for test assertions)
-  const getDataQueries = () => mockClient.query.mock.calls.filter(
-    (call: any[]) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET')
-  );
-
-  return { mockClient, queries, queryResponses, getDataQueries };
-}
-
-function createMockPool(mockClient: any) {
-  return {
-    connect: vi.fn(async () => mockClient),
-  } as any;
+  const base = createBaseMockClient();
+  const getDataQueries = () =>
+    (base.mockClient.query as unknown as { mock: { calls: any[][] } }).mock.calls.filter(
+      (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
+    );
+  return { ...base, getDataQueries };
 }
 
 const silentLogger = {

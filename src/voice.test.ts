@@ -1,44 +1,13 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import type { PoolClient } from 'pg';
 import { registerVoiceRoutes } from './routes/voice';
+import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Constants ---
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const CUSTOMER_ID = '11111111-2222-3333-8444-555555555555'; // Valid UUID format (4th segment starts with 8)
 const CALL_ID = 'call-abc-123';
-
-// --- Mock helpers ---
-
-interface MockQuery {
-  text: string;
-  params: unknown[];
-}
-
-function createMockClient() {
-  const queries: MockQuery[] = [];
-  const queryResponses: Array<{ rows: unknown[]; rowCount?: number }> = [];
-
-  const mockClient = {
-    query: vi.fn(async (text: string, params?: unknown[]) => {
-      queries.push({ text, params: params || [] });
-      return queryResponses.shift() || { rows: [], rowCount: 0 };
-    }),
-    release: vi.fn(),
-  };
-
-  return { mockClient, queries, queryResponses };
-}
-
-function createMockPool(mockClient: ReturnType<typeof createMockClient>['mockClient']) {
-  return {
-    connect: vi.fn(async () => mockClient),
-    query: vi.fn(async (text: string, params?: unknown[]) => {
-      return mockClient.query(text, params);
-    }),
-  } as any;
-}
 
 // --- App builder ---
 
@@ -53,13 +22,7 @@ function buildApp() {
   queryResponses = created.queryResponses;
 
   mockPool = createMockPool(mockClient);
-
-  // withTenantClient mock: calls fn with mockClient directly
-  const mockWithTenantClient = vi.fn(
-    async <T>(_tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> => {
-      return fn(mockClient as unknown as PoolClient);
-    }
-  );
+  const mockWithTenantClient = createMockWithTenantClient(mockClient);
 
   const fastify = Fastify({ logger: false });
 
