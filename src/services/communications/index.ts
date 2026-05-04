@@ -4,7 +4,6 @@ import { EmailService } from './emailService.js';
 import { SMSService } from './smsService.js';
 import { AppointmentCommunicationService } from './appointmentService.js';
 import type { EmailMessage, SMSMessage, CommunicationResult, AppointmentData } from './types.js';
-import { UsageTrackingService } from '../usage/UsageTrackingService.js';
 
 /**
  * Main CommunicationService - Orchestrates all communication channels
@@ -18,10 +17,9 @@ export class CommunicationService {
   constructor(
     private configService: TenantConfigService,
     private consentService?: ConsentService,
-    private usageTracker?: UsageTrackingService,
   ) {
     this.emailService = new EmailService(configService, consentService);
-    this.smsService = new SMSService(configService, consentService, usageTracker);
+    this.smsService = new SMSService(configService, consentService);
     this.appointmentService = new AppointmentCommunicationService(configService, consentService);
   }
 

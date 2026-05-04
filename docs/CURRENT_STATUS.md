@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-03 (voice fallback dead-air guard validated; tenant-config wiring redone on main; doc in-flight markers added)
+**Last updated:** 2026-05-04 (NEEDS-REFACTORING #3 closed — UsageTrackingService deleted under the test-or-delete lens)
 
 ---
 
@@ -19,9 +19,12 @@ Code shipped to `main` and merged on origin, but not yet exercised in production
 | **Voice fallback dead-air guard** | IN FLIGHT (validation pending) | Unit-level closed 2026-05-03 (commit `6488dc4`); 13 5W tests pin the contract. Live-PSTN exercise of the fallback message still blocked on the Telnyx unblock above. | Live call once Telnyx clears. |
 | **Tenant-config display path** | IN FLIGHT (validation pending) | Code on main 2026-05-03 (commit `2119451`); 10 tests green. Live-PSTN exercise pending Telnyx. | Live call once Telnyx clears. |
 | **Beta with DynaTire** | IN FLIGHT (external, transitive) | Blocked transitively on the Telnyx unblock. | Auto-unblocks when Telnyx clears. |
-| **NEEDS-REFACTORING #3 (UsageTrackingService)** | IN FLIGHT (decision pending) | Default disposition under "test or delete" lens is delete. Claude can execute in ~30 min. | User green-lights the deletion. |
 | **NEEDS-REFACTORING #14 (`pw.txt`)** | IN FLIGHT (decision pending) | Gitignored, never committed; could be a real password or a deliberate scratch note. | User confirms whether to keep or delete. |
 | **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
+
+### May 4 Session: NEEDS-REFACTORING #3 closed (UsageTrackingService deleted)
+
+- **`src/services/usage/` deleted** — UsageTrackingService.ts was an in-memory map with no DB persistence, no `usage_events` table, no Stripe metered-billing reporter, and no metered-tier customer requesting it. Resolved under the test-or-delete lens (same disposition as #1, the CRM adapters). Also deleted `src/types/usage.ts` (`Provider` enum + `UsageRecord` interface had no other consumers). The optional `usageTracker?` constructor param was removed from `CommunicationService` and `SMSService`; no production caller was passing it (`src/routes/communications.ts`, `src/services/reminders/index.ts`, and `communications.test.ts` all used the 2-arg form). Re-add when a metered-tier customer signs up — the shape will need to change anyway, so re-implementing from scratch is cheaper than evolving the stub.
 
 ### May 3 Session: voice fallback path validation + tenant-config redo on main
 

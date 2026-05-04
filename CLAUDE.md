@@ -30,14 +30,13 @@ See `docs/FRAMEWORK_MIGRATIONS.md` for the full index. Summary:
 - `/src/routes` - Modularized route handlers (auth, tenants, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, agentTools)
 - `/src/routes/routeHelpers.ts` - Shared route utilities (sendValidationError, sendNotFound, sendSuccess, sendConflict, assertRowAffected, requireValidUUID, parseDateRange, parsePagination)
 - `/src/services` - Service layer. Flat files at root: telnyxNumbers.ts [provisioning], telnyxSms.ts [OTP], googleCalendar.ts, outlookCalendar.ts, calendarSync.ts, syncOrchestrator.ts, nameUtils.ts, oauthCallbackFactory.ts, tokenManagement.ts, plus the legacy CRM clients (jobberClient/Sync, hubspotClient/Sync, squareClient/Sync, servicetitanClient/Sync). Subdirectories add migrated layers — see `/src/services` subdirs below.
-- `/src/services/communications/` - Multi-channel comms engine. CommunicationService orchestrator + emailService, smsService, appointmentService, emailTemplates (Handlebars), ProviderRegistry, TwilioAdapter, MockAdapter, TelephonyProvider.interface. Consent-gated via ConsentService, usage-tracked via UsageTrackingService.
+- `/src/services/communications/` - Multi-channel comms engine. CommunicationService orchestrator + emailService, smsService, appointmentService, emailTemplates (Handlebars), ProviderRegistry, TwilioAdapter, MockAdapter, TelephonyProvider.interface. Consent-gated via ConsentService.
 - `/src/services/reminders/` - Appointment reminder pipeline. ReminderService schedules on appointment create; reminderProcessor delivers via CommunicationService; reminderRepository handles DB CRUD. Worker pulls from `reminder_schedules` table.
 - `/src/services/tenants/` - TenantConfigService (in-memory + DB-backed). The class is still dormant (no callers), but the *need* it was meant to address is now solved — agent worker fetches `name`/`timezone` per call via `/agent-tools/tenant-config` (2026-05-01).
-- `/src/services/usage/` - UsageTrackingService stub. Records SMS/calls/emails in memory only; no DB persistence, no Stripe sync yet (TODO).
 - `/src/database/index.ts` - Canonical pool + RLS scope. `getPool()` is a lazy singleton with the deadlock-prevention timeouts (`statement_timeout=30000`, `lock_timeout=10000`, `idle_in_transaction_session_timeout=60000`, `max=10`) — Fastify routes, the reminder scheduler, and the communications service all share this one instance so the safety net is uniform. `createWithTenantClient(pool)` factory returns the per-request RLS-scoped helper that `src/index.ts` injects into every route module. Also exposes the `DatabaseService` interface used by communications/reminders.
 - `/src/workers/reminderScheduler.ts` - Background job processor. Polls every 60s, batches up to 100 reminders, runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`. Started in `index.ts`, stopped on SIGTERM.
 - `/src/templates/` - 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). HIPAA verticals are permanently excluded — there is no medical_v1. Each bundle: prompt template, first message, voice ID, field labels, example services. Loaded by tenants provisioning route.
-- `/src/types/` - Shared TS interfaces. ConsentRecord, OptOutRecord (GDPR/TCPA), ReminderSchedule/ReminderData/AppointmentForReminder, UsageRecord + Provider enum, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
+- `/src/types/` - Shared TS interfaces. ConsentRecord, OptOutRecord (GDPR/TCPA), ReminderSchedule/ReminderData/AppointmentForReminder, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
 - `/src/middleware.ts` - Shared middleware (withHandler decorator, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, requireTenantId, requireAuth, logEvent/logWarning/logError). The JWT preHandler — PUBLIC_ROUTES bypass list, Bearer token decode, password-rotation check — lives here, not in `src/index.ts`.
 - `/agent` - LiveKit Agents worker (Node). Entry `src/index.ts`, prompt `src/prompt.ts`, tool client `src/toolsClient.ts`, session context `src/sessionContext.ts`, tools `src/tools.ts` (10 tools wired to `/agent-tools/*`), fallback voice path `src/fallback.ts` (OpenAI TTS — dead-air guard for when the primary GrokTTS path can't run).
 - `/dashboard` - Next.js frontend (components/, lib/, app/) — landing page at `/`, dashboard app at `/dashboard`
@@ -141,7 +140,6 @@ These are durable rules-of-engagement that override the urge to add code "for th
 
 ## Migrated, Not Yet Wired
 Several service layers exist in the codebase but are not yet exposed via routes or fully connected. Reading these dirs may suggest features that don't actually function end-to-end. **Each entry here is on borrowed time** — under the Build Principles above, a layer that can't be tested against a real external surface and isn't requested by a real customer resolves to *delete*. Each entry below is awaiting that call.
-- **`src/services/usage/UsageTrackingService.ts`** — In-memory only. Does not persist to DB, does not feed Stripe billing. Lens result: *delete by default* (see NEEDS-REFACTORING #3); re-add when a metered-tier customer signs up.
 - **`src/services/tenants/`** — `DatabaseTenantConfigService` is implemented but no caller routes through it. The agent worker no longer hardcodes DynaTire — a per-call `/agent-tools/tenant-config` lookup reads `tenants` directly (2026-05-01). Lens result: *delete by default* unless the per-call lookup shows up as a measurable hot spot worth caching; re-add the class then.
 - **`src/types/`** — `ConsentRecord` and `OptOutRecord` have full type shapes and DB tables, but no consent management UI exists in the dashboard yet.
 
@@ -157,6 +155,16 @@ Several service layers exist in the codebase but are not yet exposed via routes 
 - BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs
 
 ## Resolved Issues
+### May 4, 2026 UsageTrackingService Deleted (NEEDS-REFACTORING #3)
+Closed NEEDS-REFACTORING #3 under the test-or-delete lens — same disposition pattern as the 2026-05-02 CRM-adapter deletion (#1). `src/services/usage/UsageTrackingService.ts` was an in-memory map with no DB persistence, no `usage_events` table, no Stripe metered-billing reporter, and no metered-tier customer asking for it. Deleted:
+
+- `src/services/usage/` directory (UsageTrackingService.ts + UsageTrackingService.test.ts).
+- `src/types/usage.ts` (the `Provider` enum + `UsageRecord` interface had only the deleted files as consumers).
+- The optional `usageTracker?: UsageTrackingService` constructor param on `CommunicationService` and `SMSService`. No production caller passed it (every `new CommunicationService(...)` site — `src/routes/communications.ts`, `src/services/reminders/index.ts`, `src/services/communications/communications.test.ts` — used the 2-arg form).
+- The `if (this.usageTracker) { ... await this.usageTracker.trackSMS(...) }` block inside `SMSService.sendSMS()`.
+
+Re-add when a metered-tier customer signs up. The shape will need to change anyway (real DB persistence + Stripe meter event push), so re-implementing from scratch is cheaper than evolving the stub.
+
 ### May 3, 2026 Voice Fallback Validation + Tenant-Config Redo on Main
 A two-part day. The fallback validation surfaced a documented-but-not-actually-shipped feature, and the same investigation found that NEEDS-REFACTORING #2 (tenant-config wiring) was in the same shape — claimed shipped, actually on a forgotten branch. Both closed.
 

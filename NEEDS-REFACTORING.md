@@ -22,7 +22,7 @@ Every "wire this dormant layer or delete it" entry below resolves through the sa
 1. **Can it be tested against a real external surface today?** A real CRM account, a real Stripe metered-billing event, a real provider API. Mocked-API tests don't count.
 2. **Is there a real customer or sales conversation asking for it?** "Pro tier roadmap" and "we might need this someday" don't qualify.
 
-If the answer to both is no, the entry resolves to *delete*. Speculative scaffolding is more expensive than re-adding the layer when a real consumer arrives. Resolved that way for #1 (CRM adapters, deleted 2026-05-02). The same lens applies to #3 (UsageTrackingService) and to any future "dormant layer" entries.
+If the answer to both is no, the entry resolves to *delete*. Speculative scaffolding is more expensive than re-adding the layer when a real consumer arrives. Resolved that way for #1 (CRM adapters, deleted 2026-05-02) and #3 (UsageTrackingService, deleted 2026-05-04), and applies to any future "dormant layer" entries.
 
 ---
 
@@ -62,20 +62,8 @@ The hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block in `agent/src/index
 
 ---
 
-### 3. Resolve `UsageTrackingService` (in-memory stub vs. real billing) — IN FLIGHT (decision pending)
-**Status: IN FLIGHT (decision pending) — needs user green-light before execution.** The Build Principles "test or delete" lens marks Option B (delete) as the default disposition; Claude can execute it in ~30 min the same way the CRM-adapter deletion (#1) was executed on 2026-05-02. Just needs an explicit go-ahead.
-
-**Problem.** `src/services/usage/UsageTrackingService.ts` records SMS/calls/emails to an in-memory map. No DB persistence, no Stripe sync. CommunicationService thinks it's tracking usage; nothing downstream actually reads the result.
-
-**Why P0.** Pretends to support per-tenant billing. The longer it lives in this state, the more callers couple to a stub interface that will need to change when real persistence lands.
-
-**Resolution lens applied.** Following the rule from #1: *can it be tested against a real Stripe metered-billing event today?* No — there's no `usage_events` table, no metered-billing reporter, no Stripe metered prices configured. *Is a customer asking for usage-based pricing?* Solo and Growth tiers are flat-rate ($129/$279/mo). Pro/Enterprise IDs sit in env without positioning. **Default disposition: delete.** Re-add when a real customer signs up for a metered tier.
-
-**Options.**
-- **A — Implement.** Add a `usage_events` table, swap the in-memory map for DB inserts, add a Stripe metered-billing reporter that batches events on a cron. Justified only by a real metered-tier customer.
-- **B — Delete and unwire.** Remove the service, drop the calls from `CommunicationService` and any other callers. Re-add when real billing becomes a near-term need. **This is the default under the resolution lens.**
-
-**Files.** `src/services/usage/`, all callers (search for `UsageTrackingService`).
+### ~~3. Resolve `UsageTrackingService` (in-memory stub vs. real billing)~~
+**Status: done 2026-05-04.** Option B — `src/services/usage/` deleted (UsageTrackingService.ts + its test). `src/types/usage.ts` deleted (`Provider` enum + `UsageRecord` interface had no other consumers). Optional `usageTracker?` constructor param removed from `CommunicationService` and `SMSService`; no production caller had been passing it anyway (`src/routes/communications.ts`, `src/services/reminders/index.ts`, `communications.test.ts` all used the 2-arg form). The `await this.usageTracker.trackSMS(...)` block in `SMSService.sendSMS()` removed. Re-add when a metered-tier customer signs up — the shape will need to change for real DB persistence + Stripe meter event push, so re-implementing is cheaper than evolving the stub. Same lens disposition as #1 (CRM adapters, deleted 2026-05-02).
 
 ---
 

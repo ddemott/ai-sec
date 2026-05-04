@@ -28,8 +28,8 @@
 
 ### Phase 2: Technical Debt Cleanup (1–2 weeks)
 
-- Resolve the dormant CRM adapter layer (migrate or delete).
-- Clean up UsageTrackingService (implement or remove).
+- Resolve the dormant CRM adapter layer (migrate or delete). [done 2026-05-02 — deleted, NEEDS-REFACTORING #1]
+- Clean up UsageTrackingService (implement or remove). [done 2026-05-04 — deleted, NEEDS-REFACTORING #3]
 - Finish documentation sweeps (remove remaining stale Vapi references).
 - Address top items from NEEDS-REFACTORING.md.
 
@@ -67,8 +67,8 @@
 
 ### III. Code Quality & Refactoring
 
-- [ ] CRM adapter layer resolved (migrate or delete) — `[tracked]` NEEDS-REFACTORING #1 (P0)
-- [ ] UsageTrackingService implemented or removed — `[tracked]` NEEDS-REFACTORING #3 (P0)
+- [x] CRM adapter layer resolved (migrate or delete) — done 2026-05-02 (deleted), NEEDS-REFACTORING #1
+- [x] UsageTrackingService implemented or removed — done 2026-05-04 (deleted), NEEDS-REFACTORING #3
 - [ ] Remaining dormant code cleaned up — `[tracked]` NEEDS-REFACTORING (multiple entries; CLAUDE.md "Migrated, Not Yet Wired")
 - [ ] TypeScript strictness improvements applied — `[tracked]` TODO.md "Code Quality → Type Safety" (dashboard test mocks `any` cleanup)
 - [ ] Soft-delete filtering consistent across queries — `[tracked]` TODO.md "Soft Delete Filtering (BUG-038)"

@@ -252,5 +252,6 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 
 - `docs/ARCHITECTURE_REVIEW_20260403.md` - Overall architecture
 - `CLAUDE.md` - Project conventions (incl. "Migrated, Not Yet Wired" section)
-- `NEEDS-REFACTORING.md` #1, #2, #3 — open decisions about CRM adapters,
-  TenantConfigService wiring, and UsageTrackingService
+- `NEEDS-REFACTORING.md` — historical decisions about CRM adapters (#1,
+  deleted 2026-05-02), TenantConfigService wiring (#2, redone on main
+  2026-05-03), and UsageTrackingService (#3, deleted 2026-05-04)

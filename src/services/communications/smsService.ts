@@ -1,8 +1,6 @@
 import type { TenantConfigService } from '../tenants/index.js';
 import type { ConsentService } from '../consentService.js';
 import type { SMSMessage, CommunicationResult } from './types.js';
-import { UsageTrackingService } from '../usage/UsageTrackingService.js';
-import { Provider } from '../../types/usage.js';
 import { providerRegistry } from './ProviderRegistry.js';
 
 export class SMSService {
@@ -11,7 +9,6 @@ export class SMSService {
   constructor(
     private configService: TenantConfigService,
     private consentService?: ConsentService,
-    private usageTracker?: UsageTrackingService,
   ) {
     if (this.isSimulationMode() && !SMSService.simulationNoticeLogged) {
       console.warn('🔕 SMS Service running in simulation mode.');
@@ -80,18 +77,6 @@ export class SMSService {
       console.log(
         `✅ SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`,
       );
-
-      // Track SMS usage
-      if (this.usageTracker) {
-        try {
-          // Map provider name to Usage Provider enum
-          const usageProvider = provider.getName() === 'twilio' ? Provider.TWILIO : Provider.MOCK;
-          await this.usageTracker.trackSMS(tenantId, 'outbound', result.messageSid, usageProvider);
-        } catch (trackError) {
-          console.error('Failed to track SMS usage:', trackError);
-          // Don't fail the SMS send if tracking fails
-        }
-      }
 
       return {
         success: true,
