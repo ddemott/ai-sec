@@ -184,15 +184,16 @@ Net: `src/index.ts` 385 → 279 lines. 1,495 backend tests green throughout.
 
 ---
 
-### 12. Prune or split `improvement-ideas.md` (142KB, 156 sections) — open, not started
-**Status: open, not started.** Pickable today.
+### ~~12. Prune or split `improvement-ideas.md` (was 184KB / 2137 lines)~~
+**Status: done 2026-05-04.** Pruned the closed entries; declined the split. Took the third option from the original framing: clarify the file's role as generator output, prune the closed entries that occupy space, accept the bulk of `Status: proposed` items as decay, and rely on `NEEDS-REFACTORING.md` / `docs/TODO.md` as the curated working lists.
 
-**Problem.** A backlog file this large stops being a working document and becomes archaeology. Resolved-but-not-removed entries (e.g., "phone normalization" marked resolved 2026-04-23) still occupy space.
+Six closed task blocks deleted (1 `resolved 2026-04-23`, 3 `dropped 2026-04-30` from the same TTS batch consolidated into a one-line note at the parent batch header, 2 individually-dropped 2026-04-30 entries). One `ALREADY SHIPPED` entry (line 2000, the tenant-config duplicate that the journal-loop generator emitted right before commit `e92b3bf` landed) deliberately left in place — an inline note marks it as audit evidence of generator behavior, and the surrounding Self-Review at the end of that batch references it.
 
-**What to do.**
-- Sweep all `Status: resolved` entries — delete or archive to `docs/improvement-ideas-archive.md`.
-- Consider splitting by area: `improvement-ideas-backend.md`, `improvement-ideas-dashboard.md`, etc.
-- Or: migrate the genuinely active items into this file (NEEDS-REFACTORING.md) and let the rest decay.
+Preamble rewritten to make the file's status explicit: "This file is generator output, not a curated backlog. If a proposed task here matters enough to act on, promote it to NEEDS-REFACTORING.md or docs/TODO.md. Otherwise it decays." That framing is the honest answer — the journal-loop generator produces ideas faster than anyone can act on them, periodic prune passes remove closed entries, and trying to curate the 113 `proposed` tasks as a working list would be feature work without a real consumer.
+
+Did NOT split by area. The two-file separation between this and `docs/IMPROVEMENT_IDEAS.md` (already documented as deliberate in `docs/TODO.md`) is the only split that maps to a real role distinction; further splits would add navigation overhead without payoff.
+
+File: 2137 → 2089 lines (−48). Closed-task signal pollution cleared. Generator-side dedup ("check git log before proposing") remains a separate open issue tracked in `.remember/state.md` "Open questions" — unaffected by this prune.
 
 ---
 

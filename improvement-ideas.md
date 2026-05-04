@@ -3,13 +3,12 @@
 > Automated daily journal of refactoring suggestions. Each batch is dated and labelled by area (`## Ideas — DATE (X reviewed)`) and ends with a `## Self-Review — DATE` footer. Tasks include `Tradeoff` and `Effort vs Gain` blocks beyond the standard Status/Files/Done-when fields.
 >
 > **For the curated review-phase backlog, see [`docs/IMPROVEMENT_IDEAS.md`](docs/IMPROVEMENT_IDEAS.md).** That file holds tasks organized for review (10 phases, ~160 tasks, dated 2026-04-10/11). The two files are deliberately distinct — see `docs/TODO.md` "Role clarity for improvement-ideas files" for the rationale.
+>
+> **This file is generator output, not a curated backlog.** If a proposed task here matters enough to act on, promote it to `NEEDS-REFACTORING.md` (durable structural concern) or `docs/TODO.md` (operational work). Otherwise it decays — and that is fine, because the journal-loop generator produces ideas faster than anyone can act on them. Periodic prune passes (NEEDS-REFACTORING #12) remove `Status: resolved` / `Status: dropped` entries; the bulk of `proposed` tasks are accepted as decay rather than carried as a working list.
 
 ---
 
 ## Ideas — 2026-04-20 (architecture reviewed)
-
-### ~~Task: Fix inconsistent phone normalization in agent-tool booking routes~~
-**Status:** resolved 2026-04-23 by the SMS OTP build. Both booking routes now gate on `isValidPhone()` and reject malformed phones before any DB call; the LLM agent handles the rejection by asking verbally and triggering the OTP flow (`send-verification-code` + `verify-phone-code`). See CLAUDE.md "April 23, 2026 Phone Verification" for details.
 
 ### Task: Replace the placeholder /analytics/stats route with an explicit temporary contract
 **Status:** proposed
@@ -916,10 +915,7 @@
 
 ## Ideas — 2026-04-23 (architecture reviewed)
 
-### ~~Task: Separate TTS request validation and voice resolution from streaming response logic~~
-### ~~Task: Extract provider error mapping for TTS failures into a route-local helper~~
-### ~~Task: Isolate TTS response header setup into a dedicated helper~~
-**Status:** dropped 2026-04-30 — `src/routes/tts.ts` was deleted in commit `661d21d` along with the rest of the Vapi custom-voice proxy. Phase 4 of the LiveKit migration replaces it with a native `GrokTTS` class inside the agent worker (`agent/src/index.ts`), so the route-level refactor targets no longer exist.
+(All tasks from this batch were dropped 2026-04-30 — they targeted `src/routes/tts.ts`, which was deleted in commit `661d21d` along with the rest of the Vapi custom-voice proxy. Phase 4 of the LiveKit migration replaces that route with a native `GrokTTS` class inside the agent worker.)
 
 ## Self-Review — 2026-04-23
 **Cycles since last self-review:** 1
@@ -1104,9 +1100,6 @@
 **Impact:** medium
 **Effort vs Gain:** Low effort, worthwhile gain because it shortens the riskiest route in the file without changing behavior.
 
-### ~~Task: Extract Vapi cleanup and warning aggregation from provisioning deactivation into a local helper~~
-**Status:** dropped 2026-04-30 — original task assumed a two-step external cleanup (delete phone number + delete assistant). After the LiveKit migration deactivation only releases the Telnyx number, so the body is one try/catch around `telnyx.client.release()` plus a DB update. Extracting a helper for a single external call is friction without payoff. Reopen if a second cleanup step ever returns.
-
 ### Task: Align provisioning status query validation with shared helper conventions
 **Status:** proposed
 **Files to change:** `src/routes/provisioning.ts:L200-L235`, `src/routes/routeHelpers.ts:L1-L160` if a tiny helper addition is warranted
@@ -1144,9 +1137,6 @@
 **Size:** small (< 1hr)
 **Impact:** medium
 **Effort vs Gain:** Less than an hour of small shell-state wiring would make this view behave like the rest of the dashboard, a good return for a high-visibility navigation surface.
-
-### ~~Task: Replace stale Vapi-specific analytics placeholders with source-aware availability messaging~~
-**Status:** dropped 2026-04-30 — `dashboard/components/AnalyticsView.tsx` already references "LiveKit call log integration" in its header comment, placeholder subtitles, and Phase 2 notice. Spot-checked 2026-04-30: zero remaining Vapi mentions in the file.
 
 ### Task: Add explicit filtered-empty and detail-loading states to VoiceCallsView
 **Status:** proposed
