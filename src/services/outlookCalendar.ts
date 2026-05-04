@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
 
 const SCOPES = 'Calendars.ReadWrite offline_access';
 const AUTHORIZE_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
@@ -50,8 +50,7 @@ export function getAuthUrl(tenantId: string): string | null {
   const config = getConfig();
   if (!config) return null;
 
-  const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  const state = jwt.sign({ tenantId, purpose: 'outlook-calendar-oauth' }, jwtSecret, { expiresIn: '10m' });
+  const state = signOAuthState({ tenantId, purpose: 'outlook-calendar-oauth' });
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -68,14 +67,7 @@ export function getAuthUrl(tenantId: string): string | null {
 
 /** Verify the state param from Microsoft callback, returns tenantId */
 export function verifyState(state: string): string | null {
-  const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  try {
-    const decoded = jwt.verify(state, jwtSecret) as { tenantId: string; purpose: string };
-    if (decoded.purpose !== 'outlook-calendar-oauth') return null;
-    return decoded.tenantId;
-  } catch {
-    return null;
-  }
+  return verifyOAuthState({ state, expectedPurpose: 'outlook-calendar-oauth' });
 }
 
 /** Exchange authorization code for tokens */

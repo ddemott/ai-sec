@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import jwt from 'jsonwebtoken';
+import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 
@@ -45,8 +45,7 @@ export function getAuthUrl(tenantId: string): string | null {
   const client = createOAuth2Client();
   if (!client) return null;
 
-  const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  const state = jwt.sign({ tenantId, purpose: 'google-calendar-oauth' }, jwtSecret, { expiresIn: '10m' });
+  const state = signOAuthState({ tenantId, purpose: 'google-calendar-oauth' });
 
   return client.generateAuthUrl({
     access_type: 'offline',
@@ -58,14 +57,7 @@ export function getAuthUrl(tenantId: string): string | null {
 
 /** Verify the state param from Google callback, returns tenantId */
 export function verifyState(state: string): string | null {
-  const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  try {
-    const decoded = jwt.verify(state, jwtSecret) as { tenantId: string; purpose: string };
-    if (decoded.purpose !== 'google-calendar-oauth') return null;
-    return decoded.tenantId;
-  } catch {
-    return null;
-  }
+  return verifyOAuthState({ state, expectedPurpose: 'google-calendar-oauth' });
 }
 
 /** Exchange authorization code for tokens */

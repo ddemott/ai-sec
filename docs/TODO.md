@@ -160,7 +160,7 @@ Doc Phase 1 inventory completed 2026-04-27. 17 files contain 177 Vapi references
 ## CRM Sync Unification (completed 2026-04-17, next steps)
 
 Shared `syncMapHelpers.ts` extracted. Remaining opportunities:
-- [ ] Unify calendar token refresh (Google + Outlook duplicate OAuth state/refresh logic)
+- [x] **Unify calendar token refresh — partially shipped 2026-05-04.** Verify-first reframed the scope: the OAuth state JWT (sign + verify) was duplicated across **6** files (Google + Outlook calendars + Jobber + HubSpot + Square + ServiceTitan clients), not just 2. Extracted to `src/services/oauthStateJwt.ts` with 10 unit tests; ~72 lines deduped. The token *refresh* itself was deliberately NOT unified — Google uses the `googleapis` SDK and Outlook uses raw `fetch` with manual error handling; abstracting over them lands in the same strategy-pattern shape that NEEDS-REFACTORING #1 rejected.
 - [ ] Extract shared tenant bootstrap helper (auth register + admin tenant create duplicate the same flow)
 
 ---
@@ -215,7 +215,7 @@ All 47 items from April 10-11 UX review resolved in commit `f9ffa8e`. Key change
 160 proposed refactoring tasks in 10 phases. Top items by impact:
 
 ### Highest Impact (do first)
-- [ ] Unify calendar service token refresh (Google + Outlook)
+- [x] Unify calendar service token refresh (Google + Outlook) — partially shipped 2026-05-04 as `src/services/oauthStateJwt.ts` (state JWT only); refresh itself deferred (Google SDK vs Outlook fetch defeat clean abstraction). See "CRM Sync Unification" above.
 - [ ] Extract shared tenant bootstrap helper (auth register + admin create)
 - [ ] Extract dashboard controller hooks (AppointmentView + SuperAdminDashboard)
 - [ ] Add tests for destructive flows (tenant delete/reorder, mock-mode booking, shift override RPC)

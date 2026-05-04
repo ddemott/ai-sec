@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
 
 const AUTHORIZE_URL = 'https://auth.servicetitan.io/connect/authorize';
 const TOKEN_URL = 'https://auth.servicetitan.io/connect/token';
@@ -77,8 +77,7 @@ export function getAuthUrl(tenantId: string): string | null {
   const config = getConfig();
   if (!config) return null;
 
-  const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  const state = jwt.sign({ tenantId, purpose: 'servicetitan-oauth' }, jwtSecret, { expiresIn: '10m' });
+  const state = signOAuthState({ tenantId, purpose: 'servicetitan-oauth' });
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -93,14 +92,7 @@ export function getAuthUrl(tenantId: string): string | null {
 
 /** Verify the state param from ServiceTitan callback, returns tenantId */
 export function verifyState(state: string): string | null {
-  const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
-  try {
-    const decoded = jwt.verify(state, jwtSecret) as { tenantId: string; purpose: string };
-    if (decoded.purpose !== 'servicetitan-oauth') return null;
-    return decoded.tenantId;
-  } catch {
-    return null;
-  }
+  return verifyOAuthState({ state, expectedPurpose: 'servicetitan-oauth' });
 }
 
 /** Exchange authorization code for tokens */
