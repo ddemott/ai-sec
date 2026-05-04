@@ -16,6 +16,7 @@ import {
   isRemoteNewer,
   updateLastSyncAt,
 } from './syncMapHelpers';
+import { paginateSync } from './syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('jobber', tenantId, entityType, action);
@@ -354,76 +355,58 @@ export async function fullSync(
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { clientsSynced: 0, visitsSynced: 0, errors: 0 };
 
-  let clientsSynced = 0;
-  let visitsSynced = 0;
-  let errors = 0;
+  const contextLabel = `[jobber-sync] tenant=${tenantId}`;
 
-  // Sync clients
-  let hasNextPage = true;
-  let cursor: string | null = null;
-  while (hasNextPage) {
-    try {
+  const clientResult = await paginateSync<jobber.JobberClient, string | null>({
+    initialCursor: null,
+    fetchPage: async (cursor) => {
       const result = await jobber.graphql<{ clients: { nodes: jobber.JobberClient[]; pageInfo: { hasNextPage: boolean; endCursor: string } } }>(
         tokens.accessToken,
         jobber.QUERIES.listClients,
         { first: 100, after: cursor }
       );
-
       const clients = result.data?.clients;
-      if (!clients) break;
+      if (!clients) return { items: [], nextCursor: null };
+      return {
+        items: clients.nodes,
+        nextCursor: clients.pageInfo.hasNextPage ? clients.pageInfo.endCursor : null,
+      };
+    },
+    processItem: (jClient) => pullJobberClient(pool, tenantId, jClient, logger),
+    itemContext: (jClient) => jClient.id,
+    contextLabel,
+    entityType: 'client',
+    logger: log,
+  });
 
-      for (const jClient of clients.nodes) {
-        try {
-          await pullJobberClient(pool, tenantId, jClient, logger);
-          clientsSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[jobber-sync] tenant=${tenantId} — failed to pull client ${jClient.id}: ${err}`);
-        }
-      }
-
-      hasNextPage = clients.pageInfo.hasNextPage;
-      cursor = clients.pageInfo.endCursor;
-    } catch (err) {
-      log.error(`[jobber-sync] tenant=${tenantId} — client pagination failed: ${err}`);
-      break;
-    }
-  }
-
-  // Sync visits
-  hasNextPage = true;
-  cursor = null;
-  while (hasNextPage) {
-    try {
+  const visitResult = await paginateSync<jobber.JobberVisit, string | null>({
+    initialCursor: null,
+    fetchPage: async (cursor) => {
       const result = await jobber.graphql<{ visits: { nodes: jobber.JobberVisit[]; pageInfo: { hasNextPage: boolean; endCursor: string } } }>(
         tokens.accessToken,
         jobber.QUERIES.listVisits,
         { first: 100, after: cursor }
       );
-
       const visits = result.data?.visits;
-      if (!visits) break;
+      if (!visits) return { items: [], nextCursor: null };
+      return {
+        items: visits.nodes,
+        nextCursor: visits.pageInfo.hasNextPage ? visits.pageInfo.endCursor : null,
+      };
+    },
+    processItem: (visit) => pullJobberVisit(pool, tenantId, visit, logger),
+    itemContext: (visit) => visit.id,
+    contextLabel,
+    entityType: 'visit',
+    logger: log,
+  });
 
-      for (const visit of visits.nodes) {
-        try {
-          await pullJobberVisit(pool, tenantId, visit, logger);
-          visitsSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[jobber-sync] tenant=${tenantId} — failed to pull visit ${visit.id}: ${err}`);
-        }
-      }
-
-      hasNextPage = visits.pageInfo.hasNextPage;
-      cursor = visits.pageInfo.endCursor;
-    } catch (err) {
-      log.error(`[jobber-sync] tenant=${tenantId} — visit pagination failed: ${err}`);
-      break;
-    }
-  }
+  const clientsSynced = clientResult.count;
+  const visitsSynced = visitResult.count;
+  const errors = clientResult.errors + visitResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'jobber');
-  log.info(`[jobber-sync] tenant=${tenantId} — full sync complete (clients=${clientsSynced} visits=${visitsSynced} errors=${errors})`);
+  log.info(`${contextLabel} — full sync complete (clients=${clientsSynced} visits=${visitsSynced} errors=${errors})`);
   return { clientsSynced, visitsSynced, errors };
 }
 

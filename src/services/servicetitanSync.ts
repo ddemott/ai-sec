@@ -16,6 +16,7 @@ import {
   isRemoteNewer,
   updateLastSyncAt,
 } from './syncMapHelpers';
+import { paginateSync } from './syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('servicetitan', tenantId, entityType, action);
@@ -335,57 +336,45 @@ export async function fullSync(
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { customersSynced: 0, appointmentsSynced: 0, errors: 0 };
 
-  let customersSynced = 0;
-  let appointmentsSynced = 0;
-  let errors = 0;
+  const contextLabel = `[servicetitan-sync] tenant=${tenantId}`;
 
-  // Sync customers
-  let page = 1;
-  let hasMore = true;
-  while (hasMore) {
-    try {
+  const customerResult = await paginateSync<servicetitan.ServiceTitanCustomer, number>({
+    initialCursor: 1,
+    fetchPage: async (page) => {
       const result = await servicetitan.listCustomers(tokens.accessToken, tokens.appKey, tokens.tenantSid, page);
-      for (const customer of result.data) {
-        try {
-          await pullServiceTitanCustomer(pool, tenantId, customer, logger);
-          customersSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[servicetitan-sync] tenant=${tenantId} — failed to pull customer ${customer.id}: ${err}`);
-        }
-      }
-      hasMore = result.hasMore;
-      page++;
-    } catch (err) {
-      log.error(`[servicetitan-sync] tenant=${tenantId} — customer pagination failed: ${err}`);
-      break;
-    }
-  }
+      return {
+        items: result.data,
+        nextCursor: result.hasMore ? page + 1 : null,
+      };
+    },
+    processItem: (customer) => pullServiceTitanCustomer(pool, tenantId, customer, logger),
+    itemContext: (customer) => String(customer.id),
+    contextLabel,
+    entityType: 'customer',
+    logger: log,
+  });
 
-  // Sync jobs
-  page = 1;
-  hasMore = true;
-  while (hasMore) {
-    try {
+  const jobResult = await paginateSync<servicetitan.ServiceTitanJob, number>({
+    initialCursor: 1,
+    fetchPage: async (page) => {
       const result = await servicetitan.listJobs(tokens.accessToken, tokens.appKey, tokens.tenantSid, page);
-      for (const job of result.data) {
-        try {
-          await pullServiceTitanJob(pool, tenantId, job, logger);
-          appointmentsSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[servicetitan-sync] tenant=${tenantId} — failed to pull job ${job.id}: ${err}`);
-        }
-      }
-      hasMore = result.hasMore;
-      page++;
-    } catch (err) {
-      log.error(`[servicetitan-sync] tenant=${tenantId} — job pagination failed: ${err}`);
-      break;
-    }
-  }
+      return {
+        items: result.data,
+        nextCursor: result.hasMore ? page + 1 : null,
+      };
+    },
+    processItem: (job) => pullServiceTitanJob(pool, tenantId, job, logger),
+    itemContext: (job) => String(job.id),
+    contextLabel,
+    entityType: 'job',
+    logger: log,
+  });
+
+  const customersSynced = customerResult.count;
+  const appointmentsSynced = jobResult.count;
+  const errors = customerResult.errors + jobResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'servicetitan');
-  log.info(`[servicetitan-sync] tenant=${tenantId} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`);
+  log.info(`${contextLabel} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`);
   return { customersSynced, appointmentsSynced, errors };
 }

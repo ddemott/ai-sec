@@ -11,6 +11,7 @@ import {
   pullRemoteCustomer,
   updateLastSyncAt,
 } from './syncMapHelpers';
+import { paginateSync } from './syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('hubspot', tenantId, entityType, action);
@@ -241,35 +242,30 @@ export async function fullSync(
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { contactsSynced: 0, meetingsSynced: 0, errors: 0 };
 
-  let contactsSynced = 0;
-  let meetingsSynced = 0;
-  let errors = 0;
+  const contextLabel = `[hubspot-sync] tenant=${tenantId}`;
+  const meetingsSynced = 0;
 
-  // Sync contacts
-  let after: string | undefined;
-  let hasMore = true;
-  while (hasMore) {
-    try {
+  const contactResult = await paginateSync<hubspot.HubSpotContact, string | undefined>({
+    initialCursor: undefined,
+    fetchPage: async (after) => {
       const result = await hubspot.listContacts(tokens.accessToken, after);
-      for (const contact of result.results) {
-        try {
-          await pullHubSpotContact(pool, tenantId, contact, logger);
-          contactsSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[hubspot-sync] tenant=${tenantId} — failed to pull contact ${contact.id}: ${err}`);
-        }
-      }
-      after = result.paging?.next?.after;
-      hasMore = !!after;
-    } catch (err) {
-      log.error(`[hubspot-sync] tenant=${tenantId} — contact pagination failed: ${err}`);
-      break;
-    }
-  }
+      return {
+        items: result.results,
+        nextCursor: result.paging?.next?.after ?? null,
+      };
+    },
+    processItem: (contact) => pullHubSpotContact(pool, tenantId, contact, logger),
+    itemContext: (contact) => contact.id,
+    contextLabel,
+    entityType: 'contact',
+    logger: log,
+  });
+
+  const contactsSynced = contactResult.count;
+  const errors = contactResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'hubspot');
-  log.info(`[hubspot-sync] tenant=${tenantId} — full sync complete (contacts=${contactsSynced} meetings=${meetingsSynced} errors=${errors})`);
+  log.info(`${contextLabel} — full sync complete (contacts=${contactsSynced} meetings=${meetingsSynced} errors=${errors})`);
   return { contactsSynced, meetingsSynced, errors };
 }
 

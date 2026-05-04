@@ -17,6 +17,7 @@ import {
   isRemoteNewer,
   updateLastSyncAt,
 } from './syncMapHelpers';
+import { paginateSync } from './syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('square', tenantId, entityType, action);
@@ -314,60 +315,46 @@ export async function fullSync(
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { customersSynced: 0, appointmentsSynced: 0, errors: 0 };
 
-  let customersSynced = 0;
-  let appointmentsSynced = 0;
-  let errors = 0;
+  const contextLabel = `[square-sync] tenant=${tenantId}`;
 
-  // Sync customers
-  let cursor: string | undefined;
-  let hasMore = true;
-  while (hasMore) {
-    try {
+  const customerResult = await paginateSync<square.SquareCustomer, string | undefined>({
+    initialCursor: undefined,
+    fetchPage: async (cursor) => {
       const result = await square.listCustomers(tokens.accessToken, cursor);
-      const customers = result.customers || [];
-      for (const customer of customers) {
-        try {
-          await pullSquareCustomer(pool, tenantId, customer, logger);
-          customersSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[square-sync] tenant=${tenantId} — failed to pull customer ${customer.id}: ${err}`);
-        }
-      }
-      cursor = result.cursor;
-      hasMore = !!cursor;
-    } catch (err) {
-      log.error(`[square-sync] tenant=${tenantId} — customer pagination failed: ${err}`);
-      break;
-    }
-  }
+      return {
+        items: result.customers || [],
+        nextCursor: result.cursor ?? null,
+      };
+    },
+    processItem: (customer) => pullSquareCustomer(pool, tenantId, customer, logger),
+    itemContext: (customer) => customer.id,
+    contextLabel,
+    entityType: 'customer',
+    logger: log,
+  });
 
-  // Sync bookings
-  cursor = undefined;
-  hasMore = true;
-  while (hasMore) {
-    try {
+  const bookingResult = await paginateSync<square.SquareBooking, string | undefined>({
+    initialCursor: undefined,
+    fetchPage: async (cursor) => {
       const result = await square.listBookings(tokens.accessToken, cursor);
-      const bookings = result.bookings || [];
-      for (const booking of bookings) {
-        try {
-          await pullSquareBooking(pool, tenantId, booking, logger);
-          appointmentsSynced++;
-        } catch (err) {
-          errors++;
-          log.error(`[square-sync] tenant=${tenantId} — failed to pull booking ${booking.id}: ${err}`);
-        }
-      }
-      cursor = result.cursor;
-      hasMore = !!cursor;
-    } catch (err) {
-      log.error(`[square-sync] tenant=${tenantId} — booking pagination failed: ${err}`);
-      break;
-    }
-  }
+      return {
+        items: result.bookings || [],
+        nextCursor: result.cursor ?? null,
+      };
+    },
+    processItem: (booking) => pullSquareBooking(pool, tenantId, booking, logger),
+    itemContext: (booking) => booking.id,
+    contextLabel,
+    entityType: 'booking',
+    logger: log,
+  });
+
+  const customersSynced = customerResult.count;
+  const appointmentsSynced = bookingResult.count;
+  const errors = customerResult.errors + bookingResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'square');
-  log.info(`[square-sync] tenant=${tenantId} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`);
+  log.info(`${contextLabel} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`);
   return { customersSynced, appointmentsSynced, errors };
 }
 

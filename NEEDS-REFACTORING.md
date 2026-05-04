@@ -157,16 +157,12 @@ If a true redistribute is wanted later, the entry can be reopened — but the di
 
 ---
 
-### 10. Extract shared CRM sync structure — open, not started
-**Status: open, not started.** Worth verifying with a real diff first (see "Worth verifying first" below); skip if the shared structure turns out to be smaller than expected.
+### 10. Extract shared CRM sync structure — IN FLIGHT (narrow extraction shipped 2026-05-04, broader extraction deferred)
+**Status: IN FLIGHT (narrow extraction shipped, broader extraction deferred).** The verify-first pass landed on a focused extraction of just the pagination loop; the broader push/pull skeleton extraction was considered and deferred under the "working flat code beats a dormant abstraction" build principle.
 
-**Problem.** `jobberSync.ts`, `hubspotSync.ts`, `squareSync.ts`, `servicetitanSync.ts` likely share a strong push-pull-merge skeleton (timestamp-based merge, COALESCE non-conflicting fields, sync-map upsert). `oauthCallbackFactory.ts` and `tokenManagement.ts` already extracted the OAuth bits; the sync orchestration itself is probably still copy-pasted.
+**Narrow extraction shipped 2026-05-04.** The 7 pagination loops across the 4 sync modules (`jobberSync` 2 loops, `hubspotSync` 1, `squareSync` 2, `servicetitanSync` 2) collapsed into calls to a new `paginateSync()` higher-order helper in `src/services/syncPaginate.ts`. The helper is 86 lines, fully unit-tested in isolation (9 tests, happy + sad: single page, multi-page cursor chain, empty page, non-string cursor types for ServiceTitan page numbers, item-error recovery, page-error fatal, page-error on first page, log-line format preservation, and the null-initialCursor case for Jobber's GraphQL `after: null`). The loop body is pure mechanism — fetch page → iterate items → catch per-item errors and continue → break on page-fetch error → terminate on `nextCursor === null`. Each provider's residual code is a thin closure that normalizes its provider-specific page shape (Jobber GraphQL `pageInfo`, HubSpot `paging.next.after`, Square `result.cursor`, ServiceTitan page-number with `hasMore`). The 4 sync files net −45 lines; the helper +86; the helper is reusable for a future 5th provider. Existing log-line formats preserved exactly so support runbooks that grep for the legacy strings still match.
 
-**What to do.** Read all four sync modules side-by-side. Identify the shared shape. Extract into `src/services/crmSyncBase.ts` (or fold into the existing `syncOrchestrator.ts`). Each provider keeps only its provider-specific mapping function.
-
-**Worth verifying first.** Do a real diff of the four files before committing to this — extraction only pays off if the shared structure is genuinely large.
-
-**Note.** No longer conflicts with #1 — that was closed 2026-05-02 with the dormant adapter layer deleted. The flat-client pattern is the only pattern, so a shared sync skeleton would extract from those four files directly.
+**Broader extraction deferred.** The push/pull skeletons across the 4 providers (push-customer, push-appointment, pull-appointment) share a real ~30-line scaffold each, but each provider has at least one quirk that resists clean parameterization: Jobber's GraphQL response unwrapping + `userErrors` arrays, HubSpot's meeting↔contact association as a separate API call, Square's cancel-on-delete API call before sync-map clear, ServiceTitan's extra `appKey`/`tenantSid` token fields. Parameterizing all of these turns the "shared" function into the same kind of strategy pattern that NEEDS-REFACTORING #1 (the deleted CRM adapter layer) rejected on 2026-05-02. The build principle is "working flat code beats a dormant abstraction" — the 4 sync files are stable, no 5th provider is asking, and reading each provider's push/pull function linearly is more maintainable than reading a generic helper plus a config object plus a closure. **Re-evaluate when a 5th provider arrives** — the answer may flip if the shared scaffolding appears 5 times instead of 4.
 
 ---
 

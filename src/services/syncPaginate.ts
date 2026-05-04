@@ -1,0 +1,86 @@
+/**
+ * Shared paginated-sync loop for CRM full-sync passes.
+ *
+ * The 4 CRM sync modules (jobber, hubspot, square, servicetitan) each have
+ * 1–2 pagination loops in their fullSync() entry points. The cursor mechanism
+ * differs per provider (Jobber GraphQL pageInfo, HubSpot paging.next.after,
+ * Square result.cursor, ServiceTitan page-number with hasMore), but the loop
+ * shape is identical: fetch page → iterate items → catch per-item errors and
+ * keep going → break on page-fetch error → terminate when no nextCursor.
+ *
+ * NEEDS-REFACTORING #10 was tracked as "extract shared CRM sync structure."
+ * The verify-first pass found that the broader push/pull skeletons across the
+ * 4 providers carry too many provider-specific quirks (GraphQL response
+ * unwrapping + userErrors for Jobber, meeting↔contact association for
+ * HubSpot, cancel-on-delete for Square, extra appKey/tenantSid token fields
+ * for ServiceTitan) to extract cleanly without re-creating the strategy
+ * pattern that NEEDS-REFACTORING #1 rejected. The pagination loop, by
+ * contrast, is pure mechanism with no provider quirks — the only variation
+ * is the per-page fetch call, which slots cleanly into a closure.
+ */
+
+import type { SyncLogger } from './tokenManagement';
+
+export interface PaginateSyncResult {
+  count: number;
+  errors: number;
+}
+
+export interface PaginateSyncArgs<TItem, TCursor> {
+  /** Cursor passed to fetchPage on the first call. Provider-defined initial value. */
+  initialCursor: TCursor;
+  /**
+   * Fetch one page. Return items + the cursor for the next page, or null to stop.
+   * The caller's closure normalizes the provider's response shape (e.g., GraphQL
+   * pageInfo, REST paging.next.after, page-number + hasMore).
+   */
+  fetchPage: (cursor: TCursor) => Promise<{ items: TItem[]; nextCursor: TCursor | null }>;
+  /** Process one item. Throwing here counts as an item-level error and continues the loop. */
+  processItem: (item: TItem) => Promise<void>;
+  /** Format an item identifier for the per-item error log line (typically `item.id`). */
+  itemContext: (item: TItem) => string;
+  /** Log prefix — e.g. `[jobber-sync] tenant=XYZ`. The loop appends the message tail. */
+  contextLabel: string;
+  /** Entity type for log lines — `client`, `contact`, `customer`, `visit`, `booking`, `job`. */
+  entityType: string;
+  logger: SyncLogger;
+}
+
+/**
+ * Drive a paginated sync loop. Returns the count of items processed successfully
+ * and the count of item-level errors. A page-fetch error breaks the loop and
+ * returns the partial result.
+ */
+export async function paginateSync<TItem, TCursor>(
+  args: PaginateSyncArgs<TItem, TCursor>,
+): Promise<PaginateSyncResult> {
+  const { initialCursor, fetchPage, processItem, itemContext, contextLabel, entityType, logger } = args;
+  let count = 0;
+  let errors = 0;
+  let cursor: TCursor = initialCursor;
+
+  while (true) {
+    let page: { items: TItem[]; nextCursor: TCursor | null };
+    try {
+      page = await fetchPage(cursor);
+    } catch (err) {
+      logger.error(`${contextLabel} — ${entityType} pagination failed: ${err}`);
+      break;
+    }
+
+    for (const item of page.items) {
+      try {
+        await processItem(item);
+        count++;
+      } catch (err) {
+        errors++;
+        logger.error(`${contextLabel} — failed to pull ${entityType} ${itemContext(item)}: ${err}`);
+      }
+    }
+
+    if (page.nextCursor === null) break;
+    cursor = page.nextCursor;
+  }
+
+  return { count, errors };
+}
