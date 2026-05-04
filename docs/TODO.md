@@ -161,7 +161,7 @@ Doc Phase 1 inventory completed 2026-04-27. 17 files contain 177 Vapi references
 
 Shared `syncMapHelpers.ts` extracted. Remaining opportunities:
 - [x] **Unify calendar token refresh — partially shipped 2026-05-04.** Verify-first reframed the scope: the OAuth state JWT (sign + verify) was duplicated across **6** files (Google + Outlook calendars + Jobber + HubSpot + Square + ServiceTitan clients), not just 2. Extracted to `src/services/oauthStateJwt.ts` with 10 unit tests; ~72 lines deduped. The token *refresh* itself was deliberately NOT unified — Google uses the `googleapis` SDK and Outlook uses raw `fetch` with manual error handling; abstracting over them lands in the same strategy-pattern shape that NEEDS-REFACTORING #1 rejected.
-- [ ] Extract shared tenant bootstrap helper (auth register + admin tenant create duplicate the same flow)
+- [x] **Extract shared tenant bootstrap helper — done 2026-04-30 (commit `19d6b8b`).** `src/services/tenants/bootstrap.ts` exports `createTenantWithOwner(pool, params)` — owns the BEGIN / duplicate-check / INSERT tenants / bcrypt / INSERT users / COMMIT (ROLLBACK on error) shape. Both `POST /register` (auth.ts:81) and `POST /tenants/create` (tenants.ts:136) consume it. Policy differences (email vs tenant-name duplicate check, conflict messages, optional first/last name fields) expressed via the `duplicateCheck` parameter. 9 unit tests in `bootstrap.test.ts` with 5W comments, happy + sad paths.
 
 ---
 
@@ -216,7 +216,7 @@ All 47 items from April 10-11 UX review resolved in commit `f9ffa8e`. Key change
 
 ### Highest Impact (do first)
 - [x] Unify calendar service token refresh (Google + Outlook) — partially shipped 2026-05-04 as `src/services/oauthStateJwt.ts` (state JWT only); refresh itself deferred (Google SDK vs Outlook fetch defeat clean abstraction). See "CRM Sync Unification" above.
-- [ ] Extract shared tenant bootstrap helper (auth register + admin create)
+- [x] Extract shared tenant bootstrap helper (auth register + admin create) — done 2026-04-30 (commit `19d6b8b`). See "CRM Sync Unification" above.
 - [ ] Extract dashboard controller hooks (AppointmentView + SuperAdminDashboard)
 - [ ] Add tests for destructive flows (tenant delete/reorder, mock-mode booking, shift override RPC)
 - [ ] Replace ad hoc tenant typing with shared dashboard tenant view type
