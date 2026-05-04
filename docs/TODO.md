@@ -243,7 +243,10 @@ shipped:
 19 stale tests updated to seed `employee_schedule` directly (booking
 RPCs read it exclusively post-`20260420000000`). 2 tests pinning the
 removed `get_effective_shifts` pattern fallback `it.skip`'d with
-explanatory comments — they need redesign before re-enabling.
+explanatory comments — **redesigned and re-enabled 2026-05-04** under
+the employee_schedule-only contract (HAPPY: multi-day range returns
+every row in date order; SAD: rows outside the queried range are
+filtered out). Skip count: 2 → 0.
 
 Test-utils gained `createScheduleEntry()` and `createShiftForDate()`
 helpers so future DB tests have a clean way to seed date-specific
@@ -262,5 +265,10 @@ skips. 1,511 backend tests pass + 2 documented skips.
   table created). CI workaround step in `.github/workflows/ci.yml`
   deleted in the same commit since the script bootstraps correctly
   on its own now.
-- [ ] Re-enable the 2 skipped `get_effective_shifts` tests by
-  redesigning them against the new "employee_schedule only" contract.
+- [x] Re-enable the 2 skipped `get_effective_shifts` tests — done
+  2026-05-04. Both replaced with new tests targeting the
+  employee_schedule-only contract: HAPPY "multi-day range returns every
+  row in date order" (5 weekday seeds, distinct hours, asserts row order
+  + content) and SAD "rows outside the queried date range are filtered
+  out" (3 seeds Mon/Wed/Fri, query Wed-only, expect exactly 1 row).
+  Both pass against the real DB. Skip count: 2 → 0.

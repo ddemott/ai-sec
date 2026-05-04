@@ -277,7 +277,7 @@ A full UX review of the dashboard identified 20 items across P0-P3. 14 shipped a
 - BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) to `book_with_scheduling_atomic()` via migration `20260401000001_specific_booking_errors.sql`
 
 ## Project Status
-Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,479 backend tests + 498 dashboard tests = 1,977 total passing (verified 2026-05-03 against real DB + dashboard, 2 documented skips). 72 agent tests. 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
+Phases 1–12 complete. Phase 13 (Production Readiness) in progress. 1,514 backend tests + 498 dashboard tests = 2,012 total passing (backend verified 2026-05-04 against real DB; dashboard count last verified 2026-05-03; 0 skips after the 2 `get_effective_shifts` tests were redesigned and re-enabled on 2026-05-04). 72 agent tests. 19 Playwright e2e tests. 29 live QA tool-call tests (88 assertions). Zero TypeScript errors.
 
 ### Remaining Work
 

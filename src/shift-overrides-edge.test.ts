@@ -52,38 +52,65 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
   });
 
   describe('get_effective_shifts RPC (used by edge function)', () => {
-    it.skip('HAPPY: returns pattern shifts for a weekday with no override', async () => {
-      // SKIPPED 2026-04-30: this test pins behavior that no longer
-      // exists. Migration 20260420000000 removed the
-      // employee_shifts fallback from get_effective_shifts — the
-      // function now reads employee_schedule exclusively. There is no
-      // "weekly pattern with no override" path for it to return.
-      // Owners populate employee_schedule via the wizard's expand-weekly
-      // fan-out (see src/services/expandWeeklyToSchedule.ts) or the
-      // copy-week button. A redesigned version of this test should
-      // seed employee_schedule directly and assert get_effective_shifts
-      // returns those rows.
-      // WHO: Employee with Mon-Fri 8-5 pattern
-      // WHAT: get_effective_shifts should return the pattern shift for Monday
-      // WHEN: No override exists for that date
-      // WHERE: get_effective_shifts RPC
-      // WHY: Edge function needs correct shifts for availability checking
+    it('HAPPY: multi-day range returns every employee_schedule row in date order', async () => {
+      // WHO: scheduler view loading a week of an employee's shifts; voice AI
+      //      reasoning over availability across multiple days at once
+      // WHAT: get_effective_shifts called with a 5-day window returns one row
+      //       per seeded employee_schedule entry, in ascending shift_date order
+      // WHEN: business has owner-defined shifts for Mon–Fri (different hours
+      //       per day) and the caller queries Mon..Fri
+      // WHERE: get_effective_shifts RPC, range branch (start_date..end_date)
+      // WHY: this is the load-bearing case for the redesigned RPC after
+      //      migration 20260420000000 dropped the pattern-fallback branch.
+      //      Single-day queries (lines 89-180) cover the per-day shape;
+      //      this pins the date-range filter and ordering contract that the
+      //      scheduler view depends on.
+      // ORIGIN: replaces the skipped 2026-04-30 "returns pattern shifts" test
+      //         whose pattern-fallback premise was retired by the migration.
       if (!dbAvailable) return;
 
-      // Find next Monday
       const monday = getNextDayOfWeek(1);
-      const dateStr = toDateStr(monday);
+      const friday = new Date(monday);
+      friday.setDate(friday.getDate() + 4);
+      // Seed five weekday rows with distinct hours so order assertions are
+      // unambiguous. Hours intentionally differ per day; `DISTINCT` shapes
+      // would otherwise hide a row swap.
+      const hours = [
+        { start: '08:00', end: '12:00' }, // Mon
+        { start: '09:00', end: '17:00' }, // Tue
+        { start: '07:00', end: '15:00' }, // Wed
+        { start: '10:00', end: '14:00' }, // Thu
+        { start: '08:00', end: '16:00' }, // Fri
+      ];
+      for (let i = 0; i < 5; i++) {
+        const day = new Date(monday);
+        day.setDate(day.getDate() + i);
+        await client.query(
+          "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, $4, $5)",
+          [tenantId, employeeId, toDateStr(day), hours[i].start, hours[i].end]
+        );
+      }
 
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
-        [tenantId, employeeId, dateStr]
+        "SELECT shift_date, start_time::text AS start_time, end_time::text AS end_time, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $4::DATE) ORDER BY shift_date",
+        [tenantId, employeeId, toDateStr(monday), toDateStr(friday)]
       );
 
-      expect(res.rows.length).toBe(1);
-      expect(res.rows[0].is_override).toBe(false);
-      expect(res.rows[0].is_off).toBe(false);
-      expect(res.rows[0].start_time).toContain('08:00');
-      expect(res.rows[0].end_time).toContain('17:00');
+      expect(res.rows.length).toBe(5);
+      // Assert shape per row — start_time + end_time match what we seeded,
+      // nothing is_off, dates are strictly increasing across the result.
+      for (let i = 0; i < 5; i++) {
+        expect(res.rows[i].is_off).toBe(false);
+        expect(res.rows[i].start_time).toContain(hours[i].start);
+        expect(res.rows[i].end_time).toContain(hours[i].end);
+      }
+      const shiftDates = res.rows.map((r: { shift_date: Date }) => toDateStr(new Date(r.shift_date)));
+      const expectedDates = hours.map((_, i) => {
+        const d = new Date(monday);
+        d.setDate(d.getDate() + i);
+        return toDateStr(d);
+      });
+      expect(shiftDates).toEqual(expectedDates);
     });
 
     it('HAPPY: returns nothing for a weekend with no override (no pattern)', async () => {
@@ -179,45 +206,54 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       expect(res.rows[0].end_time).toContain('13:00');
     });
 
-    it.skip('HAPPY: week range returns mixed pattern + overrides', async () => {
-      // SKIPPED 2026-04-30: same reason as the test above —
-      // get_effective_shifts no longer mixes pattern + override
-      // sources. It reads employee_schedule only. A redesigned version
-      // should seed employee_schedule rows for the days under test
-      // and assert the function returns them.
-      // WHO: Employee with pattern Mon-Fri + overrides on Wed and Sat
-      // WHAT: Week query returns correct mix of sources
-      // WHY: Edge function needs full week view for scheduling
+    it('SAD: rows outside the queried date range are filtered out', async () => {
+      // WHO: caller asking for shifts inside a narrow window when the
+      //      employee has rows seeded both inside and outside it
+      // WHAT: get_effective_shifts returns ONLY the rows whose shift_date
+      //       falls within [start_date, end_date] inclusive — neighbors are
+      //       not included as adjacent context
+      // WHEN: scheduler views always pass an explicit window; voice AI passes
+      //       a single-day window. Both depend on tight filtering — bleed
+      //       would surface stale or future shifts to the caller
+      // WHERE: get_effective_shifts RPC, WHERE shift_date BETWEEN clause
+      // WHY: a date-filter regression would silently break availability
+      //      checks (the AI agent could believe an employee is working a day
+      //      they aren't); a unit-level pin makes the contract explicit
+      // ORIGIN: replaces the skipped 2026-04-30 "week range mixed pattern +
+      //         overrides" test whose pattern/override-merge premise was
+      //         retired by the migration to employee_schedule-only.
       if (!dbAvailable) return;
 
       const monday = getNextDayOfWeek(1);
-      const sunday = new Date(monday);
-      sunday.setDate(sunday.getDate() + 6);
-
       const wednesday = new Date(monday);
       wednesday.setDate(wednesday.getDate() + 2);
+      const friday = new Date(monday);
+      friday.setDate(friday.getDate() + 4);
 
-      // Override Wednesday to half day
+      // Seed three rows: Mon (before window), Wed (inside), Fri (after window).
+      // Query window will be Wed..Wed only — Mon and Fri must be filtered out.
       await client.query(
         "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '08:00', '12:00')",
+        [tenantId, employeeId, toDateStr(monday)]
+      );
+      await client.query(
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '09:00', '17:00')",
         [tenantId, employeeId, toDateStr(wednesday)]
+      );
+      await client.query(
+        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, '07:00', '15:00')",
+        [tenantId, employeeId, toDateStr(friday)]
       );
 
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $4::DATE)",
-        [tenantId, employeeId, toDateStr(monday), toDateStr(sunday)]
+        "SELECT shift_date, start_time::text AS start_time, end_time::text AS end_time FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        [tenantId, employeeId, toDateStr(wednesday)]
       );
 
-      // Should have 5 rows: Mon(pat), Tue(pat), Wed(ovr), Thu(pat), Fri(pat)
-      expect(res.rows.length).toBe(5);
-
-      const wedRow = res.rows.find((r: any) => toDateStr(new Date(r.shift_date)) === toDateStr(wednesday));
-      expect(wedRow).toBeDefined();
-      expect(wedRow.is_override).toBe(true);
-      expect(wedRow.end_time).toContain('12:00');
-
-      const patternRows = res.rows.filter((r: any) => !r.is_override);
-      expect(patternRows.length).toBe(4);
+      expect(res.rows.length).toBe(1);
+      expect(toDateStr(new Date(res.rows[0].shift_date))).toBe(toDateStr(wednesday));
+      expect(res.rows[0].start_time).toContain('09:00');
+      expect(res.rows[0].end_time).toContain('17:00');
     });
   });
 
