@@ -91,5 +91,93 @@ describe('timezoneUtils', () => {
       // WHAT: Guard clause — nothing to apply an offset to
       expect(applyTimezone('', 'America/Chicago')).toBe('');
     });
+
+    // ── DST transition pinning (added 2026-05-05) ───────────────────
+    //
+    // Origin: timezone audit found the previous one-shot offset lookup
+    // returned the pre-transition offset for ~6 hours after the local
+    // clock had already changed (and symmetrically after fall-back).
+    // Net effect: every voice booking made during that window landed at
+    // the wrong UTC instant, off by exactly 1 hour. These tests pin the
+    // fixed-point algorithm so that regression can't reappear silently.
+
+    it('DST spring-forward: 1:30am Chicago on transition day is still CST', () => {
+      // WHO: caller booking pre-transition on the morning DST starts
+      // WHAT: at 1:30am local on 2026-03-08, clocks haven't sprung yet
+      // WHY: returning CDT here would push the booking 1h earlier than
+      //      the user said
+      expect(applyTimezone('2026-03-08T01:30:00', 'America/Chicago')).toBe(
+        '2026-03-08T01:30:00-06:00'
+      );
+    });
+
+    it('DST spring-forward: 3:30am Chicago on transition day is CDT', () => {
+      // WHO: caller booking right after the spring-forward jump
+      // WHAT: 2am→3am skip means 3:30am is the first valid post-transition slot
+      // WHY: pre-fix, this returned CST and recorded the appointment 1h
+      //      ahead of where the user meant
+      expect(applyTimezone('2026-03-08T03:30:00', 'America/Chicago')).toBe(
+        '2026-03-08T03:30:00-05:00'
+      );
+    });
+
+    it('DST spring-forward: 5:30am Chicago on transition day is CDT (the original BUG-059-class regression)', () => {
+      // WHO: caller picking a normal-looking morning slot on the DST day
+      // WHAT: 5:30am local on 2026-03-08 is post-transition (CDT)
+      // WHY: this is the exact case that surfaced the audit — the old
+      //      code looked up the offset at the naive-as-UTC instant,
+      //      which was still pre-transition in Chicago, so it returned
+      //      CST. The booking went into Postgres as 11:30am UTC instead
+      //      of the 10:30am UTC the caller intended.
+      expect(applyTimezone('2026-03-08T05:30:00', 'America/Chicago')).toBe(
+        '2026-03-08T05:30:00-05:00'
+      );
+    });
+
+    it('DST fall-back: 0:30am Chicago on transition day is still CDT', () => {
+      // WHO: late-night booking pre-fall-back
+      // WHAT: 0:30am local on 2026-11-01 is before DST ends at 2am
+      // WHY: symmetric guard for the autumn transition
+      expect(applyTimezone('2026-11-01T00:30:00', 'America/Chicago')).toBe(
+        '2026-11-01T00:30:00-05:00'
+      );
+    });
+
+    it('DST fall-back: 3:00am Chicago on transition day is CST', () => {
+      // WHO: caller booking the morning after fall-back
+      // WHAT: 3am local on 2026-11-01 is post-transition (CST)
+      // WHY: pre-fix, this returned CDT and recorded the appointment 1h
+      //      behind where the user meant
+      expect(applyTimezone('2026-11-01T03:00:00', 'America/Chicago')).toBe(
+        '2026-11-01T03:00:00-06:00'
+      );
+    });
+
+    it('DST fall-back ambiguous 1:30am: takes the first occurrence (CDT) — IANA convention', () => {
+      // WHO: caller picking a 1:30am slot on the day clocks fall back
+      // WHAT: 1:30am exists twice on 2026-11-01 (once CDT, then CST).
+      //       The fixed-point iteration converges on the CDT side —
+      //       the IANA "first occurrence" convention used by most date
+      //       libraries.
+      // WHY: pinning so that future refactors don't silently change
+      //      behavior on the ambiguous case. Real-world impact is low
+      //      (calls during the duplicate hour are rare) but the test
+      //      documents the intended semantics so a regression here
+      //      can't be mistaken for a routine code change.
+      expect(applyTimezone('2026-11-01T01:30:00', 'America/Chicago')).toBe(
+        '2026-11-01T01:30:00-05:00'
+      );
+    });
+
+    it('DST: non-Chicago zones also resolve correctly through the fixed-point step', () => {
+      // WHO: tenant in a different DST-observing zone (Eastern Time)
+      // WHAT: same algorithm should produce -04:00 EDT on a post-spring
+      //       morning, not -05:00 EST
+      // WHY: pin the algorithm against zone-specific assumptions — the
+      //      math is generic, not Chicago-only
+      expect(applyTimezone('2026-03-08T05:30:00', 'America/New_York')).toBe(
+        '2026-03-08T05:30:00-04:00'
+      );
+    });
   });
 });
