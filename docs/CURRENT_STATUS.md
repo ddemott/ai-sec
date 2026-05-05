@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-04 (NEEDS-REFACTORING #3 closed — UsageTrackingService deleted under the test-or-delete lens)
+**Last updated:** 2026-05-05 (cleanup-sweep day — type-safety / lint debt drive-down + UX vocabulary pass + audit truth-up)
 
 ---
 
@@ -21,6 +21,19 @@ Code shipped to `main` and merged on origin, but not yet exercised in production
 | **Beta with DynaTire** | IN FLIGHT (external, transitive) | Blocked transitively on the Telnyx unblock. | Auto-unblocks when Telnyx clears. |
 | **NEEDS-REFACTORING #14 (`pw.txt`)** | IN FLIGHT (decision pending) | Gitignored, never committed; could be a real password or a deliberate scratch note. | User confirms whether to keep or delete. |
 | **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
+
+### May 5 Session: cleanup sweep (backend tests 1,514 → 1,536, dashboard 500 → 504)
+
+Continuation of the verify-first pattern. Backend +22 tests, dashboard +4 (new vocabulary-guard regex patterns). Skip count: 0 (held). Dominant theme: drive down `any`-type debt across backend tests + extract two more shared helpers + ship a UX vocabulary pass + truth up TODO entries that had drifted from reality.
+
+- **`9364773` — High-value 5W backfill.** Added WHO/WHAT/WHEN/WHERE/WHY annotations to 23 tests across security-critical (`rls`), schema/contract (`schema`, `customer`, `tenant-reorder`), and explicit regression suites (`critical-bugs` for BUG-001/002/006). Backend 5W coverage: 64 → 69/89 files (now 70/90 after `crmDisconnect.test.ts`). Remaining 23 backend test files without 5W tracked in TODO.md as a per-file pickup item — most are mechanical schema/utility tests where descriptive test names already serve as documentation.
+- **`33f83cd` + `01b7009` — Backend test `any`-type cleanup, top-5 offenders.** Cleared 86 instances across reminders / consentService / communications / middleware / bugfix-comprehensive using `vi.mocked(...)`, `as unknown as Type` for partial-mock structural casts, and proper Fastify/Pool type imports. Net: 215 → 129 instances across backend tests (40% cleared); rest tracked in TODO.md.
+- **`5f12215` + `2cd381a` — Destructive-flow test coverage.** Four flows pinned: tenant DELETE (3 tests, happy + 404 + 401), tenant POST /reorder (5 tests including the `sort_order = 0..N-1` invariant + ROLLBACK on partial UPDATE failure), shift override CRUD (9 tests across 3 routes — happy + Zod validation + 404), and AppointmentView mock-mode `handleUpdate` + `handleDelete` guards (2 tests pinning that no destructive fetch happens when `usingMockData=true`). Mock-mode `handleCreate` guard test deliberately deferred (driving the create form needs fixture work) and tracked.
+- **`88701c0` — Verify-first deferral of NEEDS-REFACTORING #11's deferred part.** Reusable pieces (`useStaticData`, `useActiveTenantId`, `useVocabulary`, `AppointmentDetailContext`) were already extracted in earlier work; what remains is component-specific orchestration with one consumer each. Documented the lens reasoning in TODO.md.
+- **`cbf22b0` — Dashboard test `any`-type cleanup.** ~27 instances → 0 across `superadmin.test.tsx` + `settings.test.tsx`. New `dashboard/lib/test-utils.ts` exports a typed `mockJsonResponse(body, init?)` helper. Caught a real latent bug along the way: an unguarded `lastCall = .find(...)` deref of `T | undefined` that the prior `as any` cast had been hiding.
+- **`b293813` — Vocabulary pass on UI strings.** Replaced 4 user-visible jargon strings: "Multi-Tenant Management" → "Multi-Business Management", "Skill Matrix" tab + "Service Assignment Matrix" page heading → "Service Assignments", "coverage gaps" → "aren't fully staffed yet". Extended `vocabulary-guard.test.ts` with 4 new banned-pattern regexes so regressions fail fast with a named description pointing at the right replacement. Verified zero remaining occurrences of any of the 6 originally-listed jargon terms across the dashboard.
+- **`3eba91b` — `disconnectCrmIntegration` helper extracted.** Verify-first found CRM disconnect/sync-status response *shapes* were already normalized; the duplication was at the *implementation* level — 4 × 16-line disconnect handlers differing only in the provider literal. Extracted to `src/services/crmDisconnect.ts` mirroring the `crmSyncStatus.ts` shape. 5 unit tests (happy + 2 sad paths). ~30 lines deduped.
+- **`faf3056` — Canonical `TenantFull` typing for the dashboard.** Three components (TenantCard, SuperAdminDashboard, TenantEditPanel) had local `type Tenant = { ... }` declarations — each subsets/supersets of `TenantFull` in `dashboard/lib/types.ts`. Migrated to `import type { TenantFull }`. Two canonical-type fixes shipped along: relaxed `Tenant.{voice_id, system_prompt, first_message}` from non-null `string` to `string | null` (matches DB nullability + the local types' more accurate shape), and added `TenantFull.{system_prompt_template, first_message_template}` as optional read-only fields projected by the SuperAdmin /tenants list query.
 
 ### May 4 Session: 8 commits — refactor marathon (skip count 2 → 0, backend tests 1,456 → 1,514)
 
@@ -96,8 +109,8 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 
 See `docs/TODO.md` for the unified task list.
 
-### Test Count (backend verified 2026-05-04 against real Postgres; dashboard count last verified 2026-05-03)
-- **1,514 backend tests + 498 dashboard tests = 2,012 total**, 0 failures, 0 skips after the 2 `get_effective_shifts` tests were redesigned + re-enabled 2026-05-04
+### Test Count (verified 2026-05-05 against real Postgres + dashboard)
+- **1,536 backend tests + 504 dashboard tests = 2,040 total**, 0 failures, 0 skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
@@ -121,7 +134,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,514 backend + 498 dashboard = 2,012 passing + 88 QA assertions | All green (backend verified 2026-05-04 against real DB; dashboard last verified 2026-05-03), 0 skips, zero TS errors |
+| **Tests** | 1,536 backend + 504 dashboard = 2,040 passing + 88 QA assertions | All green (verified 2026-05-05 against real DB + dashboard), 0 skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

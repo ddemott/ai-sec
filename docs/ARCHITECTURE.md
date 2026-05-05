@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-05-02 (25 route modules, 82 migrations, 10 voice-AI tools)
+**Last verified:** 2026-05-05 (25 route modules, 82 migrations, 10 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
 
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
 

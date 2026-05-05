@@ -133,7 +133,7 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 
 ### Environment Variables — Canonical Reference
 
-This is the single source of truth for environment variables across all three deployable services. Verified against code 2026-04-30.
+This is the single source of truth for environment variables across all three deployable services. Verified against code 2026-05-05 — env-var contract unchanged since 2026-04-30 audit (no new services or required vars added in the 2026-05-04 / 2026-05-05 cleanup sessions).
 
 #### Backend (Fastify) — required at boot
 The backend exits on startup if any of these are missing in production (see `src/services/envWarnings.ts`).

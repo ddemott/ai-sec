@@ -1,79 +1,114 @@
-# Session state — 2026-05-03 03:04 CDT (Sunday early-morning)
+# Session state — 2026-05-05 morning (Tuesday, CDT)
 
-Last updated by `/remember` skill. Pairs with `/recall-memory` for resume.
+Last updated manually (Dale asked "update all of the *.md files"). Pairs
+with `/recall-memory` for resume. This snapshot **overwrites** the
+2026-05-03 evening Python-tutoring snapshot — every next-step in that
+list has been picked up or explicitly deferred since.
 
 ## Where we stopped
 
-Three commits pushed today, working tree clean except for the
-intentional `.remember/state.md` dirt. The session was a pair of
-"claimed shipped, actually wasn't" closures — both surfaced by the
-voice-fallback validation and both fixed in the same session — plus
-a doc sweep that added explicit IN FLIGHT markers across the backlog
-so future sessions can scan state at a glance. **Nothing is partially
-done in code; the only in-flight items are blocked-on-someone-else
-(Telnyx, the user setting `DASHBOARD_URL`, prod migration apply).**
+Clean working tree on `main`, all session work pushed. Most recent
+commit: `faf3056 refactor(dashboard): canonicalize Tenant typing to
+TenantFull (3 ad-hoc → 1)`. The two pre-existing dirty files
+(`.remember/state.md` and `improvement-ideas.md`) are managed by other
+skills and remain dirty across the session — both are explicitly out
+of scope for the work commits.
 
-## What shipped today
+User asked "update all of the *.md files" at session close, which is
+what this refresh + the CLAUDE.md / docs/CURRENT_STATUS.md / README.md
+test-count + Resolved-Issues / May-5 entries are addressing.
 
-3 commits, all on main, all pushed to `origin/main`:
+## What shipped this session (May 4 + May 5 — 27 commits across two days)
 
-- **`6488dc4`** — `feat(agent): validate runFallback dead-air guard, fix the gap`. The validation surfaced a real production-safety gap. Docs across CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 / FRAMEWORK_MIGRATIONS.md had all claimed `runFallback()` used OpenAI TTS as a guard against Grok outage; the actual code on main wired GrokTTS in **both** the primary path AND the fallback. A Grok outage during a fallback call would have produced dead air — exactly the failure mode the path was supposed to protect against. Three closures: extracted `runFallback()` to `agent/src/fallback.ts` with injectable provider deps + a `FallbackConfig` arg (so the function is testable without going through the env-validation `process.exit(1)` in `./config.js`); switched the fallback's TTS to OpenAI (matching what docs already claimed); `await`ed `session.say()` so synthesis-time failures are caught inside the try block. Pinned by 13 new 5W-annotated tests in `agent/src/fallback.test.ts`. Agent suite: 53 → 66.
+### May 4 — refactor marathon (8 commits)
 
-- **`2119451`** — `feat(agent): wire tenant display config from backend (NEEDS-REFACTORING #2 — path B)`. The voice-fallback validation also surfaced that commit `e92b3bf` ("tenant config wiring"), claimed on 2026-05-01 to close NEEDS-REFACTORING #2, actually lived on a `hold-tenant-config` branch and was never merged to main. The agent worker on main still hardcoded DynaTire. Path B taken: redone directly on main, reusing the branch's design as a reference. New `POST /agent-tools/tenant-config` route in `src/routes/agentTools.ts` (4 backend tests). New `agent/src/tenantConfig.ts` module (6 agent-side tests). Hardcoded `DYNATIRE_TENANT_ID` / `TENANT_DEFAULTS` block deleted from `agent/src/index.ts`; the agent now greets with the real business name and reasons about "today" in the tenant's IANA zone. Soft-fails to "this business" / `America/Chicago` on any backend error so a config blip never hangs up a live caller. Backend: 1,475 → 1,479. Agent: 66 → 72. Multi-tenant production no longer blocked by the agent worker's display path.
+- **`9b0a572`** — UsageTrackingService deleted (NEEDS-REFACTORING #3).
+- **`f4ac89a`** — `paginateSync()` helper extracted (NEEDS-REFACTORING #10, narrow).
+- **`c12d075`** — CLAUDE.md drift detector (NEEDS-REFACTORING #13).
+- **`24a2e47`** — `improvement-ideas.md` pruned (NEEDS-REFACTORING #12).
+- **`cdfd0b4`** — Mock test helpers extracted (~350 lines deduped across 13 test files).
+- **`647866a`** — OAuth state JWT helpers extracted (~72 lines deduped across 6 files).
+- **`ed26cbc`** — Tenant bootstrap doc cleanup (work was already shipped 2026-04-30).
+- **`f686672`** — `get_effective_shifts` skips re-enabled (2 → 0).
 
-- **`75c3ca4`** — `docs: add explicit in-flight markers across TODO + NEEDS-REFACTORING + CURRENT_STATUS`. User asked for every in-flight item to carry an explicit marker. Added a shared marker convention: `IN FLIGHT (external)` / `IN FLIGHT (user)` / `IN FLIGHT (prod-apply)` / `IN FLIGHT (decision pending)` / `IN FLIGHT (validation pending)`. Items without a marker are either complete or pickable today. New "What's in flight (between repo and prod)" table at the top of `CURRENT_STATUS.md` is the single place to see everything that's shipped to repo but not exercised in production. Top-of-file pointers in CLAUDE.md so the convention is discoverable. Test counts updated everywhere (1,479 backend + 498 dashboard = 1,977 + 2 skips; 72 agent). Stale `#2850682` references updated to reflect the 2026-05-01 supersede.
+Plus `e68c22b` (sync session-summary entries with the full 2026-05-04
+commit set) for doc consistency.
+
+### May 5 — cleanup sweep (7 commits)
+
+- **`9364773`** — High-value 5W backfill across `rls`, `schema`, `customer`, `tenant-reorder`, `critical-bugs` test suites. 23 tests gained WHO/WHAT/WHEN/WHERE/WHY annotations. Backend 5W coverage: 64 → 70/90 files.
+- **`33f83cd`** + **`01b7009`** — Backend test `any`-type cleanup, top-5 offenders. 86 instances cleared (215 → 129 across all backend test files).
+- **`5f12215`** + **`2cd381a`** — Destructive-flow tests: tenant DELETE + reorder, shift override CRUD, AppointmentView mock-mode handleUpdate + handleDelete guards. Mock-mode handleCreate explicitly deferred + tracked.
+- **`88701c0`** — NEEDS-REFACTORING #11 deferred-part verify-first. Documented why the dashboard controller-hook extraction stays deferred.
+- **`cbf22b0`** — Dashboard test `any`-type cleanup (~27 → 0). New `dashboard/lib/test-utils.ts` exports `mockJsonResponse`. Caught a real latent bug: `lastCall = .find(...)` deref of `T | undefined` previously hidden by `as any`.
+- **`b293813`** — Vocabulary pass on UI strings (4 user-visible jargon strings replaced; vocabulary-guard.test.ts extended with 4 new banned-pattern regexes).
+- **`3eba91b`** — `disconnectCrmIntegration` helper extracted to `src/services/crmDisconnect.ts`. ~30 lines deduped across the 4 CRM routes.
+- **`faf3056`** — Canonical `TenantFull` typing for the dashboard. 3 ad-hoc local `type Tenant` declarations replaced; `Tenant` nullability relaxed to match DB; `TenantFull` gained `system_prompt_template` + `first_message_template` optional fields.
 
 ## Decisions made
 
-- **Path B over Path A for NEEDS-REFACTORING #2.** Could have merged `hold-tenant-config` (~5 min if no conflicts) instead of redoing the work. Picked B because it's cleaner against current main (which had three `agent/src/index.ts` refactors since the branch was made — JWT extraction, pool dedup, withTenantClient extraction, fallback extraction). Branch is now superseded; nothing on it is uniquely valuable.
-- **OpenAI TTS in `runFallback`, not Grok.** The whole point of the fallback path is independence from the primary path's Grok dependency. If we're in fallback specifically *because* Grok is down, using GrokTTS there reproduces the exact failure mode we wanted to escape. OpenAI uses `OPENAI_API_KEY` which is already validated at boot for the LLM, so it's strictly more available than Grok.
-- **Explicit IN FLIGHT taxonomy.** Five markers (external / user / prod-apply / decision pending / validation pending) instead of "open" or "TBD". Each marker tells the reader who has the next move and why the item isn't moving. Strikethrough title + `Status: done <date> <commit>` for shipped items.
-- **`session.say()` is now `await`ed inside `runFallback`.** Pre-fix, it was fire-and-forget — a synthesis-time failure became an unhandled promise rejection on the worker. Awaiting + catching makes the caller's experience identical (dead air either way) but keeps the worker process clean.
-- **`FallbackConfig` is injected, not imported.** Importing `./config.js` at the top of `fallback.ts` would force the test file through the env-validation `process.exit(1)` path. Keeping config as an injected arg makes the function pure-ish.
+- **Vocabulary pass replacements use the spirit of the TODO entry, not the literal parenthetical examples.** TODO suggested "skill match" + "uncovered shift"; I shipped "Service Assignments" + "aren't fully staffed yet". User confirmed (after asking "Are these tone???" — autocorrect for "done") that flipping was the right call only if completely done; for vocab, all 6 listed jargon terms had zero remaining user-visible occurrences, so flip was warranted.
+- **Destructive-flow tests entry stays open ([ ]) despite 3 of 4 named flows being covered.** User's "COMPLETELY done" rule applies — handleCreate mock-mode guard is the third of three identical-shape guards; not testing it leaves the contract partially pinned. Entry reworded to document exactly what's done + what's remaining + why.
+- **23 backend test files without 5W not backfilled.** Most are mechanical schema/utility tests where the test name already documents the behavior; full backfill would be ceremony. High-value subset (security, regression, contract-pinning) got 5W in commit `9364773`. Rest tracked in TODO.md as a per-file pickup item — verify ceremony-vs-value before each.
+- **129 backend test `any` instances + 62 production `any` instances not fully cleared.** Top-5 offenders cleared this session (40% of the test debt). Rest tracked in TODO.md as separate pickup items so they don't get lost.
 
 ## Mistakes and corrections
 
-- **Mocked LiveKit constructors with arrow-function `vi.fn()` initially.** Vitest emitted "the vi.fn() mock did not use 'function' or 'class'" warnings and 8 of the new fallback tests failed because the mocks weren't `new`-able. Caught immediately on first run; rewrote with `class FakeSession`, `class FakeAgent`, etc. — second run all 13 passed.
-- **First commit message claimed `runFallback()` was tested under "real conditions."** Walked back to "unit-level closed; live-PSTN exercise still requires Telnyx unblock" in the actual TODO entry. The unit tests prove the contract; only a real call proves the audio actually reaches a caller.
-- **Documentation claimed two features had shipped that hadn't.** This is the meta-mistake of the session — and the same shape of bug both times. Fix going forward is in NEEDS-REFACTORING #13 (drift detector), now flagged as extra-relevant and recommending verification at the *commit-on-main* level (assert each `commit \`<hash>\`` reference in docs is reachable from `main`).
+- **`as any` substitution patterns sometimes hid real type bugs.** Cleaning up `superadmin.test.tsx` surfaced an unguarded `lastCall = .find(...)` deref that the prior cast had been hiding — fixed with a typed throw guard. Lesson: every `as any` removal is a chance to surface latent type assumptions; treat each as an audit, not a mechanical replace.
+- **Initial mock-test-helper extraction (`cdfd0b4`) had a bug.** Used `null` as both the initial cursor AND the stop sentinel in `paginateSync`; the loop never entered when `initialCursor === null` (Jobber's actual case). Caught by the existing FULL-SYNC-WITH-DATA test in `jobber-sync.test.ts`. Fixed mid-refactor + pinned with a dedicated regression test for the null-initialCursor case.
+- **Stash-and-pop dance to keep skill-managed dirty files out of one commit briefly resurrected the deleted `usage/` files in the working tree.** Cleaned up with `git rm -rf` immediately. Lesson: git stash-pop semantics around `--keep-index` interact unexpectedly with `git checkout HEAD -- .` from inside subdirectories; safer to use `git restore --staged` + manual file management for these dances.
 
 ## In flight / uncommitted
 
-Just `.remember/state.md`, modified by this very `/remember` skill invocation. Will be overwritten by the next `/remember`. Per the skill spec, do **not** commit.
+Just `.remember/state.md` (this file) and `improvement-ideas.md`
+(2026-05-04 journal-loop batch waiting on its own loop's commit
+cycle). Neither is mine to commit. `git status` is otherwise clean.
 
-Everything else clean: `git status` shows nothing else dirty, `git log @{upstream}..HEAD` shows nothing unpushed.
+## Test state at session close
+
+- Backend: **1,536** passing + 0 skips + 0 failures (was 1,456 at session open; +80 across 27 commits).
+- Dashboard: **504** passing + 0 failures (was 498 at session open; +6 from 4 vocab-guard patterns + 2 mock-mode guard tests).
+- Agent: **72** passing + 0 failures (1 pre-existing GrokTTS unhandled rejection from commit `f6cc1d4`, predates session, verified by reverting to HEAD~1 to reproduce).
+- 5W coverage: **101/124 test files (81%)** — 23 files missing, all tracked in TODO.md.
+- `any`-type debt: backend tests 129 (was 215), production code 62, dashboard 0, agent 0. Tracked in TODO.md.
+- Typecheck clean across backend + agent + dashboard.
+- Dashboard ESLint clean.
+- Drift detector (`npm run verify:claude-md`) clean.
 
 ## Next steps — in order
 
-The IN FLIGHT items in `docs/TODO.md` and `docs/CURRENT_STATUS.md` "What's in flight" table are the authoritative list. Top picks for a fresh session:
+Open NEEDS-REFACTORING items (3 total):
 
-1. **(User, ~2 min)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway → ai-sec service → Variables. Outstanding 6+ days. Done signal: Stripe checkout + OAuth redirects work in browser test.
+1. **#10 broader extraction** — Provider-quirk push/pull skeleton across the 4 CRM sync modules. Verified-and-deferred 2026-05-04 under "working flat code beats a dormant abstraction". Re-evaluate when a 5th provider arrives.
+2. **#11 deferred part** — Drop `withTenantClient` from `register*Routes` signatures. Verify-first found low ROI vs ~3-4h test-rewrite cost; defer.
+3. **#14 — `pw.txt`** — User judgment call: real password or scratch note? File is gitignored, never committed.
 
-2. **(External — Telnyx)** Wait for / chase the re-submitted PSTN ticket. If no human response within 24h of submission (was 2026-05-01, so escalation window already past): portal chat. 48h: call +1.888.980.9750. Done signal: an inbound CDR finally appears for `+1-630-937-9478` in Mission Control Portal. Diagnostic fallback if it stalls again: provision a second DID and observe whether it shares the symptom — if yes, wider Telnyx issue; if no, the original DID is uniquely stuck and we push for release+reissue.
+External / user blockers (carry forward from prior snapshot, none resolved):
 
-3. **(User pre-flight + apply, ~30 min)** Apply migrations `20260501000000` + `20260501000001` to prod Supabase. Pre-flight: query for existing overlapping `appointments` rows on `(resource_id, time-range)` or `(employee_id, time-range)` where `status='scheduled'` AND `is_deleted=false`. Any overlap blocks the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE`. Apply via `npm run db:migrate -- "$SUPABASE_URL"`. Done signal: prod has both constraints visible in `\d appointments`.
+4. **(External — Telnyx PSTN)** Wait for / chase the re-submitted ticket. Original `#2850682` (2026-04-27) abandoned 2026-05-01 after 4 days without a human response. Ticket was re-submitted to LERG/porting team 2026-05-01; no update. Done signal: an inbound CDR finally appears for `+1-630-937-9478` in Mission Control Portal.
+5. **(User, ~2 min)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway → ai-sec service → Variables. Outstanding 9+ days. Done signal: Stripe checkout + OAuth redirects work in browser test.
+6. **(User pre-flight + apply, ~30 min)** Apply migrations `20260501000000` + `20260501000001` to prod Supabase. Pre-flight overlap-scan needed first; see `docs/TODO.md` Phase 13.
 
-4. **(Claude, ~30 min)** Close NEEDS-REFACTORING #3 (UsageTrackingService) under the test-or-delete lens. Default disposition is delete; just needs user green-light. Same pattern as the 2026-05-02 CRM-adapter deletion. Done signal: `src/services/usage/` gone, callers in `CommunicationService` cleaned up, tests still green.
+Pickable today (Claude can act, no external dependency):
 
-5. **(User judgment)** Resolve `pw.txt` (NEEDS-REFACTORING #14). Single-line, 17 bytes, gitignored. Real password or scratch note? User-only call.
-
-6. **(Claude, longer)** NEEDS-REFACTORING #13 — write a `scripts/verify-claude-md.ts` drift-detector at the *commit-on-main* level. Today's two doc-vs-reality findings would have been caught by a script that asserts every `` `<hash>` `` reference in the docs is reachable from `main`. Higher priority now than it was yesterday given the demonstrated cost of the drift.
-
-7. **(User, no rush)** Delete the superseded `hold-tenant-config` branch — `git branch -D hold-tenant-config && git push origin --delete hold-tenant-config`. Cosmetic cleanup; nothing on the branch is uniquely valuable now.
+7. **Continue backend `any`-type cleanup** — 129 instances remaining across ~30 files at smaller per-file counts.
+8. **Audit `any` types in backend production code** — 62 instances; per-file disposition (replace vs justify).
+9. **5W backfill remaining 23 test files** — ceremony-vs-value review per file.
+10. **Mock-mode handleCreate guard test** — closes the partial entry from `2cd381a`.
+11. **Pre-launch hardening items** in `docs/TODO.md`: timezone/DST audit, hide Back Office tabs, multi-tenant isolation probe, observability (logs/metrics/Sentry), etc.
+12. **Communications & Reminders integration Phase 1+** — DatabaseService adapter, `reminder_schedules` migration, real-provider wiring.
 
 ## Open questions / unresolved
 
-- **No customer pipeline visibility into "which CRM does the next beta candidate use?"** Carries forward from yesterday. The test-or-delete policy is correct but pushes the burden onto the next sales conversation to surface a CRM request.
-- **Journal-loop generator on `improvement-ideas.md` keeps producing entries that sometimes duplicate already-shipped work.** Yesterday's session and today's session both saw this. The generator needs a "check git log before proposing" pass; nobody owns that fix yet. Not blocking.
-- **Pricing tiers (Pro/Enterprise) — IDs in env, no positioning.** Was open going into today, still open. Decide before pricing is shown to a public-facing customer.
+- **No customer pipeline visibility into "which CRM does the next beta candidate use?"** Carries forward from prior snapshot. Test-or-delete policy is correct but pushes the burden onto the next sales conversation to surface a CRM request.
+- **Pricing tiers (Pro / Enterprise) — IDs in env, no positioning.** Decide before pricing is shown to a public-facing customer.
 
 ## External state to be aware of
 
-- **Telnyx ticket** — re-submitted 2026-05-01 to LERG/porting team (original `#2850682` superseded). New ticket number not yet returned by Telnyx. Test phone `+1-630-937-9478` still unreachable from PSTN; zero inbound CDRs across the entire 2026-04-25 → 2026-05-03 window. See `docs/TICKET_SUPPORT.md`.
-- **Railway** — backend (`ai-sec-production`) and agent (`ai-sec-agent`) services running. Worker `AW_vPmGExrgTeGn` registered with LiveKit. Today's commits auto-deployed on push (last push `75c3ca4`). The fallback path's OpenAI TTS dependency means `OPENAI_API_KEY` must remain set on the agent's Railway env (already true).
+- **Telnyx ticket** — re-submitted 2026-05-01 to LERG/porting team. Test phone `+1-630-937-9478` still unreachable from PSTN; zero inbound CDRs since 2026-04-25. See `docs/TICKET_SUPPORT.md`.
+- **Railway** — backend (`ai-sec-production`) and agent (`ai-sec-agent`) services running. Last push `faf3056` auto-deployed.
 - **LiveKit Cloud** — project "AI-Secretary", US Central. Dispatch rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent`.
-- **Supabase production** — through migration `20260430000002_drop_employee_shifts.sql` (80 migrations applied). **Two newer migrations** (`20260501000000` + `20260501000001`) shipped to repo but NOT yet applied. See next-step #3.
-- **Stripe** — webhook registered at backend `/billing/webhook`. Will silently fail OAuth/checkout redirects until `DASHBOARD_URL` is set on Railway (next-step #1).
-- **Local Postgres** — `ai-secretary-postgres` container running on port 5438 (different project's DB; not used by ai-sec). The expected `:5433` port isn't bound by any container right now — `dbf53d93533e_ai-sec-db` container is exited. If next session needs to run real-DB tests locally, start that container first.
-- **Local git** — `hold-tenant-config` branch exists, superseded by `2119451`. Safe to delete whenever convenient (next-step #7).
-- **Test state at session close** — backend 1,479 + 2 skips, dashboard 498, agent 72. Typecheck clean both surfaces. Last full run was around 02:10 CDT; nothing has changed since.
+- **Supabase production** — through migration `20260430000002_drop_employee_shifts.sql` (80 migrations applied). **Two newer migrations** (`20260501000000` + `20260501000001`) shipped to repo but NOT yet applied. See user-action #6 above.
+- **Stripe** — webhook registered at backend `/billing/webhook`. Silently fails OAuth/checkout redirects until `DASHBOARD_URL` is set on Railway (user-action #5).
+- **Local Postgres** — `dbf53d93533e_ai-sec-db` container started today for the get_effective_shifts test verification + the rest of the session's real-DB runs. Still running at session close.
+- **Local git** — `hold-tenant-config` branch still exists, superseded by `2119451`. Safe to delete.

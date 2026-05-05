@@ -2,7 +2,7 @@
 
 Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `NEEDS-REFACTORING.md`.
 
-**Last updated:** 2026-05-03
+**Last updated:** 2026-05-05 (no new migrations since 2026-05-03 — date bumped to reflect doc audit; runFallback OpenAI-TTS dead-air guard from commit `6488dc4` is unchanged)
 
 ---
 

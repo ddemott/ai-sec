@@ -4,7 +4,7 @@ Living refactor backlog for the AI Secretary codebase. Items are ordered highest
 
 This is for **structural cleanup of existing code** — dead code to delete, dormant layers to wire-or-remove, conventions to enforce. New features and improvements live in `improvement-ideas.md`.
 
-Last updated: 2026-05-03.
+Last updated: 2026-05-05 (#3, #10, #12, #13 closed across the 2026-05-04 + 2026-05-05 sessions; #10 broader extraction, #11 deferred part, and #14 are the only items still open).
 
 ## In-flight markers
 
