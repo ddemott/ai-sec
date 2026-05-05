@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-05 (cleanup-sweep day — type-safety / lint debt drive-down + UX vocabulary pass + audit truth-up)
+**Last updated:** 2026-05-05 (afternoon — added user-role gating + owner UI to invite + assign roles)
 
 ---
 
@@ -20,9 +20,21 @@ Code shipped to `main` and merged on origin, but not yet exercised in production
 | **Tenant-config display path** | IN FLIGHT (validation pending) | Code on main 2026-05-03 (commit `2119451`); 10 tests green. Live-PSTN exercise pending Telnyx. | Live call once Telnyx clears. |
 | **Beta with DynaTire** | IN FLIGHT (external, transitive) | Blocked transitively on the Telnyx unblock. | Auto-unblocks when Telnyx clears. |
 | **NEEDS-REFACTORING #14 (`pw.txt`)** | IN FLIGHT (decision pending) | Gitignored, never committed; could be a real password or a deliberate scratch note. | User confirms whether to keep or delete. |
+| **User-role migration `20260505000000_user_roles.sql`** | IN FLIGHT (prod-apply) | Adds `users.role` (`owner` / `front_desk`); harmless additive ALTER with `DEFAULT 'owner'`. Code green on main; backs the Back Office tab gating + Logins UI. | Apply alongside the `20260501*` migrations via `npm run db:migrate`. |
+| **Role gating + Logins UI browser-verify** | IN FLIGHT (validation pending) | Unit tests pin both contracts (4 layout + 2 auth backend + 13 user-route + 5 TeamAccessView). Real browser session has not exercised either yet. | `npm start` and walk the test plan in `docs/TODO.md` (Browser-verify entry). |
 | **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
 
-### May 5 Session: cleanup sweep (backend tests 1,514 → 1,536, dashboard 500 → 504)
+### May 5 Afternoon: role gating + invite/role-management UI (backend 1,536 → 1,551, dashboard 504 → 513)
+
+Closes the external-review beta-blocker "Hide Back Office surface from front-desk-only logins" and the natural extension "Owner-facing UI to invite + assign role." Three commits, both shipped same day.
+
+- **`8683222` — Role gate.** Migration `20260505000000_user_roles.sql` adds `users.role TEXT DEFAULT 'owner' CHECK (role IN ('owner','front_desk'))`. Backend: `JwtPayload`, `AppRequest.auth`, `generateToken` carry the role; `/login` returns + signs it; `/auth/refresh` preserves it; unrecognized values coerce to `'owner'` (defense against future schema additions). Frontend: `SessionContext` exposes `role` (persisted to localStorage); `OutlookLayout` hides Back Office in desktop nav + mobile mode-toggle when `role === 'front_desk' && !isAdmin`; a useEffect snaps front-desk users back to `dashboard` if they land on `my-business` / `my-team` / `ai-insights` via a stale URL. Super-admins keep full access regardless of the column. **Tests:** +2 auth-handler (front_desk role round-trip; unknown-role coercion), +4 layout (owner sees both / front_desk hides both / URL redirect / super-admin override). Browser validation deliberately deferred and tracked.
+- **`e65c833` — Invite + role-management UI.** New `/users` route module: `GET /users` (list with `is_self` flag so the UI can disable own-row dropdown), `POST /users/invite` (creates user with placeholder bcrypt hash + writes a `password_resets` token + sends `sendUserInviteEmail` with 3-day TTL — invitee chooses their own password from a magic link), `PATCH /users/:id/role`. All three are owner-only via a `requireOwner()` gate; super-admins always pass; front_desk callers get 403. The role-update route also rejects same-user role changes (a 400 + clear error) so an owner can't accidentally lock themselves out — the UI's own-row dropdown is also disabled as a UX guardrail. New `TeamAccessView.tsx` lists users with role badges + invite modal (radio role picker, default Front Desk). Wired into `MyTeamView` as a fifth sub-tab "Logins". **Tests:** +13 backend route (happy + sad for all three routes including the front_desk-403 gate, same-user-self-edit guard, super-admin self-edit carve-out, dup-email 409, invalid-role 400, missing-tenant 404), +5 dashboard component (list rendering with own-row "You" badge, empty-state copy, own-row dropdown disabled, invite-modal default role front_desk, end-to-end submit POSTs the right payload).
+- **`d0277d9` — Validation entry consolidated in TODO.** Yesterday's role-gate browser-verify entry was extended to cover today's invite/role-management flow with explicit step-by-step plans for both halves and the relevant commit IDs for traceability. The completed invite-UI line was trimmed of its dangling "validation pending" note since the validation now lives in the proper unchecked entry above it.
+
+**Out of scope this afternoon (deliberate):** browser-verification, prod migration apply, and any tightening of the existing email transporter (still no-op in dev/test). All three are in the IN FLIGHT table above.
+
+### May 5 Morning: cleanup sweep (backend tests 1,514 → 1,536, dashboard 500 → 504)
 
 Continuation of the verify-first pattern. Backend +22 tests, dashboard +4 (new vocabulary-guard regex patterns). Skip count: 0 (held). Dominant theme: drive down `any`-type debt across backend tests + extract two more shared helpers + ship a UX vocabulary pass + truth up TODO entries that had drifted from reality.
 
@@ -110,7 +122,7 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 See `docs/TODO.md` for the unified task list.
 
 ### Test Count (verified 2026-05-05 against real Postgres + dashboard)
-- **1,536 backend tests + 504 dashboard tests = 2,040 total**, 0 failures, 0 skips
+- **1,551 backend tests + 513 dashboard tests = 2,064 total**, 0 failures, 0 skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
@@ -123,9 +135,9 @@ See `docs/TODO.md` for the unified task list.
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 25 route modules, Railway auto-deploy from main |
+| **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 26 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables. Two new migrations (`20260501000000` exclusion constraints + `20260501000001` RPC handlers) shipped to repo 2026-05-02 but not yet applied to prod — pre-flight overlap-scan needed first. |
+| **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables. Three new migrations on main awaiting prod apply: `20260501000000` (exclusion constraints) + `20260501000001` (RPC handlers) shipped 2026-05-02 — pre-flight overlap-scan needed; `20260505000000_user_roles.sql` shipped 2026-05-05 — harmless additive ALTER. |
 | **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
 | **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
 | **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Original ticket `#2850682` superseded 2026-05-01 after 4 days without a human response; new ticket awaiting LERG/porting reviewer. |
@@ -134,7 +146,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,536 backend + 504 dashboard = 2,040 passing + 88 QA assertions | All green (verified 2026-05-05 against real DB + dashboard), 0 skips, zero TS errors |
+| **Tests** | 1,551 backend + 513 dashboard = 2,064 passing + 88 QA assertions | All green (verified 2026-05-05 against real DB + dashboard), 0 skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

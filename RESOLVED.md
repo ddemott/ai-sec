@@ -1,0 +1,192 @@
+# SecretaryHQ — Resolved Issues Archive
+
+Historical session journals, completed phases, and resolved bug logs. Moved out of `CLAUDE.md` on 2026-05-05 to keep the always-loaded context lean. Newest first.
+
+---
+
+## May 5, 2026 — Cleanup Sweep (7 commits, type-safety + lint debt + audit truth-up)
+
+Continuation of the verify-first pattern. Backend tests: 1,514 → 1,536 (+22, all from new helper test coverage). Skip count: 0 (held). Dashboard: 500 → 504 (+4 from new vocabulary-guard regex patterns). Theme: drive down `any`-type debt across backend tests, extract two more shared helpers, ship a UX vocabulary pass, truth up TODO entries that had drifted from reality.
+
+- **`f686672` → `b293813` → `9364773`** — High-value 5W backfill across `rls`, `schema`, `customer`, `tenant-reorder`, `critical-bugs` test suites. 23 tests gained WHO/WHAT/WHEN/WHERE/WHY annotations covering security-critical RLS isolation invariants, the booking RPC contract (overlap-rejection error_message string the agent prompt depends on), the customer schema timezone defaults, the drag-reorder schema invariants, and the BUG-001/002/006 regression suite. Backend 5W coverage: 64 → 70/90 files.
+- **`33f83cd` + `01b7009`** — Backend test `any`-type cleanup. Top-5 offender files (reminders, consentService, communications, middleware, bugfix-comprehensive) cleaned with `vi.mocked(...)` for typed mock access + `as unknown as Type` for partial-mock structural casts + proper Fastify/Pool type imports. Net: 215 → 129 instances across backend tests (40% cleared); rest tracked in TODO.md.
+- **`5f12215` + `2cd381a`** — Destructive-flow tests (NEW). Four flows pinned: tenant DELETE (3 tests), tenant POST /reorder (5 tests, asserts sort_order = 0..N-1 invariant + ROLLBACK on partial UPDATE failure + auth gates), shift override CRUD (9 tests across POST create + POST update + DELETE), and AppointmentView mock-mode `handleUpdate` + `handleDelete` guards (2 tests verifying no `/update` POST and no DELETE fetch happen when `usingMockData=true`).
+- **`88701c0`** — NEEDS-REFACTORING #11 deferred-part verify-first. Reusable pieces (`useStaticData`, `useActiveTenantId`, `useVocabulary`, `AppointmentDetailContext`) were already extracted; remaining orchestration is component-specific with one consumer each.
+- **`cbf22b0`** — Dashboard test `any`-type cleanup. ~27 instances → 0 across `superadmin.test.tsx` + `settings.test.tsx`. New `dashboard/lib/test-utils.ts` exports a typed `mockJsonResponse(body, init?)` helper. Caught a real latent bug: a `lastCall = .find(...)` deref of a `T | undefined` that the prior `as any` cast had been hiding.
+- **`b293813`** — Vocabulary pass on UI strings. 4 user-visible jargon strings replaced: "Multi-Tenant Management" → "Multi-Business Management", "Skill Matrix" / "Service Assignment Matrix" → "Service Assignments", "coverage gaps" → "aren't fully staffed yet". `vocabulary-guard.test.ts` extended with 4 new banned-pattern regexes.
+- **`3eba91b`** — `disconnectCrmIntegration` helper extracted. Verify-first found CRM disconnect/sync-status response *shapes* were already normalized. The remaining duplication was at the *implementation* level — 4 × 16-line disconnect handlers differing only in the provider literal. Extracted to `src/services/crmDisconnect.ts`. 5 unit tests. Net: ~30 lines deduped.
+- **`faf3056`** — Canonical `TenantFull` typing for the dashboard. Three components (TenantCard, SuperAdminDashboard, TenantEditPanel) had local `type Tenant = { ... }` declarations. Migrated to `import type { TenantFull }`. Two canonical-type fixes: relaxed `Tenant.{voice_id, system_prompt, first_message}` to `string | null` (matches DB nullability), added `TenantFull.{system_prompt_template, first_message_template}` as optional read-only.
+
+## May 4, 2026 — Refactor Marathon (8 commits, ~−800 lines net)
+
+Backend tests: 1,456 → 1,514 (+58, mostly from new helper test files). Skip count: 2 → 0. Dominant pattern: extract-helper-then-migrate-callers, with verify-first redirecting two original framings ("unify token refresh" → "extract OAuth state JWT"; "drop withTenantClient param" → "extract mock test helpers") toward higher-ROI targets.
+
+- **`9b0a572`** — UsageTrackingService deleted (NEEDS-REFACTORING #3). In-memory stub with no DB persistence, no Stripe meter reporter, no metered-tier customer. Deleted under the test-or-delete lens. Removed `src/services/usage/`, `src/types/usage.ts`, the optional `usageTracker?` constructor param on `CommunicationService` + `SMSService`, and the `await trackSMS(...)` block.
+- **`f4ac89a`** — `paginateSync()` helper extracted (NEEDS-REFACTORING #10, narrow). 7 inline pagination loops across the 4 CRM sync modules collapsed into calls to `src/services/syncPaginate.ts`. Generic over both item type and cursor type (handles Jobber GraphQL `pageInfo`, HubSpot `paging.next.after`, Square `result.cursor`, ServiceTitan page-number `hasMore`). 9 5W-annotated tests including a regression test for the null-initial-cursor case caught mid-refactor.
+- **`c12d075`** — CLAUDE.md drift detector (NEEDS-REFACTORING #13). New `scripts/verify-claude-md.ts` runs five checks (route count, migration count, template count, listed-directory existence, commit reachability from main). Wired into the backend CI job + `npm run verify:claude-md`. Numeric-count checks scope to the current-state portion (skip historical Resolved Issues archive); commit-reachability scans the full document. Inline `<!-- verify-claude-md: unmerged -->` marker opts known-unreachable hashes out. 25 5W-annotated tests pin the pure check functions.
+- **`24a2e47`** — `improvement-ideas.md` pruned (NEEDS-REFACTORING #12). 6 closed task blocks deleted, 1 ALREADY SHIPPED entry preserved as audit evidence. Preamble rewritten to declare the file as generator output, not a curated backlog. 2137 → 2089 lines.
+- **`cdfd0b4`** — Mock test helpers extracted (~350 lines deduped). Surfaced by the verify-first on the deferred part of NEEDS-REFACTORING #11: 13 test files duplicated `createMockClient` / `createMockPool` / `mockWithTenantClient` (~25 lines each). New `src/services/test-utils-mock.ts` is a strict superset: always tracks queries, always bypasses `SET LOCAL` / `RESET` session-variable scaffolding, mock pool exposes both `connect()` and `query()`. 12 5W-annotated helper tests.
+- **`647866a`** — OAuth state JWT helpers extracted (~72 lines deduped). The truly shared code wasn't the token refresh (Google SDK vs Outlook fetch genuinely differ) but the **OAuth state JWT** — sign + verify duplicated across 6 files (Google + Outlook calendars + Jobber + HubSpot + Square + ServiceTitan clients) with only the `purpose` discriminator differing. New `src/services/oauthStateJwt.ts` with 10 5W-annotated tests covering round-trip, payload shape, env-secret fallback, custom expiry, and four sad paths including cross-provider replay defense.
+- **`ed26cbc`** — Tenant bootstrap doc cleanup. Verify-first found `src/services/tenants/bootstrap.ts` was already shipped on 2026-04-30 (commit `19d6b8b`); both call sites already consumed it; 9 unit tests with 5W comments already covered happy + sad. Pure `docs/TODO.md` truth-up.
+- **`f686672`** — `get_effective_shifts` skips re-enabled (2 → 0). Both `it.skip`'d tests in `src/shift-overrides-edge.test.ts` (skipped 2026-04-30 when the `employee_shifts` pattern fallback was retired) replaced with new tests under the `employee_schedule`-only contract: HAPPY "multi-day range returns every row in date order" (5 weekday seeds, asserts row order + content) and SAD "rows outside the queried range are filtered out" (3 seeds Mon/Wed/Fri, query Wed-only, expect exactly 1 row).
+
+## May 3, 2026 — Voice Fallback Validation + Tenant-Config Redo on Main
+
+Two-part day. The fallback validation surfaced a documented-but-not-actually-shipped feature, and the same investigation found that NEEDS-REFACTORING #2 (tenant-config wiring) was in the same shape — claimed shipped, actually on a forgotten branch. Both closed.
+
+**Voice fallback path validation** (queue #9). CLAUDE.md / ARCHITECTURE.md / NEEDS-REFACTORING.md #9 had all claimed `runFallback()` used OpenAI TTS as a guard against Grok outage, but the actual code on main wired GrokTTS in both the primary path and the fallback — meaning a Grok outage would leave the fallback unable to speak. Three closures:
+
+- Extracted `runFallback()` to `agent/src/fallback.ts` with injectable provider deps.
+- Switched the fallback TTS to OpenAI (matches what docs already claimed). Provider keys are passed in as a `FallbackConfig` arg rather than imported, so the function is testable without going through the env-validation `process.exit(1)` path.
+- Awaited `session.say()` so a synthesis-time TTS failure is caught inside the try block instead of escaping as an unhandled promise rejection.
+
+13 new 5W-annotated tests in `agent/src/fallback.test.ts`: happy path message + interruption blocking + start-before-say ordering + VAD wiring; OpenAI-not-Grok provider-choice contract (3 tests including a dedicated negative test); never-throw contract under each failure mode.
+
+**Tenant-config wiring redone on main** (closes NEEDS-REFACTORING #2). The fallback validation surfaced that commit `e92b3bf` <!-- verify-claude-md: unmerged --> ("feat(agent): fetch tenant display config from backend at call start"), claimed on 2026-05-01 to close NEEDS-REFACTORING #2 P0, actually lived on a `hold-tenant-config` branch and was never merged to main. Path B (redo on main) taken:
+
+- New `POST /agent-tools/tenant-config` route in `src/routes/agentTools.ts` returns `{ name, timezone }`; null timezone → `'America/Chicago'`. 4 backend tests.
+- New `agent/src/tenantConfig.ts` module with `fetchTenantConfig(client, tenantId)` and `TENANT_FALLBACK` constant. Returns the fallback on any non-success envelope. 6 agent-side tests.
+- Agent worker wired — `agent/src/index.ts` now calls `await fetchTenantConfig(...)` and uses the result for `buildSystemPrompt(...)` and the spoken greeting. The hardcoded DynaTire block deleted.
+
+Backend: 1,475 → 1,479. Agent suite: 53 → 72 tests.
+
+## May 2, 2026 — Concurrency Fix + Structural Refactors + Test-or-Delete Policy
+
+12-commit unblocked-work session that closed a real launch blocker, slimmed `src/index.ts` by 28%, and captured the decision principle as a durable Build Principle.
+
+**Booking concurrency hole closed** (`55be6dc`):
+- Race confirmed under READ COMMITTED with a 20-caller load test: 9/20 winners on the resource race, 20/20 on the employee race. The find-then-insert pattern in `book_appointment_atomic` / `book_with_scheduling_atomic` could pass two `NOT EXISTS` checks before either committed.
+- Closed by two GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`) scoped to scheduled, non-deleted appointments, paired with `exclusion_violation` handlers in both RPCs that return the existing `TIMESLOT_OCCUPIED` error code.
+- New test file `src/booking-concurrency.test.ts` (2 real-DB race tests).
+- Migrations `20260501000000` + `20260501000001` shipped to repo, **not yet applied to prod Supabase** — pre-flight overlap-scan needed first.
+
+**`src/index.ts` 385 → 279 lines** across three commits:
+- `fbc1eaf` — JWT preHandler extracted to `src/middleware.ts` as `registerJwtAuthHook(app, pool)`. Includes `JWT_SECRET`/`JWT_EXPIRY`/`generateToken`/`verifyToken`/`PUBLIC_ROUTES` and the password-rotation check.
+- `9b78030` — DB pool config consolidated. `src/database/index.ts:getPool()` is now the canonical singleton with deadlock-prevention timeouts.
+- `5077fd6` — `withTenantClient` factory moved to `src/database/index.ts` as `createWithTenantClient(pool)`.
+
+**`src/services/crm/` deleted** (`2cc782a`, NEEDS-REFACTORING #1):
+- 21 dormant CRM adapters + `BaseCRMAdapter` interface + `createCRMAdapter()` factory + the mocked-API test file removed (3,480 lines).
+- Two of the deleted adapters (`dentrix.ts`, `eaglesoft.ts`) were dental-practice CRMs that violated the platform's HIPAA-excluded-vertical policy.
+- Decision policy locked: anything we can't test against gets deleted. The four working flat clients (jobber/hubspot/square/servicetitan) are unaffected.
+
+**Build Principles captured in CLAUDE.md** (`18181bc`):
+- Test it or delete it. Build for real customers. Working flat code beats a dormant abstraction. HIPAA verticals permanently excluded.
+- NEEDS-REFACTORING.md gained a "Resolution lens" preamble.
+
+**Other landings:**
+- `c9f40c6` — `scripts/setup-db.sh` bootstrap bug fixed (psql `-c` and stdin heredoc were mutually exclusive).
+- `6f91b7b` — OTP Phase 3 status truthed up in CLAUDE.md (work had already shipped in commit `18caffe` on 2026-04-24).
+- `c18c996` — Telnyx PSTN ticket re-submitted to LERG/porting team after the original `#2850682` went 4 days without a human response.
+- `889d25b` — All *.md files aligned with the day's landings.
+- `444dad1` — Last three pre-existing test files (`index.test.ts`, `normalizer.test.ts`, `scheduling.test.ts`) gained 5W diagnostic comments — 47 tests annotated; the 5W convention is now universal.
+
+**Test state at session close (May 2):** 1,475 backend + 498 dashboard = 1,973 passing + 2 documented skips, 0 failures, typecheck clean both surfaces.
+
+## April 24, 2026 — UX Review & Polish Batch
+
+Full UX review of the dashboard identified 20 items across P0–P3. 14 shipped across commits `dac97cb`, `91c9903`, `7042a8e`, `3954d4c` + supporting refactors (`2f74991`). Deferred items need design input (admin-mode color, theme-selector placement, first-run nav callout) or bigger investment (skeleton screens, Remember-me refresh tokens).
+
+**P0 trust fixes:**
+- Visible load-error banner + retry on `DashboardHome`. Uses `Promise.allSettled` so partial data still renders.
+- Login copy stripped of developer-internal terminology ("Multi-Tenant Management Console", "Ready for Live Integration", "Is the backend server running?").
+- `ErrorBoundary` shows a friendly message in production; raw `Error.message` only renders when `NODE_ENV !== 'production'`.
+
+**P1 affordances:**
+- Login: create-account link, password show/hide toggle, `autoComplete="username"`, label/input a11y wiring.
+- Today's Schedule empty state offers CTAs ("View this week", "See staff shifts").
+- Unanswered-questions badge bubbles up to the Back Office mode tab.
+- Fitts's Law: entire Today's Schedule card header is a single large click target.
+- Icon-only buttons in `OutlookLayout` top bar carry `aria-label`. Profile button has `aria-expanded` + `aria-haspopup`.
+- `ErrorBoundary` has a "Reload page" escape hatch.
+
+**P2 polish:**
+- Tenant switcher dropdown uses CSS vars (themes correctly across all 8 palettes).
+- Quick-actions grid: `md:grid-cols-3` → `md:grid-cols-2 lg:grid-cols-3`.
+- "Setup Assistant" quick action label corrected to "Services & Resources".
+- User-facing "tenant" replaced with "business" in error messages. `vocabulary-guard.test.ts` prevents regression.
+
+**Backend hardening:**
+- Startup warnings extracted from `index.ts` into `src/services/envWarnings.ts` (pure function, 10 unit tests). Added a warning for missing `TELNYX_API_KEY`.
+
+**Test coverage added:** +50 dashboard tests, +10 backend tests.
+
+## April 23, 2026 — Phone Verification (SMS OTP)
+
+- New table `phone_verifications` (tenant_id, phone, code_hash, expires_at, attempt_count, verified_at). RLS + FORCE RLS. Migration `20260423000000_phone_verifications.sql`.
+- New service `src/services/telnyxSms.ts` — Telnyx Messaging API wrapper + `generateVerificationCode(digits)` using `crypto.randomInt`.
+- New agent tools: `POST /agent-tools/send-verification-code` (rate-limited: 3/phone/hour, 100/tenant/day) and `POST /agent-tools/verify-phone-code` (5 tries max, 10-min TTL, bcrypt-hashed codes).
+- SMS body locked: `Your SecretaryHQ verification code is: 123456. Reply STOP to opt out.` (TCPA opt-out required).
+- Booking routes (`book-appointment`, `book-with-scheduling`) gate on `isValidPhone(args.phone)`. Invalid phone → route returns the ask-for-phone message; LLM reads it, asks the caller verbally, kicks into the OTP flow. Valid caller-ID phone skips verification.
+- 12 new tests in `agentTools.test.ts`, 7 in `telnyxSms.test.ts`, 3 in booking-route gates.
+- **System prompt (Phase 3):** Done in commit `18caffe` (2026-04-24) when the LiveKit `agent/src/prompt.ts` was created.
+
+## April 12, 2026 — Improvement Hardening
+
+- Employee update route missing `AND tenant_id` in WHERE clause — cross-tenant employee updates were possible. Fixed by adding tenant_id scoping + `assertRowAffected` guard.
+- Zero-row mutation guards added to employees, customers, appointments, tenants, knowledge, resources, services routes — all previously returned `{ success: true }` when UPDATE/DELETE affected 0 rows (silent no-op).
+- Shared route helpers extracted to `src/routes/routeHelpers.ts`.
+- `nameUtils.ts` extended with `slugify()` and `buildDisplayName()`.
+
+## April 1, 2026 — Voice AI Bug Fixes
+
+- BUG-059: Timezone regression in `book_with_scheduling_atomic()` — hardcoded UTC instead of tenant timezone for shift validation. Fixed with migration `20260401000000_fix_scheduling_timezone_bug.sql`.
+- BUG-060: Phone number stored as "+1" (incomplete) — `normalizePhone()` now rejects < 10 digits.
+- BUG-061: Wrong date booked — Vapi assistant had hardcoded stale date in system prompt, now uses dynamic date.
+- BUG-062: No employee assigned — AI wasn't passing `requiredEmployeeSkills` array, prompt updated with service-to-skill mapping.
+- BUG-063: Call hangs up on booking failure — added error handling to Vapi assistant prompt.
+- BUG-064: Generic booking error messages — added specific error codes (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED) via migration `20260401000001_specific_booking_errors.sql`.
+
+## April 1, 2026 — Remaining Bug Fixes
+
+- BUG-030: `link_orphaned_transcripts()` now called automatically in `dispatcher.handleCallEnded()` after every call.
+- BUG-031: `checkAvailability()` now uses `check_availability_with_tz()` RPC for timezone-aware results.
+- BUG-032: n8n workflow now generates embeddings (text-embedding-3-small) and stores in `call_summaries.embedding`.
+- BUG-038: All edge function queries on soft-deletable tables filter `is_deleted`. `deleteEmployee()` uses soft delete.
+- BUG-039: ARIA attributes added to Toast, Card, FeedbackButton, CoverageBar, OutlookLayout tabs.
+
+## March 2026 — Code Review
+
+- 58 bugs identified and resolved across Critical/High/Medium/Low severity.
+- `users.email` scoped to per-tenant uniqueness (BUG-002).
+- RLS standardized on `app.current_tenant_id` (BUG-006).
+- Dev bypass button removed (BUG-005).
+- `handleEditFormChange` fixed in CRMView (BUG-004).
+- Fastify monolith broken into 20 route modules with RLS enforcement (BUG-017).
+- Scheduling logic consolidated into `shared/scheduling.ts` (BUG-016).
+
+## Phase 12 — Scheduler, Assignments & Coverage Visibility (Complete)
+
+- **12A — Repeatable Setup Wizard**: 7-step guided setup (Services, Resources, Employees, Shifts, Assignments, Review, Go Live), live coverage badges, phone activation on final step.
+- **12B — Scheduler Views**: Staff swimlanes (24hr, zoom), resource columns, appointment list, calendar sub-view. Quick Book panel, Employee Day Focus panel.
+- **12C — Skill Relationship Map**: Interactive 3-column mind map with click-to-connect/disconnect.
+- **12D — Coverage Visibility**: `check_coverage_gaps()` RPC, coverage bars, status badges, `GET /coverage` endpoint.
+- **12E — RAG Normalization Layer**: `shared/normalizeForEmbedding.ts` (gpt-4o-mini), `normalized_text` column, query normalization in edge functions.
+- **12F — Stripe Lite**: Solo ($129/mo) + Growth ($279/mo), Stripe Checkout, webhook (3 events), subscription gate middleware (402).
+
+**Additional features shipped with Phase 12:**
+- 8-theme system (light, dark, midnight, nord, sunset, forest, high-contrast, solarized) — ThemeProvider + CSS custom properties + palette picker.
+- Admin tenant reorder via drag-and-drop with save/discard. `sort_order` column, `POST /tenants/reorder`.
+- Type-to-confirm modal for tenant deletion.
+- `tenantsVersion` counter in SessionContext keeps the dropdown in sync with the admin panel.
+
+## Design Session — March 24, 2026
+
+Full UI/UX design session. All decisions documented in `docs/UI_UX_DESIGN.md`, `docs/DECISIONS.md`, `docs/DESIGN_HANDOFF.md`. Do not second-guess these without explicit instruction from Dale.
+
+**Work items (all complete as of 2026-03-25):**
+1. Apply dark sidebar visual style — all components use CSS vars, all themes dark.
+2. Rebuild theme system — `--font-display`/`--font-body` in all 8 themes, dropdown switcher.
+3. Flip the scheduler — NewSchedulerView: rows=staff, cols=hours, 24hr, split-panel scroll sync, business hours shading, zoom.
+4. Staff quick profile card — read-only, anchored, outside-click dismiss, skills as indented vertical list.
+5. Skills toggle — Hours mode (shift bar + appointments) / Skills mode (stacked skill-colored bars).
+6. Drag to reorder staff rows — grip handles, save/discard, persists to localStorage per tenant.
+7. Rebuild analytics — 3 active metrics (booking data), 3 Phase 2 placeholders (Vapi).
+8. Remove Coverage Map — `ServiceCoverageView.tsx` deleted, zero references remain.
+
+**Locked decisions:**
+- **Fonts:** Bebas Neue (`--font-display`) + DM Sans (`--font-body`). Universal. Use CSS variables only.
+- **Coverage Map:** Removed. `CoverageBar` and `CoverageStatusBadge` primitives retained (used by SetupWizard, SkillMap, ResourceColumns).
+- **Analytics:** Rebuilt. 6 metrics — 3 active from booking data (Busiest Hours, Return Rate, No-Show Pattern), 3 pending call log integration.
+- **Logo:** "Secretary HQ" (space between words).
+- **Philosophy:** We show data. They manage their business. No warnings, no grades, no opinions. See `docs/UI_UX_DESIGN.md` Design Philosophy section.

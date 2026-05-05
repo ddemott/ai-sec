@@ -46,10 +46,10 @@ flowchart TB
 
   LiveKit -->|WebSocket| Agent
 
-  Fastify["Fastify Backend<br/>25 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+  Fastify["Fastify Backend<br/>26 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>82 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>83 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook<br/>Jobber / HubSpot<br/>Square / ServiceTitan"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]

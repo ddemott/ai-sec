@@ -30,7 +30,7 @@ flowchart TB
   Telnyx -.current.-> Vapi
   Telnyx -.target.-> LiveKit
 
-  Fastify["Fastify Backend<br/>25 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+  Fastify["Fastify Backend<br/>26 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
 
   EdgeFn --> Fastify
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
