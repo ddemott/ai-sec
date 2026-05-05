@@ -217,7 +217,7 @@ All 47 items from April 10-11 UX review resolved in commit `f9ffa8e`. Key change
 ### Highest Impact (do first)
 - [x] Unify calendar service token refresh (Google + Outlook) — partially shipped 2026-05-04 as `src/services/oauthStateJwt.ts` (state JWT only); refresh itself deferred (Google SDK vs Outlook fetch defeat clean abstraction). See "CRM Sync Unification" above.
 - [x] Extract shared tenant bootstrap helper (auth register + admin create) — done 2026-04-30 (commit `19d6b8b`). See "CRM Sync Unification" above.
-- [ ] Extract dashboard controller hooks (AppointmentView + SuperAdminDashboard)
+- [x] Extract dashboard controller hooks (AppointmentView + SuperAdminDashboard) — **verified + deferred 2026-05-04** under the same lens as NEEDS-REFACTORING #11's deferred part. The reusable pieces were already extracted in earlier work (`useStaticData(tenantId)`, `useActiveTenantId`, `useVocabulary`, `AppointmentDetailContext`). What remains is component-specific orchestration with exactly one consumer (Tenant-typed CRUD + drag-reorder for SuperAdminDashboard, appointment CRUD + calendar view/zoom for AppointmentView); extracting now would relocate code without enabling reuse or new test patterns. Build principle: "Working flat code beats a dormant abstraction." Re-evaluate if a second consumer for the reorder pattern or appointment-CRUD shape arrives. One narrow follow-up tracked: a `useDraggableList<T>` extraction would pay off the moment any other admin list needs reordering.
 - [ ] Add tests for destructive flows (tenant delete/reorder, mock-mode booking, shift override RPC)
 - [ ] Replace ad hoc tenant typing with shared dashboard tenant view type
 - [ ] Normalize response envelopes across CRM disconnect/sync-status routes
