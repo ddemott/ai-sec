@@ -33,6 +33,16 @@ describe("Tenant reorder (drag-and-drop)", () => {
   });
 
   it("tenants table has sort_order column defaulting to 0", async () => {
+    // WHO: maintainer adding new tenants without specifying sort_order
+    // WHAT: information_schema confirms the column exists AND its DEFAULT
+    //       is 0 (literal "0" appears in column_default)
+    // WHEN: every tenant insert that doesn't pass sort_order
+    // WHERE: tenants table schema (added in the drag-reorder migration)
+    // WHY: a regression that drops the DEFAULT would leave NULLs in
+    //      sort_order, which would silently scramble the admin tenant
+    //      picker (NULLS LAST/FIRST behavior depends on the ORDER BY
+    //      clause). Pinning the column + default at the schema level
+    //      catches this before it ships
     if (!dbAvailable) return;
 
     const res = await client.query(
@@ -44,6 +54,16 @@ describe("Tenant reorder (drag-and-drop)", () => {
   });
 
   it("new tenants get sort_order = 0 by default", async () => {
+    // WHO: any flow inserting a tenant without explicit sort_order
+    //      (POST /tenants/create, register flow, manual admin entry)
+    // WHAT: the inserted row has sort_order = 0 (the documented default)
+    // WHEN: every tenant creation that doesn't choose a position
+    // WHERE: tenants table column default (runtime check, complementing
+    //        the schema-introspection check above)
+    // WHY: belt-and-suspenders with the previous test — that one verifies
+    //      the schema declares the default; this one verifies the default
+    //      actually applies on INSERT. A schema-only check could pass
+    //      while a triggered ON INSERT side-effect overrode the default
     if (!dbAvailable) return;
 
     await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test')");
@@ -52,6 +72,17 @@ describe("Tenant reorder (drag-and-drop)", () => {
   });
 
   it("can update sort_order for multiple tenants", async () => {
+    // WHO: super-admin saving a new tenant ordering after drag-reorder
+    // WHAT: 3 sequential UPDATEs assigning sort_order = 0, 1, 2 to specific
+    //       tenant ids; subsequent SELECT ORDER BY sort_order returns the
+    //       rows in the assigned sequence
+    // WHEN: every save-order action — the route handler at
+    //       src/routes/tenants.ts:156 issues exactly this sequence
+    // WHERE: UPDATE tenants SET sort_order = $1 WHERE id = $2
+    // WHY: this is the DB-level half of the contract that the route-level
+    //      test (tenant-routes.test.ts) verifies. If sort_order updates
+    //      didn't actually persist (column dropped, trigger interfering),
+    //      the admin would save a new order and see the old one come back
     if (!dbAvailable) return;
 
     const r1 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING id");
@@ -72,6 +103,16 @@ describe("Tenant reorder (drag-and-drop)", () => {
   });
 
   it("ORDER BY sort_order ASC, created_at DESC matches tenant listing query", async () => {
+    // WHO: GET /tenants — the dashboard's tenant picker query
+    // WHAT: the canonical listing ORDER BY clause produces the right
+    //       sequence when sort_order values are distinct
+    // WHEN: every dashboard load that lists tenants
+    // WHERE: tenants listing route + the dashboard tenant picker
+    // WHY: the production route uses this exact ORDER BY shape. If a
+    //      reviewer changes the route to use a different ordering, the
+    //      drag-reorder feature visibly breaks (the saved order isn't
+    //      what the admin sees). Pinning the ORDER BY at the schema test
+    //      level keeps the route + DB contract aligned
     if (!dbAvailable) return;
 
     await client.query("INSERT INTO tenants (name, business_type, sort_order) VALUES ('First', 'test', 2)");
@@ -83,6 +124,18 @@ describe("Tenant reorder (drag-and-drop)", () => {
   });
 
   it("tenants with same sort_order fall back to created_at DESC", async () => {
+    // WHO: dashboard listing tenants where the admin hasn't yet manually
+    //      reordered (so all sort_order values are still 0)
+    // WHAT: the secondary ORDER BY (created_at DESC) takes over and
+    //       produces newest-first ordering
+    // WHEN: a freshly-onboarded environment, or any time the admin hasn't
+    //       run reorder yet
+    // WHERE: same listing ORDER BY as above
+    // WHY: without the secondary ORDER BY, equal sort_order values would
+    //      produce nondeterministic ordering — the dashboard picker would
+    //      shuffle on every page load. Pinning the fallback to created_at
+    //      DESC preserves a stable + intuitive default (newest tenant
+    //      surfaces first)
     if (!dbAvailable) return;
 
     // All default sort_order = 0, so order by created_at DESC

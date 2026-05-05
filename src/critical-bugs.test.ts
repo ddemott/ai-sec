@@ -50,6 +50,20 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
     // =========================================================
     describe("BUG-001: Shift timezone validation", () => {
         it("should validate shifts using tenant timezone, not UTC", async () => {
+            // WHO: voice AI booking for an Eastern-timezone shop's caller
+            // WHAT: book_appointment_atomic compares the requested wall-time
+            //       against the employee's shift in the tenant's timezone
+            //       (not in UTC), so 10am-11am Eastern is correctly inside
+            //       a 9-5 Eastern shift even though the UTC values differ
+            // WHEN: every voice AI booking call where the tenant timezone
+            //       is not America/Chicago (the original baseline)
+            // WHERE: book_appointment_atomic shift-validation block — it
+            //        reads tenants.timezone and converts the booking window
+            //        before comparing against employee_schedule rows
+            // WHY: BUG-001 — pre-fix the RPC compared raw UTC values against
+            //       shift hours, so a tenant in Eastern timezone would see
+            //       valid 10am Eastern bookings rejected as "outside shift"
+            //       because 15:00 UTC sits inside 9-5 only in the US East
             if (!dbAvailable) return;
 
             const tenantId = await createTenant(root, "Eastern Shop", "auto-shop", "America/New_York");
@@ -76,6 +90,20 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
         });
 
         it("should reject booking outside shift hours in tenant timezone", async () => {
+            // WHO: same Eastern-timezone tenant; voice AI booking 6pm
+            //      Eastern (after the employee's 9-5 shift ends)
+            // WHAT: RPC returns success=false with the standard
+            //       "Employee is not on shift during this time" error string
+            //       — same string the agent prompt knows how to relay
+            // WHEN: any booking attempt outside the employee's shift window
+            //       in the tenant's local time
+            // WHERE: book_appointment_atomic shift-validation block (sad path)
+            // WHY: BUG-001 sad-path complement to the test above. Pinning
+            //      both directions (in-shift accepts, out-of-shift rejects)
+            //      catches a regression that broke EITHER the timezone
+            //      conversion OR the comparison direction. The exact
+            //      error_message string is part of the agent prompt's
+            //      failure-mapping contract
             if (!dbAvailable) return;
 
             const tenantId = await createTenant(root, "Eastern Shop", "auto-shop", "America/New_York");
@@ -102,6 +130,20 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
         });
 
         it("should handle UTC-crossing correctly (evening in local TZ is next day in UTC)", async () => {
+            // WHO: West-coast tenant whose evening hours cross the UTC
+            //      day boundary (8pm Pacific = 4am UTC the next day)
+            // WHAT: book_appointment_atomic accepts the booking even though
+            //       the UTC date differs from the local date that
+            //       employee_schedule was seeded against
+            // WHEN: any after-7pm Pacific booking (or 9pm Pacific west of
+            //       PST/PDT) — common for trade businesses with evening hours
+            // WHERE: book_appointment_atomic timezone-conversion code,
+            //        specifically the local-date derivation step
+            // WHY: BUG-001 edge case — a naive timezone implementation that
+            //      compared the booking's UTC date against employee_schedule
+            //      rows would miss the right shift_date. This test pins
+            //      that the conversion uses the LOCAL date (2026-03-02)
+            //      rather than the UTC date (2026-03-03) for the lookup
             if (!dbAvailable) return;
 
             const tenantId = await createTenant(root, "West Coast Shop", "auto-shop", "America/Los_Angeles");
@@ -134,6 +176,19 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
     // =========================================================
     describe("BUG-002: Per-tenant email uniqueness", () => {
         it("should allow the same email in different tenants", async () => {
+            // WHO: a person who owns/works at multiple tenants on the
+            //      platform (e.g. a contractor who runs two shops)
+            // WHAT: same email address can exist in users rows under
+            //       different tenant_ids without a uniqueness violation
+            // WHEN: any cross-tenant signup or admin-create flow where the
+            //       same person registers more than once
+            // WHERE: users table — UNIQUE constraint on (tenant_id, email)
+            //        rather than email alone
+            // WHY: BUG-002 — pre-fix the constraint was on email globally,
+            //      blocking legitimate multi-tenant identities. The fix
+            //      scoped uniqueness to (tenant_id, email). Pin this so a
+            //      future migration that "tightens" the constraint by
+            //      removing tenant_id from it surfaces immediately
             if (!dbAvailable) return;
 
             const tenantA = await createTenant(root, "Shop A", "auto-shop");
@@ -153,6 +208,16 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
         });
 
         it("should still reject duplicate email within the same tenant", async () => {
+            // WHO: an attempted second user registration with an email that
+            //      already exists in the same tenant
+            // WHAT: INSERT throws a uniqueness-violation error
+            // WHEN: any same-tenant duplicate email — typo in admin signup,
+            //       a bug that didn't notice the existing user, etc.
+            // WHERE: users table UNIQUE (tenant_id, email)
+            // WHY: BUG-002 sad-path complement. Without this test, a
+            //      regression that dropped the constraint entirely would
+            //      pass the previous test (multi-tenant works) but break
+            //      same-tenant duplicate detection silently. Pin both halves
             if (!dbAvailable) return;
 
             const tenantA = await createTenant(root, "Shop A", "auto-shop");
@@ -176,6 +241,18 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
     // =========================================================
     describe("BUG-006: Users RLS uses app.current_tenant_id", () => {
         it("should isolate users by tenant using app.current_tenant_id", async () => {
+            // WHO: api_user role with tenant context set; a SELECT FROM
+            //      users should return only the rows that match
+            //      app.current_tenant_id, not all users across tenants
+            // WHAT: tenant A sees only User A; tenant B sees only User B
+            //       (the correct names, in the correct rows)
+            // WHEN: every authenticated dashboard request that lists users
+            // WHERE: users RLS policy reading app.current_tenant_id
+            // WHY: BUG-006 — the original RLS policy on users table read a
+            //      different session variable than the rest of the schema,
+            //      causing cross-tenant user list leaks (a bug worse than
+            //      BUG-001 since user emails are PII). Pin the canonical
+            //      app.current_tenant_id contract uniformly across tables
             if (!dbAvailable) return;
 
             const tenantA = await createTenant(root, "A", "t");
@@ -202,6 +279,19 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
         });
 
         it("should prevent cross-tenant user access", async () => {
+            // WHO: api_user with tenant A context attempting to UPDATE a
+            //      user row in tenant B by guessed UUID
+            // WHAT: UPDATE returns rowCount=0; the target row stays untouched
+            //       when checked from tenant B's context
+            // WHEN: any cross-tenant write probe — same risk shape as the
+            //       resources-table cross-tenant UPDATE test in rls.test.ts,
+            //       but for the more sensitive users table
+            // WHERE: users RLS UPDATE policy
+            // WHY: BUG-006 write-side complement to the previous read test.
+            //      Reads (test above) leak data; writes corrupt data. A
+            //      regression here could let an attacker rename users in
+            //      another tenant — escalating from data leak to
+            //      account-takeover-adjacent territory
             if (!dbAvailable) return;
 
             const tenantA = await createTenant(root, "A", "t");

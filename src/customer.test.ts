@@ -37,6 +37,17 @@ describe("Customer Management", () => {
     });
 
     it("should create a customer with all fields including timezone", async () => {
+        // WHO: any flow that creates a customer record (voice booking,
+        //      dashboard manual entry, CRM sync inbound)
+        // WHAT: every column listed in the schema is writable + readable
+        //       round trip — name, phone, email, address parts, timezone
+        // WHEN: customer onboarding (first inbound call) or admin entry
+        // WHERE: customers table schema
+        // WHY: the timezone column was added in the timezone-aware
+        //      scheduling work; without it, voice AI would default every
+        //      caller to UTC and "today at 2pm" would map to wrong wall
+        //      time. This test pins that the timezone column is writable
+        //      with a real IANA zone string and survives a round trip
         if (!dbAvailable) return;
         const res = await client.query(
             `INSERT INTO customers (
@@ -61,6 +72,19 @@ describe("Customer Management", () => {
     });
 
     it("should update a customer's timezone and address", async () => {
+        // WHO: customer who has moved (or had wrong timezone on first entry)
+        //      and needs both fields updated
+        // WHAT: UPDATE persists both timezone and city; the read-back row
+        //       reflects both new values
+        // WHEN: any flow that mutates customer profile fields — admin
+        //       edit, voice AI updating after caller correction, CRM sync
+        //       pulling a changed remote record
+        // WHERE: customers UPDATE path
+        // WHY: a regression that silently dropped one of these fields on
+        //      UPDATE (e.g., a column rename + missed callsite) would
+        //      surface as voice AI scheduling appointments in the
+        //      caller's old timezone — confusing but easy to miss in
+        //      manual testing. Pin the round-trip here
         if (!dbAvailable) return;
         const customerId = await createCustomerFull(client, tenantId, "+15551112222", "Old Name");
 
@@ -75,6 +99,18 @@ describe("Customer Management", () => {
     });
 
     it("should default timezone to America/New_York if not specified", async () => {
+        // WHO: any insert path that doesn't pass timezone explicitly —
+        //      e.g., an older API version, a migration that didn't backfill,
+        //      a partial INSERT from a CRM webhook
+        // WHAT: customers.timezone column has DEFAULT 'America/New_York'
+        //       so the inserted row has a usable IANA zone even when omitted
+        // WHEN: every insert that doesn't pass timezone explicitly
+        // WHERE: customers table column default
+        // WHY: a NULL timezone column would crash the time-formatting code
+        //      in voice AI prompts ("today at 2pm" needs a zone). The
+        //      DEFAULT keeps callers from hitting NULL even on partial
+        //      writes; this test pins that default so a migration that
+        //      drops it surfaces here, not in production at call time
         if (!dbAvailable) return;
         const res = await client.query(
             "INSERT INTO customers (tenant_id, name, phone) VALUES ($1, 'Default Tz', '+15553334444') RETURNING timezone",
