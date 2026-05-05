@@ -799,8 +799,8 @@ describe("requireAuth middleware", () => {
     // WHERE: requireAuth helper in src/middleware.ts
     // WHY: BUG-003 — confirms authenticated requests pass through the guard
     const { requireAuth } = await import("./middleware");
-    const fakeReq = { auth: { tenant_id: "t1", user_id: "u1", email: "a@b.com" } } as any;
-    const fakeReply = {} as any;
+    const fakeReq = { auth: { tenant_id: "t1", user_id: "u1", email: "a@b.com" } } as unknown as import("./middleware").AppRequest;
+    const fakeReply = {} as unknown as import("fastify").FastifyReply;
     expect(requireAuth(fakeReq, fakeReply)).toBe(true);
   });
 
@@ -813,15 +813,15 @@ describe("requireAuth middleware", () => {
     // WHY: BUG-003 — without requireAuth, unauthenticated users could access admin routes
     const { requireAuth } = await import("./middleware");
     let statusCode: number | undefined;
-    let body: any;
+    let body: unknown;
 
-    const fakeReq = {} as any;
+    const fakeReq = {} as unknown as import("./middleware").AppRequest;
     const fakeReply = {
       status(code: number) {
         statusCode = code;
-        return { send(b: any) { body = b; } };
+        return { send(b: unknown) { body = b; } };
       },
-    } as any;
+    } as unknown as import("fastify").FastifyReply;
 
     const result = requireAuth(fakeReq, fakeReply);
     expect(result).toBe(false);

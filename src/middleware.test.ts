@@ -10,6 +10,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { FastifyReply, FastifyInstance } from "fastify";
+import type { Pool, PoolClient } from "pg";
 import {
   withHandler,
   withPoolClient,
@@ -20,27 +22,36 @@ import {
   logWarning,
   logError,
   AppError,
+  type AppRequest,
 } from "./middleware";
 
 // ── Mock helpers ────────────────────────────────────────────────────────
 
-function createMockReply() {
-  const reply: any = {
+/** Mock FastifyReply with the slice of methods middleware actually touches. */
+interface MockReply {
+  statusCode: number;
+  body: unknown;
+  status(code: number): MockReply;
+  send(data: unknown): MockReply;
+}
+
+function createMockReply(): FastifyReply {
+  const reply = {
     statusCode: 200,
-    body: null,
+    body: null as unknown,
     status(code: number) {
       reply.statusCode = code;
       return reply;
     },
-    send(data: any) {
+    send(data: unknown) {
       reply.body = data;
       return reply;
     },
-  };
-  return reply;
+  } satisfies MockReply;
+  return reply as unknown as FastifyReply;
 }
 
-function createMockRequest(overrides: Record<string, any> = {}) {
+function createMockRequest(overrides: Partial<AppRequest> & Record<string, unknown> = {}): AppRequest {
   return {
     tenantId: undefined,
     auth: undefined,
@@ -55,7 +66,7 @@ function createMockRequest(overrides: Record<string, any> = {}) {
       child: vi.fn().mockReturnThis(),
     },
     ...overrides,
-  } as any;
+  } as unknown as AppRequest;
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -81,7 +92,7 @@ describe("AppError", () => {
 
 describe("withHandler — happy paths", () => {
   it("passes through successful handler result (WHO: any route | WHAT: handler runs without error → result returned | WHERE: withHandler wrapper | WHY: decorator should be transparent on success)", async () => {
-    const handler = vi.fn(async (_req: any, reply: any) => reply.send({ success: true }));
+    const handler = vi.fn(async (_req: AppRequest, reply: FastifyReply) => reply.send({ success: true }));
     const wrapped = withHandler(handler, 'Test failed');
 
     const req = createMockRequest();
@@ -111,7 +122,7 @@ describe("withHandler — sad paths", () => {
   });
 
   it("re-throws TENANT_NOT_FOUND for global handler (WHO: route handler | WHAT: TENANT_NOT_FOUND error propagated | WHERE: withHandler catch | WHY: global handler must catch this for auto-logout on deleted tenant)", async () => {
-    const err: any = new Error('Tenant gone');
+    const err = new Error('Tenant gone') as Error & { code?: string };
     err.code = 'TENANT_NOT_FOUND';
     const handler = vi.fn(async () => { throw err; });
     const wrapped = withHandler(handler, 'Fetch failed');
@@ -123,7 +134,7 @@ describe("withHandler — sad paths", () => {
   });
 
   it("uses statusCode from error if present (WHO: validation layer | WHAT: error.statusCode used as HTTP status | WHERE: withHandler catch | WHY: validation errors carry statusCode but aren't AppErrors)", async () => {
-    const err: any = new Error('Bad input');
+    const err = new Error('Bad input') as Error & { statusCode?: number };
     err.statusCode = 422;
     const handler = vi.fn(async () => { throw err; });
     const wrapped = withHandler(handler, 'Validation failed');
@@ -160,7 +171,7 @@ describe("withHandler — sad paths", () => {
 describe("withPoolClient", () => {
   it("returns fn result and releases client (WHO: any DB operation | WHAT: pool.connect → fn → client.release | WHERE: withPoolClient | WHY: eliminates try/finally boilerplate in every route)", async () => {
     const client = { query: vi.fn(), release: vi.fn() };
-    const pool = { connect: vi.fn().mockResolvedValue(client) } as any;
+    const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
 
     const result = await withPoolClient(pool, async (c) => {
       await c.query('SELECT 1');
@@ -173,7 +184,7 @@ describe("withPoolClient", () => {
 
   it("releases client even when fn throws (WHO: any DB operation | WHAT: fn throws → client still released | WHERE: withPoolClient finally | WHY: prevents pool exhaustion on errors)", async () => {
     const client = { query: vi.fn(), release: vi.fn() };
-    const pool = { connect: vi.fn().mockResolvedValue(client) } as any;
+    const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
 
     await expect(
       withPoolClient(pool, async () => { throw new Error('Query failed'); })
@@ -237,12 +248,14 @@ describe("requireAuth", () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("tenantMiddleware", () => {
+  type HookFn = (req: AppRequest, reply: FastifyReply) => Promise<void> | void;
   function setupMiddleware() {
-    let hookFn: any;
+    let hookFn: HookFn | undefined;
     const app = {
-      addHook: vi.fn((_name: string, fn: any) => { hookFn = fn; }),
-    } as any;
+      addHook: vi.fn((_name: string, fn: HookFn) => { hookFn = fn; }),
+    } as unknown as FastifyInstance;
     tenantMiddleware(app);
+    if (!hookFn) throw new Error('tenantMiddleware did not register a preHandler hook');
     return hookFn;
   }
 
@@ -399,7 +412,7 @@ describe("logError", () => {
 
   it("includes error code if present (WHO: Postgres error | WHAT: error.code captured | WHERE: logError | WHY: Postgres errors carry code like '23505' for unique violation)", () => {
     const req = createMockRequest();
-    const err: any = new Error('duplicate key');
+    const err = new Error('duplicate key') as Error & { code?: string };
     err.code = '23505';
     logError(req, 'insert_failed', err);
 
