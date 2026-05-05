@@ -5,6 +5,7 @@ import * as hubspotClient from '../services/hubspotClient';
 import * as hubspotSync from '../services/hubspotSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 import { getCrmSyncStatus } from '../services/crmSyncStatus';
+import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerHubSpotRoutes(
   app: FastifyInstance<any, any, any>,
@@ -59,16 +60,9 @@ export function registerHubSpotRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        `DELETE FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'hubspot'`,
-        [tenantId]
-      );
-      await client.query(
-        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'hubspot'`,
-        [tenantId]
-      );
-    });
+    await withTenantClient(tenantId, (client) =>
+      disconnectCrmIntegration(client, tenantId, 'hubspot')
+    );
 
     logEvent(req, 'hubspot_disconnected', {});
     return reply.send({ success: true });

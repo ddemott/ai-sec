@@ -5,6 +5,7 @@ import * as servicetitanClient from '../services/servicetitanClient';
 import * as servicetitanSync from '../services/servicetitanSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 import { getCrmSyncStatus } from '../services/crmSyncStatus';
+import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerServiceTitanRoutes(
   app: FastifyInstance<any, any, any>,
@@ -60,16 +61,9 @@ export function registerServiceTitanRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        `DELETE FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'servicetitan'`,
-        [tenantId]
-      );
-      await client.query(
-        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'servicetitan'`,
-        [tenantId]
-      );
-    });
+    await withTenantClient(tenantId, (client) =>
+      disconnectCrmIntegration(client, tenantId, 'servicetitan')
+    );
 
     logEvent(req, 'servicetitan_disconnected', {});
     return reply.send({ success: true });

@@ -5,6 +5,7 @@ import * as squareClient from '../services/squareClient';
 import * as squareSync from '../services/squareSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 import { getCrmSyncStatus } from '../services/crmSyncStatus';
+import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerSquareRoutes(
   app: FastifyInstance<any, any, any>,
@@ -59,16 +60,9 @@ export function registerSquareRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        `DELETE FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'square'`,
-        [tenantId]
-      );
-      await client.query(
-        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'square'`,
-        [tenantId]
-      );
-    });
+    await withTenantClient(tenantId, (client) =>
+      disconnectCrmIntegration(client, tenantId, 'square')
+    );
 
     logEvent(req, 'square_disconnected', {});
     return reply.send({ success: true });

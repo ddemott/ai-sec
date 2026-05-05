@@ -5,6 +5,7 @@ import * as jobberClient from '../services/jobberClient';
 import * as jobberSync from '../services/jobberSync';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 import { getCrmSyncStatus } from '../services/crmSyncStatus';
+import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerJobberRoutes(
   app: FastifyInstance<any, any, any>,
@@ -59,17 +60,9 @@ export function registerJobberRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        `DELETE FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
-        [tenantId]
-      );
-      // Clean up sync map entries
-      await client.query(
-        `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = 'jobber'`,
-        [tenantId]
-      );
-    });
+    await withTenantClient(tenantId, (client) =>
+      disconnectCrmIntegration(client, tenantId, 'jobber')
+    );
 
     logEvent(req, 'jobber_disconnected', {});
     return reply.send({ success: true });
