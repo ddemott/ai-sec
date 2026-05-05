@@ -1,0 +1,134 @@
+/**
+ * OutlookLayout role-gating tests.
+ *
+ * The dashboard's two-tab nav (Front Desk / Back Office) used to be visible
+ * to every tenant user. After the user-roles migration (2026-05-05), front-
+ * desk-only logins (`role === 'front_desk'`) should:
+ *   1. Not see the Back Office tab in the desktop nav.
+ *   2. Not see the Back Office button in the mobile mode-toggle.
+ *   3. Be snapped back to the Front Desk Home if they land on a Back
+ *      Office sub-tab via a stale URL or back-button.
+ *
+ * Owners (and super-admins, who keep full access regardless of `role`)
+ * should still see both tabs.
+ */
+import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import '@testing-library/jest-dom'
+import React from 'react'
+import { OutlookLayout } from './OutlookLayout'
+
+// Stub the API the layout uses on mount (knowledge badge + tenants list).
+// Without this, the layout fires a real fetch on render and littles the
+// console with rejected promises.
+vi.mock('../lib/api', () => ({
+  Api: {
+    knowledge: { unanswered: vi.fn().mockResolvedValue({ questions: [] }) },
+    tenants: { list: vi.fn().mockResolvedValue([]) },
+  },
+}))
+
+vi.mock('@/lib/ThemeContext', () => ({
+  useTheme: () => ({
+    theme: 'dark',
+    setTheme: vi.fn(),
+    themeInfo: { name: 'Dark' },
+  }),
+  THEMES: [{ id: 'dark', name: 'Dark' }],
+}))
+
+vi.mock('@/lib/SessionContext', async () => {
+  // OutlookLayout pulls tenantsVersion off useSessionContext; the
+  // FeedbackButton (rendered inside the layout) pulls useActiveTenantId.
+  // We don't need a real provider — just enough exports to satisfy the
+  // imports.
+  return {
+    useSessionContext: () => ({ tenantsVersion: 0 }),
+    useActiveTenantId: () => null,
+  }
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('OutlookLayout role gating', () => {
+  test('HAPPY: owner sees both Front Desk and Back Office tabs', async () => {
+    // WHO: Shop owner / admin user with the default 'owner' role.
+    // WHAT: Both top-level mode tabs render.
+    // WHERE: Desktop nav (FolderTabBar with size="lg").
+    // WHEN: On every page load while signed in as an owner.
+    // WHY: Owners need access to Services, Resources, Skills, Vocabulary,
+    //      Version History — all under Back Office. Hiding it would make
+    //      configuration impossible for the only people who configure.
+    render(
+      <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="owner">
+        <div>content</div>
+      </OutlookLayout>
+    )
+    expect(screen.getByRole('tab', { name: /front desk/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /back office/i })).toBeInTheDocument()
+  })
+
+  test('SAD: front_desk user does NOT see the Back Office tab', () => {
+    // WHO: Shop staff member promoted to a 'front_desk' role.
+    // WHAT: Only the Front Desk tab renders; Back Office is hidden in
+    //       both the desktop and mobile nav.
+    // WHERE: Both FolderTabBar (desktop) and the mobile mode-toggle div.
+    // WHY: External review (2026-05-01) flagged the dashboard as too
+    //      complex for non-technical users. The front-desk audience
+    //      doesn't need Resources/Skills/Vocabulary tabs to do their
+    //      daily work (book a call-in, look up tomorrow's schedule).
+    render(
+      <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="front_desk">
+        <div>content</div>
+      </OutlookLayout>
+    )
+    expect(screen.getByRole('tab', { name: /front desk/i })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /back office/i })).not.toBeInTheDocument()
+    // Mobile nav has plain <button>s rather than role="tab"; assert by name.
+    const mobileBackOffice = screen.queryByRole('button', { name: /^back office$/i })
+    expect(mobileBackOffice).not.toBeInTheDocument()
+  })
+
+  test('SAD: front_desk user landing on a Back Office sub-tab is redirected to dashboard', async () => {
+    // WHO: Front-desk user who clicked a stale ?tab=my-business link or
+    //      hit the back-button after an admin demoted them.
+    // WHAT: The layout snaps activeTab back to 'dashboard' on mount.
+    // WHERE: useEffect inside OutlookLayout that watches isFrontDeskOnly +
+    //        activeTab.
+    // WHY: Without this guard the user would see whichever Back Office
+    //      view was rendered by the dashboard page even though the tab
+    //      to switch back is gone — a dead-end for the user.
+    const setActiveTab = vi.fn()
+    render(
+      <OutlookLayout activeTab="my-business" setActiveTab={setActiveTab} role="front_desk">
+        <div>content</div>
+      </OutlookLayout>
+    )
+    await waitFor(() => {
+      expect(setActiveTab).toHaveBeenCalledWith('dashboard')
+    })
+  })
+
+  test('HAPPY: super-admin with role=front_desk still sees Back Office', async () => {
+    // WHO: Platform super-admin (tenant_id = 00000000...). The role
+    //      column doesn't apply to them — admin status is identified by
+    //      tenant_id, not by users.role. A super-admin with a stray
+    //      'front_desk' role on their user record still needs full UI.
+    // WHAT: Back Office tab still renders because isAdmin overrides role.
+    // WHY: Without this, demoting a super-admin's user record would
+    //      lock them out of the very dashboard they manage tenants from.
+    render(
+      <OutlookLayout
+        activeTab="dashboard"
+        setActiveTab={vi.fn()}
+        role="front_desk"
+        isAdmin
+      >
+        <div>content</div>
+      </OutlookLayout>
+    )
+    expect(await screen.findByRole('tab', { name: /back office/i })).toBeInTheDocument()
+  })
+})

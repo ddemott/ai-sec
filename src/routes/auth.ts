@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { withHandler, withPoolClient, type AppRequest } from '../middleware';
+import { withHandler, withPoolClient, type AppRequest, type UserRole } from '../middleware';
 import { sendPasswordResetEmail } from '../services/communications/systemEmail';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';
 
@@ -36,7 +36,7 @@ function hashToken(token: string): string {
 export function registerAuthRoutes(
   app: FastifyInstance<any, any, any>,
   pool: Pool,
-  generateToken: (payload: { tenant_id: string; user_id: string; email: string }) => string
+  generateToken: (payload: { tenant_id: string; user_id: string; email: string; role: UserRole }) => string
 ) {
   app.post('/login', { config: { rateLimit: { max: 5, timeWindow: '5 minutes' } } }, withHandler(async (req: AppRequest, reply) => {
     const parsed = LoginSchema.safeParse(req.body);
@@ -56,16 +56,19 @@ export function registerAuthRoutes(
     if (!match) {
       return reply.status(401).send({ success: false, error: 'Invalid email or password' });
     }
+    const role: UserRole = (user.role === 'front_desk' ? 'front_desk' : 'owner');
     const token = generateToken({
       tenant_id: user.tenant_id,
       user_id: user.id,
       email: user.email,
+      role,
     });
     return reply.send({
       success: true,
       tenant_id: user.tenant_id,
       user_id: user.id,
       user_name: user.full_name,
+      role,
       token,
     });
   }, 'Login failed'));
@@ -95,6 +98,7 @@ export function registerAuthRoutes(
       tenant_id: result.tenantId,
       user_id: result.userId,
       email,
+      role: 'owner',
     });
 
     return reply.status(201).send({
@@ -102,6 +106,7 @@ export function registerAuthRoutes(
       tenant_id: result.tenantId,
       user_id: result.userId,
       user_name: owner_name,
+      role: 'owner',
       token,
     });
   }, 'Registration failed'));
@@ -116,6 +121,7 @@ export function registerAuthRoutes(
       tenant_id: req.auth.tenant_id,
       user_id: req.auth.user_id,
       email: req.auth.email,
+      role: req.auth.role,
     });
     return reply.send({ success: true, token });
   }, 'Token refresh failed'));

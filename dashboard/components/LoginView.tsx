@@ -5,7 +5,7 @@ import { Lock, Mail, Loader2, Bot, Eye, EyeOff } from 'lucide-react'
 import { API_BASE_URL } from '../lib/api'
 
 interface LoginViewProps {
-  onLoginSuccess: (data: { tenant_id: string; user_name: string }) => void;
+  onLoginSuccess: (data: { tenant_id: string; user_name: string; role?: string }) => void;
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {

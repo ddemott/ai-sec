@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const {
     tenantId,
     userName,
+    role,
     isAdmin,
     managedTenantId,
     managedTenantName,
@@ -65,7 +66,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleLoginSuccess = (data: { tenant_id: string; user_name: string }) => {
+  const handleLoginSuccess = (data: { tenant_id: string; user_name: string; role?: string }) => {
     login(data)
     if (data.tenant_id === '00000000-0000-0000-0000-000000000000') {
       handleSetActiveTab('all-businesses')
@@ -94,6 +95,7 @@ export default function DashboardPage() {
       setActiveTab={handleSetActiveTab}
       onLogout={logout}
       userName={userName}
+      role={role}
       isAdmin={isAdmin}
       managedTenantName={managedTenantName}
       managedTenantId={managedTenantId}

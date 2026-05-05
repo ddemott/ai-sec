@@ -98,6 +98,7 @@ describe("Auth Routes — Handler-Level", () => {
       queryResponses.push({ rows: [{
         id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
         email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
+        role: 'owner',
       }] });
 
       await route.handler(req, reply);
@@ -107,9 +108,76 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.tenant_id).toBe(TENANT_ID_MOCK);
       expect(reply.body.user_id).toBe(USER_ID_MOCK);
       expect(reply.body.user_name).toBe('Test User');
+      expect(reply.body.role).toBe('owner');
       expect(generateToken).toHaveBeenCalledWith({
-        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@example.com',
+        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@example.com', role: 'owner',
       });
+    });
+
+    // WHO: shop owner promoting a staff member to a stripped-down view.
+    // WHAT: login user record carries role='front_desk'; the handler must
+    // surface that on both the response body and the JWT payload so the
+    // dashboard can hide Back Office and the JWT-only refresh path keeps
+    // the role assignment intact.
+    // WHERE: /login handler — runs before SessionContext sees the value.
+    // WHY: without this the front-desk gating in OutlookLayout has nothing
+    // to read; a front_desk user would still see Back Office.
+    it("returns role=front_desk when user record has it", async () => {
+      const { mockClient: client, queryResponses } = createMockClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const realHash = await bcrypt.hash('pass123', 10);
+      queryResponses.push({ rows: [{
+        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        email: 'desk@example.com', password_hash: realHash, full_name: 'Desk Staff',
+        role: 'front_desk',
+      }] });
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'desk@example.com', password: 'pass123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body.success).toBe(true);
+      expect(reply.body.role).toBe('front_desk');
+      expect(generateToken).toHaveBeenCalledWith({
+        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'desk@example.com', role: 'front_desk',
+      });
+    });
+
+    // WHO: legacy users created before the role column landed (defaulted
+    // to 'owner' by the migration) — but also a defense-in-depth path for
+    // any unexpected role value the DB might return.
+    // WHAT: an unrecognized role value coerces to 'owner' so the user
+    // never gets locked out of features they had access to yesterday.
+    // WHERE: /login handler — between the bcrypt check and token mint.
+    // WHY: a CHECK constraint already restricts the column, but the
+    // server should never trust the row blindly; if a future migration
+    // adds a third role and an old client deploys against new data, we
+    // want graceful degradation, not a silent privilege downgrade.
+    it("coerces unrecognized role values to 'owner'", async () => {
+      const { mockClient: client, queryResponses } = createMockClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const realHash = await bcrypt.hash('pass123', 10);
+      queryResponses.push({ rows: [{
+        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        email: 'legacy@example.com', password_hash: realHash, full_name: 'Legacy',
+        role: 'unknown_future_role',
+      }] });
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'legacy@example.com', password: 'pass123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body.role).toBe('owner');
     });
 
     it("returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)", async () => {
@@ -286,13 +354,19 @@ describe("Auth Routes — Handler-Level", () => {
 
       const route = findRoute(routes, '/auth/refresh');
       const req = createMockRequest({}, {
-        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@test.com',
+        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@test.com', role: 'front_desk',
       });
       const reply = createMockReply();
 
       await route.handler(req, reply);
 
       expect(reply.body).toEqual({ success: true, token: TEST_TOKEN });
+      // WHY: refresh must preserve the role from the inbound auth context.
+      // If it didn't, every refresh would silently promote a front_desk
+      // user back to owner.
+      expect(generateToken).toHaveBeenCalledWith({
+        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@test.com', role: 'front_desk',
+      });
     });
 
     it("returns 401 when not authenticated (WHO: expired JWT | WHAT: no auth context | WHERE: /auth/refresh | WHY: can't refresh without valid session)", async () => {

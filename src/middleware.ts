@@ -12,10 +12,13 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 
 // ── Types ────────────────────────────────────────────────────────────
 
+/** Roles a tenant user can hold. Super-admins are identified by tenant_id, not by this column. */
+export type UserRole = 'owner' | 'front_desk';
+
 /** Extended request with tenant context and structured logger */
 export interface AppRequest extends FastifyRequest {
   tenantId?: string;
-  auth?: { tenant_id: string; user_id: string; email: string; iat?: number };
+  auth?: { tenant_id: string; user_id: string; email: string; role: UserRole; iat?: number };
 }
 
 /** Known error codes the system can produce */
@@ -258,13 +261,17 @@ const JWT_SECRET =
   (process.env.NODE_ENV === 'production' ? '' : 'dev-jwt-secret-change-in-production');
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
-type JwtPayload = { tenant_id: string; user_id: string; email: string; iat?: number };
+type JwtPayload = { tenant_id: string; user_id: string; email: string; role: UserRole; iat?: number };
 
 /**
  * Sign a session token. Exported so the auth route can mint tokens on
  * login/register; nothing else should need to call this.
+ *
+ * Tokens issued before the role column landed (no `role` claim) are
+ * treated as 'owner' on read so existing sessions don't get downgraded
+ * mid-flight. New tokens always carry an explicit role.
  */
-export function generateToken(payload: { tenant_id: string; user_id: string; email: string }): string {
+export function generateToken(payload: { tenant_id: string; user_id: string; email: string; role: UserRole }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as any });
 }
 
@@ -338,6 +345,6 @@ export function registerJwtAuthHook(app: FastifyInstance, pool: Pool) {
       }
     }
 
-    (request as AppRequest).auth = decoded;
+    (request as AppRequest).auth = { ...decoded, role: decoded.role ?? 'owner' };
   });
 }
