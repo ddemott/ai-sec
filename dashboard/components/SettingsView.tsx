@@ -369,7 +369,7 @@ export default function SettingsView() {
         </div>
         <div>
           <h1 className="text-2xl md:text-3xl font-display">Business Onboarding</h1>
-          <p className="text-sm italic font-medium" style={{ color: 'var(--text-secondary)' }}>Super-Admin Console (Multi-Tenant Management)</p>
+          <p className="text-sm italic font-medium" style={{ color: 'var(--text-secondary)' }}>Super-Admin Console (Multi-Business Management)</p>
         </div>
       </header>
 

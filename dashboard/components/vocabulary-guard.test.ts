@@ -6,6 +6,11 @@
  * stay unchanged. This test scans every non-test component source file
  * for user-visible copy that leaks the internal "tenant" term.
  *
+ * Extended 2026-05-05 (TODO #5 vocabulary pass): also banned in user
+ * copy — "Multi-Tenant", "Skill Matrix", "Service Assignment Matrix",
+ * and "coverage gap" phrasings. Each was flagged by the pre-launch UX
+ * audit as developer-jargon leaking into the operator surface.
+ *
  * If a regression is introduced ("tenant" inside setError, a JSX text
  * node, a placeholder, etc.) this test fails with the exact file + line.
  * Keeps the audit self-documenting.
@@ -58,6 +63,14 @@ const USER_VISIBLE_CONTEXTS: Array<{ pattern: RegExp; description: string }> = [
   { pattern: /placeholder=["'][^"']*\btenant\b[^"']*["']/i, description: 'placeholder contains "tenant"' },
   // aria-label="... tenant ..." (user-facing label, not a code role name)
   { pattern: /aria-label=["'][^"']*\btenant\b[^"']*["']/i, description: 'aria-label contains user-facing "tenant"' },
+  // Banned developer-jargon phrases in any quoted string OR JSX text
+  // node. Each was a real leak fixed in the 2026-05-05 vocabulary pass.
+  // The phrase form (with the space + capitalized words) prevents false
+  // positives from valid code identifiers like SkillMatrixView.
+  { pattern: /Multi-Tenant\b/, description: '"Multi-Tenant" leaking into user copy (use "Multi-Business")' },
+  { pattern: /Skill Matrix\b/, description: '"Skill Matrix" leaking into user copy (use "Service Assignments")' },
+  { pattern: /Service Assignment Matrix\b/, description: '"Service Assignment Matrix" leaking into user copy (use "Service Assignments")' },
+  { pattern: /coverage gap/i, description: '"coverage gap" leaking into user copy (use "fully staffed" / "unstaffed")' },
 ];
 
 describe('Vocabulary guard: user-facing copy should say "business", not "tenant"', () => {

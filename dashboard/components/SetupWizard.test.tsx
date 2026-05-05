@@ -670,7 +670,7 @@ describe('SetupWizard: Step 6 Review', () => {
     })
   })
 
-  test('shows warning message when coverage gaps exist', async () => {
+  test('shows warning message when services are not fully staffed', async () => {
     ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/services')) {
         return Promise.resolve({
@@ -697,7 +697,7 @@ describe('SetupWizard: Step 6 Review', () => {
     for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'))
 
     await waitFor(() => {
-      expect(screen.getByText(/Some services have coverage gaps/)).toBeInTheDocument()
+      expect(screen.getByText(/Some services aren't fully staffed yet/)).toBeInTheDocument()
     })
   })
 

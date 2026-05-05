@@ -119,7 +119,7 @@ export default function SkillMatrixView() {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-display">Service Assignment Matrix</h1>
+            <h1 className="text-3xl font-display">Service Assignments</h1>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Align your people and places with the services you provide.</p>
           </div>
         </div>

@@ -70,7 +70,7 @@ export function Step6Review({ services, resources, employees, coverageData, load
           }`}>
             {allCovered
               ? "You're ready to go! All services are fully covered."
-              : 'Some services have coverage gaps. Go back to fix assignments, shifts, or staffing.'}
+              : "Some services aren't fully staffed yet. Go back to fix assignments, shifts, or staffing."}
           </p>
         </div>
       )}
