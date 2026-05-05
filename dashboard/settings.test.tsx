@@ -1,22 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import { expect, test, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import SettingsView from './components/SettingsView'
+import { mockJsonResponse } from './lib/test-utils'
 
 // Simple in-memory resources store for mocking
 let mockResources: Array<{ id: string; name: string; description?: string | null; is_active?: boolean }> = []
 
 // Build a fetch mock that supports resources GET/CREATE/UPDATE
 function buildFetchMock() {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString()
 
     if (url.includes('/resources?tenant_id=')) {
-      return {
-        ok: true,
-        json: async () => mockResources,
-      } as any
+      return mockJsonResponse(mockResources)
     }
 
     if (url.endsWith('/resources/create') && init?.method === 'POST') {
@@ -28,10 +25,7 @@ function buildFetchMock() {
         is_active: true,
       }
       mockResources.push(newRes)
-      return {
-        ok: true,
-        json: async () => ({ success: true, resource: newRes }),
-      } as any
+      return mockJsonResponse({ success: true, resource: newRes })
     }
 
     if (url.includes('/resources/') && url.endsWith('/update') && init?.method === 'POST') {
@@ -40,16 +34,10 @@ function buildFetchMock() {
       mockResources = mockResources.map(r =>
         r.id === id ? { ...r, ...('is_active' in body ? { is_active: body.is_active } : {}) } : r
       )
-      return {
-        ok: true,
-        json: async () => ({ success: true }),
-      } as any
+      return mockJsonResponse({ success: true })
     }
 
-    return {
-      ok: true,
-      json: async () => ({}),
-    } as any
+    return mockJsonResponse({})
   })
 
   return fetchMock
@@ -63,7 +51,7 @@ beforeEach(() => {
   window.localStorage.setItem('tenantId', 'tenant-owner-1')
 
   const fetchMock = buildFetchMock()
-  vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+  vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 })
 
 test('SettingsView (owner): shows resources list and creation form', async () => {
@@ -91,7 +79,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
   await screen.findByText(/Resource 1/i)

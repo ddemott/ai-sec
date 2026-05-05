@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import { expect, test, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import SuperAdminDashboard from './components/SuperAdminDashboard'
+import { mockJsonResponse } from './lib/test-utils'
 
 // Mock SessionContext so SuperAdminDashboard can call useSessionContext
 vi.mock('@/lib/SessionContext', () => ({
@@ -21,7 +21,7 @@ vi.mock('@/lib/SessionContext', () => ({
     notifyTenantsChanged: vi.fn(),
   }),
   useActiveTenantId: () => '00000000-0000-0000-0000-000000000000',
-  SessionProvider: ({ children }: any) => children,
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // Helper to build a fetch mock that returns tenants, templates, then a success for create/delete
@@ -46,41 +46,26 @@ function buildFetchMock() {
     },
   ]
 
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString()
 
     if (url.endsWith('/tenants') && (!init || init.method === undefined || init.method === 'GET')) {
-      return {
-        ok: true,
-        json: async () => tenants,
-      } as any
+      return mockJsonResponse(tenants)
     }
 
     if (url.endsWith('/templates')) {
-      return {
-        ok: true,
-        json: async () => templates,
-      } as any
+      return mockJsonResponse(templates)
     }
 
     if (url.endsWith('/tenants/create') && init?.method === 'POST') {
-      return {
-        ok: true,
-        json: async () => ({ success: true, tenant_id: 'new-tenant-id' }),
-      } as any
+      return mockJsonResponse({ success: true, tenant_id: 'new-tenant-id' })
     }
 
     if (url.includes('/tenants/') && init?.method === 'DELETE') {
-      return {
-        ok: true,
-        json: async () => ({ success: true }),
-      } as any
+      return mockJsonResponse({ success: true })
     }
 
-    return {
-      ok: true,
-      json: async () => ({}),
-    } as any
+    return mockJsonResponse({})
   })
 
   return fetchMock
@@ -88,7 +73,7 @@ function buildFetchMock() {
 
 test('SuperAdminDashboard: lists tenants and selects one', async () => {
   const fetchMock = buildFetchMock()
-  vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+  vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 
   render(<SuperAdminDashboard />)
 
@@ -105,7 +90,7 @@ test('SuperAdminDashboard: lists tenants and selects one', async () => {
 
 test('SuperAdminDashboard: can launch new business via modal', async () => {
   const fetchMock = buildFetchMock()
-  vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+  vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 
   render(<SuperAdminDashboard />)
 
@@ -145,11 +130,12 @@ test('SuperAdminDashboard: can launch new business via modal', async () => {
     )
   })
 
-  const lastCall = (fetchMock as any).mock.calls.find((call: any[]) =>
+  const lastCall = fetchMock.mock.calls.find((call) =>
     (typeof call[0] === 'string' ? call[0] : call[0].toString()).includes('/tenants/create')
   )
 
-  expect(lastCall).toBeTruthy()
+  expect(lastCall).toBeDefined()
+  if (!lastCall) throw new Error('unreachable: lastCall asserted defined above')
   const body = lastCall[1]?.body as string
   expect(JSON.parse(body)).toMatchObject({
     tenant_name: 'Acme Tires',
@@ -163,7 +149,7 @@ test('SuperAdminDashboard: can launch new business via modal', async () => {
 
 test('SuperAdminDashboard: can delete a business', async () => {
   const fetchMock = buildFetchMock()
-  vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+  vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 
   render(<SuperAdminDashboard />)
 
@@ -199,22 +185,18 @@ import { describe } from 'vitest'
 
 describe('SuperAdminDashboard sad paths', () => {
   test('shows empty state when tenant list fetch fails', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       const url = typeof input === 'string' ? input : input.toString()
 
       if (url.endsWith('/tenants') && (!init || !init.method || init.method === 'GET')) {
-        return {
-          ok: false,
-          status: 500,
-          json: async () => ({ success: false, error: 'DB unavailable' }),
-        } as any
+        return mockJsonResponse({ success: false, error: 'DB unavailable' }, { ok: false, status: 500 })
       }
       if (url.endsWith('/templates')) {
-        return { ok: true, json: async () => ([]) } as any
+        return mockJsonResponse([])
       }
-      return { ok: true, json: async () => ({}) } as any
+      return mockJsonResponse({})
     })
-    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 
     render(<SuperAdminDashboard />)
 
@@ -230,27 +212,21 @@ describe('SuperAdminDashboard sad paths', () => {
   })
 
   test('shows error when tenant creation fails', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       const url = typeof input === 'string' ? input : input.toString()
 
       if (url.endsWith('/tenants') && (!init || !init.method || init.method === 'GET')) {
-        return { ok: true, json: async () => ([]) } as any
+        return mockJsonResponse([])
       }
       if (url.endsWith('/templates')) {
-        return {
-          ok: true,
-          json: async () => ([{ business_type: 'mobile-tire', display_name: 'Mobile Tire Shop' }]),
-        } as any
+        return mockJsonResponse([{ business_type: 'mobile-tire', display_name: 'Mobile Tire Shop' }])
       }
       if (url.endsWith('/tenants/create') && init?.method === 'POST') {
-        return {
-          ok: true,
-          json: async () => ({ success: false, error: 'Tenant name already exists' }),
-        } as any
+        return mockJsonResponse({ success: false, error: 'Tenant name already exists' })
       }
-      return { ok: true, json: async () => ({}) } as any
+      return mockJsonResponse({})
     })
-    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 
     render(<SuperAdminDashboard />)
 
@@ -291,7 +267,7 @@ describe('SuperAdminDashboard sad paths', () => {
 
   test('delete button stays disabled with wrong confirmation text', async () => {
     const fetchMock = buildFetchMock()
-    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(fetchMock as any)
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
 
     render(<SuperAdminDashboard />)
 
@@ -314,7 +290,7 @@ describe('SuperAdminDashboard sad paths', () => {
     expect((confirmButton as HTMLButtonElement).disabled).toBe(true)
 
     // No delete call should have been made
-    const deleteCalls = fetchMock.mock.calls.filter((call: any[]) => {
+    const deleteCalls = fetchMock.mock.calls.filter((call) => {
       const url = typeof call[0] === 'string' ? call[0] : call[0].toString()
       return url.includes('/tenants/tenant-1') && call[1]?.method === 'DELETE'
     })
