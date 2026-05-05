@@ -4,7 +4,7 @@
 >
 > **For the curated review-phase backlog, see [`docs/IMPROVEMENT_IDEAS.md`](docs/IMPROVEMENT_IDEAS.md).** That file holds tasks organized for review (10 phases, ~160 tasks, dated 2026-04-10/11). The two files are deliberately distinct — see `docs/TODO.md` "Role clarity for improvement-ideas files" for the rationale.
 >
-> **This file is generator output, not a curated backlog.** If a proposed task here matters enough to act on, promote it to `NEEDS-REFACTORING.md` (durable structural concern) or `docs/TODO.md` (operational work). Otherwise it decays — and that is fine, because the journal-loop generator produces ideas faster than anyone can act on them. Periodic prune passes (NEEDS-REFACTORING #12) remove `Status: resolved` / `Status: dropped` entries; the bulk of `proposed` tasks are accepted as decay rather than carried as a working list.
+> **This file is generator output, not a curated backlog.** If a proposed task here matters enough to act on, promote it to `NEEDS-REFACTORING.md` (durable structural concern) or `docs/TODO.md` (operational work). Otherwise it decays — and that is fine, because the journal-loop generator produces ideas faster than anyone can act on them. Periodic prune passes remove (a) `Status: resolved` / `Status: dropped` entries (NEEDS-REFACTORING #12, 2026-05-04), (b) duplicate task titles produced by the generator's known dedup gap, and (c) tasks whose extraction target has already shipped — most recently 2026-05-05, which dropped 21 exact-title duplicates + 3 near-dups (e.g. "single capability registry" vs "one capability registry") + 2 already-shipped tasks (`getCrmSyncStatus`, `disconnectCrmIntegration` extractions): 117 tasks → 93, 2180 → 1818 lines.
 
 ---
 
@@ -352,21 +352,6 @@
 **Why:** The current workflow is still producing useful, bounded outputs without obvious repetition or wasted motion.
 
 ## Ideas — 2026-04-20 (architecture reviewed)
-
-### Task: Replace duplicated provider arrays in syncOrchestrator with one capability registry
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L1-L80`
-**What to do:** Define one explicit provider registry that records whether each integration supports appointment sync, customer sync, or both, then derive both fan-out loops from that registry. Preserve current provider ordering and behavior exactly, but eliminate the need to maintain support rules in two separate arrays.
-**Done when:**
-- [ ] Provider support is declared in one registry instead of separate appointment/customer arrays
-- [ ] `syncAppointmentToAll` and `syncCustomerToAll` derive their loops from that registry
-- [ ] Current provider order and function selection remain unchanged
-- [ ] All existing tests pass, new tests cover registry-driven fan-out if needed
-**Why it matters:** Central integration rules become brittle when support declarations live in more than one place.
-**Tradeoff:** The registry should stay explicit and small so it improves clarity rather than adding abstraction noise.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, strong return because it removes a clear source of integration drift from a shared service.
 
 ## Self-Review — 2026-04-20
 **Cycles since last self-review:** 1
@@ -978,36 +963,6 @@
 
 ## Ideas — 2026-04-25 (architecture reviewed)
 
-### Task: Extract shared CRM integration settings and disconnect route registration
-**Status:** proposed
-**Files to change:** `src/routes/jobber.ts:L41-L75`, `src/routes/hubspot.ts:L41-L74`, `src/routes/square.ts`, `src/routes/servicetitan.ts`, `src/routes/integrationRouteHelpers.ts` (new)
-**What to do:** Add one narrow helper that registers the common `GET /<provider>/settings` and `POST /<provider>/settings/disconnect` handlers for CRM-style integrations. Pass in the provider name, event names, and any provider-specific cleanup hook if needed. Keep each route file responsible for OAuth initiation, callback wiring, webhook handling, and full sync, but stop duplicating the same settings read and disconnect flow across Jobber and HubSpot, then apply the same helper to Square and ServiceTitan if their route shape matches.
-**Done when:**
-- [ ] Jobber and HubSpot no longer hand-write identical settings and disconnect handlers
-- [ ] The helper stays limited to settings fetch and disconnect cleanup, not OAuth or webhook behavior
-- [ ] Response payloads and audit event names remain unchanged for existing routes
-- [ ] All existing tests pass, new tests cover helper-driven settings/disconnect behavior if needed
-**Why it matters:** These integration routes already share a stable mini-contract, and keeping the same CRUD-like plumbing in four files raises the chance of one provider drifting from the others.
-**Tradeoff:** Pulling out too much would make provider routes harder to read, so the helper needs to stay tightly scoped to the truly identical parts.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** A couple of careful hours would remove obvious duplication from multiple integration routes, a solid return as long as the helper stays intentionally small.
-
-### Task: Centralize integration sync-status aggregation for CRM providers
-**Status:** proposed
-**Files to change:** `src/routes/jobber.ts:L151-L184`, `src/routes/hubspot.ts:L156-L187`, `src/routes/square.ts`, `src/routes/servicetitan.ts`, `src/routes/integrationRouteHelpers.ts` (new or same helper module)
-**What to do:** Extract the repeated `entity_sync_map` counting and `last_sync_at` shaping into one helper that accepts `tenantId`, provider name, and a tenant-scoped client, then returns the common `{ last_sync_at, pending_count, error_count, total_mapped }` payload. Preserve the current query semantics and response shape exactly, but stop recomputing the same counts inline in each provider route.
-**Done when:**
-- [ ] Jobber and HubSpot sync-status routes share one aggregation helper instead of repeating the same count/filter/reduce logic
-- [ ] Returned payload shape remains unchanged for current clients
-- [ ] Any additional provider route using the same sync-status contract can adopt the helper without changing its endpoint URL
-- [ ] All existing tests pass, new tests cover helper-driven sync-status aggregation if needed
-**Why it matters:** Sync status is part of the operational contract for every CRM integration, and duplicated aggregation logic makes it too easy for one provider to quietly report counts differently.
-**Tradeoff:** The helper should stay explicit about the fixed payload contract rather than turning into a generic reporting abstraction.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Under an hour of extraction would buy better consistency across several operational endpoints, a strong maintenance win.
-
 ### Task: Separate webhook acknowledgement from provider-specific event processing in CRM routes
 **Status:** proposed
 **Files to change:** `src/routes/jobber.ts:L77-L140`, `src/routes/hubspot.ts:L76-L145`
@@ -1381,51 +1336,6 @@
 
 ## Ideas — 2026-04-30 (architecture reviewed)
 
-### Task: Normalize requireTenantId onto the standard API error envelope
-**Status:** proposed
-**Files to change:** `src/middleware.ts:L105-L125`, route tests covering missing-tenant responses
-**What to do:** Update `requireTenantId` so its 400 response uses the same `{ success: false, error: ... }` shape already used by `requireAuth` and `withHandler`. Keep the status code unchanged and limit the change to middleware-level consistency.
-**Done when:**
-- [ ] `requireTenantId` returns `{ success: false, error: 'tenant_id is required' }`
-- [ ] Missing-tenant failures still use status 400
-- [ ] Routes relying on `requireTenantId` continue behaving the same aside from the normalized error body
-- [ ] All existing tests pass, new tests cover the missing-tenant contract if needed
-**Why it matters:** Shared guard behavior should be consistent so the frontend does not need special cases for one common middleware failure.
-**Tradeoff:** Any code depending on the bare `{ error }` shape needs to be checked before the contract is normalized.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it normalizes a central middleware response used across many routes.
-
-### Task: Extract tenant extraction precedence into a named helper inside middleware.ts
-**Status:** proposed
-**Files to change:** `src/middleware.ts:L145-L190`
-**What to do:** Pull the query/body/auth tenant lookup precedence into a small local helper, then have `tenantMiddleware` call it before logger enrichment. Preserve the existing query > body > auth precedence exactly while making the rule easier to read and test.
-**Done when:**
-- [ ] Tenant extraction precedence no longer lives inline inside `tenantMiddleware`
-- [ ] Query > body > auth precedence remains unchanged
-- [ ] `tenantMiddleware` reads more clearly around exemption check, extraction, and logger enrichment
-- [ ] All existing tests pass, new tests cover precedence behavior if needed
-**Why it matters:** Middleware precedence rules are subtle shared behavior, and naming them explicitly makes future changes less risky.
-**Tradeoff:** The helper should stay local and obvious so it does not over-engineer a simple path.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it improves readability in a shared, easy-to-misread path.
-
-### Task: Add a tiny shared guard-response helper for middleware auth and tenant failures
-**Status:** proposed
-**Files to change:** `src/middleware.ts:L105-L140`
-**What to do:** Introduce one small internal helper for common middleware guard failures so `requireTenantId` and `requireAuth` stop assembling their reply bodies independently. Keep status codes and messages unchanged except where intentionally normalized.
-**Done when:**
-- [ ] `requireTenantId` and `requireAuth` share a small response-emission helper
-- [ ] Guard messages and status codes remain unchanged unless deliberately normalized
-- [ ] The helper stays local to middleware guard concerns and does not turn into a generic response abstraction
-- [ ] All existing tests pass, new tests cover helper-driven guard responses if needed
-**Why it matters:** Small shared guard helpers make it easier to evolve middleware response conventions consistently later.
-**Tradeoff:** The helper must stay extremely small so it clarifies rather than hides straightforward logic.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it trims duplication in a central guard layer.
-
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
 **What's working:** The recreated root UX log is behaving as expected again, and this cycle resumed the canonical backlog cleanly while using one fully readable shared backend file to keep the ideas pass concrete.
@@ -1487,51 +1397,6 @@
 
 ## Ideas — 2026-04-30 (code patterns reviewed)
 
-### Task: Reuse parsePagination in GET /customers
-**Status:** proposed
-**Files to change:** `src/routes/customers.ts:L45-L60`, `src/routes/routeHelpers.ts:L100-L140` if any default tweak is needed
-**What to do:** Replace the inline `limit` and `offset` parsing in `GET /customers` with `parsePagination`, preserving the current defaults and caps while aligning the route with the shared helper conventions already established in `routeHelpers.ts`.
-**Done when:**
-- [ ] `GET /customers` uses `parsePagination` instead of route-local `parseInt` logic
-- [ ] Current limit/offset defaults and cap behavior remain unchanged
-- [ ] Super-admin and tenant-scoped list behavior remain unchanged
-- [ ] All existing tests pass, new tests cover customer pagination behavior if needed
-**Why it matters:** Customer listing is a core route pattern, and leaving it on local parsing weakens the value of the shared helper layer.
-**Tradeoff:** This is mostly consistency work, so it should stay behavior-preserving and avoid broader query refactors.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, solid gain because it aligns a common list route with an existing shared convention.
-
-### Task: Replace customer route validation branches with sendValidationError
-**Status:** proposed
-**Files to change:** `src/routes/customers.ts:L60-L120`, `src/routes/routeHelpers.ts:L1-L40`
-**What to do:** Swap the inline validation-failure branches in customer create and update to use `sendValidationError`, keeping the response payload exactly the same while removing repeated validation envelope boilerplate from the route file.
-**Done when:**
-- [ ] Customer create uses `sendValidationError` for schema parse failures
-- [ ] Customer update uses `sendValidationError` for schema parse failures
-- [ ] Validation response payloads remain unchanged for callers
-- [ ] All existing tests pass, new tests cover validation-failure behavior if needed
-**Why it matters:** Shared helper conventions only pay off if real CRUD routes adopt them, and this file still repeats the same validation envelope manually.
-**Tradeoff:** This is a narrow consistency cleanup, so it should stay scoped to the customer file rather than triggering a broad rewrite.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it makes a representative CRUD route more consistent immediately.
-
-### Task: Pilot sendSuccess adoption in customer mutation routes
-**Status:** proposed
-**Files to change:** `src/routes/customers.ts:L90-L170`, `src/routes/routeHelpers.ts:L20-L40`
-**What to do:** Replace a few direct `reply.send({ success: true, ... })` responses in customer mutations with `sendSuccess`, confirming the helper fits real CRUD usage without changing payload shape. Keep the rollout selective and behavior-preserving.
-**Done when:**
-- [ ] Selected customer mutation responses use `sendSuccess`
-- [ ] Response payloads remain unchanged for callers
-- [ ] The route stays readable and helper use does not feel forced
-- [ ] All existing tests pass, new tests cover any helper-adopted paths if needed
-**Why it matters:** It is hard to know whether a shared success helper is genuinely useful unless a few real routes prove it in practice.
-**Tradeoff:** Some responses may still read better inline, so the rollout should stay narrow and pragmatic.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it tests a shared helper under realistic CRUD conditions.
-
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
 **What's working:** The recreated root UX log is continuing predictably, and this cycle stayed concrete by pairing a clear customer/recovery UX slice with one fully readable CRUD route instead of stretching across clipped files.
@@ -1539,51 +1404,6 @@
 **Why:** The current instructions are still handling the rebuilt-root workflow and small-batch continuation without confusion or wasted work.
 
 ## Ideas — 2026-04-30 (architecture reviewed)
-
-### Task: Split OAuth callback persistence from redirect construction in createOAuthCallbackHandler
-**Status:** proposed
-**Files to change:** `src/services/oauthCallbackFactory.ts:L35-L110`
-**What to do:** Refactor `createOAuthCallbackHandler` so token exchange plus DB upsert live in one small internal persistence step, while success/error redirect URL construction lives in another. Keep the public factory contract and runtime behavior unchanged, but separate the side-effect-heavy persistence logic from navigation branching.
-**Done when:**
-- [ ] OAuth callback token persistence is isolated from redirect URL construction inside `oauthCallbackFactory.ts`
-- [ ] Success and failure redirects behave exactly as they do today
-- [ ] The persistence step can be tested or reasoned about without reading redirect branching at the same time
-- [ ] All existing tests pass, new tests cover the separated persistence and redirect paths if needed
-**Why it matters:** OAuth callbacks combine side effects and navigation decisions in one place, and separating them makes the shared integration layer easier to reason about and safer to change.
-**Tradeoff:** The extraction should stay local to the factory and not expand into a larger OAuth framework rewrite.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile gain because it clarifies a shared multi-provider integration choke point without changing behavior.
-
-### Task: Extract tenant_integration_settings upsert SQL assembly into a local helper in oauthCallbackFactory
-**Status:** proposed
-**Files to change:** `src/services/oauthCallbackFactory.ts:L55-L100`
-**What to do:** Move the two-branch upsert logic, with and without `extraSettings`, into one small helper that returns the query text and params or performs the upsert directly. Keep the stored values and ON CONFLICT behavior unchanged, but reduce the duplicated SQL shape inside the callback handler.
-**Done when:**
-- [ ] The OAuth callback handler no longer carries two near-duplicate upsert query blocks inline
-- [ ] Upsert behavior remains identical for both plain-token and extra-settings providers
-- [ ] The helper stays local to callback persistence concerns and does not become a generic DB abstraction
-- [ ] All existing tests pass, new tests cover helper-driven upsert behavior if needed
-**Why it matters:** Duplicated persistence branches are easy to drift, especially in a shared multi-provider factory that several integrations depend on.
-**Tradeoff:** The helper should remain very small so it clarifies the handler rather than hiding straightforward SQL behavior.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it removes duplication from a shared integration path with little risk.
-
-### Task: Add a small provider-display metadata helper in oauthCallbackFactory
-**Status:** proposed
-**Files to change:** `src/services/oauthCallbackFactory.ts:L30-L45`
-**What to do:** Replace the ad hoc `displayName` and query-param naming assembly with a small helper that returns the provider’s display label plus success/error query parameter names. Preserve all current redirect URLs and log messages unchanged, but make provider-specific naming logic explicit in one place.
-**Done when:**
-- [ ] Provider display label and success/error query param names are derived through one helper
-- [ ] Redirect URLs and log messages remain unchanged for all current providers
-- [ ] The handler body reads more clearly by separating provider metadata from control flow
-- [ ] All existing tests pass, new tests cover helper-driven naming if needed
-**Why it matters:** Small provider-specific naming rules are easy to scatter in shared factories, and collecting them improves readability and future extension safety.
-**Tradeoff:** The helper should stay tiny and local so it adds clarity rather than ceremony.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest but real gain because it trims repeated provider-metadata logic from a shared factory.
 
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
@@ -1646,51 +1466,6 @@
 
 ## Ideas — 2026-04-30 (code patterns reviewed)
 
-### Task: Replace service route validation branches with sendValidationError
-**Status:** proposed
-**Files to change:** `src/routes/services.ts:L40-L95`, `src/routes/routeHelpers.ts:L1-L40`
-**What to do:** Swap the inline validation-failure branches in service create and update to use `sendValidationError`, keeping the response payload exactly the same while removing repeated validation envelope boilerplate from the route file.
-**Done when:**
-- [ ] Service create uses `sendValidationError` for schema parse failures
-- [ ] Service update uses `sendValidationError` for schema parse failures
-- [ ] Validation response payloads remain unchanged for callers
-- [ ] All existing tests pass, new tests cover validation-failure behavior if needed
-**Why it matters:** Shared helper conventions only pay off if real CRUD routes adopt them, and this file still repeats the same validation envelope manually.
-**Tradeoff:** This is a narrow consistency cleanup, so it should stay scoped to the service file rather than triggering a broad rewrite.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it makes a central CRUD route more consistent immediately.
-
-### Task: Normalize service create payload defaults before the insert query
-**Status:** proposed
-**Files to change:** `src/routes/services.ts:L55-L70`
-**What to do:** Move the fallback normalization for `subtitle`, `description`, `required_skills`, and `required_resources` into a small local normalization step before the insert query so the SQL parameter list reads as already-shaped data. Keep stored values identical to current behavior.
-**Done when:**
-- [ ] Service create no longer mixes fallback normalization directly inside the SQL parameter array
-- [ ] Inserted values remain identical for missing subtitle, description, skills, and resources
-- [ ] The normalization step stays local and obvious inside the service route module
-- [ ] All existing tests pass, new tests cover create normalization if needed
-**Why it matters:** Inline fallback shaping inside parameter arrays is harder to scan and makes future payload adjustments more error-prone than they need to be.
-**Tradeoff:** The gain is mostly readability, so the helper should stay tiny and local.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest but real gain because it makes a common mutation path easier to modify safely.
-
-### Task: Extract the service delete transaction wrapper into a narrow shared helper
-**Status:** proposed
-**Files to change:** `src/routes/services.ts:L95-L125`, `src/routes/routeHelpers.ts:L1-L200` or a nearby shared transaction helper
-**What to do:** Pull the `BEGIN/COMMIT/ROLLBACK` wrapper used for service deletion into a minimal shared helper that accepts a client callback, then keep mapping cleanup and service deletion local to the route. Preserve the current deletion order and rollback semantics exactly.
-**Done when:**
-- [ ] Service delete no longer hand-writes its full transaction wrapper inline
-- [ ] Mapping cleanup and service delete still happen atomically in the same order
-- [ ] Rollback behavior remains unchanged on failure
-- [ ] All existing tests pass, new tests cover rollback behavior if needed
-**Why it matters:** Transaction wrappers are repetitive and easy to get subtly wrong, especially in routes that already carry real business logic.
-**Tradeoff:** The helper must stay minimal so transaction boundaries remain obvious during debugging.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile gain because it trims repetitive scaffolding from a representative CRUD route.
-
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
 **What's working:** The rebuilt root UX backlog is still progressing in clean slices, and this cycle stayed grounded by pairing a coherent onboarding trio with one fully readable CRUD route instead of stretching across clipped files.
@@ -1698,52 +1473,6 @@
 **Why:** The current instructions are still supporting small-batch continuation and producing specific, useful outputs without confusion.
 
 ## Ideas — 2026-04-30 (architecture reviewed)
-
-### Task: Replace duplicated provider arrays in syncOrchestrator with one capability registry
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L25-L70`
-**What to do:** Define one explicit provider registry that records whether each integration supports appointment sync, customer sync, or both, then derive both fan-out loops from that registry. Preserve current provider ordering and behavior exactly, but eliminate the need to maintain support rules in two separate arrays.
-**Done when:**
-- [ ] Provider support is declared in one registry instead of separate appointment/customer arrays
-- [ ] `syncAppointmentToAll` and `syncCustomerToAll` derive their loops from that registry
-- [ ] Current provider order and function selection remain unchanged
-- [ ] All existing tests pass, new tests cover registry-driven fan-out if needed
-**Why it matters:** Central integration rules become brittle when support declarations live in more than one place.
-**Tradeoff:** The registry should stay explicit and small so it improves clarity rather than adding abstraction noise.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, strong return because it removes a clear source of integration drift from a shared service.
-
-### Task: Extract shared fan-out execution into a local helper inside syncOrchestrator
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L18-L80`
-**What to do:** Pull the repeated provider iteration and catch-log pattern into a narrow local helper that accepts provider entries plus entity metadata, then use it for both appointment and customer fan-out. Preserve the current fire-and-forget semantics exactly.
-**Done when:**
-- [ ] Appointment and customer sync functions no longer each inline the same provider loop-and-catch pattern
-- [ ] `logSyncError` usage and non-throwing behavior remain unchanged
-- [ ] The helper stays local and specific to sync orchestration behavior
-- [ ] All existing tests pass, new tests cover helper-driven fan-out if needed
-**Why it matters:** Repeated orchestration mechanics make it harder to see the actual domain differences between the two sync paths.
-**Tradeoff:** The helper must stay very small so the file remains easy to audit.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Low effort, modest gain because it trims repetition from a central integration file.
-
-### Task: Add lightweight fan-out start logs to syncOrchestrator without provider-level success noise
-**Status:** proposed
-**Files to change:** `src/services/syncOrchestrator.ts:L18-L70`
-**What to do:** Emit one structured start log at the beginning of appointment and customer fan-out when a logger is available, while keeping the current provider failure logs unchanged. Avoid adding per-provider success logs.
-**Done when:**
-- [ ] Appointment fan-out emits one structured start log when a logger exists
-- [ ] Customer fan-out emits one structured start log when a logger exists
-- [ ] Existing provider-level failure logging remains unchanged
-- [ ] No noisy provider success logs are introduced
-- [ ] All existing tests pass, new tests cover logger invocation if needed
-**Why it matters:** Fire-and-forget orchestration is otherwise mostly invisible when nothing fails, which makes operational tracing harder.
-**Tradeoff:** Even sparse logs add some noise, so the extra visibility should stay limited to high-value start events.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it improves observability in a mostly silent integration path.
 
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
@@ -1753,51 +1482,6 @@
 
 ## Ideas — 2026-04-30 (developer experience reviewed)
 
-### Task: Add a concise contract comment block around tenant targeting and auth refresh helpers in dashboard/lib/api.ts
-**Status:** proposed
-**Files to change:** `dashboard/lib/api.ts:L20-L140`
-**What to do:** Add one compact, factual comment block near `getTargetTenantId`, token refresh, auth failure handling, and generic fetch/mutate helpers that explains the intended contract for tenant targeting, proactive refresh, and forced logout behavior. Keep comments brief and make no runtime changes.
-**Done when:**
-- [ ] `dashboard/lib/api.ts` has concise documentation covering tenant targeting, proactive token refresh, auth failure logout, and generic fetch/mutate flow
-- [ ] The comments describe current behavior accurately and do not drift into aspirational architecture
-- [ ] The file remains easy to scan and is not over-commented
-- [ ] All existing tests pass, no runtime behavior changes are introduced
-**Why it matters:** This file is a central dashboard integration boundary, and a little embedded guidance can save a lot of re-reading for future maintenance.
-**Tradeoff:** Comments can drift, so the documentation should stay sparse and anchored to stable behavior.
-**Size:** small (< 1hr)
-**Impact:** low
-**Effort vs Gain:** Very low effort, modest but real gain because it improves maintainability in a central helper module.
-
-### Task: Introduce named appointment request payload types in dashboard/lib/types.ts and use them in Api.appointments
-**Status:** proposed
-**Files to change:** `dashboard/lib/types.ts:L1-L140`, `dashboard/lib/api.ts:L220-L340`
-**What to do:** Add explicit request interfaces for appointment create and update payloads in `dashboard/lib/types.ts`, then replace the current broad appointment helper signatures in `Api.appointments` so they use those named types instead of loose composite payloads. Keep runtime behavior unchanged.
-**Done when:**
-- [ ] Appointment create/update request payloads have named shared types
-- [ ] `Api.appointments.create` and `Api.appointments.update` stop relying on broad intersection payload types
-- [ ] Existing call sites compile cleanly or reveal legitimate typing gaps that are fixed locally
-- [ ] All existing tests pass, TypeScript remains clean
-**Why it matters:** Appointment mutations sit on a hot path, and broad payload typing weakens the strongest safety tool the dashboard has, strict TypeScript.
-**Tradeoff:** Tightening the signatures may expose a few sloppy callers, so there can be a modest cleanup cost.
-**Size:** medium (1-3hr)
-**Impact:** high
-**Effort vs Gain:** Moderate effort, strong return because it improves safety and readability at a central dashboard API boundary.
-
-### Task: Extract settled-result unwrapping from useStaticData into a tiny typed helper
-**Status:** proposed
-**Files to change:** `dashboard/lib/hooks.ts:L35-L95`
-**What to do:** Pull the repeated `Promise.allSettled` success-array checks in `useStaticData` into a small local helper that returns typed arrays plus first-failure information. Keep the hook API and behavior the same, but make the partial-failure handling shorter and easier to maintain.
-**Done when:**
-- [ ] `useStaticData` no longer repeats the same fulfilled/array checks for every resource fetch
-- [ ] The helper is small, typed, and local to the hook module unless reuse is clearly warranted
-- [ ] Returned data, loading, error, and refresh behavior stay unchanged
-- [ ] All existing tests pass, new tests cover the helper if added
-**Why it matters:** `useStaticData` is foundational dashboard plumbing, and reducing repetitive settled-result handling will make future edits less noisy and less error-prone.
-**Tradeoff:** The helper should stay very small so it clarifies the hook instead of abstracting away obvious behavior.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it trims a repeated pattern in a central hook without changing functionality.
-
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
 **What's working:** The rebuilt root UX backlog is still shrinking in coherent slices, and this cycle kept the improvement pass fresh by returning to shared dashboard infrastructure instead of repeating another route-helper or service-factory batch.
@@ -1805,52 +1489,6 @@
 **Why:** The current instructions are still supporting small-batch continuation and producing specific, useful outputs without confusion.
 
 ## Ideas — 2026-04-30 (code patterns reviewed)
-
-### Task: Replace repeated shift-route validation branches with sendValidationError
-**Status:** proposed
-**Files to change:** `src/routes/shifts.ts:L1-L260`, `src/routes/routeHelpers.ts:L1-L40`
-**What to do:** Swap the repeated inline validation-failure branches across shift create, update, override create/update, and copy-week routes to use `sendValidationError`, keeping the payloads identical while removing duplicated error-envelope boilerplate from the file.
-**Done when:**
-- [ ] Shift create/update routes use `sendValidationError`
-- [ ] Shift override create/update routes use `sendValidationError`
-- [ ] Copy-week validation uses `sendValidationError`
-- [ ] Validation response payloads remain unchanged for callers
-- [ ] All existing tests pass, new tests cover validation-failure behavior if needed
-**Why it matters:** This file repeats the same validation envelope pattern many times, and adopting the shared helper would make behavior easier to keep consistent.
-**Tradeoff:** The cleanup should stay scoped to envelope reuse and not turn into a larger shift-route refactor.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, worthwhile gain because it removes repeated boilerplate from one of the denser CRUD route files.
-
-### Task: Standardize zero-row not-found handling in shift and override mutations on assertRowAffected
-**Status:** proposed
-**Files to change:** `src/routes/shifts.ts:L60-L220`, `src/routes/routeHelpers.ts:L40-L70`
-**What to do:** Replace the repeated `res.rows.length === 0` checks in shift and override update/delete routes with `assertRowAffected` or an equivalent shared helper path, preserving current 404 behavior and messages while aligning these mutations with the backend’s shared zero-row handling pattern.
-**Done when:**
-- [ ] Shift update/delete routes use shared zero-row mutation handling
-- [ ] Shift override update/delete routes use shared zero-row mutation handling
-- [ ] Current not-found behavior remains unchanged for callers
-- [ ] All existing tests pass, new tests cover zero-row mutation cases if needed
-**Why it matters:** Repeated zero-row handling is exactly the kind of thing that drifts subtly across multiple mutation endpoints in one file.
-**Tradeoff:** The rollout should stay behavior-preserving and not broaden into unrelated route cleanup.
-**Size:** small (< 1hr)
-**Impact:** medium
-**Effort vs Gain:** Low effort, solid gain because it aligns several closely related mutation routes with an existing shared convention.
-
-### Task: Extract target-week override write loop from copy-week into a route-local helper
-**Status:** proposed
-**Files to change:** `src/routes/shifts.ts:L220-L320`
-**What to do:** Pull the loop that transforms effective shifts into target-week override upserts into a small route-local helper that accepts tenant, employee, day offset, and effective rows. Keep copy-week behavior unchanged, but separate the transformation/upsert mechanics from the endpoint flow.
-**Done when:**
-- [ ] The copy-week route no longer inlines the full effective-row transform and upsert loop
-- [ ] The helper stays local to shift copy-week behavior and does not become a generic scheduling abstraction
-- [ ] Current copied-count behavior and upsert semantics remain unchanged
-- [ ] All existing tests pass, new tests cover helper-driven copy-week behavior if needed
-**Why it matters:** The copy-week route mixes validation, date math, data fetching, transformation, and writes in one flow, and splitting out the write loop would make it easier to reason about safely.
-**Tradeoff:** The helper should stay tight and file-local so it clarifies the endpoint instead of hiding important scheduling details.
-**Size:** medium (1-3hr)
-**Impact:** medium
-**Effort vs Gain:** Moderate effort, worthwhile gain because it simplifies the densest part of a multi-step scheduling mutation without changing behavior.
 
 ## Self-Review — 2026-04-30
 **Cycles since last self-review:** 1
@@ -2087,3 +1725,94 @@
 **What's working:** UX review is now correctly skippable, and the strongest improvement output comes from concrete front-end slices like the AI insights cluster, where the tasks can be specific without repeating old backend helper cleanups.
 **What I changed in HEARTBEAT.md:** Added a Continuous Improvement note to treat recently shipped or dropped file clusters as recent churn and move to a different slice unless the next task is materially different.
 **Why:** The improvement log is mature enough now that stale or already-invalidated ideas are a bigger risk than under-specification, so this small rule should cut down on rediscovering work that just changed.
+
+## Ideas — 2026-05-04 (developer experience reviewed)
+
+### Task: Split agent tool registration by conversation domain
+**Status:** proposed
+**Files to change:** `agent/src/tools.ts:L35-L345`, `agent/src/tools.test.ts:L54-L325`, new files such as `agent/src/tools.booking.ts` and `agent/src/tools.customer.ts`
+**What to do:** Break the single `buildTools()` return object into 2-3 small domain builders, for example customer/context, scheduling/booking, and policy/verification, then merge them in `tools.ts` for the final export. Keep the public tool names, descriptions, parameter schemas, payload shapes, and context injection behavior exactly the same. Update `tools.test.ts` so the top-level contract tests still pin the full 10-tool registry while new focused tests cover each domain builder where it reduces duplication.
+**Done when:**
+- [ ] `agent/src/tools.ts` no longer holds all 10 tool definitions inline in one return object
+- [ ] Public tool names and backend route payloads remain unchanged
+- [ ] The top-level `buildTools()` export still returns the exact same tool registry contract
+- [ ] All existing tests pass, new tests cover the split builders where helpful
+**Why it matters:** This file is now one of the worker's core contracts, and packing every tool schema, description, and execute body into one module makes routine edits harder to scan and review than they need to be.
+**Tradeoff:** More files adds a little navigation overhead, so the split should follow obvious conversation domains and stop there instead of turning into a micro-module maze.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** 1-2 hours of structural cleanup would make a high-signal worker boundary much easier to maintain without changing runtime behavior, a solid return.
+
+### Task: Introduce a typed agent-tool contract map for ToolsClient and tool tests
+**Status:** proposed
+**Files to change:** `agent/src/toolsClient.ts:L17-L118`, `agent/src/tools.ts:L35-L345`, `agent/src/tools.test.ts:L21-L325`, `agent/src/toolsClient.test.ts:L25-L224`
+**What to do:** Add a shared TypeScript contract map that ties each `/agent-tools/*` path to its request body and expected result shape, then make `ToolsClient.call()` generic over that map instead of accepting an arbitrary `string` path plus `unknown` body. Update `buildTools()` and the tests to use the typed paths and payloads so route-name drift, missing required fields, and mismatched result assumptions fail at compile time before they reach a live call.
+**Done when:**
+- [ ] `ToolsClient.call()` is constrained by a shared path-to-request/result contract instead of raw string + unknown inputs
+- [ ] `agent/src/tools.ts` uses the typed route contracts for its backend calls
+- [ ] `tools.test.ts` and `toolsClient.test.ts` compile against the same shared path contract
+- [ ] All existing tests pass, TypeScript remains clean
+**Why it matters:** The worker/backend boundary is one of the easiest places for subtle drift to sneak in, and right now a misspelled route or payload mismatch can compile cleanly until it breaks in-call.
+**Tradeoff:** The type map adds some upfront ceremony, so it is only worth doing if it stays tightly scoped to the existing 10 agent-tool routes.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** A couple of careful hours would buy stronger compile-time protection on a live-call integration boundary, which is a strong payoff for the amount of code involved.
+
+## Self-Review — 2026-05-04
+**Cycles since last self-review:** 1
+**What's working:** UX review is genuinely complete now, and the process correctly skipped it while still producing a fresh improvement slice by moving to the agent-side tool boundary instead of revisiting recently changed dashboard files.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already handled the finished-UX state and recent-churn avoidance well, and this cycle still produced concrete, non-duplicate tasks without extra tuning.
+
+## Ideas — 2026-05-05 (developer experience reviewed)
+
+### Task: Normalize SessionProvider login and hydration transitions to clear stale managed-tenant state
+**Status:** proposed
+**Files to change:** `dashboard/lib/SessionContext.tsx:L35-L69`, new tests such as `dashboard/lib/SessionContext.test.tsx`
+**What to do:** Refactor the SessionProvider hydration and `login()` path so they both run through one small session-normalization helper that explicitly handles the two supported modes: super-admin and regular user. Preserve the current storage keys and public context API, but make the transition logic clear stale `managedTenantId` and `managedTenantName` when switching from a super-admin session to a regular tenant, and avoid leaving old managed-tenant state hanging around when a new login payload does not provide it.
+**Done when:**
+- [ ] Hydration and `login()` share one normalization path for super-admin versus regular-user session state
+- [ ] Logging in as a regular user clears any prior managed-tenant selection and name from in-memory state
+- [ ] Super-admin hydration still restores a saved managed tenant only when both saved values are present
+- [ ] All existing tests pass, new tests cover super-admin-to-regular-user and regular-user hydration cases
+**Why it matters:** Session context sits under the whole dashboard, and stale managed-tenant state is the kind of subtle bug that can make the UI show the wrong business context without an obvious failure.
+**Tradeoff:** This is mostly correctness and readability work, so the helper should stay small and avoid turning session state into a second auth layer.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Under an hour of careful cleanup would remove a quiet but high-consequence state-leak risk from a central provider, a strong return.
+
+### Task: Reset VocabularyProvider immediately on tenant changes and expose an explicit loading state
+**Status:** proposed
+**Files to change:** `dashboard/lib/VocabularyContext.tsx:L23-L79`, callers that need the new loading flag such as `dashboard/components/OutlookLayout.tsx` or other vocabulary-driven shells if applicable, new tests such as `dashboard/lib/VocabularyContext.test.tsx`
+**What to do:** Extend the vocabulary context contract so it exposes `loading` alongside `vocab` and `refreshVocabulary`, then update the effect to reset to defaults and mark loading immediately whenever the effective tenant changes or a manual refresh starts. Reuse `useActiveTenantId()` instead of re-deriving tenant precedence locally. Keep the same fallback defaults, but stop leaving the previous tenant’s labels on screen while a new tenant vocabulary request is in flight.
+**Done when:**
+- [ ] Vocabulary context exposes a `loading` flag in addition to `vocab` and `refreshVocabulary`
+- [ ] Tenant changes and manual refreshes immediately clear stale tenant-specific labels before the next fetch resolves
+- [ ] `VocabularyProvider` uses `useActiveTenantId()` instead of duplicating managed-tenant precedence logic
+- [ ] All existing tests pass, new tests cover tenant-switch loading and fetch-failure fallback behavior
+**Why it matters:** Vocabulary is part of the product’s core wording, so briefly showing the wrong tenant’s labels during tenant switches is a trust issue even if the data eventually corrects itself.
+**Tradeoff:** Adding a loading state nudges a few consumers to acknowledge the fetch lifecycle, so the rollout should stay focused on shell-level callers that actually need to react.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** A couple of focused hours would tighten one of the dashboard’s cross-tenant seams and remove a subtle source of misleading UI copy, a strong payoff.
+
+### Task: Initialize ThemeProvider from storage synchronously and add provider-level hydration tests
+**Status:** proposed
+**Files to change:** `dashboard/lib/ThemeContext.tsx:L31-L76`, new tests such as `dashboard/lib/ThemeContext.test.tsx`
+**What to do:** Replace the current `mounted` gate with a single initialization path that reads and validates the saved theme once, applies the chosen theme to `document.documentElement`, and keeps the dark class + `data-theme` attribute in sync without a default-theme first paint. Keep the public `useTheme()` contract and supported theme IDs unchanged. Add provider-level tests that cover saved-theme hydration, invalid saved-theme fallback, and DOM side effects for `data-theme` and `dark` class updates.
+**Done when:**
+- [ ] ThemeProvider no longer needs a separate `mounted` state just to avoid writing before hydration
+- [ ] A saved valid theme is applied without first painting the default `navy` theme in the provider lifecycle
+- [ ] Invalid saved values still fall back cleanly to `navy`
+- [ ] All existing tests pass, new tests cover theme hydration and DOM attribute/class updates
+**Why it matters:** Theme is global shell state, and first-paint drift plus missing provider tests make a high-visibility piece of infrastructure easier to regress than it should be.
+**Tradeoff:** The implementation needs to stay SSR-safe and avoid over-engineering a tiny provider just to shave a small flicker.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** 1-2 hours of focused provider cleanup and tests would harden a global UI primitive and reduce theme flicker risk, a worthwhile return.
+
+## Self-Review — 2026-05-05
+**Cycles since last self-review:** 1
+**What's working:** UX review is still correctly skipped now that the component pass is complete, and the freshest improvement output comes from small shared dashboard infrastructure slices where the tasks can stay concrete without falling back into repeated backend helper cleanup.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already pushed this cycle toward a different, low-churn slice and still produced specific file-level tasks with clear stop conditions.
