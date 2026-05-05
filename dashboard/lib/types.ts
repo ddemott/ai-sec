@@ -499,3 +499,15 @@ export interface VersionComparison {
   value_a: unknown;
   value_b: unknown;
 }
+
+// One row in the Team Logins / Access view. Mirrors the GET /users
+// response: minimal user record + an `is_self` flag the server attaches
+// so the UI can disable role-edit / disable-self controls.
+export interface TeamUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: 'owner' | 'front_desk';
+  created_at: string;
+  is_self: boolean;
+}

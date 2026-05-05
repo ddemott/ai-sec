@@ -7,6 +7,7 @@ import type {
   VoiceSession, VoiceSessionDisplay, CustomerContext,
   RecordHistoryResponse, DeletedRecordsResponse, RecordRestorePreview, RecentChangesResponse,
   VersionedTable, ChangeSource, RecordVersion, VersionComparison,
+  TeamUser,
 } from './types'
 
 export const API_BASE_URL =
@@ -334,6 +335,18 @@ export const Api = {
 
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/employees/${id}/delete`, 'DELETE', { tenant_id: tenantId }),
+  },
+
+  // --- USERS (login + role management) ---
+  users: {
+    list: (tenantId: string | null) =>
+      apiFetch<{ success: true; users: TeamUser[] }>(`/users`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    invite: (tenantId: string | null, data: { email: string; full_name: string; role: 'owner' | 'front_desk' }) =>
+      apiMutate<{ user_id: string }>(`/users/invite`, 'POST', { tenant_id: tenantId, ...data }),
+
+    updateRole: (id: string, tenantId: string | null, role: 'owner' | 'front_desk') =>
+      apiMutate<{ role: 'owner' | 'front_desk' }>(`/users/${id}/role`, 'PATCH', { tenant_id: tenantId, role }),
   },
 
   // --- MAPPINGS ---

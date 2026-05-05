@@ -7,11 +7,12 @@ import EmployeeManagementView from './EmployeeManagementView'
 import ShiftManagementView from './ShiftManagementView'
 import SkillMatrixView from './SkillMatrixView'
 import SkillRelationshipMap from './skill-map/SkillRelationshipMap'
+import TeamAccessView from './TeamAccessView'
 import { useVocabulary } from '@/lib/VocabularyContext'
 
-type SubTab = 'employees' | 'shifts' | 'skills' | 'skill-map'
+type SubTab = 'employees' | 'shifts' | 'skills' | 'skill-map' | 'logins'
 
-const VALID_SUB_TABS: SubTab[] = ['employees', 'shifts', 'skills', 'skill-map']
+const VALID_SUB_TABS: SubTab[] = ['employees', 'shifts', 'skills', 'skill-map', 'logins']
 
 export default function MyTeamView() {
   const searchParams = useSearchParams()
@@ -33,6 +34,7 @@ export default function MyTeamView() {
     { id: 'shifts', label: 'Shifts' },
     { id: 'skills', label: 'Service Assignments' },
     { id: 'skill-map', label: 'Skill Map' },
+    { id: 'logins', label: 'Logins' },
   ]
 
   return (
@@ -47,6 +49,7 @@ export default function MyTeamView() {
         {activeSubTab === 'shifts' && <ShiftManagementView />}
         {activeSubTab === 'skills' && <SkillMatrixView />}
         {activeSubTab === 'skill-map' && <SkillRelationshipMap />}
+        {activeSubTab === 'logins' && <TeamAccessView />}
       </div>
     </div>
   )
