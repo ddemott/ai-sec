@@ -49,9 +49,11 @@ export interface Tenant {
   id: string;
   name: string;
   business_type: string;
-  system_prompt: string;
-  voice_id: string;
-  first_message: string;
+  // Nullable in the DB schema and routinely null for newly-created tenants
+  // before the AI persona is configured. Consumers must guard.
+  system_prompt: string | null;
+  voice_id: string | null;
+  first_message: string | null;
   team_size?: number;
   timezone?: string;
 }
@@ -170,6 +172,12 @@ export interface TenantFull extends Tenant {
   telnyx_phone_number_id?: string | null;
   phone_status?: string;
   created_at?: string;
+  // Read-only template defaults projected onto the tenant by the
+  // SuperAdmin /tenants list query — not persisted columns on tenants
+  // themselves, but available on the row for display + revert-to-default
+  // UX in the admin console.
+  system_prompt_template?: string;
+  first_message_template?: string;
 }
 
 export interface CalendarSettings {

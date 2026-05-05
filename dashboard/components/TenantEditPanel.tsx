@@ -27,20 +27,9 @@ import { Api } from '../lib/api';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
+import type { TenantFull } from '../lib/types';
 
-type Tenant = {
-  id: string;
-  name: string;
-  business_type: string;
-  timezone?: string;
-  owner_phone?: string | null;
-  inbound_phone?: string | null;
-  voice_id?: string | null;
-  first_message?: string | null;
-  system_prompt?: string | null;
-  telnyx_phone_number_id?: string | null;
-  phone_status?: string;
-};
+type Tenant = TenantFull;
 
 type Template = {
   business_type: string;

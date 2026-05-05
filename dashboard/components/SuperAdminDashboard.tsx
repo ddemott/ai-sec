@@ -17,28 +17,9 @@ import { Modal } from './ui/Modal'
 import { TenantCard } from './TenantCard'
 import { TenantCreateForm } from './TenantCreateForm'
 import { TenantEditPanel } from './TenantEditPanel'
+import type { TenantFull } from '../lib/types'
 
-type Tenant = {
-    id: string
-    name: string
-    business_type: string
-    timezone?: string
-    owner_phone?: string | null
-    inbound_phone?: string | null
-    voice_id?: string | null
-    first_message?: string | null
-    system_prompt?: string | null
-    telnyx_phone_number_id?: string | null
-    phone_status?: string
-    system_prompt_template?: string
-    first_message_template?: string
-    stripe_customer_id?: string | null
-    stripe_subscription_id?: string | null
-    subscription_status?: string
-    subscription_plan?: string | null
-    sort_order?: number
-    created_at?: string
-}
+type Tenant = TenantFull
 
 type Template = {
     business_type: string

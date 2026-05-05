@@ -1,23 +1,10 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Badge } from './ui/Badge';
-
-type Tenant = {
-  id: string;
-  name: string;
-  business_type: string;
-  timezone?: string;
-  owner_phone?: string | null;
-  inbound_phone?: string | null;
-  voice_id?: string | null;
-  first_message?: string | null;
-  system_prompt?: string | null;
-  telnyx_phone_number_id?: string | null;
-  phone_status?: string;
-};
+import type { TenantFull } from '../lib/types';
 
 interface TenantCardProps {
-  tenant: Tenant;
+  tenant: TenantFull;
   isSelected: boolean;
   isDragging: boolean;
   index: number;
