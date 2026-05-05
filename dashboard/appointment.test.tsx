@@ -326,4 +326,166 @@ describe('AppointmentView sad paths', () => {
     })
     // WHO: tenant user | WHAT: save appointment changes | WHEN: API update returns 500 | WHERE: AppointmentView detail panel | WHY: user must not lose edits when save fails — they should be able to retry
   })
+
+  test('mock-mode handleUpdate is a no-op (no /update fetch when sample data is showing)', async () => {
+    // WHO: a logged-out (or mid-fetch-failure) viewer who sees MOCK_APPOINTMENTS
+    //      and tries to edit one of them
+    // WHAT: AppointmentView's `if (usingMockData) { setError(...); return; }`
+    //       guard at the top of handleUpdate prevents the /update POST
+    //       from ever being issued
+    // WHEN: the GET /appointments fetch rejected during initial load, so the
+    //       catch arm set MOCK_APPOINTMENTS + usingMockData=true. The user
+    //       then drives the same edit flow that "can modify and save an
+    //       appointment" exercises in the happy path.
+    // WHERE: dashboard/components/AppointmentView.tsx → handleUpdate, line 215
+    //        guard. Banner copy "Showing sample data" lives in
+    //        AppointmentListSidebar.tsx:55.
+    // WHY: without this guard a user editing a fake appointment would fire
+    //      a POST /appointments/{mock-id}/update that 404s. The guard
+    //      intercepts before the fetch — pinning the no-op behavior here
+    //      prevents a regression that would silently spam the backend with
+    //      404-bound writes whenever fetch fails on initial load.
+    const updateFetchHappened = vi.fn()
+    global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : ''
+      // GET /appointments rejects → component catches → usingMockData=true,
+      // MOCK_APPOINTMENTS rendered.
+      if (url.includes('/appointments') && (!init?.method || init.method === 'GET') && !url.includes('/update')) {
+        return Promise.reject(new Error('simulated network error'))
+      }
+      // Track any /update POST that slips through — the test's load-bearing
+      // assertion is that this counter stays at zero.
+      if (url.match(/\/appointments\/([\w-]+)\/update$/) && init?.method === 'POST') {
+        updateFetchHappened()
+      }
+      // Other GETs (customers, resources, employees, services, skills) succeed
+      // so the form can render the dropdowns it expects.
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        redirected: false,
+        type: 'basic',
+        url,
+        json: async () => ([]),
+        text: async () => '[]',
+        clone: function () { return this },
+        body: null,
+        bodyUsed: false,
+      } as Response)
+    })
+
+    render(<AppointmentView />)
+
+    // Wait for the mock-mode banner to confirm the catch arm fired and
+    // usingMockData is now true. If this never appears, the test setup is
+    // broken (fetch didn't reject) and any later assertion would be
+    // meaningless.
+    await screen.findByText(/Showing sample data/i)
+
+    // Drive the same edit-and-save flow as the happy-path test.
+    const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
+    fireEvent.click(listItems[0])
+
+    const modifyBtns = await screen.findAllByRole('button', { name: /Edit Details/i })
+    fireEvent.click(modifyBtns[0])
+
+    const updateButton = screen.getByTestId('update-appointment-btn')
+    fireEvent.click(updateButton)
+
+    await waitFor(() => {
+      const btn = screen.queryByTestId('save-changes-btn')
+      expect(btn).not.toBeNull()
+    })
+    const saveChangesButton = screen.getByTestId('save-changes-btn')
+    fireEvent.click(saveChangesButton)
+
+    // Wait long enough that any pending fetch would have resolved if it
+    // were going to happen. waitFor with a short timeout is enough — the
+    // guard rejects synchronously, so by the time React's event loop has
+    // processed the click no fetch should be queued.
+    await waitFor(() => {
+      // Anchor on a stable post-click DOM signal so this isn't a sleep.
+      // The save-changes-btn click closes the confirm modal in the happy
+      // path; in the mock-mode path the error message lives in the
+      // detail panel (handleUpdate set it via setError). Either way the
+      // toolbar continues to be present, which proves the component
+      // didn't crash and the click path completed.
+      expect(document.querySelector('.rbc-toolbar')).toBeTruthy()
+    })
+
+    expect(updateFetchHappened).not.toHaveBeenCalled()
+  })
+
+  test('mock-mode handleDelete is a no-op (no DELETE fetch when sample data is showing)', async () => {
+    // WHO: same logged-out / fetch-failure viewer who tries to delete a
+    //      sample appointment
+    // WHAT: AppointmentView's `if (usingMockData) { setError(...); return; }`
+    //       guard inside handleDelete prevents the DELETE /appointments/:id
+    //       from ever being issued
+    // WHEN: GET /appointments rejected → mock-mode active → user clicks
+    //       delete on Bob Smith's mock row, then confirms in the native
+    //       browser confirm dialog
+    // WHERE: dashboard/components/AppointmentView.tsx → handleDelete, line 300
+    //        guard. The dialog comes from window.confirm (native), which we
+    //        stub to return true so the guard is the only thing that can
+    //        block the DELETE.
+    // WHY: deleting a fake appointment via API would issue a DELETE for an
+    //      ID that doesn't exist — silently 404 from the user's view and
+    //      pollute the audit log. The guard short-circuits before the
+    //      fetch; this test pins that behavior so a refactor that re-orders
+    //      the guards (e.g. moves the mock-mode check below the API call)
+    //      surfaces immediately.
+    const deleteFetchHappened = vi.fn()
+    global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : ''
+      if (url.includes('/appointments') && (!init?.method || init.method === 'GET') && !url.includes('/update')) {
+        return Promise.reject(new Error('simulated network error'))
+      }
+      if (url.includes('/appointments/') && init?.method === 'DELETE') {
+        deleteFetchHappened()
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        redirected: false,
+        type: 'basic',
+        url,
+        json: async () => ([]),
+        text: async () => '[]',
+        clone: function () { return this },
+        body: null,
+        bodyUsed: false,
+      } as Response)
+    })
+
+    // Stub window.confirm to return true so the guard at handleDelete:299
+    // doesn't bail before reaching the usingMockData check at handleDelete:300.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<AppointmentView />)
+
+    await screen.findByText(/Showing sample data/i)
+
+    const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
+    fireEvent.click(listItems[0])
+
+    // The delete button lives in AppointmentDetailPanel and is labeled
+    // "Cancel Appointment" (the action handler is handleDelete despite the
+    // user-facing copy — see AppointmentDetailPanel.tsx:103).
+    const deleteButtons = await screen.findAllByRole('button', { name: /Cancel Appointment/i })
+    fireEvent.click(deleteButtons[0])
+
+    await waitFor(() => {
+      // Confirm was called (proves we reached the guard with confirm()=true)
+      expect(confirmSpy).toHaveBeenCalled()
+    })
+
+    expect(deleteFetchHappened).not.toHaveBeenCalled()
+
+    confirmSpy.mockRestore()
+  })
 })
