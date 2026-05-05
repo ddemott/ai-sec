@@ -112,8 +112,8 @@ describe('ReminderService', () => {
         expect(mockDb.createReminderSchedule).toHaveBeenCalledTimes(4);
 
         // Verify reminder types
-        const calls = (mockDb.createReminderSchedule as any).mock.calls;
-        const reminderTypes = calls.map((c: any) => c[0].reminder_type);
+        const calls = vi.mocked(mockDb.createReminderSchedule).mock.calls;
+        const reminderTypes = calls.map((c) => c[0].reminder_type);
         expect(reminderTypes).toContain('confirmation');
         expect(reminderTypes).toContain('72h');
         expect(reminderTypes).toContain('24h');
@@ -135,8 +135,8 @@ describe('ReminderService', () => {
 
         await reminderService.scheduleAppointmentReminders(appointment);
 
-        const confirmationCall = (mockDb.createReminderSchedule as any).mock.calls.find(
-          (c: any) => c[0].reminder_type === 'confirmation'
+        const confirmationCall = vi.mocked(mockDb.createReminderSchedule).mock.calls.find(
+          (c) => c[0].reminder_type === 'confirmation'
         );
 
         expect(confirmationCall).toBeDefined();
@@ -161,8 +161,8 @@ describe('ReminderService', () => {
 
         await reminderService.scheduleAppointmentReminders(appointment);
 
-        const reminder72h = (mockDb.createReminderSchedule as any).mock.calls.find(
-          (c: any) => c[0].reminder_type === '72h'
+        const reminder72h = vi.mocked(mockDb.createReminderSchedule).mock.calls.find(
+          (c) => c[0].reminder_type === '72h'
         );
 
         const scheduledFor = new Date(reminder72h[0].scheduled_for);
@@ -188,8 +188,8 @@ describe('ReminderService', () => {
           status: 'scheduled',
         };
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
-        (mockDb.getAppointmentById as any).mockResolvedValue({
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
           id: '123',
           tenantId: '1',
           customerEmail: 'customer@example.com',
@@ -222,7 +222,7 @@ describe('ReminderService', () => {
           sent_at: new Date().toISOString(),
         };
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
 
         await reminderService.processReminder('1');
 
@@ -246,8 +246,8 @@ describe('ReminderService', () => {
           status: 'scheduled',
         };
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
-        (mockDb.getAppointmentById as any).mockResolvedValue({
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
           id: '123',
           tenantId: '1',
           customerEmail: 'customer@example.com',
@@ -272,13 +272,13 @@ describe('ReminderService', () => {
           { id: 3, appointment_id: 123, tenant_id: 1, reminder_type: '2h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
         ];
 
-        (mockDb.getReminderSchedulesByAppointment as any).mockResolvedValue(mockReminders);
+        vi.mocked(mockDb.getReminderSchedulesByAppointment).mockResolvedValue(mockReminders);
 
         await reminderService.cancelAppointmentReminders('123', '1');
 
         expect(mockDb.updateReminderSchedule).toHaveBeenCalledTimes(3);
-        const calls = (mockDb.updateReminderSchedule as any).mock.calls;
-        calls.forEach((call: any) => {
+        const calls = vi.mocked(mockDb.updateReminderSchedule).mock.calls;
+        calls.forEach((call) => {
           expect(call[1]).toEqual({ status: 'cancelled' });
         });
         // WHO: system on behalf of customer | WHAT: all reminders cancelled
@@ -293,8 +293,8 @@ describe('ReminderService', () => {
           { id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
         ];
 
-        (mockDb.getReminderSchedulesByAppointment as any).mockResolvedValue(oldReminders);
-        (mockDb.getAppointmentById as any).mockResolvedValue({
+        vi.mocked(mockDb.getReminderSchedulesByAppointment).mockResolvedValue(oldReminders);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
           id: '123',
           tenantId: '1',
           customerEmail: 'customer@example.com',
@@ -323,7 +323,7 @@ describe('ReminderService', () => {
           { id: 2, appointment_id: 456, tenant_id: 1, reminder_type: '2h', status: 'scheduled', customer_email: 'b@test.com', scheduled_for: '' },
         ];
 
-        (mockDb.getReminderSchedulesByTenant as any).mockResolvedValue(mockReminders);
+        vi.mocked(mockDb.getReminderSchedulesByTenant).mockResolvedValue(mockReminders);
 
         const reminders = await reminderService.getScheduledReminders(1);
 
@@ -396,7 +396,7 @@ describe('ReminderService', () => {
 
     describe('processReminder - Reminder Not Found', () => {
       it('handles missing reminder gracefully', async () => {
-        (mockDb.getReminderSchedule as any).mockResolvedValue(null);
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(null);
 
         await reminderService.processReminder('nonexistent');
 
@@ -425,8 +425,8 @@ describe('ReminderService', () => {
           status: 'scheduled',
         };
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
-        (mockDb.getAppointmentById as any).mockResolvedValue({
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
           id: '123',
           tenantId: '1',
           dateTime: createFutureDate(24).toISOString(),
@@ -462,8 +462,8 @@ describe('ReminderService', () => {
         const pastDate = new Date();
         pastDate.setHours(pastDate.getHours() - 1);
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
-        (mockDb.getAppointmentById as any).mockResolvedValue({
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
           id: '123',
           tenantId: '1',
           dateTime: pastDate.toISOString(), // Already passed
@@ -496,8 +496,8 @@ describe('ReminderService', () => {
           status: 'scheduled',
         };
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
-        (mockDb.getAppointmentById as any).mockResolvedValue({
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
           id: '123',
           tenantId: '1',
           customerEmail: 'customer@example.com',
@@ -505,7 +505,7 @@ describe('ReminderService', () => {
           status: 'scheduled',
         });
         // Override consent to return revoked
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             consent_type: 'email',
@@ -544,7 +544,7 @@ describe('ReminderService', () => {
           sent_at: new Date().toISOString(),
         };
 
-        (mockDb.getReminderSchedule as any).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
 
         const result = await reminderService.triggerReminder('1');
 
@@ -555,7 +555,7 @@ describe('ReminderService', () => {
       });
 
       it('returns false for nonexistent reminders', async () => {
-        (mockDb.getReminderSchedule as any).mockResolvedValue(null);
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(null);
 
         const result = await reminderService.triggerReminder('999');
 
@@ -581,8 +581,8 @@ describe('ReminderService', () => {
 
       await reminderService.scheduleAppointmentReminders(appointment);
 
-      const calls = (mockDb.createReminderSchedule as any).mock.calls;
-      const reminderTypes = calls.map((c: any) => c[0].reminder_type);
+      const calls = vi.mocked(mockDb.createReminderSchedule).mock.calls;
+      const reminderTypes = calls.map((c) => c[0].reminder_type);
 
       // Should have confirmation, 24h, and 2h but NOT 72h (would be in past)
       expect(reminderTypes).toContain('confirmation');
@@ -607,7 +607,7 @@ describe('ReminderService', () => {
       await reminderService.scheduleAppointmentReminders(snakeCaseAppointment as any);
 
       expect(mockDb.createReminderSchedule).toHaveBeenCalled();
-      const call = (mockDb.createReminderSchedule as any).mock.calls[0][0];
+      const call = vi.mocked(mockDb.createReminderSchedule).mock.calls[0][0];
       expect(call.customer_email).toBe('customer@example.com');
     });
 

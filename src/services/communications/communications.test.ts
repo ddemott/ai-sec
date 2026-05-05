@@ -74,7 +74,7 @@ describe('CommunicationService', () => {
     describe('sendEmail', () => {
       it('sends email successfully when customer has consent', async () => {
         // Setup: Customer has email consent
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             tenant_id: 'test-tenant-123',
@@ -99,7 +99,7 @@ describe('CommunicationService', () => {
       });
 
       it('applies email templates correctly', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             consent_type: 'email',
@@ -132,7 +132,7 @@ describe('CommunicationService', () => {
 
     describe('sendSMS', () => {
       it('sends SMS successfully when customer has consent', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             customer_phone: '+15559876543',
@@ -157,7 +157,7 @@ describe('CommunicationService', () => {
 
     describe('sendAppointmentConfirmation', () => {
       it('sends both email and SMS when customer has both contacts', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             customer_email: 'customer@example.com',
@@ -190,7 +190,7 @@ describe('CommunicationService', () => {
 
     describe('sendAppointmentReminder', () => {
       it('sends reminder with correct hours until appointment', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             consent_type: 'email',
@@ -225,7 +225,7 @@ describe('CommunicationService', () => {
   describe('Sad Paths', () => {
     describe('sendEmail - No Consent', () => {
       it('fails when customer has no consent record', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([]);
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([]);
 
         const result = await communicationService.sendEmail('test-tenant-123', {
           to: 'noconsent@example.com',
@@ -242,7 +242,7 @@ describe('CommunicationService', () => {
       });
 
       it('fails when customer revoked consent', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             customer_email: 'revoked@example.com',
@@ -271,7 +271,7 @@ describe('CommunicationService', () => {
 
     describe('sendSMS - Invalid Phone', () => {
       it('fails with invalid phone number format', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             consent_type: 'sms',
@@ -295,7 +295,7 @@ describe('CommunicationService', () => {
 
     describe('sendEmail - Tenant Not Found', () => {
       it('fails when tenant config does not exist', async () => {
-        (configService.getTenantConfig as any).mockReturnValue(null);
+        vi.mocked(configService.getTenantConfig).mockReturnValue(null);
 
         const result = await communicationService.sendEmail('nonexistent-tenant', {
           to: 'customer@example.com',
@@ -337,7 +337,7 @@ describe('CommunicationService', () => {
 
   describe('Edge Cases', () => {
     it('handles consent for "both" type correctly', async () => {
-      (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+      vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
         {
           id: 1,
           consent_type: 'both',
@@ -359,7 +359,7 @@ describe('CommunicationService', () => {
     });
 
     it('respects most recent consent record', async () => {
-      (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+      vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
         {
           id: 1,
           consent_type: 'email',
@@ -388,7 +388,7 @@ describe('CommunicationService', () => {
     });
 
     it('handles concurrent consent checks safely', async () => {
-      (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+      vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
         {
           id: 1,
           consent_type: 'email',
@@ -442,7 +442,7 @@ describe('ConsentService', () => {
 
     describe('checkConsent', () => {
       it('returns true for valid consent', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             consent_type: 'email',
@@ -468,7 +468,7 @@ describe('ConsentService', () => {
 
     describe('revokeConsent', () => {
       it('revokes consent successfully', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
             id: 1,
             consent_type: 'email',
@@ -477,7 +477,7 @@ describe('ConsentService', () => {
             consent_method: 'booking',
           },
         ]);
-        (mockDb.updateConsentRecord as any).mockResolvedValue({});
+        vi.mocked(mockDb.updateConsentRecord).mockResolvedValue({});
 
         const revoked = await consentService.revokeConsent(
           1,
@@ -539,7 +539,7 @@ describe('ConsentService', () => {
   describe('Sad Paths', () => {
     describe('checkConsent - No Records', () => {
       it('returns false when no consent records exist', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([]);
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([]);
 
         const hasConsent = await consentService.checkConsent(
           1,
@@ -557,7 +557,7 @@ describe('ConsentService', () => {
 
     describe('revokeConsent - No Existing Consent', () => {
       it('returns false when no consent to revoke', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockResolvedValue([]);
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([]);
 
         const revoked = await consentService.revokeConsent(
           1,
@@ -575,7 +575,7 @@ describe('ConsentService', () => {
 
     describe('canReceiveCommunications - Mixed Consent', () => {
       it('handles email-only consent correctly', async () => {
-        (mockDb.getConsentRecordsByCustomer as any).mockImplementation(
+        vi.mocked(mockDb.getConsentRecordsByCustomer).mockImplementation(
           async (_tenantId: number, email?: string) => {
             if (email) {
               return [

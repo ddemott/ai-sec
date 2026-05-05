@@ -3,6 +3,7 @@
  * Migrated from ai-secretary - provides GDPR/TCPA-compliant consent management.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { DatabaseService } from '../database/index.js';
 
 describe('ConsentService', () => {
   // Mock database service
@@ -29,7 +30,7 @@ describe('ConsentService', () => {
     it('should record consent with all required fields', async () => {
       const { ConsentService } = await import('./consentService');
       const mockDb = createMockDb();
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.recordConsent({
         tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
@@ -48,7 +49,7 @@ describe('ConsentService', () => {
     it('should pass tenant_id as UUID string', async () => {
       const { ConsentService } = await import('./consentService');
       const mockDb = createMockDb();
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       await service.recordConsent({
         tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
@@ -78,7 +79,7 @@ describe('ConsentService', () => {
         },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.checkConsent(1, 'test@example.com', undefined, 'email');
 
       expect(result).toBe(true);
@@ -89,7 +90,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.checkConsent(1, 'test@example.com', undefined, 'email');
 
       expect(result).toBe(false);
@@ -108,7 +109,7 @@ describe('ConsentService', () => {
         },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.checkConsent(1, 'test@example.com', undefined, 'email');
 
       expect(result).toBe(false);
@@ -127,7 +128,7 @@ describe('ConsentService', () => {
         },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       // Should work for email
       const emailResult = await service.checkConsent(1, 'test@example.com', undefined, 'email');
@@ -161,7 +162,7 @@ describe('ConsentService', () => {
         },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.checkConsent(1, 'test@example.com', undefined, 'email');
 
       expect(result).toBe(false); // Most recent consent says no
@@ -181,7 +182,7 @@ describe('ConsentService', () => {
         },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.revokeConsent(1, 'test@example.com', undefined, 'email', 'User requested');
 
       expect(result).toBe(true);
@@ -195,7 +196,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.revokeConsent(1, 'test@example.com', undefined, 'email');
 
       expect(result).toBe(false);
@@ -209,7 +210,7 @@ describe('ConsentService', () => {
         { id: '2', consent_type: 'sms', revoked_at: null },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
       const result = await service.revokeConsent(1, 'test@example.com', '+15551234567', 'both');
 
       expect(result).toBe(true);
@@ -225,7 +226,7 @@ describe('ConsentService', () => {
         { id: '1', consent_type: 'sms', revoked_at: null },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.recordOptOut({
         tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
@@ -245,14 +246,17 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
+      // The OptOutRecord type uses camelCase but this test deliberately passes
+      // a snake_case-flavored payload to verify the service normalizes/handles
+      // both shapes. The dual cast documents the intentional shape mismatch.
       await service.recordOptOut({
         tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         customer_phone: '+15551234567',
         opt_out_type: 'sms',
         opt_out_method: 'stop',
-      } as any);
+      } as unknown as Parameters<typeof service.recordOptOut>[0]);
 
       expect(mockDb.createOptOutRecord).toHaveBeenCalled();
     });
@@ -264,7 +268,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.processOptOutCommand(1, 'STOP', '+15551234567');
 
@@ -279,7 +283,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.processOptOutCommand(1, 'UNSUBSCRIBE', undefined, 'test@example.com');
 
@@ -293,7 +297,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       await service.processOptOutCommand(1, 'stop', '+15551234567');
       await service.processOptOutCommand(1, 'STOP', '+15551234568');
@@ -316,7 +320,7 @@ describe('ConsentService', () => {
         },
       ]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.canReceiveCommunications(1, 'test@example.com', '+15551234567');
 
@@ -330,7 +334,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.canReceiveCommunications(1, 'test@example.com', '+15551234567');
 
@@ -350,7 +354,7 @@ describe('ConsentService', () => {
       ];
       mockDb.getConsentRecordsByTenant.mockResolvedValue(mockRecords);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.getConsentRecords(1);
 
@@ -369,7 +373,7 @@ describe('ConsentService', () => {
       ];
       mockDb.getOptOutRecordsByTenant.mockResolvedValue(mockRecords);
 
-      const service = new ConsentService(mockDb as any);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.getOptOutRecords(1);
 
