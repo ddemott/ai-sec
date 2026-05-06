@@ -488,4 +488,88 @@ describe('AppointmentView sad paths', () => {
 
     confirmSpy.mockRestore()
   })
+
+  test('mock-mode handleCreate is a no-op (no POST /appointments/create when sample data is showing)', async () => {
+    // WHO: same logged-out / fetch-failure viewer who clicks the "+"
+    //      button to create a new appointment while mock-mode is active
+    // WHAT: AppointmentView's `if (usingMockData) { setError(...); return; }`
+    //       guard inside handleCreate prevents the POST /appointments/create
+    //       from ever being issued
+    // WHEN: GET /appointments rejected → mock-mode active → user clicks
+    //       the "+" button (which calls startNewAppointment → opens the
+    //       create form prefilled with whatever first customer/resource/
+    //       employee is loaded), then clicks "Create Appointment" without
+    //       changing any field
+    // WHERE: dashboard/components/AppointmentView.tsx → handleCreate, line 256
+    //        guard. The "+" button is in AppointmentListSidebar.tsx with
+    //        data-testid="new-appointment-btn"; the submit button is
+    //        rendered by AppointmentDetailPanel.tsx with the text
+    //        "Create Appointment" while isCreating is true.
+    // WHY: creating a fake appointment via API would issue a POST against
+    //      /appointments/create with a payload referencing mock customers
+    //      and resources that don't exist in the real database. The guard
+    //      short-circuits before the fetch; this test pins that behavior
+    //      so a refactor that re-orders the guards (e.g. moves the mock-
+    //      mode check below the API call) surfaces immediately. Pairs
+    //      with the handleUpdate + handleDelete mock-mode no-op tests so
+    //      all three destructive guards are contract-pinned.
+    const createFetchHappened = vi.fn()
+    global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : ''
+      // GET /appointments rejects → component catches → usingMockData=true,
+      // MOCK_APPOINTMENTS rendered. Don't reject the create POST below
+      // (different method) — but the guard should prevent it from firing
+      // anyway, so this branch is belt-and-suspenders.
+      if (url.includes('/appointments') && (!init?.method || init.method === 'GET') && !url.includes('/update') && !url.includes('/create')) {
+        return Promise.reject(new Error('simulated network error'))
+      }
+      // Track any /create POST that slips through — the test's load-
+      // bearing assertion is that this counter stays at zero.
+      if (url.includes('/appointments/create') && init?.method === 'POST') {
+        createFetchHappened()
+      }
+      // Other GETs (customers, resources, employees, services, skills)
+      // succeed with empty arrays so the form can still render.
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        redirected: false,
+        type: 'basic',
+        url,
+        json: async () => ([]),
+        text: async () => '[]',
+        clone: function () { return this },
+        body: null,
+        bodyUsed: false,
+      } as Response)
+    })
+
+    render(<AppointmentView />)
+
+    // Wait for the mock-mode banner — anchors the test on a known
+    // post-fetch-rejection state.
+    await screen.findByText(/Showing sample data/i)
+
+    // Click the "+" button (sidebar header) → startNewAppointment runs,
+    // isCreating becomes true, the detail panel renders the create form.
+    const newButton = await screen.findByTestId('new-appointment-btn')
+    fireEvent.click(newButton)
+
+    // The submit button text is `Create ${vocab.booking_label}`; the
+    // mocked vocab returns booking_label="Appointment".
+    const createButton = await screen.findByRole('button', { name: /create appointment/i })
+    fireEvent.click(createButton)
+
+    await waitFor(() => {
+      // Anchor on a stable post-click DOM signal so this isn't a sleep.
+      // The setError + setSaving(false) inside the guard rerenders the
+      // component without crashing; the calendar toolbar continues to
+      // be present, which proves the click path completed.
+      expect(document.querySelector('.rbc-toolbar')).toBeTruthy()
+    })
+
+    expect(createFetchHappened).not.toHaveBeenCalled()
+  })
 })

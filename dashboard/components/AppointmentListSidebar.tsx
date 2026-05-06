@@ -39,7 +39,7 @@ export function AppointmentListSidebar({
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold">{`${bookingLabel}s`}</h2>
           <div className="flex space-x-1">
-              <Button onClick={onStartNew} size="sm" className="p-1.5">
+              <Button onClick={onStartNew} size="sm" className="p-1.5" data-testid="new-appointment-btn">
                 <Plus className="w-4 h-4" />
               </Button>
               <Button variant="ghost" size="sm" onClick={onRefresh} className="p-1.5">
