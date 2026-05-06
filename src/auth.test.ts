@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, clearDB, createTenant, createUser, hashPassword } from "./test-utils";
 import { Client } from "pg";
+import type { FastifyReply } from "fastify";
 import bcrypt from "bcrypt";
+import type { AppRequest } from "./middleware";
 
 // Mock the email sender so route tests don't try to send real mail
 vi.mock('./services/communications/systemEmail', () => ({
@@ -17,37 +19,41 @@ vi.mock('./services/communications/systemEmail', () => ({
 const mockBcryptCompare = vi.fn();
 const mockBcryptHash = vi.fn();
 
-function createMockReply() {
-  const reply: any = {
+type MockReply = FastifyReply & { statusCode: number; body: unknown };
+type RouteHandler = (req: AppRequest, reply: FastifyReply) => Promise<unknown>;
+type RouteOpts = { config?: { rateLimit?: { max: number; timeWindow: string } } };
+
+function createMockReply(): MockReply {
+  const reply = {
     statusCode: 200,
-    body: null,
+    body: null as unknown,
     status(code: number) { reply.statusCode = code; return reply; },
-    send(data: any) { reply.body = data; return reply; },
-  };
+    send(data: unknown) { reply.body = data; return reply; },
+  } as unknown as MockReply;
   return reply;
 }
 
-function createMockRequest(body: any = {}, auth?: any) {
+function createMockRequest(body: Record<string, unknown> = {}, auth?: AppRequest['auth']): AppRequest {
   return {
     body, auth,
     headers: {}, ip: '127.0.0.1',
     log: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), child: vi.fn().mockReturnThis() },
     url: '/test', method: 'POST',
-  } as any;
+  } as unknown as AppRequest;
 }
 
 const TEST_TOKEN = 'jwt.test.token';
 const TENANT_ID_MOCK = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const USER_ID_MOCK = '11111111-2222-3333-4444-555555555555';
 
-interface RouteCapture { method: string; path: string; handler: any; opts?: any; }
+interface RouteCapture { method: string; path: string; handler: RouteHandler; opts?: RouteOpts; }
 
 function captureRoutes() {
   const routes: RouteCapture[] = [];
   const app = {
-    post: vi.fn((path: string, ...args: any[]) => {
-      const handler = args[args.length - 1];
-      const opts = args.length > 1 ? args[0] : undefined;
+    post: vi.fn((path: string, ...args: Array<RouteOpts | RouteHandler>) => {
+      const handler = args[args.length - 1] as RouteHandler;
+      const opts = args.length > 1 ? (args[0] as RouteOpts) : undefined;
       routes.push({ method: 'POST', path, handler, opts });
     }),
   };
@@ -61,7 +67,7 @@ function findRoute(routes: RouteCapture[], path: string) {
 import { createMockClient, createMockPool } from './test-utils-mock';
 
 describe("Auth Routes — Handler-Level", () => {
-  let registerAuthRoutes: any;
+  let registerAuthRoutes: typeof import('./routes/auth').registerAuthRoutes;
   const generateToken = vi.fn().mockReturnValue(TEST_TOKEN);
 
   beforeAll(async () => {

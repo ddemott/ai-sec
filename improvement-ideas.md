@@ -1822,3 +1822,59 @@
 **What's working:** The workflow correctly prioritized clearing the last canonical UX backlog item instead of inventing another low-value improvement batch when the ideas log is already mature and repetition-sensitive.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions already support the right behavior here, finish the remaining required UX work first, then avoid forcing extra output when it would mostly repeat prior themes.
+
+## Ideas — 2026-05-06 (code patterns reviewed)
+
+### Task: Reuse shared validation and zero-row helpers in users.ts
+**Status:** proposed
+**Files to change:** `src/routes/users.ts:L88-L93`, `src/routes/users.ts:L168-L186`, `src/routes/routeHelpers.ts:L1-L57`
+**What to do:** Replace the inline `safeParse` failure replies in `POST /users/invite` and `PATCH /users/:id/role` with `sendValidationError`, then swap the route-local `res.rows.length === 0` branch in the role update path for `assertRowAffected(reply, 'User')` or the same shared zero-row pattern used elsewhere. Keep route payloads and status codes unchanged.
+**Done when:**
+- [ ] Invite validation failures use `sendValidationError`
+- [ ] Role-update validation failures use `sendValidationError`
+- [ ] Role-update not-found handling uses shared zero-row mutation handling
+- [ ] Existing success, 400, and 404 response shapes remain unchanged for callers
+- [ ] All existing tests pass, new tests cover invalid invite/role payloads and missing-user role updates if needed
+**Why it matters:** This route already follows the project’s shared-helper direction in spirit, but still carries a few one-off validation and not-found branches in a sensitive owner-management flow.
+**Tradeoff:** The gain is mostly consistency and safer maintenance, so the cleanup should stay tightly scoped to helper reuse instead of broad auth-route refactoring.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Under an hour of mechanical cleanup would align a security-sensitive route with existing backend conventions, a solid return.
+
+### Task: Extract invite creation and reset-token persistence into a users route helper
+**Status:** proposed
+**Files to change:** `src/routes/users.ts:L102-L142`
+**What to do:** Pull the tenant lookup, placeholder-password hashing, reset-token generation, and `withTenantClient` insert flow for `POST /users/invite` into one small route-local helper such as `createInvitedUserWithResetToken`. Have the route keep ownership checks, email sending, and logging, but move the persistence-heavy block behind a named function that returns `{ userId, businessName, rawToken }`. Preserve the current transaction shape, unique-violation handling, and email-after-write behavior exactly.
+**Done when:**
+- [ ] `POST /users/invite` no longer mixes tenant lookup, password hashing, token generation, and inserts inline in the route body
+- [ ] The extracted helper returns the same `userId`, `businessName`, and raw reset token data the route needs today
+- [ ] Unique-email conflicts still map to the current 409 response
+- [ ] Invite email sending still happens after the DB writes and still does not roll back on delivery failure
+- [ ] All existing tests pass, new tests cover helper-driven invite persistence if needed
+**Why it matters:** The invite route currently interleaves policy checks, persistence, crypto, and email setup, which makes one of the more delicate user-management flows harder to scan than it needs to be.
+**Tradeoff:** The helper should stay route-local and explicit, otherwise the extraction just hides complexity instead of making the flow easier to reason about.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** About 1-2 hours of careful extraction would make the invite flow noticeably easier to audit without changing behavior, a worthwhile maintenance win.
+
+### Task: Collapse duplicate service mapping mutations behind a small shared executor
+**Status:** proposed
+**Files to change:** `src/routes/mappings.ts:L13-L107`, `src/routes/routeHelpers.ts:L31-L76`
+**What to do:** Add one route-local helper in `mappings.ts` that accepts the validated IDs, tenant ID, SQL text, and log event name, then reuse it for the four assign/unassign endpoints. In the same pass, replace the local `UUID_RE` checks with `requireValidUUID` and the repeated `{ success: true }` replies with `sendSuccess`. Keep URLs, SQL statements, and emitted audit events unchanged.
+**Done when:**
+- [ ] `mappings.ts` no longer declares its own UUID regex when the shared helper can validate the same params
+- [ ] The four assign/unassign endpoints share one narrow execution path for query + audit logging + success reply
+- [ ] Current SQL behavior and event names remain unchanged for employee/resource assign and unassign flows
+- [ ] Response payloads remain unchanged for callers
+- [ ] All existing tests pass, new tests cover helper-driven UUID validation and assign/unassign success paths if needed
+**Why it matters:** This file is almost entirely four copies of the same mutation pattern, which makes future edits drift-prone for no real benefit.
+**Tradeoff:** The helper needs to stay tiny and route-local so the file remains obvious to debug and does not turn into a generic mapping abstraction.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Less than an hour of focused deduplication would simplify an entire route module with very low regression risk, a strong return.
+
+## Self-Review — 2026-05-06
+**Cycles since last self-review:** 1
+**What's working:** The workflow handled the finished UX-review state cleanly, and the freshest improvement output came from a small backend slice, `users.ts` and `mappings.ts`, that had not been mined yet and still yielded concrete, bounded tasks.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already say to skip UX review once the canonical file is complete and to rotate toward a different improvement area when recent batches get repetitive, which is exactly what this cycle needed.

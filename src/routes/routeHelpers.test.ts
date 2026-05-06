@@ -3,6 +3,8 @@
  * Every test includes 5W diagnostic context explaining the real-world scenario it guards against.
  */
 import { describe, it, expect } from 'vitest';
+import type { FastifyReply } from 'fastify';
+import type { ZodIssue } from 'zod';
 import {
   sendValidationError,
   sendNotFound,
@@ -16,13 +18,16 @@ import {
 
 // ── Mock Reply ──────────────────────────────────────────────────────
 
-function createMockReply() {
-  const reply: any = {
+type MockReplyBody = { success?: boolean; error?: string; details?: ZodIssue[] | unknown[] } | Record<string, unknown> | null;
+type MockReply = FastifyReply & { _status: number; _body: MockReplyBody };
+
+function createMockReply(): MockReply {
+  const reply = {
     _status: 200,
-    _body: null,
+    _body: null as MockReplyBody,
     status(code: number) { reply._status = code; return reply; },
-    send(body: unknown) { reply._body = body; return reply; },
-  };
+    send(body: unknown) { reply._body = body as MockReplyBody; return reply; },
+  } as unknown as MockReply;
   return reply;
 }
 
@@ -37,7 +42,7 @@ describe('sendValidationError', () => {
     // WHY: before this helper, 15+ routes hand-built the same 400 envelope — one typo in any of them
     //      would cause the dashboard to misparse the error and show a generic "Something went wrong"
     const reply = createMockReply();
-    const issues = [{ code: 'invalid_type', path: ['name'], message: 'Required' }] as any;
+    const issues = [{ code: 'invalid_type', path: ['name'], message: 'Required' }] as unknown as ZodIssue[];
     sendValidationError(reply, issues);
     expect(reply._status).toBe(400);
     expect(reply._body).toEqual({ success: false, error: 'Validation failed', details: issues });
@@ -272,7 +277,7 @@ describe('parseDateRange', () => {
     // WHERE: parseDateRange({})
     // WHY: without a default, the SQL query would receive NULL for start_date and either
     //      return all rows (performance bomb) or error on the ::DATE cast
-    const result = parseDateRange({} as any);
+    const result = parseDateRange({});
     const today = new Date().toISOString().split('T')[0];
     expect(result.startDate).toBe(today);
     expect(result.endDate).toBeNull();
@@ -325,7 +330,7 @@ describe('parsePagination', () => {
     // WHERE: parsePagination({})
     // WHY: without defaults, parseInt(undefined) returns NaN, and SQL would get "LIMIT NaN"
     //      which throws a Postgres syntax error (500) instead of returning the first page
-    const result = parsePagination({} as any);
+    const result = parsePagination({});
     expect(result).toEqual({ limit: 100, offset: 0 });
   });
 
@@ -346,7 +351,7 @@ describe('parsePagination', () => {
     // WHEN: GET /voice/history (no limit param, route default is 25)
     // WHERE: parsePagination with custom defaults object
     // WHY: different views need different default page sizes — the helper must not force 100 everywhere
-    const result = parsePagination({} as any, { limit: 25, maxLimit: 200 });
+    const result = parsePagination({}, { limit: 25, maxLimit: 200 });
     expect(result.limit).toBe(25);
   });
 

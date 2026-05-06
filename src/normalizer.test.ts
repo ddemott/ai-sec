@@ -108,7 +108,7 @@ describe("normalizeForEmbedding", () => {
         choices: [{ message: { content: "Customer prefers Suzy for oil changes." } }],
       }),
     };
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     const result = await normalize("I think Suzy is great at oil changes", {
@@ -120,12 +120,13 @@ describe("normalizeForEmbedding", () => {
 
     const [url, options] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://api.openai.com/v1/chat/completions");
-    const body = JSON.parse((options as any).body);
+    const init = options as RequestInit;
+    const body = JSON.parse(init.body as string);
     expect(body.model).toBe("gpt-4o-mini");
     expect(body.temperature).toBe(0);
     expect(body.messages[1].content).toContain("call summary");
     expect(body.messages[1].content).toContain("I think Suzy is great at oil changes");
-    expect((options as any).headers.Authorization).toBe("Bearer test-api-key");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-api-key");
 
     fetchSpy.mockRestore();
   });
@@ -145,7 +146,7 @@ describe("normalizeForEmbedding", () => {
         choices: [{ message: { content: "" } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     const result = await normalize("I think Suzy is great at oil changes");
@@ -168,7 +169,7 @@ describe("normalizeForEmbedding", () => {
       ok: false,
       json: async () => ({ error: { message: "Invalid API key" } }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("bad-key");
     await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
@@ -219,7 +220,7 @@ describe("normalizeForEmbedding", () => {
       ok: false,
       json: async () => ({ error: { message: "Internal server error", type: "server_error" } }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
@@ -246,7 +247,7 @@ describe("normalizeForEmbedding", () => {
         error: { message: "Rate limit exceeded", type: "rate_limit_error" },
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
@@ -274,7 +275,7 @@ describe("normalizeForEmbedding", () => {
         throw new SyntaxError("Unexpected token < in JSON at position 0");
       },
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
@@ -297,7 +298,7 @@ describe("normalizeForEmbedding", () => {
       ok: true,
       json: async () => ({ choices: [] }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     const result = await normalize("I think Suzy is great at oil changes");
@@ -322,7 +323,7 @@ describe("normalizeForEmbedding", () => {
         choices: [{ message: { content: null } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     const result = await normalize("I think Suzy is great at oil changes");
@@ -369,7 +370,7 @@ describe("normalizeForEmbedding", () => {
         choices: [{ message: { content: "Customer asks about brake service. Name: Rene." } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     const result = await normalize("Hey! 😊 I'm René — do you guys do brakes? 🚗💨");
@@ -397,7 +398,7 @@ describe("normalizeForEmbedding", () => {
         choices: [{ message: { content: "Customer requests oil change." } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as any);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
 
     const normalize = createNormalizer("test-api-key");
     const result = await normalize(longText);

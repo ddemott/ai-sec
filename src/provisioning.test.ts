@@ -127,7 +127,7 @@ describe("Phone Provisioning", () => {
                     ok: true,
                     json: async () => ({ data: [{ phone_number: '+13125551234' }] }),
                 } as Response;
-            }) as any;
+            }) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             const result = await client.searchAvailable('312');
             expect(result?.phone_number).toBe('+13125551234');
@@ -142,17 +142,17 @@ describe("Phone Provisioning", () => {
             global.fetch = vi.fn(async () => ({
                 ok: true,
                 json: async () => ({ data: [] }),
-            } as Response)) as any;
+            } as Response)) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             const result = await client.searchAvailable('999');
             expect(result).toBeNull();
         });
 
         it("orderNumber returns the purchased number with its Telnyx ID", async () => {
-            global.fetch = vi.fn(async (url: string, init: any) => {
+            global.fetch = vi.fn(async (url: string, init: RequestInit) => {
                 expect(url).toContain('/number_orders');
                 expect(init.method).toBe('POST');
-                expect(JSON.parse(init.body)).toEqual({
+                expect(JSON.parse(init.body as string)).toEqual({
                     phone_numbers: [{ phone_number: '+13125551234' }],
                 });
                 return {
@@ -164,7 +164,7 @@ describe("Phone Provisioning", () => {
                         },
                     }),
                 } as Response;
-            }) as any;
+            }) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             const result = await client.orderNumber('+13125551234');
             expect(result).toEqual({ id: 'tnum_xyz', phone_number: '+13125551234' });
@@ -180,7 +180,7 @@ describe("Phone Provisioning", () => {
                 ok: false,
                 status: 422,
                 text: async () => 'Phone number unavailable',
-            } as Response)) as any;
+            } as Response)) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             await expect(client.orderNumber('+13125551234')).rejects.toThrow(/422.*Phone number unavailable/);
         });
@@ -191,22 +191,22 @@ describe("Phone Provisioning", () => {
             // WHEN: number is purchased and must be routed to LiveKit
             // WHERE: TelnyxNumbersClient.assignToConnection
             // WHY: without this PATCH the inbound call never reaches LiveKit, even though the number is in our account
-            global.fetch = vi.fn(async (url: string, init: any) => {
+            global.fetch = vi.fn(async (url: string, init: RequestInit) => {
                 expect(url).toContain('/phone_numbers/tnum_xyz');
                 expect(init.method).toBe('PATCH');
-                expect(JSON.parse(init.body)).toEqual({ connection_id: 'sip_conn_42' });
+                expect(JSON.parse(init.body as string)).toEqual({ connection_id: 'sip_conn_42' });
                 return { ok: true, json: async () => ({}) } as Response;
-            }) as any;
+            }) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             await client.assignToConnection('tnum_xyz', 'sip_conn_42');
         });
 
         it("release sends DELETE to /phone_numbers/{id}", async () => {
-            global.fetch = vi.fn(async (url: string, init: any) => {
+            global.fetch = vi.fn(async (url: string, init: RequestInit) => {
                 expect(url).toContain('/phone_numbers/tnum_xyz');
                 expect(init.method).toBe('DELETE');
                 return { ok: true, json: async () => ({}) } as Response;
-            }) as any;
+            }) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             await client.release('tnum_xyz');
         });
@@ -217,7 +217,7 @@ describe("Phone Provisioning", () => {
             // WHEN: DNS down, TLS error, etc.
             // WHERE: TelnyxNumbersClient.fetch network error path
             // WHY: bare 'fetch failed' is unactionable; the wrapper makes the call site clear in logs
-            global.fetch = vi.fn(async () => { throw new Error('ENETUNREACH'); }) as any;
+            global.fetch = vi.fn(async () => { throw new Error('ENETUNREACH'); }) as unknown as typeof fetch;
             const client = new TelnyxNumbersClient('test-key');
             await expect(client.searchAvailable()).rejects.toThrow(/Telnyx GET.*ENETUNREACH/);
         });

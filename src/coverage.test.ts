@@ -2,6 +2,15 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
 import { Client } from "pg";
 
+type CoverageRow = {
+    service_name: string;
+    status: 'full' | 'partial' | 'gap' | 'closed';
+    coverage_pct: string;
+    check_date: string;
+    gap_hours: unknown[];
+    covered_hours: unknown[];
+};
+
 describe("Coverage Gap Detection", () => {
     let client: Client;
     let tenantId: string;
@@ -174,11 +183,11 @@ describe("Coverage Gap Detection", () => {
         );
 
         // Mon-Fri should be 'full', Sat-Sun should be 'closed'
-        const weekday = res.rows.find((r: any) => r.status === 'full');
+        const weekday = res.rows.find((r: CoverageRow) => r.status === 'full');
         expect(weekday).toBeDefined();
         expect(weekday.coverage_pct).toBe('100.0');
 
-        const weekend = res.rows.filter((r: any) => r.status === 'closed');
+        const weekend = res.rows.filter((r: CoverageRow) => r.status === 'closed');
         expect(weekend.length).toBe(2); // Sat + Sun
     });
 
@@ -198,12 +207,12 @@ describe("Coverage Gap Detection", () => {
             [tenantId]
         );
 
-        const brakes = res.rows.filter((r: any) => r.service_name === "Brakes");
+        const brakes = res.rows.filter((r: CoverageRow) => r.service_name === "Brakes");
         expect(brakes.length).toBeGreaterThan(0);
 
         // Some days should have coverage, some should be gaps
-        const covered = brakes.filter((r: any) => r.status !== 'closed' && Number(r.coverage_pct) > 0);
-        const gaps = brakes.filter((r: any) => r.status === 'gap' || r.status === 'closed');
+        const covered = brakes.filter((r: CoverageRow) => r.status !== 'closed' && Number(r.coverage_pct) > 0);
+        const gaps = brakes.filter((r: CoverageRow) => r.status === 'gap' || r.status === 'closed');
         expect(covered.length).toBeGreaterThan(0);
         expect(gaps.length).toBeGreaterThan(0);
     });
@@ -225,7 +234,7 @@ describe("Coverage Gap Detection", () => {
         );
 
         // Monday should have partial coverage for Alignment (10-12 covered, 8-10 + 12-17 gap)
-        const alignmentMon = res.rows.find((r: any) =>
+        const alignmentMon = res.rows.find((r: CoverageRow) =>
             r.service_name === "Alignment" && new Date(r.check_date).getDay() === 1
         );
         if (alignmentMon) {
@@ -248,7 +257,7 @@ describe("Coverage Gap Detection", () => {
             [tenantId]
         );
 
-        const fullDays = res.rows.filter((r: any) => r.status === 'full');
+        const fullDays = res.rows.filter((r: CoverageRow) => r.status === 'full');
         for (const day of fullDays) {
             expect(day.gap_hours).toEqual([]);
         }
