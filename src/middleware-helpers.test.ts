@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { Client } from "pg";
+import type { FastifyReply } from "fastify";
+import type { AppRequest } from "./middleware";
 import {
     getRootClient, clearDB, setupBasicTenant,
     beginTestTransaction, rollbackTestTransaction,
@@ -90,8 +92,8 @@ describe("Middleware Helpers", () => {
         it("returns tenantId from req.tenantId", async () => {
             const { requireTenantId } = await import("./middleware");
 
-            const req = { tenantId: "abc-123" } as any;
-            const reply = { status: () => ({ send: () => {} }) } as any;
+            const req = { tenantId: "abc-123" } as unknown as AppRequest;
+            const reply = { status: () => ({ send: () => {} }) } as unknown as FastifyReply;
 
             const result = requireTenantId(req, reply);
             expect(result).toBe("abc-123");
@@ -100,8 +102,8 @@ describe("Middleware Helpers", () => {
         it("returns tenantId from req.body.tenant_id", async () => {
             const { requireTenantId } = await import("./middleware");
 
-            const req = { body: { tenant_id: "def-456" } } as any;
-            const reply = { status: () => ({ send: () => {} }) } as any;
+            const req = { body: { tenant_id: "def-456" } } as unknown as AppRequest;
+            const reply = { status: () => ({ send: () => {} }) } as unknown as FastifyReply;
 
             const result = requireTenantId(req, reply);
             expect(result).toBe("def-456");
@@ -110,8 +112,8 @@ describe("Middleware Helpers", () => {
         it("prefers req.tenantId over body", async () => {
             const { requireTenantId } = await import("./middleware");
 
-            const req = { tenantId: "from-query", body: { tenant_id: "from-body" } } as any;
-            const reply = { status: () => ({ send: () => {} }) } as any;
+            const req = { tenantId: "from-query", body: { tenant_id: "from-body" } } as unknown as AppRequest;
+            const reply = { status: () => ({ send: () => {} }) } as unknown as FastifyReply;
 
             const result = requireTenantId(req, reply);
             expect(result).toBe("from-query");
@@ -121,14 +123,14 @@ describe("Middleware Helpers", () => {
             const { requireTenantId } = await import("./middleware");
 
             let sentStatus = 0;
-            let sentBody: any = null;
-            const req = { body: {} } as any;
+            let sentBody: { error: string } | null = null;
+            const req = { body: {} } as unknown as AppRequest;
             const reply = {
                 status: (code: number) => {
                     sentStatus = code;
-                    return { send: (body: any) => { sentBody = body; } };
+                    return { send: (body: { error: string }) => { sentBody = body; } };
                 }
-            } as any;
+            } as unknown as FastifyReply;
 
             const result = requireTenantId(req, reply);
             expect(result).toBeNull();
@@ -141,31 +143,31 @@ describe("Middleware Helpers", () => {
         it("error response includes actionable message", async () => {
             const { requireTenantId } = await import("./middleware");
 
-            let sentBody: any = null;
-            const req = {} as any; // no tenantId, no body
+            let sentBody: { error: string } | null = null;
+            const req = {} as unknown as AppRequest; // no tenantId, no body
             const reply = {
                 status: () => ({
-                    send: (body: any) => { sentBody = body; }
+                    send: (body: { error: string }) => { sentBody = body; }
                 })
-            } as any;
+            } as unknown as FastifyReply;
 
             requireTenantId(req, reply);
-            expect(sentBody.error).toBe("tenant_id is required");
+            expect(sentBody!.error).toBe("tenant_id is required");
             // Error message should be clear enough to debug — tells you exactly what's missing
-            expect(sentBody.error).toContain("tenant_id");
+            expect(sentBody!.error).toContain("tenant_id");
         });
 
         it("handles undefined body gracefully", async () => {
             const { requireTenantId } = await import("./middleware");
 
             let sentStatus = 0;
-            const req = { body: undefined } as any;
+            const req = { body: undefined } as unknown as AppRequest;
             const reply = {
                 status: (code: number) => {
                     sentStatus = code;
                     return { send: () => {} };
                 }
-            } as any;
+            } as unknown as FastifyReply;
 
             const result = requireTenantId(req, reply);
             expect(result).toBeNull();
@@ -232,7 +234,7 @@ describe("Middleware Helpers", () => {
                 [tenantId]
             );
             expect(res.rows.length).toBeGreaterThanOrEqual(1);
-            expect(res.rows.some((r: any) => r.name === "Test Customer")).toBe(true);
+            expect(res.rows.some((r: { name: string }) => r.name === "Test Customer")).toBe(true);
         });
     });
 });
