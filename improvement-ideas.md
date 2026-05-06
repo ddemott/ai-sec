@@ -1816,3 +1816,9 @@
 **What's working:** UX review is still correctly skipped now that the component pass is complete, and the freshest improvement output comes from small shared dashboard infrastructure slices where the tasks can stay concrete without falling back into repeated backend helper cleanup.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The current instructions already pushed this cycle toward a different, low-churn slice and still produced specific file-level tasks with clear stop conditions.
+
+## Self-Review — 2026-05-05
+**Cycles since last self-review:** 1
+**What's working:** The workflow correctly prioritized clearing the last canonical UX backlog item instead of inventing another low-value improvement batch when the ideas log is already mature and repetition-sensitive.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already support the right behavior here, finish the remaining required UX work first, then avoid forcing extra output when it would mostly repeat prior themes.

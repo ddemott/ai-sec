@@ -225,3 +225,8 @@
 ### StepReview (dashboard/components/SetupWizard/StepReview.tsx)
 - **[high]** When services exist but `coverageData` is still empty after loading, the review step drops the entire coverage section and status message, which makes a high-stakes final check feel incomplete instead of clearly blocked or unavailable → Add an explicit no-coverage-yet state that explains whether assignments were not checked, coverage could not be calculated, or setup is still incomplete.
 - **[medium]** The review step hardcodes `gray` and `dark:bg-[#222]` colors instead of leaning on the theme CSS variables used elsewhere, so this summary screen is more likely to look off-brand or inconsistent across the project’s eight dark themes → Move these surfaces onto the shared theme tokens so the final setup review stays visually consistent with the rest of the dashboard.
+
+## Review — 2026-05-05
+
+### TeamAccessView (dashboard/components/TeamAccessView.tsx)
+- **[medium]** Access-management screens are trust-sensitive because they mix identity, permission, and invitation states, and if loading, role-change, and pending-access cues are not explicit the surface can feel riskier than it needs to → Strengthen role-state, pending-invite, and mutation-result feedback so admins can understand access changes with confidence.
