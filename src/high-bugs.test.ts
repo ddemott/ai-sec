@@ -19,6 +19,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword } from "./test-utils";
 import { Client } from "pg";
 import jwt from "jsonwebtoken";
+import type { JwtPayload } from "jsonwebtoken";
+import type { ZodIssue } from "zod";
+
+type TestJwtPayload = JwtPayload & { tenant_id: string; user_id: string; email: string };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
 
@@ -202,7 +206,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const payload = { tenant_id: 'test-uuid', user_id: 'user-uuid', email: 'test@test.com' };
             const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 
-            const decoded = jwt.verify(token, JWT_SECRET) as any;
+            const decoded = jwt.verify(token, JWT_SECRET) as TestJwtPayload;
             expect(decoded.tenant_id).toBe('test-uuid');
             expect(decoded.user_id).toBe('user-uuid');
             expect(decoded.email).toBe('test@test.com');
@@ -466,7 +470,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
                 { expiresIn: '8h' }
             );
 
-            const decoded = jwt.verify(token, JWT_SECRET) as any;
+            const decoded = jwt.verify(token, JWT_SECRET) as TestJwtPayload;
             expect(decoded.tenant_id).toBe(tenantId);
             expect(decoded.user_id).toBe(userId);
             expect(decoded.email).toBe('jwt@test.com');
@@ -483,7 +487,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
                 { expiresIn: '1h' }
             );
 
-            const decoded = jwt.verify(tokenA, JWT_SECRET) as any;
+            const decoded = jwt.verify(tokenA, JWT_SECRET) as TestJwtPayload;
             expect(decoded.tenant_id).toBe('tenant-a');
             expect(decoded.tenant_id).not.toBe('tenant-b');
 
@@ -647,13 +651,13 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
                 expect(issues.length).toBeGreaterThanOrEqual(3);
 
                 // Each issue should identify WHICH field (path) and WHY (message)
-                const paths = issues.map((i: any) => i.path[0]);
+                const paths = issues.map((i: ZodIssue) => i.path[0]);
                 expect(paths).toContain('tenant_id');
                 expect(paths).toContain('start_time');
                 expect(paths).toContain('description');
 
                 // Messages should be specific
-                issues.forEach((issue: any) => {
+                issues.forEach((issue: ZodIssue) => {
                     expect(issue.message).toBeDefined();
                     expect(issue.message.length).toBeGreaterThan(0);
                     expect(issue.message).not.toBe('error');

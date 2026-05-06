@@ -114,7 +114,7 @@ import { createMockClient as createBaseMockClient, createMockPool } from './test
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: any[][] } }).mock.calls.filter(
+    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
       (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
     );
   return { ...base, getDataQueries };
@@ -308,10 +308,10 @@ describe("Jobber Sync — Push Happy Paths", () => {
     // again with its own pool.connect. We need to handle multiple connect calls.
 
     const queries: MockQuery[] = [];
-    const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
+    const allResponses: Array<{ rows: unknown[]; rowCount?: number }> = [];
 
     const mockClient = {
-      query: vi.fn(async (text: string, params?: any[]) => {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
         queries.push({ text, params: params || [] });
         return allResponses.shift() || { rows: [], rowCount: 0 };
       }),
@@ -721,7 +721,7 @@ describe("Jobber Sync — Sad Paths", () => {
 
     const visitData = makeJobberVisitData({ job: { id: JOBBER_JOB_ID, title: 'Job', client: null } });
 
-    await pullJobberVisit(pool, TENANT_ID, visitData as any, silentLogger);
+    await pullJobberVisit(pool, TENANT_ID, visitData as unknown as jobber.JobberVisit, silentLogger);
 
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('no associated client'));
     expect(mockClient.release).toHaveBeenCalled();

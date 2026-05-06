@@ -20,6 +20,7 @@ import {
   fullSync,
 } from "./services/servicetitanSync";
 import * as servicetitan from "./services/servicetitanClient";
+import type { ServiceTitanJob } from "./services/servicetitanClient";
 
 // ---- Mock helpers ----
 
@@ -91,7 +92,7 @@ import { createMockClient as createBaseMockClient, createMockPool } from './test
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: any[][] } }).mock.calls.filter(
+    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
       (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
     );
   return { ...base, getDataQueries };
@@ -279,10 +280,10 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     // WHERE: services/servicetitanSync.ts → syncAppointmentToServiceTitan() → syncCustomerToServiceTitan() → createCustomer + createJob
     // WHY: Without cascade sync, createJob would fail with invalid customerId — ServiceTitan requires valid customer reference for jobs
     const queries: MockQuery[] = [];
-    const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
+    const allResponses: Array<{ rows: unknown[]; rowCount?: number }> = [];
 
     const mockClient = {
-      query: vi.fn(async (text: string, params?: any[]) => {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
         queries.push({ text, params: params || [] });
         return allResponses.shift() || { rows: [], rowCount: 0 };
       }),
@@ -744,7 +745,7 @@ describe("ServiceTitan Sync — Pull Job", () => {
     await pullServiceTitanJob(pool, TENANT_ID, jobData, silentLogger);
 
     const insertCall = mockClient.query.mock.calls.find(
-      (c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO appointments')
+      (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO appointments')
     );
     expect(insertCall![1]).toContain('canceled');
   });
@@ -860,7 +861,7 @@ describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
     // UPDATE sync map status
     queryResponses.push({ rows: [] });
 
-    vi.mocked(servicetitan.cancelJob).mockResolvedValueOnce({} as any);
+    vi.mocked(servicetitan.cancelJob).mockResolvedValueOnce({ id: 0, customerId: 0 } as ServiceTitanJob);
 
     await syncApptST(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
 
@@ -914,7 +915,7 @@ describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
     // UPDATE sync map
     queryResponses.push({ rows: [] });
 
-    vi.mocked(servicetitan.updateJob).mockResolvedValueOnce({} as any);
+    vi.mocked(servicetitan.updateJob).mockResolvedValueOnce({ id: 0, customerId: 0 } as ServiceTitanJob);
 
     await syncApptST(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
 

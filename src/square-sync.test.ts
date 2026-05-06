@@ -89,7 +89,7 @@ import { createMockClient as createBaseMockClient, createMockPool } from './test
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: any[][] } }).mock.calls.filter(
+    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
       (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
     );
   return { ...base, getDataQueries };
@@ -273,10 +273,10 @@ describe("Square Sync — Push Happy Paths", () => {
     // WHERE: services/squareSync.ts → syncAppointmentToSquare() → syncCustomerToSquare() → createCustomer + createBooking
     // WHY: Without cascade sync, createBooking would fail with invalid customer_id — Square requires valid customer reference
     const queries: MockQuery[] = [];
-    const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
+    const allResponses: Array<{ rows: unknown[]; rowCount?: number }> = [];
 
     const mockClient = {
-      query: vi.fn(async (text: string, params?: any[]) => {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
         queries.push({ text, params: params || [] });
         return allResponses.shift() || { rows: [], rowCount: 0 };
       }),
@@ -741,7 +741,7 @@ describe("Square Sync — Pull Booking", () => {
 
     // Verify the INSERT included 'canceled' status
     const insertCall = mockClient.query.mock.calls.find(
-      (c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO appointments')
+      (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO appointments')
     );
     expect(insertCall).toBeDefined();
     expect(insertCall![1]).toContain('canceled');
