@@ -38,6 +38,16 @@ Closes the pre-launch validation entry "Multi-tenant isolation verification in p
 
 **Out of scope this session (deliberate):** `/agent-tools/*` is exempt from `tenantMiddleware` (different threat model — shared-secret auth via `x-agent-secret` header, not JWT — anyone with `AGENT_SECRET` can act as any tenant by design, scoped by Railway env). `body.tenantId` (camelCase) and header-based tenant ingestion: audit found zero usages across the codebase. The inline cross-tenant check in `appointments.ts:182` (added before this session) is now redundant with the middleware gate but left as defense-in-depth.
 
+### May 6: CI rot fixed — pgvector image, set-e blind spot, dashboard tsconfig
+
+Discovered after pushing the security fix above: CI on main had been red since 2026-05-04 (every commit failed). Three independent root causes:
+
+- **CI postgres image had no pgvector.** `.github/workflows/ci.yml` used `postgres:16` (vanilla), but the very first migration (`20260228000000_initial_schema.sql`) calls `CREATE EXTENSION vector` and the local Docker stack uses `ankane/pgvector` per CLAUDE.md. CI silently failed on the first migration. Switched the CI service image to `ankane/pgvector:v0.5.1` to match local.
+- **`scripts/setup-db.sh` swallowed the actual error.** `OUTPUT=$(psql ... 2>&1); RC=$?` looks like it captures the exit code, but with `set -e` the script exits on `OUTPUT=...` failure *before* `RC=$?` runs — so the FAIL handler that prints the error never ran. Three days of red CI showed nothing but `exit 3` with no message. Wrapped the psql call with `set +e` / `set -e` so the FAIL block actually fires and prints the psql output.
+- **`dashboard/tsconfig.json` had `"types": ["vitest", "jest"]` placed at the JSON root level instead of inside `compilerOptions`.** TypeScript silently ignores misplaced fields, so the directive was dead config. It worked locally because `tsc` auto-discovers everything in `node_modules/@types/*` and lifecycle-hook globals leaked in transitively. Fresh CI installs didn't get the same lucky tree, so `afterAll`/`afterEach` resolved as `Cannot find name`. Moved the directive into `compilerOptions` and switched to the proper values: `["vitest/globals", "@testing-library/jest-dom/vitest"]`.
+
+**Verified against fresh `npm ci` install** to simulate CI: dashboard `tsc --noEmit` clean, 514/514 tests pass, lint clean. Backend 1,592/1,592 tests pass, build clean. Setup-db script tested locally — exits 1 with a visible psql error on a real failure (was silent exit-3 before).
+
 ### May 5 Afternoon: role gating + invite/role-management UI (backend 1,536 → 1,551, dashboard 504 → 513)
 
 Closes the external-review beta-blocker "Hide Back Office surface from front-desk-only logins" and the natural extension "Owner-facing UI to invite + assign role." Three commits, both shipped same day.

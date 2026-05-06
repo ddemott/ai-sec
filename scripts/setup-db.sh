@@ -112,12 +112,21 @@ for f in "${FILES[@]}"; do
   # Apply in a single transaction with the INSERT into schema_migrations.
   # If either the migration SQL or the tracking INSERT fails, the whole
   # transaction rolls back and we report failure.
+  #
+  # `set +e` for this block is required: with `set -e` enabled, a failing
+  # `OUTPUT=$(psql ...)` aborts the whole script BEFORE the FAIL handler
+  # runs, leaving the user staring at a silent exit-3 with no error
+  # message — exactly what hid the pgvector-missing failure on CI from
+  # 2026-05-04 → 2026-05-06. The FAIL handler depends on $RC, so we
+  # briefly disable set -e to capture.
+  set +e
   OUTPUT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction <<SQL 2>&1
 \i $f
 INSERT INTO schema_migrations (version, filename) VALUES ('$version', '$fname');
 SQL
 )
   RC=$?
+  set -e
 
   if [ $RC -eq 0 ]; then
     APPLIED=$((APPLIED + 1))

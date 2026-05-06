@@ -94,7 +94,9 @@ Today the agent worker logs to stdout via Pino, the backend logs via Fastify, an
 
 ---
 
-## CI Rot — RESOLVED (2026-04-30)
+## CI Rot — RESOLVED (2026-04-30, recurrence resolved 2026-05-06)
+
+The 2026-04-30 fix held until 2026-05-04, after which CI was red on every push for ~3 days due to three independent root causes (postgres image lacked pgvector; `scripts/setup-db.sh` silently swallowed errors due to a `set -e` interaction; dashboard `tsconfig.json` had its `types` directive placed at the JSON root instead of inside `compilerOptions`). All three fixed 2026-05-06 — see `docs/CURRENT_STATUS.md` "May 6: CI rot fixed" for the full disposition. Verified against a fresh `npm ci` install to simulate CI before pushing.
 
 Done in a focused pass. Two-job CI gate now runs on every push/PR to main:
 

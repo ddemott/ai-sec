@@ -17,7 +17,12 @@ jobs:
       # under src/*.test.ts that gate on `dbAvailable` from getRootClient()
       # would always pass with zero assertions executed.
       postgres:
-        image: postgres:16
+        # ankane/pgvector ships pgvector preinstalled. The first migration
+        # (20260228000000_initial_schema.sql) does CREATE EXTENSION IF NOT
+        # EXISTS vector, and 20260501000000 does CREATE EXTENSION btree_gist
+        # (contrib, bundled). Vanilla postgres:16 silently failed on the
+        # first one and `set -e` in scripts/setup-db.sh hid the error.
+        image: ankane/pgvector:v0.5.1
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

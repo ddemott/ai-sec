@@ -4,6 +4,24 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## May 6, 2026 — Multi-tenant isolation audit + CI rot recurrence
+
+Backend tests 1,551 → 1,592 (+41 over the day's two commits). Dashboard 514/514 held. Theme: pre-launch hardening — close two cross-tenant authorization gaps surfaced by a verify-first probe, then unbreak ~3 days of red CI on main.
+
+- **`3a72f0d` — Multi-tenant isolation probe + cross-tenant leak fixes.** Built `src/multi-tenant-isolation.test.ts` (25 tests across 5 probe categories: query-string override, cross-tenant id under JWT-only, body-tenant_id FK injection, positive controls, admin-only `/tenants/*` gating). Real Fastify + real Postgres + RLS-enforced via api_user pool. Probe found two findings, both closed in the same commit:
+  - **Finding 1 — application-layer cross-tenant override (read + write).** `tenantMiddleware` precedence (`query > body > JWT`) had no auth gate; any non-admin could pass `?tenant_id=<other>` to read another tenant's data, OR POST `body.tenant_id=<other>` to write to another tenant. 12 of 21 initial probes failed (8 read-leak shapes + 4 write-injection shapes). Closed by adding a 403 gate in `tenantMiddleware` for any cross-tenant override unless caller is super-admin; mismatched query-vs-body returns 400.
+  - **Finding 2 — `/tenants/*` admin routes had no super-admin gate.** Every route used `requireAuth()` only, which checks "is authenticated" not "is super-admin." Any tenant user could `GET /tenants` (enumerate every customer), `DELETE /tenants/<other>`, `POST /tenants/reorder`, etc. Added `requireSuperAdmin()` helper to `src/middleware.ts` and applied to the destructive surface; `GET /tenants/:id/config` + `POST /tenants/:id/update-config` get a "super-admin OR own-tenant" gate so tenant users can still manage their own config.
+  - **Fallout repaired:** `src/tenant-routes.test.ts` had `authStub` shape using camelCase (`tenantId`) while the production JWT payload is snake_case (`tenant_id`). New gate exposed the mismatch via undefined `req.auth.tenant_id`; fixed the stub to match. 10 new middleware unit tests pin the gate + `requireSuperAdmin` at the unit layer in addition to the integration probe.
+  - Severity: pre-beta, no real customer data was at risk because DynaTire isn't live. But either finding alone would have been a critical breach in a paying-tenant SaaS once one beta customer was on the platform; both closed before launch. The probe is now permanent regression coverage; the existing DB-level `rls.test.ts` stays unchanged (DB layer was correctly enforcing whatever context the app set — the bug was that the app set the wrong context).
+
+- **CI rot recurrence — pgvector image, set-e blind spot, dashboard tsconfig.** After pushing the security fix, discovered CI on main had been red since 2026-05-04. Three independent root causes, all fixed in one commit:
+  - **CI postgres image had no pgvector.** `.github/workflows/ci.yml` used `postgres:16` (vanilla); the first migration calls `CREATE EXTENSION vector` and silently failed. Switched the CI service image to `ankane/pgvector:v0.5.1` to match the local Docker stack documented in CLAUDE.md.
+  - **`scripts/setup-db.sh` swallowed migration errors.** `OUTPUT=$(psql ... 2>&1); RC=$?` looks like it captures the exit code, but with `set -e` the script exits on `OUTPUT=...` failure *before* `RC=$?` runs — the FAIL handler that prints the error never ran. Three days of red CI showed `exit 3` with no message. Wrapped the psql call with `set +e` / `set -e` so the FAIL block actually fires and prints the psql output.
+  - **`dashboard/tsconfig.json` had `"types": ["vitest", "jest"]` placed at the JSON root level instead of inside `compilerOptions`.** TypeScript silently ignores misplaced fields, so the directive was dead config. It worked locally because `tsc` auto-discovers everything in `node_modules/@types/*` and lifecycle-hook globals leaked in transitively. Fresh CI installs didn't get the same tree, so `afterAll`/`afterEach` resolved as `Cannot find name`. Moved into `compilerOptions` and switched to the proper values: `["vitest/globals", "@testing-library/jest-dom/vitest"]`.
+  - Verified against a fresh `npm ci` install to simulate CI before pushing: dashboard tsc clean, 514/514 tests pass, lint clean. Setup-db script tested locally — exits 1 with a visible psql error on real failure (was silent exit-3 before).
+
+---
+
 ## May 5, 2026 — Cleanup Sweep (7 commits, type-safety + lint debt + audit truth-up)
 
 Continuation of the verify-first pattern. Backend tests: 1,514 → 1,536 (+22, all from new helper test coverage). Skip count: 0 (held). Dashboard: 500 → 504 (+4 from new vocabulary-guard regex patterns). Theme: drive down `any`-type debt across backend tests, extract two more shared helpers, ship a UX vocabulary pass, truth up TODO entries that had drifted from reality.
