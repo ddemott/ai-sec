@@ -18,5 +18,20 @@ export default defineConfig({
     // while other test files hold RowShareLocks in open transactions. Sequential execution
     // ensures each file completes its cleanup before the next starts.
     fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      // Source code only — exclude tests, vendored, and runtime-only files
+      include: ['src/**', 'shared/**'],
+      exclude: [
+        '**/*.test.ts',
+        '**/test-utils*.ts',
+        'src/types/**',
+        'dist/**',
+        'node_modules/**',
+      ],
+      // Output to coverage_data/ (already in .gitignore)
+      reportsDirectory: './coverage_data',
+    },
   },
 })
