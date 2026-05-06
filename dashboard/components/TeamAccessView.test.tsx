@@ -34,7 +34,7 @@ const deskRow = {
   role: 'front_desk' as const, created_at: '2026-02-01', is_self: false,
 }
 
-function mockListResponse(users: (typeof ownerRow | typeof deskRow)[]) {
+function mockListResponse(users: typeof ownerRow[]) {
   return {
     ok: true,
     json: async () => ({ success: true, users }),
