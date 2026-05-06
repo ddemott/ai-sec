@@ -76,7 +76,7 @@ Treat this as a launch-blocker for beta with DynaTire — the carrier propagatio
 
 Today the agent worker logs to stdout via Pino, the backend logs via Fastify, and the dashboard logs via Next.js. Nothing aggregates them or alerts on regression. Beta-blocker for support — when a customer says "the call dropped at 2:14pm", we need a way to find that call.
 
-- [ ] **Structured-log aggregation.** Pick one (Railway logs, Logtail, Axiom, etc.) and forward backend + agent + dashboard logs there. Filter by `tenant_id` + `call_id` for support cases.
+- [ ] **Structured-log aggregation.** Pick one (Railway logs, Logtail, Better Stack, Grafana Loki, etc.) and forward backend + agent + dashboard logs there. Filter by `tenant_id` + `call_id` for support cases.
 - [ ] **Basic metrics: call success rate, booking success rate, tool-call latency.** No PromQL / Grafana needed — a daily cron-emitted summary to email or Slack covers MVP.
 - [ ] **Error rate monitoring for first beta users.** Sentry (or similar) on dashboard + backend + agent. Alert on error-rate spike, not on individual errors.
 - [ ] **Expanded live QA suite.** `scripts/qa-live-test.py` covers 29 tool calls today. Add coverage for the OTP flow, the 5 specific booking error codes, and the timezone edge cases above.
