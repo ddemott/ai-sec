@@ -47,7 +47,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - `/src/workers/reminderScheduler.ts` — 60s tick, batches up to 100. Runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`.
 - `/src/templates/` — 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). No HIPAA verticals.
 - `/src/types/` — Shared TS interfaces: ConsentRecord, OptOutRecord, ReminderSchedule/Data/AppointmentForReminder, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
-- `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here.
+- `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation: any user-supplied `tenant_id` (query or body) that doesn't match the JWT's `tenant_id` is rejected with 403 unless the caller is super-admin (added 2026-05-06 after the multi-tenant-isolation probe found cross-tenant data leak via `?tenant_id=` override). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
 - `/supabase/migrations` — 83 SQL migrations.
@@ -131,7 +131,7 @@ Service layers that exist but lack production callers. **Each is on borrowed tim
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
-**Phase 13 (Production Readiness) in progress.** 1,551 backend + 513 dashboard = 2,064 tests passing (verified 2026-05-05; 0 skips). 72 agent tests, 19 Playwright e2e, 29 live QA tool calls. Zero TS errors across backend / agent / dashboard.
+**Phase 13 (Production Readiness) in progress.** 1,592 backend + 514 dashboard = 2,106 tests passing (verified 2026-05-06; 0 skips). 72 agent tests, 19 Playwright e2e, 29 live QA tool calls. Zero TS errors across backend / agent / dashboard.
 
 Remaining blockers: deploy dashboard, set `DASHBOARD_URL`, beta test with DynaTire. Full task list and post-launch backlog in `docs/TODO.md`. Phases 1–12 history in `RESOLVED.md`.
 

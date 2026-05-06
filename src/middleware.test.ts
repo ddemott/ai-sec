@@ -17,6 +17,7 @@ import {
   withPoolClient,
   requireTenantId,
   requireAuth,
+  requireSuperAdmin,
   tenantMiddleware,
   logEvent,
   logWarning,
@@ -24,6 +25,8 @@ import {
   AppError,
   type AppRequest,
 } from "./middleware";
+
+const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
 // ── Mock helpers ────────────────────────────────────────────────────────
 
@@ -244,6 +247,61 @@ describe("requireAuth", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+// requireSuperAdmin
+// ═══════════════════════════════════════════════════════════════════════
+
+describe("requireSuperAdmin", () => {
+  it("returns true for super-admin JWT", () => {
+    // WHO: super-admin user (tenant_id === SUPER_ADMIN_TENANT_ID)
+    // WHAT: gate passes, returns true
+    // WHEN: any /tenants/* admin operation
+    // WHERE: src/middleware.ts requireSuperAdmin
+    // WHY: super-admins legitimately need cross-tenant ops (list every
+    //      tenant, delete a churned customer's tenant, edit any tenant
+    //      config); this is the green-light path
+    const req = createMockRequest({
+      auth: { tenant_id: SUPER_ADMIN_TENANT_ID, user_id: 'admin', email: 'admin@x', role: 'owner' },
+    });
+    const reply = createMockReply();
+    expect(requireSuperAdmin(req, reply)).toBe(true);
+    expect(reply.statusCode).toBe(200);
+  });
+
+  it("returns false and sends 401 when no auth context attached", () => {
+    // WHO: unauthenticated request reaching an admin route
+    // WHAT: req.auth missing → 401 + 'Authentication required'
+    // WHEN: token expired, never logged in, manually-crafted request
+    // WHERE: requireSuperAdmin gate
+    // WHY: anonymous calls must never reach admin operations regardless
+    //      of payload; the 401 (not 403) tells the client to re-auth
+    const req = createMockRequest();
+    const reply = createMockReply();
+    expect(requireSuperAdmin(req, reply)).toBe(false);
+    expect(reply.statusCode).toBe(401);
+    expect(reply.body.error).toBe('Authentication required');
+  });
+
+  it("returns false and sends 403 when authenticated as a non-admin tenant", () => {
+    // WHO: regular tenant owner (valid JWT, tenant_id !== super-admin)
+    // WHAT: gate rejects with 403 + 'Forbidden: super-admin only'
+    // WHEN: any tenant user attempting GET /tenants, DELETE /tenants/:id,
+    //       POST /tenants/reorder, POST /templates/create, etc.
+    // WHERE: requireSuperAdmin gate after the auth check
+    // WHY: this is the load-bearing isolation boundary that the
+    //      multi-tenant-isolation probe (Probe 5) found missing on
+    //      2026-05-06 — without this gate every tenant's user could
+    //      enumerate the entire customer list and DELETE another tenant.
+    const req = createMockRequest({
+      auth: { tenant_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', user_id: 'u', email: 'u@x', role: 'owner' },
+    });
+    const reply = createMockReply();
+    expect(requireSuperAdmin(req, reply)).toBe(false);
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body.error).toBe('Forbidden: super-admin only');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 // tenantMiddleware
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -351,6 +409,108 @@ describe("tenantMiddleware", () => {
       tenantId: 'tid-123',
       userId: 'uid-456',
     });
+  });
+
+  // ── Cross-tenant override gate (added 2026-05-06 after the
+  //    multi-tenant-isolation probe found a cross-tenant data leak) ─────
+
+  it("BLOCKS cross-tenant override via query: A token + ?tenant_id=B → 403", async () => {
+    // WHO: tenant A user appending ?tenant_id=<B> to a request URL
+    // WHAT: gate detects candidate (B) ≠ JWT (A) AND not super-admin → 403
+    // WHEN: every authenticated request — load-bearing case for isolation
+    // WHERE: tenantMiddleware preHandler, after candidate extraction
+    // WHY: pre-fix, query-string tenant_id silently overrode the JWT,
+    //      letting any authenticated user read another tenant's rows.
+    //      This unit test pins the gate at the middleware layer; the
+    //      integration probe in src/multi-tenant-isolation.test.ts pins
+    //      the contract end-to-end through a real Fastify app + DB.
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({
+      query: { tenant_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+      auth: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', user_id: 'u', email: 'u@x', role: 'owner' },
+    });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body.error).toContain('does not match authenticated session');
+    expect(req.tenantId).toBeUndefined(); // request short-circuited before tenantId set
+  });
+
+  it("BLOCKS cross-tenant override via body: A token + body.tenant_id=B → 403", async () => {
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({
+      body: { tenant_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+      auth: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', user_id: 'u', email: 'u@x', role: 'owner' },
+    });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(403);
+    expect(req.tenantId).toBeUndefined();
+  });
+
+  it("ALLOWS super-admin to override tenant_id via query (legitimate cross-tenant scoping)", async () => {
+    // WHO: super-admin scoping a request to tenant A from the admin UI
+    // WHAT: candidate (A) ≠ JWT (super-admin), but isSuperAdmin=true → pass
+    // WHY: the dashboard's admin tooling depends on the override to scope
+    //      cross-tenant queries; the gate must not break this path
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({
+      query: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
+      auth: { tenant_id: SUPER_ADMIN_TENANT_ID, user_id: 'admin', email: 'admin@x', role: 'owner' },
+    });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(200);
+    expect(req.tenantId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  });
+
+  it("ALLOWS noisy noop: A token + ?tenant_id=A passes (matches JWT)", async () => {
+    // WHO: dashboard sending ?tenant_id=<self> on a tenant user's request
+    // WHAT: candidate equals JWT tenant — no mismatch, gate doesn't fire
+    // WHY: the dashboard does this on every page load; the gate must
+    //      not turn legitimate same-tenant scoping into a 403
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({
+      query: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
+      auth: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', user_id: 'u', email: 'u@x', role: 'owner' },
+    });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(200);
+    expect(req.tenantId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  });
+
+  it("BLOCKS query-vs-body tenant_id mismatch with 400", async () => {
+    // WHO: a buggy or hostile client sending different tenant_ids in
+    //      the query string and the body of the same request
+    // WHAT: gate refuses to guess which one was intended → 400
+    // WHY: even for super-admin, an ambiguous pair shouldn't silently
+    //      pick one — fail noisily so the misuse is fixed at the source
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({
+      query: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
+      body: { tenant_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+      auth: { tenant_id: SUPER_ADMIN_TENANT_ID, user_id: 'admin', email: 'admin@x', role: 'owner' },
+    });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(400);
+    expect(reply.body.error).toContain('tenant_id mismatch');
+  });
+
+  it("permits anonymous requests with no JWT to fall through (downstream requireAuth handles)", async () => {
+    // WHO: an unauthenticated request that hits a tenant-scoped route
+    // WHAT: no JWT means no JWT-vs-candidate comparison; gate doesn't
+    //       fire; the downstream requireAuth() / route guard takes over
+    // WHY: the JWT auth hook may have skipped (no Bearer header). The
+    //      tenant gate should not 403 anonymous traffic — instead let the
+    //      route's own auth check produce the appropriate error
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({ query: { tenant_id: 'tid-from-query' } });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(200); // gate didn't fire
+    expect(req.tenantId).toBe('tid-from-query');
   });
 });
 

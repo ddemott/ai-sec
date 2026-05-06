@@ -32,7 +32,7 @@ let app: FastifyInstance;
 let mockClient: MockClient;
 let queryResponses: MockResponse[];
 let queries: { text: string; params: unknown[] }[];
-let authStub: { userId: string; tenantId: string } | null;
+let authStub: { user_id: string; tenant_id: string; email: string; role: 'owner' | 'front_desk' } | null;
 
 function buildApp() {
   const handle = createMockClient();
@@ -66,8 +66,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   queries.length = 0;
   queryResponses.length = 0;
-  // Default: authenticated as a super-admin user.
-  authStub = { userId: 'admin-user', tenantId: '00000000-0000-0000-0000-000000000000' };
+  // Default: authenticated as a super-admin user. JWT payload shape is
+  // snake_case (tenant_id, user_id) — matches the verified JWT decoded
+  // by registerJwtAuthHook.
+  authStub = {
+    user_id: 'admin-user',
+    tenant_id: '00000000-0000-0000-0000-000000000000',
+    email: 'admin@test',
+    role: 'owner',
+  };
 });
 
 // ════════════════════════════════════════════════════════════════════

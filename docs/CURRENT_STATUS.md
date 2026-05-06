@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-05 (afternoon — added user-role gating + owner UI to invite + assign roles)
+**Last updated:** 2026-05-06 (multi-tenant isolation probe + closed two cross-tenant leaks before any commit)
 
 ---
 
@@ -23,6 +23,20 @@ Code shipped to `main` and merged on origin, but not yet exercised in production
 | **User-role migration `20260505000000_user_roles.sql`** | IN FLIGHT (prod-apply) | Adds `users.role` (`owner` / `front_desk`); harmless additive ALTER with `DEFAULT 'owner'`. Code green on main; backs the Back Office tab gating + Logins UI. | Apply alongside the `20260501*` migrations via `npm run db:migrate`. |
 | **Role gating + Logins UI browser-verify** | IN FLIGHT (validation pending) | Unit tests pin both contracts (4 layout + 2 auth backend + 13 user-route + 5 TeamAccessView). Real browser session has not exercised either yet. | `npm start` and walk the test plan in `docs/TODO.md` (Browser-verify entry). |
 | **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
+
+### May 6: multi-tenant isolation probe + cross-tenant leak fixes (backend 1,551 → 1,592)
+
+Closes the pre-launch validation entry "Multi-tenant isolation verification in production-like environment." Verify-first approach: built a real-Fastify + real-Postgres + RLS-enforced probe (`src/multi-tenant-isolation.test.ts`, 25 tests) before assuming RLS plus the existing `rls.test.ts` were sufficient. Probe found two real findings, both closed in the same session.
+
+**Finding 1 — application-layer cross-tenant override (read + write).** `tenantMiddleware`'s precedence (`query > body > JWT`) had no auth gate, so any authenticated user could pass `?tenant_id=<other>` and silently switch the request's RLS scope, OR POST `body.tenant_id=<other>` to insert rows under another tenant. 12 of the initial 21 probes failed — 8 read-leak shapes (customers/employees/services/resources/appointments/skills/knowledge/users) and 4 write-injection shapes (customers/employees/services/resources). The leak existed at the *application* layer; RLS itself was correctly enforcing whatever context the app set — the bug was that the app set the wrong context. Closed in `src/middleware.ts` `tenantMiddleware`: gate added that 403s any cross-tenant override unless the caller is super-admin; mismatched query-vs-body returns 400. The DB-level `rls.test.ts` did not catch this because RLS is the *floor*, not the gate — the gate is the middleware.
+
+**Finding 2 — `/tenants/*` admin routes had no super-admin gate.** Every `/tenants/*` admin route used `requireAuth()` only, which checks "is authenticated" but not "is super-admin." Any tenant user with a valid JWT could `GET /tenants` (enumerate every customer's tenant + voice config), `DELETE /tenants/<other>` (destructive), `POST /tenants/reorder`, etc. Added `requireSuperAdmin()` helper to `src/middleware.ts` and applied to the destructive surface: `GET /tenants`, `DELETE /tenants/:id`, `POST /tenants/:id/update-attributes`, `POST /tenants/create`, `POST /tenants/reorder`, `POST /templates/create`. `GET /tenants/:id/config` + `POST /tenants/:id/update-config` get a "super-admin OR own-tenant" gate (tenant users legitimately read/edit their own config from the dashboard's BusinessSettingsView / AIConfigView).
+
+**Fallout repaired:** `src/tenant-routes.test.ts` had its `authStub` shape using camelCase (`tenantId`) while the production JWT payload is snake_case (`tenant_id`). The new `requireSuperAdmin` exposed the mismatch by failing fast on undefined `req.auth.tenant_id` — fixed the stub shape to match the verified-JWT contract.
+
+**Severity context:** pre-beta, no real customer data was at risk because DynaTire isn't live. But either finding alone would have been a critical breach in a paying-tenant SaaS once even one beta customer was on the platform; both closed before launch. The probe is now permanent regression coverage. After-state: backend 1,551 → 1,592 tests pass (+25 isolation probe + 10 new middleware unit tests pinning the gate behavior at the unit layer). Dashboard 514/514 still pass. Both `tsc --noEmit` clean.
+
+**Out of scope this session (deliberate):** `/agent-tools/*` is exempt from `tenantMiddleware` (different threat model — shared-secret auth via `x-agent-secret` header, not JWT — anyone with `AGENT_SECRET` can act as any tenant by design, scoped by Railway env). `body.tenantId` (camelCase) and header-based tenant ingestion: audit found zero usages across the codebase. The inline cross-tenant check in `appointments.ts:182` (added before this session) is now redundant with the middleware gate but left as defense-in-depth.
 
 ### May 5 Afternoon: role gating + invite/role-management UI (backend 1,536 → 1,551, dashboard 504 → 513)
 
@@ -122,7 +136,7 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 See `docs/TODO.md` for the unified task list.
 
 ### Test Count (verified 2026-05-05 against real Postgres + dashboard)
-- **1,551 backend tests + 513 dashboard tests = 2,064 total**, 0 failures, 0 skips
+- **1,592 backend tests + 514 dashboard tests = 2,106 total**, 0 failures, 0 skips
 - 19 Playwright e2e tests (7 critical + 12 functional audit)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard)
@@ -146,7 +160,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,551 backend + 513 dashboard = 2,064 passing + 88 QA assertions | All green (verified 2026-05-05 against real DB + dashboard), 0 skips, zero TS errors |
+| **Tests** | 1,592 backend + 514 dashboard = 2,106 passing + 88 QA assertions | All green (verified 2026-05-06 against real DB + dashboard), 0 skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

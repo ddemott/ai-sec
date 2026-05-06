@@ -145,6 +145,30 @@ export function requireAuth(req: AppRequest, reply: FastifyReply): boolean {
   return true;
 }
 
+/**
+ * Guards super-admin-only routes: returns true if the caller is the
+ * super-admin tenant, sends 401 (no auth) or 403 (auth but not admin)
+ * and returns false otherwise.
+ *
+ * Super-admin is identified by the JWT tenant_id matching the well-known
+ * super-admin UUID. Added 2026-05-06 after the multi-tenant-isolation
+ * probe found that /tenants/* routes were reachable by any authenticated
+ * user — letting a regular tenant user list every customer in the system
+ * or DELETE another tenant entirely. requireAuth() alone is not enough
+ * for these routes.
+ */
+export function requireSuperAdmin(req: AppRequest, reply: FastifyReply): boolean {
+  if (!req.auth) {
+    reply.status(401).send({ success: false, error: 'Authentication required' });
+    return false;
+  }
+  if (req.auth.tenant_id !== '00000000-0000-0000-0000-000000000000') {
+    reply.status(403).send({ success: false, error: 'Forbidden: super-admin only' });
+    return false;
+  }
+  return true;
+}
+
 // ── Tenant ID Middleware (Chain of Responsibility) ────────────────────
 
 /** Routes that don't require a tenant_id */
@@ -177,18 +201,68 @@ function isTenantExempt(url: string): boolean {
  * Attaches as req.tenantId for consistent access in route handlers.
  * Creates a child logger with tenant context for structured logging.
  *
- * Priority: query param > body > JWT auth token
+ * Priority: query param > body > JWT auth token.
+ *
+ * Authorization gate (added 2026-05-06 after multi-tenant-isolation probe
+ * found cross-tenant data leak via ?tenant_id= override):
+ *   If a query/body tenant_id is supplied AND differs from the JWT's
+ *   tenant_id AND the caller is not super-admin, return 403. The dashboard
+ *   uses ?tenant_id=<self> for legitimate calls (which still passes the
+ *   gate trivially), and super-admin tooling uses ?tenant_id=<other> as
+ *   the cross-tenant scoping mechanism (also allowed). What the gate
+ *   blocks is a non-admin user passing another tenant's id — previously
+ *   that silently scoped the request to the victim tenant.
+ *
+ *   Anonymous (auth-less) requests still pass through here so downstream
+ *   handlers can reject via requireAuth(); the gate only fires once a
+ *   JWT is present.
  */
 export function tenantMiddleware(app: FastifyInstance) {
-  app.addHook('preHandler', async (request: AppRequest, _reply) => {
+  app.addHook('preHandler', async (request: AppRequest, reply) => {
     if (request.method === 'OPTIONS') return;
     if (isTenantExempt(request.url)) return;
 
-    const tenantId =
-      (request.query as Record<string, string>)?.tenant_id ||
-      (request.body as Record<string, string>)?.tenant_id ||
-      request.auth?.tenant_id;
+    const SUPER_ADMIN = '00000000-0000-0000-0000-000000000000';
+    const queryTenant = (request.query as Record<string, string>)?.tenant_id;
+    const bodyTenant = (request.body as Record<string, string>)?.tenant_id;
+    const candidate = queryTenant || bodyTenant;
+    const jwtTenant = request.auth?.tenant_id;
+    const isSuperAdmin = jwtTenant === SUPER_ADMIN;
 
+    if (candidate && jwtTenant && candidate !== jwtTenant && !isSuperAdmin) {
+      request.log.warn({
+        event: 'cross_tenant_override_blocked',
+        jwtTenant,
+        attemptedTenant: candidate,
+        source: queryTenant ? 'query' : 'body',
+        url: request.url,
+        userId: request.auth?.user_id,
+      }, 'cross_tenant_override_blocked');
+      reply.status(403).send({
+        success: false,
+        error: 'Forbidden: tenant_id does not match authenticated session',
+      });
+      return reply;
+    }
+
+    // Also block divergent query+body tenants in the same request — even
+    // if both equal the JWT (super-admin edge case where one is wrong),
+    // a mismatched pair is ambiguous and rejected.
+    if (queryTenant && bodyTenant && queryTenant !== bodyTenant) {
+      request.log.warn({
+        event: 'tenant_id_mismatch_query_vs_body',
+        queryTenant,
+        bodyTenant,
+        url: request.url,
+      }, 'tenant_id_mismatch_query_vs_body');
+      reply.status(400).send({
+        success: false,
+        error: 'tenant_id mismatch between query and body',
+      });
+      return reply;
+    }
+
+    const tenantId = candidate || jwtTenant;
     if (tenantId) {
       request.tenantId = tenantId;
 

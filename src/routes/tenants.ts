@@ -2,7 +2,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { withHandler, withPoolClient, logEvent, requireAuth, type AppRequest } from '../middleware';
+import { withHandler, withPoolClient, logEvent, requireAuth, requireSuperAdmin, type AppRequest } from '../middleware';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { assertRowAffected } from './routeHelpers';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';
 
@@ -52,7 +53,7 @@ const CreateTemplateSchema = z.object({
 
 export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: Pool) {
   app.get('/tenants', withHandler(async (req: AppRequest, reply) => {
-    if (!requireAuth(req, reply)) return;
+    if (!requireSuperAdmin(req, reply)) return;
     const res = await withPoolClient(pool, client =>
       client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC')
     );
@@ -60,7 +61,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
   }, 'Failed to fetch tenants'));
 
   app.delete('/tenants/:id', withHandler(async (req: AppRequest, reply) => {
-    if (!requireAuth(req, reply)) return;
+    if (!requireSuperAdmin(req, reply)) return;
     const { id } = req.params as { id: string };
     const res = await withPoolClient(pool, client =>
       client.query('DELETE FROM tenants WHERE id = $1 RETURNING id', [id])
@@ -71,6 +72,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
   }, 'Failed to delete tenant'));
 
   app.post('/tenants/:id/update-attributes', withHandler(async (req: AppRequest, reply) => {
+    if (!requireSuperAdmin(req, reply)) return;
     const { id } = req.params as { id: string };
     const parsed = UpdateAttributesSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -93,7 +95,14 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
   }, 'Failed to update tenant'));
 
   app.get('/tenants/:id/config', withHandler(async (req: AppRequest, reply) => {
+    if (!requireAuth(req, reply)) return;
     const { id } = req.params as { id: string };
+    // Tenant config (system prompt, voice, business type) is sensitive — a
+    // tenant user can read their own; super-admin can read any.
+    const isSuperAdmin = req.auth?.tenant_id === SUPER_ADMIN_TENANT_ID;
+    if (!isSuperAdmin && req.auth?.tenant_id !== id) {
+      return reply.status(403).send({ success: false, error: 'Forbidden: cross-tenant config access' });
+    }
     const res = await withPoolClient(pool, client =>
       client.query(
         'SELECT id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone FROM tenants WHERE id = $1',
@@ -105,7 +114,13 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
   }, 'Failed to fetch tenant config'));
 
   app.post('/tenants/:id/update-config', withHandler(async (req: AppRequest, reply) => {
+    if (!requireAuth(req, reply)) return;
     const { id } = req.params as { id: string };
+    // Same gate as GET /:id/config — tenant-self or super-admin only.
+    const isSuperAdmin = req.auth?.tenant_id === SUPER_ADMIN_TENANT_ID;
+    if (!isSuperAdmin && req.auth?.tenant_id !== id) {
+      return reply.status(403).send({ success: false, error: 'Forbidden: cross-tenant config update' });
+    }
     const parsed = UpdateConfigSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
@@ -123,6 +138,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
   }, 'Failed to update tenant config'));
 
   app.post('/tenants/create', withHandler(async (req: AppRequest, reply) => {
+    if (!requireSuperAdmin(req, reply)) return;
     const parsed = CreateTenantSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
@@ -154,7 +170,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
 
   // Save tenant sort order (admin drag-and-drop reordering)
   app.post('/tenants/reorder', withHandler(async (req: AppRequest, reply) => {
-    if (!requireAuth(req, reply)) return;
+    if (!requireSuperAdmin(req, reply)) return;
     const { order } = req.body as { order: string[] }; // array of tenant IDs in desired order
     if (!Array.isArray(order) || order.length === 0) {
       return reply.status(400).send({ success: false, error: 'order must be a non-empty array of tenant IDs' });
@@ -191,6 +207,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
 
   // POST /templates/create — Admin adds a new business type
   app.post('/templates/create', withHandler(async (req: AppRequest, reply) => {
+    if (!requireSuperAdmin(req, reply)) return;
     const parsed = CreateTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
