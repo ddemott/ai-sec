@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Api } from './api';
 import { useActiveTenantId } from '@/lib/SessionContext';
+import { buildMappingMaps, type ServiceMappingMaps } from './availability';
 import type { Customer, Resource, Employee, Service, Skill } from './types';
 
 /**
@@ -143,4 +144,50 @@ export function useServices(tenantId?: string | null) {
 
 export function useSkills(tenantId?: string | null) {
   return useEntityList<Skill>(Api.skills.list, tenantId);
+}
+
+/**
+ * Loads service ↔ employee and service ↔ resource mappings and exposes them
+ * as Sets keyed by service_id for O(1) lookup. Used by QuickBookPanel and
+ * AppointmentDetailPanel to filter dropdowns to (employee, resource)
+ * combinations valid for the selected service — closing the gap where the
+ * dashboard previously let operators pick incompatible combinations and
+ * relied on the booking RPC's late rejection to surface the problem.
+ *
+ * "Booking only when everything aligns" — the user's words 2026-05-07.
+ */
+export function useServiceMappings(tenantIdOverride?: string | null): {
+  maps: ServiceMappingMaps;
+  loading: boolean;
+  refresh: () => Promise<void>;
+} {
+  const contextTenantId = useActiveTenantId();
+  const tenantId = tenantIdOverride !== undefined ? tenantIdOverride : contextTenantId;
+  const [serviceEmployeeRows, setServiceEmployeeRows] = useState<Awaited<ReturnType<typeof Api.mappings.listServiceEmployee>>>([]);
+  const [serviceResourceRows, setServiceResourceRows] = useState<Awaited<ReturnType<typeof Api.mappings.listServiceResource>>>([]);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!tenantId) return;
+    setLoading(true);
+    try {
+      const [seRes, srRes] = await Promise.allSettled([
+        Api.mappings.listServiceEmployee(tenantId),
+        Api.mappings.listServiceResource(tenantId),
+      ]);
+      setServiceEmployeeRows(seRes.status === 'fulfilled' && Array.isArray(seRes.value) ? seRes.value : []);
+      setServiceResourceRows(srRes.status === 'fulfilled' && Array.isArray(srRes.value) ? srRes.value : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const maps = useMemo(
+    () => buildMappingMaps(serviceEmployeeRows, serviceResourceRows),
+    [serviceEmployeeRows, serviceResourceRows]
+  );
+
+  return { maps, loading, refresh };
 }

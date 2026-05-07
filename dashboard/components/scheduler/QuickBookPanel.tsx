@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Zap } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -6,6 +6,8 @@ import { Input } from '../ui/Input';
 import { CustomerCombobox } from '../ui/CustomerCombobox';
 import { Api } from '../../lib/api';
 import { useVocabulary } from '@/lib/VocabularyContext';
+import { useServiceMappings } from '../../lib/hooks';
+import { filterEmployeesByService, filterResourcesByService } from '../../lib/availability';
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
@@ -58,6 +60,39 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   const [endTime, setEndTime] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // service↔employee + service↔resource mappings for the alignment filter.
+  // The dashboard previously let operators pick incompatible combinations
+  // and relied on the booking RPC's late rejection; this hook + the two
+  // helpers below close that gap so only valid combinations surface.
+  const { maps } = useServiceMappings(tenantId);
+  const eligibleEmployees = useMemo(
+    () => filterEmployeesByService(employees, serviceId || null, maps.serviceEmployee),
+    [employees, serviceId, maps.serviceEmployee]
+  );
+  const eligibleResources = useMemo(
+    () => filterResourcesByService(resources, serviceId || null, maps.serviceResource),
+    [resources, serviceId, maps.serviceResource]
+  );
+
+  // Auto-clear stale selections when the service narrows them out — so the
+  // operator never submits an employee/resource that's no longer in the
+  // dropdown but whose id still lives in form state.
+  useEffect(() => {
+    if (employeeId && !eligibleEmployees.some((e) => String(e.id) === employeeId)) {
+      setEmployeeId('');
+    }
+    if (resourceId && !eligibleResources.some((r) => r.id === resourceId)) {
+      setResourceId('');
+    }
+  }, [eligibleEmployees, eligibleResources, employeeId, resourceId]);
+
+  // Inline "no qualified option" state. Only meaningful when a service is
+  // chosen — without a service, any employee/resource is valid.
+  const hasServicePicked = !!serviceId;
+  const noEligibleEmployees = hasServicePicked && eligibleEmployees.length === 0;
+  const noEligibleResources = hasServicePicked && eligibleResources.length === 0;
+  const alignmentBlocked = noEligibleEmployees || noEligibleResources;
 
   useEffect(() => {
     if (isOpen && prefill) {
@@ -174,26 +209,45 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           data-testid="quick-book-service"
         />
 
-        {/* Resource */}
+        {/* Resource — narrowed to those permitted for the selected service */}
         <Select
           label={vocab.resource_label}
           value={resourceId}
           onChange={(e) => setResourceId(e.target.value)}
-          options={resources.map((r) => ({ label: r.name, value: r.id }))}
+          options={eligibleResources.map((r) => ({ label: r.name, value: r.id }))}
           data-testid="quick-book-resource"
         />
 
-        {/* Employee */}
+        {/* Employee — narrowed to those qualified for the selected service */}
         <Select
           label={vocab.employee_label}
           value={employeeId}
           onChange={(e) => setEmployeeId(e.target.value)}
           options={[
             { label: 'Unassigned', value: '' },
-            ...employees.map((e) => ({ label: e.name, value: String(e.id) })),
+            ...eligibleEmployees.map((e) => ({ label: e.name, value: String(e.id) })),
           ]}
           data-testid="quick-book-employee"
         />
+
+        {alignmentBlocked && (
+          <div
+            className="p-3 text-sm rounded-lg border"
+            style={{
+              color: 'var(--warning, #eab308)',
+              background: 'var(--warning-muted, rgba(234,179,8,0.10))',
+              borderColor: 'var(--warning-muted, rgba(234,179,8,0.3))',
+            }}
+            role="status"
+            data-testid="quick-book-alignment-blocked"
+          >
+            {noEligibleEmployees && noEligibleResources
+              ? `No qualified ${vocab.employee_label.toLowerCase()} or ${vocab.resource_label.toLowerCase()} configured for this service. Assign one in Back Office → Service Assignments first.`
+              : noEligibleEmployees
+                ? `No ${vocab.employee_label.toLowerCase()} is configured to perform this service. Assign one in Back Office → Service Assignments first.`
+                : `No ${vocab.resource_label.toLowerCase()} is configured for this service. Assign one in Back Office → Service Assignments first.`}
+          </div>
+        )}
 
         {/* Time */}
         <div className="grid grid-cols-2 gap-3">
@@ -219,7 +273,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           className="w-full py-3"
           onClick={handleBook}
           isLoading={saving}
-          disabled={!customerId || !resourceId || !startTime || !endTime}
+          disabled={!customerId || !resourceId || !startTime || !endTime || alignmentBlocked}
           data-testid="quick-book-confirm"
         >
           <Zap className="w-4 h-4 mr-2" />

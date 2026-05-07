@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -7,6 +7,9 @@ import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
 import { CustomerCombobox } from './ui/CustomerCombobox';
+import { useServiceMappings } from '../lib/hooks';
+import { useActiveTenantId } from '../lib/SessionContext';
+import { filterEmployeesByService, filterResourcesByService } from '../lib/availability';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -65,6 +68,42 @@ export function AppointmentDetailPanel({
   } = useAppointmentDetail()
 
   const onFormChange = (f: typeof form) => setForm(f)
+
+  // Booking-alignment filter (audit P1 #4 follow-up: "system only books
+  // when everything aligns"). Derive service_id from the form's free-text
+  // `description` field — the panel doesn't track service_id directly,
+  // matching is by name (the same convention the auto-end-time effect
+  // below uses).
+  const tenantId = useActiveTenantId();
+  const { maps } = useServiceMappings(tenantId);
+  const currentServiceId = useMemo(() => {
+    if (!form.description) return null;
+    const svc = services.find((s) => s.name === form.description);
+    return svc ? String(svc.id) : null;
+  }, [form.description, services]);
+  const eligibleEmployees = useMemo(
+    () => filterEmployeesByService(employees, currentServiceId, maps.serviceEmployee),
+    [employees, currentServiceId, maps.serviceEmployee]
+  );
+  const eligibleResources = useMemo(
+    () => filterResourcesByService(resources, currentServiceId, maps.serviceResource),
+    [resources, currentServiceId, maps.serviceResource]
+  );
+  const noEligibleEmployees = !!currentServiceId && eligibleEmployees.length === 0;
+  const noEligibleResources = !!currentServiceId && eligibleResources.length === 0;
+  const alignmentBlocked = noEligibleEmployees || noEligibleResources;
+
+  // Auto-clear stale resource/employee selections when the chosen service
+  // narrows them out, so submitting can't carry an id that's no longer in
+  // the dropdown.
+  useEffect(() => {
+    if (form.employee_id && !eligibleEmployees.some((e) => String(e.id) === form.employee_id)) {
+      setForm((prev) => ({ ...prev, employee_id: '' }));
+    }
+    if (form.resource_id && !eligibleResources.some((r) => r.id === form.resource_id)) {
+      setForm((prev) => ({ ...prev, resource_id: '' }));
+    }
+  }, [eligibleEmployees, eligibleResources, form.employee_id, form.resource_id, setForm]);
 
   // Auto-calculate end time when service or start time changes
   useEffect(() => {
@@ -189,7 +228,7 @@ export function AppointmentDetailPanel({
                                           label={vocab.resource_label}
                                           value={form.resource_id}
                                           onChange={e => onFormChange({...form, resource_id: e.target.value})}
-                                          options={resources.map(r => ({ label: r.name, value: r.id }))}
+                                          options={eligibleResources.map(r => ({ label: r.name, value: r.id }))}
                                       />
                                       <Select
                                           label={`${vocab.employee_label} Assigned`}
@@ -197,10 +236,28 @@ export function AppointmentDetailPanel({
                                           onChange={e => onFormChange({...form, employee_id: e.target.value})}
                                           options={[
                                             { label: 'Unassigned', value: '' },
-                                            ...employees.map(e => ({ label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`, value: e.id.toString() }))
+                                            ...eligibleEmployees.map(e => ({ label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`, value: e.id.toString() }))
                                           ]}
                                       />
                                   </div>
+                                  {alignmentBlocked && (
+                                      <div
+                                          className="p-3 text-sm rounded-lg border"
+                                          style={{
+                                              color: 'var(--warning, #eab308)',
+                                              background: 'var(--warning-muted, rgba(234,179,8,0.10))',
+                                              borderColor: 'var(--warning-muted, rgba(234,179,8,0.3))',
+                                          }}
+                                          role="status"
+                                          data-testid="appointment-alignment-blocked"
+                                      >
+                                          {noEligibleEmployees && noEligibleResources
+                                              ? `No qualified ${vocab.employee_label.toLowerCase()} or ${vocab.resource_label.toLowerCase()} configured for this service. Assign one in Back Office → Service Assignments first.`
+                                              : noEligibleEmployees
+                                                  ? `No ${vocab.employee_label.toLowerCase()} is configured to perform this service. Assign one in Back Office → Service Assignments first.`
+                                                  : `No ${vocab.resource_label.toLowerCase()} is configured for this service. Assign one in Back Office → Service Assignments first.`}
+                                      </div>
+                                  )}
                                   <div>
                                       <label className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-muted)' }}>Internal Notes</label>
                                       <textarea rows={2} value={form.customer_notes} onChange={e => onFormChange({...form, customer_notes: e.target.value})} className="w-full p-2.5 rounded-lg outline-none text-sm italic" style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Private notes..." />
@@ -232,6 +289,7 @@ export function AppointmentDetailPanel({
                                   className="flex-1 py-3"
                                   onClick={isCreating ? onSave : onRequestUpdateConfirmation}
                                   isLoading={saving}
+                                  disabled={alignmentBlocked}
                                   data-testid="update-appointment-btn"
                               >
                                   {!saving && <Save className="w-5 h-5 mr-2" />}

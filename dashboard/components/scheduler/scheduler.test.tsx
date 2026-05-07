@@ -3,8 +3,22 @@ import { describe, test, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
+// QuickBookPanel now reads service ↔ employee + service ↔ resource
+// mappings via useServiceMappings (which depends on useActiveTenantId).
+// Stub the hook context + the mappings endpoints so legacy QuickBookPanel
+// test cases keep working without provider wrapping. Tests that need
+// custom Api.appointments behavior still vi.spyOn per-test below.
+vi.mock('@/lib/SessionContext', () => ({
+  useActiveTenantId: () => 'tenant-1',
+}));
+
 import { SchedulerDateNav } from './SchedulerDateNav';
 import { Api } from '../../lib/api';
+
+// Default the mappings list calls to empty arrays so unmocked tests don't
+// crash on hook-mount fetch. Per-test overrides via vi.spyOn still work.
+vi.spyOn(Api.mappings, 'listServiceEmployee').mockResolvedValue([]);
+vi.spyOn(Api.mappings, 'listServiceResource').mockResolvedValue([]);
 import { TimeGrid, formatHourLabel } from './TimeGrid';
 import { AppointmentBlock, getEmployeeColor, getTimeSpan } from './AppointmentBlock';
 import { StaffSwimLaneView } from './StaffSwimLaneView';
