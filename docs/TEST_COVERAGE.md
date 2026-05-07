@@ -13,10 +13,10 @@
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | 1,653 / 1,653 | ✅ | ~150s |
-| Dashboard (`cd dashboard && npm test`) | 556 / 556 | ✅ | ~30s |
+| Dashboard (`cd dashboard && npm test`) | 557 / 557 | ✅ | ~30s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 28 passed, 1 skipped | ✅ | ~40s |
 
-Total unit tests: 2,209 (backend + dashboard) + 78 agent.
+Total unit tests: 2,210 (backend + dashboard) + 78 agent.
 
 ## Unit test coverage (V8)
 

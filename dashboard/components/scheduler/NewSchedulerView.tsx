@@ -345,14 +345,28 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   }, []);
 
   // --- Empty-slot click → open Quick Book prefilled (front-desk audit P1 #4) ---
-  // The grid cells were passive backgrounds before today; now each empty
-  // hour cell on a staff row is a click target. Hover cue is a subtle
-  // background tint + cursor:pointer applied inline at render so the
-  // affordance is discoverable without screen-reading the audit.
+  // Click only fires when the row's specific employee has a shift covering
+  // the hour on the viewed date. Cells outside that window are passive —
+  // booking would be rejected by the RPC with EMPLOYEE_NOT_SCHEDULED, so
+  // the UI shouldn't invite the click.
+  const isEmployeeWorkingAt = useCallback((employeeId: string, hour: number): boolean => {
+    const empShifts = shiftsByEmployee.get(employeeId) || [];
+    // useSchedulerData already drops is_off days from the map, so any
+    // shift returned here is a real working window.
+    for (const s of empShifts) {
+      if (!s.start_time || !s.end_time) continue;
+      const startH = shiftTimeToHour(String(s.start_time));
+      const endH = shiftTimeToHour(String(s.end_time));
+      if (hour >= startH && hour < endH) return true;
+    }
+    return false;
+  }, [shiftsByEmployee]);
+
   const handleSlotClick = useCallback((employeeId: string, hour: number) => {
     if (!onQuickBook) return;
+    if (!isEmployeeWorkingAt(employeeId, hour)) return;
     onQuickBook({ employeeId, hour, date: selectedDate });
-  }, [onQuickBook, selectedDate]);
+  }, [onQuickBook, selectedDate, isEmployeeWorkingAt]);
 
   // --- Staff name click -> open profile card (Item #4) ---
   const handleStaffNameClick = useCallback((employeeId: string, e: React.MouseEvent) => {
@@ -864,13 +878,22 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                     data-testid={`scheduler-row-${empId}`}
                   >
                     {/* Hour slot backgrounds — clickable in hours mode when
-                        Quick Book is wired (audit P1 #4). Skills mode keeps
-                        the cells passive because skill bars cover the row
-                        and a click on a skill is meaningless for booking. */}
+                        Quick Book is wired AND the row's employee actually
+                        has a shift covering this hour (audit P1 #4 +
+                        out-of-hours fix). Cells outside the employee's
+                        shift stay passive: booking those would be
+                        rejected by the RPC with EMPLOYEE_NOT_SCHEDULED, so
+                        a clickable affordance there would be a broken
+                        invitation. The global `isOutsideBusiness` band is
+                        still used for the visual shading (the building's
+                        overall open window vs. a single employee's day off
+                        within open hours both render shaded — but only
+                        the per-employee gate decides clickability). */}
                     <div className="absolute inset-0 flex">
                       {HOURS.map((h) => {
                         const isOutsideBusiness = h < openHour || h >= closeHour;
-                        const isClickable = viewMode === 'hours' && !!onQuickBook;
+                        const employeeWorking = viewMode === 'hours' && isEmployeeWorkingAt(empId, h);
+                        const isClickable = !!onQuickBook && employeeWorking;
                         return (
                           <div
                             key={h}

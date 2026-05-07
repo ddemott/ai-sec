@@ -76,7 +76,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - Audit trigger `fn_audit_trigger` is `SECURITY DEFINER` to bypass RLS for internal logging.
 - **`employee_schedule` is the single source of truth** for shifts: `(tenant_id, employee_id, shift_date, start_time, end_time, is_off)`. The earlier weekly-pattern `employee_shifts` table was dropped 2026-04-30. Setup wizard collects a weekly grid in form state and posts it to `POST /shifts/expand-weekly` (`expandWeeklyToSchedule()` in `src/services/expandWeeklyToSchedule.ts`) — fans the pattern into `employee_schedule` for 4 weeks. Owners extend forward via the Schedule tab's copy-week button. API: `GET/POST /shifts/overrides`.
 - **Booking RPCs** (both read `employee_schedule` directly):
-  - `book_appointment_atomic()` — 7-layer constraint check + past-time rejection + business-hours + fuzzy service match
+  - `book_appointment_atomic()` — 7-layer constraint check + past-time rejection + employee-shift coverage (rejects with `EMPLOYEE_NOT_SCHEDULED` when no shift in `employee_schedule` covers the requested time) + fuzzy service match. There is no separate tenant-level "business hours" config — the building's open window is implicitly the union of staff shifts.
   - `book_with_scheduling_atomic()` — production booking RPC; date-based shift validation, cross-midnight night shifts, specific error codes (`TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`, `NO_AVAILABILITY`, `INVALID_PARAMS`)
   - Both protected by GiST exclusion constraints (`appointments_no_resource_overlap`, `appointments_no_employee_overlap`) — race-safe under READ COMMITTED.
 - `get_effective_shifts()` / `get_effective_shifts_bulk()` — return rows from `employee_schedule`. Bulk variant powers the scheduler.
@@ -131,7 +131,7 @@ Service layers that exist but lack production callers. **Each is on borrowed tim
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
-**Phase 13 (Production Readiness) in progress.** 1,653 backend + 556 dashboard = 2,209 tests passing (verified 2026-05-07; 0 skips). 78 agent tests, 28 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage.
+**Phase 13 (Production Readiness) in progress.** 1,653 backend + 557 dashboard = 2,210 tests passing (verified 2026-05-07; 0 skips). 78 agent tests, 28 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage.
 
 Remaining blockers: deploy dashboard, set `DASHBOARD_URL`, beta test with DynaTire. Full task list and post-launch backlog in `docs/TODO.md`. Phases 1–12 history in `RESOLVED.md`.
 

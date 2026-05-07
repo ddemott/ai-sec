@@ -546,13 +546,26 @@ describe('NewSchedulerView', () => {
       // WHO: operator viewing the skill matrix instead of the hour grid | WHAT: cells become passive — clicking a skill bar position is meaningless for booking | WHEN: viewMode === 'skills' | WHERE: NewSchedulerView slot conditional gate | WHY: in skills mode the row's content is "what skills this employee covers across the day," not "is this hour booked"; surfacing a Book affordance there would let the operator click on what looks like a skill-color band and unintentionally open Quick Book — a UX trap
     });
 
-    test('clicking outside-business-hours slot still fires onQuickBook (operators may book early/late)', () => {
+    test('cells outside the row employee\'s shift are NOT clickable (per-employee gate)', () => {
       const onQuickBook = vi.fn();
       render(<NewSchedulerView onQuickBook={onQuickBook} />);
-      // Hour 6 is outside business hours by default (open=8, close=17 derived from shift fixture).
-      fireEvent.click(screen.getByTestId('slot-emp-1-6'));
-      expect(onQuickBook).toHaveBeenCalledWith(expect.objectContaining({ hour: 6 }));
-      // WHO: front-desk operator handling an after-hours appointment request | WHAT: shaded out-of-business cells stay clickable | WHEN: a shop owner agrees to a 7am Saturday tire change off-schedule | WHERE: NewSchedulerView slot click eligibility | WHY: visual shading communicates "outside normal hours" but doesn't disable booking — gating clicks on business-hours would block legitimate operator intent and require them to switch to a different surface to book the same appointment
+      // Mike (emp-1) works 8-16 in the fixture. Hour 6 is before his shift.
+      const slot = screen.getByTestId('slot-emp-1-6');
+      expect(slot).not.toHaveAttribute('role');
+      expect(slot).not.toHaveAttribute('aria-label');
+      expect(slot.className).not.toContain('cursor-pointer');
+      fireEvent.click(slot);
+      expect(onQuickBook).not.toHaveBeenCalled();
+      // WHO: front-desk operator + the booking RPC's contract enforcement | WHAT: cells outside the employee's own shift become passive — not clickable, no role=button, no hover, click is a no-op | WHEN: any cell where this row's employee has no shift covering the hour on the viewed date | WHERE: NewSchedulerView slot click gate (`isEmployeeWorkingAt`) | WHY: original P1 #4 left these clickable with the rationale "operators may book early/late" — but the booking RPC immediately rejects with EMPLOYEE_NOT_SCHEDULED, so the click was an invitation to a guaranteed-failure path. The system's design contract is "book when employee+skill+resource+time align" — the UI must enforce the time half before the operator types in a customer name. Off-schedule one-offs require adding an employee_schedule entry first (Back Office → Shifts), then booking; this is the correct mental model rather than a "let it fail" fallback
+    });
+
+    test('cells inside the row employee\'s shift ARE clickable even on a row where another employee is also working', () => {
+      // Carlos (emp-2) works 9-17 in the fixture. Hour 9 is inside his shift.
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      fireEvent.click(screen.getByTestId('slot-emp-2-9'));
+      expect(onQuickBook).toHaveBeenCalledWith(expect.objectContaining({ employeeId: 'emp-2', hour: 9 }));
+      // WHO: front-desk operator booking with Carlos specifically | WHAT: the gate is per-row, not global — Carlos's 9am cell is clickable because Carlos is on shift, regardless of whether Mike is | WHEN: shifts overlap or staggered; e.g., Mike 8-16, Carlos 9-17 | WHERE: NewSchedulerView per-row shift lookup | WHY: a global "any employee working" gate would falsely show Mike's row as clickable at 16:30 (because Carlos works until 17), even though Mike is gone — booking through that path lands EMPLOYEE_NOT_SCHEDULED on the specific Mike booking; the per-row gate matches the actual booking shape
     });
   });
 
