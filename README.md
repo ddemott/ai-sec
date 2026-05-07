@@ -239,8 +239,7 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | `docs/BUGS.md` | Historical bug tracker (72 bugs + 47 UX items, all resolved) |
 | `docs/FRAMEWORK_MIGRATIONS.md` | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (pending) |
 | `NEEDS-REFACTORING.md` | Code-cleanup backlog — dormant layers, dead code, conventions to enforce |
-| `improvement-ideas.md` (root) | Automated daily-journal feed of refactor proposals (2026-04-20+) |
-| `docs/IMPROVEMENT_IDEAS.md` | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11) — distinct from the journal feed above |
+| `docs/IMPROVEMENT_IDEAS.md` | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11) |
 
 ---
 

@@ -2,7 +2,7 @@
 
 Living refactor backlog for the AI Secretary codebase. Items are ordered highest priority first. Renumber freely.
 
-This is for **structural cleanup of existing code** — dead code to delete, dormant layers to wire-or-remove, conventions to enforce. New features and improvements live in `improvement-ideas.md`.
+This is for **structural cleanup of existing code** — dead code to delete, dormant layers to wire-or-remove, conventions to enforce. New features and improvements live in `docs/IMPROVEMENT_IDEAS.md`.
 
 Last updated: 2026-05-05 (#3, #10, #12, #13 closed across the 2026-05-04 + 2026-05-05 sessions; #10 broader extraction, #11 deferred part, and #14 are the only items still open).
 
@@ -252,4 +252,4 @@ Pure check functions are exported and tested in `scripts/verify-claude-md.test.t
 - When starting refactor work, pick the lowest-numbered open item that fits your time budget.
 - Mark items completed by adding `**Status: done <date> <commit>**` and striking the title (`### ~~1. ...~~`). Periodically delete completed items to keep the file scannable.
 - When you discover a new structural concern, add it under the right priority bucket and renumber if needed.
-- Items that turn out to be feature work (not refactors) move to `improvement-ideas.md`.
+- Items that turn out to be feature work (not refactors) move to `docs/IMPROVEMENT_IDEAS.md`.
