@@ -121,8 +121,10 @@ export interface NewSchedulerViewProps {
   onViewChange?: (key: string) => void;
   /** Optional Quick Book trigger — when provided, renders a button in the
       header toolbar so the front-desk operator can book a call-in without
-      switching sub-tabs. Wired by SchedulerView. */
-  onQuickBook?: () => void;
+      switching sub-tabs. Empty grid cells are also click-targets that call
+      this with `{ employeeId, hour, date }` prefilled (front-desk audit P1
+      #4). Wired by SchedulerView. */
+  onQuickBook?: (prefill?: { employeeId?: string; hour?: number; date?: Date }) => void;
 }
 
 export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, activeView, onViewChange, onQuickBook }: NewSchedulerViewProps) {
@@ -341,6 +343,16 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   const handleZoomOut = useCallback(() => {
     setColW(prev => Math.max(prev - ZOOM_STEP, MIN_COL_W));
   }, []);
+
+  // --- Empty-slot click → open Quick Book prefilled (front-desk audit P1 #4) ---
+  // The grid cells were passive backgrounds before today; now each empty
+  // hour cell on a staff row is a click target. Hover cue is a subtle
+  // background tint + cursor:pointer applied inline at render so the
+  // affordance is discoverable without screen-reading the audit.
+  const handleSlotClick = useCallback((employeeId: string, hour: number) => {
+    if (!onQuickBook) return;
+    onQuickBook({ employeeId, hour, date: selectedDate });
+  }, [onQuickBook, selectedDate]);
 
   // --- Staff name click -> open profile card (Item #4) ---
   const handleStaffNameClick = useCallback((employeeId: string, e: React.MouseEvent) => {
@@ -567,7 +579,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               usable in other contexts. */}
           {onQuickBook && (
             <button
-              onClick={onQuickBook}
+              onClick={() => onQuickBook?.()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
               style={{ background: 'var(--accent, #3b82f6)', color: 'var(--primary-text, #fff)' }}
               data-testid="quick-book-trigger"
@@ -851,14 +863,32 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                     }}
                     data-testid={`scheduler-row-${empId}`}
                   >
-                    {/* Hour slot backgrounds */}
+                    {/* Hour slot backgrounds — clickable in hours mode when
+                        Quick Book is wired (audit P1 #4). Skills mode keeps
+                        the cells passive because skill bars cover the row
+                        and a click on a skill is meaningless for booking. */}
                     <div className="absolute inset-0 flex">
                       {HOURS.map((h) => {
                         const isOutsideBusiness = h < openHour || h >= closeHour;
+                        const isClickable = viewMode === 'hours' && !!onQuickBook;
                         return (
                           <div
                             key={h}
-                            className="shrink-0"
+                            role={isClickable ? 'button' : undefined}
+                            aria-label={isClickable ? `Book ${emp.name} at ${formatHour(h)}` : undefined}
+                            tabIndex={isClickable ? 0 : undefined}
+                            onClick={isClickable ? () => handleSlotClick(empId, h) : undefined}
+                            onKeyDown={
+                              isClickable
+                                ? (e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      handleSlotClick(empId, h);
+                                    }
+                                  }
+                                : undefined
+                            }
+                            className={`shrink-0${isClickable ? ' cursor-pointer hover:bg-[rgba(59,130,246,0.08)]' : ''}`}
                             style={{
                               width: colW,
                               height: rowH,

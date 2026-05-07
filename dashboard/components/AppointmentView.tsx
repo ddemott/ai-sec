@@ -52,15 +52,26 @@ interface DnDEventArgs {
   end: Date;
 }
 
-export default function AppointmentView() {
+export interface AppointmentViewProps {
+  /** Optional empty-slot click handler. When provided, the BigCalendar
+      becomes `selectable` and clicks/drags on empty slots fire this with
+      the selected `{ start, end }` range. SchedulerView wires this to the
+      Quick Book panel so booking is reachable from the Calendar sub-tab
+      without hunting for the sidebar's icon-only "+" button (front-desk
+      audit P1 #4). When omitted the calendar stays read-only on slots —
+      the existing "+" affordance still creates appointments. */
+  onSelectSlot?: (range: { start: Date; end: Date }) => void;
+}
+
+export default function AppointmentView(props: AppointmentViewProps = {}) {
   return (
     <AppointmentDetailProvider>
-      <AppointmentViewInner />
+      <AppointmentViewInner {...props} />
     </AppointmentDetailProvider>
   )
 }
 
-function AppointmentViewInner() {
+function AppointmentViewInner({ onSelectSlot }: AppointmentViewProps) {
   const tenantId = useActiveTenantId();
   const { customers, resources, employees, services } = useStaticData(tenantId);
   const vocab = useVocabulary();
@@ -422,6 +433,14 @@ function AppointmentViewInner() {
               timeslots={calendarTimeslots}
               scrollToTime={calendarScrollTo}
               resizable
+              selectable={!!onSelectSlot}
+              onSelectSlot={
+                onSelectSlot
+                  ? ({ start, end }: { start: Date | string; end: Date | string }) => {
+                      onSelectSlot({ start: new Date(start), end: new Date(end) });
+                    }
+                  : undefined
+              }
               draggableAccessor={() => true}
               onView={(view: CalendarViewType) => setCalendarView(view)}
               onNavigate={(date: Date) => setCalendarDate(date)}

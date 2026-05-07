@@ -449,6 +449,111 @@ describe('NewSchedulerView', () => {
       fireEvent.click(screen.getByTestId('quick-book-trigger'));
       expect(onQuickBook).toHaveBeenCalledTimes(1);
     });
+
+    test('toolbar button click invokes onQuickBook with NO arguments', () => {
+      // WHO: SchedulerView's parent merging selectedDate at the call site
+      // WHAT: Toolbar button must NOT pass a synthetic MouseEvent through —
+      //       parent's prefill handler reads { employeeId, hour, date }
+      //       fields, and a leaked MouseEvent would land in date and break
+      //       Date construction.
+      // WHEN: Audit P1 #4 widened the prop signature; pin no-arg behavior.
+      // WHERE: NewSchedulerView toolbar
+      // WHY: Catch a future refactor that drops the `() => onQuickBook?.()`
+      //      wrapper and exposes the raw onClick.
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      fireEvent.click(screen.getByTestId('quick-book-trigger'));
+      expect(onQuickBook).toHaveBeenCalledWith();
+    });
+  });
+
+  // --- Front-desk audit P1 #4: Empty-cell click → Quick Book prefilled ---
+  describe('Empty-slot click → Quick Book prefill (audit P1 #4)', () => {
+    test('clicking an empty hour cell on a staff row invokes onQuickBook with employeeId + hour + date', () => {
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      fireEvent.click(screen.getByTestId('slot-emp-1-10'));
+
+      expect(onQuickBook).toHaveBeenCalledTimes(1);
+      const call = onQuickBook.mock.calls[0][0];
+      expect(call).toMatchObject({ employeeId: 'emp-1', hour: 10 });
+      expect(call.date).toBeInstanceOf(Date);
+      // WHO: front-desk operator who already knows "Mike at 10am" | WHAT: single click on the empty cell delivers all three prefill fields | WHEN: the operator's most-frequent booking pattern (staff-then-time, not customer-first) | WHERE: NewSchedulerView slot-click handler | WHY: this is the audit P1 #4 done-signal exactly — "clicking an empty 10am slot for Mike opens Quick Book with employeeId=Mike + hour=10 prefilled"; pinning the contract guards against a future refactor that drops one of the three fields and silently degrades the workflow
+    });
+
+    test('slot cells are NOT clickable (no role/cursor) when onQuickBook is omitted', () => {
+      render(<NewSchedulerView />);
+      const slot = screen.getByTestId('slot-emp-1-10');
+      expect(slot).not.toHaveAttribute('role');
+      expect(slot).not.toHaveAttribute('aria-label');
+      expect(slot.className).not.toContain('cursor-pointer');
+      // WHO: any standalone consumer of NewSchedulerView | WHAT: slot cells stay passive when no booking handler is wired | WHEN: a future surface uses NewSchedulerView in a read-only context (e.g. embedded in a printable schedule view) | WHERE: slot-click conditional render | WHY: a clickable cell with no handler is a broken affordance — the cursor change implies action, the action does nothing; gating role/cursor on the prop keeps the read-only mode honest
+    });
+
+    test('slot cells expose role=button + aria-label when onQuickBook is wired', () => {
+      render(<NewSchedulerView onQuickBook={vi.fn()} />);
+      const slot = screen.getByTestId('slot-emp-1-10');
+      expect(slot).toHaveAttribute('role', 'button');
+      expect(slot).toHaveAttribute('aria-label', expect.stringContaining('Mike Jones'));
+      expect(slot.getAttribute('aria-label')).toMatch(/10am/i);
+      expect(slot).toHaveAttribute('tabIndex', '0');
+      // WHO: keyboard + screen-reader users | WHAT: slot cells announce "Book Mike Jones at 10am" with proper button semantics | WHEN: assistive tech navigates the grid | WHERE: NewSchedulerView slot a11y attributes | WHY: a sighted user sees the cursor change and figures it out; a keyboard user without role/aria-label/tabIndex literally cannot reach or understand the affordance — adding all three closes a WCAG 2.1 keyboard-accessibility gap that would otherwise ship blind
+    });
+
+    test('keyboard Enter on a slot cell fires onQuickBook with the same prefill', () => {
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      const slot = screen.getByTestId('slot-emp-2-14');
+      fireEvent.keyDown(slot, { key: 'Enter' });
+
+      expect(onQuickBook).toHaveBeenCalledTimes(1);
+      expect(onQuickBook.mock.calls[0][0]).toMatchObject({ employeeId: 'emp-2', hour: 14 });
+      // WHO: keyboard user (a11y, power user, screen-reader) | WHAT: Enter activates the slot exactly like a click | WHEN: navigating the grid via Tab + Enter | WHERE: NewSchedulerView slot keyDown handler | WHY: role=button without keyboard activation is a partial fix — the screen reader announces the affordance but pressing Enter does nothing; pin both Enter and Space (next test) so the keyboard path is fully equivalent to mouse
+    });
+
+    test('keyboard Space on a slot cell also fires onQuickBook (and prevents page scroll)', () => {
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      const slot = screen.getByTestId('slot-emp-1-10');
+      const event = { key: ' ' };
+      fireEvent.keyDown(slot, event);
+
+      expect(onQuickBook).toHaveBeenCalledTimes(1);
+      // WHO: keyboard user | WHAT: Space activates the slot | WHEN: WCAG-standard activation key for role=button elements | WHERE: NewSchedulerView slot keyDown handler | WHY: native <button> gets Space activation for free; we lose that by using <div role=button>, so we must wire Space explicitly; the handler also calls preventDefault to stop Space from scrolling the page beneath the panel that's about to open
+    });
+
+    test('non-activation keys (Tab, ArrowRight, etc.) do NOT fire onQuickBook', () => {
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      const slot = screen.getByTestId('slot-emp-1-10');
+      fireEvent.keyDown(slot, { key: 'Tab' });
+      fireEvent.keyDown(slot, { key: 'ArrowRight' });
+      fireEvent.keyDown(slot, { key: 'a' });
+      expect(onQuickBook).not.toHaveBeenCalled();
+      // WHO: keyboard user navigating between cells | WHAT: only Enter and Space activate the slot — Tab moves focus, arrow keys browse, regular typing is ignored | WHEN: any keyboard-driven navigation pattern | WHERE: NewSchedulerView slot keyDown handler | WHY: a too-eager activation would intercept arrow-key navigation between adjacent slots and break the natural keyboard flow; pin the negative space so the handler stays narrowly scoped
+    });
+
+    test('slot click in skills mode is a no-op (cells stay passive)', () => {
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      // Switch to skills mode.
+      fireEvent.click(screen.getByTestId('view-mode-skills'));
+
+      const slot = screen.getByTestId('slot-emp-1-10');
+      expect(slot).not.toHaveAttribute('role');
+      fireEvent.click(slot);
+      expect(onQuickBook).not.toHaveBeenCalled();
+      // WHO: operator viewing the skill matrix instead of the hour grid | WHAT: cells become passive — clicking a skill bar position is meaningless for booking | WHEN: viewMode === 'skills' | WHERE: NewSchedulerView slot conditional gate | WHY: in skills mode the row's content is "what skills this employee covers across the day," not "is this hour booked"; surfacing a Book affordance there would let the operator click on what looks like a skill-color band and unintentionally open Quick Book — a UX trap
+    });
+
+    test('clicking outside-business-hours slot still fires onQuickBook (operators may book early/late)', () => {
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      // Hour 6 is outside business hours by default (open=8, close=17 derived from shift fixture).
+      fireEvent.click(screen.getByTestId('slot-emp-1-6'));
+      expect(onQuickBook).toHaveBeenCalledWith(expect.objectContaining({ hour: 6 }));
+      // WHO: front-desk operator handling an after-hours appointment request | WHAT: shaded out-of-business cells stay clickable | WHEN: a shop owner agrees to a 7am Saturday tire change off-schedule | WHERE: NewSchedulerView slot click eligibility | WHY: visual shading communicates "outside normal hours" but doesn't disable booking — gating clicks on business-hours would block legitimate operator intent and require them to switch to a different surface to book the same appointment
+    });
   });
 
   describe('Scroll sync', () => {

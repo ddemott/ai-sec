@@ -48,6 +48,7 @@ export default function SchedulerView() {
     employeeId?: string;
     resourceId?: string;
     hour?: number;
+    endHour?: number;
     date?: Date;
   }>({});
 
@@ -82,10 +83,18 @@ export default function SchedulerView() {
     refreshScheduler();
   }, [refreshScheduler]);
 
-  const handleNewQuickBook = useCallback(() => {
-    setQuickBookPrefill({ date: selectedDate });
-    setQuickBookOpen(true);
-  }, [selectedDate]);
+  // Single Quick Book opener — used by the toolbar button (no args) and by
+  // empty-cell clicks on the Staff/Calendar sub-tabs (with cell prefill).
+  // Caller-supplied date wins over selectedDate so the Staff sub-tab's own
+  // date nav (which doesn't sync with SchedulerView's) doesn't get
+  // overwritten when a user clicks a slot on a different day.
+  const handleNewQuickBook = useCallback(
+    (prefill?: { employeeId?: string; resourceId?: string; hour?: number; endHour?: number; date?: Date }) => {
+      setQuickBookPrefill({ date: selectedDate, ...prefill });
+      setQuickBookOpen(true);
+    },
+    [selectedDate]
+  );
 
   // Single return so QuickBookPanel + EmployeeDayFocusPanel + AppointmentPopover
   // are reachable from every sub-tab — Quick Book used to be Resources/List
@@ -123,7 +132,7 @@ export default function SchedulerView() {
                 </button>
               ))}
             </div>
-            <Button size="sm" onClick={handleNewQuickBook} data-testid="quick-book-trigger">
+            <Button size="sm" onClick={() => handleNewQuickBook()} data-testid="quick-book-trigger">
               <Plus className="w-4 h-4 mr-1" />
               Quick Book
             </Button>
@@ -176,7 +185,7 @@ export default function SchedulerView() {
             <Button variant="ghost" size="sm" onClick={handleRefresh} aria-label="Refresh">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-            <Button size="sm" onClick={handleNewQuickBook} data-testid="quick-book-trigger">
+            <Button size="sm" onClick={() => handleNewQuickBook()} data-testid="quick-book-trigger">
               <Plus className="w-4 h-4 mr-1" />
               Quick Book
             </Button>
@@ -186,7 +195,22 @@ export default function SchedulerView() {
 
       {/* View content */}
       <div className={activeView === 'staff' ? 'flex-1 flex overflow-hidden' : 'flex-1 overflow-auto bg-white dark:bg-[#111]'}>
-        {activeView === 'calendar' && <AppointmentView />}
+        {activeView === 'calendar' && (
+          <AppointmentView
+            onSelectSlot={({ start, end }) => {
+              const startHour = start.getHours();
+              const endHour = end.getHours();
+              handleNewQuickBook({
+                date: start,
+                hour: startHour,
+                // BigCalendar's drag-select returns [start, end). For a single
+                // click in month view, end may equal start — fall back to a
+                // 1-hour window so QuickBook doesn't open with end ≤ start.
+                endHour: endHour > startHour ? endHour : startHour + 1,
+              });
+            }}
+          />
+        )}
         {activeView === 'staff' && (
           <NewSchedulerView
             viewTabs={viewTabs}
