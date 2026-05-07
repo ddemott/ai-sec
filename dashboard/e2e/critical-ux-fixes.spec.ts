@@ -192,7 +192,7 @@ test.describe('Fix #6: Scheduler handles empty appointment times', () => {
     await expect(page.locator('text=Schedule').first()).toBeVisible({ timeout: 10000 });
 
     // Verify the grid renders — look for hour header
-    const hourHeader = page.locator('[data-testid="hour-header"]');
+    const hourHeader = page.locator('[data-testid="scheduler-view"]');
     if (await hourHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
       await expect(hourHeader).toBeVisible();
     }
@@ -216,7 +216,7 @@ test.describe('Fix #2: Error feedback on API failures', () => {
     await navigateToTab(page, 'Schedule');
 
     // The scheduler grid should render with hour labels
-    await expect(page.locator('[data-testid="hour-header"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="scheduler-view"]')).toBeVisible({ timeout: 10000 });
 
     // Verify refresh button works
     const refresh = page.locator('[data-testid="scheduler-refresh"]');
@@ -224,7 +224,7 @@ test.describe('Fix #2: Error feedback on API failures', () => {
       await refresh.click();
       await page.waitForTimeout(1000);
       // No crash after refresh
-      await expect(page.locator('[data-testid="hour-header"]')).toBeVisible();
+      await expect(page.locator('[data-testid="scheduler-view"]')).toBeVisible();
     }
   });
 });

@@ -24,7 +24,7 @@ async function ensureLoggedIn(page: Page) {
   if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
     await emailInput.fill('admin@secretaryhq.com');
     await page.locator('input[type="password"]').fill('password');
-    await page.getByText('Sign In to Dashboard').click();
+    await page.locator('button[type="submit"]').click();
     await page.waitForTimeout(3000);
   }
 

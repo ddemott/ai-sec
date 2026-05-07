@@ -121,9 +121,15 @@ test('AppointmentView: can modify and save an appointment', async () => {
   const localDate = new Date(d.getTime() - (offset * 60 * 1000))
   const expectedTimeStr = localDate.toISOString().slice(0, 16)
 
-  // Change the start time via the datetime-local input bound to start_time
+  // Change BOTH start and end together so the new range stays internally
+  // consistent. The shared validateAppointmentTimeRange helper rejects
+  // end<=start and >12h spans, so changing only start_time leaves end_time
+  // unchanged at MOCK_APPOINTMENTS[0].end_time (~tomorrow 10am) and the
+  // resulting ~62-day span trips the duration cap.
   const startInput = await screen.findByDisplayValue(expectedTimeStr)
   fireEvent.change(startInput, { target: { value: '2026-03-05T11:00' } })
+  const endInput = await screen.findByLabelText(/End Time/i)
+  fireEvent.change(endInput, { target: { value: '2026-03-05T12:00' } })
 
 
   // Use data-testid to uniquely select the Update Appointment button

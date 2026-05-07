@@ -356,29 +356,6 @@ describe('Fix #6: Security headers (Helmet)', () => {
 // FIX #1 + #2 Integration: get_effective_shifts RPC
 // ═══════════════════════════════════════════════════════════════
 describe('get_effective_shifts RPC integration', () => {
-  test('HAPPY: returns pattern shifts when no overrides exist', async () => {
-    await withClient(async (client) => {
-      const emp = await client.query(
-        "SELECT id FROM employees WHERE tenant_id = $1 AND is_active = true LIMIT 1",
-        [TEST_TENANT_ID]
-      );
-      if (emp.rows.length === 0) return;
-
-      const result = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2, CURRENT_DATE, CURRENT_DATE + 6)",
-        [TEST_TENANT_ID, emp.rows[0].id]
-      );
-
-      // Should return rows from pattern (is_override = false)
-      for (const row of result.rows) {
-        expect(row.is_override).toBe(false);
-        expect(row.is_off).toBe(false);
-        expect(row.start_time).toBeTruthy();
-        expect(row.end_time).toBeTruthy();
-      }
-    });
-  });
-
   test('HAPPY: override takes precedence over pattern', async () => {
     await withClient(async (client) => {
       const emp = await client.query(

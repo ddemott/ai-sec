@@ -32,7 +32,7 @@ export default function MyTeamView() {
   const SUB_TABS: { id: SubTab; label: string }[] = [
     { id: 'employees', label: vocab.employee_plural },
     { id: 'shifts', label: 'Shifts' },
-    { id: 'skills', label: 'Skill Matrix' },
+    { id: 'skills', label: 'Service Assignments' },
     { id: 'skill-map', label: 'Skill Map' },
     { id: 'logins', label: 'Logins' },
   ]

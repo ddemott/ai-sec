@@ -90,7 +90,7 @@ export default function SchedulerView() {
   // Show calendar tab as the primary schedule surface.
   if (activeView === 'calendar') {
     return (
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-3 flex-wrap">
           <div>
             <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Schedule</div>
