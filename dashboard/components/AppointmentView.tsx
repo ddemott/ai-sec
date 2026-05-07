@@ -292,13 +292,21 @@ function AppointmentViewInner({ onSelectSlot }: AppointmentViewProps) {
       }
     }
 
+    // Derive service_id from form.description by matching against the
+    // services list — mirrors the alignment-filter convention in
+    // AppointmentDetailPanel. When provided, the booking RPC enforces
+    // service_employee / service_resource mapping (or its array
+    // fallback). For walk-in / unmatched descriptions, service_id is
+    // omitted and the RPC takes the legacy unchecked path.
+    const matchedSvc = services.find((s) => s.name === form.description);
     try {
       const res = await Api.appointments.create(targetTenantId, {
             ...form,
             start_time: toISOStringWithOffset(form.start_time),
             end_time: toISOStringWithOffset(form.end_time),
             employee_id: form.employee_id || null,
-            customer_phone: form.customer_phone
+            customer_phone: form.customer_phone,
+            service_id: matchedSvc ? matchedSvc.id : null,
         })
         if (res.success) {
           setIsCreating(false)

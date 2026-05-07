@@ -150,6 +150,10 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
         start_time: new Date(startTime).toISOString(),
         end_time: new Date(endTime).toISOString(),
         description,
+        // Pass serviceId so the RPC enforces service_employee +
+        // service_resource mapping (or its array fallback) — the same
+        // alignment the UI dropdown filter shows the operator.
+        service_id: serviceId || null,
       });
       if (res.success) {
         onBooked();

@@ -17,6 +17,12 @@ const AppointmentCreateSchema = z.object({
   description: z.string().min(1).max(1000),
   location: z.string().max(500).optional().nullable(),
   employee_id: z.union([z.string(), z.number()]).optional().nullable(),
+  // Optional FK to services. When provided, the booking RPC enforces
+  // service_employee + service_resource mapping (or, if the mapping is
+  // empty for that service, the legacy required_skills/_resources array
+  // check). Omitting it keeps unchanged behavior — every existing caller
+  // before 2026-05-07 left it null.
+  service_id: z.string().uuid().optional().nullable(),
 });
 
 const AppointmentUpdateSchema = z.object({
@@ -50,10 +56,26 @@ export function registerAppointmentRoutes(
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(
-        'SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-        [body.tenant_id, body.resource_id, body.customer_id, body.start_time, body.end_time,
-         body.description, 'manual-entry', body.location || null,
-         body.employee_id ? body.employee_id.toString() : null]
+        // Positional args mirror the RPC signature (12 params; null-defaulted
+        // tail args supplied explicitly so the call is unambiguous):
+        // tenant, resource, customer, start, end, description, call_id,
+        // location, assignment_id (employee or user), service_id,
+        // customer_phone, customer_name.
+        `SELECT * FROM book_appointment_atomic(
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NULL
+         )`,
+        [
+          body.tenant_id,
+          body.resource_id,
+          body.customer_id,
+          body.start_time,
+          body.end_time,
+          body.description,
+          'manual-entry',
+          body.location || null,
+          body.employee_id ? body.employee_id.toString() : null,
+          body.service_id || null,
+        ]
       );
     });
     const result = res.rows[0];
