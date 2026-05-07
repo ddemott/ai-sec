@@ -1,16 +1,13 @@
 /**
  * OutlookLayout role-gating tests.
  *
- * The dashboard's two-tab nav (Front Desk / Back Office) used to be visible
- * to every tenant user. After the user-roles migration (2026-05-05), front-
- * desk-only logins (`role === 'front_desk'`) should:
- *   1. Not see the Back Office tab in the desktop nav.
- *   2. Not see the Back Office button in the mobile mode-toggle.
- *   3. Be snapped back to the Front Desk Home if they land on a Back
- *      Office sub-tab via a stale URL or back-button.
+ * The dashboard now uses a single flattened nav. Front-desk-only logins
+ * (`role === 'front_desk'`) should only see the daily-use tabs and be
+ * snapped back to Home if they land on a management tab via a stale URL or
+ * back-button.
  *
  * Owners (and super-admins, who keep full access regardless of `role`)
- * should still see both tabs.
+ * should still see the management tabs.
  */
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -53,53 +50,49 @@ beforeEach(() => {
 })
 
 describe('OutlookLayout role gating', () => {
-  test('HAPPY: owner sees both Front Desk and Back Office tabs', async () => {
-    // WHO: Shop owner / admin user with the default 'owner' role.
-    // WHAT: Both top-level mode tabs render.
+  test('HAPPY: owner sees management tabs', async () => {
+    // WHO: Shop owner / manager with the default 'owner' role.
+    // WHAT: Daily-use tabs plus management tabs render.
     // WHERE: Desktop nav (FolderTabBar with size="lg").
     // WHEN: On every page load while signed in as an owner.
-    // WHY: Owners need access to Services, Resources, Skills, Vocabulary,
-    //      Version History — all under Back Office. Hiding it would make
-    //      configuration impossible for the only people who configure.
+    // WHY: Owners need access to Services, Staff, and AI/knowledge setup.
     render(
       <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="owner">
         <div>content</div>
       </OutlookLayout>
     )
-    expect(screen.getByRole('tab', { name: /front desk/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /back office/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /schedule/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /services & resources/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /staff & shifts/i })).toBeInTheDocument()
   })
 
-  test('SAD: front_desk user does NOT see the Back Office tab', () => {
+  test('SAD: front_desk user does NOT see management tabs', () => {
     // WHO: Shop staff member promoted to a 'front_desk' role.
-    // WHAT: Only the Front Desk tab renders; Back Office is hidden in
-    //       both the desktop and mobile nav.
-    // WHERE: Both FolderTabBar (desktop) and the mobile mode-toggle div.
-    // WHY: External review (2026-05-01) flagged the dashboard as too
-    //      complex for non-technical users. The front-desk audience
-    //      doesn't need Resources/Skills/Vocabulary tabs to do their
-    //      daily work (book a call-in, look up tomorrow's schedule).
+    // WHAT: Only the daily-use tabs render; management tabs are hidden.
+    // WHERE: Desktop nav and the mobile nav.
+    // WHY: Non-technical staff shouldn't have to choose between setup
+    //      surfaces to do their daily work.
     render(
       <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="front_desk">
         <div>content</div>
       </OutlookLayout>
     )
-    expect(screen.getByRole('tab', { name: /front desk/i })).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /back office/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /services & resources/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /staff & shifts/i })).not.toBeInTheDocument()
     // Mobile nav has plain <button>s rather than role="tab"; assert by name.
-    const mobileBackOffice = screen.queryByRole('button', { name: /^back office$/i })
-    expect(mobileBackOffice).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^businesses$/i })).not.toBeInTheDocument()
   })
 
-  test('SAD: front_desk user landing on a Back Office sub-tab is redirected to dashboard', async () => {
+  test('SAD: front_desk user landing on a management tab is redirected to dashboard', async () => {
     // WHO: Front-desk user who clicked a stale ?tab=my-business link or
     //      hit the back-button after an admin demoted them.
     // WHAT: The layout snaps activeTab back to 'dashboard' on mount.
     // WHERE: useEffect inside OutlookLayout that watches isFrontDeskOnly +
     //        activeTab.
-    // WHY: Without this guard the user would see whichever Back Office
-    //      view was rendered by the dashboard page even though the tab
-    //      to switch back is gone — a dead-end for the user.
+    // WHY: Without this guard the user would see a management view even
+    //      though the tab to switch back is gone — a dead-end for the user.
     const setActiveTab = vi.fn()
     render(
       <OutlookLayout activeTab="my-business" setActiveTab={setActiveTab} role="front_desk">
@@ -111,12 +104,12 @@ describe('OutlookLayout role gating', () => {
     })
   })
 
-  test('HAPPY: super-admin with role=front_desk still sees Back Office', async () => {
+  test('HAPPY: super-admin with role=front_desk still sees management tabs', async () => {
     // WHO: Platform super-admin (tenant_id = 00000000...). The role
     //      column doesn't apply to them — admin status is identified by
     //      tenant_id, not by users.role. A super-admin with a stray
     //      'front_desk' role on their user record still needs full UI.
-    // WHAT: Back Office tab still renders because isAdmin overrides role.
+    // WHAT: Management tabs still render because isAdmin overrides role.
     // WHY: Without this, demoting a super-admin's user record would
     //      lock them out of the very dashboard they manage tenants from.
     render(
@@ -129,6 +122,6 @@ describe('OutlookLayout role gating', () => {
         <div>content</div>
       </OutlookLayout>
     )
-    expect(await screen.findByRole('tab', { name: /back office/i })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: /services & resources/i })).toBeInTheDocument()
   })
 })

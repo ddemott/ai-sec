@@ -14,17 +14,6 @@ function logIssue(area: string, description: string) {
 }
 
 async function navigateToTab(page: Page, tabLabel: string) {
-  const backOfficeTabs = ['Services & Resources', 'Staff & Shifts', 'AI & Knowledge', 'Settings'];
-  if (backOfficeTabs.includes(tabLabel)) {
-    await page.locator('text=Back Office').first().click();
-    await page.waitForTimeout(500);
-  } else {
-    const frontDesk = page.locator('text=Front Desk').first();
-    if (await frontDesk.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await frontDesk.click();
-      await page.waitForTimeout(500);
-    }
-  }
   await page.locator(`text=${tabLabel}`).first().click();
   await page.waitForTimeout(1000);
 }
@@ -51,14 +40,14 @@ test.describe.serial('Full Functional Audit', () => {
     await page.goto('/dashboard');
 
     // Admin lands on All Businesses — switch to a tenant first to see the home dashboard
-    const tenantBtn = page.locator('text=/Secretary HQ|DynaTire/').first();
+    const tenantBtn = page.getByTestId('tenant-card-00000000-0000-0000-0000-000000000000');
     if (await tenantBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await tenantBtn.click();
       await page.waitForTimeout(1000);
     }
 
     // Navigate to Home tab
-    const homeTab = page.locator('text=Home').first();
+    const homeTab = page.getByRole('tab', { name: /^Home$/i });
     if (await homeTab.isVisible({ timeout: 3000 }).catch(() => false)) {
       await homeTab.click();
       await page.waitForTimeout(1000);
@@ -94,7 +83,7 @@ test.describe.serial('Full Functional Audit', () => {
     await expect(header).toBeVisible({ timeout: 10000 });
 
     // Check for staff tab (default view)
-    const staffTab = page.locator('text=/Staff|Employees/i').first();
+    const staffTab = page.locator('[data-testid="view-tab-staff"]');
     if (await staffTab.isVisible({ timeout: 3000 }).catch(() => false)) {
       await staffTab.click();
       await page.waitForTimeout(500);
@@ -177,7 +166,7 @@ test.describe.serial('Full Functional Audit', () => {
     }
 
     // Add customer button
-    const addBtn = page.locator('text=/Add|New Customer/i').first();
+    const addBtn = page.getByRole('button', { name: /Add Customer|New Customer/i }).first();
     if (!await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       logIssue('CRM', 'Add customer button not visible');
     }
@@ -235,7 +224,7 @@ test.describe.serial('Full Functional Audit', () => {
     }
 
     // Verify at least one service card is visible (or empty state)
-    const serviceCard = page.locator('text=/Follow-Up Call|In-Person Meeting|Phone Consultation|No services/i').first();
+    const serviceCard = page.locator('text=/Follow-Up Call|In-Person Meeting|Phone Consultation|No services yet|No services/i').first();
     if (!await serviceCard.isVisible({ timeout: 3000 }).catch(() => false)) {
       logIssue('SERVICES', 'No service cards or empty state visible');
     }
@@ -255,9 +244,11 @@ test.describe.serial('Full Functional Audit', () => {
       logIssue('STAFF', 'Staff view did not load');
     }
 
+    const teamTabs = page.getByRole('tablist', { name: /Team sections/i });
+
     // Check sub-tabs: Staff, Shifts, Skill Matrix, Skill Map
-    for (const sub of ['Staff', 'Shifts', 'Skill Matrix', 'Skill Map']) {
-      const subTab = page.locator(`text=${sub}`).first();
+    for (const sub of [/Staff|Employees/i, /Shifts/i, /Skill Matrix/i, /Skill Map/i]) {
+      const subTab = teamTabs.getByRole('tab', { name: sub }).first();
       if (await subTab.isVisible({ timeout: 2000 }).catch(() => false)) {
         await subTab.click();
         await page.waitForTimeout(500);
@@ -268,13 +259,13 @@ test.describe.serial('Full Functional Audit', () => {
     }
 
     // Go to Shifts tab and verify shift management
-    const shiftsTab = page.locator('text=Shifts').first();
+    const shiftsTab = teamTabs.getByRole('tab', { name: /Shifts/i }).first();
     if (await shiftsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await shiftsTab.click();
       await page.waitForTimeout(500);
 
       // Employee selector should show
-      const empSelector = page.locator('text=/Select.*employee|Dale/i').first();
+      const empSelector = page.locator('[data-testid="shift-employee-selector"]');
       if (!await empSelector.isVisible({ timeout: 3000 }).catch(() => false)) {
         logIssue('SHIFTS', 'Employee selector not visible in Shifts view');
       }

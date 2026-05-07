@@ -284,8 +284,9 @@ export default function CRMView() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold">Customers</h2>
             <div className="flex space-x-1">
-                <Button onClick={startNewCustomer} size="sm" className="p-1.5">
+                <Button onClick={startNewCustomer} size="sm" className="gap-2">
                     <UserPlus className="w-4 h-4" />
+                    Add Customer
                 </Button>
                 <Button variant="ghost" onClick={fetchCustomers} size="sm" className="p-1.5">
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

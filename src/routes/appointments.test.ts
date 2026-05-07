@@ -132,6 +132,28 @@ describe('POST /appointments/create', () => {
         );
     });
 
+    it('SAD: rejects absurd 23-hour appointments before hitting the RPC', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/appointments/create',
+            payload: {
+                ...validCreatePayload,
+                end_time: '2026-04-16T13:00:00Z',
+            },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'Appointment duration cannot exceed 12 hours',
+        });
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(0);
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
     it('SAD: returns 400 on Zod validation failure (missing required field)', async () => {
         // WHO: a buggy client that omitted required body fields
         // WHAT: AppointmentCreateSchema.safeParse fails → 400 with details
@@ -469,8 +491,9 @@ describe('POST /appointments/:id/update', () => {
         // WHY: the transaction wraps both the appointment update AND the
         //       optional customer-info update so they commit atomically;
         //       a partial failure rolls back both
-        // BEGIN, UPDATE appointments, COMMIT — 3 scripted responses
+        // BEGIN, SELECT existing appointment, UPDATE appointments, COMMIT — 4 scripted responses
         handle.queryResponses.push({ rows: [] }); // BEGIN
+        handle.queryResponses.push({ rows: [{ start_time: '2026-04-15T15:00:00Z', end_time: '2026-04-15T16:00:00Z' }] }); // SELECT existing
         handle.queryResponses.push({ rows: [] }); // UPDATE appointments
         handle.queryResponses.push({ rows: [] }); // COMMIT
 
@@ -491,10 +514,11 @@ describe('POST /appointments/:id/update', () => {
             (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
         );
         expect(dataQueries[0].text).toBe('BEGIN');
-        expect(dataQueries[1].text).toContain('UPDATE appointments SET');
-        expect(dataQueries[1].text).toContain('start_time =');
-        expect(dataQueries[1].text).toContain('description =');
-        expect(dataQueries[2].text).toBe('COMMIT');
+        expect(dataQueries[1].text).toContain('SELECT start_time::text AS start_time');
+        expect(dataQueries[2].text).toContain('UPDATE appointments SET');
+        expect(dataQueries[2].text).toContain('start_time =');
+        expect(dataQueries[2].text).toContain('description =');
+        expect(dataQueries[3].text).toBe('COMMIT');
         expect(syncAppointmentToAll).toHaveBeenCalledWith(
             handle.mockPool,
             TENANT_ID,
@@ -589,6 +613,30 @@ describe('POST /appointments/:id/update', () => {
             (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
         );
         expect(dataQueries).toHaveLength(0);
+    });
+
+    it('SAD: rejects absurd 23-hour updates before the write', async () => {
+        handle.queryResponses.push({ rows: [] }); // BEGIN
+        handle.queryResponses.push({ rows: [{ start_time: '2026-04-15T10:00:00Z', end_time: '2026-04-15T11:00:00Z' }] });
+        handle.queryResponses.push({ rows: [] }); // ROLLBACK
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                start_time: '2026-04-15T10:00:00Z',
+                end_time: '2026-04-16T09:00:00Z',
+                description: 'Way too long',
+            },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'Appointment duration cannot exceed 12 hours',
+        });
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
     });
 
     it('HAPPY: super-admin can update any tenant\'s appointment (cross-tenant gate exempted)', async () => {

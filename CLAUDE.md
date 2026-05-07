@@ -74,7 +74,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - Single DB pool via `DATABASE_URL` (Supabase managed; no separate `api_user` pool).
 - Admin bypass policies on `tenants`, `users`, `business_templates` for cross-tenant ops with no tenant context.
 - Audit trigger `fn_audit_trigger` is `SECURITY DEFINER` to bypass RLS for internal logging.
-- **`employee_schedule` is the single source of truth** for shifts: `(tenant_id, employee_id, shift_date, start_time, end_time, is_off)`. The earlier weekly-pattern `employee_shifts` table was dropped 2026-04-30. Setup wizard collects a weekly grid in form state and posts it to `POST /shifts/expand-weekly` (`expandWeeklyToSchedule()` in `src/services/expandWeeklyToSchedule.ts`) — fans the pattern into `employee_schedule` for 4 weeks. Owners extend forward via the Front Desk scheduler's copy-week button. API: `GET/POST /shifts/overrides`.
+- **`employee_schedule` is the single source of truth** for shifts: `(tenant_id, employee_id, shift_date, start_time, end_time, is_off)`. The earlier weekly-pattern `employee_shifts` table was dropped 2026-04-30. Setup wizard collects a weekly grid in form state and posts it to `POST /shifts/expand-weekly` (`expandWeeklyToSchedule()` in `src/services/expandWeeklyToSchedule.ts`) — fans the pattern into `employee_schedule` for 4 weeks. Owners extend forward via the Schedule tab's copy-week button. API: `GET/POST /shifts/overrides`.
 - **Booking RPCs** (both read `employee_schedule` directly):
   - `book_appointment_atomic()` — 7-layer constraint check + past-time rejection + business-hours + fuzzy service match
   - `book_with_scheduling_atomic()` — production booking RPC; date-based shift validation, cross-midnight night shifts, specific error codes (`TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`, `NO_AVAILABILITY`, `INVALID_PARAMS`)
@@ -96,7 +96,7 @@ Durable rules-of-engagement that override "build for the future":
 ## Code Conventions
 
 **Dashboard**
-- Front Desk / Back Office two-tab layout, sub-views in each.
+- Single primary nav bar: Primary tabs (Home, Schedule, Customers, Calls) always visible; Advanced tabs (Services & Resources, Staff & Shifts, AI & Knowledge) shown for owners/admins only. Front-desk-only users see Primary tabs only and are snapped back to Home if they hit a restricted tab via a stale URL.
 - Components: List+Detail pane pattern (sidebar list, detail right). Large views split into sub-components.
 - UI primitives in `dashboard/components/ui/` — Button (`isLoading`), Card, Input, Select, Modal (Escape/backdrop close), Badge, Toast (5s err/warn, 3s success/info, max 5), `ConfirmModal` + `useConfirm()` for destructive actions.
 - API client: `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`, fully typed returns. Shared `forceLogout()` + `checkAuthFailure()`.

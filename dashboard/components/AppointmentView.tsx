@@ -7,6 +7,7 @@ import { toLocalISO, toISOStringWithOffset, formatCustomerAddress, splitFullName
 import { useStaticData } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
+import { validateAppointmentTimeRange } from '../lib/appointmentValidation';
 import {
   Calendar as BigCalendar,
   dateFnsLocalizer,
@@ -204,19 +205,24 @@ function AppointmentViewInner() {
 
   async function handleUpdate() {
     if (!selectedAppointment) return;
-    setShowConfirmModal(false);
-    setSaving(true);
-    setError("");
     if (!tenantId) {
       setError('Please log in to edit appointments.');
-      setSaving(false);
       return;
     }
     if (usingMockData) {
       setError('Sample appointments cannot be updated. Create a real appointment after logging in.');
-      setSaving(false);
       return;
     }
+
+    const validationError = validateAppointmentTimeRange(form.start_time, form.end_time);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setShowConfirmModal(false);
+    setSaving(true);
+    setError("");
 
     try {
       const res = await Api.appointments.update(selectedAppointment.id, selectedAppointment.tenant_id, {
@@ -244,20 +250,24 @@ function AppointmentViewInner() {
 
 
   async function handleCreate() {
-    setSaving(true)
-    setError("")
-
     if (!tenantId) {
       setError('Please log in to create appointments.')
-      setSaving(false)
       return
     }
 
     if (usingMockData) {
       setError('You are viewing sample data only. Sign in to your business account to create appointments that persist.')
-      setSaving(false)
       return
     }
+
+    const validationError = validateAppointmentTimeRange(form.start_time, form.end_time)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setSaving(true)
+    setError("")
 
     let targetTenantId = tenantId
     if (tenantId === SUPER_ADMIN_TENANT_ID) {

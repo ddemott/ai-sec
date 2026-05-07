@@ -31,6 +31,7 @@ export function TenantCard({
       onDragOver={(e) => onDragOver(e, index)}
       onDragEnd={onDragEnd}
       onClick={onSelect}
+      data-testid={`tenant-card-${tenant.id}`}
       className={`p-4 border-b cursor-pointer transition flex justify-between items-center
         ${isSelected ? 'border-l-4 shadow-sm' : ''}
         ${isDragging ? 'opacity-50' : ''}`}

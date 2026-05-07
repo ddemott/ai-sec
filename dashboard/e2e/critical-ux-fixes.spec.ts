@@ -2,12 +2,6 @@ import { test, expect, Page } from '@playwright/test';
 
 // Helper: navigate to a tab by clicking it in the sidebar
 async function navigateToTab(page: Page, tabLabel: string) {
-  // Back Office tabs need the mode switch first
-  const backOfficeTabs = ['Services & Resources', 'Staff & Shifts', 'AI & Knowledge', 'Settings'];
-  if (backOfficeTabs.includes(tabLabel)) {
-    await page.locator('text=Back Office').first().click();
-    await page.waitForTimeout(500);
-  }
   await page.locator(`text=${tabLabel}`).first().click();
   await page.waitForTimeout(500);
 }

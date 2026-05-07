@@ -454,6 +454,19 @@ describe('agentTools /policy-answer', () => {
 });
 
 describe('agentTools /book-appointment', () => {
+  it('SAD: rejects absurd 23-hour appointments before touching the DB', async () => {
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      start_time: '2026-05-01T10:00:00',
+      end_time: '2026-05-02T09:00:00',
+    });
+    expectValidationFailure(res, queries);
+    expect(res.json().error).toBe('Appointment duration cannot exceed 12 hours');
+  });
+
   it('HAPPY: new customer is upserted then booked atomically', async () => {
     // WHO: First-time caller — agent passes a phone number it has never seen
     // WHAT: Route must SELECT for existing customer, INSERT when not found,

@@ -519,11 +519,11 @@ CREATE TABLE employee_schedule (
 );
 ```
 
-Date-based only — no weekly patterns, no overrides. The `employee_shifts` weekly-pattern table that previously coexisted was dropped 2026-04-30 (NEEDS-REFACTORING #4 Phase 2). The setup wizard collects a weekly grid in form state and posts it to `POST /shifts/expand-weekly`, which fans the pattern into `employee_schedule` for 4 weeks at finalize. Owners then extend coverage forward via the Front Desk scheduler's copy-week button.
+Date-based only — no weekly patterns, no overrides. The `employee_shifts` weekly-pattern table that previously coexisted was dropped 2026-04-30 (NEEDS-REFACTORING #4 Phase 2). The setup wizard collects a weekly grid in form state and posts it to `POST /shifts/expand-weekly`, which fans the pattern into `employee_schedule` for 4 weeks at finalize. Owners then extend coverage forward via the Schedule tab's copy-week button.
 
 ### 11.2 Effective shifts
 
-`get_effective_shifts(tenant_id, date)` and `get_effective_shifts_bulk(tenant_id, start, end)` return rows from `employee_schedule` verbatim. Both the Working Hours editor (Back Office → My Team) and the Front Desk scheduler read from these RPCs.
+`get_effective_shifts(tenant_id, date)` and `get_effective_shifts_bulk(tenant_id, start, end)` return rows from `employee_schedule` verbatim. Both the Working Hours editor (under Staff & Shifts) and the Schedule tab read from these RPCs.
 
 ### 11.3 Booking (7-layer check)
 
@@ -725,16 +725,17 @@ Next.js 14 App Router:
 - `/app/dashboard/page.tsx` — App shell (single route, view-switching internally via tab state + URL query params).
 - `/app/layout.tsx` — Wraps `SessionProvider`, `ThemeProvider`, `VocabularyProvider`, `ToastContainer`, `ErrorBoundary`.
 
-### 16.2 Navigation — Front Desk / Back Office
+### 16.2 Navigation — Primary + Advanced
 
 ```
-Front Desk (daily operations)      Back Office (configuration)
-├─ Schedule                        ├─ My Team (employees, skills, schedules)
-├─ Customers (CRM)                 ├─ My Business (services, resources, hours, knowledge)
-└─ Staffing Map                    └─ AI & Insights (analytics, knowledge Q&A, vocabulary)
+Primary (always visible)           Advanced (owners + admins only)
+├─ Home                            ├─ Services & Resources
+├─ Schedule                        ├─ Staff & Shifts
+├─ Customers                       └─ AI & Knowledge
+└─ Calls
 ```
 
-Desktop: two top-level tabs with sub-views. Mobile: bottom nav + scrollable sub-tabs. Tab state synced to URL query params (`?tab=schedule`) — shareable links, browser back/forward works.
+Single top-level tab bar. Front-desk-only users (`role === 'front_desk' && !isAdmin`) see the Primary group only — a useEffect in `OutlookLayout` snaps them back to Home if they land on a restricted tab via a stale `?tab=` URL or back-button. Owners and super-admins see Primary + Advanced. Account-level destinations (My Profile, Business Settings, All Businesses for admins) live in the profile dropdown, not the tab bar. Tab state synced to URL query params (`?tab=schedule`) — shareable links, browser back/forward works.
 
 ### 16.3 State management
 

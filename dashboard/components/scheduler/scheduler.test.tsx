@@ -1,9 +1,10 @@
 import React from 'react';
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import { SchedulerDateNav } from './SchedulerDateNav';
+import { Api } from '../../lib/api';
 import { TimeGrid, formatHourLabel } from './TimeGrid';
 import { AppointmentBlock, getEmployeeColor, getTimeSpan } from './AppointmentBlock';
 import { StaffSwimLaneView } from './StaffSwimLaneView';
@@ -41,6 +42,10 @@ const resources = [
   { id: 'res-1', name: 'Bay 1' },
   { id: 'res-2', name: 'Bay 2' },
 ];
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // --- SchedulerDateNav ---
 
@@ -576,5 +581,59 @@ describe('QuickBookPanel', () => {
     const btn = screen.getByTestId('quick-book-confirm');
     expect(btn).toBeDisabled();
     // WHO: receptionist | WHAT: prevent booking without customer | WHEN: no customer selected in form | WHERE: QuickBookPanel | WHY: submitting without customer creates orphaned appointments with no contact info
+  });
+
+  test('rejects end time before start time and does not book', async () => {
+    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-123' } as any);
+
+    render(
+      <QuickBookPanel
+        isOpen={true}
+        onClose={() => {}}
+        tenantId="t1"
+        customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
+        employees={employees}
+        resources={resources}
+        services={[]}
+        onBooked={() => {}}
+      />
+    );
+
+    fireEvent.change(screen.getByTestId('quick-book-customer'), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByTestId('quick-book-resource'), { target: { value: 'res-1' } });
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-05-01T10:00' } });
+    fireEvent.change(screen.getByLabelText('End'), { target: { value: '2026-05-01T09:00' } });
+    fireEvent.click(screen.getByTestId('quick-book-confirm'));
+
+    expect(await screen.findByText('End time must be after start time')).toBeInTheDocument();
+    expect(createSpy).not.toHaveBeenCalled();
+    // WHO: receptionist | WHAT: block swapped start/end times | WHEN: quick book submit | WHERE: QuickBookPanel | WHY: reversed times would create a nonsense appointment and confuse the schedule
+  });
+
+  test('rejects an appointment longer than 12 hours and does not book', async () => {
+    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-456' } as any);
+
+    render(
+      <QuickBookPanel
+        isOpen={true}
+        onClose={() => {}}
+        tenantId="t1"
+        customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
+        employees={employees}
+        resources={resources}
+        services={[]}
+        onBooked={() => {}}
+      />
+    );
+
+    fireEvent.change(screen.getByTestId('quick-book-customer'), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByTestId('quick-book-resource'), { target: { value: 'res-1' } });
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-05-01T10:00' } });
+    fireEvent.change(screen.getByLabelText('End'), { target: { value: '2026-05-02T09:00' } });
+    fireEvent.click(screen.getByTestId('quick-book-confirm'));
+
+    expect(await screen.findByText('Appointment duration cannot exceed 12 hours')).toBeInTheDocument();
+    expect(createSpy).not.toHaveBeenCalled();
+    // WHO: receptionist | WHAT: block accidental 23-hour booking | WHEN: quick book submit | WHERE: QuickBookPanel | WHY: absurd durations are almost always a start/end mix-up and should fail fast
   });
 });

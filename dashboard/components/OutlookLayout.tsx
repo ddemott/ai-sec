@@ -24,8 +24,6 @@ import { FeedbackButton } from './ui/FeedbackButton'
 
 type Tab = 'dashboard' | 'schedule' | 'customers' | 'calls' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses' | 'profile' | 'business-settings';
 
-type TopMode = 'front-desk' | 'back-office';
-
 interface LayoutProps {
   children: ReactNode;
   activeTab: Tab;
@@ -39,23 +37,28 @@ interface LayoutProps {
   onSelectTenant?: (id: string, name: string) => void;
 }
 
-const FRONT_DESK_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+const PRIMARY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { id: 'schedule', label: 'Schedule', icon: Calendar },
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'calls', label: 'Calls', icon: Phone },
 ]
 
-const BACK_OFFICE_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+const ADVANCED_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'my-business', label: 'Services & Resources', icon: Wrench },
   { id: 'my-team', label: 'Staff & Shifts', icon: UserCog },
   { id: 'ai-insights', label: 'AI & Knowledge', icon: Bot },
 ]
 
-function getMode(tab: Tab): TopMode {
-  if (['dashboard', 'schedule', 'customers', 'calls'].includes(tab)) return 'front-desk'
-  if (['profile', 'business-settings'].includes(tab)) return 'back-office'
-  return 'back-office'
+const ACCOUNT_TABS: Record<'profile' | 'business-settings' | 'all-businesses', string> = {
+  profile: 'My Profile',
+  'business-settings': 'Business Settings',
+  'all-businesses': 'All Businesses',
+}
+
+function getTabLabel(tab: Tab): string {
+  const match = [...PRIMARY_TABS, ...ADVANCED_TABS].find(t => t.id === tab)
+  return match?.label || ACCOUNT_TABS[tab as keyof typeof ACCOUNT_TABS] || tab
 }
 
 export function OutlookLayout({
@@ -86,19 +89,15 @@ export function OutlookLayout({
   const { tenantsVersion } = useSessionContext()
   const [unansweredCount, setUnansweredCount] = useState(0)
 
-  const currentMode = activeTab === 'all-businesses' ? 'front-desk' : getMode(activeTab)
-  const subTabs = currentMode === 'front-desk' ? FRONT_DESK_TABS : BACK_OFFICE_TABS
+  const visibleTabs = isFrontDeskOnly ? PRIMARY_TABS : [...PRIMARY_TABS, ...ADVANCED_TABS]
 
-  // WHY: a front-desk-only user could still land on a Back Office tab via
-  // a stale ?tab=my-business URL or a back-button. Snap them to the Front
-  // Desk home in that case. Profile + business-settings tabs (which getMode
-  // also classifies as back-office) are still permitted because the profile
-  // dropdown is the only way for a front-desk user to manage their own
-  // password / sign out.
+  // WHY: a front-desk-only user could still land on a management tab via a
+  // stale ?tab=my-business URL or a back-button. Snap them back to Home so
+  // they always land on the simplest working surface.
   useEffect(() => {
     if (!isFrontDeskOnly) return
-    const isBackOfficeSubTab = (['my-business', 'my-team', 'ai-insights'] as Tab[]).includes(activeTab)
-    if (isBackOfficeSubTab) setActiveTab('dashboard')
+    const restrictedTabs = new Set<Tab>(['my-business', 'my-team', 'ai-insights', 'settings', 'all-businesses'])
+    if (restrictedTabs.has(activeTab)) setActiveTab('dashboard')
   }, [isFrontDeskOnly, activeTab, setActiveTab])
 
   // Fetch unanswered question count for KB badge
@@ -117,14 +116,6 @@ export function OutlookLayout({
       })
     }
   }, [isAdmin, tenantsVersion])
-
-  const handleModeSwitch = (mode: TopMode) => {
-    if (mode === 'front-desk' && currentMode !== 'front-desk') {
-      setActiveTab('dashboard')
-    } else if (mode === 'back-office' && currentMode !== 'back-office') {
-      setActiveTab('my-business')
-    }
-  }
 
   return (
     <>
@@ -160,85 +151,73 @@ export function OutlookLayout({
         </header>
       )}
 
-      {/* PRIMARY NAVIGATION BAR — Mode tabs + utility buttons */}
-      <FolderTabBar size="lg" ariaLabel="Navigation mode" right={
-        <>
-          {isAdmin && (
-            <button
-              aria-label="All businesses"
-              title="All businesses"
-              onClick={() => setActiveTab('all-businesses')}
-              className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-            style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
-            >
-              <Globe className="w-4 h-4" aria-hidden="true" />
-            </button>
-          )}
-          <select
-            value={theme}
-            onChange={e => setTheme(e.target.value as typeof theme)}
-            aria-label={`Theme (currently ${themeInfo.name})`}
-            title={`Theme: ${themeInfo.name}`}
-            className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
-            style={{
-              backgroundColor: 'var(--bg-raised)',
-              borderColor: 'var(--border-soft)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-soft)',
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            {THEMES.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          <button
-            ref={profileBtnRef}
-            aria-label={userName ? `Account menu for ${userName}` : 'Account menu'}
-            aria-expanded={profileMenuOpen}
-            aria-haspopup="menu"
-            title={`Account: ${userName || 'Profile'}`}
-            onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-            className={`p-2 rounded-md transition-all ${
-              profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
-                ? ''
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-            }`}
-            style={
-              profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
-                ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }
-                : undefined
-            }
-          >
-            <User className="w-4 h-4" aria-hidden="true" />
-          </button>
-        </>
-      }>
-        <FolderTab label="Front Desk" icon={Phone} size="lg" isActive={currentMode === 'front-desk'} onClick={() => handleModeSwitch('front-desk')} />
-        {!isFrontDeskOnly && (
-          <span className="relative">
-            <FolderTab label="Back Office" icon={Wrench} size="lg" isActive={currentMode === 'back-office'} onClick={() => handleModeSwitch('back-office')} />
-            {/* Bubble the unanswered-questions badge up to the Back Office
-                mode tab so users with Back Office access still see pending
-                items without having to swap modes first. */}
-            {unansweredCount > 0 && currentMode !== 'back-office' && (
-              <span
-                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none pointer-events-none"
-                style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
-                aria-label={`${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'} from callers`}
+      {/* PRIMARY NAVIGATION BAR — Daily-use tabs + utility buttons */}
+      <FolderTabBar
+        size="lg"
+        ariaLabel="Main navigation"
+        right={
+          <>
+            {isAdmin && (
+              <button
+                aria-label="All businesses"
+                title="All businesses"
+                onClick={() => setActiveTab('all-businesses')}
+                className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
               >
-                {unansweredCount > 99 ? '99+' : unansweredCount}
-              </span>
+                <Globe className="w-4 h-4" aria-hidden="true" />
+              </button>
             )}
-          </span>
-        )}
-      </FolderTabBar>
-
-      {/* SECONDARY NAVIGATION — Sub-tabs for current mode */}
-      <FolderTabBar size="md" ariaLabel="Section navigation">
-        {subTabs.map(tab => (
+            <select
+              value={theme}
+              onChange={e => setTheme(e.target.value as typeof theme)}
+              aria-label={`Theme (currently ${themeInfo.name})`}
+              title={`Theme: ${themeInfo.name}`}
+              className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
+              style={{
+                backgroundColor: 'var(--bg-raised)',
+                borderColor: 'var(--border-soft)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border-soft)',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              {THEMES.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <button
+              ref={profileBtnRef}
+              aria-label={userName ? `Account menu for ${userName}` : 'Account menu'}
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+              title={`Account: ${userName || 'Profile'}`}
+              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+              className={`p-2 rounded-md transition-all ${
+                profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
+                  ? ''
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              }`}
+              style={
+                profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
+                  ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }
+                  : undefined
+              }
+            >
+              <User className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </>
+        }
+      >
+        {visibleTabs.map(tab => (
           <span key={tab.id} data-tab-id={tab.id} className="relative">
-            <FolderTab label={tab.label} icon={tab.icon} size="md" isActive={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
+            <FolderTab
+              label={tab.label}
+              icon={tab.icon}
+              size="lg"
+              isActive={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            />
             {tab.id === 'ai-insights' && unansweredCount > 0 && (
               <span
                 className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none"
@@ -257,41 +236,20 @@ export function OutlookLayout({
         {children}
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION */}
+      {/* MOBILE NAVIGATION — mirrors the primary tabs */}
       <nav aria-label="Mobile navigation" className="md:hidden flex flex-col border-t transition-colors duration-200 safe-area-pb" style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}>
-        {/* Mode toggle — Back Office hidden for front-desk-only users.
-            When hidden, the Front Desk button still renders so the mobile
-            nav keeps a consistent visual band; without it the sub-tab row
-            looks orphaned. */}
-        <div className="flex border-b" style={{ borderColor: 'var(--border)' }}>
-          <button
-            onClick={() => handleModeSwitch('front-desk')}
-            className={`flex-1 py-2 text-xs font-bold text-center transition-all ${
-              currentMode === 'front-desk'
-                ? ''
-                : 'text-gray-400'
-            }`}
-            style={currentMode === 'front-desk' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
-          >
-            Front Desk
-          </button>
-          {!isFrontDeskOnly && (
+        <div className="flex h-14 overflow-x-auto no-scrollbar border-b" style={{ borderColor: 'var(--border)' }}>
+          {isAdmin && (
             <button
-              onClick={() => handleModeSwitch('back-office')}
-              className={`flex-1 py-2 text-xs font-bold text-center transition-all ${
-                currentMode === 'back-office'
-                  ? ''
-                  : 'text-gray-400'
-              }`}
-              style={currentMode === 'back-office' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
+              onClick={() => setActiveTab('all-businesses')}
+              className={`relative flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === 'all-businesses' ? '' : 'text-gray-500'}`}
+              style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)' } : undefined}
             >
-              Back Office
+              <Globe className="w-5 h-5" />
+              <span className="text-[9px] mt-0.5 font-medium">Businesses</span>
             </button>
           )}
-        </div>
-        {/* Sub-tabs — scrollable to show all tabs on mobile */}
-        <div className="flex h-14 overflow-x-auto no-scrollbar">
-          {subTabs.map(tab => {
+          {visibleTabs.map(tab => {
             const Icon = tab.icon
             return (
               <button
@@ -438,11 +396,7 @@ export function OutlookLayout({
 
     {/* Feedback button — appears on every page with automatic context */}
     <FeedbackButton
-      page={`${currentMode === 'front-desk' ? 'Front Desk' : 'Back Office'} > ${
-        FRONT_DESK_TABS.find(t => t.id === activeTab)?.label ||
-        BACK_OFFICE_TABS.find(t => t.id === activeTab)?.label ||
-        activeTab
-      }`}
+      page={getTabLabel(activeTab)}
       context={managedTenantName ? `Viewing as: ${managedTenantName}` : undefined}
     />
     </>

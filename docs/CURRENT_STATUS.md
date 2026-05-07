@@ -132,7 +132,7 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 **Scheduling simplified** — User rejected pattern+override model as too complex:
 - **New model**: date-based only. Click a day → set times → save. No weekly patterns.
 - Data lives in `employee_schedule` table (API: `Api.shifts.schedule.*`)
-- Both Working Hours and Front Desk scheduler read from same table
+- Both Working Hours editor and the Schedule tab read from same table
 - Default times: 8:00 AM - 5:00 PM
 - `employee_shifts` (weekly patterns) was dropped 2026-04-30 (NEEDS-REFACTORING #4 Phase 2). Setup wizard now collects the weekly grid in form state and posts the pattern to `POST /shifts/expand-weekly`, which fans it into `employee_schedule` for 4 weeks at finalize.
 

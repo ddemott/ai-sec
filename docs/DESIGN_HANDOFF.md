@@ -40,11 +40,11 @@ The working artifact from this session is `secretaryhq-demo.html` — an interac
 
 ---
 
-## 3. Navigation Structure — Keep Existing, Apply New Visual Style
+## 3. Navigation Structure — Single Primary Bar
 
-**Decision:** Do not change the navigation structure. Keep the existing Front Desk / Back Office two-tab layout with all current sub-views intact. Apply the demo's dark sidebar visual style on top of the existing structure.
+**Decision (superseded 2026-05-06):** The earlier Front Desk / Back Office two-tab layout was retired in favor of a single primary tab bar. Daily-use destinations (Home, Schedule, Customers, Calls) are always visible; configuration destinations (Services & Resources, Staff & Shifts, AI & Knowledge) are appended for owners and super-admins only. Front-desk-only logins see the Primary group only. The dark sidebar visual language from the demo still applies — only the structural split was removed.
 
-**Reasoning:** The real app has 8+ views. The demo only shows 4 because it's a simplified demo. Dale confirmed the two-tab approach handles the complexity well and he doesn't want to restructure it. The only change is cosmetic — the dark left rail with section labels, active state highlighting (left border + background tint), and the visual language from the demo.
+**Reasoning:** External review flagged the two-mode toggle as cognitively expensive for non-technical users — staff had to learn a meta-concept ("which mode am I in?") before they could find the action they wanted. Flattening to a single bar makes the most-used destinations one click away and lets role-based gating (rather than mode-switching) hide the configuration surface from front-desk staff.
 
 **Sidebar visual spec (from demo):**
 - Background: `--bg-surface`

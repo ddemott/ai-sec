@@ -274,7 +274,7 @@ export default function ShiftManagementView() {
         </div>
 
         {/* Employee selector */}
-        <div className="mb-4">
+        <div className="mb-4" data-testid="shift-employee-selector">
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Select {vocab.employee_label}</label>
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {activeEmployees.map(emp => (
@@ -283,6 +283,7 @@ export default function ShiftManagementView() {
                 onClick={() => { setSelectedEmployeeId(emp.id); hasAutoScrolled.current = false }}
                 className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.id ? 'text-white shadow-lg scale-105' : ''}`}
                 style={selectedEmployeeId === emp.id ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
+                data-testid={`shift-employee-${emp.id}`}
               >
                 {emp.name}
               </button>

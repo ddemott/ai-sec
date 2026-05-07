@@ -2,26 +2,19 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
+import { parseDateRange } from './routeHelpers';
 
 export function registerAnalyticsRoutes(
   app: FastifyInstance<any, any, any>,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
-  app.post('/analytics/stats', withHandler(async (_req: AppRequest, _reply) => {
-    // Existing analytics logic (placeholder — was empty in original)
-  }, 'Failed to fetch analytics stats'));
-
   // Coverage gap detection — returns per-service coverage status for a date range
   app.get('/coverage', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-    const rawStart = (req.query as any).start_date;
-    const rawEnd = (req.query as any).end_date;
-    const startDate = (rawStart && DATE_RE.test(rawStart)) ? rawStart : new Date().toISOString().split('T')[0];
-    const endDate = (rawEnd && DATE_RE.test(rawEnd)) ? rawEnd : null;
+    const { startDate, endDate } = parseDateRange(req.query as Record<string, string>);
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(

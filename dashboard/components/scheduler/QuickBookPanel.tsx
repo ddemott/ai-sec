@@ -6,6 +6,7 @@ import { Input } from '../ui/Input';
 import { Api } from '../../lib/api';
 import { formatPhone } from '../../lib/phone';
 import { useVocabulary } from '@/lib/VocabularyContext';
+import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
 interface QuickBookEmployee { id: string | number; name: string }
@@ -95,20 +96,13 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       setError('Customer and resource are required');
       return;
     }
-    if (!startTime || !endTime) {
-      setError('Start and end times are required');
+
+    const validationError = validateAppointmentTimeRange(startTime, endTime);
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    const startDt = new Date(startTime);
-    const endDt = new Date(endTime);
-    if (isNaN(startDt.getTime()) || isNaN(endDt.getTime())) {
-      setError('Invalid date/time');
-      return;
-    }
-    if (endDt <= startDt) {
-      setError('End time must be after start time');
-      return;
-    }
+
     setSaving(true);
     setError('');
 

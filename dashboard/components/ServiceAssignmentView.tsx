@@ -169,6 +169,33 @@ export default function ServiceAssignmentView() {
     return <div className="p-8 flex items-center justify-center text-gray-500 italic">Loading catalog...</div>
   }
 
+  if (!loading && services.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+        <header className="mb-8 flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="p-2 rounded-lg mr-4" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
+              <Settings className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-display">Service Catalog</h1>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Manage your business offerings and operational logic.</p>
+            </div>
+          </div>
+          <Button onClick={() => setIsWizardOpen(true)} icon={PlusCircle}>New Service Wizard</Button>
+        </header>
+        <Card className="p-10 text-center border-dashed" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}>
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
+            <Wrench className="w-6 h-6" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">No services yet</h2>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>Create your first service so staff can start booking appointments.</p>
+          <Button onClick={() => setIsWizardOpen(true)} icon={PlusCircle}>New Service Wizard</Button>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <header className="mb-8 flex items-center justify-between">

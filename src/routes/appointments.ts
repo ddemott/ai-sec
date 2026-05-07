@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
+import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { assertRowAffected } from './routeHelpers';
 
 const AppointmentCreateSchema = z.object({
@@ -42,6 +43,10 @@ export function registerAppointmentRoutes(
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
     const body = parsed.data;
+    const timeValidationError = validateAppointmentTimeRange(body.start_time, body.end_time);
+    if (timeValidationError) {
+      return reply.status(400).send({ success: false, error: timeValidationError });
+    }
 
     const res = await withTenantClient(body.tenant_id, async (client) => {
       return client.query(
@@ -183,10 +188,35 @@ export function registerAppointmentRoutes(
       return reply.status(403).send({ success: false, error: 'tenant_id does not match authenticated tenant' });
     }
 
+    let shortCircuited = false;
     await withTenantClient(body.tenant_id, async (client) => {
       // Wrap in transaction to ensure atomicity
       await client.query('BEGIN');
       try {
+        let effectiveStartTime = body.start_time ?? null;
+        let effectiveEndTime = body.end_time ?? null;
+        if (body.start_time || body.end_time) {
+          const existing = await client.query<{ start_time: string; end_time: string }>(
+            'SELECT start_time::text AS start_time, end_time::text AS end_time FROM appointments WHERE id = $1 AND tenant_id = $2 AND is_deleted = false',
+            [id, body.tenant_id]
+          );
+          if (existing.rows.length === 0) {
+            await client.query('ROLLBACK');
+            shortCircuited = true;
+            reply.status(404).send({ success: false, error: 'Appointment not found' });
+            return;
+          }
+          effectiveStartTime = body.start_time ?? existing.rows[0].start_time;
+          effectiveEndTime = body.end_time ?? existing.rows[0].end_time;
+          const timeValidationError = validateAppointmentTimeRange(effectiveStartTime, effectiveEndTime);
+          if (timeValidationError) {
+            await client.query('ROLLBACK');
+            shortCircuited = true;
+            reply.status(400).send({ success: false, error: timeValidationError });
+            return;
+          }
+        }
+
         // Direct UPDATE instead of RPC — avoids integer/UUID type mismatch
         // on the overloaded update_appointment_customer functions
         const fields: string[] = [];
@@ -238,6 +268,10 @@ export function registerAppointmentRoutes(
         throw err;
       }
     });
+
+    if (shortCircuited) {
+      return;
+    }
 
     logEvent(req, 'appointment_updated', { appointmentId: id });
     // Sync update to calendars/CRMs

@@ -17,6 +17,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, type AppRequest } from '../middleware';
 import { applyTimezone } from '../services/timezoneUtils';
+import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
 import {
@@ -359,6 +360,10 @@ export function registerAgentToolRoutes(
       );
     }
     const normalized = normalizePhone(args.phone)!;
+    const timeValidationError = validateAppointmentTimeRange(args.start_time, args.end_time);
+    if (timeValidationError) {
+      return fail(reply, timeValidationError);
+    }
 
     const result = await withTenantClient(args.tenant_id, async (client) => {
       let customerId: string | null = null;

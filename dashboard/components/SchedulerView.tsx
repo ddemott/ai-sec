@@ -22,10 +22,10 @@ export default function SchedulerView() {
   const vocab = useVocabulary();
 
   const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType }[] = [
+    { key: 'calendar', label: 'Calendar', icon: Calendar },
     { key: 'staff', label: vocab.employee_plural, icon: Users },
     { key: 'resources', label: vocab.resource_plural, icon: Columns3 },
     { key: 'list', label: 'List', icon: List },
-    { key: 'calendar', label: 'Calendar', icon: Calendar },
   ];
   const { customers, resources, employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
   // Only show actual employees in the scheduler, not user accounts (owners/admins)
@@ -34,7 +34,7 @@ export default function SchedulerView() {
     [allStaff]
   );
 
-  const [activeView, setActiveView] = useState<SchedulerViewTab>('staff');
+  const [activeView, setActiveView] = useState<SchedulerViewTab>('calendar');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Zoom: column width in px per hour
@@ -87,11 +87,15 @@ export default function SchedulerView() {
     setQuickBookOpen(true);
   }, [selectedDate]);
 
-  // Show calendar tab as the existing AppointmentView
+  // Show calendar tab as the primary schedule surface.
   if (activeView === 'calendar') {
     return (
       <div className="flex flex-col flex-1 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Schedule</div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Start with the calendar. Switch to staff or resources only when you need detail.</div>
+          </div>
           <div className="flex items-center gap-1">
             {viewTabs.map(({ key, label, icon: Icon }) => (
               <button

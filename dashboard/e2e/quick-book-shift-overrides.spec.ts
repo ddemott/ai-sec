@@ -22,39 +22,47 @@ async function ensureLoggedIn(page: Page) {
   // If on login form, fill and submit
   const emailInput = page.locator('input[type="email"]');
   if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await emailInput.fill('daledemott@gmail.com');
+    await emailInput.fill('admin@secretaryhq.com');
     await page.locator('input[type="password"]').fill('password');
     await page.getByText('Sign In to Dashboard').click();
     await page.waitForTimeout(3000);
   }
 
   // Wait for dashboard to be visible
-  await expect(page.getByText('Front Desk').first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Home').first()).toBeVisible({ timeout: 15000 });
 }
 
-async function switchToBellasTenant(page: Page) {
-  // Click the tenant switcher in the header (shows current tenant name with chevron)
-  const tenantBtn = page.locator('button').filter({ hasText: /Bella|DynaTire|Hair|Studio/ }).first();
-  if (await tenantBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await tenantBtn.click();
-    await page.waitForTimeout(500);
-  }
+async function switchToDynaTireTenant(page: Page) {
+  await page.evaluate(() => {
+    localStorage.setItem('managedTenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
+    localStorage.setItem('managedTenantName', 'DynaTire Mobile Service');
+  });
+  await page.reload();
+  await page.waitForTimeout(1500);
 
-  // Click Bella's Hair Studio in dropdown
-  const bellaOption = page.getByText("Bella's Hair Studio", { exact: false });
-  if (await bellaOption.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await bellaOption.click();
-    await page.waitForTimeout(1500);
-  }
+  await page.waitForTimeout(1000);
+}
+
+async function getScheduledEmployeeId(page: Page, dateStr: string): Promise<string | null> {
+  return page.evaluate(async ({ dateStr }) => {
+    const token = localStorage.getItem('authToken');
+    const res = await fetch(`/shifts/overrides?tenant_id=f234e471-0e60-4163-86c9-93cfd9338e3a&start_date=${dateStr}&end_date=${dateStr}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    const row = Array.isArray(rows) ? rows.find((r: any) => !r.is_off && r.start_time && r.end_time && r.employee_id) : null;
+    return row?.employee_id ? String(row.employee_id) : null;
+  }, { dateStr });
 }
 
 test.describe('Quick Book with employee_schedule', () => {
 
   test('booking succeeds for employee with shift_override but no weekly pattern', async ({ page }) => {
     await ensureLoggedIn(page);
-    await switchToBellasTenant(page);
+    await switchToDynaTireTenant(page);
 
-    // Navigate to Front Desk > Schedule
+    // Navigate to Schedule
     await page.getByText('Schedule').first().click();
     await page.waitForTimeout(1500);
 
@@ -89,28 +97,27 @@ test.describe('Quick Book with employee_schedule', () => {
     const resourceSelect = page.getByTestId('quick-book-resource');
     await resourceSelect.selectOption({ index: 0 });
 
-    // Select first real employee (not Unassigned)
-    const employeeSelect = page.getByTestId('quick-book-employee');
-    const empOptions = await employeeSelect.locator('option').allTextContents();
-    const firstEmployee = empOptions.find(o => o !== 'Unassigned' && o.trim() !== '');
-    if (firstEmployee) {
-      await employeeSelect.selectOption({ label: firstEmployee });
-    }
-
-    // Set start time to today at 10:00 AM (within 8-5 shift)
+    // Set start time to a safe mid-shift time in tenant local hours
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
+
+    // Select an employee that is actually scheduled on the chosen date.
+    const employeeSelect = page.getByTestId('quick-book-employee');
+    const scheduledEmployeeId = await getScheduledEmployeeId(page, `${year}-${month}-${day}`);
+    if (scheduledEmployeeId) {
+      await employeeSelect.selectOption({ value: scheduledEmployeeId });
+    }
     const startInput = quickBookPanel.locator('input[type="datetime-local"]').first();
-    await startInput.fill(`${year}-${month}-${day}T10:00`);
+    await startInput.fill(`${year}-${month}-${day}T15:00`);
     await page.waitForTimeout(500);
 
     // End time should auto-fill from service duration
     const endInput = quickBookPanel.locator('input[type="datetime-local"]').last();
     const endValue = await endInput.inputValue();
     if (!endValue) {
-      await endInput.fill(`${year}-${month}-${day}T10:30`);
+      await endInput.fill(`${year}-${month}-${day}T15:30`);
     }
 
     // Click Book Now
@@ -137,9 +144,89 @@ test.describe('Quick Book with employee_schedule', () => {
     }
   });
 
+  test('rejects an end time before the start time', async ({ page }) => {
+    await ensureLoggedIn(page);
+    await switchToDynaTireTenant(page);
+
+    await page.getByText('Schedule').first().click();
+    await page.waitForTimeout(1500);
+
+    const chairsTab = page.getByTestId('view-tab-resources');
+    await expect(chairsTab).toBeVisible({ timeout: 5000 });
+    await chairsTab.click();
+    await page.waitForTimeout(1000);
+
+    const quickBookBtn = page.locator('button').filter({ hasText: 'Quick Book' });
+    await expect(quickBookBtn).toBeVisible({ timeout: 5000 });
+    await quickBookBtn.click();
+    await page.waitForTimeout(500);
+
+    const quickBookPanel = page.getByTestId('quick-book-panel');
+    await expect(quickBookPanel).toBeVisible({ timeout: 5000 });
+
+    await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
+    await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
+
+    const employeeSelect = page.getByTestId('quick-book-employee');
+    const scheduledEmployeeId = await getScheduledEmployeeId(page, '2026-05-01');
+    if (scheduledEmployeeId) {
+      await employeeSelect.selectOption({ value: scheduledEmployeeId });
+    }
+
+    const startInput = quickBookPanel.locator('input[type="datetime-local"]').first();
+    const endInput = quickBookPanel.locator('input[type="datetime-local"]').last();
+    await startInput.fill('2026-05-01T10:00');
+    await endInput.fill('2026-05-01T09:00');
+
+    await page.getByTestId('quick-book-confirm').click();
+
+    await expect(page.getByText('End time must be after start time')).toBeVisible({ timeout: 5000 });
+    await expect(quickBookPanel).toBeVisible();
+  });
+
+  test('rejects a 23-hour appointment as too long', async ({ page }) => {
+    await ensureLoggedIn(page);
+    await switchToDynaTireTenant(page);
+
+    await page.getByText('Schedule').first().click();
+    await page.waitForTimeout(1500);
+
+    const chairsTab = page.getByTestId('view-tab-resources');
+    await expect(chairsTab).toBeVisible({ timeout: 5000 });
+    await chairsTab.click();
+    await page.waitForTimeout(1000);
+
+    const quickBookBtn = page.locator('button').filter({ hasText: 'Quick Book' });
+    await expect(quickBookBtn).toBeVisible({ timeout: 5000 });
+    await quickBookBtn.click();
+    await page.waitForTimeout(500);
+
+    const quickBookPanel = page.getByTestId('quick-book-panel');
+    await expect(quickBookPanel).toBeVisible({ timeout: 5000 });
+
+    await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
+    await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
+
+    const employeeSelect = page.getByTestId('quick-book-employee');
+    const scheduledEmployeeId = await getScheduledEmployeeId(page, '2026-05-01');
+    if (scheduledEmployeeId) {
+      await employeeSelect.selectOption({ value: scheduledEmployeeId });
+    }
+
+    const startInput = quickBookPanel.locator('input[type="datetime-local"]').first();
+    const endInput = quickBookPanel.locator('input[type="datetime-local"]').last();
+    await startInput.fill('2026-05-01T10:00');
+    await endInput.fill('2026-05-02T09:00');
+
+    await page.getByTestId('quick-book-confirm').click();
+
+    await expect(page.getByText('Appointment duration cannot exceed 12 hours')).toBeVisible({ timeout: 5000 });
+    await expect(quickBookPanel).toBeVisible();
+  });
+
   test('Chairs view displays resource rows', async ({ page }) => {
     await ensureLoggedIn(page);
-    await switchToBellasTenant(page);
+    await switchToDynaTireTenant(page);
 
     // Navigate to Schedule
     await page.getByText('Schedule').first().click();

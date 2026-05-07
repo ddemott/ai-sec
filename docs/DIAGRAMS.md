@@ -576,7 +576,7 @@ stateDiagram-v2
 
 ## 10. Dashboard Component Hierarchy
 
-Provider tree + Front Desk / Back Office split. UI primitives under `components/ui/` are consumed throughout.
+Provider tree + single primary tab bar (Primary tabs always visible, Advanced tabs gated to owners + admins). UI primitives under `components/ui/` are consumed throughout.
 
 ```mermaid
 flowchart TB
@@ -594,13 +594,14 @@ flowchart TB
   Layout --> Landing["app/page.tsx<br/>Marketing landing"]
   Contexts --> Shell["app/dashboard/page.tsx<br/>Single-route app shell<br/>?tab=... URL sync"]
 
-  Shell --> FD["Front Desk tab"]
-  Shell --> BO["Back Office tab"]
+  Shell --> Primary["Primary tabs (always visible)"]
+  Shell --> Advanced["Advanced tabs (owners + admins)"]
   Shell --> Wizard["SetupWizard — 7 steps<br/>+ WizardModeChooser (solo/team)"]
 
-  FD --> Schedule["Schedule<br/>NewSchedulerView"]
-  FD --> CRMView["Customers (CRM)"]
-  FD --> StaffingMap["Staffing Map"]
+  Primary --> Home["Home<br/>dashboard"]
+  Primary --> Schedule["Schedule<br/>NewSchedulerView"]
+  Primary --> CRMView["Customers"]
+  Primary --> Calls["Calls"]
 
   Schedule --> StaffRow["StaffRow"]
   Schedule --> ResCol["ResourceColumns"]
@@ -608,9 +609,9 @@ flowchart TB
   Schedule --> DayFocus["EmployeeDayFocusPanel"]
   Schedule --> Profile["StaffProfileCard"]
 
-  BO --> MyTeam["My Team<br/>employees / skills / schedules"]
-  BO --> MyBiz["My Business<br/>services / resources / hours / KB"]
-  BO --> AIInsights["AI and Insights<br/>analytics / KB Q+A / vocabulary"]
+  Advanced --> MyBiz["Services & Resources<br/>services / resources / hours"]
+  Advanced --> MyTeam["Staff & Shifts<br/>employees / skills / schedules"]
+  Advanced --> AIInsights["AI & Knowledge<br/>analytics / KB Q+A / vocabulary"]
 
   subgraph UI["components/ui/ — 16 primitives"]
     direction LR
@@ -630,8 +631,8 @@ flowchart TB
   end
 
   Shell -.consumes.-> UI
-  FD -.consumes.-> UI
-  BO -.consumes.-> UI
+  Primary -.consumes.-> UI
+  Advanced -.consumes.-> UI
   Wizard -.consumes.-> UI
 
   API["lib/api.ts<br/>Api.{resource}.{action}() — fully typed"]
