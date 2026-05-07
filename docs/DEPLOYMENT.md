@@ -174,6 +174,8 @@ The backend boots without these but specific features fail or warn loudly.
 | `SMS_SIMULATION_MODE` | `false` | If `true`, SMS service no-ops (test/dev) |
 | `EMAIL_USER`, `EMAIL_PASS` | (none) | nodemailer SMTP creds for transactional email |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | (none) | Used only when `TELEPHONY_PROVIDER=twilio` |
+| `BETTER_STACK_TOKEN` | (none) | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below. |
+| `LOG_LEVEL` | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy. |
 
 #### Backend — CRM + Calendar OAuth (set per integration you use)
 
@@ -204,6 +206,7 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 | `XAI_API_KEY` | Yes | Primary TTS (Grok). Without this the agent worker refuses to start. |
 | `XAI_TTS_VOICE` | No | One of `eve` \| `ara` \| `rex` \| `sal` \| `leo`. Default `ara`. |
 | `BACKEND_URL` | No | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`. |
+| `BETTER_STACK_TOKEN` | No | Same value as the backend's `BETTER_STACK_TOKEN`. When set, agent forwards Pino logs to Better Stack alongside stdout; unset = stdout only. Per-call child logger adds `tenant_id` + `call_id` to every line so support can pull a specific call's full timeline with one filter. See "Observability" below. |
 | `LOG_LEVEL` | No | `trace` \| `debug` \| `info` (default) \| `warn` \| `error` |
 
 #### Dashboard (Next.js)
@@ -326,6 +329,53 @@ A 200 with a JSON body confirms the route is up and the agent secret is correctl
 1. Upload a policy PDF via the dashboard's Knowledge Base tab
 2. Call in and ask a policy question (e.g., "What's your cancellation policy?")
 3. Verify the AI answers using the uploaded document content
+
+---
+
+## Observability — Better Stack log aggregation
+
+Backend and agent both ship Pino JSON logs to stdout (Railway captures them) and, when `BETTER_STACK_TOKEN` is set, also forward to Better Stack (Logtail's successor). Both services use the same source token; a `service` filter splits them in the UI.
+
+### One-time setup (one source for both services)
+
+1. Sign up at [betterstack.com/logs](https://betterstack.com/logs). Free tier is 1 GB / 3 days retention — sufficient for current ai-sec scale.
+2. Create a new source: type **JavaScript / Pino**.
+3. Copy the source token.
+4. Set `BETTER_STACK_TOKEN=<token>` on the backend Railway service (`ai-sec-production`) AND on the agent Railway service (`ai-sec-agent`). Same value on both.
+5. Restart both services. New log lines start flowing within ~5 seconds.
+
+If the token is unset, both services keep running with stdout-only logging — there's no fail-open / fail-closed surprise.
+
+### Filterable fields baked into every line
+
+| Field | Source | Use |
+|---|---|---|
+| `service` | `ai-sec-backend` or `ai-sec-agent` | Split the two services in one source |
+| `env` | `production` / `development` / `test` | Drop dev noise from prod incident filters |
+| `tenant_id` | Backend: `tenantMiddleware` enriches request logger. Agent: per-call child logger after `sessionCtx` resolves. | Pull all logs for one tenant |
+| `call_id` | Agent: from SIP participant attributes (`sip.callID`). | Pull one specific call's full timeline |
+| `caller_phone` | Agent: from SIP participant attributes. Null for anonymous callers. | Cross-reference a customer's reported call without knowing the call_id |
+| `event` | Both: explicit event name in `log.info({ event: '...' }, msg)` calls. | Filter by lifecycle stage (`call_start`, `session_started`, `tenant_config_fetched`, `fallback_triggered`, etc.) |
+
+### Common support queries
+
+- "The call dropped at 2:14pm" → filter `service: ai-sec-agent AND tenant_id: <id>`, find the call_id at the right timestamp, then re-filter `call_id: <id>` to see the full timeline (call_start → session_context_resolved → tenant_config_fetched → session_started → any tool calls → fallback_triggered if applicable).
+- "Why did the AI not book this customer?" → filter `service: ai-sec-backend AND tenant_id: <id> AND event: booking_*` for the relevant minute. The booking RPC error code (`TIMESLOT_OCCUPIED` / `NO_SKILLED_EMPLOYEE` / `EMPLOYEE_NOT_SCHEDULED` / `NO_AVAILABILITY` / `INVALID_PARAMS`) is logged at the route handler.
+- "Did fallback trigger today?" → filter `service: ai-sec-agent AND event: fallback_triggered`. Returns the dispatch-metadata-invalid and session-context-lost cases (other fallback paths inside `runFallback` itself are not yet logged — separate follow-up).
+
+### Cost knobs
+
+- `LOG_LEVEL=warn` on both services drops info-level lifecycle noise; pair with a Better Stack alert on `level: error OR level: warn` to keep paging signal intact.
+- The transport is a Pino worker thread — when Better Stack is unreachable or the token is invalid, log lines silently drop rather than blocking the main thread. The backend / agent never crash because of a logging issue.
+
+### What's NOT yet wired
+
+This is the first observability slice; metrics, error monitoring, and expanded live QA are tracked separately in `docs/TODO.md`. Specifically out of scope for this slice:
+
+- Dashboard logs (Next.js). Backend + agent are the priority because they handle the call path; dashboard logs are nice-to-have for support.
+- Sentry / error-rate alerting. Better Stack supports basic alerts; full Sentry-style error grouping is a follow-up.
+- Metrics (call success rate, booking success rate, tool-call latency). Daily-summary cron is a planned follow-up.
+- Logging inside `runFallback()` itself. The callsites in `agent/src/index.ts` log when fallback is triggered; the dead-air-guard internals don't yet. Adding it would touch the 13 fallback unit tests; deferred.
 
 ---
 

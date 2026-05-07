@@ -21,8 +21,10 @@
     "@livekit/agents-plugin-deepgram": "^1.2.8",
     "@livekit/agents-plugin-openai": "^1.2.8",
     "@livekit/agents-plugin-silero": "^1.2.8",
+    "@logtail/pino": "^0.5.8",
     "dotenv": "^17.3.1",
     "livekit-server-sdk": "^2.15.1",
+    "pino": "^10.3.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

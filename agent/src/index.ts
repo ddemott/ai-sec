@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { runFallback } from './fallback.js';
 import { GrokTTS } from './grokTTS.js';
+import { getLogger } from './logger.js';
 import { buildSessionContext } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
@@ -43,6 +44,9 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     await ctx.connect();
 
+    const log = getLogger();
+    log.info({ event: 'call_start', room: ctx.room.name }, 'agent entry — call dispatched');
+
     // 1. Tenant_id from dispatch metadata (preferred — set on the agent
     //    job by the LiveKit dispatch rule's "Dispatch metadata" field)
     //    falling back to room metadata. Robust to either wiring.
@@ -56,6 +60,10 @@ export default defineAgent({
     if (!preliminaryCtx) {
       // Dispatch rule misconfigured — no tenant_id means we can't safely
       // do anything. Start a bare session and say a fallback message.
+      log.error(
+        { event: 'fallback_triggered', reason: 'dispatch_metadata_invalid', room: ctx.room.name },
+        'no tenant_id in dispatch/room metadata — running fallback'
+      );
       await runFallback(ctx, "I'm sorry, we're having a system issue. Please try calling back in a moment.", config);
       return;
     }
@@ -84,9 +92,29 @@ export default defineAgent({
     });
     if (!sessionCtx) {
       // Shouldn't happen — preliminaryCtx already succeeded — but be safe
+      log.error(
+        {
+          event: 'fallback_triggered',
+          reason: 'session_context_lost',
+          tenant_id: preliminaryCtx.tenantId,
+          room: ctx.room.name,
+        },
+        'session context unexpectedly null after participant join — running fallback'
+      );
       await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
       return;
     }
+
+    // Per-call child logger — every subsequent line on this call carries
+    // tenant_id + call_id + caller_phone so a Better Stack filter pulls
+    // the full timeline for "the call at 2:14pm" support questions.
+    const callLog = log.child({
+      tenant_id: sessionCtx.tenantId,
+      call_id: sessionCtx.callId,
+      caller_phone: sessionCtx.callerPhone ?? null,
+      room: ctx.room.name,
+    });
+    callLog.info({ event: 'session_context_resolved' }, 'tenant + caller resolved');
 
     // 3. Build tools client + fetch the tenant's display config. The
     //    fetch is a single round-trip to /agent-tools/tenant-config; on
@@ -99,6 +127,10 @@ export default defineAgent({
     });
     const tools = buildTools(sessionCtx, client);
     const tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
+    callLog.info(
+      { event: 'tenant_config_fetched', tenant_name: tenantConfig.name, timezone: tenantConfig.timezone },
+      'tenant config resolved'
+    );
 
     // 4. Build prompt with runtime context
     const instructions = buildSystemPrompt({
@@ -122,6 +154,7 @@ export default defineAgent({
     });
 
     await session.start({ agent, room: ctx.room });
+    callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
 
     // 6. Greeting. Kept short — the LLM will warm up from here.
     session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {

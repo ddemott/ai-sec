@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import { collectStartupWarnings } from './services/envWarnings';
 import multipart from '@fastify/multipart';
 import { getPool, closePool, createWithTenantClient } from './database';
+import { buildLogger } from './services/logger';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -77,16 +78,17 @@ const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
 
 const useHttps = process.env.NODE_ENV !== 'production';
 const certDir = path.resolve(__dirname, '..', '..', 'certs');
+const logger = buildLogger({ service: 'ai-sec-backend' });
 const app = Fastify(
   (useHttps
     ? {
-        logger: true,
+        logger,
         https: {
           key: fs.readFileSync(path.join(certDir, 'localhost-key.pem')),
           cert: fs.readFileSync(path.join(certDir, 'localhost-cert.pem')),
         },
       }
-    : { logger: true }) as any
+    : { logger }) as any
 );
 
 // Enforce HTTPS when behind a proxy
