@@ -4,6 +4,15 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## May 7, 2026 — Front-desk audit + coverage backend↔UI consistency
+
+Backend tests 1,637 → 1,646 (+9 from new consistency suite). Dashboard 516/516 held. Two pieces of work landed:
+
+- **Front-desk click-count audit (`docs/sessions/2026-05-07-front-desk-audit.md`).** Read-only walk through the four daily-use tasks for the `front_desk` role shipped 2026-05-05. Found that 3 of 4 daily tasks fail the docs/TODO.md "≤3 decisions" threshold: book a call-in (8+ decisions on the default Calendar path), look up tomorrow (3, borderline), mark someone unavailable (∞ — front_desk role literally cannot do it; `Staff & Shifts` is owner-only), find a customer (2 ✓). Top finding: the dashboard has two parallel scheduler implementations on the Schedule tab (`AppointmentView` calendar default, `NewSchedulerView` staff sub-tab) and Quick Book — the only sane create flow — appears only on Resources/List sub-tabs. Six-item priority punch list in the audit doc; items 1-3 are P0 launch-blockers. No code changes from the audit itself.
+- **Coverage gap detection backend↔UI consistency (`src/coverage-ui-consistency.test.ts`, 9 tests).** Closes the docs/TODO.md "Pre-launch validation" entry. Surfaced a real bug while writing the test: pre-fix, both `StepReview.tsx` and `SoloStepReview.tsx` derived the wizard review badge from `coverage_pct`, and the RPC returns `coverage_pct = 100.0` for the divide-by-zero case (`WHEN sc.open_count > 0 THEN ... ELSE 100.0`). Net effect: a tenant with no employees scheduled saw a green "Full Coverage / You're ready to go!" banner — the worst possible UX on the highest-stakes onboarding step. Fix: extracted `dashboard/lib/coverage.ts` with `statusToBadge(status)` + `isAllCovered(rows)`. Both wizard review components now derive from the backend's 5-state `status` field (mapped to 3 dashboard badges). Edge cases pinned: employee on leave (all `is_off=true`), shift starting before typical business hours (04:00-08:00), day with zero scheduled employees (Sat/Sun in a Mon-Fri shop), service with no qualified employees but other staff on shift, zero-staff tenant.
+
+---
+
 ## May 6, 2026 — Test cleanup batch + skill-resource sweep + coverage tooling
 
 Backend tests: 1,592 → 1,605 (+13 from new launch-readiness sweep). Dashboard 514/514 held. Theme: continue the any-type debt drawdown from the morning, ship the skill+resource matching reliability sweep that the pre-launch validation list called out, then wire `@vitest/coverage-v8` so the next coverage push has a real baseline to measure against.

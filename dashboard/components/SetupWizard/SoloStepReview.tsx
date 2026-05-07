@@ -3,6 +3,7 @@
 import React from 'react'
 import { Check, AlertCircle } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { statusToBadge } from '../../lib/coverage'
 import type { WizardShift } from './types'
 import type { Service, CoverageItem } from '../../lib/types'
 
@@ -41,20 +42,22 @@ export function SoloStepReview({
         {coverageData.length > 0 && (
           <div className="text-left max-w-sm mx-auto space-y-2">
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Service Coverage</h4>
-            {coverageData.map(item => (
-              <div key={item.service_id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-700 dark:text-gray-300">{item.service_name}</span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  item.coverage_pct >= 100
-                    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
-                    : item.coverage_pct > 0
-                    ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400'
-                    : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
-                }`}>
-                  {item.status}
-                </span>
-              </div>
-            ))}
+            {coverageData.map(item => {
+              const badge = statusToBadge(item.status)
+              const colorClass = badge === 'full'
+                ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                : badge === 'partial'
+                ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400'
+                : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
+              return (
+                <div key={item.service_id} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700 dark:text-gray-300">{item.service_name}</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
+                    {item.status}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

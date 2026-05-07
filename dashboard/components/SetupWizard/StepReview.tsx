@@ -3,11 +3,12 @@
 import React from 'react'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { CoverageStatusBadge } from '../ui/CoverageStatusBadge'
+import { isAllCovered, statusToBadge } from '@/lib/coverage'
 import type { Step6Props, CoverageItem } from './types'
 
 export function Step6Review({ services, resources, employees, coverageData, loading }: Step6Props) {
   const vocab = useVocabulary()
-  const allCovered = coverageData.length > 0 && coverageData.every((c: CoverageItem) => (c.coverage_pct ?? 0) >= 100)
+  const allCovered = isAllCovered(coverageData)
 
   return (
     <div>
@@ -46,7 +47,7 @@ export function Step6Review({ services, resources, employees, coverageData, load
               className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
             >
               <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.service_name}</span>
-              <CoverageStatusBadge status={(item.coverage_pct ?? 0) >= 100 ? 'full' : (item.coverage_pct ?? 0) > 0 ? 'partial' : 'uncovered'} />
+              <CoverageStatusBadge status={statusToBadge(item.status)} />
             </div>
           ))}
         </div>
