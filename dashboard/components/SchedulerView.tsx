@@ -34,7 +34,12 @@ export default function SchedulerView() {
     [allStaff]
   );
 
-  const [activeView, setActiveView] = useState<SchedulerViewTab>('calendar');
+  // Default sub-tab: Staff (front-desk audit P1 #5, 2026-05-07).
+  // The Staff sub-tab is the daily-use surface for front-desk operators —
+  // rows = staff, hours across, today highlighted, empty cells now click
+  // through to Quick Book (P1 #4). Calendar stays available for month/week
+  // overview and drag-and-drop, just no longer the landing.
+  const [activeView, setActiveView] = useState<SchedulerViewTab>('staff');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Zoom: column width in px per hour
@@ -111,7 +116,7 @@ export default function SchedulerView() {
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-3 flex-wrap">
           <div>
             <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Schedule</div>
-            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Start with the calendar. Switch to staff or resources only when you need detail.</div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Month, week, or day view. Click a slot to book.</div>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
