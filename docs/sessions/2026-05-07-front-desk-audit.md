@@ -200,9 +200,20 @@ Six items, each phrased as a self-contained PR target:
 3. **[P0] ~~Replace the `AppointmentDetailPanel` customer `<select>` with the searchable pattern from `QuickBookPanel`~~ — DONE 2026-05-07.** Extracted `dashboard/components/ui/CustomerCombobox.tsx` (search input + filtered native select, consistent label format, name + phone-substring filter). Both `QuickBookPanel` and `AppointmentDetailPanel` consume it; AppointmentDetailPanel's address pre-fill side effect preserved at the parent level. 11 new unit tests pin the contract. Decision-count for "book a call-in" on the Calendar default path drops further (the customer-pick step is now one search box instead of scrolling a 50+-item dropdown).
 4. **[P1] ~~Make empty scheduler cells clickable to open Quick Book prefilled~~ — DONE 2026-05-07.** Both surfaces shipped: Staff sub-tab (`NewSchedulerView`) — every empty hour cell now exposes `role=button` + `aria-label` + tabIndex=0 + cursor pointer; click/Enter/Space delivers `{ employeeId, hour, date }` to `onQuickBook`. Skills mode keeps cells passive (no booking semantic when the row shows skill bars). Calendar sub-tab (`AppointmentView`) — gained an optional `onSelectSlot` prop wired from `SchedulerView`; when present, BigCalendar runs `selectable=true` and slot drag/click delivers `{ start, end }` to Quick Book. `SchedulerView.handleNewQuickBook` widened to accept optional prefill, merging `selectedDate` so cell-supplied date wins. 9 new tests pin slot click + keyboard + a11y attrs + skills-mode passive + outside-business-hours.
 5. **[P1] ~~Default Schedule tab to `staff` instead of `calendar`~~ — DONE 2026-05-07.** Default flipped at `SchedulerView.tsx:37` (`useState<SchedulerViewTab>('staff')`). Calendar branch's narrative subtitle reworked from "Start with the calendar. Switch to staff or resources only when you need detail" (which positioned itself as the recommended default and contradicted the flip) to neutral descriptive copy: "Month, week, or day view. Click a slot to book." No tests assumed Calendar-as-default; the existing e2e spec was already forward-compatible (comments "Check for staff tab (default view)" and clicks Staff if visible — now a no-op since Staff IS default). Note: no analytics on Schedule sub-tab selection exist today, so the "verify with the team" gate the audit raised was moot.
-6. **[P2] Add `Yesterday | Today | Tomorrow` chips to `SchedulerDateNav`.** (R2.2 — three buttons, ~20 LOC.)
+6. **[P2] ~~Add `Yesterday | Today | Tomorrow` chips to `SchedulerDateNav`~~ — DONE 2026-05-07.** Three peer chips replace the single Today button; each meets WCAG 2.5.5 with `min-w-[48px] min-h-[48px]` (audit specified 48×48 for mobile reliability). `aria-pressed` reflects which chip matches `selectedDate` so screen readers see the toggle state the visual primary-variant cue communicates to sighted users. Outside the today±1 window, all three chips show un-pressed state — keeping the chips' job as "click to jump" affordances rather than a date-display widget. ChevronLeft/Right preserved for further-out dates. 5 new tests pin Yesterday/Tomorrow click behavior, aria-pressed truthing under varied selected dates, the touch-target minimums, and the outside-window un-pressed contract.
 
 Items 1–3 are the launch-blocker subset — without them the front-desk role we just shipped (commit `8683222`) cannot do its job. Items 4–6 are quality-of-life that move several daily tasks from acceptable to fast.
+
+**All six punch-list items shipped 2026-05-07.** Decision-count audit re-run after the changes:
+
+| Task | Before | After | Threshold |
+|---|---|---|---|
+| Book a call-in (default landing) | 8+ | 1 (cell click → Quick Book prefilled) | 3 ✓ |
+| Look up tomorrow (Schedule tab) | 3 | 1 (Tomorrow chip) | 3 ✓ |
+| Mark someone unavailable (front_desk) | ∞ | 3 (staff name → Mark off → confirm) | 3 ✓ |
+| Find a customer | 2 | 2 (unchanged — already passing) | 3 ✓ |
+
+All four daily-use tasks now meet the ≤3-decision threshold for the audience the dashboard was role-gated for.
 
 ---
 

@@ -88,6 +88,74 @@ describe('SchedulerDateNav', () => {
     expect(newDate.getDate()).toBe(today.getDate());
     // WHO: receptionist | WHAT: jump to today | WHEN: Today button clicked after browsing other dates | WHERE: SchedulerDateNav | WHY: user gets lost in past/future dates and cannot return to current day
   });
+
+  // --- Front-desk audit P2 #6: Yesterday | Today | Tomorrow chips ---
+  test('Yesterday chip navigates to yesterday', () => {
+    const date = new Date(2026, 2, 19);
+    const onChange = vi.fn();
+    render(<SchedulerDateNav selectedDate={date} onDateChange={onChange} />);
+    fireEvent.click(screen.getByTestId('date-chip-yesterday'));
+    const newDate = onChange.mock.calls[0][0] as Date;
+    const expected = new Date();
+    expected.setDate(expected.getDate() - 1);
+    expect(newDate.getDate()).toBe(expected.getDate());
+    expect(newDate.getMonth()).toBe(expected.getMonth());
+    expect(newDate.getFullYear()).toBe(expected.getFullYear());
+    // WHO: front-desk operator answering "what was yesterday?" | WHAT: one-click jump to yesterday's schedule | WHEN: customer asks about an appointment from the prior day | WHERE: SchedulerDateNav Yesterday chip | WHY: pre-fix this required either ChevronLeft tap (twice if currently on tomorrow) or mental math on the calendar; the audit cited this as a P2 polish that turns a 2-3-decision navigation into a 1-decision affordance
+  });
+
+  test('Tomorrow chip navigates to tomorrow', () => {
+    const date = new Date(2026, 2, 19);
+    const onChange = vi.fn();
+    render(<SchedulerDateNav selectedDate={date} onDateChange={onChange} />);
+    fireEvent.click(screen.getByTestId('date-chip-tomorrow'));
+    const newDate = onChange.mock.calls[0][0] as Date;
+    const expected = new Date();
+    expected.setDate(expected.getDate() + 1);
+    expect(newDate.getDate()).toBe(expected.getDate());
+    expect(newDate.getMonth()).toBe(expected.getMonth());
+    expect(newDate.getFullYear()).toBe(expected.getFullYear());
+    // WHO: front-desk operator preparing for tomorrow's load | WHAT: one-click jump to tomorrow's schedule | WHEN: end-of-day prep, "what's the morning look like?" | WHERE: SchedulerDateNav Tomorrow chip | WHY: tomorrow is the second-most-frequent date jump after today; surfacing it as a peer chip removes the implicit hierarchy where "Today" was a button but "Tomorrow" required arrow-tapping
+  });
+
+  test('chip aria-pressed reflects which chip matches the selected date', () => {
+    // Selected date IS today.
+    const today = new Date();
+    const onChange = vi.fn();
+    const { rerender } = render(<SchedulerDateNav selectedDate={today} onDateChange={onChange} />);
+    expect(screen.getByTestId('date-chip-today')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('date-chip-yesterday')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('date-chip-tomorrow')).toHaveAttribute('aria-pressed', 'false');
+
+    // Now selected date IS tomorrow.
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    rerender(<SchedulerDateNav selectedDate={tomorrow} onDateChange={onChange} />);
+    expect(screen.getByTestId('date-chip-tomorrow')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('date-chip-today')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('date-chip-yesterday')).toHaveAttribute('aria-pressed', 'false');
+    // WHO: screen-reader user navigating the date chips | WHAT: aria-pressed announces which day is currently selected | WHEN: assistive tech focus lands on the chip group | WHERE: SchedulerDateNav aria-pressed wiring | WHY: the visual variant=primary cue that sighted users see is invisible to screen readers; aria-pressed is the canonical ARIA pattern for toggle-style chips and lets a blind operator know "I'm currently on Today" vs "I'm currently on Tomorrow" without trial-and-error
+  });
+
+  test('chips meet WCAG 2.5.5 minimum 48×48 touch-target sizing', () => {
+    const date = new Date();
+    render(<SchedulerDateNav selectedDate={date} onDateChange={() => {}} />);
+    for (const testId of ['date-chip-yesterday', 'date-chip-today', 'date-chip-tomorrow']) {
+      const chip = screen.getByTestId(testId);
+      expect(chip.className).toContain('min-w-[48px]');
+      expect(chip.className).toContain('min-h-[48px]');
+    }
+    // WHO: mobile front-desk users (tire shop / salon owners checking schedules between customers per the audit) | WHAT: chip touch targets meet the WCAG 2.1 AA minimum | WHEN: assistive-tech audits or mobile QA | WHERE: SchedulerDateNav chip className | WHY: the audit explicitly called out 48×48 (R2.2); pinning the className guards against a future refactor that strips the minimum-size utility classes — a chip below 44×44 is a real-world tap-failure on phones, not a theoretical concern
+  });
+
+  test('outside the today/yesterday/tomorrow window, no chip is aria-pressed', () => {
+    const date = new Date(2026, 2, 19); // Far past from real-world "today"
+    render(<SchedulerDateNav selectedDate={date} onDateChange={() => {}} />);
+    expect(screen.getByTestId('date-chip-yesterday')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('date-chip-today')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('date-chip-tomorrow')).toHaveAttribute('aria-pressed', 'false');
+    // WHO: operator browsing a date several days out via the Chevron arrows | WHAT: all three chips show un-pressed state | WHEN: selectedDate is more than ±1 day from today | WHERE: SchedulerDateNav active-chip detection | WHY: a chip showing "pressed" while the user is on an unrelated date would be a lie; the chips' job is to advertise "click here to jump to X" — they're not a date-display widget
+  });
 });
 
 // --- TimeGrid ---
