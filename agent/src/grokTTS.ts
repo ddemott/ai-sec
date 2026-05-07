@@ -140,7 +140,22 @@ export class GrokChunkedStream extends tts.ChunkedStream {
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
-      throw error;
+      // Emit via the base class's `emitError` and return cleanly instead
+      // of throwing. LiveKit's `mainTask` is fire-and-forget (unawaited
+      // promise on the parent class's `start()`), so a throw here lands as
+      // an unhandled rejection at the Node level — even though the
+      // framework also catches and emits the same 'error' event. Calling
+      // `emitError` ourselves preserves the single-event contract the
+      // test asserts (`errorEvents.length === 1`) and stops the
+      // unhandled-rejection warning that surfaced under vitest.
+      // Cast: emitError is declared `private` in the framework's .d.ts but
+      // not actually `#private` in the JS — runtime-accessible to subclasses.
+      (this as unknown as {
+        emitError: (args: { error: Error; recoverable: boolean }) => void;
+      }).emitError({
+        error: error instanceof Error ? error : new Error(String(error)),
+        recoverable: false,
+      });
     } finally {
       this.queue.close();
     }
