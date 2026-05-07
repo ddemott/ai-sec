@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { CalendarX } from 'lucide-react';
 import type { Employee } from '../../lib/types';
 import { useVocabulary } from '@/lib/VocabularyContext';
 
@@ -18,6 +19,17 @@ export interface StaffProfileCardProps {
   anchorRect: DOMRect;
   /** Called when user clicks outside the card */
   onClose: () => void;
+  /** When provided + the employee has a shift, render a "Mark off" action.
+      Parent owns the API call, confirm dialog, toast, and data refresh — the
+      card only emits intent. Hidden when the employee has no shift on the
+      currently-viewed date (nothing to mark off). */
+  onMarkOff?: () => void;
+  /** Button label. Parent computes this from the scheduler's selected date so
+      "Mark off today" reads correctly only when viewing today; other dates
+      get an explicit weekday/date label. Defaults to "Mark off today". */
+  markOffLabel?: string;
+  /** Disable the button while the parent's API call is in-flight. */
+  isMarkingOff?: boolean;
 }
 
 export function StaffProfileCard({
@@ -29,6 +41,9 @@ export function StaffProfileCard({
   shiftEnd,
   anchorRect,
   onClose,
+  onMarkOff,
+  markOffLabel = 'Mark off today',
+  isMarkingOff = false,
 }: StaffProfileCardProps) {
   const vocab = useVocabulary();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -55,9 +70,11 @@ export function StaffProfileCard({
     };
   }, [onClose]);
 
+  const showMarkOff = Boolean(onMarkOff && shiftStart && shiftEnd);
+
   // Position: below the anchor, or above if near bottom
   const cardWidth = 260;
-  const cardEstHeight = 260;
+  const cardEstHeight = showMarkOff ? 312 : 260;
   const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
 
   const spaceBelow = viewportHeight - anchorRect.bottom;
@@ -176,6 +193,30 @@ export function StaffProfileCard({
           </div>
         )}
       </div>
+
+      {showMarkOff && (
+        <>
+          <div style={{ height: 1, background: 'var(--border-soft, #333)', margin: '0 16px' }} />
+          <div className="px-4 py-3">
+            <button
+              type="button"
+              onClick={onMarkOff}
+              disabled={isMarkingOff}
+              data-testid="staff-card-mark-off"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{
+                background: 'var(--warning-muted, rgba(234,179,8,0.12))',
+                color: 'var(--warning, #eab308)',
+                border: '1px solid var(--warning-muted, rgba(234,179,8,0.3))',
+                fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+              }}
+            >
+              <CalendarX className="w-4 h-4" />
+              {isMarkingOff ? 'Marking off…' : markOffLabel}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

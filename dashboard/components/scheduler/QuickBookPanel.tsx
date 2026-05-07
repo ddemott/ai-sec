@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Zap } from 'lucide-react';
+import { X, Zap } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
+import { CustomerCombobox } from '../ui/CustomerCombobox';
 import { Api } from '../../lib/api';
-import { formatPhone } from '../../lib/phone';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 
@@ -56,7 +56,6 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   const [employeeId, setEmployeeId] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -68,7 +67,6 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       setServiceId('');
       setError('');
       setSaving(false);
-      setSearchTerm('');
 
       if (prefill.date && prefill.hour != null) {
         setStartTime(toLocalISOFromParts(prefill.date, prefill.hour));
@@ -133,13 +131,6 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredCustomers = searchTerm
-    ? customers.filter((c) =>
-        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone?.includes(searchTerm)
-      )
-    : customers;
-
   return (
     <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-[#1a1a1a] shadow-2xl border-l border-gray-200 dark:border-gray-800 z-30 flex flex-col animate-in slide-in-from-right duration-200" data-testid="quick-book-panel">
       <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
@@ -162,30 +153,14 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
         </div>
 
         {/* Customer search */}
-        <div>
-          <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Customer</label>
-          <div className="relative mb-2">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search customers..."
-              className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none"
-            />
-          </div>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-bold"
-            data-testid="quick-book-customer"
-          >
-            <option value="">Select customer...</option>
-            {filteredCustomers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${formatPhone(c.phone)})` : ''}</option>
-            ))}
-          </select>
-        </div>
+        <CustomerCombobox
+          customers={customers.map((c) => ({ id: c.id, name: c.name ?? null, phone: c.phone ?? null }))}
+          value={customerId}
+          onChange={setCustomerId}
+          selectTestId="quick-book-customer"
+          searchTestId="quick-book-customer-search"
+        />
+
 
         {/* Service */}
         <Select

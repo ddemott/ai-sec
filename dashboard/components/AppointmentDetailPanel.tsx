@@ -6,6 +6,7 @@ import { Select } from './ui/Select';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
+import { CustomerCombobox } from './ui/CustomerCombobox';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -160,20 +161,21 @@ export function AppointmentDetailPanel({
                           <Card title="Customer Details">
                               <div className="space-y-4">
                                   {isCreating ? (
-                                      <Select
+                                      <CustomerCombobox
                                           label="Select Customer"
+                                          customers={customers}
                                           value={form.customer_id}
-                                          onChange={e => {
-                                              const newCustomerId = e.target.value
+                                          onChange={(newCustomerId) => {
                                               const customer = findCustomerById(newCustomerId)
                                               const suggestedLocation = formatCustomerAddress(customer)
                                               onFormChange({
                                                   ...form,
                                                   customer_id: newCustomerId,
-                                                  location: form.location || suggestedLocation
+                                                  location: form.location || suggestedLocation,
                                               })
                                           }}
-                                          options={customers.map(c => ({ label: `${c.name} ${formatPhone(c.phone)}`, value: c.id }))}
+                                          selectTestId="appointment-customer-select"
+                                          searchTestId="appointment-customer-search"
                                       />
                                   ) : (
                                       <div className="grid grid-cols-2 gap-4">

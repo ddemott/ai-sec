@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-07 (added coverage-ui-consistency suite, +9 tests)
+**Last refreshed:** 2026-05-07 (added coverage-ui-consistency +9 backend; Mark off today +12 dashboard; CustomerCombobox +11 dashboard)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -13,10 +13,10 @@
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | 1,646 / 1,646 | ✅ | ~150s |
-| Dashboard (`cd dashboard && npm test`) | 519 / 519 | ✅ | ~30s |
+| Dashboard (`cd dashboard && npm test`) | 542 / 542 | ✅ | ~30s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 28 passed, 1 skipped | ✅ | ~40s |
 
-Total unit tests: 2,165.
+Total unit tests: 2,188.
 
 ## Unit test coverage (V8)
 

@@ -9,6 +9,9 @@ import { useSchedulerData } from './useSchedulerData';
 import { SchedulerDateNav } from './SchedulerDateNav';
 import { StaffProfileCard } from './StaffProfileCard';
 import { AppointmentPopover } from './AppointmentPopover';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { showToast } from '../ui/Toast';
+import { useConfirm } from '../../lib/useConfirm';
 import type { SchedulerAppointment } from './useSchedulerData';
 import type { Service, Employee } from '../../lib/types';
 
@@ -351,6 +354,13 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     setProfileCard(null);
   }, []);
 
+  // --- Mark off today (front-desk audit P0 #2) ---
+  // Front-desk role can take a sick employee off the board without leaving
+  // Schedule. The handler is declared further down, after profileCardEmployee
+  // is in scope — only the lightweight UI state and label memos live here.
+  const [markingOff, setMarkingOff] = useState(false);
+  const { state: confirmState, confirm: openConfirm, close: closeConfirm } = useConfirm();
+
   // --- Appointment click -> open popover ---
   const handleAppointmentClick = useCallback((appointment: SchedulerAppointment, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -429,6 +439,68 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
     return { todayApptCount, todayHours, shiftStart, shiftEnd };
   }, [profileCard, profileCardEmployee, appointmentsByEmployee, shiftsByEmployee]);
+
+  // --- Mark off handler (declared here so it can close over profileCardEmployee) ---
+  const isSelectedDateToday = useMemo(() => {
+    const now = new Date();
+    return (
+      selectedDate.getFullYear() === now.getFullYear() &&
+      selectedDate.getMonth() === now.getMonth() &&
+      selectedDate.getDate() === now.getDate()
+    );
+  }, [selectedDate]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (isSelectedDateToday) return 'today';
+    return selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }, [selectedDate, isSelectedDateToday]);
+
+  const markOffButtonLabel = isSelectedDateToday ? 'Mark off today' : `Mark off ${selectedDateLabel}`;
+
+  const handleMarkOffClick = useCallback(() => {
+    if (!profileCardEmployee || !tenantId) return;
+    const employeeId = profileCardEmployee.id;
+    const employeeName = profileCardEmployee.name;
+    const tzOffsetMs = selectedDate.getTimezoneOffset() * 60000;
+    const shiftDate = new Date(selectedDate.getTime() - tzOffsetMs).toISOString().slice(0, 10);
+
+    openConfirm({
+      title: markOffButtonLabel,
+      message: `Mark ${employeeName} off for ${selectedDateLabel}? Their shift will be removed and the AI won't book new appointments with them on this day.`,
+      confirmLabel: 'Mark off',
+      confirmVariant: 'warning',
+      onConfirm: () => {
+        void (async () => {
+          setMarkingOff(true);
+          try {
+            await Api.shifts.schedule.save(tenantId, {
+              employee_id: employeeId,
+              shift_date: shiftDate,
+              is_off: true,
+            });
+            showToast(`${employeeName} marked off for ${selectedDateLabel}`, 'success');
+            closeConfirm();
+            handleProfileCardClose();
+            handleRefresh();
+          } catch {
+            showToast('Failed to mark off — please try again', 'error');
+          } finally {
+            setMarkingOff(false);
+          }
+        })();
+      },
+    });
+  }, [
+    profileCardEmployee,
+    tenantId,
+    selectedDate,
+    selectedDateLabel,
+    markOffButtonLabel,
+    openConfirm,
+    closeConfirm,
+    handleProfileCardClose,
+    handleRefresh,
+  ]);
 
   // --- Compute row heights for skills mode (Item #5) ---
   const getRowHeight = useCallback((emp: Employee): number => {
@@ -889,8 +961,23 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
           skills={employeeSkillsMap.get(profileCard.employeeId) || []}
           anchorRect={profileCard.anchorRect}
           onClose={handleProfileCardClose}
+          onMarkOff={handleMarkOffClick}
+          markOffLabel={markOffButtonLabel}
+          isMarkingOff={markingOff}
         />
       )}
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={closeConfirm}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        confirmVariant={confirmState.confirmVariant}
+        loading={markingOff}
+      />
+
 
       {/* Appointment popover */}
       {apptPopover && (

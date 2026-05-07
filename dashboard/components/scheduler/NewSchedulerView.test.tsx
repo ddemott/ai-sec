@@ -115,19 +115,26 @@ vi.mock('../../lib/hooks', () => ({
   useStaticData: () => mockStaticDataOverride || buildDefaultStaticData(),
 }));
 
-// Mock Api for service-employee mappings (used by Skills mode)
-vi.mock('../../lib/api', () => ({
-  Api: {
+// Mock Api for service-employee mappings (used by Skills mode) and the
+// Mark-off action (front-desk audit P0 #2). vi.hoisted lets per-test
+// reset + override of the save-shift behavior so we can pin happy and
+// sad paths independently.
+const { mockApi, mockShowToast } = vi.hoisted(() => ({
+  mockApi: {
     mappings: {
-      listServiceEmployee: vi.fn().mockResolvedValue([
-        { service_id: 'svc-1', employee_id: 'emp-1' }, // Mike → Oil Change
-        { service_id: 'svc-2', employee_id: 'emp-1' }, // Mike → Tire Rotation
-        { service_id: 'svc-2', employee_id: 'emp-2' }, // Carlos → Tire Rotation
-        { service_id: 'svc-1', employee_id: 'emp-2' }, // Carlos → Oil Change (as "Balancing" equivalent)
-      ]),
+      listServiceEmployee: vi.fn(),
+    },
+    shifts: {
+      schedule: {
+        save: vi.fn(),
+      },
     },
   },
+  mockShowToast: vi.fn(),
 }));
+
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
+vi.mock('../ui/Toast', () => ({ showToast: mockShowToast, ToastContainer: () => null }));
 
 vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => 'tenant-1',
@@ -144,6 +151,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockStaticDataOverride = null;
   mockSchedulerDataOverride = null;
+  // Default Api behavior — individual tests override (e.g. reject for sad paths).
+  mockApi.mappings.listServiceEmployee.mockResolvedValue([
+    { service_id: 'svc-1', employee_id: 'emp-1' }, // Mike → Oil Change
+    { service_id: 'svc-2', employee_id: 'emp-1' }, // Mike → Tire Rotation
+    { service_id: 'svc-2', employee_id: 'emp-2' }, // Carlos → Tire Rotation
+    { service_id: 'svc-1', employee_id: 'emp-2' }, // Carlos → Oil Change
+  ]);
+  mockApi.shifts.schedule.save.mockResolvedValue({ override: { id: 'new-1' } });
 });
 
 describe('NewSchedulerView', () => {
@@ -532,6 +547,111 @@ describe('NewSchedulerView', () => {
       // Click outside the card
       fireEvent.mouseDown(document.body);
       expect(screen.queryByTestId('staff-profile-card')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Front-desk audit P0 #2: Mark off today ---
+  describe('Mark off today (front-desk audit P0 #2)', () => {
+    function todayLocalISODate(): string {
+      const now = new Date();
+      const tzMs = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - tzMs).toISOString().slice(0, 10);
+    }
+
+    test('Mark off button visible when staff card opens for an employee with a shift today', () => {
+      render(<NewSchedulerView />);
+      fireEvent.click(screen.getByTestId('staff-name-emp-1'));
+      const btn = screen.getByTestId('staff-card-mark-off');
+      expect(btn).toBeInTheDocument();
+      expect(btn).toHaveTextContent('Mark off today');
+      // WHO: front-desk operator handling a sick-call | WHAT: button surfaces on the staff profile card | WHEN: clicking an employee scheduled today | WHERE: NewSchedulerView → StaffProfileCard wiring | WHY: this is the audit P0 #2 affordance — the front-desk role currently cannot mark someone unavailable; the button must appear where the operator already lands when they identify the problem (clicking the staff name)
+    });
+
+    test('Mark off button hidden when employee has no shift today', () => {
+      // Override scheduler data so emp-1 has no shifts.
+      mockSchedulerDataOverride = {
+        ...buildDefaultSchedulerData(),
+        shiftsByEmployee: new Map([['emp-2', [mockShifts[1]]]]),
+      };
+      render(<NewSchedulerView />);
+      fireEvent.click(screen.getByTestId('staff-name-emp-1'));
+      expect(screen.getByTestId('staff-profile-card')).toBeInTheDocument();
+      expect(screen.queryByTestId('staff-card-mark-off')).not.toBeInTheDocument();
+      // WHO: front-desk operator | WHAT: button hidden when there's nothing to mark off | WHEN: clicking an employee with no shift on the viewed date | WHERE: NewSchedulerView | WHY: marking-off an unscheduled employee creates a row that has no operational effect — surfacing the button would imply an action that does nothing, violating H1 (visibility of system status)
+    });
+
+    test('clicking Mark off opens confirm modal with employee + day in copy', () => {
+      render(<NewSchedulerView />);
+      fireEvent.click(screen.getByTestId('staff-name-emp-1'));
+      fireEvent.click(screen.getByTestId('staff-card-mark-off'));
+
+      // ConfirmModal renders the message + Cancel/Mark off buttons. The
+      // title "Mark off today" also matches the card button text, so we
+      // assert via the message + button roles instead.
+      expect(screen.getByText(/Mark Mike Jones off for today/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Mark off' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+      // WHO: front-desk operator | WHAT: confirm dialog names the employee + the day | WHEN: clicking Mark off, before any DB write | WHERE: NewSchedulerView's ConfirmModal wiring | WHY: H5 (error prevention) — destructive actions need explicit confirmation with the specific subject ("Mike Jones, today") so the operator can catch a wrong-employee click before it hits the DB
+    });
+
+    test('confirm fires Api.shifts.schedule.save with the right payload, then toasts + refreshes + closes', async () => {
+      render(<NewSchedulerView />);
+      fireEvent.click(screen.getByTestId('staff-name-emp-1'));
+      fireEvent.click(screen.getByTestId('staff-card-mark-off'));
+      fireEvent.click(screen.getByRole('button', { name: 'Mark off' }));
+
+      await waitFor(() => {
+        expect(mockApi.shifts.schedule.save).toHaveBeenCalledWith('tenant-1', {
+          employee_id: 'emp-1',
+          shift_date: todayLocalISODate(),
+          is_off: true,
+        });
+      });
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.stringContaining('Mike Jones marked off for today'),
+          'success'
+        );
+      });
+      expect(mockRefreshScheduler).toHaveBeenCalled();
+      expect(mockRefreshStaticData).toHaveBeenCalled();
+      // The card closes after success.
+      expect(screen.queryByTestId('staff-profile-card')).not.toBeInTheDocument();
+      // WHO: front-desk operator confirming the action | WHAT: backend called with tenant-scoped is_off=true row, success toast, scheduler refreshed, card dismissed | WHEN: the operator commits the off-day | WHERE: NewSchedulerView handleMarkOffClick | WHY: pins the entire happy-path chain — payload shape (so a backend rename surfaces here), tenant scoping (so a future bug can't cross tenants), refresh (so the operator sees the change reflected without a manual reload), and card dismissal (so the next click doesn't re-trigger the same flow)
+    });
+
+    test('save failure surfaces an error toast and leaves the confirm modal open for retry', async () => {
+      mockApi.shifts.schedule.save.mockRejectedValueOnce(new Error('network down'));
+
+      render(<NewSchedulerView />);
+      fireEvent.click(screen.getByTestId('staff-name-emp-1'));
+      fireEvent.click(screen.getByTestId('staff-card-mark-off'));
+      fireEvent.click(screen.getByRole('button', { name: 'Mark off' }));
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.stringContaining('Failed to mark off'),
+          'error'
+        );
+      });
+      expect(mockRefreshScheduler).not.toHaveBeenCalled();
+      // Confirm modal still open so the operator can retry without re-navigating.
+      expect(screen.getByRole('button', { name: 'Mark off' })).toBeInTheDocument();
+      // WHO: front-desk operator on a flaky network | WHAT: error surfaces clearly, no false success state, modal stays open for retry | WHEN: backend or network rejects the save | WHERE: NewSchedulerView handleMarkOffClick catch branch | WHY: a silent failure here would leave the operator believing the employee was off-the-board when the AI is still booking them — the failure mode the audit explicitly cites as the operational risk; the modal staying open lets the operator retry without losing context
+    });
+
+    test('Cancel in confirm modal dismisses without calling the API', () => {
+      render(<NewSchedulerView />);
+      fireEvent.click(screen.getByTestId('staff-name-emp-1'));
+      fireEvent.click(screen.getByTestId('staff-card-mark-off'));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(mockApi.shifts.schedule.save).not.toHaveBeenCalled();
+      expect(mockRefreshScheduler).not.toHaveBeenCalled();
+      // Card remains open so the operator can read it again or click another action.
+      expect(screen.getByTestId('staff-profile-card')).toBeInTheDocument();
+      // WHO: front-desk operator who realized they clicked the wrong employee | WHAT: cancel exits cleanly with no side effects | WHEN: in the confirm step, before commit | WHERE: NewSchedulerView ConfirmModal onClose | WHY: confirms the bail-out path — H3 (user control and freedom) requires a clearly-marked exit from any commitment dialog, with zero side effects when taken
     });
   });
 

@@ -195,9 +195,9 @@ These cut across multiple tasks and are worth pulling out:
 
 Six items, each phrased as a self-contained PR target:
 
-1. **[P0] Hoist Quick Book to the Schedule tab toolbar** so it appears on Calendar/Staff/Resources/List. (R1.1 — small, ~30 LOC move in `SchedulerView.tsx`.)
-2. **[P0] Add a `Mark off today` action to `StaffProfileCard`** so front-desk users can take a sick employee off the board without leaving Schedule. (R3.1 — new button + existing API call.)
-3. **[P0] Replace the `AppointmentDetailPanel` customer `<select>` with the searchable pattern from `QuickBookPanel`.** (R1.2 — extract a shared `CustomerCombobox` component.)
+1. **[P0] ~~Hoist Quick Book to the Schedule tab toolbar~~ — DONE 2026-05-07 (`1b60b48`).** Quick Book now visible on all four sub-tabs. Decision-count for "book a call-in" on the default Calendar landing: 8+ → 5.
+2. **[P0] ~~Add a `Mark off today` action to `StaffProfileCard`~~ — DONE 2026-05-07.** Optional `onMarkOff`/`markOffLabel`/`isMarkingOff` props on `StaffProfileCard`; parent (`NewSchedulerView`) owns confirm + API + toast + refresh. Hidden when employee has no shift on the viewed date. Label adapts to "Mark off today" / "Mark off Mon, May 11" so it doesn't lie when viewing non-today. 12 new tests (6 card unit + 6 wiring integration). Decision-count for "mark someone unavailable" as `front_desk`: ∞ → 3.
+3. **[P0] ~~Replace the `AppointmentDetailPanel` customer `<select>` with the searchable pattern from `QuickBookPanel`~~ — DONE 2026-05-07.** Extracted `dashboard/components/ui/CustomerCombobox.tsx` (search input + filtered native select, consistent label format, name + phone-substring filter). Both `QuickBookPanel` and `AppointmentDetailPanel` consume it; AppointmentDetailPanel's address pre-fill side effect preserved at the parent level. 11 new unit tests pin the contract. Decision-count for "book a call-in" on the Calendar default path drops further (the customer-pick step is now one search box instead of scrolling a 50+-item dropdown).
 4. **[P1] Make empty scheduler cells clickable to open Quick Book prefilled.** (R1.3 — `selectable` + `onSelectSlot` on Calendar; new click handler on Staff grid.)
 5. **[P1] Default Schedule tab to `staff` instead of `calendar`.** (R2.1 — one-line default change in `SchedulerView.tsx:37`. Verify with team that no analytics depend on month-view default.)
 6. **[P2] Add `Yesterday | Today | Tomorrow` chips to `SchedulerDateNav`.** (R2.2 — three buttons, ~20 LOC.)
