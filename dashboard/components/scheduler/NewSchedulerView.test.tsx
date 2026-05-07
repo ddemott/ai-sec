@@ -396,6 +396,46 @@ describe('NewSchedulerView', () => {
     });
   });
 
+  describe('Quick Book trigger', () => {
+    test('does NOT render the Quick Book button when onQuickBook is omitted', () => {
+      // WHO: NewSchedulerView used standalone (no parent passing the callback)
+      // WHAT: The Quick Book trigger should be hidden — the component must
+      //       remain reusable without forcing a booking dependency.
+      // WHEN: Test added 2026-05-07 with the Quick Book hoist (audit P0 #1)
+      // WHERE: dashboard/components/scheduler/NewSchedulerView.tsx onQuickBook prop
+      // WHY: Optional prop contract — only renders the button when wired.
+      render(<NewSchedulerView />);
+      expect(screen.queryByTestId('quick-book-trigger')).not.toBeInTheDocument();
+    });
+
+    test('renders the Quick Book button when onQuickBook is provided', () => {
+      // WHO: SchedulerView passing handleNewQuickBook through to the staff sub-tab
+      // WHAT: The button must surface in the toolbar so front-desk operators
+      //       can book a call-in without switching sub-tabs.
+      // WHEN: Audit P0 #1 — "hoist Quick Book to the Schedule tab toolbar"
+      // WHERE: docs/sessions/2026-05-07-front-desk-audit.md punch list
+      // WHY: Pre-2026-05-07 the button only existed on Resources/List sub-tabs,
+      //      forcing front-desk to switch tabs before booking. Test pins the
+      //      contract so a future refactor can't silently drop the button.
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      expect(screen.getByTestId('quick-book-trigger')).toBeInTheDocument();
+    });
+
+    test('clicking the Quick Book button invokes the callback', () => {
+      // WHO: Front-desk operator with phone in hand
+      // WHAT: Click → callback fires → parent SchedulerView opens the panel
+      // WHEN: Daily call flow, the most-frequent front-desk task
+      // WHERE: NewSchedulerView toolbar
+      // WHY: Affordance without function is worse than no affordance —
+      //      pin the click → handler wiring.
+      const onQuickBook = vi.fn();
+      render(<NewSchedulerView onQuickBook={onQuickBook} />);
+      fireEvent.click(screen.getByTestId('quick-book-trigger'));
+      expect(onQuickBook).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Scroll sync', () => {
     test('staff panel and grid container refs are rendered', () => {
       render(<NewSchedulerView />);

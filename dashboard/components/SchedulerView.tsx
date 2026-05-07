@@ -87,15 +87,52 @@ export default function SchedulerView() {
     setQuickBookOpen(true);
   }, [selectedDate]);
 
-  // Show calendar tab as the primary schedule surface.
-  if (activeView === 'calendar') {
-    return (
-      <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
+  // Single return so QuickBookPanel + EmployeeDayFocusPanel + AppointmentPopover
+  // are reachable from every sub-tab — Quick Book used to be Resources/List
+  // only, which made the most-frequent front-desk task (book a call-in) two
+  // clicks deeper than necessary on the default Calendar landing.
+  // See docs/sessions/2026-05-07-front-desk-audit.md punch list item #1.
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
+      {/* Calendar branch keeps its narrative header above the view-tab bar.
+          Staff branch lets NewSchedulerView render its own header (it owns
+          a richer toolbar with date nav, zoom, view-mode toggle). All other
+          branches share the toolbar below. */}
+      {activeView === 'calendar' && (
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-3 flex-wrap">
           <div>
             <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Schedule</div>
             <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Start with the calendar. Switch to staff or resources only when you need detail.</div>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {viewTabs.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveView(key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                    activeView !== key
+                      ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      : ''
+                  }`}
+                  style={activeView === key ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}
+                  data-testid={`view-tab-${key}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <Button size="sm" onClick={handleNewQuickBook} data-testid="quick-book-trigger">
+              <Plus className="w-4 h-4 mr-1" />
+              Quick Book
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {(activeView === 'resources' || activeView === 'list') && (
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-1">
             {viewTabs.map(({ key, label, icon: Icon }) => (
               <button
@@ -114,80 +151,50 @@ export default function SchedulerView() {
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-3">
+            <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+            {activeView === 'resources' && (
+              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
+                  disabled={zoomIndex <= 0}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  title="Zoom out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
+                  disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  title="Zoom in"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleRefresh} aria-label="Refresh">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button size="sm" onClick={handleNewQuickBook} data-testid="quick-book-trigger">
+              <Plus className="w-4 h-4 mr-1" />
+              Quick Book
+            </Button>
+          </div>
         </div>
-        <AppointmentView />
-      </div>
-    );
-  }
-
-  // Staff tab: use the new redesigned scheduler (with view tab bar)
-  if (activeView === 'staff') {
-    return (
-      <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
-        <NewSchedulerView viewTabs={viewTabs} activeView={activeView} onViewChange={(key) => setActiveView(key as SchedulerViewTab)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col flex-1 overflow-hidden" data-testid="scheduler-view">
-      {/* Toolbar */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-4 flex-wrap">
-        {/* View switcher */}
-        <div className="flex items-center gap-1">
-          {viewTabs.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveView(key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
-                activeView !== key
-                  ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  : ''
-              }`}
-              style={activeView === key ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}
-              data-testid={`view-tab-${key}`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Date nav + actions */}
-        <div className="flex items-center gap-3">
-          <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
-          {activeView === 'resources' && (
-            <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
-                disabled={zoomIndex <= 0}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
-                title="Zoom out"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
-                disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
-                title="Zoom in"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-          <Button variant="ghost" size="sm" onClick={handleRefresh} aria-label="Refresh">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button size="sm" onClick={handleNewQuickBook}>
-            <Plus className="w-4 h-4 mr-1" />
-            Quick Book
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* View content */}
-      <div className="flex-1 overflow-auto bg-white dark:bg-[#111]">
+      <div className={activeView === 'staff' ? 'flex-1 flex overflow-hidden' : 'flex-1 overflow-auto bg-white dark:bg-[#111]'}>
+        {activeView === 'calendar' && <AppointmentView />}
+        {activeView === 'staff' && (
+          <NewSchedulerView
+            viewTabs={viewTabs}
+            activeView={activeView}
+            onViewChange={(key) => setActiveView(key as SchedulerViewTab)}
+            onQuickBook={handleNewQuickBook}
+          />
+        )}
         {activeView === 'resources' && (
           <ResourceColumnsView
             resources={resources}
@@ -208,7 +215,7 @@ export default function SchedulerView() {
         )}
       </div>
 
-      {/* Panels */}
+      {/* Panels — rendered for every sub-tab so Quick Book reachable everywhere */}
       <QuickBookPanel
         isOpen={quickBookOpen}
         onClose={() => setQuickBookOpen(false)}

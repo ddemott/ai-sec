@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Minus, Plus, RefreshCw, Save, X, Users } from 'lucide-react';
+import { Minus, Plus, RefreshCw, Save, X, Users, Zap } from 'lucide-react';
 import { useStaticData } from '../../lib/hooks';
 import { Api } from '../../lib/api';
 import { formatHour, shiftTimeToHour, formatShiftTime, formatTime24to12 } from '../../lib/utils';
@@ -116,9 +116,13 @@ export interface NewSchedulerViewProps {
   viewTabs?: { key: string; label: string; icon: React.ElementType }[];
   activeView?: string;
   onViewChange?: (key: string) => void;
+  /** Optional Quick Book trigger — when provided, renders a button in the
+      header toolbar so the front-desk operator can book a call-in without
+      switching sub-tabs. Wired by SchedulerView. */
+  onQuickBook?: () => void;
 }
 
-export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, activeView, onViewChange }: NewSchedulerViewProps) {
+export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, activeView, onViewChange, onQuickBook }: NewSchedulerViewProps) {
   const contextTenantId = useActiveTenantId();
   const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
 
@@ -484,6 +488,22 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
         <div className="flex items-center gap-3">
           <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+
+          {/* Quick Book trigger — wired by SchedulerView so the front-desk
+              operator can book a call-in from this sub-tab too. Hidden when
+              the parent didn't pass a handler so the component remains
+              usable in other contexts. */}
+          {onQuickBook && (
+            <button
+              onClick={onQuickBook}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+              style={{ background: 'var(--accent, #3b82f6)', color: 'var(--primary-text, #fff)' }}
+              data-testid="quick-book-trigger"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              Quick Book
+            </button>
+          )}
 
           {/* View mode toggle (Item #5) */}
           <div

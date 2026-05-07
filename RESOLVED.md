@@ -4,7 +4,13 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
-## May 7, 2026 — Front-desk audit + coverage backend↔UI consistency
+## May 7, 2026 — Front-desk audit + coverage consistency + Quick Book hoist
+
+Dashboard 516 → 519 (+3 from Quick Book trigger tests). Backend 1,637 → 1,646 from the morning. Three pieces shipped:
+
+- **Quick Book hoisted to the Schedule tab toolbar (audit P0 #1).** Pre-fix, the Quick Book button only existed on Resources/List sub-tabs. Front-desk operators landing on the default Calendar view had to switch sub-tabs first, costing two clicks before the form. Fix: consolidated `SchedulerView.tsx`'s three returns into one — Quick Book button now visible in Calendar's toolbar (next to view tabs), Resources/List's toolbar (existing location), and the Staff sub-tab via a new optional `onQuickBook` prop on `NewSchedulerView`. Side benefit: `QuickBookPanel`, `EmployeeDayFocusPanel`, and `AppointmentPopover` now render at the outer level so they're reachable from every sub-tab (previously dead on Calendar + Staff). 3 new regression tests pin the trigger contract. Decision-count for "book a call-in" on the default landing: 8+ → 5.
+
+
 
 Backend tests 1,637 → 1,646 (+9 from new consistency suite). Dashboard 516/516 held. Two pieces of work landed:
 
