@@ -131,7 +131,7 @@ Service layers that exist but lack production callers. **Each is on borrowed tim
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
-**Phase 13 (Production Readiness) in progress.** 1,712 backend + 617 dashboard = 2,329 tests passing (verified 2026-05-08; 0 skips). 78 agent tests, 46 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage.
+**Phase 13 (Production Readiness) in progress.** 1,712 backend + 617 dashboard = 2,329 tests passing (verified 2026-05-08; 0 skips). 81 agent tests, 46 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage.
 
 Remaining blockers: deploy dashboard, set `DASHBOARD_URL`, beta test with DynaTire. Full task list and post-launch backlog in `docs/TODO.md`. Phases 1–12 history in `RESOLVED.md`.
 

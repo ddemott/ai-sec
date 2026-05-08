@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (next-available-slots feature complete — slices 2 + 3: /appointments/create + /agent-tools/book-with-scheduling now return `next_available` array on conflict; ConflictModal renders alternatives + click pre-fills the form. +4 dashboard tests for ConflictModal alternatives. Backend 1,712 unchanged; dashboard 613 → 617.)
+**Last refreshed:** 2026-05-08 (agent prompt: availability-check-before-book discipline + next_available alternatives propagation. +3 prompt tests. Agent 78 → 81.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale

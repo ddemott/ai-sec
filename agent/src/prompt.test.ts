@@ -102,6 +102,62 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/no.*formatting/i);
     expect(prompt).toMatch(/no.*disclaimers/i);
   });
+
+  it('HAPPY: availability-discipline section requires checking BEFORE booking', () => {
+    // WHO: voice agent picking up a call where the caller wants to book
+    // WHAT: prompt explicitly establishes that availability tools must
+    //        run BEFORE booking tools, not in parallel and not skipped
+    // WHEN: every booking conversation
+    // WHERE: # Availability discipline section
+    // WHY: pre-fix the agent would sometimes call book_appointment with
+    //        a time it guessed from context — backend rejects with
+    //        NO_AVAILABILITY, awkward "actually that's taken" follow-up
+    //        on the phone. Prompt now mandates the check-first flow.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toMatch(/Availability discipline/i);
+    // Both check-availability tools called out as the gate before booking.
+    expect(prompt).toMatch(/get_available_slots[\s\S]*get_scheduling_options[\s\S]*FIRST/i);
+    // Sequence is explicit — caller asks → check → propose → book.
+    expect(prompt).toMatch(/before.*booking|check.*before.*book/i);
+  });
+
+  it('HAPPY: next_available alternatives section instructs the agent to propose them aloud', () => {
+    // WHO: agent that just called book_with_scheduling and got
+    //        NO_AVAILABILITY back (or TIMESLOT_OCCUPIED), but the
+    //        response included a next_available array
+    // WHAT: prompt tells the agent to read those alternatives to the
+    //        caller verbally instead of asking "what other time?"
+    // WHEN: any failed booking attempt where alternatives are present
+    // WHERE: # When a booking response includes next_available section
+    // WHY: shipping the next_available data plumbing (commits e2cf4a9 +
+    //        ba8cc43) provides the alternatives, but without prompt
+    //        guidance the agent ignores the array and falls back to the
+    //        old "want to pick another time?" line — feature has zero
+    //        runtime impact until this section exists.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toMatch(/next_available/);
+    // Includes a concrete usage example — pre-formatted slot → spoken line.
+    expect(prompt).toMatch(/employee_name/);
+    // Empty-array fallback is documented so the agent knows when to
+    // revert to the old "pick another time" behavior.
+    expect(prompt).toMatch(/empty.*missing|missing.*empty/i);
+  });
+
+  it('HAPPY: NO_AVAILABILITY mapping references next_available rather than just "pick another time"', () => {
+    // WHY: pin the explicit linkage between the error code and the
+    //        alternatives surface — if a refactor breaks the mapping
+    //        the agent reverts to the generic line and the new feature
+    //        silently dies in production.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    // The NO_AVAILABILITY mapping must reference next_available so the
+    // agent knows to read those alternatives before falling back.
+    const noAvailIdx = prompt.indexOf('NO_AVAILABILITY');
+    expect(noAvailIdx).toBeGreaterThan(-1);
+    // Within the next 200 chars after NO_AVAILABILITY, next_available
+    // must appear — keeps the mapping concrete and findable for the LLM.
+    const slice = prompt.slice(noAvailIdx, noAvailIdx + 300);
+    expect(slice).toMatch(/next_available/);
+  });
 });
 
 describe('formatDateForPrompt', () => {
