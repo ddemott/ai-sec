@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (calendar-slot 15-min guard: front-end alert prevents AppointmentView slot clicks at off-grid zoom levels from opening the form with off-grid times; +10 dashboard tests for the helper, dashboard 603 → 613)
+**Last refreshed:** 2026-05-08 (4 new E2E tests closing P1 gaps: edit-overlap conflict in booking-enforcement.spec.ts; role-gate + password-reset + otp-verify in new auth-flows.spec.ts. Playwright e2e 42 → 46 passing.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -14,7 +14,7 @@
 |---|---|---|---|
 | Backend (`npm test`) | 1,704 / 1,704 | ✅ | ~140s |
 | Dashboard (`cd dashboard && npm test`) | 613 / 613 | ✅ | ~10s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 42 passed, 1 skipped | ✅ | ~110s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 46 passed, 1 skipped | ✅ | ~125s |
 
 Total unit tests: 2,307 (backend + dashboard) + 78 agent.
 
