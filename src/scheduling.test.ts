@@ -345,12 +345,31 @@ describe('Scheduling selector – auto shop scenarios', () => {
       employees,
     });
 
-    expect(options).toEqual([
-      { resourceId: 'bay4', employeeId: 'rick' },
-      { resourceId: 'bay4', employeeId: 'sara' },
-      { resourceId: 'bay5', employeeId: 'rick' },
-      { resourceId: 'bay5', employeeId: 'sara' },
-    ]);
+    // After the 2026-05-08 auto-assignment policy change, employees with
+    // equal skill counts are tiebroken by today's-busy-count, then random
+    // (so equally-qualified equally-busy techs rotate over time). Rick and
+    // Sara both have 1 skill and 0 today-busy → random order between them.
+    // Resources still iterate in input order. Assert presence of all 4
+    // combinations regardless of within-bay employee order.
+    expect(options).toHaveLength(4);
+    expect(options).toEqual(
+      expect.arrayContaining([
+        { resourceId: 'bay4', employeeId: 'rick' },
+        { resourceId: 'bay4', employeeId: 'sara' },
+        { resourceId: 'bay5', employeeId: 'rick' },
+        { resourceId: 'bay5', employeeId: 'sara' },
+      ])
+    );
+    // Bay4's options come before Bay5's (resource iteration is preserved).
+    const bay4Indexes = options
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => o.resourceId === 'bay4')
+      .map(({ i }) => i);
+    const bay5Indexes = options
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => o.resourceId === 'bay5')
+      .map(({ i }) => i);
+    expect(Math.max(...bay4Indexes)).toBeLessThan(Math.min(...bay5Indexes));
     expect(diagnostics.reason).toBe('ok');
   });
 });
@@ -983,5 +1002,84 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     expect(diagnostics.skilledEmployees).toBe(0);
     expect(diagnostics.onShiftEmployees).toBe(0);
     expect(diagnostics.reason).toBe('ok');
+  });
+});
+
+describe('selectAssignments — least-skilled-qualified auto-assignment policy (2026-05-08)', () => {
+  // WHO: voice-agent caller asking for a job multiple techs can do
+  // WHAT: selectAssignments returns the qualified employee with the
+  //        FEWEST skills first — the specialist gets the simple job,
+  //        the all-rounder stays free for jobs only they can do
+  // WHEN: any /agent-tools/scheduling-options call (and the equivalent
+  //        SQL ORDER BY in book_with_scheduling_atomic shipped 2026-05-08)
+  // WHERE: shared/scheduling.ts selectAssignments sortedEmployees
+  // WHY: pre-fix the sort was alphabetical, so Mike (5 tire skills)
+  //        won simple rotations before Carlos (3) and Dana (3). The new
+  //        policy preserves senior-tech availability for jobs only they
+  //        can do (e.g. Balancing — only Mike has it in DynaTire's seed).
+
+  const seedResources = [{ id: 'truck-1', capabilities: ['mobile-truck'] }];
+  const seedWindow = { from: new Date('2026-06-01T09:00:00Z'), to: new Date('2026-06-01T10:00:00Z') };
+
+  it('HAPPY: tire rotation — Mike (5 skills) does NOT win when 3-skill techs qualify', () => {
+    const employees = [
+      { id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
+      { id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
+      { id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+    ];
+    const { options } = selectAssignments({
+      requirements: {
+        serviceType: 'rotation',
+        requiredEmployeeSkills: ['tire-rotation'],
+        requiredResourceCapabilities: ['mobile-truck'],
+      },
+      window: seedWindow,
+      resources: seedResources,
+      employees,
+    });
+    expect(options.length).toBeGreaterThan(0);
+    // Mike must NOT be the first option. Carlos or Dana wins (random
+    // tiebreak between them is acceptable).
+    expect(options[0].employeeId).not.toBe('mike');
+  });
+
+  it('HAPPY: balancing — Mike wins by elimination (only-qualified)', () => {
+    const employees = [
+      { id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
+      { id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
+      { id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+    ];
+    const { options } = selectAssignments({
+      requirements: {
+        serviceType: 'balancing',
+        requiredEmployeeSkills: ['balancing'],
+        requiredResourceCapabilities: ['mobile-truck'],
+      },
+      window: seedWindow,
+      resources: seedResources,
+      employees,
+    });
+    expect(options).toHaveLength(1);
+    expect(options[0].employeeId).toBe('mike');
+  });
+
+  it('HAPPY: tire install — Dana (3) wins over Mike (5)', () => {
+    const employees = [
+      { id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
+      { id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
+      { id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+    ];
+    const { options } = selectAssignments({
+      requirements: {
+        serviceType: 'install',
+        requiredEmployeeSkills: ['tire-install'],
+        requiredResourceCapabilities: ['mobile-truck'],
+      },
+      window: seedWindow,
+      resources: seedResources,
+      employees,
+    });
+    // Only Mike + Dana have tire-install. Dana wins by skill count.
+    expect(options[0].employeeId).toBe('dana');
   });
 });

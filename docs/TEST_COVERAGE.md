@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (4 new E2E tests closing P1 gaps: edit-overlap conflict in booking-enforcement.spec.ts; role-gate + password-reset + otp-verify in new auth-flows.spec.ts. Playwright e2e 42 → 46 passing.)
+**Last refreshed:** 2026-05-08 (auto-assignment policy: book_with_scheduling_atomic + selectAssignments now pick lowest-skill qualified employee → least-busy-today → random. Senior staff stay free for jobs only they can do. +3 backend tests pinning the policy. Backend 1,704 → 1,707.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,7 +12,7 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,704 / 1,704 | ✅ | ~140s |
+| Backend (`npm test`) | 1,707 / 1,707 | ✅ | ~120s |
 | Dashboard (`cd dashboard && npm test`) | 613 / 613 | ✅ | ~10s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 46 passed, 1 skipped | ✅ | ~125s |
 

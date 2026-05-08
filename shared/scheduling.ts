@@ -184,8 +184,32 @@ export function selectAssignments(args: {
   let options: AssignmentOption[] = [];
 
   if (needEmployee) {
+    // Pre-sort employees by skill count ASC (least-skilled qualified
+    // first), then today's existing-appointment count ASC (least busy),
+    // then random — mirrors the book_with_scheduling_atomic ORDER BY
+    // policy added 2026-05-08. Senior staff stay free for jobs that
+    // actually need them.
+    const todayBusyCount = (employeeId: string): number => {
+      // Count appointments already on this employee's plate during the day
+      // of the requested window. existingAppointments doesn't carry
+      // employee_id today (only resourceId), so this falls back to 0
+      // until the upstream caller threads it through. The RPC has the
+      // proper SQL-side count; this helper is best-effort for now.
+      return existing.filter(
+        (a) => (a as { employeeId?: string }).employeeId === employeeId
+      ).length;
+    };
+    const sortedEmployees = [...employees].sort((a, b) => {
+      const skillDiff = (a.skills?.length ?? 0) - (b.skills?.length ?? 0);
+      if (skillDiff !== 0) return skillDiff;
+      const busyDiff = todayBusyCount(a.id) - todayBusyCount(b.id);
+      if (busyDiff !== 0) return busyDiff;
+      // Random tiebreaker so equally-skilled and equally-busy employees
+      // rotate over time. Manager can override via UI.
+      return Math.random() - 0.5;
+    });
     for (const r of availableResources) {
-      for (const e of employees) {
+      for (const e of sortedEmployees) {
         const onShift = e.onShift !== undefined
           ? e.onShift
           : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);

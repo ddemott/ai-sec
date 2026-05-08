@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Zap } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -12,7 +12,7 @@ import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 import { ConflictModal, type BookingConflict } from './ConflictModal';
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
-interface QuickBookEmployee { id: string | number; name: string }
+interface QuickBookEmployee { id: string | number; name: string; skills?: string[] }
 interface QuickBookResource { id: string; name: string }
 interface QuickBookService { id: string | number; name: string; duration_minutes?: number }
 
@@ -91,6 +91,38 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       setResourceId('');
     }
   }, [eligibleEmployees, eligibleResources, employeeId, resourceId]);
+
+  // Auto-suggest the least-skilled qualified employee when a service is
+  // picked but no employee is chosen yet. Mirrors the RPC's auto-
+  // assignment policy (2026-05-08): senior-time preservation. The
+  // operator can override by picking a different option in the dropdown,
+  // or clear by picking "Unassigned". We don't auto-select on every
+  // render — only on the first eligible-employee population for a given
+  // service pick — so a manual "Unassigned" choice sticks.
+  const autoSuggestedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!serviceId) {
+      autoSuggestedRef.current = null;
+      return;
+    }
+    if (employeeId) return; // operator already picked
+    if (autoSuggestedRef.current === serviceId) return; // already suggested for this service
+    if (eligibleEmployees.length === 0) return;
+
+    const sorted = [...eligibleEmployees].sort((a, b) => {
+      const aSkills = a.skills?.length ?? 0;
+      const bSkills = b.skills?.length ?? 0;
+      if (aSkills !== bSkills) return aSkills - bSkills;
+      // Tiebreaker: alphabetical for predictable client-side suggestion.
+      // (The backend RPC adds a least-busy-today tiebreaker that needs
+      // appointment data we don't fetch into Quick Book; alphabetical
+      // here is a stable approximation, and the operator can always
+      // override before submit.)
+      return a.name.localeCompare(b.name);
+    });
+    setEmployeeId(String(sorted[0].id));
+    autoSuggestedRef.current = serviceId;
+  }, [serviceId, employeeId, eligibleEmployees]);
 
   // Inline "no qualified option" state. Only meaningful when a service is
   // chosen — without a service, any employee/resource is valid.
