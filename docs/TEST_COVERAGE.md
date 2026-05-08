@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (E2E hardening: fixed 2 pre-existing flakes in workflows.spec.ts + added 5 multi-tenant isolation tests + added 1 form-level 15-min rejection test + workers:1 in playwright.config to prevent across-spec parallelism; Playwright e2e 32 → 42 passing, 1 skipped)
+**Last refreshed:** 2026-05-08 (calendar-slot 15-min guard: front-end alert prevents AppointmentView slot clicks at off-grid zoom levels from opening the form with off-grid times; +10 dashboard tests for the helper, dashboard 603 → 613)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -13,7 +13,7 @@
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | 1,704 / 1,704 | ✅ | ~140s |
-| Dashboard (`cd dashboard && npm test`) | 603 / 603 | ✅ | ~10s |
+| Dashboard (`cd dashboard && npm test`) | 613 / 613 | ✅ | ~10s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 42 passed, 1 skipped | ✅ | ~110s |
 
 Total unit tests: 2,307 (backend + dashboard) + 78 agent.

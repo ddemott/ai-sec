@@ -23,6 +23,8 @@ import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
 import { AppointmentDetailProvider, useAppointmentDetail } from '../lib/AppointmentDetailContext';
 import { ConflictModal, type BookingConflict } from './scheduler/ConflictModal';
+import { showToast } from './ui/Toast';
+import { isSlotOnFifteenMinuteGrid } from '../lib/calendarSlot';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -500,7 +502,22 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
               onSelectSlot={
                 onSelectSlot
                   ? ({ start, end }: { start: Date | string; end: Date | string }) => {
-                      onSelectSlot({ start: new Date(start), end: new Date(end) });
+                      const slot = { start: new Date(start), end: new Date(end) };
+                      // Front-end guard: react-big-calendar zoom levels go
+                      // down to 5min, but the DB enforces a 15-min grid.
+                      // Reject off-grid clicks here so the form never opens
+                      // with off-grid prefill times. The backend Zod + DB
+                      // CHECK + JS form validator stay as defense-in-depth
+                      // for direct API hits — this guard just spares the
+                      // operator the wasted form-fill round-trip.
+                      if (!isSlotOnFifteenMinuteGrid(slot)) {
+                        showToast(
+                          'Please pick a time in 15-minute increments (:00, :15, :30, :45).',
+                          'warning'
+                        );
+                        return;
+                      }
+                      onSelectSlot(slot);
                     }
                   : undefined
               }
