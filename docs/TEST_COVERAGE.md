@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (auto-assignment policy: book_with_scheduling_atomic + selectAssignments now pick lowest-skill qualified employee → least-busy-today → random. Senior staff stay free for jobs only they can do. +3 backend tests pinning the policy. Backend 1,704 → 1,707.)
+**Last refreshed:** 2026-05-08 (next-available-slots helper: `findNextAvailableSlots` searches forward in 15-min increments, applies the same skill+shift+overlap filters as the booking RPC, returns lowest-skill emp per slot. +5 real-DB tests covering all-idle / lower-skill-busy-senior-idle / all-busy-cascade / empty-horizon / open-service. Backend 1,707 → 1,712. Slice 1 of the "next available time" feature; slices 2 and 3 wire it into the agent and dashboard conflict modal.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,7 +12,7 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,707 / 1,707 | ✅ | ~120s |
+| Backend (`npm test`) | 1,712 / 1,712 | ✅ | ~110s |
 | Dashboard (`cd dashboard && npm test`) | 613 / 613 | ✅ | ~10s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 46 passed, 1 skipped | ✅ | ~125s |
 
