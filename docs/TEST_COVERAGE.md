@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (booking-enforcement slice 2: ConflictModal +6, QuickBookPanel conflict-modal wiring +2, dashboard appointmentValidation +20 dashboard; dashboard 575 → 603. Backend unchanged at 1,704)
+**Last refreshed:** 2026-05-08 (booking-enforcement slice 3: 5 new E2E tests in booking-enforcement.spec.ts — out-of-hours, employee/resource/partial overlap, UI ConflictModal — all self-contained per the test-isolation memory; Playwright e2e 32 → 37 passing)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -14,7 +14,7 @@
 |---|---|---|---|
 | Backend (`npm test`) | 1,704 / 1,704 | ✅ | ~140s |
 | Dashboard (`cd dashboard && npm test`) | 603 / 603 | ✅ | ~10s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 32 passed, 1 skipped | ✅ | ~65s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 37 passed, 1 skipped | ✅ | ~80s |
 
 Total unit tests: 2,307 (backend + dashboard) + 78 agent.
 

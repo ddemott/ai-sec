@@ -140,15 +140,16 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     await page.getByTestId('quick-book-service').selectOption({ index: 1 });
     await page.getByTestId('quick-book-resource').selectOption({ index: 1 });
 
-    // Pick a time 35 days out with an odd minute offset — past the seeded
-    // 2-week appointment window AND unlikely to collide with anything else
-    // a parallel test or a re-run might have created. The GiST exclusion
-    // constraint on (resource_id, [start_time, end_time)) rejects overlaps.
+    // Pick a time 35 days out — past the seeded 2-week appointment window AND
+    // unlikely to collide with anything else a parallel test or a re-run might
+    // have created. Times must land on the 15-minute grid (DB CHECK
+    // appointments_start_time_15min, applied 2026-05-08); 10:15-10:45 is grid-
+    // aligned and not a typical seed value.
     const future = new Date();
     future.setDate(future.getDate() + 35);
-    future.setHours(10, 13, 0, 0);
+    future.setHours(10, 15, 0, 0);
     const startStr = future.toISOString().slice(0, 16);
-    future.setHours(10, 43, 0, 0);
+    future.setHours(10, 45, 0, 0);
     const endStr = future.toISOString().slice(0, 16);
 
     const startInput = panel.locator('input[type="datetime-local"]').first();

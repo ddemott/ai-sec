@@ -275,13 +275,13 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     expect(truckId).toBeTruthy();
     expect(customerId).toBeTruthy();
 
-    // Use TODAY's date with an unusual minute offset — the List sub-tab
+    // Use TODAY's date with a non-seed minute offset — the List sub-tab
     // displays the scheduler's `selectedDate` (today by default), so a
-    // far-future row would be off-screen. The 23-min offset is a long
-    // enough gap from any seeded appointment to avoid the GiST overlap
-    // exclusion.
+    // far-future row would be off-screen. 13:45 is grid-aligned (DB CHECK
+    // appointments_start_time_15min, applied 2026-05-08) and not a typical
+    // seed value, so it avoids both the constraint and overlap rejection.
     const start = new Date();
-    start.setHours(13, 23, 0, 0);
+    start.setHours(13, 45, 0, 0);
     const end = new Date(start);
     end.setMinutes(start.getMinutes() + 30);
 
