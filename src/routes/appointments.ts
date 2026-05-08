@@ -6,6 +6,7 @@ import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
+import { findOverlappingAppointment, isOverlapError, type AppointmentConflict } from '../services/conflictLookup';
 import { assertRowAffected } from './routeHelpers';
 
 const AppointmentCreateSchema = z.object({
@@ -54,8 +55,11 @@ export function registerAppointmentRoutes(
       return reply.status(400).send({ success: false, error: timeValidationError });
     }
 
-    const res = await withTenantClient(body.tenant_id, async (client) => {
-      return client.query(
+    type RpcResult =
+      | { success: true; appointment_id: string; error_message: null }
+      | { success: false; appointment_id: null; error_message: string };
+    const outcome = await withTenantClient(body.tenant_id, async (client) => {
+      const rpcRes = await client.query<RpcResult>(
         // Positional args mirror the RPC signature (12 params; null-defaulted
         // tail args supplied explicitly so the call is unambiguous):
         // tenant, resource, customer, start, end, description, call_id,
@@ -77,8 +81,24 @@ export function registerAppointmentRoutes(
           body.service_id || null,
         ]
       );
+      const result = rpcRes.rows[0];
+      // On overlap, query for the conflicting appointment in the same
+      // connection so the operator can see WHICH booking is blocking.
+      // Other failure modes (past time, no skilled employee, etc.) skip
+      // this lookup — they have nothing to point at.
+      let conflict: AppointmentConflict | null = null;
+      if (result && !result.success && isOverlapError(result.error_message)) {
+        conflict = await findOverlappingAppointment(client, {
+          tenantId: body.tenant_id,
+          resourceId: body.resource_id,
+          employeeId: body.employee_id ? body.employee_id.toString() : null,
+          startTime: body.start_time,
+          endTime: body.end_time,
+        });
+      }
+      return { result, conflict };
     });
-    const result = res.rows[0];
+    const { result, conflict } = outcome;
     if (!result) {
       return reply.status(500).send({ success: false, error: 'Booking RPC returned no result' });
     }
@@ -86,9 +106,16 @@ export function registerAppointmentRoutes(
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
       syncAppointmentToAll(pool, body.tenant_id, result.appointment_id, 'create', req.log);
       return reply.send({ success: true, appointment_id: result.appointment_id });
-    } else {
-      return reply.status(400).send({ success: false, error: result.error_message });
     }
+    if (conflict) {
+      return reply.status(409).send({
+        success: false,
+        error: result.error_message,
+        error_code: 'TIMESLOT_OCCUPIED',
+        conflict,
+      });
+    }
+    return reply.status(400).send({ success: false, error: result.error_message });
   }, 'Failed to create appointment'));
 
   app.get('/appointments', withHandler(async (req: AppRequest, reply) => {

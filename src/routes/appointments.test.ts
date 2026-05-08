@@ -183,17 +183,21 @@ describe('POST /appointments/create', () => {
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
     });
 
-    it('SAD: returns 400 with RPC error_message when book_appointment_atomic returns success=false', async () => {
+    it('SAD: non-overlap RPC failures pass through with 400 + plain error (no conflict lookup)', async () => {
         // WHO: dashboard user trying to book a slot that fails an RPC constraint
-        //       (overlap, past time, business hours, etc.)
-        // WHAT: route forwards the RPC's `error_message` verbatim to the client
+        //       OTHER THAN overlap — e.g. past time, no skilled employee, off-shift
+        // WHAT: route forwards the RPC's `error_message` verbatim with status 400
+        //        and skips the conflict-lookup query (nothing to point at)
         // WHEN: book_appointment_atomic returns `{ success: false, error_message }`
-        // WHERE: appointments.ts result.success branch
-        // WHY: the RPC's diagnostic messages ("Resource already booked", "Cannot
-        //       book in the past") are crafted for end-user display; the route
-        //       must surface them, not replace with a generic "booking failed"
+        //        with a non-"already booked" message
+        // WHERE: appointments.ts isOverlapError(...) gate
+        // WHY: the RPC's diagnostic messages for non-overlap failures are useful
+        //       on their own ("Employee is not on shift during this time"); a
+        //       conflict block would be misleading because there's no conflicting
+        //       appointment to display. Also: skipping the lookup saves a DB
+        //       round-trip on every non-overlap rejection.
         handle.queryResponses.push({
-            rows: [{ success: false, appointment_id: null, error_message: 'Resource already booked during this timeslot' }],
+            rows: [{ success: false, appointment_id: null, error_message: 'Employee is not on shift during this time' }],
         });
 
         const res = await app.inject({
@@ -205,8 +209,103 @@ describe('POST /appointments/create', () => {
         expect(res.statusCode).toBe(400);
         expect(res.json()).toEqual({
             success: false,
-            error: 'Resource already booked during this timeslot',
+            error: 'Employee is not on shift during this time',
         });
+        // Critical: only 1 RPC query, no follow-up conflict lookup.
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(1);
+        expect(dataQueries[0].text).toContain('book_appointment_atomic');
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
+    it('SAD: overlap rejection returns 409 + conflict block with existing appointment details', async () => {
+        // WHO: front-desk operator trying to double-book a resource/employee
+        // WHAT: RPC returns "Resource already booked"; route runs the follow-up
+        //        SELECT to find the conflicting row and surfaces its details
+        //        (id, customer name, employee name, resource name, time range)
+        //        so the operator can decide what to do. Status flips to 409.
+        // WHEN: any /appointments/create where the GiST exclusion constraint or
+        //        the RPC's pre-check rejects on time-overlap
+        // WHERE: appointments.ts isOverlapError + findOverlappingAppointment
+        // WHY: a string error alone ("Resource already booked") gives the
+        //       operator no actionable info. Showing "Bay 1 is taken by Alice
+        //       with Mike from 2:00-2:30 (Tire rotation)" lets them pick another
+        //       time, ask Alice to reschedule, or look up Alice's record.
+        handle.queryResponses.push(
+            { rows: [{ success: false, appointment_id: null, error_message: 'Resource already booked during this timeslot' }] },
+            {
+                rows: [{
+                    appointment_id: 'existing-id',
+                    start_time: '2026-05-10T14:00:00.000Z',
+                    end_time: '2026-05-10T14:30:00.000Z',
+                    customer_name: 'Alice',
+                    employee_name: 'Mike',
+                    resource_name: 'Bay 1',
+                    description: 'Tire rotation',
+                }],
+            },
+        );
+
+        const res = await app.inject({
+            method: 'POST',
+            url: '/appointments/create',
+            payload: validCreatePayload,
+        });
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'Resource already booked during this timeslot',
+            error_code: 'TIMESLOT_OCCUPIED',
+            conflict: {
+                appointment_id: 'existing-id',
+                start_time: '2026-05-10T14:00:00.000Z',
+                end_time: '2026-05-10T14:30:00.000Z',
+                customer_name: 'Alice',
+                employee_name: 'Mike',
+                resource_name: 'Bay 1',
+                description: 'Tire rotation',
+            },
+        });
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+        // Two data queries: the RPC + the conflict lookup. Pin shape so a
+        // refactor that re-orders or drops the lookup fails this test.
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(2);
+        expect(dataQueries[0].text).toContain('book_appointment_atomic');
+        expect(dataQueries[1].text).toMatch(/SELECT[\s\S]*FROM appointments/i);
+    });
+
+    it('SAD: overlap rejection but conflict lookup empty returns 400 + plain error (defensive)', async () => {
+        // WHO: extreme-edge race — RPC said "already booked" but by the time
+        //        the follow-up SELECT runs, the conflicting row was canceled
+        //        or soft-deleted (millisecond window between snapshot reads)
+        // WHAT: route falls back to the plain 400 + error_message shape — no
+        //        bogus conflict block claiming details we don't actually have
+        // WHY: the dashboard's conflict modal would show empty fields if the
+        //       backend returned a partial conflict object; null lets the UI
+        //       branch on "no conflict to display" and just toast the message
+        handle.queryResponses.push(
+            { rows: [{ success: false, appointment_id: null, error_message: 'Employee already booked' }] },
+            { rows: [] }, // conflict lookup finds nothing
+        );
+
+        const res = await app.inject({
+            method: 'POST',
+            url: '/appointments/create',
+            payload: validCreatePayload,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'Employee already booked',
+        });
+        expect(res.json().conflict).toBeUndefined();
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
     });
 
