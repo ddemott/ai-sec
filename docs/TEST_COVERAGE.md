@@ -14,7 +14,7 @@
 |---|---|---|---|
 | Backend (`npm test`) | 1,659 / 1,659 | ✅ | ~150s |
 | Dashboard (`cd dashboard && npm test`) | 575 / 575 | ✅ | ~30s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 28 passed, 1 skipped | ✅ | ~40s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 32 passed, 1 skipped | ✅ | ~65s |
 
 Total unit tests: 2,234 (backend + dashboard) + 78 agent.
 
