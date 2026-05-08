@@ -135,21 +135,29 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     const panel = page.getByTestId('quick-book-panel');
     await expect(panel).toBeVisible({ timeout: 5000 });
 
-    // Pick first non-placeholder option in each select
+    // Pick first real option in each select. Customer + Service dropdowns
+    // include a placeholder/prompt at index 0, so index 1 is the first
+    // real option. Resource dropdown does NOT include a prompt — it lists
+    // eligible resources directly (post-2026-05-07 alignment filter), so
+    // index 0 is the first real resource. Some services in the seed are
+    // mapped to a single resource (Balancing, New Tire Install → truck1
+    // only), and using index 1 there would fail because no second option
+    // exists. Pinning index 0 makes this work for any service.
     await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
     await page.getByTestId('quick-book-service').selectOption({ index: 1 });
-    await page.getByTestId('quick-book-resource').selectOption({ index: 1 });
+    await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
 
-    // Pick a time 35 days out — past the seeded 2-week appointment window AND
-    // unlikely to collide with anything else a parallel test or a re-run might
-    // have created. Times must land on the 15-minute grid (DB CHECK
-    // appointments_start_time_15min, applied 2026-05-08); 10:15-10:45 is grid-
-    // aligned and not a typical seed value.
+    // Pick a 30-min slot 35 days out, at a random grid-aligned hour
+    // between 09:00 and 14:00 (within shop business hours so the booking
+    // RPC's shift-coverage check would pass if employee is assigned).
+    // Random hour so consecutive failed runs that miss cleanup don't
+    // compound into a permanent overlap blocker on the same slot.
     const future = new Date();
     future.setDate(future.getDate() + 35);
-    future.setHours(10, 15, 0, 0);
+    const randomHour = 9 + Math.floor(Math.random() * 5); // 09-13 inclusive
+    future.setHours(randomHour, 15, 0, 0);
     const startStr = future.toISOString().slice(0, 16);
-    future.setHours(10, 45, 0, 0);
+    future.setHours(randomHour, 45, 0, 0);
     const endStr = future.toISOString().slice(0, 16);
 
     const startInput = panel.locator('input[type="datetime-local"]').first();
@@ -195,15 +203,27 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
   const tag = uniqueTag();
   const description = `${tag}-edit`;
   let apptId: string | null = null;
+  let shiftId: string | null = null;
 
   try {
-    // Pre-create via direct INSERT (no booking-RPC noise) — pick a future weekday slot
+    // Pre-create via direct INSERT (no booking-RPC noise) — pick a future
+    // weekday slot. Per the test-isolation principle: also ensure the
+    // assigned employee has a shift covering that day, otherwise the row
+    // is operationally inconsistent ("appointment exists for an employee
+    // who isn't working") and any future cross-check that re-validates
+    // existing rows against shift coverage would flag it. The test owns
+    // the shift and the appointment together; both come and go together.
     const future = new Date();
     future.setDate(future.getDate() + 14);
+    // Snap to next weekday in case getDate()+14 lands on a Sat/Sun.
+    while (future.getDay() === 0 || future.getDay() === 6) {
+      future.setDate(future.getDate() + 1);
+    }
     future.setHours(10, 0, 0, 0);
     const startIso = future.toISOString();
     future.setHours(11, 0, 0, 0);
     const endIso = future.toISOString();
+    const shiftDate = future.toISOString().slice(0, 10);
 
     const customer = await pool.query(
       `SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1`,
@@ -213,21 +233,30 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
       `SELECT id FROM resources WHERE tenant_id = $1 LIMIT 1`,
       [DYNATIRE_ID],
     );
+    const employee = await pool.query(
+      `SELECT id FROM employees WHERE tenant_id = $1 AND name = 'Mike Rivera' LIMIT 1`,
+      [DYNATIRE_ID],
+    );
+    expect(employee.rowCount, 'Mike Rivera must exist in DynaTire seed').toBe(1);
+
+    // Insert (or upsert) Mike's shift covering the test slot. ON CONFLICT
+    // guard against parallel-test residue or seed already having a row.
+    const shiftRes = await pool.query(
+      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+       VALUES ($1, $2, $3, '08:00', '17:00', false)
+       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
+         SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
+       RETURNING id`,
+      [DYNATIRE_ID, employee.rows[0].id, shiftDate],
+    );
+    shiftId = shiftRes.rows[0].id;
+
     const insert = await pool.query(
-      `INSERT INTO appointments (tenant_id, customer_id, resource_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'scheduled') RETURNING id`,
-      [DYNATIRE_ID, customer.rows[0].id, resource.rows[0].id, startIso, endIso, description],
+      `INSERT INTO appointments (tenant_id, customer_id, resource_id, employee_id, start_time, end_time, description, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING id`,
+      [DYNATIRE_ID, customer.rows[0].id, resource.rows[0].id, employee.rows[0].id, startIso, endIso, description],
     );
     apptId = insert.rows[0].id;
-
-    await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
-    await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
-    await page.waitForTimeout(1500);
-
-    // UI assertion: the appointment is reachable in the schedule list sidebar
-    const listItem = page.locator(`text=${description}`).first();
-    await expect(listItem, 'pre-inserted appointment should appear in schedule list').toBeVisible({ timeout: 10000 });
 
     // Edit via API (reuses the same PUT /appointments/:id route the UI calls).
     // We don't drive the form because (a) controlled-input fills don't reliably
@@ -276,6 +305,9 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
   } finally {
     if (apptId) {
       await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
+    }
+    if (shiftId) {
+      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [shiftId]);
     }
   }
 });

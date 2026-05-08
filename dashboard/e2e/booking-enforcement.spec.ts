@@ -536,29 +536,39 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
 
   try {
     const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
+    // Use Truck 2 + a far-future date completely outside seed and any
+    // other E2E's range. Tests 2-4 use FUTURE_DATE = '2026-06-15'; this
+    // test uses '2026-06-22' so even a worst-case parallel run with
+    // sloppy cleanup can't collide. The Quick Book form fills any date
+    // the test types in, so today-vs-future doesn't matter for the UI
+    // contract — what matters is that the form submission produces
+    // exactly the conflict response the modal renders against.
+    const truckId = await findResourceIdByName('Truck 2');
     const customerId = await findCustomerId();
     expect(mikeId).toBeTruthy();
-    expect(truckId).toBeTruthy();
+    expect(truckId, 'Truck 2 must exist in DynaTire seed').toBeTruthy();
 
-    // Shift for Mike. Use TODAY to keep the Quick Book defaults predictable.
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
+    const UI_TEST_DATE = '2026-06-22'; // Monday, no seed conflicts
     const shiftIns = await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
        RETURNING id`,
-      [DYNATIRE_ID, mikeId, todayStr]
+      [DYNATIRE_ID, mikeId, UI_TEST_DATE]
     );
     scheduleIdToCleanup = shiftIns.rows[0].id;
 
-    // Existing 14:00-14:30 booking that we'll try to overlap from the UI.
-    const existingStart = new Date(today);
-    existingStart.setHours(14, 0, 0, 0);
-    const existingEnd = new Date(today);
-    existingEnd.setHours(14, 30, 0, 0);
+    // Pre-clean any residue at this exact slot from a previously-failed run.
+    await pool.query(
+      `DELETE FROM appointments
+        WHERE tenant_id = $1 AND resource_id = $2
+          AND start_time = $3::timestamptz`,
+      [DYNATIRE_ID, truckId, `${UI_TEST_DATE}T14:00:00.000Z`]
+    );
+
+    // Existing 14:00-14:30 UTC booking that we'll try to overlap from the UI.
+    const existingStart = new Date(`${UI_TEST_DATE}T14:00:00.000Z`);
+    const existingEnd = new Date(`${UI_TEST_DATE}T14:30:00.000Z`);
     const existing = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
@@ -615,7 +625,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     await expect(page.getByText('That time is already booked')).toBeVisible({ timeout: 5000 });
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Mike Rivera');
-    await expect(dialog).toContainText('Truck 1');
+    await expect(dialog).toContainText('Truck 2');
 
     // No second row in DB.
     expect(await countAppointments(tag)).toBe(0);
@@ -628,3 +638,93 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     }
   }
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// 6. Form-level 15-minute increment rejection through the UI
+// ────────────────────────────────────────────────────────────────────────────
+test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline error and never reaches the backend', async ({ page }) => {
+  // WHO: front-desk operator who types or pastes "1:23" into the start
+  //        time input (or whose autofill software produces an off-grid
+  //        time that bypasses the browser's step="900" hint)
+  // WHAT: dashboard's validateAppointmentTimeRange (lib/appointmentValidation.ts)
+  //        catches it before the API call fires; QuickBookPanel surfaces
+  //        the increment error inline, no /appointments/create POST
+  // WHEN: any UI booking attempt with start_time or end_time NOT on
+  //        :00/:15/:30/:45
+  // WHERE: QuickBookPanel.handleBook → validateAppointmentTimeRange
+  // WHY: the DB CHECK constraint and Zod refinement are the safety nets;
+  //        the FORM is the user-facing layer. If a refactor removes the
+  //        client validator, the operator submits → backend rejects with
+  //        a generic 400 → the increment-specific message is lost. This
+  //        test pins the friendlier inline rendering.
+  const tag = uniqueTag();
+
+  await page.goto('/dashboard');
+  await page.waitForTimeout(500);
+  // Switch to DynaTire so the Quick Book has populated dropdowns.
+  await page.evaluate(
+    ({ id, name }) => {
+      localStorage.setItem('managedTenantId', id);
+      localStorage.setItem('managedTenantName', name);
+    },
+    { id: DYNATIRE_ID, name: 'DynaTire Mobile Service' }
+  );
+  await page.reload();
+  await page.waitForTimeout(1500);
+
+  // Open Schedule tab + Quick Book panel.
+  await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+  await page.getByRole('button', { name: /Quick Book/i }).first().click();
+  await expect(page.getByTestId('quick-book-panel')).toBeVisible({ timeout: 10000 });
+
+  // Wait for dropdowns to populate, then pick the first option in each.
+  await expect(page.getByTestId('quick-book-customer')).toBeVisible({ timeout: 10000 });
+  await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
+  await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
+
+  // Fill an off-grid start time. The browser's step="900" attribute
+  // nudges the spinner to 15-min increments but does NOT block direct
+  // string input (that's how a paste / autofill / programmatic-value
+  // attack would land here in production).
+  const future = new Date();
+  future.setDate(future.getDate() + 30);
+  while (future.getDay() === 0 || future.getDay() === 6) {
+    future.setDate(future.getDate() + 1);
+  }
+  const dateStr = future.toISOString().slice(0, 10);
+
+  const startInputs = page.locator('input[type="datetime-local"]');
+  // Off-grid: 14:23 (clearly not on the 15-min grid).
+  await startInputs.nth(0).fill(`${dateStr}T14:23`);
+  await startInputs.nth(1).fill(`${dateStr}T14:53`);
+
+  // Track network calls — the rejection must happen client-side, no POST.
+  let createCalled = false;
+  page.on('request', (req) => {
+    if (req.url().includes('/appointments/create') && req.method() === 'POST') {
+      createCalled = true;
+    }
+  });
+
+  // Submit.
+  await page.getByTestId('quick-book-confirm').click();
+
+  // The validator rejects synchronously; the inline error appears within
+  // a render cycle. No need for a long timeout.
+  await expect(
+    page.getByText(/15-minute increment|15-min increment|:00, :15, :30, :45/i)
+  ).toBeVisible({ timeout: 3000 });
+
+  // Critical: zero POSTs to /appointments/create — the validator caught it
+  // before the network call. Wait a beat to let any in-flight request land.
+  await page.waitForTimeout(500);
+  expect(createCalled, 'no /appointments/create POST should fire on off-grid input').toBe(false);
+
+  // Belt-and-suspenders: nothing in the DB tagged with this run.
+  const dbCheck = await pool.query(
+    `SELECT count(*)::int AS n FROM appointments WHERE description = $1`,
+    [tag]
+  );
+  expect(dbCheck.rows[0].n).toBe(0);
+});
+

@@ -5,6 +5,12 @@ export default defineConfig({
   timeout: 30000,
   expect: { timeout: 10000 },
   fullyParallel: false,
+  // workers:1 forces serial execution across spec files. fullyParallel:false
+  // only disables WITHIN-file parallelism; without this setting Playwright
+  // runs spec files in parallel by default (workers = half CPU cores), which
+  // breaks the test-isolation principle when two specs touch the same tenant
+  // at overlapping today-times — the GiST exclusion fails the loser.
+  workers: 1,
   retries: 0,
   use: {
     baseURL: 'https://localhost:4000',

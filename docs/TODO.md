@@ -111,6 +111,44 @@ Slices 1–3 build the human-facing surface now. AI prevention items below are T
 - [ ] **AI prevention — pre-flight tool fallback (escalation, only if needed).** If beta data shows the agent skips the availability check >5% of the time despite the prompt rule, ship `/agent-tools/propose-times` returning 3-5 conflict-free 15-minute slots given a window. Server-enforced — agent reads from a list rather than picking arbitrary times. Don't build speculatively; only escalate if prompt-only proves unreliable.
 - [ ] **AI prevention — E2E coverage.** Conversation-shape tests (using the existing agent test harness) that prove the agent: (a) calls availability before booking; (b) when availability returns a conflict, proposes an alternative rather than booking the conflicted slot; (c) honors 15-minute increment in proposed times; (d) when all slots are taken, gracefully tells the caller and offers to take a message. Required before relying on the prompt-only enforcement in production.
 
+### E2E coverage gaps surfaced 2026-05-08 (deep-dive analysis)
+
+After shipping slices 1-3 (37→42 E2E tests passing), a coverage analysis identified concrete gaps in the launch-readiness surface. Tier P0 items closed (multi-tenant isolation E2E, 15-min form-level rejection E2E, two pre-existing flakes fixed); P1/P2 below remain pickable.
+
+#### P1 — high-value (real flows, real risk)
+
+- [ ] **Calendar sync on booking.** Appointment create fires `syncAppointmentToAll()` to Google + Outlook. If sync silently breaks, customer calendars miss appointments. Hard to E2E because real OAuth tokens are needed; could mock the Google/Outlook API at the network level (Playwright `route()` interceptor) and assert the right outbound POST is made on appointment create.
+- [ ] **Setup wizard finalize → first usable tenant.** New tenant registers → completes wizard → can immediately book. critical-ux test 19 covers step guards but not the full finalize path that posts `/shifts/expand-weekly` and hydrates the tenant's first booking-ready state.
+- [ ] **Password reset flow.** `/auth/forgot-password` → email link → `/reset-password` → set new password → login. Untested. Real risk for any user who locks themselves out — and the dev path emits the reset link to logs (no real SMTP in test), which the spec can capture.
+- [ ] **Cancel + restore appointment.** Soft-cancel keeps the row; we test the slot frees up (booking-alignment test 9). Missing: clicking on a canceled appointment, seeing canceled state, attempting to reactivate (or confirming the system says "this is canceled, book a new one").
+- [ ] **Front-desk role 403 on owner-only routes.** workflows test 14 covers the layout-hide; missing: a front-desk user actually hitting `/users/invite` / `/users/:id/role` and getting 403 from the route, not just hidden in nav.
+- [ ] **Booking past-time form-level rejection.** Like the 15-min form-rejection test shipped in slice 3 — pin that the form rejects past times with a clear inline error before any API call. Cheap, ~30 lines.
+- [ ] **Scheduler shows the new appointment in real-time.** After successful booking, the scheduler grid should reflect the new row without manual refresh. Likely works (existing wiring) but unverified end-to-end.
+- [ ] **Appointment-edit doesn't trip its own overlap constraint.** Edit an appointment to a new time that's free → succeeds. Edit to a time taken by another appointment → rejected with the same conflict modal as create. We have it for create; not for update.
+- [ ] **OTP / phone-verification end-to-end.** Voice agent's `/agent-tools/send-verification-code` → `/agent-tools/verify-phone-code`. Unit-tested; no E2E that sends a code and verifies it round-trips.
+
+#### P2 — nice-to-have but real gaps
+
+- [ ] **All 5 industry templates produce a working setup.** Currently DynaTire (automotive) is the only one exercised end-to-end. Salon, mobile_tire, auto_bays, ai_platform have setup-wizard differences that aren't pinned by E2E.
+- [ ] **Solo wizard vs multi-employee wizard divergence.** Two paths in the wizard; only one is exercised in audit.
+- [ ] **Knowledge base upload + Q&A retrieval.** Upload PDF → embedding generated → ask question → policy-answer route returns relevant chunk. Untested end-to-end.
+- [ ] **Reminder scheduled on appointment create.** `reminder_schedules` row appears with the right `scheduled_for`; worker delivers it (or, in dev, no-ops without crashing).
+- [ ] **Tenant delete cascade.** Owner deletes tenant → all appointments, employees, customers, mappings, schedules go. Backend has tests; no E2E proof.
+- [ ] **Vocabulary overrides flow through the UI.** Setting "tech" → "stylist" should change labels everywhere immediately. Tested in vocabulary-guard but not E2E.
+- [ ] **Version-history restore for a soft-deleted record.** Critical for "we accidentally deleted X — restore it" customer-trust scenario.
+- [ ] **Date-nav chips honor tenant timezone.** Yesterday/Today/Tomorrow logic depends on tenant's IANA zone. Test 26 (date-nav chips dashboard component) covers UI; not the timezone correctness end-to-end.
+
+#### Deliberately NOT adding to E2E (better at other levels)
+
+- RPC concurrency races (`booking-concurrency.test.ts` is real-DB and sufficient)
+- Token refresh / JWT lifetime (unit-tested)
+- Validation edge cases — long names, unicode, etc. (Zod tests are right level)
+- RLS policy enforcement at DB layer (`rls.test.ts` exhaustive)
+- Mobile responsiveness (manual on real devices is more meaningful — tracked under "Mobile responsiveness validated" elsewhere in this doc)
+- Cross-browser (Chrome only; Firefox/Safari only matters if a customer reports an issue)
+- Real OAuth flows for Google/Outlook/Jobber/HubSpot/Square/ServiceTitan/Stripe (would require credential rotation in CI; manual before release is more honest)
+- Performance / load (separate tool — k6, Artillery)
+
 ---
 
 ## CI Rot — RESOLVED (2026-04-30, recurrence resolved 2026-05-06)
