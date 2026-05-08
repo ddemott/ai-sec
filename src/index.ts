@@ -82,13 +82,13 @@ const logger = buildLogger({ service: 'ai-sec-backend' });
 const app = Fastify(
   (useHttps
     ? {
-        logger,
+        loggerInstance: logger,
         https: {
           key: fs.readFileSync(path.join(certDir, 'localhost-key.pem')),
           cert: fs.readFileSync(path.join(certDir, 'localhost-cert.pem')),
         },
       }
-    : { logger }) as any
+    : { loggerInstance: logger }) as any
 );
 
 // Enforce HTTPS when behind a proxy

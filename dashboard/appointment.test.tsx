@@ -424,30 +424,37 @@ describe('AppointmentView sad paths', () => {
     expect(updateFetchHappened).not.toHaveBeenCalled()
   })
 
-  test('mock-mode handleDelete is a no-op (no DELETE fetch when sample data is showing)', async () => {
-    // WHO: same logged-out / fetch-failure viewer who tries to delete a
+  test('mock-mode handleDelete is a no-op (no /cancel POST when sample data is showing)', async () => {
+    // WHO: same logged-out / fetch-failure viewer who tries to cancel a
     //      sample appointment
     // WHAT: AppointmentView's `if (usingMockData) { setError(...); return; }`
-    //       guard inside handleDelete prevents the DELETE /appointments/:id
-    //       from ever being issued
+    //       guard inside handleDelete prevents the POST
+    //       /appointments/:id/cancel from ever being issued
     // WHEN: GET /appointments rejected → mock-mode active → user clicks
-    //       delete on Bob Smith's mock row, then confirms in the native
-    //       browser confirm dialog
-    // WHERE: dashboard/components/AppointmentView.tsx → handleDelete, line 300
-    //        guard. The dialog comes from window.confirm (native), which we
-    //        stub to return true so the guard is the only thing that can
-    //        block the DELETE.
-    // WHY: deleting a fake appointment via API would issue a DELETE for an
-    //      ID that doesn't exist — silently 404 from the user's view and
-    //      pollute the audit log. The guard short-circuits before the
-    //      fetch; this test pins that behavior so a refactor that re-orders
-    //      the guards (e.g. moves the mock-mode check below the API call)
-    //      surfaces immediately.
+    //       Cancel Appointment on Bob Smith's mock row, then confirms in
+    //       the native browser confirm dialog
+    // WHERE: dashboard/components/AppointmentView.tsx → handleDelete
+    //        usingMockData guard. The dialog comes from window.confirm
+    //        (native), stubbed to return true so the guard is the only
+    //        thing that can block the API call.
+    // WHY: handleDelete switched from hard-DELETE to soft-cancel via
+    //      POST /appointments/:id/cancel (2026-05-07). Mock-mode
+    //      appointments don't exist server-side, so issuing the cancel
+    //      would silently 404 and pollute the audit log. This test pins
+    //      both contracts at once: (a) the guard still short-circuits
+    //      under mock-mode, AND (b) the request shape that would have
+    //      gone out is the new POST /cancel — not the old DELETE. A
+    //      future refactor that re-orders the guards OR reverts to hard
+    //      delete surfaces here.
+    const cancelFetchHappened = vi.fn()
     const deleteFetchHappened = vi.fn()
     global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : ''
-      if (url.includes('/appointments') && (!init?.method || init.method === 'GET') && !url.includes('/update')) {
+      if (url.includes('/appointments') && (!init?.method || init.method === 'GET') && !url.includes('/update') && !url.includes('/cancel')) {
         return Promise.reject(new Error('simulated network error'))
+      }
+      if (url.includes('/appointments/') && url.includes('/cancel') && init?.method === 'POST') {
+        cancelFetchHappened()
       }
       if (url.includes('/appointments/') && init?.method === 'DELETE') {
         deleteFetchHappened()
@@ -468,8 +475,8 @@ describe('AppointmentView sad paths', () => {
       } as Response)
     })
 
-    // Stub window.confirm to return true so the guard at handleDelete:299
-    // doesn't bail before reaching the usingMockData check at handleDelete:300.
+    // Stub window.confirm to return true so the only thing that can block
+    // the cancel API call is the usingMockData guard.
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(<AppointmentView />)
@@ -479,17 +486,16 @@ describe('AppointmentView sad paths', () => {
     const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
     fireEvent.click(listItems[0])
 
-    // The delete button lives in AppointmentDetailPanel and is labeled
-    // "Cancel Appointment" (the action handler is handleDelete despite the
-    // user-facing copy — see AppointmentDetailPanel.tsx:103).
-    const deleteButtons = await screen.findAllByRole('button', { name: /Cancel Appointment/i })
-    fireEvent.click(deleteButtons[0])
+    // "Cancel Appointment" button in AppointmentDetailPanel.
+    const cancelButtons = await screen.findAllByRole('button', { name: /Cancel Appointment/i })
+    fireEvent.click(cancelButtons[0])
 
     await waitFor(() => {
-      // Confirm was called (proves we reached the guard with confirm()=true)
       expect(confirmSpy).toHaveBeenCalled()
     })
 
+    expect(cancelFetchHappened).not.toHaveBeenCalled()
+    // Belt-and-braces: also confirm the legacy DELETE path is not used.
     expect(deleteFetchHappened).not.toHaveBeenCalled()
 
     confirmSpy.mockRestore()

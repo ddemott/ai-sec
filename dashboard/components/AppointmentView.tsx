@@ -61,6 +61,16 @@ export interface AppointmentViewProps {
       audit P1 #4). When omitted the calendar stays read-only on slots —
       the existing "+" affordance still creates appointments. */
   onSelectSlot?: (range: { start: Date; end: Date }) => void;
+  /** When set on mount/change, AppointmentView pre-selects this appointment
+      and enters edit mode automatically. Wired by SchedulerView so the
+      AppointmentPopover's "Edit" button (visible from Resources / List /
+      Staff sub-tabs) can open the same edit panel that the Calendar
+      sub-tab uses. */
+  initialEditAppointmentId?: string | null;
+  /** Called once after `initialEditAppointmentId` has been consumed so the
+      parent can clear its state and a re-render with the same id won't
+      re-trigger edit mode. */
+  onInitialEditConsumed?: () => void;
 }
 
 export default function AppointmentView(props: AppointmentViewProps = {}) {
@@ -71,7 +81,7 @@ export default function AppointmentView(props: AppointmentViewProps = {}) {
   )
 }
 
-function AppointmentViewInner({ onSelectSlot }: AppointmentViewProps) {
+function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitialEditConsumed }: AppointmentViewProps) {
   const tenantId = useActiveTenantId();
   const { customers, resources, employees, services } = useStaticData(tenantId);
   const vocab = useVocabulary();
@@ -140,6 +150,32 @@ function AppointmentViewInner({ onSelectSlot }: AppointmentViewProps) {
     fetchAppointments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
+
+  // Pre-select + enter edit mode when SchedulerView hands us an appointment
+  // id (popover Edit button from a non-Calendar sub-tab). Waits for the
+  // appointments list to be populated so we can find the row. The
+  // setTimeout(0) lands setIsEditing(true) after the
+  // selectedAppointment-changed effect below auto-resets it to false on the
+  // setSelectedAppointment call that runs in this effect — without it, the
+  // pre-edit handoff would silently drop into view-only mode.
+  useEffect(() => {
+    if (!initialEditAppointmentId) return;
+    if (appointments.length === 0) return;
+    const appt = appointments.find(a => a.id === initialEditAppointmentId);
+    if (!appt) {
+      onInitialEditConsumed?.();
+      return;
+    }
+    setSelectedAppointment(appt);
+    setShowDetailOnMobile(true);
+    setIsCreating(false);
+    const t = setTimeout(() => {
+      setIsEditing(true);
+      onInitialEditConsumed?.();
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEditAppointmentId, appointments]);
 
   useEffect(() => {
     if (selectedAppointment) {
@@ -325,27 +361,34 @@ function AppointmentViewInner({ onSelectSlot }: AppointmentViewProps) {
 
   async function handleDelete() {
     if (!selectedAppointment) return
-    if (!confirm('Permanently delete this appointment record?')) return
+    if (!confirm('Cancel this appointment? It will be marked canceled and the slot will free up, but the record stays for history.')) return
     if (usingMockData) {
-      setError('Sample appointments cannot be deleted. Create a real appointment after logging in.')
+      setError('Sample appointments cannot be canceled. Create a real appointment after logging in.')
       return
     }
     if (!tenantId) {
-      setError('Please log in to delete appointments.')
+      setError('Please log in to cancel appointments.')
       return
     }
 
     try {
-      const res = await Api.appointments.delete(selectedAppointment.id)
+      // Soft-cancel rather than hard-delete: the appointment row stays
+      // in the DB with status='canceled' so re-clicks from a stale
+      // list don't return 404, the audit trail is preserved, and the
+      // row can still be referenced by reports / call summaries. The
+      // backend soft-cancel route also drops the slot from synced
+      // calendars + CRMs, matching what an operator expects from
+      // "cancel."
+      const res = await Api.appointments.cancel(selectedAppointment.id, tenantId)
       if (res.success) {
           setSelectedAppointment(null)
           fetchAppointments()
       } else {
-          setError(res.error || 'Failed to delete appointment')
+          setError(res.error || 'Failed to cancel appointment')
       }
     } catch (e) {
         console.error(e)
-        setError('Connection error — could not delete appointment')
+        setError('Connection error — could not cancel appointment')
     }
   }
 

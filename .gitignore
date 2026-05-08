@@ -48,3 +48,10 @@ dashboard/dist/
 # Production secrets
 .env.production
 .env.production.save
+
+# Journal-loop generator output. Retired 2026-05-07 (commit 6b43c8e).
+# The generator still runs on a separate schedule and recreates these
+# files; gitignored so output stays untracked rather than reappearing
+# in working-tree status every session.
+improvement-ideas.md
+.remember/

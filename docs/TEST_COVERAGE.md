@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-07 (coverage-ui-consistency +9, logger +7, booking-mapping +6 backend; logger +6 agent; Mark off today +12, CustomerCombobox +11, empty-cell click +9, date-nav chips +5, booking-alignment +13 dashboard)
+**Last refreshed:** 2026-05-07 (coverage-ui-consistency +9, logger +7, booking-mapping +6 backend; logger +6 agent; Mark off today +12, CustomerCombobox +11, empty-cell click +9, date-nav chips +5, booking-alignment +13, popover Edit/Cancel +5 dashboard)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -13,10 +13,10 @@
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | 1,659 / 1,659 | ✅ | ~150s |
-| Dashboard (`cd dashboard && npm test`) | 570 / 570 | ✅ | ~30s |
+| Dashboard (`cd dashboard && npm test`) | 575 / 575 | ✅ | ~30s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 28 passed, 1 skipped | ✅ | ~40s |
 
-Total unit tests: 2,229 (backend + dashboard) + 78 agent.
+Total unit tests: 2,234 (backend + dashboard) + 78 agent.
 
 ## Unit test coverage (V8)
 

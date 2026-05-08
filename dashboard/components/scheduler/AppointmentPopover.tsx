@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Clock, User, MapPin, Wrench, Calendar } from 'lucide-react';
+import { Clock, User, MapPin, Wrench, Calendar, Edit, Trash2 } from 'lucide-react';
 import { formatPhone } from '../../lib/phone';
 import type { SchedulerAppointment } from './useSchedulerData';
 
@@ -10,6 +10,14 @@ export interface AppointmentPopoverProps {
   anchorRect: DOMRect;
   onClose: () => void;
   onOpenDetails?: (appointmentId: string) => void;
+  /** When provided, renders an "Edit" button. Parent owns navigation —
+      typically switches to the Calendar sub-tab and pre-selects the
+      appointment in edit mode. */
+  onEdit?: (appointmentId: string) => void;
+  /** When provided, renders a "Cancel" button. Parent owns the API call
+      (soft-cancel via `Api.appointments.cancel`), confirm dialog, and
+      data refresh. Hidden when the appointment is already canceled. */
+  onCancel?: (appointmentId: string) => void;
 }
 
 function formatTime(iso: string): string {
@@ -29,6 +37,8 @@ export function AppointmentPopover({
   anchorRect,
   onClose,
   onOpenDetails,
+  onEdit,
+  onCancel,
 }: AppointmentPopoverProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -177,6 +187,50 @@ export function AppointmentPopover({
             <Calendar className="w-3.5 h-3.5" />
             Open Details
           </button>
+        </>
+      )}
+
+      {/* Edit + Cancel actions — available from any view (Resources / List /
+          Staff / Calendar). Pre-fix the popover was read-only, forcing the
+          operator to navigate to the Calendar sub-tab and click the
+          appointment again before editing or canceling. The "Cancel"
+          button hits the soft-cancel endpoint (status='canceled') so the
+          row stays in the DB and re-clicks don't 404. */}
+      {(onEdit || onCancel) && appointment.status !== 'canceled' && (
+        <>
+          <div style={{ height: 1, background: 'var(--border-soft, #333)', margin: '0 16px' }} />
+          <div className="flex gap-2 px-4 py-3">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(appointment.id)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-colors hover:brightness-125"
+                style={{
+                  background: 'var(--accent-muted, rgba(59,130,246,0.15))',
+                  color: 'var(--accent, #3b82f6)',
+                  border: '1px solid var(--accent-muted, rgba(59,130,246,0.3))',
+                }}
+                data-testid="appointment-popover-edit"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                Edit
+              </button>
+            )}
+            {onCancel && (
+              <button
+                onClick={() => onCancel(appointment.id)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-colors hover:brightness-125"
+                style={{
+                  background: 'var(--danger-muted, rgba(239,68,68,0.12))',
+                  color: 'var(--danger, #ef4444)',
+                  border: '1px solid var(--danger-muted, rgba(239,68,68,0.3))',
+                }}
+                data-testid="appointment-popover-cancel"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Cancel
+              </button>
+            )}
+          </div>
         </>
       )}
     </div>

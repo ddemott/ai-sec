@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
+import { Api } from '../lib/api';
 import { useStaticData } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
+import { showToast } from './ui/Toast';
 import { useSchedulerData } from './scheduler/useSchedulerData';
 import type { SchedulerAppointment } from './scheduler/useSchedulerData';
 import { SchedulerDateNav } from './scheduler/SchedulerDateNav';
@@ -76,6 +78,12 @@ export default function SchedulerView() {
 
   const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
 
+  // When the popover's Edit button fires from a non-Calendar sub-tab, we
+  // switch to Calendar AND ask AppointmentView to pre-select + edit this
+  // appointment on its next render. Simpler than hoisting the
+  // AppointmentDetailContext above SchedulerView.
+  const [pendingEditAppointmentId, setPendingEditAppointmentId] = useState<string | null>(null);
+
   const handleAppointmentClick = useCallback(
     (appt: SchedulerAppointment, e: React.MouseEvent) => {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -83,6 +91,40 @@ export default function SchedulerView() {
         prev?.appointment.id === appt.id ? null : { appointment: appt, anchorRect: rect }
       );
     }, []);
+
+  // Edit-from-popover (any sub-tab → Calendar with the appointment in
+  // edit mode). Closes the architectural gap where Resources / List /
+  // Staff sub-tabs only opened a read-only popover and the operator had
+  // to navigate to Calendar and click the appointment again.
+  const handlePopoverEdit = useCallback((appointmentId: string) => {
+    setPendingEditAppointmentId(appointmentId);
+    setActiveView('calendar');
+    setApptPopover(null);
+  }, []);
+
+  // Cancel-from-popover (any sub-tab). Soft-cancel via the existing
+  // /appointments/:id/cancel endpoint — sets status='canceled' but keeps
+  // the row, so a stale-list re-click can't 404 the way the old hard
+  // DELETE would. Refreshes both the scheduler data and the static data
+  // (employees / resources / services / customers) so any view shows
+  // the canceled status immediately.
+  const handlePopoverCancel = useCallback(async (appointmentId: string) => {
+    if (!tenantId) return;
+    if (!confirm('Cancel this appointment? The slot will free up but the record stays for history.')) return;
+    try {
+      const res = await Api.appointments.cancel(appointmentId, tenantId);
+      if (res.success) {
+        showToast('Appointment canceled', 'success');
+        setApptPopover(null);
+        refreshScheduler();
+        refreshStaticData();
+      } else {
+        showToast(res.error || 'Failed to cancel appointment', 'error');
+      }
+    } catch {
+      showToast('Connection error — could not cancel appointment', 'error');
+    }
+  }, [tenantId, refreshScheduler, refreshStaticData]);
 
   const handleQuickBooked = useCallback(() => {
     refreshScheduler();
@@ -202,6 +244,8 @@ export default function SchedulerView() {
       <div className={activeView === 'staff' ? 'flex-1 flex overflow-hidden' : 'flex-1 overflow-auto bg-white dark:bg-[#111]'}>
         {activeView === 'calendar' && (
           <AppointmentView
+            initialEditAppointmentId={pendingEditAppointmentId}
+            onInitialEditConsumed={() => setPendingEditAppointmentId(null)}
             onSelectSlot={({ start, end }) => {
               const startHour = start.getHours();
               const endHour = end.getHours();
@@ -277,6 +321,8 @@ export default function SchedulerView() {
           resourceName={apptPopover.appointment.resources?.name || null}
           anchorRect={apptPopover.anchorRect}
           onClose={() => setApptPopover(null)}
+          onEdit={handlePopoverEdit}
+          onCancel={handlePopoverCancel}
         />
       )}
     </div>
