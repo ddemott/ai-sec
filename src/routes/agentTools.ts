@@ -19,6 +19,7 @@ import { withHandler, type AppRequest } from '../middleware';
 import { applyTimezone } from '../services/timezoneUtils';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
+import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
 import {
   selectAssignments,
@@ -365,25 +366,18 @@ export function registerAgentToolRoutes(
       return fail(reply, timeValidationError);
     }
 
-    const result = await withTenantClient(args.tenant_id, async (client) => {
-      let customerId: string | null = null;
-      const existing = await client.query<{ id: string }>(
-        `SELECT id FROM customers
-          WHERE tenant_id = $1 AND phone = $2
-            AND (is_deleted IS NULL OR is_deleted = false)`,
-        [args.tenant_id, normalized]
-      );
-      if (existing.rows.length > 0) {
-        customerId = existing.rows[0].id;
-      } else {
-        const inserted = await client.query<{ id: string }>(
-          `INSERT INTO customers (tenant_id, phone, name)
-             VALUES ($1, $2, $3) RETURNING id`,
-          [args.tenant_id, normalized, args.name || 'Valued Customer']
-        );
-        customerId = inserted.rows[0]?.id ?? null;
-      }
+    // Step 1 — get-or-create the customer in its own transaction so the row
+    // persists even if the booking RPC below returns failure. See
+    // services/customerLookup.ts for the rationale.
+    const customerId = await getOrCreateCustomerByPhone(
+      withTenantClient,
+      args.tenant_id,
+      normalized,
+      args.name || 'Valued Customer'
+    );
 
+    // Step 2 — booking RPC in a fresh transaction.
+    const result = await withTenantClient(args.tenant_id, async (client) => {
       // p_assignment_id is TEXT in the current RPC (holds UUID post-Phase 9).
       const rpc = await client.query<{
         success: boolean;
@@ -553,6 +547,20 @@ export function registerAgentToolRoutes(
       );
     }
     const normalized = normalizePhone(args.phone)!;
+
+    // Step 1 — get-or-create the customer in its own transaction. The RPC
+    // would otherwise do this inside its own plpgsql function execution;
+    // pulling it out guarantees the customer persists even when the RPC
+    // returns NO_AVAILABILITY / TIMESLOT_OCCUPIED / etc., so the next
+    // attempt doesn't re-collect the caller's identity. The RPC still
+    // receives phone+name in step 2 — its lookup-by-phone will find the
+    // customer we just inserted and skip its own INSERT branch.
+    await getOrCreateCustomerByPhone(
+      withTenantClient,
+      args.tenant_id,
+      normalized,
+      args.name || 'Caller'
+    );
 
     const result = await withTenantClient(args.tenant_id, async (client) => {
       const rpc = await client.query<{

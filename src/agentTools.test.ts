@@ -830,6 +830,9 @@ describe('agentTools /book-with-scheduling', () => {
     // WHAT: Route returns the booked details for the agent to confirm aloud
     const { app, queries } = buildApp({
       queryResponses: [
+        // The customerLookup helper runs first (separate transaction) — an
+        // existing customer match short-circuits the INSERT branch.
+        { rows: [{ id: 'cust-1' }] },
         {
           rows: [
             {
@@ -864,8 +867,10 @@ describe('agentTools /book-with-scheduling', () => {
       employee_name: 'Jane',
     });
     // WHY: Normalized phone must reach the RPC so the customer upsert path
-    //       inside it matches previously-stored records
-    expect(queries[0].params?.[1]).toBe('+15551234567');
+    //       inside it matches previously-stored records. Helper SELECT is
+    //       queries[0]; RPC is queries[1] (post-2026-05-08 customer-create
+    //       refactor). Param shape for the RPC: $1=tenant_id, $2=phone.
+    expect(queries[1].params?.[1]).toBe('+15551234567');
   });
 
   it('SAD: RPC error_code is surfaced so the agent can be specific', async () => {
@@ -875,6 +880,8 @@ describe('agentTools /book-with-scheduling', () => {
     //       not the generic "no availability" fallback
     const { app } = buildApp({
       queryResponses: [
+        // customerLookup helper finds an existing row before the RPC fires.
+        { rows: [{ id: 'cust-occupied' }] },
         {
           rows: [
             {
@@ -911,7 +918,12 @@ describe('agentTools /book-with-scheduling', () => {
   it('SAD: missing RPC row falls back to NO_AVAILABILITY', async () => {
     // WHO: RPC returned nothing (should not happen, but be defensive)
     // WHAT: Route must never crash the agent — fall back cleanly
-    const { app } = buildApp({ queryResponses: [{ rows: [] }] });
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ id: 'cust-fallback' }] }, // customer SELECT succeeds first
+        { rows: [] },                         // RPC returns no row
+      ],
+    });
     const res = await post(app, '/agent-tools/book-with-scheduling', {
       tenant_id: TENANT_ID,
       phone: '5551234567',
@@ -1539,5 +1551,159 @@ describe('agentTools /verify-phone-code', () => {
       code: 'abcdef',
     });
     expectValidationFailure(res, queries);
+  });
+});
+
+describe('agentTools customer persistence on booking failure', () => {
+  // Feature areas covered: /agent-tools/book-appointment +
+  // /agent-tools/book-with-scheduling. These tests pin the contract that
+  // when a NEW caller's phone produces a customer row but the booking RPC
+  // then returns failure, the customer row remains in the DB. Regression
+  // protection for the 2026-05-08 refactor that pulled customer
+  // get-or-create out of the booking transaction (services/customerLookup.ts).
+
+  it('book-appointment: RPC failure does not block the customer INSERT from happening first', async () => {
+    // WHO: First-time caller; the requested timeslot just got taken
+    // WHAT: Route SHOULD have done SELECT(empty) → INSERT(customer) →
+    //        RPC(failure). Even though RPC returns success:false, queries
+    //        prove the customer write already executed.
+    // WHERE: /agent-tools/book-appointment after the customerLookup refactor
+    // WHEN: Voice agent collects a phone, then the slot lookup races a
+    //        concurrent booking and loses
+    // WHY: Without this guarantee, the agent would have to re-collect the
+    //        caller's phone+name on every retry — terrible UX. With it,
+    //        the next attempt re-uses the persisted customer_id.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] },                            // SELECT — no existing row
+        { rows: [{ id: 'newly-created' }] },     // INSERT — customer persists
+        {
+          rows: [
+            {
+              success: false,
+              appointment_id: null,
+              error_message: 'That time slot just got booked.',
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      name: 'Carol',
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    // Critical assertions: the customer SELECT and INSERT happened BEFORE
+    // the RPC. If a future refactor put RPC first, queries would be in a
+    // different order and these would fail.
+    expect(queries).toHaveLength(3);
+    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[1].text).toContain('INSERT INTO customers');
+    expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Carol']);
+    expect(queries[2].text).toContain('book_appointment_atomic');
+  });
+
+  it('book-with-scheduling: customer get-or-create runs before the RPC, even when RPC fails', async () => {
+    // WHO: First-time caller hitting the scheduling-options branch
+    // WHAT: Route SHOULD do SELECT(empty) → INSERT(customer) → RPC(failure)
+    //        with NO_AVAILABILITY. Customer persists for the next attempt.
+    // WHERE: /agent-tools/book-with-scheduling after the customerLookup refactor
+    // WHY: Pre-refactor, customer-create lived inside book_with_scheduling_atomic's
+    //        plpgsql body. RETURN-style failure paths happened to commit it via
+    //        connection auto-commit, but a future refactor wrapping the call in
+    //        explicit BEGIN/COMMIT would have silently rolled it back. Pulling
+    //        it into a separate withTenantClient call removes that fragility.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] },                            // SELECT — no existing row
+        { rows: [{ id: 'sched-customer' }] },    // INSERT — customer persists
+        {
+          rows: [
+            {
+              success: false,
+              appointment_id: null,
+              resource_id: null,
+              resource_name: null,
+              employee_id: null,
+              employee_name: null,
+              booked_start: null,
+              booked_end: null,
+              customer_id: null,
+              error_message: 'No available scheduling options',
+              error_code: 'NO_AVAILABILITY',
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Diane',
+      description: 'Tire rotation',
+      window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T18:00:00Z' },
+      requirements: {
+        serviceType: 'rotation',
+        requiredEmployeeSkills: ['tire'],
+        requiredResourceCapabilities: [],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    // Customer write happened BEFORE the RPC, regardless of failure.
+    expect(queries).toHaveLength(3);
+    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[1].text).toContain('INSERT INTO customers');
+    expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);
+    expect(queries[2].text).toContain('book_with_scheduling_atomic');
+  });
+
+  it('book-with-scheduling: existing customer is reused — only SELECT + RPC fire', async () => {
+    // WHAT: Repeat caller — SELECT finds the row, INSERT is skipped, RPC fires
+    // WHY: Verifies the helper short-circuits correctly in the scheduling path
+    //       (mirroring the equivalent test for book-appointment above)
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ id: 'cust-known' }] },
+        {
+          rows: [
+            {
+              success: true,
+              appointment_id: 'sched-appt',
+              resource_id: 'r1',
+              resource_name: 'Truck 1',
+              employee_id: 'e1',
+              employee_name: 'Mike',
+              booked_start: '2026-05-01T14:00:00Z',
+              booked_end: '2026-05-01T14:30:00Z',
+              customer_id: 'cust-known',
+              error_message: null,
+              error_code: null,
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      description: 'Tire rotation',
+      window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T18:00:00Z' },
+      requirements: {
+        serviceType: 'rotation',
+        requiredEmployeeSkills: ['tire'],
+        requiredResourceCapabilities: [],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(queries).toHaveLength(2);
+    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[1].text).toContain('book_with_scheduling_atomic');
   });
 });
