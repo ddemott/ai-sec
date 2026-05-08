@@ -7,6 +7,7 @@ import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { findOverlappingAppointment, isOverlapError, type AppointmentConflict } from '../services/conflictLookup';
+import { findNextAvailableSlots, type AvailableSlot } from '../services/availabilitySearch';
 import { assertRowAffected } from './routeHelpers';
 
 const AppointmentCreateSchema = z.object({
@@ -87,6 +88,7 @@ export function registerAppointmentRoutes(
       // Other failure modes (past time, no skilled employee, etc.) skip
       // this lookup — they have nothing to point at.
       let conflict: AppointmentConflict | null = null;
+      let nextAvailable: AvailableSlot[] = [];
       if (result && !result.success && isOverlapError(result.error_message)) {
         conflict = await findOverlappingAppointment(client, {
           tenantId: body.tenant_id,
@@ -95,10 +97,49 @@ export function registerAppointmentRoutes(
           startTime: body.start_time,
           endTime: body.end_time,
         });
+        // Also fetch the next-available slots so the conflict modal can
+        // show "Try one of these times instead" — same connection, same
+        // tenant scope. Service requirements derive from the booking's
+        // service_id when present (preferred) or fall open otherwise.
+        let requiredSkills: string[] = [];
+        let requiredCaps: string[] = [];
+        let durationMinutes = Math.max(
+          15,
+          Math.round(
+            (new Date(body.end_time).getTime() - new Date(body.start_time).getTime()) /
+              (60 * 1000 * 15)
+          ) * 15
+        );
+        if (body.service_id) {
+          const svcRes = await client.query<{
+            duration_minutes: number | null;
+            required_skills: string[] | null;
+            required_resources: string[] | null;
+          }>(
+            `SELECT duration_minutes, required_skills, required_resources
+               FROM services WHERE id = $1 AND tenant_id = $2`,
+            [body.service_id, body.tenant_id]
+          );
+          if (svcRes.rows[0]) {
+            requiredSkills = svcRes.rows[0].required_skills ?? [];
+            requiredCaps = svcRes.rows[0].required_resources ?? [];
+            if (svcRes.rows[0].duration_minutes) {
+              durationMinutes = svcRes.rows[0].duration_minutes;
+            }
+          }
+        }
+        nextAvailable = await findNextAvailableSlots(client, {
+          tenantId: body.tenant_id,
+          fromTime: body.start_time,
+          durationMinutes,
+          requiredSkills,
+          requiredCapabilities: requiredCaps,
+          count: 5,
+        });
       }
-      return { result, conflict };
+      return { result, conflict, nextAvailable };
     });
-    const { result, conflict } = outcome;
+    const { result, conflict, nextAvailable } = outcome;
     if (!result) {
       return reply.status(500).send({ success: false, error: 'Booking RPC returned no result' });
     }
@@ -113,6 +154,7 @@ export function registerAppointmentRoutes(
         error: result.error_message,
         error_code: 'TIMESLOT_OCCUPIED',
         conflict,
+        next_available: nextAvailable,
       });
     }
     return reply.status(400).send({ success: false, error: result.error_message });

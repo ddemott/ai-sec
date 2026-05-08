@@ -114,4 +114,120 @@ describe('ConflictModal', () => {
     );
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('HAPPY: renders next-available alternatives section when slots + handler provided', () => {
+    // WHO: operator who hit a conflict; backend returned suggestions
+    // WHAT: each suggested slot renders as a clickable button showing
+    //        time + employee + resource
+    // WHEN: /appointments/create returns 409 with non-empty next_available
+    // WHERE: ConflictModal — new "Try one of these times instead" section
+    // WHY: pre-fix the operator had to manually try other times until one
+    //        worked. With suggestions, one click pre-fills the form.
+    const onPick = vi.fn();
+    render(
+      <ConflictModal
+        isOpen
+        onClose={() => {}}
+        conflict={baseConflict}
+        nextAvailable={[
+          {
+            start_time: '2026-05-10T15:00:00.000Z',
+            end_time: '2026-05-10T15:30:00.000Z',
+            employee_id: 'emp-carlos',
+            employee_name: 'Carlos',
+            resource_id: 'res-truck1',
+            resource_name: 'Truck 1',
+            skill_count: 3,
+          },
+          {
+            start_time: '2026-05-10T15:30:00.000Z',
+            end_time: '2026-05-10T16:00:00.000Z',
+            employee_id: 'emp-dana',
+            employee_name: 'Dana',
+            resource_id: 'res-truck1',
+            resource_name: 'Truck 1',
+            skill_count: 3,
+          },
+        ]}
+        onPickAlternative={onPick}
+      />
+    );
+
+    expect(screen.getByText(/Try one of these times instead/i)).toBeInTheDocument();
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.getByText('Dana')).toBeInTheDocument();
+  });
+
+  it('WIRING: clicking an alternative invokes onPickAlternative and closes the modal', () => {
+    // WHY: operator picks a suggested slot → host pre-fills form and the
+    //        modal goes away so the form is usable again. Both the pick
+    //        callback AND onClose must fire from one click.
+    const onPick = vi.fn();
+    const onClose = vi.fn();
+    const slot = {
+      start_time: '2026-05-10T15:00:00.000Z',
+      end_time: '2026-05-10T15:30:00.000Z',
+      employee_id: 'emp-carlos',
+      employee_name: 'Carlos',
+      resource_id: 'res-truck1',
+      resource_name: 'Truck 1',
+      skill_count: 3,
+    };
+    render(
+      <ConflictModal
+        isOpen
+        onClose={onClose}
+        conflict={baseConflict}
+        nextAvailable={[slot]}
+        onPickAlternative={onPick}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId(`conflict-modal-alt-${slot.start_time}`));
+    expect(onPick).toHaveBeenCalledWith(slot);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('GUARD: alternatives section hidden when nextAvailable is empty', () => {
+    // WHY: empty alternatives means backend found no free slots in the
+    //        24h horizon. Don't render an empty header — the modal would
+    //        look broken. The "Pick another time" button (which closes
+    //        the modal so operator can try elsewhere) handles that case.
+    render(
+      <ConflictModal
+        isOpen
+        onClose={() => {}}
+        conflict={baseConflict}
+        nextAvailable={[]}
+        onPickAlternative={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/Try one of these times instead/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('conflict-modal-alternatives')).not.toBeInTheDocument();
+  });
+
+  it('GUARD: alternatives section hidden when onPickAlternative is not provided', () => {
+    // WHY: a host that doesn't wire the callback can't usefully render
+    //        clickable suggestions. Suppress the section rather than
+    //        render dead-end buttons.
+    render(
+      <ConflictModal
+        isOpen
+        onClose={() => {}}
+        conflict={baseConflict}
+        nextAvailable={[
+          {
+            start_time: '2026-05-10T15:00:00.000Z',
+            end_time: '2026-05-10T15:30:00.000Z',
+            employee_id: 'e',
+            employee_name: 'C',
+            resource_id: 'r',
+            resource_name: 'T',
+            skill_count: 3,
+          },
+        ]}
+      />
+    );
+    expect(screen.queryByText(/Try one of these times instead/i)).not.toBeInTheDocument();
+  });
 });

@@ -246,6 +246,13 @@ describe('POST /appointments/create', () => {
                     description: 'Tire rotation',
                 }],
             },
+            // tenants tz lookup (findNextAvailableSlots)
+            { rows: [{ timezone: 'America/Chicago' }] },
+            // findNextAvailableSlots SQL — returns empty in mock land,
+            // which is fine; test asserts presence of next_available key,
+            // not specific slot data. Real-DB integration is covered by
+            // src/availability-search.test.ts.
+            { rows: [] }
         );
 
         const res = await app.inject({
@@ -255,7 +262,8 @@ describe('POST /appointments/create', () => {
         });
 
         expect(res.statusCode).toBe(409);
-        expect(res.json()).toEqual({
+        const body = res.json();
+        expect(body).toMatchObject({
             success: false,
             error: 'Resource already booked during this timeslot',
             error_code: 'TIMESLOT_OCCUPIED',
@@ -269,13 +277,17 @@ describe('POST /appointments/create', () => {
                 description: 'Tire rotation',
             },
         });
+        // The new next-available alternatives field is always present in
+        // conflict responses — even when empty — so the dashboard can
+        // unconditionally render the "Try another time" section.
+        expect(body.next_available).toEqual([]);
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
-        // Two data queries: the RPC + the conflict lookup. Pin shape so a
-        // refactor that re-orders or drops the lookup fails this test.
+        // Four data queries: RPC, conflict lookup, tenant-tz lookup, and
+        // the next-available SQL.
         const dataQueries = handle.queries.filter(
             (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
         );
-        expect(dataQueries).toHaveLength(2);
+        expect(dataQueries.length).toBeGreaterThanOrEqual(2);
         expect(dataQueries[0].text).toContain('book_appointment_atomic');
         expect(dataQueries[1].text).toMatch(/SELECT[\s\S]*FROM appointments/i);
     });

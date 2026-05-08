@@ -899,6 +899,10 @@ describe('agentTools /book-with-scheduling', () => {
             },
           ],
         },
+        // After failure, route calls findNextAvailableSlots — needs tenant
+        // tz lookup + the slots SQL. Return empty slots in mock land.
+        { rows: [{ timezone: 'America/Chicago' }] },
+        { rows: [] },
       ],
     });
     const res = await post(app, '/agent-tools/book-with-scheduling', {
@@ -908,11 +912,15 @@ describe('agentTools /book-with-scheduling', () => {
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
       });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({
+    const body = res.json();
+    expect(body).toMatchObject({
       success: false,
       error: 'That time slot is already booked.',
       error_code: 'TIMESLOT_OCCUPIED',
     });
+    // The next-available alternatives field is always present in failure
+    // responses so the agent prompt can branch on it deterministically.
+    expect(body.next_available).toEqual([]);
   });
 
   it('SAD: missing RPC row falls back to NO_AVAILABILITY', async () => {
@@ -922,6 +930,9 @@ describe('agentTools /book-with-scheduling', () => {
       queryResponses: [
         { rows: [{ id: 'cust-fallback' }] }, // customer SELECT succeeds first
         { rows: [] },                         // RPC returns no row
+        // findNextAvailableSlots: tz + slots
+        { rows: [{ timezone: 'America/Chicago' }] },
+        { rows: [] },
       ],
     });
     const res = await post(app, '/agent-tools/book-with-scheduling', {
@@ -1639,6 +1650,9 @@ describe('agentTools customer persistence on booking failure', () => {
             },
           ],
         },
+        // findNextAvailableSlots after failure: tz lookup + slots SQL
+        { rows: [{ timezone: 'America/Chicago' }] },
+        { rows: [] },
       ],
     });
     const res = await post(app, '/agent-tools/book-with-scheduling', {
@@ -1656,7 +1670,10 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(false);
     // Customer write happened BEFORE the RPC, regardless of failure.
-    expect(queries).toHaveLength(3);
+    // Five queries total: customer SELECT + customer INSERT + RPC + tz
+    // lookup + slots SQL. The first three are the persistence contract;
+    // the trailing two are the next-available alternatives lookup.
+    expect(queries.length).toBeGreaterThanOrEqual(3);
     expect(queries[0].text).toContain('SELECT id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);

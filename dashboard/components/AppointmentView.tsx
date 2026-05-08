@@ -22,7 +22,7 @@ import { parse, startOfWeek, getDay } from 'date-fns'
 import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
 import { AppointmentDetailProvider, useAppointmentDetail } from '../lib/AppointmentDetailContext';
-import { ConflictModal, type BookingConflict } from './scheduler/ConflictModal';
+import { ConflictModal, type BookingConflict, type AvailableAlternative } from './scheduler/ConflictModal';
 import { showToast } from './ui/Toast';
 import { isSlotOnFifteenMinuteGrid } from '../lib/calendarSlot';
 
@@ -137,8 +137,11 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   const [originalAppointment, setOriginalAppointment] = useState<Appointment | null>(null);
   // Conflict modal — populated when /appointments/create returns 409 with
   // a `conflict` block. Lets the operator see WHICH existing appointment
-  // is blocking the slot they tried to book.
+  // is blocking the slot they tried to book. The `nextAvailable` array
+  // is rendered as clickable alternatives in the modal; clicking one
+  // pre-fills the form so the operator can submit again.
   const [conflict, setConflict] = useState<BookingConflict | null>(null);
+  const [nextAvailable, setNextAvailable] = useState<AvailableAlternative[]>([]);
   // Calendar date state
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   // Zoom: step in minutes per slot (smaller = more zoomed in)
@@ -361,6 +364,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           // with the existing booking's details. Inline error stays empty
           // so the modal owns the messaging.
           setConflict(res.conflict)
+          setNextAvailable(res.next_available ?? [])
           setError('')
           setSaving(false)
         } else {
@@ -648,7 +652,30 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
       <ConflictModal
         isOpen={conflict !== null}
         conflict={conflict}
-        onClose={() => setConflict(null)}
+        nextAvailable={nextAvailable}
+        onPickAlternative={(slot) => {
+          // Pre-fill the form with the picked alternative slot. The
+          // calendar-create flow uses `form` state — convert ISO back
+          // to the datetime-local input format the form expects.
+          const toLocalInputValue = (iso: string) => {
+            const d = new Date(iso);
+            const offset = d.getTimezoneOffset() * 60000;
+            return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+          };
+          setForm({
+            ...form,
+            start_time: toLocalInputValue(slot.start_time),
+            end_time: toLocalInputValue(slot.end_time),
+            resource_id: slot.resource_id,
+            employee_id: slot.employee_id,
+          });
+          setConflict(null);
+          setNextAvailable([]);
+        }}
+        onClose={() => {
+          setConflict(null);
+          setNextAvailable([]);
+        }}
       />
     </div>
   )

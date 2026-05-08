@@ -20,6 +20,7 @@ import { applyTimezone } from '../services/timezoneUtils';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
+import { findNextAvailableSlots } from '../services/availabilitySearch';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
 import {
   selectAssignments,
@@ -602,10 +603,26 @@ export function registerAgentToolRoutes(
     });
 
     if (!result || !result.success) {
+      // Fetch next-available alternatives so the agent can propose them
+      // verbally instead of saying "no availability." Same skill +
+      // capability filters as the booking attempt, searches forward up
+      // to 24h. Failure to find alternatives leaves next_available
+      // empty; the agent prompt handles both shapes.
+      const nextAvailable = await withTenantClient(args.tenant_id, (client) =>
+        findNextAvailableSlots(client, {
+          tenantId: args.tenant_id,
+          fromTime: new Date(args.window.from).toISOString(),
+          durationMinutes: 30,
+          requiredSkills: args.requirements.requiredEmployeeSkills || [],
+          requiredCapabilities: args.requirements.requiredResourceCapabilities || [],
+          count: 5,
+        })
+      ).catch(() => []);
       return reply.status(200).send({
         success: false,
         error: result?.error_message || 'No available scheduling options',
         error_code: result?.error_code || 'NO_AVAILABILITY',
+        next_available: nextAvailable,
       });
     }
 

@@ -18,6 +18,21 @@ export interface BookingConflict {
   description: string | null;
 }
 
+/**
+ * Shape of the `next_available` slot suggestions returned alongside a
+ * conflict response. Mirrors AvailableSlot from src/services/
+ * availabilitySearch.ts on the backend.
+ */
+export interface AvailableAlternative {
+  start_time: string;
+  end_time: string;
+  employee_id: string;
+  employee_name: string;
+  resource_id: string;
+  resource_name: string;
+  skill_count: number;
+}
+
 interface ConflictModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,6 +40,14 @@ interface ConflictModalProps {
   /** Optional: navigate to the conflicting appointment (e.g. switch to
    *  Calendar sub-tab and select). When omitted, the View button is hidden. */
   onView?: (appointmentId: string) => void;
+  /** Optional: next-available slot suggestions surfaced from the booking
+   *  response. When provided AND non-empty, the modal renders a "Try
+   *  another time" section the operator can click through. */
+  nextAvailable?: AvailableAlternative[];
+  /** Called when the operator picks one of the next-available slots —
+   *  the host pre-fills the form with the suggested time + employee +
+   *  resource and closes the modal so the operator can submit again. */
+  onPickAlternative?: (slot: AvailableAlternative) => void;
 }
 
 /**
@@ -67,8 +90,17 @@ function formatDate(iso: string): string {
  * reschedule. Replaces the prior plain-string toast UX where the operator
  * only saw "Resource already booked".
  */
-export function ConflictModal({ isOpen, onClose, conflict, onView }: ConflictModalProps) {
+export function ConflictModal({
+  isOpen,
+  onClose,
+  conflict,
+  onView,
+  nextAvailable,
+  onPickAlternative,
+}: ConflictModalProps) {
   if (!conflict) return null;
+  const alternatives = nextAvailable ?? [];
+  const showAlternatives = alternatives.length > 0 && !!onPickAlternative;
   return (
     <Modal
       isOpen={isOpen}
@@ -138,6 +170,40 @@ export function ConflictModal({ isOpen, onClose, conflict, onView }: ConflictMod
             </div>
           )}
         </dl>
+
+        {showAlternatives && (
+          <div className="pt-2" data-testid="conflict-modal-alternatives">
+            <p className="mb-2 font-medium" style={{ color: 'var(--text-primary)' }}>
+              Try one of these times instead:
+            </p>
+            <ul className="space-y-1">
+              {alternatives.map((slot) => (
+                <li key={`${slot.start_time}-${slot.employee_id}`}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 rounded-md border text-sm hover:bg-[var(--surface-3)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)]"
+                    style={{
+                      borderColor: 'var(--border)',
+                      background: 'var(--surface-2)',
+                      color: 'var(--text-primary)',
+                    }}
+                    onClick={() => {
+                      onPickAlternative!(slot);
+                      onClose();
+                    }}
+                    data-testid={`conflict-modal-alt-${slot.start_time}`}
+                  >
+                    <span className="font-medium">{formatRange(slot.start_time, slot.end_time)}</span>
+                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>·</span>
+                    <span>{slot.employee_name}</span>
+                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>·</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{slot.resource_name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </Modal>
   );

@@ -303,6 +303,15 @@ export const Api = {
           resource_name: string | null;
           description: string | null;
         };
+        next_available?: Array<{
+          start_time: string;
+          end_time: string;
+          employee_id: string;
+          employee_name: string;
+          resource_id: string;
+          resource_name: string;
+          skill_count: number;
+        }>;
       }>(`/appointments/create`, 'POST', {
         tenant_id: tenantId,
         ...data,

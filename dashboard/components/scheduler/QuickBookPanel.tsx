@@ -9,7 +9,7 @@ import { useVocabulary } from '@/lib/VocabularyContext';
 import { useServiceMappings } from '../../lib/hooks';
 import { filterEmployeesByService, filterResourcesByService } from '../../lib/availability';
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
-import { ConflictModal, type BookingConflict } from './ConflictModal';
+import { ConflictModal, type BookingConflict, type AvailableAlternative } from './ConflictModal';
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
 interface QuickBookEmployee { id: string | number; name: string; skills?: string[] }
@@ -65,6 +65,10 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   // 409 with a `conflict` block. Showing the existing appointment's
   // details lets the operator pick another time without leaving the panel.
   const [conflict, setConflict] = useState<BookingConflict | null>(null);
+  // Next-available alternatives surfaced alongside the conflict — the
+  // operator can click one to pre-fill the form with that time + employee
+  // + resource and submit again. Empty when no alternatives were found.
+  const [nextAvailable, setNextAvailable] = useState<AvailableAlternative[]>([]);
 
   // service↔employee + service↔resource mappings for the alignment filter.
   // The dashboard previously let operators pick incompatible combinations
@@ -200,6 +204,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
         // with the existing booking's details. Inline error stays empty
         // so the modal owns the messaging.
         setConflict(res.conflict);
+        setNextAvailable(res.next_available ?? []);
         setError('');
       } else {
         setError(res.error || 'Booking failed');
@@ -320,7 +325,27 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       <ConflictModal
         isOpen={conflict !== null}
         conflict={conflict}
-        onClose={() => setConflict(null)}
+        nextAvailable={nextAvailable}
+        onPickAlternative={(slot) => {
+          // Pre-fill the form with the picked alternative. Convert UTC
+          // ISO times back to a datetime-local input string in the user's
+          // local zone so the input renders the time the operator clicked.
+          const toLocalInputValue = (iso: string) => {
+            const d = new Date(iso);
+            const offset = d.getTimezoneOffset() * 60000;
+            return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+          };
+          setStartTime(toLocalInputValue(slot.start_time));
+          setEndTime(toLocalInputValue(slot.end_time));
+          setResourceId(slot.resource_id);
+          setEmployeeId(slot.employee_id);
+          setConflict(null);
+          setNextAvailable([]);
+        }}
+        onClose={() => {
+          setConflict(null);
+          setNextAvailable([]);
+        }}
       />
 
 
