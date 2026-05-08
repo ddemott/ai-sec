@@ -22,6 +22,7 @@ import { parse, startOfWeek, getDay } from 'date-fns'
 import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
 import { AppointmentDetailProvider, useAppointmentDetail } from '../lib/AppointmentDetailContext';
+import { ConflictModal, type BookingConflict } from './scheduler/ConflictModal';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -132,6 +133,10 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   const [calendarView, setCalendarView] = useState<CalendarViewType>('month');
   // Store original appointment for cancel/undo
   const [originalAppointment, setOriginalAppointment] = useState<Appointment | null>(null);
+  // Conflict modal — populated when /appointments/create returns 409 with
+  // a `conflict` block. Lets the operator see WHICH existing appointment
+  // is blocking the slot they tried to book.
+  const [conflict, setConflict] = useState<BookingConflict | null>(null);
   // Calendar date state
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   // Zoom: step in minutes per slot (smaller = more zoomed in)
@@ -349,6 +354,13 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           setDraftEvent(null)
           setSaving(false)
           fetchAppointments(res.appointment_id)
+        } else if (res.error_code === 'TIMESLOT_OCCUPIED' && res.conflict) {
+          // Overlap with an existing appointment — show the conflict modal
+          // with the existing booking's details. Inline error stays empty
+          // so the modal owns the messaging.
+          setConflict(res.conflict)
+          setError('')
+          setSaving(false)
         } else {
             setError(res.error || 'Failed to create appointment')
             setSaving(false)
@@ -616,6 +628,11 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           onCloseMobile={() => { setShowDetailOnMobile(false); setIsCreating(false); }}
         />
       </div>
+      <ConflictModal
+        isOpen={conflict !== null}
+        conflict={conflict}
+        onClose={() => setConflict(null)}
+      />
     </div>
   )
 }

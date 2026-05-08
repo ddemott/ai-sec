@@ -9,6 +9,7 @@ import { useVocabulary } from '@/lib/VocabularyContext';
 import { useServiceMappings } from '../../lib/hooks';
 import { filterEmployeesByService, filterResourcesByService } from '../../lib/availability';
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
+import { ConflictModal, type BookingConflict } from './ConflictModal';
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
 interface QuickBookEmployee { id: string | number; name: string }
@@ -60,6 +61,10 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   const [endTime, setEndTime] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Conflict modal state — populated when /appointments/create returns
+  // 409 with a `conflict` block. Showing the existing appointment's
+  // details lets the operator pick another time without leaving the panel.
+  const [conflict, setConflict] = useState<BookingConflict | null>(null);
 
   // service↔employee + service↔resource mappings for the alignment filter.
   // The dashboard previously let operators pick incompatible combinations
@@ -158,6 +163,12 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       if (res.success) {
         onBooked();
         onClose();
+      } else if (res.error_code === 'TIMESLOT_OCCUPIED' && res.conflict) {
+        // Overlap with an existing appointment — show the conflict modal
+        // with the existing booking's details. Inline error stays empty
+        // so the modal owns the messaging.
+        setConflict(res.conflict);
+        setError('');
       } else {
         setError(res.error || 'Booking failed');
       }
@@ -253,24 +264,33 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           </div>
         )}
 
-        {/* Time */}
+        {/* Time — step="900" enforces 15-minute increments at the form
+            level (browser arrow keys + reportValidity); the JS validator
+            and the DB CHECK constraint are the safety nets behind it. */}
         <div className="grid grid-cols-2 gap-3">
           <Input
             type="datetime-local"
             label="Start"
-            step="60"
+            step="900"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
           />
           <Input
             type="datetime-local"
             label="End"
-            step="60"
+            step="900"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
           />
         </div>
       </div>
+
+      <ConflictModal
+        isOpen={conflict !== null}
+        conflict={conflict}
+        onClose={() => setConflict(null)}
+      />
+
 
       <footer className="p-4 border-t border-gray-200 dark:border-gray-800">
         <Button

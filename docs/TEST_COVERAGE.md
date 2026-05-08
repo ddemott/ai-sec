@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (booking-enforcement slice 1+1.5: conflictLookup +11, appointmentValidation 15-min +25, route conflict-shape +2 backend; backend 1,666 → 1,704 — the larger jump also reflects real-DB tests now running locally with Docker connected, previously they silently skipped)
+**Last refreshed:** 2026-05-08 (booking-enforcement slice 2: ConflictModal +6, QuickBookPanel conflict-modal wiring +2, dashboard appointmentValidation +20 dashboard; dashboard 575 → 603. Backend unchanged at 1,704)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -13,10 +13,10 @@
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | 1,704 / 1,704 | ✅ | ~140s |
-| Dashboard (`cd dashboard && npm test`) | 575 / 575 | ✅ | ~30s |
+| Dashboard (`cd dashboard && npm test`) | 603 / 603 | ✅ | ~10s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 32 passed, 1 skipped | ✅ | ~65s |
 
-Total unit tests: 2,279 (backend + dashboard) + 78 agent.
+Total unit tests: 2,307 (backend + dashboard) + 78 agent.
 
 ## Unit test coverage (V8)
 

@@ -230,3 +230,8 @@
 
 ### TeamAccessView (dashboard/components/TeamAccessView.tsx)
 - **[medium]** Access-management screens are trust-sensitive because they mix identity, permission, and invitation states, and if loading, role-change, and pending-access cues are not explicit the surface can feel riskier than it needs to → Strengthen role-state, pending-invite, and mutation-result feedback so admins can understand access changes with confidence.
+
+## Review — 2026-05-08
+
+### ConflictModal (dashboard/components/scheduler/ConflictModal.tsx)
+- **[medium]** The conflict modal already uses solid primitives and clearer content than a toast, but it still relies on the operator inferring the next-best action from static appointment details alone → Add a slightly stronger next-step cue, for example emphasizing whether to view the existing booking or choose another time, so the modal feels more decisional in a high-friction moment.

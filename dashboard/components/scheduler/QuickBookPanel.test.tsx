@@ -152,3 +152,88 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     // WHO: operator changing their mind about which service to book | WHAT: the form recovers — all options return, message clears | WHEN: serviceId set then cleared back to '' | WHERE: QuickBookPanel reactive filter | WHY: pin reactivity. A naive useEffect that only narrows on first set (without clearing on re-set to '') would leave the dropdown stuck in the narrow state, trapping the operator. Confirms the filter is a derivation, not a one-time effect
   });
 });
+
+describe('QuickBookPanel — conflict modal wiring (slice 2, 2026-05-08)', () => {
+  test('booking returns 409 + conflict block → modal renders with existing appointment details', async () => {
+    // WHO: front-desk operator submits a booking that overlaps an existing one
+    // WHAT: Api.appointments.create returns success:false + error_code TIMESLOT_OCCUPIED
+    //        + a conflict block; QuickBookPanel surfaces the ConflictModal so
+    //        the operator sees the existing customer/employee/resource/time
+    //        instead of just a string toast
+    // WHEN: the backend's GiST exclusion constraint or pre-check rejects on overlap
+    // WHERE: QuickBookPanel.handleBook conflict-branch + the rendered <ConflictModal>
+    // WHY: pre-fix the modal didn't exist — the operator only saw "Resource
+    //       already booked" as a toast and had no actionable info. This test
+    //       fails if a refactor breaks the wiring (modal not mounted, conflict
+    //       state not set, error_code branch removed).
+    mockApi.appointments.create.mockReset().mockResolvedValue({
+      success: false,
+      error: 'Resource already booked during this timeslot',
+      error_code: 'TIMESLOT_OCCUPIED',
+      conflict: {
+        appointment_id: 'existing-1',
+        start_time: '2026-05-10T14:00:00.000Z',
+        end_time: '2026-05-10T14:30:00.000Z',
+        customer_name: 'Bob Smith',
+        employee_name: 'Mike',
+        resource_name: 'Bay 1',
+        description: 'Tire rotation',
+      },
+    });
+
+    renderPanel();
+    await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
+
+    // Fill the form with a 15-min-aligned slot so client-side validator passes.
+    fireEvent.change(screen.getByTestId('quick-book-customer-search'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByTestId('quick-book-customer'), { target: { value: 'c-1' } });
+    fireEvent.change(screen.getByTestId('quick-book-resource'), { target: { value: 'bay-1' } });
+    // Find the start/end time inputs by label association via the underlying input.
+    const startInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[0];
+    const endInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[1];
+    fireEvent.change(startInput, { target: { value: '2026-05-10T14:00' } });
+    fireEvent.change(endInput, { target: { value: '2026-05-10T14:30' } });
+
+    // Submit. Booking call resolves with the conflict response.
+    fireEvent.click(screen.getByTestId('quick-book-confirm'));
+
+    // Modal renders with the existing appointment's details. Scope queries
+    // to the modal's dialog role so we don't false-match "Mike" or "Bay 1"
+    // in the form's dropdown options behind the backdrop.
+    await waitFor(() => {
+      expect(screen.getByText('That time is already booked')).toBeInTheDocument();
+    });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Bob Smith');
+    expect(dialog).toHaveTextContent('Mike');
+    expect(dialog).toHaveTextContent('Bay 1');
+  });
+
+  test('booking returns plain error (no error_code) → modal NOT rendered, error stays inline', async () => {
+    // WHY: the modal must only appear for true overlaps. Other failure modes
+    //       (past time, no skilled employee, validation) keep the existing
+    //       inline-error UX so the operator isn't confronted with a "view
+    //       conflict" affordance for failures that have no conflict.
+    mockApi.appointments.create.mockReset().mockResolvedValue({
+      success: false,
+      error: 'Employee is not on shift during this time',
+    });
+
+    renderPanel();
+    await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByTestId('quick-book-customer-search'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByTestId('quick-book-customer'), { target: { value: 'c-1' } });
+    fireEvent.change(screen.getByTestId('quick-book-resource'), { target: { value: 'bay-1' } });
+    const startInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[0];
+    const endInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[1];
+    fireEvent.change(startInput, { target: { value: '2026-05-10T14:00' } });
+    fireEvent.change(endInput, { target: { value: '2026-05-10T14:30' } });
+    fireEvent.click(screen.getByTestId('quick-book-confirm'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Employee is not on shift during this time')).toBeInTheDocument()
+    );
+    expect(screen.queryByText('That time is already booked')).not.toBeInTheDocument();
+  });
+});

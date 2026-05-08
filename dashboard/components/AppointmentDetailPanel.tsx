@@ -182,14 +182,14 @@ export function AppointmentDetailPanel({
                                       <Input
                                           type="datetime-local"
                                           label="Start Time"
-                                          step="60"
+                                          step="900"
                                           value={form.start_time}
                                           onChange={e => onFormChange({...form, start_time: e.target.value})}
                                       />
                                       <Input
                                           type="datetime-local"
                                           label="End Time"
-                                          step="60"
+                                          step="900"
                                           value={form.end_time}
                                           onChange={e => onFormChange({...form, end_time: e.target.value})}
                                       />

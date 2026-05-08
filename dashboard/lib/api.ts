@@ -287,7 +287,23 @@ export const Api = {
     },
 
     create: (tenantId: string | null, data: Partial<Appointment> & Record<string, unknown>) =>
-      apiMutate<{ appointment_id: string }>(`/appointments/create`, 'POST', {
+      // On overlap, the backend returns 409 with `error_code: 'TIMESLOT_OCCUPIED'`
+      // and a `conflict` block describing the existing appointment so the
+      // dashboard can surface it (see ConflictModal). apiMutate spreads the
+      // response body, so these fields flow through the typed return.
+      apiMutate<{
+        appointment_id?: string;
+        error_code?: string;
+        conflict?: {
+          appointment_id: string;
+          start_time: string;
+          end_time: string;
+          customer_name: string | null;
+          employee_name: string | null;
+          resource_name: string | null;
+          description: string | null;
+        };
+      }>(`/appointments/create`, 'POST', {
         tenant_id: tenantId,
         ...data,
         customer_phone: normalizePhone(data.customer_phone as string | undefined),
