@@ -666,7 +666,7 @@ describe('QuickBookPanel', () => {
   });
 
   test('rejects end time before start time and does not book', async () => {
-    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-123' } as any);
+    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-123' } as Awaited<ReturnType<typeof Api.appointments.create>>);
 
     render(
       <QuickBookPanel
@@ -693,7 +693,7 @@ describe('QuickBookPanel', () => {
   });
 
   test('rejects an appointment longer than 12 hours and does not book', async () => {
-    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-456' } as any);
+    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-456' } as Awaited<ReturnType<typeof Api.appointments.create>>);
 
     render(
       <QuickBookPanel

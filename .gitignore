@@ -20,6 +20,8 @@ yarn-debug.log*
 yarn-error.log*
 /coverage
 /coverage_data
+# Match coverage output from any package (backend, agent, dashboard).
+**/coverage/
 
 # environment variables
 .env
