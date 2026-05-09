@@ -122,9 +122,13 @@ describe('agentTools auth', () => {
     expect(res.json()).toEqual({ success: false, error: 'Unauthorized' });
   });
 
-  it('SAD: wrong x-agent-secret header returns 401', async () => {
-    // WHAT: Any mismatch is treated as unauthorized (no timing-attack
-    //        protection needed at this layer — rate limiting handles that)
+  it('SAD: wrong x-agent-secret header returns 401 (timing-safe comparison)', async () => {
+    // WHAT: Any mismatch returns 401. Comparison uses crypto.timingSafeEqual
+    //        (added 2026-05-09 security-review pass 2) so a per-character
+    //        timing oracle cannot probe the secret one byte at a time.
+    // WHY: Prior plain `!==` short-circuited on first mismatched byte —
+    //        in principle observable across enough samples. Constant-time
+    //        comparison closes that channel.
     const { app } = buildApp({ queryResponses: [] });
     const res = await app.inject({
       method: 'POST',
@@ -149,6 +153,80 @@ describe('agentTools auth', () => {
       payload: { tenant_id: TENANT_ID },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('SAD: a much shorter provided secret returns 401 cleanly (no length-mismatch crash)', async () => {
+    // WHO: Adversary or misconfigured worker sending a single-character secret
+    // WHAT: timingSafeEqual throws if buffers differ in length, so the
+    //        wrapper guards by checking lengths first. The route returns
+    //        a clean 401 instead of a 500.
+    // WHEN: any request whose x-agent-secret has a different byte length
+    //        than the configured AGENT_SECRET (the common case for any
+    //        wrong-secret attempt)
+    // WHERE: src/routes/agentTools.ts safeEquals
+    // WHY: pre-fix the route used `!==` which never crashed on length
+    //        mismatch but leaked timing info. Post-fix the route uses
+    //        timingSafeEqual which would crash without the length guard.
+    //        Pin that the guard works — a length mismatch must NOT crash.
+    const { app } = buildApp({ queryResponses: [] });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/agent-tools/service-catalog',
+      headers: { 'x-agent-secret': 'x' },
+      payload: { tenant_id: TENANT_ID },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ success: false, error: 'Unauthorized' });
+  });
+
+  it('HAPPY: AGENT_SECRET_OLD is accepted during a rotation window', async () => {
+    // WHO: Operator rotating the agent secret. New AGENT_SECRET deployed on
+    //        backend; agent worker still on the old value until its
+    //        Railway redeploy completes.
+    // WHAT: Setting AGENT_SECRET_OLD lets the backend accept either the
+    //        new primary OR the old value during the transition. After
+    //        all workers are on the new secret, AGENT_SECRET_OLD is
+    //        cleared and only the primary works.
+    // WHEN: any request authenticating with the previous secret while
+    //        AGENT_SECRET_OLD is still set
+    // WHERE: src/routes/agentTools.ts auth preHandler — `matchesOld` branch
+    // WHY: pre-fix there was no rotation infrastructure. Rotating
+    //        required setting the new secret on backend + worker
+    //        simultaneously, which is impossible without downtime. Now
+    //        rotation is hot-swappable: deploy backend with both secrets,
+    //        deploy worker with new secret, drop AGENT_SECRET_OLD.
+    process.env.AGENT_SECRET = 'new-primary-secret-32+chars';
+    process.env.AGENT_SECRET_OLD = SECRET;
+    const { app } = buildApp({
+      queryResponses: [{ rows: [{ id: 'svc-1', name: 'Test', duration_minutes: 30 }] }],
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/agent-tools/service-catalog',
+      // Worker still using the OLD secret — must succeed during rotation.
+      headers: { 'x-agent-secret': SECRET },
+      payload: { tenant_id: TENANT_ID },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    delete process.env.AGENT_SECRET_OLD;
+  });
+
+  it('SAD: AGENT_SECRET_OLD does NOT enable a third value (only the two named ones work)', async () => {
+    // WHY: pin that rotation isn't a "wildcard accepts anything that was
+    //        ever a secret" — it's specifically AGENT_SECRET OR
+    //        AGENT_SECRET_OLD. Any other value still 401s.
+    process.env.AGENT_SECRET = 'new-primary-secret-32+chars';
+    process.env.AGENT_SECRET_OLD = SECRET;
+    const { app } = buildApp({ queryResponses: [] });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/agent-tools/service-catalog',
+      headers: { 'x-agent-secret': 'something-else-entirely' },
+      payload: { tenant_id: TENANT_ID },
+    });
+    expect(res.statusCode).toBe(401);
+    delete process.env.AGENT_SECRET_OLD;
   });
 });
 

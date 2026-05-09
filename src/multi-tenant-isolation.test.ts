@@ -699,3 +699,116 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
     expect(body.find(r => r.id === B.id)).toBeTruthy();
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────
+// Probe 6: RLS configuration verified for tables fixed 2026-05-09
+//
+// Production runs against Supabase-managed Postgres where the `postgres`
+// role is non-superuser + non-BYPASSRLS, so FORCE RLS applies and the
+// per-tenant policies enforce isolation. The local test Postgres uses a
+// SUPERUSER+BYPASSRLS `postgres` role which always bypasses RLS — making
+// behavioral cross-tenant tests under that role meaningless locally.
+//
+// What we CAN test locally is the RLS configuration — the metadata flags
+// in pg_class and pg_policies — which proves the migrations applied and
+// would catch a future migration that drops them. Behavioral verification
+// against managed Postgres has to happen post-deploy via the api_user-
+// flavored probes that already exist (Probes 1-5).
+// ────────────────────────────────────────────────────────────────────────
+
+describe('Probe 6: RLS configuration on tables fixed 2026-05-09', () => {
+  it('voice_sessions has ENABLE + FORCE row-level security applied', async () => {
+    // WHO: future migration author who might accidentally drop FORCE while
+    //        renaming or restructuring voice_sessions
+    // WHAT: pin the metadata flags so a missing FORCE on this table
+    //        regresses the test loudly instead of silently exposing
+    //        cross-tenant call data on managed Postgres
+    // WHEN: every test run after the migrations are applied
+    // WHERE: 20260509000001_force_rls_voice_sessions_record_versions.sql
+    // WHY: the policy on voice_sessions has existed since 2026-04-09, but
+    //        FORCE was only added 2026-05-09 — a regression that drops
+    //        FORCE wouldn't break anything observable in api_user-mediated
+    //        tests but would re-open the leak on managed Postgres.
+    if (!dbAvailable) return;
+    const res = await setup.query(
+      `SELECT relrowsecurity, relforcerowsecurity
+         FROM pg_class WHERE relname = $1`,
+      ['voice_sessions']
+    );
+    expect(res.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+  });
+
+  it('record_versions has ENABLE + FORCE row-level security applied', async () => {
+    // Same shape as voice_sessions — closes the same FORCE-not-applied
+    // gap from migration 20260409100000 via the 2026-05-09 fix.
+    if (!dbAvailable) return;
+    const res = await setup.query(
+      `SELECT relrowsecurity, relforcerowsecurity
+         FROM pg_class WHERE relname = $1`,
+      ['record_versions']
+    );
+    expect(res.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+  });
+
+  it('password_resets has ENABLE + FORCE + unauthenticated-only policy', async () => {
+    // WHO: any future caller that tries to read password_resets from a
+    //        tenant-context-set connection
+    // WHAT: pin (a) RLS is enabled, (b) FORCE is on, (c) at least one
+    //        policy exists with the exact name the migration created
+    // WHEN: every test run after the migrations are applied
+    // WHERE: 20260509000000_password_resets_rls.sql
+    // WHY: pre-fix the table had ZERO RLS — any connection could read
+    //        all reset tokens. The fix added ENABLE + FORCE + a policy
+    //        that allows access only when app.current_tenant_id is empty.
+    //        A regression that drops any of those three facets re-opens
+    //        the leak; pinning the metadata catches it.
+    if (!dbAvailable) return;
+    const flagRes = await setup.query(
+      `SELECT relrowsecurity, relforcerowsecurity
+         FROM pg_class WHERE relname = $1`,
+      ['password_resets']
+    );
+    expect(flagRes.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
+
+    const policyRes = await setup.query(
+      `SELECT policyname FROM pg_policies WHERE tablename = $1`,
+      ['password_resets']
+    );
+    const names = (policyRes.rows as Array<{ policyname: string }>).map((r) => r.policyname);
+    expect(names).toContain('password_resets_unauthenticated_only');
+  });
+
+  it('positive control: forgot-password flow still works (INSERT + SELECT under empty context)', async () => {
+    // WHY: the policy added 2026-05-09 must NOT break the legitimate
+    //        unauthenticated /forgot-password and /reset-password flows.
+    //        Both run via withPoolClient (no setTenantContext call), so
+    //        app.current_tenant_id stays at its session default. With
+    //        the BYPASSRLS local postgres this would always pass; the
+    //        real value of this test is documenting the contract — if
+    //        someone ever switches the test role to api_user, this
+    //        test continues to gate against an over-strict policy.
+    if (!dbAvailable) return;
+
+    // Use api_user via pool so the test is meaningful under non-BYPASSRLS.
+    const client = await pool.connect();
+    try {
+      await client.query(`SELECT set_config('app.current_tenant_id', '', false)`);
+      await client.query(
+        `INSERT INTO password_resets (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [A.userId, 'probe6-positive-token']
+      );
+      const res = await client.query(
+        `SELECT user_id FROM password_resets WHERE token_hash = $1`,
+        ['probe6-positive-token']
+      );
+      expect(res.rows, 'unauthenticated flow MUST be able to read password_resets').toHaveLength(1);
+      expect(res.rows[0].user_id).toBe(A.userId);
+      await client.query(`DELETE FROM password_resets WHERE token_hash = $1`, [
+        'probe6-positive-token',
+      ]);
+    } finally {
+      client.release();
+    }
+  });
+});

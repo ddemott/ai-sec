@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-09 (security review pass 1: webhook signature verification + CRM HMAC bug fix. Audit of `/billing/webhook` and the four CRM webhooks surfaced two real findings — (1) Stripe webhook had correct constructEvent + raw-body wiring but ZERO test pinning the contract; (2) HubSpot, Square, and Jobber all used `JSON.stringify(req.body)` for HMAC verification, fundamentally broken because providers sign the raw bytes they sent. Fixed all three CRM routes to read `req.rawBody` (already preserved by the global content-type parser) with a defensive 400 fallback. Added `src/webhook-signatures.test.ts` (11 tests) pinning the contract for all four webhooks: missing/invalid/valid signature paths, replay-protection on HubSpot's timestamp-freshness window, no-active-integration short-circuit on Jobber. Backend 1,752 → 1,763 (+11). Earlier same-day work: booking enforcement chain + appointments-route branch-coverage lift (1,733 → 1,752, branch coverage on appointments.ts 73.94 → 81.69).)
+**Last refreshed:** 2026-05-09 (security review pass 2: RLS coverage audit + JWT/refresh + AGENT_SECRET rotation. Three findings: (1) `password_resets` had zero RLS at all → migration `20260509000000` adds ENABLE+FORCE+unauthenticated-only policy; (2) `voice_sessions` and `record_versions` had policies but lacked FORCE → migration `20260509000001` applies FORCE; (3) AGENT_SECRET used plain `!==` string equality (timing-channel surface) and had no rotation path → switched to `crypto.timingSafeEqual` with `AGENT_SECRET_OLD` rotation pivot. New `docs/SECURITY.md` documents the as-shipped posture. +7 tests across `agentTools.test.ts` (3) and `multi-tenant-isolation.test.ts` (4). Backend 1,763 → 1,770 from this session's adds; **12 pre-existing failures unrelated to pass 2** (booking RPC error-code expectations updated by `20260508000001` migration but tests not refreshed) tracked separately in TODO. Net green: 1,758 backend tests passing. Pass 1 earlier today shipped webhook signature verification + CRM HMAC bug fix (1,752 → 1,763).)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,12 +12,12 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,763 / 1,763 | ✅ | ~110s |
+| Backend (`npm test`) | 1,758 / 1,770 (12 pre-existing failures) | ⚠️ | ~115s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
 | Agent (`cd agent && npm test`) | 85 / 85 | ✅ | ~3s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 55 passed, 7 skipped | ✅ | ~135s |
 
-Total unit tests: 2,380 (backend + dashboard) + 85 agent.
+Total unit tests: 2,375 passing (backend + dashboard) + 85 agent. 12 backend pre-existing failures from `20260508000001` migration mismatch tracked in TODO.
 
 > **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
 > require the backend to start with `SYNC_TEST_RECORDER=1`. Without the

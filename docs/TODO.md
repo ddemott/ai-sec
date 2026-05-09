@@ -82,7 +82,7 @@ Today the agent worker logs to stdout via Pino, the backend logs via Fastify, an
 
 ### Launch prep
 
-- [ ] **Security review of the production surface — pass 1 of 2 done 2026-05-09.** Webhook signature verification audited and fixed: Stripe webhook now has 3 contract tests (`src/webhook-signatures.test.ts`), and the HubSpot/Square/Jobber webhooks were fixed from a real bug — they had been re-serializing `req.body` via `JSON.stringify` for HMAC verification, which fundamentally cannot match the raw bytes the provider signed (whitespace + key order vary). All three now use `req.rawBody` (preserved by the global content-type parser) with a defensive 400 fallback. **Pass 2 deferred** to a separate session: (a) RLS coverage audit on every new table since 2026-03 — confirm migrations enable ROW LEVEL SECURITY + FORCE ROW LEVEL SECURITY + per-tenant policy; (b) JWT lifetime + refresh story (8h tokens, /auth/refresh path, revocation strategy — currently stateless tokens cannot be revoked mid-window); (c) `/agent-tools/*` shared-secret rotation plan (single AGENT_SECRET env var today, no rotation infrastructure).
+- [x] ~~**Security review of the production surface.**~~ Closed 2026-05-09 across two passes. Pass 1: webhook signature verification audited and fixed — Stripe gained 3 contract tests, HubSpot/Square/Jobber routes switched from broken `JSON.stringify(req.body)` HMAC verification to `req.rawBody`, all 4 pinned by `src/webhook-signatures.test.ts` (11 tests). Pass 2: (a) RLS audit found 3 gaps — `password_resets` had zero RLS, `voice_sessions` and `record_versions` had policies but lacked FORCE — closed by migrations `20260509000000` + `20260509000001`; (b) JWT lifetime + refresh audited, no fixes needed (8h tokens with `password_changed_at` revocation is the right shape for our threat model); (c) `AGENT_SECRET` switched from plain `!==` to `crypto.timingSafeEqual` and gained `AGENT_SECRET_OLD` for hot rotation. Production security posture documented in `docs/SECURITY.md`. Pinned by +7 tests across `agentTools.test.ts` (3) and `multi-tenant-isolation.test.ts` Probe 6 (4). Open follow-ups: ServiceTitan webhook contract test (low priority, no real integration); admin "lock account" UI (currently SQL-only); per-worker agent identity (only matters when running multiple agent workers concurrently).
 - [ ] **Beta customer onboarding guide.** Setup wizard + first-call walkthrough + how to extend coverage forward. Currently nothing exists — first beta customer would need a screen-share with the founder.
 - [ ] **Pricing tiers finalized.** Solo ($129/mo) and Growth ($279/mo) are wired in Stripe. The Pro and Enterprise price IDs are present in env but no product/positioning. Decide before pricing is shown to a public-facing customer.
 
@@ -154,7 +154,18 @@ After shipping slices 1-3 (37→42 E2E tests passing), a coverage analysis ident
 
 ---
 
-## CI Rot — RESOLVED (2026-04-30, recurrence resolved 2026-05-06)
+## Test debt: 12 backend failures from booking-RPC migration mismatch
+
+**Surfaced 2026-05-09** during the security review pass 2 full-suite run. Pre-dates that work — confirmed via `git stash` reproducing the same 14 failures (the 2 that flipped between runs are real-DB deadlock flake on the 20-concurrent-callers test).
+
+Migration `20260508000001_assignment_least_skilled_least_busy.sql` rewrote `book_with_scheduling_atomic` to consolidate several rejection cases under a single `NO_AVAILABILITY` error code. Tests expecting the OLDER granular codes (`NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`) weren't updated. Affected files:
+
+- `src/booking-concurrency.test.ts` (2 tests; deadlock flake at high concurrency, not migration-related)
+- `src/scheduling-atomic.test.ts` (3 tests expecting old codes)
+- `src/skill-resource-matching-sweep.test.ts` (5 tests expecting old codes)
+- `src/crm-appointments.test.ts` (3 tests; cause TBD — may be a different state-pollution issue)
+
+Decision needed: is the new RPC behavior (collapse to `NO_AVAILABILITY`) the right shape, or should the RPC restore the granular codes? If the new shape stays, update the tests. If granular codes are correct, revert the consolidation in the RPC. Roughly 1-2 hours of investigation either way.
 
 The 2026-04-30 fix held until 2026-05-04, after which CI was red on every push for ~3 days due to three independent root causes (postgres image lacked pgvector; `scripts/setup-db.sh` silently swallowed errors due to a `set -e` interaction; dashboard `tsconfig.json` had its `types` directive placed at the JSON root instead of inside `compilerOptions`). All three fixed 2026-05-06 — see `docs/CURRENT_STATUS.md` "May 6: CI rot fixed" for the full disposition. Verified against a fresh `npm ci` install to simulate CI before pushing.
 

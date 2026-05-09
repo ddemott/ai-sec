@@ -4,6 +4,28 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-09 — Security review pass 2: RLS coverage + JWT/refresh + AGENT_SECRET rotation
+
+Three sub-audits, three findings. New `docs/SECURITY.md` documents the as-shipped posture for future audits.
+
+**RLS coverage audit on tables since 2026-03.** Inventoried every CREATE TABLE migration, cross-referenced against the global FORCE-RLS migration `20260323000000_force_rls_single_pool.sql`. Three real gaps:
+
+1. `password_resets` (created `20260422000000`) had **zero RLS** — no `ENABLE`, no policy. Holds short-lived account-recovery tokens; cross-tenant leak material if any future caller joined or read this table from a tenant-context-set connection. Closed by migration `20260509000000_password_resets_rls.sql`: ENABLE + FORCE + a permissive policy that only allows access when `app.current_tenant_id` is empty (the unauthenticated `/forgot-password` and `/reset-password` flows). Authenticated tenant sessions get NO access — defense in depth.
+2. `voice_sessions` (created `20260409000000`) had `ENABLE ROW LEVEL SECURITY` + a tenant-isolation policy but lacked FORCE. On Supabase managed Postgres (where we connect as `postgres`, a non-super non-BYPASSRLS role per the 2026-03-23 migration's rationale), policies-without-FORCE may bypass — `voice_sessions` stores call_id + transcript + AI-judged outcome, all cross-tenant leak-worthy.
+3. `record_versions` (same migration date) had the same shape gap. Stores soft-delete + version-history rows — leaking these would expose prior values of edited records (e.g. customer's old phone number, appointment's prior status).
+
+Closed by migration `20260509000001_force_rls_voice_sessions_record_versions.sql` applying FORCE to both. Pinned by Probe 6 in `multi-tenant-isolation.test.ts` (4 tests checking `pg_class.relrowsecurity` + `relforcerowsecurity` metadata + the `pg_policies` row for password_resets + a positive-control INSERT/SELECT under empty tenant context). Local test `postgres` is SUPERUSER+BYPASSRLS so behavioral cross-tenant probes under that role are meaningless locally; the metadata probes catch a future migration that drops RLS or FORCE on these tables.
+
+**JWT lifetime + refresh + revocation.** No fixes needed. The current shape is robust: 8h stateless tokens, `/auth/refresh` sliding-window, and the cleverest piece — every authenticated request looks up `users.password_changed_at` and rejects tokens with `iat < password_changed_at` epoch. Password rotation is the revocation mechanism. Documented gaps: no admin "lock account" UI without password change (workaround: SQL `UPDATE users SET password_changed_at = NOW()`), no per-token denylist (acceptable for stateless tokens at this scale).
+
+**AGENT_SECRET timing-safe + rotation.** Pre-fix the auth comparison was plain `provided !== AGENT_SECRET` — short-circuit on first mismatched byte → timing oracle in principle. Switched to `crypto.timingSafeEqual` with a length-mismatch guard so the helper doesn't crash on different-length input. Added `AGENT_SECRET_OLD` for hot rotation: backend accepts either primary or old during the transition window. Rotation procedure: set new + old on backend, redeploy worker with new, drop old. Pinned by 3 new auth tests in `agentTools.test.ts` (length-mismatch no-crash, OLD accepted, OLD doesn't wildcard-accept third values).
+
+**Out of scope this session (deliberate):** ServiceTitan webhook contract test (no real integration today). Admin "lock account" UI surface. Per-worker agent identity (only matters when running multiple agent workers). Investigation of the 12 pre-existing test failures from migration `20260508000001` — same-day discovery during the full-suite run, tracked separately in `docs/TODO.md`.
+
+**Backend tests:** 1,763 → 1,770 from this session's adds (+7). 12 pre-existing failures unrelated to this work tracked separately. Net green: 1,758 backend tests passing.
+
+---
+
 ## 2026-05-09 — Security review pass 1: webhook signature verification + CRM HMAC bug fix
 
 Audit + fix in one session. Two findings, both closed.

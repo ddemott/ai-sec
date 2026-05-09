@@ -14,6 +14,7 @@
  */
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
+import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { withHandler, type AppRequest } from '../middleware';
 import { applyTimezone } from '../services/timezoneUtils';
@@ -230,17 +231,43 @@ export function registerAgentToolRoutes(
   normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
 ) {
   const AGENT_SECRET = process.env.AGENT_SECRET || '';
+  // AGENT_SECRET_OLD is the rotation pivot: when rotating, set AGENT_SECRET
+  // to the new value AND keep the previous value in AGENT_SECRET_OLD until
+  // every agent worker has been redeployed with the new secret. Both values
+  // are accepted during the rotation window. After all workers are on the
+  // new secret, drop AGENT_SECRET_OLD.
+  const AGENT_SECRET_OLD = process.env.AGENT_SECRET_OLD || '';
   if (!AGENT_SECRET) {
     app.log.warn('AGENT_SECRET not set — /agent-tools/* routes will reject all requests');
   }
 
+  // Constant-time string comparison. Returns false if lengths differ
+  // (length itself leaks but is negligible vs per-character timing) or
+  // if the bytes don't match. Wrapped so callers don't need to remember
+  // the Buffer.from + length-check + timingSafeEqual trio.
+  function safeEquals(provided: string, expected: string): boolean {
+    if (!expected) return false;
+    const a = Buffer.from(provided, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    if (a.length !== b.length) return false;
+    // timingSafeEqual throws if lengths differ — guarded above.
+    return timingSafeEqual(a, b);
+  }
+
   // Shared auth gate for every /agent-tools/ route. If AGENT_SECRET is
   // unset we still register the routes, but every request fails auth —
-  // never "unlocked by default".
+  // never "unlocked by default". Accepts AGENT_SECRET or (during rotation)
+  // AGENT_SECRET_OLD.
   app.addHook('preHandler', async (req: AppRequest, reply) => {
     if (!req.url.startsWith('/agent-tools/')) return;
-    const provided = req.headers['x-agent-secret'];
-    if (!AGENT_SECRET || provided !== AGENT_SECRET) {
+    const providedRaw = req.headers['x-agent-secret'];
+    const provided = typeof providedRaw === 'string' ? providedRaw : '';
+    if (!provided) {
+      return reply.status(401).send({ success: false, error: 'Unauthorized' });
+    }
+    const matchesPrimary = safeEquals(provided, AGENT_SECRET);
+    const matchesOld = AGENT_SECRET_OLD ? safeEquals(provided, AGENT_SECRET_OLD) : false;
+    if (!matchesPrimary && !matchesOld) {
       return reply.status(401).send({ success: false, error: 'Unauthorized' });
     }
   });
