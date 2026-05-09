@@ -147,18 +147,38 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     await page.getByTestId('quick-book-service').selectOption({ index: 1 });
     await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
 
-    // Pick a 30-min slot 35 days out, at a random grid-aligned hour
-    // between 09:00 and 14:00 (within shop business hours so the booking
-    // RPC's shift-coverage check would pass if employee is assigned).
-    // Random hour so consecutive failed runs that miss cleanup don't
-    // compound into a permanent overlap blocker on the same slot.
+    // Pick a 30-min slot a few days out at a random grid-aligned hour
+    // within the SEED'S LOCAL business hours so the booking RPC's
+    // shift-coverage check would pass if employee is assigned.
+    //
+    // Two real subtleties this test got bitten by:
+    //
+    // 1. Date reach. The seed's `employee_schedule` only extends ~12
+    //    days from today (refresh-seed-data.sql, weekdays only). Booking
+    //    further out fails with EMPLOYEE_NOT_SCHEDULED. We walk forward
+    //    3 days, then skip Sat/Sun.
+    //
+    // 2. Local-vs-UTC. `<input type="datetime-local">` interprets the
+    //    string we fill as LOCAL time, so we must hand it a LOCAL
+    //    datetime string. `toISOString()` returns UTC, so calling it on
+    //    a Date built from setHours() shifts the rendered hour by the
+    //    machine's offset and silently pushes the booking outside the
+    //    shop's local shift window (Mike 07-16, Carlos 08-17, Dana
+    //    09-18). Format the string from the local components directly.
+    //
+    // Range 10-14 LOCAL gives us a safe corridor: even at the edges,
+    // every seed employee has overlap with at least the resource we
+    // pick, so the booking RPC's auto-assign always finds someone.
     const future = new Date();
-    future.setDate(future.getDate() + 35);
-    const randomHour = 9 + Math.floor(Math.random() * 5); // 09-13 inclusive
-    future.setHours(randomHour, 15, 0, 0);
-    const startStr = future.toISOString().slice(0, 16);
-    future.setHours(randomHour, 45, 0, 0);
-    const endStr = future.toISOString().slice(0, 16);
+    future.setDate(future.getDate() + 3);
+    while (future.getDay() === 0 || future.getDay() === 6) {
+      future.setDate(future.getDate() + 1);
+    }
+    const randomHour = 10 + Math.floor(Math.random() * 5); // 10-14 inclusive
+    const ymd = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    const hh = String(randomHour).padStart(2, '0');
+    const startStr = `${ymd}T${hh}:15`;
+    const endStr = `${ymd}T${hh}:45`;
 
     const startInput = panel.locator('input[type="datetime-local"]').first();
     const endInput = panel.locator('input[type="datetime-local"]').last();

@@ -14,15 +14,17 @@
 |---|---|---|---|
 | Backend (`npm test`) | 1,733 / 1,733 | ✅ | ~140s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 58 passed, 1 skipped | ✅ | ~125s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 52 passed, 7 skipped | ✅ | ~120s |
 
 Total unit tests: 2,350 (backend + dashboard) + 78 agent.
 
-> **Note**: `calendar-sync.spec.ts` requires the backend to start with
-> `SYNC_TEST_RECORDER=1` set. Without the env var, the spec's
-> `beforeEach` skip-guards every test with a clear message — so these
-> 6 tests show as "skipped" in a default run and "passed" only when
-> the backend is launched with the recorder enabled.
+> **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
+> require the backend to start with `SYNC_TEST_RECORDER=1`. Without the
+> env var, the spec's `beforeEach` skip-guards every test with a clear
+> message. Run `SYNC_TEST_RECORDER=1 npm start && cd dashboard && npx
+> playwright test` to flip them to passing — total becomes 58 passed,
+> 1 skipped. The remaining 1 skip is in `full-functional-audit.spec.ts`
+> Voice Calls section, deferred until Telnyx PSTN clears.
 
 ## Unit test coverage (V8)
 

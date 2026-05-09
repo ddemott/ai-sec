@@ -4,6 +4,21 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-08 — Quick-book e2e deflake (date reach + local-time bug)
+
+Surface area: `dashboard/e2e/workflows.spec.ts` quick-book test only. No production code touched.
+
+Two compounding bugs were causing the test to fail intermittently — and consistently in the full-suite run vs. passing in isolation, which is the classic shape of a hidden race-or-state issue. Both turned out to be deterministic once unpacked:
+
+1. **Date reach.** Test booked +35 days out, but `refresh-seed-data.sql` (applied this morning) only extends `employee_schedule` ~12 days forward. Beyond that there are zero shifts → booking RPC rejects with `EMPLOYEE_NOT_SCHEDULED` → no row inserted → `expect(rowCount).toBeGreaterThanOrEqual(1)` fails. The test's prior "+35 days" was tolerant of an older, longer seed window; the seed-refresh tightened it.
+2. **Local-vs-UTC datetime-local.** `setHours(9, 15)` sets local hours; `toISOString()` returns UTC; `<input type="datetime-local">` then interprets the string we fill as LOCAL again. On a CDT machine, hour 13 → "T18:00" → form picker reads 18:00 LOCAL → outside Mike's 07-16 shift, outside Carlos's 08-17, exactly at Dana's 18 boundary. Consequence: the random hour 9-13 choice silently became 14-18 LOCAL and only the bottom of that range was bookable. Failure rate scaled with whichever employee the booking RPC's auto-assign happened to pick.
+
+**Fix.** Walk +3 days, skip Sat/Sun to land on a covered weekday. Build the datetime-local string from local Y/M/D + HH:mm components directly (no `toISOString()` round-trip). Range tightened to 10-14 LOCAL so even the ends of the random distribution sit comfortably inside every seed employee's shift window.
+
+**Doc fix bundled in same commit.** `docs/TEST_COVERAGE.md` previously claimed "58 passed, 1 skipped" — that count came from a `SYNC_TEST_RECORDER=1` run during validation, but the standard developer run is 52 passed + 7 skipped (the 6 calendar-sync tests skip-guard themselves when the env var is unset, plus 1 historic skip in full-functional-audit). Now stated accurately with both counts (default + recorder-enabled) called out. Quick-book passing again brings the default-env run back to 52 / 7 / 0.
+
+---
+
 ## 2026-05-08 — Observability slice 2: in-process Prometheus metrics + scrape endpoint
 
 Backend 1,719 → 1,733 (+14 metrics-registry unit tests). Dashboard / agent / Playwright unchanged. The "Basic metrics" item in `docs/TODO.md` Observability section is now `[x]`.
