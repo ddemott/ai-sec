@@ -352,6 +352,82 @@ describe('POST /appointments/create', () => {
         expect(dataQueries[1].text).toMatch(/SELECT[\s\S]*FROM appointments/i);
     });
 
+    it('SAD: overlap rejection with service_id derives next_available from service requirements', async () => {
+        // WHO: dashboard operator booking against a specific service that has
+        //       its own duration + skills + capabilities (e.g. "Brake Job —
+        //       60 min, requires brake-cert + lift-bay") and the slot collides
+        // WHAT: when body.service_id is provided, the conflict path SELECTs
+        //       services to get duration_minutes / required_skills /
+        //       required_resources, then uses those (not the booking's own
+        //       end-start delta + empty arrays) to find next-available slots
+        // WHEN: POST /appointments/create with service_id where the slot is taken
+        // WHERE: src/routes/appointments.ts L137-153 — the `if (body.service_id)`
+        //        branch inside the overlap-conflict path
+        // WHY: pre-fix this branch was uncovered (branch coverage 73.94%). The
+        //        operator booking with a service got alternatives derived from
+        //        a fallback duration (rounded from start-end delta) and empty
+        //        skill/cap requirements — meaning "Try one of these times
+        //        instead" might propose techs/bays unqualified for the actual
+        //        service. Pin the SELECT services + the propagation of its
+        //        fields into findNextAvailableSlots.
+        const SERVICE_ID = 'aaaa1111-bbbb-4ccc-8ddd-eeee22223333';
+        handle.queryResponses.push(
+            // book_appointment_atomic — overlap reject
+            { rows: [{ success: false, appointment_id: null, error_message: 'Resource already booked during this timeslot' }] },
+            // findOverlappingAppointment lookup
+            {
+                rows: [{
+                    appointment_id: 'existing-id',
+                    start_time: '2026-05-10T14:00:00.000Z',
+                    end_time: '2026-05-10T14:30:00.000Z',
+                    customer_name: 'Alice',
+                    employee_name: 'Mike',
+                    resource_name: 'Bay 1',
+                    description: 'Tire rotation',
+                }],
+            },
+            // SELECT services — branch under test. Returns a 60-min "brake"
+            // service with one skill + one cap so the propagation is visible.
+            {
+                rows: [{
+                    duration_minutes: 60,
+                    required_skills: ['brake-cert'],
+                    required_resources: ['lift-bay'],
+                }],
+            },
+            // findNextAvailableSlots — tenant tz lookup
+            { rows: [{ timezone: 'America/Chicago' }] },
+            // findNextAvailableSlots — main slot search (returns empty in mock)
+            { rows: [] },
+        );
+
+        const res = await app.inject({
+            method: 'POST',
+            url: '/appointments/create',
+            payload: { ...validCreatePayload, service_id: SERVICE_ID },
+        });
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json().error_code).toBe('TIMESLOT_OCCUPIED');
+
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        // Pin the order: RPC → conflict lookup → service SELECT → tenants tz → slots search.
+        expect(dataQueries[0].text).toContain('book_appointment_atomic');
+        expect(dataQueries[1].text).toMatch(/SELECT[\s\S]*FROM appointments/i);
+        expect(dataQueries[2].text).toContain('FROM services');
+        expect(dataQueries[2].params).toEqual([SERVICE_ID, TENANT_ID]);
+        // Pin the slot-search params include the service-derived skills + caps.
+        // findNextAvailableSlots is called with requiredSkills + requiredCapabilities;
+        // those land in the slot-search SQL's params. The exact param positions
+        // depend on availabilitySearch's binding order; assert by content rather
+        // than position so a refactor of the SQL doesn't break this test.
+        const slotsQuery = dataQueries[dataQueries.length - 1];
+        expect(slotsQuery.params).toEqual(expect.arrayContaining([['brake-cert']]));
+        expect(slotsQuery.params).toEqual(expect.arrayContaining([['lift-bay']]));
+    });
+
     it('SAD: overlap rejection but conflict lookup empty returns 400 + plain error (defensive)', async () => {
         // WHO: extreme-edge race — RPC said "already booked" but by the time
         //        the follow-up SELECT runs, the conflicting row was canceled
@@ -589,6 +665,39 @@ describe('DELETE /appointments/:id', () => {
         expect(res.statusCode).toBe(404);
         expect(res.json()).toMatchObject({ success: false });
     });
+
+    it('SAD: returns 400 when no tenant context is on the request (auth short-circuit)', async () => {
+        // WHO: malformed call where the JWT preHandler somehow didn't stamp
+        //       request.tenantId AND there's no body.tenant_id (e.g. middleware
+        //       order regression, or a future internal caller that bypasses it)
+        // WHAT: requireTenantId() short-circuits with 400 + "tenant_id is
+        //       required" before any DB activity or sync dispatch
+        // WHEN: DELETE /appointments/:id without auth + without tenant override
+        // WHERE: src/routes/appointments.ts L259 — `if (!tenantId) return`
+        // WHY: pre-fix this branch was uncovered (the route's safety net for
+        //       a missing tenant context). Without it, the route would fall
+        //       through to syncAppointmentToAll(undefined, ...) and a DELETE
+        //       with no tenant filter — potentially destructive. Pin that the
+        //       gate fires AND nothing else runs.
+        handle.auth.current = null;
+        handle.tenantIdOverride.current = null;
+
+        const res = await app.inject({
+            method: 'DELETE',
+            url: `/appointments/${APPOINTMENT_ID}`,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({ error: 'tenant_id is required' });
+        // Critical: zero DB activity AND no sync dispatch. requireTenantId
+        // must short-circuit BEFORE the route reaches the DELETE or the
+        // fire-and-forget syncAppointmentToAll call.
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(0);
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
 });
 
 // ────────────────────────────────────────────────────────────────────
@@ -645,6 +754,34 @@ describe('POST /appointments/:id/cancel', () => {
 
         expect(res.statusCode).toBe(404);
         expect(res.json()).toEqual({ success: false, error: 'Appointment not found' });
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
+    it('SAD: returns 400 when no tenant context is on the request (auth short-circuit)', async () => {
+        // WHO: same shape as the DELETE auth-short-circuit test — symmetric
+        //       coverage so the gate behavior is pinned on every destructive
+        //       single-row endpoint
+        // WHAT: requireTenantId() returns null + sends 400 before the cancel
+        //       UPDATE runs. No fire-and-forget sync dispatch fires either.
+        // WHEN: POST /appointments/:id/cancel without auth context
+        // WHERE: src/routes/appointments.ts L277 — `if (!tenantId) return`
+        // WHY: pre-fix this branch was uncovered. Without it, a missing tenant
+        //       context would let the cancel UPDATE run with `tenant_id = $2`
+        //       bound to undefined → potential cross-tenant write.
+        handle.auth.current = null;
+        handle.tenantIdOverride.current = null;
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/cancel`,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({ error: 'tenant_id is required' });
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(0);
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
     });
 });
@@ -734,6 +871,95 @@ describe('POST /appointments/:id/update', () => {
         expect(customerUpdateQueries).toHaveLength(1);
         expect(customerUpdateQueries[0].text).toContain('name =');
         expect(customerUpdateQueries[0].text).toContain('phone =');
+    });
+
+    it('HAPPY: updates ONLY customer_notes (covers notes-defined branch in isolation)', async () => {
+        // WHO: dashboard user editing a single note field on the appointment
+        //       detail view — name and phone untouched
+        // WHAT: customer-info update sub-block builds a UPDATE customers SET
+        //       statement with ONLY the metadata jsonb_set fragment; the
+        //       name= and phone= fragments stay absent
+        // WHEN: payload carries customer_notes but neither customer_name nor
+        //        customer_phone
+        // WHERE: src/routes/appointments.ts L375-378 — the per-field
+        //        if-statements inside the customer-info sub-block. Each builds
+        //        the UPDATE fragment only when its own field is set; the
+        //        notes-defined-only path was untested (branch coverage gap).
+        // WHY: pre-test, a refactor that swapped which field maps to which
+        //       SQL fragment (name <-> phone, notes <-> phone, etc.) would
+        //       silently corrupt rows in production — the existing happy test
+        //       always sent name + phone together, masking ordering bugs.
+        handle.queryResponses.push(
+            { rows: [] },                                  // BEGIN
+            { rows: [] },                                  // UPDATE appointments (description-only field set)
+            { rows: [{ customer_id: CUSTOMER_ID }] },      // SELECT customer_id
+            { rows: [] },                                  // UPDATE customers
+            { rows: [] },                                  // COMMIT
+        );
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                description: 'Updated note',
+                customer_notes: 'Allergic to mint air freshener',
+            },
+        });
+
+        expect(res.statusCode).toBe(200);
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        const custUpdate = dataQueries.find((q) => q.text.includes('UPDATE customers'));
+        expect(custUpdate).toBeDefined();
+        // Pin the SET clause shape: only metadata jsonb_set, no name=, no phone=.
+        expect(custUpdate!.text).toContain("jsonb_set(COALESCE(metadata, '{}'), '{notes}'");
+        expect(custUpdate!.text).not.toMatch(/\bname\s*=/);
+        expect(custUpdate!.text).not.toMatch(/\bphone\s*=/);
+    });
+
+    it('SAD: customer-info update is skipped when SELECT returns no customer_id (orphan row)', async () => {
+        // WHO: edge case — appointment row exists but its customer_id FK was
+        //       null'd out (rare, but possible after a customer hard-delete
+        //       race or a partial migration)
+        // WHAT: the SELECT customer_id ... clause returns rows[0] with
+        //       customer_id = null, so `appt.rows[0]?.customer_id` is falsy
+        //       and the UPDATE customers branch is skipped. The appointment
+        //       update still commits.
+        // WHEN: payload includes customer_name etc. but the appointment's
+        //        customer_id is null in the DB
+        // WHERE: src/routes/appointments.ts L371 — `if (appt.rows[0]?.customer_id)`
+        //        false branch (uncovered pre-test).
+        // WHY: pre-test, this defensive guard was never exercised by tests.
+        //       A refactor that dropped the `?.customer_id` chain (e.g. wrote
+        //       `appt.rows[0]` directly) would attempt UPDATE customers WHERE
+        //       id = null, which is a silent no-op but masks the data anomaly.
+        //       Pinning the skip behavior makes the contract explicit.
+        handle.queryResponses.push(
+            { rows: [] },                                  // BEGIN
+            { rows: [] },                                  // UPDATE appointments
+            { rows: [{ customer_id: null }] },             // SELECT customer_id — orphan
+            { rows: [] },                                  // COMMIT (no UPDATE customers in between)
+        );
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                description: 'Updated',
+                customer_name: 'Should be ignored',
+            },
+        });
+
+        expect(res.statusCode).toBe(200);
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        // Critical: NO UPDATE customers despite the payload requesting one,
+        // because the appointment's customer_id was null.
+        expect(dataQueries.find((q) => q.text.includes('UPDATE customers'))).toBeUndefined();
     });
 
     it('SAD: returns 400 on Zod validation failure', async () => {

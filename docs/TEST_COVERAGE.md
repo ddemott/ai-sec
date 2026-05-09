@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-09 (booking enforcement chain closed end-to-end: Slice 1 conflict-details on agent route + four-geometry × two-flavor unit tests, Slice 1.5 INVALID_INCREMENT error_code threading + structured validator return, Slice 2 audit confirmed already shipped, Slice 3 fresh-tenant E2E pattern via `dashboard/e2e/helpers/fixtures.ts`, AI prevention prompt-only enforcement + four CONVERSATION-SHAPE prompt-content tests. Backend 1,733 → 1,747 (+14); agent 81 → 85 (+4); dashboard 617 unchanged.)
+**Last refreshed:** 2026-05-09 (booking enforcement chain + appointments-route branch-coverage lift. Branch coverage on `src/routes/appointments.ts` 73.94 → 81.69 via 5 new tests covering: overlap-with-service_id propagating service-derived skills/caps into `findNextAvailableSlots`; DELETE + cancel auth short-circuits (`requireTenantId` → 400, no DB activity, no sync dispatch); customer-info update with notes only (per-field branch in isolation); customer-info update on orphan customer_id (defensive skip). Backend 1,733 → 1,752 (+19); agent 81 → 85 (+4); dashboard 617 unchanged.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,12 +12,12 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,747 / 1,747 | ✅ | ~155s |
+| Backend (`npm test`) | 1,752 / 1,752 | ✅ | ~155s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
 | Agent (`cd agent && npm test`) | 85 / 85 | ✅ | ~3s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 55 passed, 7 skipped | ✅ | ~135s |
 
-Total unit tests: 2,364 (backend + dashboard) + 85 agent.
+Total unit tests: 2,369 (backend + dashboard) + 85 agent.
 
 > **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
 > require the backend to start with `SYNC_TEST_RECORDER=1`. Without the
