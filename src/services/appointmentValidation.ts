@@ -30,31 +30,60 @@ export function isFifteenMinuteIncrement(iso: string | null | undefined): boolea
   );
 }
 
-export function validateAppointmentTimeRange(startTime?: string | null, endTime?: string | null): string | null {
+/**
+ * Stable error codes returned alongside the human-readable message so route
+ * handlers can branch on the failure mode without string-matching the
+ * message. Add new codes here when adding new validation rules; consumers
+ * (dashboard form, agent prompt, metrics) read the code, not the message.
+ */
+export type AppointmentValidationCode =
+  | 'INVALID_PARAMS'
+  | 'INVALID_RANGE'
+  | 'INVALID_DURATION'
+  | 'INVALID_INCREMENT';
+
+export interface AppointmentValidationError {
+  error: string;
+  code: AppointmentValidationCode;
+}
+
+export function validateAppointmentTimeRange(
+  startTime?: string | null,
+  endTime?: string | null
+): AppointmentValidationError | null {
   if (!startTime || !endTime) {
-    return 'Start and end times are required';
+    return { error: 'Start and end times are required', code: 'INVALID_PARAMS' };
   }
 
   const startDt = new Date(startTime);
   const endDt = new Date(endTime);
   if (Number.isNaN(startDt.getTime()) || Number.isNaN(endDt.getTime())) {
-    return 'Invalid date/time';
+    return { error: 'Invalid date/time', code: 'INVALID_PARAMS' };
   }
 
   if (endDt <= startDt) {
-    return 'End time must be after start time';
+    return { error: 'End time must be after start time', code: 'INVALID_RANGE' };
   }
 
   const maxMs = MAX_APPOINTMENT_DURATION_HOURS * 60 * 60 * 1000;
   if (endDt.getTime() - startDt.getTime() > maxMs) {
-    return `Appointment duration cannot exceed ${MAX_APPOINTMENT_DURATION_HOURS} hours`;
+    return {
+      error: `Appointment duration cannot exceed ${MAX_APPOINTMENT_DURATION_HOURS} hours`,
+      code: 'INVALID_DURATION',
+    };
   }
 
   if (!isFifteenMinuteIncrement(startTime)) {
-    return 'Start time must land on a 15-minute increment (:00, :15, :30, :45)';
+    return {
+      error: 'Start time must land on a 15-minute increment (:00, :15, :30, :45)',
+      code: 'INVALID_INCREMENT',
+    };
   }
   if (!isFifteenMinuteIncrement(endTime)) {
-    return 'End time must land on a 15-minute increment (:00, :15, :30, :45)';
+    return {
+      error: 'End time must land on a 15-minute increment (:00, :15, :30, :45)',
+      code: 'INVALID_INCREMENT',
+    };
   }
 
   return null;

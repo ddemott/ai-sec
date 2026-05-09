@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (observability slice 2: in-process Prometheus metrics registry at `src/services/metrics.ts`, scrape endpoint at `GET /metrics` gated by `METRICS_TOKEN`. Six pre-declared metrics — http_requests_total + http_request_duration_ms histogram + booking_attempts_total + tool_calls_total + sync_dispatches_total + errors_total. Backend +14 unit tests → 1,733.)
+**Last refreshed:** 2026-05-09 (booking enforcement chain closed end-to-end: Slice 1 conflict-details on agent route + four-geometry × two-flavor unit tests, Slice 1.5 INVALID_INCREMENT error_code threading + structured validator return, Slice 2 audit confirmed already shipped, Slice 3 fresh-tenant E2E pattern via `dashboard/e2e/helpers/fixtures.ts`, AI prevention prompt-only enforcement + four CONVERSATION-SHAPE prompt-content tests. Backend 1,733 → 1,747 (+14); agent 81 → 85 (+4); dashboard 617 unchanged.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,17 +12,18 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,733 / 1,733 | ✅ | ~140s |
+| Backend (`npm test`) | 1,747 / 1,747 | ✅ | ~155s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 52 passed, 7 skipped | ✅ | ~120s |
+| Agent (`cd agent && npm test`) | 85 / 85 | ✅ | ~3s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 55 passed, 7 skipped | ✅ | ~135s |
 
-Total unit tests: 2,350 (backend + dashboard) + 78 agent.
+Total unit tests: 2,364 (backend + dashboard) + 85 agent.
 
 > **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
 > require the backend to start with `SYNC_TEST_RECORDER=1`. Without the
 > env var, the spec's `beforeEach` skip-guards every test with a clear
 > message. Run `SYNC_TEST_RECORDER=1 npm start && cd dashboard && npx
-> playwright test` to flip them to passing — total becomes 58 passed,
+> playwright test` to flip them to passing — total becomes 61 passed,
 > 1 skipped. The remaining 1 skip is in `full-functional-audit.spec.ts`
 > Voice Calls section, deferred until Telnyx PSTN clears.
 
@@ -58,6 +59,9 @@ purpose-built coverage build. Track e2e by **workflows covered** instead.
 | `calendar-sync.spec.ts` | appointment lifecycle dispatch | create/update/delete each fire all 5 providers (calendar + 4 CRMs) via `SYNC_TEST_RECORDER` recorder |
 | `calendar-sync.spec.ts` | customer lifecycle dispatch | create/update/delete each fire the 4 CRMs (no calendar — by contract) |
 | `calendar-sync.spec.ts` | fire-and-forget contract | HTTP returns in <3s even with 5 sync promises in flight |
+| `setup-wizard-to-booking.spec.ts` | wizard finalize → first booking | `/register` → seed services/resource/employee → `/shifts/expand-weekly` → `/appointments/create` succeeds |
+| `setup-wizard-to-booking.spec.ts` | skip-fan-out sad path | same flow minus expand-weekly → booking returns `EMPLOYEE_NOT_SCHEDULED` |
+| `setup-wizard-to-booking.spec.ts` | range coverage | default `weeks_ahead=4` → 28 employee_schedule rows reaching ~27 days out |
 
 ### Soft-checked workflows (`if (visible)` guards or `logIssue()`)
 
@@ -75,7 +79,7 @@ the test still passes.
 - Voice/AI loop (Telnyx → LiveKit → tools → booking) — covered by `scripts/qa-live-test.py`, not Playwright
 - ~~Calendar sync (Google + Outlook OAuth)~~ — orchestration layer covered by `calendar-sync.spec.ts` (2026-05-08); actual outbound HTTP shape still only at unit level
 - ~~CRM sync (Jobber / HubSpot / Square / ServiceTitan, bidirectional)~~ — dispatch covered by `calendar-sync.spec.ts`; bidirectional read paths (CRM → us) still uncovered
-- Setup wizard end-to-end (8 steps from business-type pick to first booking)
+- ~~Setup wizard end-to-end (8 steps from business-type pick to first booking)~~ — finalize → first-booking path now covered by `setup-wizard-to-booking.spec.ts` (2026-05-08); 8-step UI walkthrough still uncovered, deferred (driving the modal's nested step state through Playwright is heavy for what unit-tests of `useWizardCrud` already cover)
 - Stripe billing flow / checkout / webhook
 - SMS OTP verification before booking
 - Knowledge base upload → chunking → RAG query

@@ -55,3 +55,6 @@ dashboard/dist/
 # in working-tree status every session.
 improvement-ideas.md
 .remember/
+
+# Claude Code harness state (per-machine, not source-controlled)
+.claude/

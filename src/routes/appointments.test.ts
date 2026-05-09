@@ -146,12 +146,72 @@ describe('POST /appointments/create', () => {
         expect(res.json()).toEqual({
             success: false,
             error: 'Appointment duration cannot exceed 12 hours',
+            error_code: 'INVALID_DURATION',
         });
         const dataQueries = handle.queries.filter(
             (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
         );
         expect(dataQueries).toHaveLength(0);
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
+    it('SAD: rejects off-grid start time with INVALID_INCREMENT before any DB call', async () => {
+        // WHO: dashboard user (or curl bypassing the form's snap-to-grid picker)
+        // WHAT: validateAppointmentTimeRange catches a :07 start time and the
+        //        route returns 400 + INVALID_INCREMENT before the booking RPC runs
+        // WHEN: Slice 1.5 of booking enforcement hardening, 2026-05-09
+        // WHERE: src/routes/appointments.ts POST /appointments/create
+        // WHY: third-layer enforcement — DB CHECK constraint applied 2026-05-08
+        //       is the floor; this Zod-equivalent gate gives a clean error_code
+        //       BEFORE consuming a DB connection. Without it, off-grid times
+        //       would 500 with a generic "constraint violation" Postgres error.
+        const res = await app.inject({
+            method: 'POST',
+            url: '/appointments/create',
+            payload: {
+                ...validCreatePayload,
+                start_time: '2026-04-15T10:07:00Z',
+                end_time: '2026-04-15T11:00:00Z',
+            },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'Start time must land on a 15-minute increment (:00, :15, :30, :45)',
+            error_code: 'INVALID_INCREMENT',
+        });
+        // Critical: no DB activity. Validation gate must fire BEFORE the
+        // BEGIN/SET LOCAL/RPC sequence — otherwise the constraint catches
+        // it server-side but burns a transaction round-trip.
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(0);
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
+    it('SAD: rejects off-grid end time (start was on-grid)', async () => {
+        // WHY: pin both halves of the predicate independently — a future
+        //       change that drops the end-time check while keeping start
+        //       would silently let half-bad rows through Zod and rely
+        //       solely on the DB CHECK to reject.
+        const res = await app.inject({
+            method: 'POST',
+            url: '/appointments/create',
+            payload: {
+                ...validCreatePayload,
+                start_time: '2026-04-15T10:00:00Z',
+                end_time: '2026-04-15T10:23:00Z',
+            },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'End time must land on a 15-minute increment (:00, :15, :30, :45)',
+            error_code: 'INVALID_INCREMENT',
+        });
     });
 
     it('SAD: returns 400 on Zod validation failure (missing required field)', async () => {
@@ -746,6 +806,48 @@ describe('POST /appointments/:id/update', () => {
         expect(res.json()).toEqual({
             success: false,
             error: 'Appointment duration cannot exceed 12 hours',
+            error_code: 'INVALID_DURATION',
+        });
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
+    it('SAD: update with off-grid time is rejected with INVALID_INCREMENT', async () => {
+        // WHO: dashboard reschedule, or curl PUT bypassing the time-picker
+        // WHAT: validateAppointmentTimeRange runs after the existing-row SELECT
+        //        on the update path; off-grid times ROLLBACK the transaction
+        //        and return 400 + INVALID_INCREMENT
+        // WHY: parity with create — both surfaces must enforce the same grid
+        //       so a row can't end up off-grid via either route, regardless
+        //       of the DB CHECK as floor.
+        // The handler reads existing row first, then validates effective times.
+        handle.queryResponses.push({ rows: [] }); // BEGIN
+        handle.queryResponses.push({
+            rows: [
+                {
+                    id: APPOINTMENT_ID,
+                    tenant_id: TENANT_ID,
+                    start_time: '2026-04-15T10:00:00Z',
+                    end_time: '2026-04-15T10:30:00Z',
+                },
+            ],
+        }); // SELECT existing
+        handle.queryResponses.push({ rows: [] }); // ROLLBACK
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                start_time: '2026-04-15T10:07:00Z',
+                end_time: '2026-04-15T10:30:00Z',
+            },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({
+            success: false,
+            error: 'Start time must land on a 15-minute increment (:00, :15, :30, :45)',
+            error_code: 'INVALID_INCREMENT',
         });
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
     });

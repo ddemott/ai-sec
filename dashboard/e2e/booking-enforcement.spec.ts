@@ -2,12 +2,16 @@
  * E2E coverage for the booking-enforcement work shipped 2026-05-08
  * (slices 1-2: backend conflict-details, 15-min increments, ConflictModal).
  *
- * Four scenarios — each fully self-contained per the testing-isolation
- * memory. Every test creates its own employee_schedule rows + blocking
- * appointments in `try`, asserts, and tears them down in `finally`. No
- * test depends on another's residue or on specific seed.sql values
- * persisting; any test can be run in isolation in any order.
+ * Slice 3 refactor (2026-05-09): tests 1-4 + 7 use fresh tenants from
+ * dashboard/e2e/helpers/fixtures.ts — registerFreshTenant + seedBookingScenario
+ * + cleanTenantData (single-DELETE cascade). Each test owns its full data
+ * lifecycle: setup → assert → teardown, runs independently of every other
+ * test. No more DynaTire seed dependency, no more per-row cleanup. UI tests
+ * (5: ui-conflict-modal, 6: 15min-form-rejection) still need the DynaTire
+ * seed because they drive the dashboard's tenant-aware UI; their isolation
+ * is governed by the auth-state setup project, not this slice's scope.
  *
+ * Scenarios:
  *   1. Out-of-hours blocked — booking outside the assigned employee's
  *      shift window is rejected by the backend with a clear inline
  *      error; no row is inserted.
@@ -21,25 +25,43 @@
  *   4. Partial overlap blocked — 14:15-14:45 vs an existing 14:00-14:30
  *      is rejected (proves the GiST exclusion is whole-slot via the &&
  *      operator, not just exact-match-start).
+ *   5. UI smoke: ConflictModal renders when the backend returns 409.
+ *   6. UI smoke: 15-min off-grid time is rejected at the form before
+ *      reaching the backend.
+ *   7. Edit-overlap: PUT /appointments/:id/update is symmetric on overlap.
  *
  * Setup: backend on https://localhost:4001, dashboard on
- * https://localhost:4000, Postgres on localhost:5433. Each test uses
- * a unique tag for cleanup safety.
+ * https://localhost:4000, Postgres on localhost:5433.
  */
 import { test, expect, Page } from '@playwright/test';
 import { Pool } from 'pg';
+import {
+  PG_URL,
+  registerFreshTenant,
+  seedBookingScenario,
+  seedAppointment,
+  cleanTenantData,
+  bookAppointmentAs,
+  updateAppointmentAs,
+  isoDateDaysFromNow,
+  type RegisteredTenant,
+} from './helpers/fixtures';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
-const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const ADMIN_EMAIL = 'admin@secretaryhq.com';
 const ADMIN_PASSWORD = 'password';
-const FUTURE_DATE = '2026-06-15'; // Far enough from today to avoid seed collisions
 
 let pool: Pool;
 
-function uniqueTag(): string {
-  return `e2e-enforce-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+async function countAppointmentsForTenant(tenantId: string): Promise<number> {
+  const r = await pool.query(
+    `SELECT count(*)::int AS n FROM appointments WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  return r.rows[0].n;
 }
+
+// ── UI-test helpers (used only by tests 5 + 6, which need browser nav) ──
 
 async function ensureLoggedIn(page: Page) {
   await page.goto('/dashboard');
@@ -68,7 +90,7 @@ async function switchToDynaTireTenant(page: Page) {
   await page.waitForTimeout(1500);
 }
 
-async function findEmployeeIdByName(name: string): Promise<string | null> {
+async function findDynaTireEmployeeId(name: string): Promise<string | null> {
   const r = await pool.query(
     'SELECT id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
@@ -76,7 +98,7 @@ async function findEmployeeIdByName(name: string): Promise<string | null> {
   return r.rows[0]?.id ?? null;
 }
 
-async function findResourceIdByName(name: string): Promise<string | null> {
+async function findDynaTireResourceId(name: string): Promise<string | null> {
   const r = await pool.query(
     'SELECT id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
@@ -84,7 +106,7 @@ async function findResourceIdByName(name: string): Promise<string | null> {
   return r.rows[0]?.id ?? null;
 }
 
-async function findCustomerId(): Promise<string> {
+async function findDynaTireCustomerId(): Promise<string> {
   const r = await pool.query(
     'SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1',
     [DYNATIRE_ID]
@@ -93,56 +115,8 @@ async function findCustomerId(): Promise<string> {
   return r.rows[0].id;
 }
 
-async function getApiToken(page: Page): Promise<string> {
-  const result = await page.evaluate(
-    async ({ email, password }) => {
-      const res = await fetch('https://localhost:4001/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      return await res.json();
-    },
-    { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }
-  );
-  if (!result?.token) throw new Error(`Login failed: ${JSON.stringify(result)}`);
-  return result.token as string;
-}
-
-/**
- * POST /appointments/create from inside the page context (so Playwright
- * picks up the auth cookies / token). Returns the parsed JSON response
- * regardless of HTTP status, so tests can assert on the conflict block
- * the backend returns at 409.
- */
-async function postBookAppointment(
-  page: Page,
-  token: string,
-  payload: Record<string, unknown>
-): Promise<{ status: number; body: Record<string, unknown> }> {
-  return await page.evaluate(
-    async ({ token, payload }) => {
-      const res = await fetch('https://localhost:4001/appointments/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const body = await res.json();
-      return { status: res.status, body };
-    },
-    { token, payload }
-  );
-}
-
-async function countAppointments(tag: string): Promise<number> {
-  const r = await pool.query(
-    `SELECT count(*)::int AS n FROM appointments WHERE description = $1`,
-    [tag]
-  );
-  return r.rows[0].n;
+function uniqueTag(): string {
+  return `e2e-enforce-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
 test.beforeAll(() => {
@@ -155,12 +129,13 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. Out-of-hours blocked
 // ────────────────────────────────────────────────────────────────────────────
-test('out-of-hours: booking outside the assigned employee shift is rejected with a clear error', async ({ page }) => {
+test('out-of-hours: booking outside the assigned employee shift is rejected with a clear error', async ({ request }) => {
   // WHO: front-desk operator trying to fit a customer in before the shop opens
   // WHAT: backend's book_appointment_atomic checks employee_schedule and
   //        rejects with "Employee is not on shift during this time"
   //        (or similar) when the requested time falls outside the
-  //        employee's shift; status 400, no row inserted
+  //        employee's shift; status 400, no row inserted, NO conflict block
+  //        because there's no overlapping appointment — just a missing shift.
   // WHEN: any booking where the assigned employee has no covering
   //        employee_schedule row at the requested time
   // WHERE: book_appointment_atomic shift-coverage check + the dashboard's
@@ -169,44 +144,27 @@ test('out-of-hours: booking outside the assigned employee shift is rejected with
   // WHY: the system must enforce business hours so a frantic morning
   //        operator can't accidentally book a 6am appointment for an
   //        employee who starts at 9am — the customer would arrive to a
-  //        closed shop. Inline error rather than modal because there's
-  //        nothing to "view" — the operator just needs to pick a time
-  //        that overlaps a real shift.
-  const tag = uniqueTag();
-  const apptIdsToCleanup: string[] = [];
-  let scheduleIdToCleanup: string | null = null;
-
+  //        closed shop.
+  let tenant: RegisteredTenant | null = null;
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = await findCustomerId();
-    expect(mikeId, 'Mike Rivera must exist in DynaTire seed').toBeTruthy();
-    expect(truckId, 'Truck 1 must exist').toBeTruthy();
+    tenant = await registerFreshTenant(request);
+    const date = isoDateDaysFromNow(14); // far enough out to avoid past-time issues
+    const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
+      employees: ['Test Tech'],
+      resources: ['Test Bay'],
+      shiftDates: [date],
+      shiftHours: { start: '09:00', end: '17:00' },
+    });
 
-    // Setup: give Mike a 9-17 shift on the future date, then try booking at 06:00.
-    const ins = await pool.query(
-      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
-    );
-    scheduleIdToCleanup = ins.rows[0].id;
-
-    await ensureLoggedIn(page);
-    const token = await getApiToken(page);
-
-    // Try booking at 06:00 (3 hours before Mike's shift starts).
-    const earlyStart = `${FUTURE_DATE}T06:00:00.000Z`;
-    const earlyEnd = `${FUTURE_DATE}T06:30:00.000Z`;
-    const res = await postBookAppointment(page, token, {
-      tenant_id: DYNATIRE_ID,
-      resource_id: truckId,
-      customer_id: customerId,
-      employee_id: mikeId,
-      start_time: earlyStart,
-      end_time: earlyEnd,
-      description: tag,
+    // Try booking at 06:00 (3 hours before the shift starts).
+    const res = await bookAppointmentAs(request, tenant.token, {
+      tenant_id: tenant.tenantId,
+      resource_id: seed.resourceIds[0],
+      customer_id: seed.customerId,
+      employee_id: seed.employeeIds[0],
+      start_time: `${date}T06:00:00.000Z`,
+      end_time: `${date}T06:30:00.000Z`,
+      description: 'pre-shift attempt',
     });
 
     expect(res.status, 'pre-shift booking must be rejected').toBe(400);
@@ -216,24 +174,19 @@ test('out-of-hours: booking outside the assigned employee shift is rejected with
     expect(String(res.body.error)).toMatch(/shift|on shift/i);
     expect(res.body.conflict, 'no conflict block on shift errors').toBeUndefined();
 
-    // No row landed in the DB for our tag.
-    expect(await countAppointments(tag)).toBe(0);
+    // Belt-and-suspenders: nothing landed.
+    expect(await countAppointmentsForTenant(tenant.tenantId)).toBe(0);
   } finally {
-    for (const id of apptIdsToCleanup) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    }
-    if (scheduleIdToCleanup) {
-      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleIdToCleanup]);
-    }
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // 2. Employee double-book → conflict block surfaces existing appointment
 // ────────────────────────────────────────────────────────────────────────────
-test('employee-double-book: overlap returns 409 with conflict block showing the existing appointment', async ({ page }) => {
-  // WHO: operator trying to fit a second customer in with Mike during a
-  //        time he's already booked
+test('employee-double-book: overlap returns 409 with conflict block showing the existing appointment', async ({ request }) => {
+  // WHO: operator trying to fit a second customer in with the same tech
+  //        during a time he's already booked
   // WHAT: backend rejects with 409 + error_code TIMESLOT_OCCUPIED + a
   //        `conflict` block containing the existing appointment's id,
   //        customer_name, employee_name, resource_name, start/end
@@ -246,51 +199,37 @@ test('employee-double-book: overlap returns 409 with conflict block showing the 
   //        ConflictModal depends on. If a future refactor breaks the
   //        409 status, the conflict block, or any of the surfaced
   //        fields, the modal would render blank in production.
-  const tag = uniqueTag();
-  const apptIdsToCleanup: string[] = [];
-  let scheduleIdToCleanup: string | null = null;
-
+  let tenant: RegisteredTenant | null = null;
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = await findCustomerId();
-    expect(mikeId).toBeTruthy();
-    expect(truckId).toBeTruthy();
+    tenant = await registerFreshTenant(request);
+    const date = isoDateDaysFromNow(14);
+    const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
+      employees: ['Mike Test'],
+      resources: ['Bay 1'],
+      shiftDates: [date],
+    });
 
-    // Shift for Mike on the future date (9-17), so the only failure
-    // mode for our second booking is the employee-overlap, not shift.
-    const shiftIns = await pool.query(
-      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
-    );
-    scheduleIdToCleanup = shiftIns.rows[0].id;
+    // Pre-existing appointment 14:00-14:30 — Mike + Bay 1.
+    const existingStart = `${date}T14:00:00.000Z`;
+    const existingEnd = `${date}T14:30:00.000Z`;
+    const existingId = await seedAppointment(pool, tenant.tenantId, {
+      resourceId: seed.resourceIds[0],
+      customerId: seed.customerId,
+      employeeId: seed.employeeIds[0],
+      startTime: existingStart,
+      endTime: existingEnd,
+      description: 'blocker',
+    });
 
-    // Pre-existing appointment: Mike + Truck 1 from 14:00 to 14:30.
-    const existingStart = `${FUTURE_DATE}T14:00:00.000Z`;
-    const existingEnd = `${FUTURE_DATE}T14:30:00.000Z`;
-    const existing = await pool.query(
-      `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING id`,
-      [DYNATIRE_ID, truckId, customerId, mikeId, existingStart, existingEnd, `${tag}-blocker`]
-    );
-    apptIdsToCleanup.push(existing.rows[0].id);
-
-    await ensureLoggedIn(page);
-    const token = await getApiToken(page);
-
-    // Try to book Mike at the exact same slot — must fail with conflict block.
-    const res = await postBookAppointment(page, token, {
-      tenant_id: DYNATIRE_ID,
-      resource_id: truckId,
-      customer_id: customerId,
-      employee_id: mikeId,
+    // Try the exact same slot — must fail with conflict block.
+    const res = await bookAppointmentAs(request, tenant.token, {
+      tenant_id: tenant.tenantId,
+      resource_id: seed.resourceIds[0],
+      customer_id: seed.customerId,
+      employee_id: seed.employeeIds[0],
       start_time: existingStart,
       end_time: existingEnd,
-      description: tag,
+      description: 'second attempt',
     });
 
     expect(res.status, 'overlap must return 409').toBe(409);
@@ -298,28 +237,23 @@ test('employee-double-book: overlap returns 409 with conflict block showing the 
     expect(res.body.error_code).toBe('TIMESLOT_OCCUPIED');
     const conflict = res.body.conflict as Record<string, unknown> | undefined;
     expect(conflict, 'conflict block must be present').toBeTruthy();
-    expect(conflict?.appointment_id).toBe(existing.rows[0].id);
-    expect(conflict?.employee_name).toBe('Mike Rivera');
-    expect(conflict?.resource_name).toBe('Truck 1');
+    expect(conflict?.appointment_id).toBe(existingId);
+    expect(conflict?.employee_name).toBe('Mike Test');
+    expect(conflict?.resource_name).toBe('Bay 1');
     expect(conflict?.start_time).toBeTruthy();
     expect(conflict?.end_time).toBeTruthy();
 
-    // No second row got inserted.
-    expect(await countAppointments(tag)).toBe(0);
+    // Only the blocker exists — no second row landed.
+    expect(await countAppointmentsForTenant(tenant.tenantId)).toBe(1);
   } finally {
-    for (const id of apptIdsToCleanup) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    }
-    if (scheduleIdToCleanup) {
-      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleIdToCleanup]);
-    }
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // 3. Resource double-book → conflict block surfaces existing appointment
 // ────────────────────────────────────────────────────────────────────────────
-test('resource-double-book: same resource + different employee still returns 409 with conflict', async ({ page }) => {
+test('resource-double-book: same resource + different employee still returns 409 with conflict', async ({ request }) => {
   // WHO: operator who picked a different employee but the same truck/
   //        bay during a time the truck is already in use
   // WHAT: backend rejects on the resource axis (appointments_no_resource_overlap)
@@ -333,88 +267,64 @@ test('resource-double-book: same resource + different employee still returns 409
   //        exclusion constraints; this test pins the rejection PLUS
   //        the modal's data path, so a future refactor that drops the
   //        resource branch from the conflict lookup surfaces here
-  const tag = uniqueTag();
-  const apptIdsToCleanup: string[] = [];
-  let scheduleIdToCleanup: string | null = null;
-
+  let tenant: RegisteredTenant | null = null;
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const carlosId = await findEmployeeIdByName('Carlos Vega');
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = await findCustomerId();
-    expect(mikeId).toBeTruthy();
-    expect(carlosId).toBeTruthy();
-    expect(truckId).toBeTruthy();
+    tenant = await registerFreshTenant(request);
+    const date = isoDateDaysFromNow(14);
+    const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
+      // Two employees so the second-attempt failure mode is the resource
+      // overlap, not "Carlos is not on shift."
+      employees: ['Mike Test', 'Carlos Test'],
+      resources: ['Truck 1'],
+      shiftDates: [date],
+    });
+    const [mikeId, carlosId] = seed.employeeIds;
+    const truckId = seed.resourceIds[0];
 
-    // Both employees need a shift so the second-attempt failure mode
-    // is the resource overlap, not "Carlos is not on shift."
-    await pool.query(
-      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
-    );
-    const carlosShiftRes = await pool.query(
-      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
-      [DYNATIRE_ID, carlosId, FUTURE_DATE]
-    );
-    scheduleIdToCleanup = carlosShiftRes.rows[0].id; // we'll clean Mike's separately
-
-    const existingStart = `${FUTURE_DATE}T15:00:00.000Z`;
-    const existingEnd = `${FUTURE_DATE}T15:30:00.000Z`;
-    const existing = await pool.query(
-      `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING id`,
-      [DYNATIRE_ID, truckId, customerId, mikeId, existingStart, existingEnd, `${tag}-blocker`]
-    );
-    apptIdsToCleanup.push(existing.rows[0].id);
-
-    await ensureLoggedIn(page);
-    const token = await getApiToken(page);
+    // Existing booking: Mike + Truck 1 at 15:00.
+    const existingStart = `${date}T15:00:00.000Z`;
+    const existingEnd = `${date}T15:30:00.000Z`;
+    const existingId = await seedAppointment(pool, tenant.tenantId, {
+      resourceId: truckId,
+      customerId: seed.customerId,
+      employeeId: mikeId,
+      startTime: existingStart,
+      endTime: existingEnd,
+      description: 'blocker',
+    });
 
     // Try Carlos + same truck + same time — resource overlap, not employee overlap.
-    const res = await postBookAppointment(page, token, {
-      tenant_id: DYNATIRE_ID,
+    const res = await bookAppointmentAs(request, tenant.token, {
+      tenant_id: tenant.tenantId,
       resource_id: truckId,
-      customer_id: customerId,
+      customer_id: seed.customerId,
       employee_id: carlosId,
       start_time: existingStart,
       end_time: existingEnd,
-      description: tag,
+      description: 'second attempt',
     });
 
     expect(res.status).toBe(409);
     expect(res.body.error_code).toBe('TIMESLOT_OCCUPIED');
     const conflict = res.body.conflict as Record<string, unknown> | undefined;
     expect(conflict, 'conflict block must be present even when only resource overlaps').toBeTruthy();
-    expect(conflict?.appointment_id).toBe(existing.rows[0].id);
+    expect(conflict?.appointment_id).toBe(existingId);
     // The conflict surfaces the EXISTING booking's employee (Mike), not
     // the requested employee (Carlos). The modal's job is to show what's
     // there, not who tried to book.
-    expect(conflict?.employee_name).toBe('Mike Rivera');
+    expect(conflict?.employee_name).toBe('Mike Test');
     expect(conflict?.resource_name).toBe('Truck 1');
 
-    expect(await countAppointments(tag)).toBe(0);
+    expect(await countAppointmentsForTenant(tenant.tenantId)).toBe(1);
   } finally {
-    for (const id of apptIdsToCleanup) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    }
-    // Clean both shifts the test created.
-    await pool.query(
-      `DELETE FROM employee_schedule WHERE tenant_id = $1 AND shift_date = $2`,
-      [DYNATIRE_ID, FUTURE_DATE]
-    );
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // 4. Partial overlap blocked (whole-slot check, not just exact-match)
 // ────────────────────────────────────────────────────────────────────────────
-test('partial-overlap: 14:15-14:45 is blocked by an existing 14:00-14:30 booking', async ({ page }) => {
+test('partial-overlap: 14:15-14:45 is blocked by an existing 14:00-14:30 booking', async ({ request }) => {
   // WHO: operator who knows there's a 14:00 booking and tries to slip
   //        in starting at 14:15 (overlapping the tail half of the
   //        existing slot)
@@ -429,90 +339,65 @@ test('partial-overlap: 14:15-14:45 is blocked by an existing 14:00-14:30 booking
   //        double book... It should check to see if that whole time slot
   //        is free." Pin the partial-overlap case because it's the
   //        most common real-world conflict (operator partially overlaps
-  //        rather than picking the exact same start).
-  const tag = uniqueTag();
-  const apptIdsToCleanup: string[] = [];
-  let scheduleIdToCleanup: string | null = null;
-
+  //        rather than picking the exact same start). Also pin the
+  //        adjacent (touching) case as positive control: half-open
+  //        ranges allow back-to-back bookings.
+  let tenant: RegisteredTenant | null = null;
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = await findCustomerId();
-    expect(mikeId).toBeTruthy();
-    expect(truckId).toBeTruthy();
+    tenant = await registerFreshTenant(request);
+    const date = isoDateDaysFromNow(14);
+    const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
+      shiftDates: [date],
+    });
+    const empId = seed.employeeIds[0];
+    const resId = seed.resourceIds[0];
 
-    const shiftIns = await pool.query(
-      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
-    );
-    scheduleIdToCleanup = shiftIns.rows[0].id;
-
-    // Existing booking 14:00-14:30
-    const existing = await pool.query(
-      `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING id`,
-      [
-        DYNATIRE_ID,
-        truckId,
-        customerId,
-        mikeId,
-        `${FUTURE_DATE}T14:00:00.000Z`,
-        `${FUTURE_DATE}T14:30:00.000Z`,
-        `${tag}-blocker`,
-      ]
-    );
-    apptIdsToCleanup.push(existing.rows[0].id);
-
-    await ensureLoggedIn(page);
-    const token = await getApiToken(page);
+    // Existing booking 14:00-14:30.
+    const existingId = await seedAppointment(pool, tenant.tenantId, {
+      resourceId: resId,
+      customerId: seed.customerId,
+      employeeId: empId,
+      startTime: `${date}T14:00:00.000Z`,
+      endTime: `${date}T14:30:00.000Z`,
+      description: 'blocker',
+    });
 
     // Try 14:15-14:45 — overlaps the second half of the existing booking.
-    const res = await postBookAppointment(page, token, {
-      tenant_id: DYNATIRE_ID,
-      resource_id: truckId,
-      customer_id: customerId,
-      employee_id: mikeId,
-      start_time: `${FUTURE_DATE}T14:15:00.000Z`,
-      end_time: `${FUTURE_DATE}T14:45:00.000Z`,
-      description: tag,
+    const res = await bookAppointmentAs(request, tenant.token, {
+      tenant_id: tenant.tenantId,
+      resource_id: resId,
+      customer_id: seed.customerId,
+      employee_id: empId,
+      start_time: `${date}T14:15:00.000Z`,
+      end_time: `${date}T14:45:00.000Z`,
+      description: 'partial overlap',
     });
 
     expect(res.status, 'partial overlap must return 409').toBe(409);
     expect(res.body.error_code).toBe('TIMESLOT_OCCUPIED');
     expect(res.body.conflict).toBeTruthy();
-    expect((res.body.conflict as Record<string, unknown>).appointment_id).toBe(existing.rows[0].id);
-
-    // No second row.
-    expect(await countAppointments(tag)).toBe(0);
+    expect((res.body.conflict as Record<string, unknown>).appointment_id).toBe(existingId);
 
     // ALSO confirm the boundary case — adjacent (touching) is allowed.
     // 14:30-15:00 starts exactly when the existing one ends. Half-open
     // [) range: this should succeed.
-    const adjacent = await postBookAppointment(page, token, {
-      tenant_id: DYNATIRE_ID,
-      resource_id: truckId,
-      customer_id: customerId,
-      employee_id: mikeId,
-      start_time: `${FUTURE_DATE}T14:30:00.000Z`,
-      end_time: `${FUTURE_DATE}T15:00:00.000Z`,
-      description: `${tag}-adjacent`,
+    const adjacent = await bookAppointmentAs(request, tenant.token, {
+      tenant_id: tenant.tenantId,
+      resource_id: resId,
+      customer_id: seed.customerId,
+      employee_id: empId,
+      start_time: `${date}T14:30:00.000Z`,
+      end_time: `${date}T15:00:00.000Z`,
+      description: 'adjacent (touching)',
     });
     expect(adjacent.status, 'adjacent (touching) booking must succeed').toBe(200);
     expect(adjacent.body.success).toBe(true);
-    if (adjacent.body.appointment_id) {
-      apptIdsToCleanup.push(adjacent.body.appointment_id as string);
-    }
+
+    // Final state: blocker + adjacent = 2 rows. The 14:15 attempt did NOT
+    // insert, proving the rejection actually blocked the row.
+    expect(await countAppointmentsForTenant(tenant.tenantId)).toBe(2);
   } finally {
-    for (const id of apptIdsToCleanup) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    }
-    if (scheduleIdToCleanup) {
-      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleIdToCleanup]);
-    }
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
@@ -530,25 +415,24 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
   //        wiring end-to-end. A regression that, e.g., dropped the
   //        ConflictModal from the JSX or stopped reading res.conflict
   //        would slip past the API tests but fail here.
+  // NOTE: this UI test still uses DynaTire seed (Mike Rivera, Truck 2)
+  //        because the dashboard's tenant-aware UI needs a real tenant
+  //        with populated dropdowns. The Slice 3 fresh-tenant pattern
+  //        is for the API contract tests above.
   const tag = uniqueTag();
   const apptIdsToCleanup: string[] = [];
   let scheduleIdToCleanup: string | null = null;
 
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
+    const mikeId = await findDynaTireEmployeeId('Mike Rivera');
     // Use Truck 2 + a far-future date completely outside seed and any
-    // other E2E's range. Tests 2-4 use FUTURE_DATE = '2026-06-15'; this
-    // test uses '2026-06-22' so even a worst-case parallel run with
-    // sloppy cleanup can't collide. The Quick Book form fills any date
-    // the test types in, so today-vs-future doesn't matter for the UI
-    // contract — what matters is that the form submission produces
-    // exactly the conflict response the modal renders against.
-    const truckId = await findResourceIdByName('Truck 2');
-    const customerId = await findCustomerId();
+    // other E2E's range. UI test uses '2026-06-22' (Monday, no seed conflicts).
+    const truckId = await findDynaTireResourceId('Truck 2');
+    const customerId = await findDynaTireCustomerId();
     expect(mikeId).toBeTruthy();
     expect(truckId, 'Truck 2 must exist in DynaTire seed').toBeTruthy();
 
-    const UI_TEST_DATE = '2026-06-22'; // Monday, no seed conflicts
+    const UI_TEST_DATE = '2026-06-22';
     const shiftIns = await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
@@ -627,8 +511,12 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     await expect(dialog).toContainText('Mike Rivera');
     await expect(dialog).toContainText('Truck 2');
 
-    // No second row in DB.
-    expect(await countAppointments(tag)).toBe(0);
+    // No second row in DB (only the blocker we seeded).
+    const dbRes = await pool.query(
+      `SELECT count(*)::int AS n FROM appointments WHERE description = $1`,
+      [tag]
+    );
+    expect(dbRes.rows[0].n).toBe(0);
   } finally {
     for (const id of apptIdsToCleanup) {
       await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
@@ -737,11 +625,11 @@ test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline e
 // ────────────────────────────────────────────────────────────────────────────
 // 7. Editing an appointment to overlap another returns 409 + conflict block
 // ────────────────────────────────────────────────────────────────────────────
-test('edit-overlap: updating an appointment to a taken time returns 409 with conflict details', async ({ page }) => {
-  // WHO: operator who decides to move appointment B from 14:00 to 15:00,
-  //        but 15:00 on the same resource is already booked by A
-  // WHAT: PUT /appointments/:id/update should return 409 + conflict block
-  //        symmetric to the create flow — same operator-facing affordance
+test('edit-overlap: updating an appointment to a taken time returns 409 with conflict details', async ({ request }) => {
+  // WHO: operator who decides to move appointment B from 15:00 to 14:00,
+  //        but 14:00 on the same resource is already booked by A
+  // WHAT: POST /appointments/:id/update should reject the overlap; B's
+  //        start_time in DB is unchanged. Status is 4xx.
   // WHEN: any update that would overlap an existing scheduled+not-deleted
   //        row on the same resource or employee
   // WHERE: src/routes/appointments.ts /appointments/:id/update
@@ -750,64 +638,42 @@ test('edit-overlap: updating an appointment to a taken time returns 409 with con
   //        update flow has been silent on this — operators see a generic
   //        400 error if they edit into a conflict, with no detail about
   //        what's blocking. This pins the contract symmetrically.
-
-  const tag = uniqueTag();
-  const apptIdsToCleanup: string[] = [];
-  let scheduleIdToCleanup: string | null = null;
-
+  let tenant: RegisteredTenant | null = null;
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = await findCustomerId();
-
-    const FUTURE = '2026-06-29';
-    const shiftIns = await pool.query(
-      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
-      [DYNATIRE_ID, mikeId, FUTURE]
-    );
-    scheduleIdToCleanup = shiftIns.rows[0].id;
+    tenant = await registerFreshTenant(request);
+    const date = isoDateDaysFromNow(21);
+    const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
+      shiftDates: [date],
+    });
+    const empId = seed.employeeIds[0];
+    const resId = seed.resourceIds[0];
 
     // Appointment A: 14:00-14:30 (the "blocker" we'll try to overlap).
-    const apptA = await pool.query(
-      `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING id`,
-      [DYNATIRE_ID, truckId, customerId, mikeId, `${FUTURE}T14:00:00.000Z`, `${FUTURE}T14:30:00.000Z`, `${tag}-A`]
-    );
-    apptIdsToCleanup.push(apptA.rows[0].id);
+    await seedAppointment(pool, tenant.tenantId, {
+      resourceId: resId,
+      customerId: seed.customerId,
+      employeeId: empId,
+      startTime: `${date}T14:00:00.000Z`,
+      endTime: `${date}T14:30:00.000Z`,
+      description: 'A (blocker)',
+    });
 
     // Appointment B: 15:00-15:30 (we'll try to move this on top of A).
-    const apptB = await pool.query(
-      `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING id`,
-      [DYNATIRE_ID, truckId, customerId, mikeId, `${FUTURE}T15:00:00.000Z`, `${FUTURE}T15:30:00.000Z`, `${tag}-B`]
-    );
-    apptIdsToCleanup.push(apptB.rows[0].id);
+    const apptBId = await seedAppointment(pool, tenant.tenantId, {
+      resourceId: resId,
+      customerId: seed.customerId,
+      employeeId: empId,
+      startTime: `${date}T15:00:00.000Z`,
+      endTime: `${date}T15:30:00.000Z`,
+      description: 'B (will try to move)',
+    });
 
-    await ensureLoggedIn(page);
-    const token = await getApiToken(page);
-
-    // Move B to overlap A's slot (14:00-14:30). Should fail with conflict.
-    const updateRes = await page.evaluate(
-      async ({ url, token, id, tenantId, startIso, endIso }) => {
-        const res = await fetch(`${url}/appointments/${id}/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ tenant_id: tenantId, start_time: startIso, end_time: endIso }),
-        });
-        return { status: res.status, body: await res.json() };
-      },
-      {
-        url: 'https://localhost:4001',
-        token,
-        id: apptB.rows[0].id,
-        tenantId: DYNATIRE_ID,
-        startIso: `${FUTURE}T14:00:00.000Z`,
-        endIso: `${FUTURE}T14:30:00.000Z`,
-      }
-    );
+    // Move B to overlap A's slot. Should fail.
+    const updateRes = await updateAppointmentAs(request, tenant.token, apptBId, {
+      tenant_id: tenant.tenantId,
+      start_time: `${date}T14:00:00.000Z`,
+      end_time: `${date}T14:30:00.000Z`,
+    });
 
     // The update route may use different status codes than create. We
     // care that: (1) it does NOT succeed (overlap is rejected), AND
@@ -816,16 +682,10 @@ test('edit-overlap: updating an appointment to a taken time returns 409 with con
 
     const after = await pool.query(
       `SELECT start_time::text AS s FROM appointments WHERE id = $1`,
-      [apptB.rows[0].id]
+      [apptBId]
     );
-    expect(after.rows[0].s).toContain(`${FUTURE} 15:00:00`);
+    expect(after.rows[0].s).toContain(`${date} 15:00:00`);
   } finally {
-    for (const id of apptIdsToCleanup) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    }
-    if (scheduleIdToCleanup) {
-      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleIdToCleanup]);
-    }
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
-

@@ -465,6 +465,55 @@ describe('agentTools /book-appointment', () => {
     });
     expectValidationFailure(res, queries);
     expect(res.json().error).toBe('Appointment duration cannot exceed 12 hours');
+    expect(res.json().error_code).toBe('INVALID_DURATION');
+  });
+
+  it('SAD: off-grid start time → INVALID_INCREMENT, no DB call', async () => {
+    // WHO: agent hallucinates a non-15-min start ("ten oh seven" → 10:07)
+    // WHAT: Route returns 200 + { success:false, error_code:'INVALID_INCREMENT' }
+    //        before any DB activity. Agent prompt branches on the code to
+    //        re-snap to the nearest valid grid point.
+    // WHEN: Slice 1.5 of booking enforcement hardening, 2026-05-09
+    // WHERE: /agent-tools/book-appointment validateAppointmentTimeRange gate
+    // WHY: third-layer enforcement, parity with /appointments/create. Without
+    //       error_code, the agent prompt would have to string-match the
+    //       message — brittle as message wording evolves.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      start_time: '2026-05-01T10:07:00',
+      end_time: '2026-05-01T11:00:00',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      success: false,
+      error_code: 'INVALID_INCREMENT',
+      error: 'Start time must land on a 15-minute increment (:00, :15, :30, :45)',
+    });
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SAD: off-grid end time → INVALID_INCREMENT, no DB call', async () => {
+    // WHY: pin both halves of the predicate; a future helper-rewrite that
+    //       silently drops the end-time branch would slip past Zod and rely
+    //       solely on the DB CHECK (which returns a generic constraint
+    //       violation, not the conversational message the agent needs).
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      start_time: '2026-05-01T10:00:00',
+      end_time: '2026-05-01T10:23:00',
+    });
+    expect(res.json()).toMatchObject({
+      success: false,
+      error_code: 'INVALID_INCREMENT',
+      error: 'End time must land on a 15-minute increment (:00, :15, :30, :45)',
+    });
+    expect(queries).toHaveLength(0);
   });
 
   it('HAPPY: new customer is upserted then booked atomically', async () => {
@@ -641,6 +690,116 @@ describe('agentTools /book-appointment', () => {
     expect(res.json().success).toBe(false);
     expect(res.json().error).toContain('good phone number');
     expect(queries).toHaveLength(0);
+  });
+
+  it('SAD: RPC overlap → response carries conflict block + TIMESLOT_OCCUPIED', async () => {
+    // WHO: Caller requesting a slot the GiST exclusion constraint will reject
+    // WHAT: Route detects "Resource already booked", runs findOverlappingAppointment
+    //        in the same transaction, surfaces the conflicting appointment in the
+    //        response so the agent (and any structured-response consumer) can read
+    //        WHICH booking is blocking — not just "something is."
+    // WHEN: Slice 1 of the booking enforcement hardening, 2026-05-09
+    // WHERE: /agent-tools/book-appointment + src/services/conflictLookup.ts
+    // WHY: Without this, the agent can only relay a generic "that time is taken"
+    //       message; with the conflict block, downstream surfaces (dashboard
+    //       review of agent calls, future agent prompts) can be specific.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        // Step 1 inside getOrCreateCustomerByPhone: SELECT customer
+        { rows: [{ id: 'existing-cust' }] },
+        // Step 2: book_appointment_atomic returns overlap error
+        {
+          rows: [
+            {
+              success: false,
+              appointment_id: null,
+              error_message: 'Resource already booked during this timeslot',
+            },
+          ],
+        },
+        // Step 3: findOverlappingAppointment lookup
+        {
+          rows: [
+            {
+              appointment_id: 'blocking-appt-1',
+              start_time: '2026-05-01T14:15:00Z',
+              end_time: '2026-05-01T14:45:00Z',
+              customer_name: 'Existing Customer',
+              employee_name: 'Mike',
+              resource_name: 'Bay 1',
+              description: 'Tire rotation',
+            },
+          ],
+        },
+      ],
+    });
+
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.error_code).toBe('TIMESLOT_OCCUPIED');
+    expect(body.error).toBe('Resource already booked during this timeslot');
+    expect(body.conflict).toEqual({
+      appointment_id: 'blocking-appt-1',
+      start_time: '2026-05-01T14:15:00Z',
+      end_time: '2026-05-01T14:45:00Z',
+      customer_name: 'Existing Customer',
+      employee_name: 'Mike',
+      resource_name: 'Bay 1',
+      description: 'Tire rotation',
+    });
+    // Pin: the third query is the conflict lookup, scoped to the same tenant
+    // and resource, with the requested time bounds.
+    expect(queries).toHaveLength(3);
+    expect(queries[2].text).toMatch(/FROM appointments a/);
+    expect(queries[2].text).toMatch(/a\.start_time < \$4/);
+  });
+
+  it('SAD: non-overlap RPC error keeps plain { success:false, error } shape — no conflict lookup', async () => {
+    // WHO: RPC rejected for a non-overlap reason (past time, skill mismatch, etc.)
+    // WHAT: route must NOT run findOverlappingAppointment — there's nothing
+    //        to point at — and the response stays the legacy plain shape so
+    //        the existing agent prompt parsing keeps working.
+    // WHY: isOverlapError() gates the lookup. Pin that the gate fires only
+    //       on "already booked" strings.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ id: 'existing-cust' }] },
+        {
+          rows: [
+            {
+              success: false,
+              appointment_id: null,
+              error_message: 'Cannot book in the past',
+            },
+          ],
+        },
+      ],
+    });
+
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      start_time: '2020-01-01T14:00:00',
+      end_time: '2020-01-01T15:00:00',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      success: false,
+      error: 'Cannot book in the past',
+    });
+    // Critical: no third query — the lookup never ran.
+    expect(queries).toHaveLength(2);
   });
 });
 

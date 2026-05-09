@@ -128,35 +128,61 @@ describe('validateAppointmentTimeRange — 15-min increment integration', () => 
     ).toBeNull();
   });
 
-  it('SAD: off-grid start returns the increment error', () => {
+  it('SAD: off-grid start returns INVALID_INCREMENT', () => {
     expect(
       validateAppointmentTimeRange('2026-05-10T14:07:00Z', '2026-05-10T14:30:00Z')
-    ).toBe('Start time must land on a 15-minute increment (:00, :15, :30, :45)');
+    ).toEqual({
+      error: 'Start time must land on a 15-minute increment (:00, :15, :30, :45)',
+      code: 'INVALID_INCREMENT',
+    });
   });
 
-  it('SAD: off-grid end returns the increment error (start was valid)', () => {
+  it('SAD: off-grid end returns INVALID_INCREMENT (start was valid)', () => {
     expect(
       validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:23:00Z')
-    ).toBe('End time must land on a 15-minute increment (:00, :15, :30, :45)');
+    ).toEqual({
+      error: 'End time must land on a 15-minute increment (:00, :15, :30, :45)',
+      code: 'INVALID_INCREMENT',
+    });
   });
 
-  it('SAD: missing time still returns the missing-time error (not increment)', () => {
+  it('SAD: missing time returns INVALID_PARAMS, not INVALID_INCREMENT', () => {
     // WHY: 'Start and end times are required' is more actionable than the
-    //       increment message when the field is empty
-    expect(validateAppointmentTimeRange('', '2026-05-10T14:30:00Z')).toBe(
-      'Start and end times are required'
-    );
+    //       increment message when the field is empty. Pin the precedence
+    //       so the route can branch on code (re-ask both fields, not snap-to-grid).
+    expect(validateAppointmentTimeRange('', '2026-05-10T14:30:00Z')).toEqual({
+      error: 'Start and end times are required',
+      code: 'INVALID_PARAMS',
+    });
   });
 
-  it('SAD: inverted range still returns the order error (not increment)', () => {
+  it('SAD: inverted range returns INVALID_RANGE, not INVALID_INCREMENT', () => {
     expect(
       validateAppointmentTimeRange('2026-05-10T14:30:00Z', '2026-05-10T14:00:00Z')
-    ).toBe('End time must be after start time');
+    ).toEqual({
+      error: 'End time must be after start time',
+      code: 'INVALID_RANGE',
+    });
   });
 
-  it('SAD: 13-hour range still returns the duration error', () => {
+  it('SAD: 13-hour range returns INVALID_DURATION', () => {
     expect(
       validateAppointmentTimeRange('2026-05-10T08:00:00Z', '2026-05-10T21:00:00Z')
-    ).toBe('Appointment duration cannot exceed 12 hours');
+    ).toEqual({
+      error: 'Appointment duration cannot exceed 12 hours',
+      code: 'INVALID_DURATION',
+    });
+  });
+
+  it('SAD: unparseable date returns INVALID_PARAMS', () => {
+    // WHY: Date constructor on garbage gives NaN; the helper must catch
+    //       that BEFORE the increment check (which short-circuits true on
+    //       NaN to avoid double-reporting).
+    expect(
+      validateAppointmentTimeRange('not-a-date', '2026-05-10T14:30:00Z')
+    ).toEqual({
+      error: 'Invalid date/time',
+      code: 'INVALID_PARAMS',
+    });
   });
 });

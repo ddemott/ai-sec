@@ -73,7 +73,11 @@ export function registerAppointmentRoutes(
     const timeValidationError = validateAppointmentTimeRange(body.start_time, body.end_time);
     if (timeValidationError) {
       bookingAttemptsTotal.inc({ outcome: 'validation_error', source: 'api' });
-      return reply.status(400).send({ success: false, error: timeValidationError });
+      return reply.status(400).send({
+        success: false,
+        error: timeValidationError.error,
+        error_code: timeValidationError.code,
+      });
     }
 
     type RpcResult =
@@ -326,7 +330,11 @@ export function registerAppointmentRoutes(
           if (timeValidationError) {
             await client.query('ROLLBACK');
             shortCircuited = true;
-            reply.status(400).send({ success: false, error: timeValidationError });
+            reply.status(400).send({
+              success: false,
+              error: timeValidationError.error,
+              error_code: timeValidationError.code,
+            });
             return;
           }
         }

@@ -21,6 +21,7 @@ import { validateAppointmentTimeRange } from '../services/appointmentValidation'
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { findNextAvailableSlots } from '../services/availabilitySearch';
+import { findOverlappingAppointment, isOverlapError, type AppointmentConflict } from '../services/conflictLookup';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
 import { getSyncRecorder, clearSyncRecorder } from '../services/syncOrchestrator';
 import { toolCallsTotal, bookingAttemptsTotal } from '../services/metrics';
@@ -410,7 +411,17 @@ export function registerAgentToolRoutes(
     const normalized = normalizePhone(args.phone)!;
     const timeValidationError = validateAppointmentTimeRange(args.start_time, args.end_time);
     if (timeValidationError) {
-      return fail(reply, timeValidationError);
+      // Hand-rolled response (not fail()) so the agent sees error_code —
+      // its prompt branches differently for INVALID_INCREMENT (re-snap to
+      // grid) vs INVALID_RANGE (re-ask for end time) vs INVALID_PARAMS
+      // (re-ask for both). Same outcome label as the dashboard route.
+      bookingAttemptsTotal.inc({ outcome: 'validation_error', source: 'agent' });
+      (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
+      return reply.status(200).send({
+        success: false,
+        error: timeValidationError.error,
+        error_code: timeValidationError.code,
+      });
     }
 
     // Step 1 — get-or-create the customer in its own transaction so the row
@@ -423,8 +434,11 @@ export function registerAgentToolRoutes(
       args.name || 'Valued Customer'
     );
 
-    // Step 2 — booking RPC in a fresh transaction.
-    const result = await withTenantClient(args.tenant_id, async (client) => {
+    // Step 2 — booking RPC in a fresh transaction. On overlap, do a follow-up
+    // SELECT in the same connection to find the conflicting appointment so
+    // the response can carry conflict details (matches /appointments/create
+    // contract — Slice 1 of the booking enforcement hardening 2026-05-09).
+    const outcome = await withTenantClient(args.tenant_id, async (client) => {
       // p_assignment_id is TEXT in the current RPC (holds UUID post-Phase 9).
       const rpc = await client.query<{
         success: boolean;
@@ -446,11 +460,35 @@ export function registerAgentToolRoutes(
           args.employee_id || null,
         ]
       );
-      return rpc.rows[0];
+      const result = rpc.rows[0];
+      let conflict: AppointmentConflict | null = null;
+      if (result && !result.success && isOverlapError(result.error_message)) {
+        conflict = await findOverlappingAppointment(client, {
+          tenantId: args.tenant_id,
+          resourceId: args.resource_id,
+          employeeId: args.employee_id || null,
+          startTime: args.start_time,
+          endTime: args.end_time,
+        });
+      }
+      return { result, conflict };
     });
+    const { result, conflict } = outcome;
 
     if (!result || !result.success) {
       bookingAttemptsTotal.inc({ outcome: bookingOutcomeFromAgentError(result?.error_message), source: 'agent' });
+      // Hand-rolled response (not fail()) when conflict info is present so
+      // the agent + dashboard can read structured fields. Mirrors the
+      // book-with-scheduling shape so consumers see one error contract.
+      if (conflict) {
+        (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
+        return reply.status(200).send({
+          success: false,
+          error: result?.error_message || 'That time is already booked.',
+          error_code: 'TIMESLOT_OCCUPIED',
+          conflict,
+        });
+      }
       return fail(
         reply,
         result?.error_message || 'Booking failed due to a scheduling conflict.'
