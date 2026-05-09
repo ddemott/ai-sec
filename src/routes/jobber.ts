@@ -72,12 +72,24 @@ export function registerJobberRoutes(
   app.post('/jobber/webhook/:tenantId', async (req: any, reply: any) => {
     const tenantId = req.params.tenantId as string;
     const signature = req.headers['x-jobber-hmac-sha256'] as string;
-    const rawBody = JSON.stringify(req.body);
+    // HMAC verification requires the EXACT bytes Jobber signed. See hubspot.ts
+    // for the rationale — same fix.
+    const rawBuffer = (req as { rawBody?: Buffer | string }).rawBody;
+    const rawBody =
+      typeof rawBuffer === 'string'
+        ? rawBuffer
+        : rawBuffer instanceof Buffer
+          ? rawBuffer.toString('utf8')
+          : null;
 
     // Validate tenantId is a UUID to prevent injection via URL param
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!tenantId || !UUID_RE.test(tenantId) || !signature) {
       return reply.status(400).send({ success: false, error: 'Missing or invalid tenant ID or signature' });
+    }
+    if (rawBody === null) {
+      app.log.error({ event: 'jobber_webhook_missing_raw_body', tenantId }, 'Raw body missing for Jobber webhook — verification cannot proceed');
+      return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
     }
 
     // Look up webhook secret for this tenant

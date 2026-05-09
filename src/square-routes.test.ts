@@ -44,6 +44,22 @@ function buildApp() {
 
   const fastify = Fastify({ logger: false });
 
+  // Mirror src/index.ts content-type parser — preserves req.rawBody so the
+  // webhook signature path can verify against original bytes (added 2026-05-09
+  // when the route switched from JSON.stringify(req.body) to req.rawBody).
+  fastify.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    async (req: unknown, rawBody: Buffer) => {
+      (req as { rawBody?: Buffer }).rawBody = rawBody;
+      try {
+        return JSON.parse(rawBody.toString('utf8'));
+      } catch {
+        throw new Error('Invalid JSON');
+      }
+    }
+  );
+
   // Simulate tenant middleware: inject tenantId from query param or header
   fastify.addHook('preHandler', async (request: any) => {
     const tenantId =

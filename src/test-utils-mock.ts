@@ -216,6 +216,23 @@ export function buildRouteTestApp(
 
   const app = Fastify({ logger: false });
 
+  // Mirror the production content-type parser in src/index.ts:136 — preserves
+  // req.rawBody for webhook signature verification while still parsing JSON
+  // for handlers. Without this, route-handler tests exercising any
+  // /*/webhook route always see req.rawBody as undefined and return 400.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    async (req: unknown, rawBody: Buffer) => {
+      (req as { rawBody?: Buffer }).rawBody = rawBody;
+      try {
+        return JSON.parse(rawBody.toString('utf8'));
+      } catch {
+        throw new Error('Invalid JSON');
+      }
+    }
+  );
+
   // Inject auth + tenantId before each handler runs. The production middleware
   // chain (registerJwtAuthHook → tenantMiddleware) is exercised separately by
   // `src/multi-tenant-isolation.test.ts` and `src/middleware.test.ts`; here we

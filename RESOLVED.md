@@ -4,6 +4,22 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-09 — Security review pass 1: webhook signature verification + CRM HMAC bug fix
+
+Audit + fix in one session. Two findings, both closed.
+
+**Finding 1 — Stripe webhook signature contract had zero tests.** The `/billing/webhook` route correctly used `stripe.webhooks.constructEvent` against the raw body (preserved by the global content-type parser at `src/index.ts:142`), but no test pinned the contract. A refactor that reordered constructEvent before the sig check, removed the rawBody preservation, or replaced constructEvent with `JSON.parse(req.body)` for "convenience" would slip past the suite. New file `src/webhook-signatures.test.ts` adds 3 Stripe contract tests: missing-signature → 400 with no DB activity, invalid-signature → 400 (logged via `stripe_webhook_signature_failed`), valid-signature → 200 with the checkout.session.completed handler running and the tenants UPDATE firing. Tests use `Stripe.webhooks.generateTestHeaderString` so the signature math is real, not stubbed.
+
+**Finding 2 — HubSpot, Square, and Jobber webhooks had broken HMAC verification.** All three routes had `const rawBody = JSON.stringify(req.body)` and passed that into `verifyWebhookSignature`. This is fundamentally broken: providers sign the EXACT bytes they sent, and re-serializing through V8's `JSON.stringify` doesn't byte-match — whitespace, key order, number formatting, escape sequences can all differ. Production-impact today is contained because no real CRM is wired (all four CRM integrations are OAuth-pending env vars), but the bug would have surfaced on the first real webhook. Fixed all three routes to read `req.rawBody` (already preserved globally) with a defensive 400 fallback if rawBody is somehow missing. New tests in `webhook-signatures.test.ts` pin the contract per provider: bad-signature → 401, valid-signature → 200, plus replay-protection on HubSpot's timestamp-freshness window and a no-active-integration → 404 short-circuit on Jobber.
+
+**Test scaffolding side-effect.** The fix required `req.rawBody` to be available in test apps. `buildRouteTestApp` in `src/test-utils-mock.ts` was updated to mirror the production content-type parser. The three existing route tests (`hubspot-routes.test.ts`, `square-routes.test.ts`, `jobber-routes.test.ts`) build their own Fastify instances directly, so they got a copy-paste of the same parser block — small duplication accepted to keep the change minimal.
+
+**Pass 2 of the security review deferred to a future session:** RLS coverage audit on tables added since 2026-03; JWT lifetime + refresh story (revocation strategy); `/agent-tools/*` shared-secret rotation plan.
+
+**Backend tests:** 1,752 → 1,763 (+11 webhook signature tests). Dashboard / agent unchanged.
+
+---
+
 ## 2026-05-09 — Booking enforcement chain closed end-to-end (5 sub-slices in one session)
 
 Backend 1,733 → 1,747 (+14). Agent 81 → 85 (+4). Dashboard 617 unchanged. Six TODO entries closed under the `Booking enforcement hardening` section: Slice 1, 1.5, 2, 3, AI prevention prompt-only, AI prevention E2E coverage. Only `pre-flight tool fallback` remains and it's deliberately deferred ("only ship if beta data shows the prompt rule is unreliable").

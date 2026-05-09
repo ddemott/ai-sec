@@ -71,10 +71,22 @@ export function registerSquareRoutes(
   // --- Square webhook receiver ---
   app.post('/square/webhook', async (req: any, reply: any) => {
     const signature = req.headers['x-square-hmacsha256-signature'] as string;
-    const rawBody = JSON.stringify(req.body);
+    // HMAC verification requires the EXACT bytes Square signed. See hubspot.ts
+    // for the rationale — same fix.
+    const rawBuffer = (req as { rawBody?: Buffer | string }).rawBody;
+    const rawBody =
+      typeof rawBuffer === 'string'
+        ? rawBuffer
+        : rawBuffer instanceof Buffer
+          ? rawBuffer.toString('utf8')
+          : null;
 
     if (!signature) {
       return reply.status(400).send({ success: false, error: 'Missing signature header' });
+    }
+    if (rawBody === null) {
+      app.log.error({ event: 'square_webhook_missing_raw_body' }, 'Raw body missing for Square webhook — verification cannot proceed');
+      return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
     }
 
     const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || '';

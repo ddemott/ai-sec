@@ -72,10 +72,26 @@ export function registerHubSpotRoutes(
   app.post('/hubspot/webhook', async (req: any, reply: any) => {
     const signature = req.headers['x-hubspot-signature-v3'] as string;
     const timestamp = req.headers['x-hubspot-request-timestamp'] as string;
-    const rawBody = JSON.stringify(req.body);
+    // HMAC verification requires the EXACT bytes HubSpot signed. Re-serializing
+    // via JSON.stringify(req.body) drops/changes whitespace + key order vs the
+    // original payload, breaking the signature deterministically. The global
+    // content-type parser in src/index.ts preserves req.rawBody for this.
+    const rawBuffer = (req as { rawBody?: Buffer | string }).rawBody;
+    const rawBody =
+      typeof rawBuffer === 'string'
+        ? rawBuffer
+        : rawBuffer instanceof Buffer
+          ? rawBuffer.toString('utf8')
+          : null;
 
     if (!signature || !timestamp) {
       return reply.status(400).send({ success: false, error: 'Missing signature or timestamp headers' });
+    }
+    if (rawBody === null) {
+      // Defensive — should never happen given the global content-type parser,
+      // but if it does, fail closed rather than verify against wrong bytes.
+      app.log.error({ event: 'hubspot_webhook_missing_raw_body' }, 'Raw body missing for HubSpot webhook — verification cannot proceed');
+      return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
     }
 
     // Check timestamp freshness (5 min window)
