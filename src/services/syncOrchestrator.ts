@@ -23,6 +23,45 @@ function logSyncError(logger: SyncLogger | null, provider: string, entity: strin
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Test-only dispatch recorder
+// ─────────────────────────────────────────────────────────────────────
+// The orchestrator is fire-and-forget so a black-box e2e test can't
+// observe whether each provider was actually invoked. When
+// SYNC_TEST_RECORDER=1 is set at boot, every dispatch appends a
+// SyncEvent to an in-memory ring buffer; an /agent-tools/_test/
+// sync-events route then exposes it for assertion. The recorder is a
+// no-op outside test mode, so prod code paths are unaffected.
+export type SyncEvent = {
+  ts: string;
+  provider: string;
+  entity: 'appointment' | 'customer';
+  action: 'create' | 'update' | 'delete';
+  tenantId: string;
+  entityId: string;
+};
+
+const recorder: SyncEvent[] = [];
+const RECORDER_MAX = 500;
+
+function recordingEnabled(): boolean {
+  return process.env.SYNC_TEST_RECORDER === '1';
+}
+
+function record(provider: string, entity: 'appointment' | 'customer', action: 'create' | 'update' | 'delete', tenantId: string, entityId: string) {
+  if (!recordingEnabled()) return;
+  recorder.push({ ts: new Date().toISOString(), provider, entity, action, tenantId, entityId });
+  if (recorder.length > RECORDER_MAX) recorder.splice(0, recorder.length - RECORDER_MAX);
+}
+
+export function getSyncRecorder(): readonly SyncEvent[] {
+  return recorder;
+}
+
+export function clearSyncRecorder(): void {
+  recorder.length = 0;
+}
+
 /**
  * Sync an appointment to all connected providers (calendars + CRMs).
  * Fire-and-forget — never throws, never blocks the caller.
@@ -43,6 +82,7 @@ export function syncAppointmentToAll(
   ];
 
   for (const { name, fn } of providers) {
+    record(name, 'appointment', action, tenantId, appointmentId);
     fn(pool, tenantId, appointmentId, action).catch(e =>
       logSyncError(logger, name, 'appointment', action, appointmentId, e)
     );
@@ -68,6 +108,7 @@ export function syncCustomerToAll(
   ];
 
   for (const { name, fn } of providers) {
+    record(name, 'customer', action, tenantId, customerId);
     fn(pool, tenantId, customerId, action).catch(e =>
       logSyncError(logger, name, 'customer', action, customerId, e)
     );

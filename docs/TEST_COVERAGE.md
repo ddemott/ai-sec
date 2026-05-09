@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (agent E2E harness: dashboard/e2e/agent-conversation.spec.ts simulates 6 agent tool-call sequences against live backend — known/unknown caller, successful booking, conflict-with-alternatives, service-catalog contract, OTP verify round-trip. Playwright e2e 46 → 52 passing.)
+**Last refreshed:** 2026-05-08 (calendar + CRM sync E2E: dashboard/e2e/calendar-sync.spec.ts pins the orchestration contract — 6 tests verifying every appointment + customer lifecycle event dispatches the right provider set via the new `SYNC_TEST_RECORDER` hook. Playwright e2e 52 → 58 passing. Backend +7 tests for the recorder semantics → 1,719.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,11 +12,17 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,712 / 1,712 | ✅ | ~110s |
+| Backend (`npm test`) | 1,719 / 1,719 | ✅ | ~110s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 52 passed, 1 skipped | ✅ | ~120s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 58 passed, 1 skipped | ✅ | ~125s |
 
-Total unit tests: 2,307 (backend + dashboard) + 78 agent.
+Total unit tests: 2,336 (backend + dashboard) + 78 agent.
+
+> **Note**: `calendar-sync.spec.ts` requires the backend to start with
+> `SYNC_TEST_RECORDER=1` set. Without the env var, the spec's
+> `beforeEach` skip-guards every test with a clear message — so these
+> 6 tests show as "skipped" in a default run and "passed" only when
+> the backend is launched with the recorder enabled.
 
 ## Unit test coverage (V8)
 
@@ -47,6 +53,9 @@ purpose-built coverage build. Track e2e by **workflows covered** instead.
 | `quick-book-shift-overrides.spec.ts` | validator: end ≤ start | rejected |
 | `quick-book-shift-overrides.spec.ts` | validator: 23-hour appointment | rejected |
 | `quick-book-shift-overrides.spec.ts` | resources/chairs view | renders rows |
+| `calendar-sync.spec.ts` | appointment lifecycle dispatch | create/update/delete each fire all 5 providers (calendar + 4 CRMs) via `SYNC_TEST_RECORDER` recorder |
+| `calendar-sync.spec.ts` | customer lifecycle dispatch | create/update/delete each fire the 4 CRMs (no calendar — by contract) |
+| `calendar-sync.spec.ts` | fire-and-forget contract | HTTP returns in <3s even with 5 sync promises in flight |
 
 ### Soft-checked workflows (`if (visible)` guards or `logIssue()`)
 
@@ -62,8 +71,8 @@ the test still passes.
 ### Not covered by any e2e
 
 - Voice/AI loop (Telnyx → LiveKit → tools → booking) — covered by `scripts/qa-live-test.py`, not Playwright
-- Calendar sync (Google + Outlook OAuth)
-- CRM sync (Jobber / HubSpot / Square / ServiceTitan, bidirectional)
+- ~~Calendar sync (Google + Outlook OAuth)~~ — orchestration layer covered by `calendar-sync.spec.ts` (2026-05-08); actual outbound HTTP shape still only at unit level
+- ~~CRM sync (Jobber / HubSpot / Square / ServiceTitan, bidirectional)~~ — dispatch covered by `calendar-sync.spec.ts`; bidirectional read paths (CRM → us) still uncovered
 - Setup wizard end-to-end (8 steps from business-type pick to first booking)
 - Stripe billing flow / checkout / webhook
 - SMS OTP verification before booking

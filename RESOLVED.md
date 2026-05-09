@@ -4,6 +4,21 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-08 — Calendar + CRM sync E2E (last beta-blocker P1 closed)
+
+Backend 1,712 → 1,719 (+7 recorder semantics). Dashboard 617 unchanged (recorder logic lives backend-side). Playwright 52 → 58. Last unchecked P1 in `docs/TODO.md` Test Suite Gap Analysis is now `[x]`.
+
+- **Sync-test recorder hook in `syncOrchestrator.ts`.** Test-only in-memory ring buffer (cap 500) gated by `SYNC_TEST_RECORDER=1`. Strict opt-in — `"true"`, `"yes"`, `"on"`, empty string all stay disabled. `record()` is a no-op outside test mode so prod paths are untouched. `record()` runs synchronously inside the dispatch loop BEFORE the provider promise fires, so the recorder reflects intent-to-dispatch even when a provider's `.catch()` is still pending.
+- **`/agent-tools/_test/sync-events` route.** GET reads the buffer, DELETE clears it. Both gated by both the env var (404 when off) AND the existing agent-secret hook. The recorder + endpoint live alongside the 10 production agent tools but are clearly namespaced under `/_test/` so a code review can spot test infrastructure at a glance.
+- **`dashboard/e2e/calendar-sync.spec.ts` — 6 tests.** API-only design (uses Playwright's `APIRequestContext`, no page navigation), so it sidesteps any dashboard SSR/hydration flake. Logs in as `admin@dynatire.com` (DynaTire tenant admin) rather than `admin@secretaryhq.com` (super-admin) — `DELETE /appointments/:id` and `PUT /customers/:id` read tenant_id from JWT only, no super-admin override path, so logging in as platform admin would 404 against rows in the DynaTire tenant. Asserts: each appointment lifecycle event (create/update/delete) dispatches all 5 providers with the right action label; each customer event dispatches the 4 CRMs (no calendar — by contract); fire-and-forget HTTP returns in <3s with 5 sync promises in flight. Each test creates its own customer + employee_schedule + appointment in `try`, cleans up in `finally` per the test-isolation feedback memory; clears the recorder buffer in `beforeEach` so cross-test contamination is structurally impossible.
+- **`src/sync-orchestrator.test.ts` — 7 unit tests.** Pin recorder semantics in isolation: enabled mode appends 5 appointment / 4 customer events with the right shape, disabled mode (env unset OR any value other than literal `"1"`) records nothing, `clearSyncRecorder()` empties the buffer, ring-buffer caps at 500 events dropping oldest, append-order is preserved across multiple calls. Co-exists with the prior `src/services/syncOrchestrator.test.ts` (file-grep regression tests) — different files, different mechanisms; both pass.
+- **Two test-fixture bugs surfaced + fixed during validation.**
+  - DELETE requests with `Content-Type: application/json` and no body trip Fastify's parser (`Invalid JSON` → 500). Removed the header on the body-less DELETEs (appointment-delete, customer-delete, recorder clear).
+  - DynaTire's tenant timezone is `America/Chicago`, so the booking RPC translates UTC `start_time` to local before checking shift coverage. Initial fire-and-forget test used `11:00 UTC` (`06:00 CDT`, before Mike's 09:00 shift) → `EMPLOYEE_NOT_SCHEDULED` 400. Moved to `17:00 UTC` (`12:00 CDT`, mid-shift). Comment in the spec calls out the timezone math so a future refactor doesn't drift back.
+- **Doc deltas.** `CLAUDE.md` documents the `SYNC_TEST_RECORDER` flag + the namespaced test endpoints, bumps backend tests 1,712 → 1,719 + Playwright 52 → 58. `docs/TEST_COVERAGE.md` headline refreshed; "Calendar sync" + "CRM sync" struck through with a note that orchestration layer is now covered (outbound HTTP shape still only at unit level). `docs/TODO.md` marks Calendar sync E2E as `[x]` — last unchecked P1 in that section.
+
+---
+
 ## 2026-05-08 — 7 prod migrations applied (3 silently overdue) + customer-create as a separate transaction
 
 Backend 1,659 → 1,666 (+7: customerLookup helper +4, agentTools persistence regressions +3). Dashboard + agent untouched.
