@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (agent prompt: availability-check-before-book discipline + next_available alternatives propagation. +3 prompt tests. Agent 78 → 81.)
+**Last refreshed:** 2026-05-08 (agent E2E harness: dashboard/e2e/agent-conversation.spec.ts simulates 6 agent tool-call sequences against live backend — known/unknown caller, successful booking, conflict-with-alternatives, service-catalog contract, OTP verify round-trip. Playwright e2e 46 → 52 passing.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -14,7 +14,7 @@
 |---|---|---|---|
 | Backend (`npm test`) | 1,712 / 1,712 | ✅ | ~110s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 46 passed, 1 skipped | ✅ | ~125s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 52 passed, 1 skipped | ✅ | ~120s |
 
 Total unit tests: 2,307 (backend + dashboard) + 78 agent.
 
