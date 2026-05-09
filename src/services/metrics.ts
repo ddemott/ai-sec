@@ -1,0 +1,289 @@
+/**
+ * In-process metrics registry — Prometheus-compatible exposition.
+ *
+ * Why in-process and not prom-client: this codebase already has a
+ * structured logging story (Pino → Better Stack). The gap was a
+ * scrapeable rate/error/latency surface for dashboards and alerts. A
+ * 200-line in-memory store with the standard counter + histogram shapes
+ * gives us 95% of what prom-client would, with no extra dependency, no
+ * worker thread, and no surprise behavior when the process forks.
+ *
+ * Memory ceiling: each named metric is a Map<labelKey, number>. To stop
+ * a misbehaving caller from blowing the heap with high-cardinality label
+ * values (e.g. user-supplied phone numbers), every counter caps at
+ * MAX_LABEL_CARDINALITY series — once exceeded, further unique label
+ * combinations bucket into `__overflow__`. The cap is per-metric so a
+ * single bad actor can't starve the others.
+ *
+ * Process model: single registry per process. Reset via clearAll() in
+ * tests; never reset in prod. Counters are monotonic since boot — that's
+ * what Prometheus expects (it computes rates by diffing scrapes).
+ */
+
+const MAX_LABEL_CARDINALITY = 1000;
+
+type LabelMap = Record<string, string>;
+
+function labelKey(labels: LabelMap | undefined): string {
+  if (!labels) return '';
+  // Stable serialization — object key order matters for the map key, so
+  // sort to make {a,b} and {b,a} equal.
+  const keys = Object.keys(labels).sort();
+  return keys.map((k) => `${k}=${labels[k]}`).join('\x00');
+}
+
+function escapeLabelValue(v: string): string {
+  // Prometheus label-value escaping: backslash, doublequote, newline.
+  return v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+
+function renderLabels(labels: LabelMap | undefined): string {
+  if (!labels) return '';
+  const keys = Object.keys(labels).sort();
+  if (keys.length === 0) return '';
+  return '{' + keys.map((k) => `${k}="${escapeLabelValue(labels[k])}"`).join(',') + '}';
+}
+
+interface MetricBase {
+  name: string;
+  help: string;
+  type: 'counter' | 'histogram';
+}
+
+class Counter implements MetricBase {
+  type = 'counter' as const;
+  private series = new Map<string, { labels: LabelMap; value: number }>();
+  private overflowed = false;
+
+  constructor(public name: string, public help: string) {}
+
+  inc(labels?: LabelMap, by = 1): void {
+    const key = labelKey(labels);
+    const existing = this.series.get(key);
+    if (existing) {
+      existing.value += by;
+      return;
+    }
+    if (this.series.size >= MAX_LABEL_CARDINALITY) {
+      this.overflowed = true;
+      const overflow = this.series.get('__overflow__') ?? { labels: { overflow: 'true' }, value: 0 };
+      overflow.value += by;
+      this.series.set('__overflow__', overflow);
+      return;
+    }
+    this.series.set(key, { labels: labels ?? {}, value: by });
+  }
+
+  expose(): string {
+    const lines: string[] = [];
+    lines.push(`# HELP ${this.name} ${this.help}`);
+    lines.push(`# TYPE ${this.name} counter`);
+    for (const { labels, value } of this.series.values()) {
+      lines.push(`${this.name}${renderLabels(labels)} ${value}`);
+    }
+    if (this.overflowed) {
+      lines.push(`# NOTE ${this.name} hit MAX_LABEL_CARDINALITY=${MAX_LABEL_CARDINALITY}; further series collapsed into overflow="true"`);
+    }
+    return lines.join('\n');
+  }
+
+  // Test-only: snapshot of the current series. Don't use in prod code.
+  snapshot(): Array<{ labels: LabelMap; value: number }> {
+    return Array.from(this.series.values()).map((s) => ({ labels: { ...s.labels }, value: s.value }));
+  }
+
+  reset(): void {
+    this.series.clear();
+    this.overflowed = false;
+  }
+}
+
+class Histogram implements MetricBase {
+  type = 'histogram' as const;
+  private series = new Map<
+    string,
+    { labels: LabelMap; bucketCounts: number[]; sum: number; count: number }
+  >();
+  private overflowed = false;
+
+  constructor(public name: string, public help: string, public buckets: number[]) {
+    // Validate buckets are sorted ascending.
+    for (let i = 1; i < buckets.length; i++) {
+      if (buckets[i] <= buckets[i - 1]) {
+        throw new Error(`Histogram ${name} buckets must be strictly ascending`);
+      }
+    }
+  }
+
+  observe(value: number, labels?: LabelMap): void {
+    const key = labelKey(labels);
+    let entry = this.series.get(key);
+    if (!entry) {
+      if (this.series.size >= MAX_LABEL_CARDINALITY) {
+        this.overflowed = true;
+        const overflowKey = labelKey({ overflow: 'true' });
+        entry = this.series.get(overflowKey);
+        if (!entry) {
+          entry = {
+            labels: { overflow: 'true' },
+            bucketCounts: new Array(this.buckets.length).fill(0),
+            sum: 0,
+            count: 0,
+          };
+          this.series.set(overflowKey, entry);
+        }
+      } else {
+        entry = {
+          labels: labels ?? {},
+          bucketCounts: new Array(this.buckets.length).fill(0),
+          sum: 0,
+          count: 0,
+        };
+        this.series.set(key, entry);
+      }
+    }
+    for (let i = 0; i < this.buckets.length; i++) {
+      if (value <= this.buckets[i]) entry.bucketCounts[i]++;
+    }
+    entry.sum += value;
+    entry.count++;
+  }
+
+  expose(): string {
+    const lines: string[] = [];
+    lines.push(`# HELP ${this.name} ${this.help}`);
+    lines.push(`# TYPE ${this.name} histogram`);
+    for (const entry of this.series.values()) {
+      // Per-bucket _bucket lines + +Inf
+      let cumulative = 0;
+      for (let i = 0; i < this.buckets.length; i++) {
+        cumulative = entry.bucketCounts[i];
+        const bucketLabels = { ...entry.labels, le: String(this.buckets[i]) };
+        lines.push(`${this.name}_bucket${renderLabels(bucketLabels)} ${cumulative}`);
+      }
+      const infLabels = { ...entry.labels, le: '+Inf' };
+      lines.push(`${this.name}_bucket${renderLabels(infLabels)} ${entry.count}`);
+      lines.push(`${this.name}_sum${renderLabels(entry.labels)} ${entry.sum}`);
+      lines.push(`${this.name}_count${renderLabels(entry.labels)} ${entry.count}`);
+    }
+    if (this.overflowed) {
+      lines.push(`# NOTE ${this.name} hit MAX_LABEL_CARDINALITY=${MAX_LABEL_CARDINALITY}`);
+    }
+    return lines.join('\n');
+  }
+
+  snapshot(): Array<{ labels: LabelMap; sum: number; count: number; bucketCounts: number[] }> {
+    return Array.from(this.series.values()).map((s) => ({
+      labels: { ...s.labels },
+      sum: s.sum,
+      count: s.count,
+      bucketCounts: [...s.bucketCounts],
+    }));
+  }
+
+  reset(): void {
+    this.series.clear();
+    this.overflowed = false;
+  }
+}
+
+class MetricsRegistry {
+  private metrics = new Map<string, Counter | Histogram>();
+
+  counter(name: string, help: string): Counter {
+    const existing = this.metrics.get(name);
+    if (existing) {
+      if (existing.type !== 'counter') {
+        throw new Error(`Metric ${name} already registered as ${existing.type}`);
+      }
+      return existing as Counter;
+    }
+    const c = new Counter(name, help);
+    this.metrics.set(name, c);
+    return c;
+  }
+
+  histogram(name: string, help: string, buckets: number[]): Histogram {
+    const existing = this.metrics.get(name);
+    if (existing) {
+      if (existing.type !== 'histogram') {
+        throw new Error(`Metric ${name} already registered as ${existing.type}`);
+      }
+      return existing as Histogram;
+    }
+    const h = new Histogram(name, help, buckets);
+    this.metrics.set(name, h);
+    return h;
+  }
+
+  /** Prometheus text-format exposition for all registered metrics. */
+  expose(): string {
+    const sections: string[] = [];
+    // Sort by name for stable output (helpful in tests + diffs).
+    const names = Array.from(this.metrics.keys()).sort();
+    for (const name of names) {
+      sections.push(this.metrics.get(name)!.expose());
+    }
+    return sections.join('\n\n') + '\n';
+  }
+
+  // Test-only — clears every counter+histogram series. Never call in prod.
+  clearAll(): void {
+    for (const m of this.metrics.values()) m.reset();
+  }
+}
+
+// Singleton — one registry per process. Tests reset via clearAll().
+export const registry = new MetricsRegistry();
+
+// ─────────────────────────────────────────────────────────────────────
+// Pre-declared metrics — the call sites below import these directly so
+// names + help strings live in one place. Adding a new metric? Add it
+// here so it's discoverable in code review and the /metrics output.
+// ─────────────────────────────────────────────────────────────────────
+
+// HTTP request count by route + method + status family. Emitted by the
+// Fastify onResponse hook in src/index.ts.
+export const httpRequestsTotal = registry.counter(
+  'http_requests_total',
+  'HTTP requests received, partitioned by route + method + status family'
+);
+
+// HTTP latency histogram. Buckets cover the realistic range for this
+// service: most routes <100ms, booking RPC sometimes hits the 500ms
+// p99, anything above 2s is a problem worth alerting on.
+export const httpRequestDurationMs = registry.histogram(
+  'http_request_duration_ms',
+  'HTTP request duration in milliseconds, by route + method + status family',
+  [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+);
+
+// Booking outcomes — what happens when an operator (or the agent) tries
+// to book. The dashboard's "booking success rate" graph reads this.
+export const bookingAttemptsTotal = registry.counter(
+  'booking_attempts_total',
+  'Booking attempts, partitioned by outcome (success, timeslot_occupied, employee_not_scheduled, no_skilled_employee, no_availability, validation_error, other_error) and source (api, agent)'
+);
+
+// Tool-call outcomes per tool. Powers the agent reliability dashboard —
+// "what fraction of customer-context calls returned success last hour."
+export const toolCallsTotal = registry.counter(
+  'tool_calls_total',
+  'Agent tool calls, partitioned by tool name and outcome (success, error, validation_error)'
+);
+
+// Sync dispatch counts — proves the orchestrator is firing in prod the
+// way the e2e tests verify it does in dev. Compared against successful
+// appointment + customer mutations to flag silent dispatch failures.
+export const syncDispatchesTotal = registry.counter(
+  'sync_dispatches_total',
+  'Sync orchestrator dispatches, partitioned by provider + entity + action'
+);
+
+// Generic error counter, keyed by the `event` arg passed to logError().
+// Pair with errors_total{event="provisioning_failed"} alerts in Better
+// Stack / Grafana — much higher signal than scraping log lines.
+export const errorsTotal = registry.counter(
+  'errors_total',
+  'Errors logged via logError(), partitioned by event name'
+);

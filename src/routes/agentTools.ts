@@ -23,6 +23,7 @@ import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { findNextAvailableSlots } from '../services/availabilitySearch';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
 import { getSyncRecorder, clearSyncRecorder } from '../services/syncOrchestrator';
+import { toolCallsTotal, bookingAttemptsTotal } from '../services/metrics';
 import {
   selectAssignments,
   type ResourceCandidate,
@@ -132,11 +133,45 @@ const VerifyPhoneCodeSchema = z.object({
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function ok(reply: FastifyReply, result: unknown) {
+  // _toolOutcome is read by toolRoute() after the handler returns to bump
+  // tool_calls_total{outcome=...}. Both ok() and fail() send 200 (the
+  // agent expects to relay both shapes naturally), so we can't distinguish
+  // success vs failure from status alone.
+  (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'success';
   return reply.status(200).send({ success: true, result });
 }
 
 function fail(reply: FastifyReply, message: string, status = 200) {
+  (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
   return reply.status(status).send({ success: false, error: message });
+}
+
+/**
+ * Map a booking RPC result back to the canonical outcome label used in
+ * booking_attempts_total. Prefers the explicit error_code (book-with-
+ * scheduling RPC sets one); falls back to keyword-matching the message
+ * (book-appointment RPC returns prose only).
+ */
+function bookingOutcomeFromAgentError(
+  errMessage: string | null | undefined,
+  errCode?: string | null
+): string {
+  if (errCode) {
+    const c = errCode.toLowerCase();
+    if (c === 'timeslot_occupied') return 'timeslot_occupied';
+    if (c === 'employee_not_scheduled') return 'employee_not_scheduled';
+    if (c === 'no_skilled_employee') return 'no_skilled_employee';
+    if (c === 'no_availability') return 'no_availability';
+    if (c === 'invalid_params') return 'validation_error';
+  }
+  if (!errMessage) return 'other_error';
+  const m = errMessage.toLowerCase();
+  if (m.includes('timeslot') || m.includes('overlap')) return 'timeslot_occupied';
+  if (m.includes('not on shift') || m.includes('not_scheduled')) return 'employee_not_scheduled';
+  if (m.includes('skill')) return 'no_skilled_employee';
+  if (m.includes('availability')) return 'no_availability';
+  if (m.includes('past')) return 'past_time';
+  return 'other_error';
 }
 
 function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply): T | null {
@@ -164,12 +199,22 @@ function toolRoute<T>(
   handler: (args: T, reply: FastifyReply) => Promise<unknown>,
   errorMessage: string
 ): void {
+  // Strip the "/agent-tools/" prefix so the metric label matches the tool
+  // name the LLM uses in its prompt (e.g. "book-with-scheduling"). Cardinality
+  // is bounded by the number of registered tools (10 today).
+  const toolName = path.replace(/^\/agent-tools\//, '');
   app.post(
     path,
     withHandler(async (req: AppRequest, reply) => {
       const args = parseOrFail(schema, req.body, reply);
-      if (!args) return;
-      return handler(args, reply);
+      if (!args) {
+        toolCallsTotal.inc({ tool: toolName, outcome: 'validation_error' });
+        return;
+      }
+      const result = await handler(args, reply);
+      const outcome = (reply as unknown as { _toolOutcome?: string })._toolOutcome ?? 'success';
+      toolCallsTotal.inc({ tool: toolName, outcome });
+      return result;
     }, errorMessage)
   );
 }
@@ -405,11 +450,13 @@ export function registerAgentToolRoutes(
     });
 
     if (!result || !result.success) {
+      bookingAttemptsTotal.inc({ outcome: bookingOutcomeFromAgentError(result?.error_message), source: 'agent' });
       return fail(
         reply,
         result?.error_message || 'Booking failed due to a scheduling conflict.'
       );
     }
+    bookingAttemptsTotal.inc({ outcome: 'success', source: 'agent' });
     return ok(reply, {
       success: true,
       appointment_id: result.appointment_id,
@@ -619,6 +666,14 @@ export function registerAgentToolRoutes(
           count: 5,
         })
       ).catch(() => []);
+      bookingAttemptsTotal.inc({
+        outcome: bookingOutcomeFromAgentError(result?.error_message, result?.error_code),
+        source: 'agent',
+      });
+      // Hand-rolled response (not ok/fail) so the agent can read
+      // error_code + next_available; mirror the success-flag for the
+      // tool-call counter so the validation-error branch isn't double-bumped.
+      (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
       return reply.status(200).send({
         success: false,
         error: result?.error_message || 'No available scheduling options',
@@ -627,6 +682,7 @@ export function registerAgentToolRoutes(
       });
     }
 
+    bookingAttemptsTotal.inc({ outcome: 'success', source: 'agent' });
     return ok(reply, {
       success: true,
       appointment_id: result.appointment_id,

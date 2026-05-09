@@ -4,6 +4,25 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-08 — Observability slice 2: in-process Prometheus metrics + scrape endpoint
+
+Backend 1,719 → 1,733 (+14 metrics-registry unit tests). Dashboard / agent / Playwright unchanged. The "Basic metrics" item in `docs/TODO.md` Observability section is now `[x]`.
+
+- **`src/services/metrics.ts` — in-process registry, no external deps.** Standard counter + histogram shapes, Prometheus text-format exposition. Hard-coded label cardinality cap (1000 series per metric, overflow funnels to `overflow="true"`) so a misbehaving caller emitting per-phone-number labels can't pin process memory. Singleton registry exported as `registry`. Six pre-declared metrics live in the same file so the taxonomy is discoverable in code review:
+  - `http_requests_total{route,method,status}` — partitioned by route PATTERN (e.g. `/appointments/:id`), not rendered URL, to keep cardinality bounded.
+  - `http_request_duration_ms` — histogram with the same labels. Buckets `[10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]` cover the realistic range for this service (most routes <100ms, booking RPC sometimes 500ms p99, anything >2s should alert).
+  - `booking_attempts_total{outcome, source}` — outcome ∈ `success | timeslot_occupied | employee_not_scheduled | no_skilled_employee | no_availability | validation_error | past_time | other_error`; source ∈ `api | agent`. Powers booking success-rate dashboards.
+  - `tool_calls_total{tool, outcome}` — outcome ∈ `success | error | validation_error`. tool name is the `/agent-tools/<name>` suffix (10 tools today; bounded cardinality).
+  - `sync_dispatches_total{provider, entity, action}` — 5 providers × 2 entities × 3 actions = 30 series max. Lets us verify in prod that the orchestrator is firing the way `calendar-sync.spec.ts` proves it does in dev.
+  - `errors_total{event}` — sibling counter inside `logError()`. Pair with `rate(errors_total[5m])` alerts in Grafana for higher-signal alerting than scraping log lines.
+- **Auto HTTP metrics via Fastify onResponse hook (`src/index.ts`).** Status code is rolled up to family (`2xx`/`4xx`/`5xx`) to keep cardinality sane. Skips `/health` (constant traffic, no signal) and `/metrics` (avoids recursive scrape). Uses `req.routerPath` (not `req.url`) so `/appointments/abc-123` and `/appointments/def-456` collapse into the same `/appointments/:id` series. `reply.elapsedTime` (Fastify built-in) feeds the histogram.
+- **Domain counters wired at the call sites that matter.** Booking outcomes in `/appointments/create` (4 paths: validation, success, conflict-409, other-error) and the agent's `/agent-tools/book-appointment` + `/agent-tools/book-with-scheduling`. Tool-call outcomes via the existing `toolRoute()` wrapper — `ok()`/`fail()` set a `_toolOutcome` marker on the reply, the wrapper reads it after the handler returns and bumps the counter. Sync dispatches alongside the recorder hook (single dispatch loop, both call sites), error counter in `logError()`.
+- **`GET /metrics` scrape endpoint, gated by `METRICS_TOKEN`.** Strict opt-in: returns 404 when the env var is unset (so a fresh deploy can't leak tenant counters publicly), 401 on missing or wrong Bearer header, 200 with `text/plain; version=0.0.4` body when correct. Added `/metrics` to `PUBLIC_ROUTES` in `middleware.ts` so the JWT auth hook doesn't try to validate the bearer as a JWT before the route handler runs. Verified live with curl against a backend started with `METRICS_TOKEN=...`: counters populate per-request, no public exposure when env var is removed.
+- **`src/metrics.test.ts` — 14 unit tests.** Counter inc with no labels / multiple label combos / sort-stable label keys, by=N step argument, cardinality cap behavior. Histogram cumulative bucket placement, sum + count accumulation, separate-series by labels, ascending-bucket validation. Registry double-registration semantics (same type returns same instance, different type throws), exposition format (HELP / TYPE / +Inf / _sum / _count), label-value escaping (quotes / backslashes / newlines per Prometheus spec).
+- **Doc deltas.** `CLAUDE.md` documents the metrics taxonomy + `METRICS_TOKEN` env var; bumps backend tests 1,719 → 1,733 (Phase 13 line). `docs/TEST_COVERAGE.md` headline refreshed; counts bumped. `docs/TODO.md` marks "Basic metrics" `[x]` with a one-paragraph wrap-up.
+
+---
+
 ## 2026-05-08 — Calendar + CRM sync E2E (last beta-blocker P1 closed)
 
 Backend 1,712 → 1,719 (+7 recorder semantics). Dashboard 617 unchanged (recorder logic lives backend-side). Playwright 52 → 58. Last unchecked P1 in `docs/TODO.md` Test Suite Gap Analysis is now `[x]`.

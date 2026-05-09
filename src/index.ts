@@ -7,6 +7,12 @@ import { collectStartupWarnings } from './services/envWarnings';
 import multipart from '@fastify/multipart';
 import { getPool, closePool, createWithTenantClient } from './database';
 import { buildLogger } from './services/logger';
+import {
+  registry as metricsRegistry,
+  httpRequestsTotal,
+  httpRequestDurationMs,
+  errorsTotal,
+} from './services/metrics';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -160,6 +166,29 @@ tenantMiddleware(app as any);
 // --- Subscription Gate (after auth, before routes) ---
 app.addHook('onRequest', subscriptionGate(pool));
 
+// --- HTTP request metrics ---
+// onResponse fires after the body has been sent, so reply.statusCode is
+// final and the request->response lifecycle latency is fully measured.
+// We label by the route's PATTERN (req.routerPath, e.g. /appointments/:id)
+// rather than the rendered URL (/appointments/abc-123) — otherwise label
+// cardinality grows once-per-id and the cap kicks in within minutes.
+// Skip /health (constant traffic from k8s/Railway, no signal) and
+// /metrics itself (recursive scrape contamination).
+const METRICS_SKIP_PATTERNS = new Set(['/health', '/metrics']);
+app.addHook('onResponse', async (req, reply) => {
+  const routePattern = (req as unknown as { routerPath?: string }).routerPath ?? req.url;
+  if (METRICS_SKIP_PATTERNS.has(routePattern)) return;
+  const status = reply.statusCode;
+  const statusFamily = `${Math.floor(status / 100)}xx`; // 2xx, 4xx, 5xx — keeps cardinality sane
+  const labels = { route: routePattern, method: req.method, status: statusFamily };
+  httpRequestsTotal.inc(labels);
+  // reply.elapsedTime is Fastify's internal millisecond-resolution timer
+  const elapsed = (reply as unknown as { elapsedTime?: number }).elapsedTime;
+  if (typeof elapsed === 'number' && Number.isFinite(elapsed)) {
+    httpRequestDurationMs.observe(elapsed, labels);
+  }
+});
+
 // --- Global Error Handler ---
 app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }, _request: unknown, reply: { status: (code: number) => { send: (body: Record<string, unknown>) => void } }) => {
   const statusCode = error.statusCode || 500;
@@ -175,6 +204,7 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
     statusCode,
     timestamp: new Date().toISOString(),
   }, `unhandled_error: ${error.message}`);
+  errorsTotal.inc({ event: 'unhandled_error' });
   return reply.status(statusCode).send({ success: false, error: error.message || 'Internal server error' });
 });
 
@@ -193,6 +223,28 @@ app.get('/demo', async (_req, reply) => {
   reply.type('text/html').send(html);
 });
 app.get('/health', async () => ({ status: 'ok' }));
+
+// --- Prometheus-format metrics scrape endpoint ---
+// Strict opt-in: refuses ALL requests when METRICS_TOKEN is unset, so a
+// fresh deploy can't accidentally expose tenant-keyed counters publicly.
+// Once set, the scraper passes the token via Authorization: Bearer.
+// Returns text/plain per Prometheus exposition spec.
+app.get('/metrics', async (req, reply) => {
+  const token = process.env.METRICS_TOKEN;
+  if (!token) {
+    return reply.status(404).send({ success: false, error: 'Metrics endpoint disabled' });
+  }
+  const auth = req.headers['authorization'];
+  const provided = typeof auth === 'string' && auth.startsWith('Bearer ')
+    ? auth.slice('Bearer '.length)
+    : null;
+  if (provided !== token) {
+    return reply.status(401).send({ success: false, error: 'Unauthorized' });
+  }
+  return reply
+    .type('text/plain; version=0.0.4; charset=utf-8')
+    .send(metricsRegistry.expose());
+});
 
 app.post('/admin/purge-soft-reservations', async (_req, reply) => {
   const client = await pool.connect();

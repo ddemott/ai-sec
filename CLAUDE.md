@@ -117,6 +117,10 @@ Durable rules-of-engagement that override "build for the future":
 - `/agent-tools/*` responses: `{ success: true, result }` or `{ success: false, error }` at status 200 — LLM relays both shapes naturally. Auth via `x-agent-secret` header.
 - `SYNC_TEST_RECORDER=1` (off by default) flips on an in-memory ring buffer in `syncOrchestrator.ts` that records every appointment + customer sync dispatch (provider, action, tenantId, entityId, ts). Exposed via `GET /agent-tools/_test/sync-events` (read) and `DELETE /agent-tools/_test/sync-events` (clear), both gated by the env var AND the existing agent-secret. Used exclusively by `dashboard/e2e/calendar-sync.spec.ts` to assert the orchestration contract without real Google/Outlook/CRM credentials. Strict opt-in — anything other than the literal string `"1"` keeps it disabled, so a stray prod request can't enumerate sync activity.
 
+**Observability**
+- Pino → stdout (Railway live-tail) + Better Stack (when `BETTER_STACK_TOKEN` is set). Per-request enrichment: `service`, `env`, `tenant_id`, `call_id`. `logEvent`/`logWarning`/`logError` helpers in `middleware.ts` add structured fields.
+- Prometheus-style metrics at `GET /metrics`, gated by `METRICS_TOKEN` env var (returns 404 when unset, 401 on missing/wrong Bearer). In-process registry in `src/services/metrics.ts` — no external deps, hard cap at 1000 series per metric (overflow funnels to `overflow="true"`). Pre-declared metrics: `http_requests_total{route,method,status}` + `http_request_duration_ms` (histogram, same labels), `booking_attempts_total{outcome,source}`, `tool_calls_total{tool,outcome}`, `sync_dispatches_total{provider,entity,action}`, `errors_total{event}`. Auto-emitted by Fastify `onResponse` hook (HTTP) and inside `logError` (errors); domain counters wired into appointments + agentTools + syncOrchestrator.
+
 **Tests**
 - All tests cover happy + sad paths with 5W diagnostic comments (WHO/WHAT/WHEN/WHERE/WHY).
 - Mock helpers in `src/services/test-utils-mock.ts`.
@@ -132,7 +136,7 @@ Service layers that exist but lack production callers. **Each is on borrowed tim
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
-**Phase 13 (Production Readiness) in progress.** 1,719 backend + 617 dashboard = 2,336 tests passing (verified 2026-05-08; 0 skips). 81 agent tests, 58 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage.
+**Phase 13 (Production Readiness) in progress.** 1,733 backend + 617 dashboard = 2,350 tests passing (verified 2026-05-08; 0 skips). 81 agent tests, 58 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage.
 
 Remaining blockers: deploy dashboard, set `DASHBOARD_URL`, beta test with DynaTire. Full task list and post-launch backlog in `docs/TODO.md`. Phases 1–12 history in `RESOLVED.md`.
 

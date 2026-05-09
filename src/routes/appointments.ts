@@ -8,7 +8,25 @@ import { syncAppointmentToAll } from '../services/syncOrchestrator';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { findOverlappingAppointment, isOverlapError, type AppointmentConflict } from '../services/conflictLookup';
 import { findNextAvailableSlots, type AvailableSlot } from '../services/availabilitySearch';
+import { bookingAttemptsTotal } from '../services/metrics';
 import { assertRowAffected } from './routeHelpers';
+
+/**
+ * Map a book_with_scheduling_atomic error_message back to the canonical
+ * outcome label used in the metric. Keeps metric labels consistent with
+ * the error_code values surfaced to the dashboard / agent prompt.
+ */
+function bookingOutcomeFromError(errMessage: string | null | undefined): string {
+  if (!errMessage) return 'other_error';
+  const m = errMessage.toLowerCase();
+  if (m.includes('timeslot') || m.includes('overlap') || m.includes('exclusion')) return 'timeslot_occupied';
+  if (m.includes('not on shift') || m.includes('not_scheduled')) return 'employee_not_scheduled';
+  if (m.includes('skill')) return 'no_skilled_employee';
+  if (m.includes('availability') || m.includes('no availability')) return 'no_availability';
+  if (m.includes('past')) return 'past_time';
+  if (m.includes('15-minute') || m.includes('increment')) return 'increment_violation';
+  return 'other_error';
+}
 
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -48,11 +66,13 @@ export function registerAppointmentRoutes(
   app.post('/appointments/create', withHandler(async (req: AppRequest, reply) => {
     const parsed = AppointmentCreateSchema.safeParse(req.body);
     if (!parsed.success) {
+      bookingAttemptsTotal.inc({ outcome: 'validation_error', source: 'api' });
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
     const body = parsed.data;
     const timeValidationError = validateAppointmentTimeRange(body.start_time, body.end_time);
     if (timeValidationError) {
+      bookingAttemptsTotal.inc({ outcome: 'validation_error', source: 'api' });
       return reply.status(400).send({ success: false, error: timeValidationError });
     }
 
@@ -145,10 +165,12 @@ export function registerAppointmentRoutes(
     }
     if (result.success) {
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
+      bookingAttemptsTotal.inc({ outcome: 'success', source: 'api' });
       syncAppointmentToAll(pool, body.tenant_id, result.appointment_id, 'create', req.log);
       return reply.send({ success: true, appointment_id: result.appointment_id });
     }
     if (conflict) {
+      bookingAttemptsTotal.inc({ outcome: 'timeslot_occupied', source: 'api' });
       return reply.status(409).send({
         success: false,
         error: result.error_message,
@@ -157,6 +179,7 @@ export function registerAppointmentRoutes(
         next_available: nextAvailable,
       });
     }
+    bookingAttemptsTotal.inc({ outcome: bookingOutcomeFromError(result.error_message), source: 'api' });
     return reply.status(400).send({ success: false, error: result.error_message });
   }, 'Failed to create appointment'));
 

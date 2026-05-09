@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-08 (calendar + CRM sync E2E: dashboard/e2e/calendar-sync.spec.ts pins the orchestration contract — 6 tests verifying every appointment + customer lifecycle event dispatches the right provider set via the new `SYNC_TEST_RECORDER` hook. Playwright e2e 52 → 58 passing. Backend +7 tests for the recorder semantics → 1,719.)
+**Last refreshed:** 2026-05-08 (observability slice 2: in-process Prometheus metrics registry at `src/services/metrics.ts`, scrape endpoint at `GET /metrics` gated by `METRICS_TOKEN`. Six pre-declared metrics — http_requests_total + http_request_duration_ms histogram + booking_attempts_total + tool_calls_total + sync_dispatches_total + errors_total. Backend +14 unit tests → 1,733.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,11 +12,11 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,719 / 1,719 | ✅ | ~110s |
+| Backend (`npm test`) | 1,733 / 1,733 | ✅ | ~140s |
 | Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 58 passed, 1 skipped | ✅ | ~125s |
 
-Total unit tests: 2,336 (backend + dashboard) + 78 agent.
+Total unit tests: 2,350 (backend + dashboard) + 78 agent.
 
 > **Note**: `calendar-sync.spec.ts` requires the backend to start with
 > `SYNC_TEST_RECORDER=1` set. Without the env var, the spec's

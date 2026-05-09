@@ -10,6 +10,7 @@ import { syncAppointmentToJobber, syncCustomerToJobber } from './jobberSync';
 import { syncAppointmentToHubSpot, syncCustomerToHubSpot } from './hubspotSync';
 import { syncAppointmentToSquare, syncCustomerToSquare } from './squareSync';
 import { syncAppointmentToServiceTitan, syncCustomerToServiceTitan } from './servicetitanSync';
+import { syncDispatchesTotal } from './metrics';
 
 interface SyncLogger {
   error: (obj: Record<string, unknown>, msg: string) => void;
@@ -54,6 +55,16 @@ function record(provider: string, entity: 'appointment' | 'customer', action: 'c
   if (recorder.length > RECORDER_MAX) recorder.splice(0, recorder.length - RECORDER_MAX);
 }
 
+/**
+ * Bump the sync dispatch counter regardless of recorder mode. Lives
+ * alongside record() so the dispatch loop only walks the providers
+ * once. Labels are bounded (5 providers × 2 entities × 3 actions = 30
+ * series max) so cardinality is safe.
+ */
+function meter(provider: string, entity: 'appointment' | 'customer', action: 'create' | 'update' | 'delete') {
+  syncDispatchesTotal.inc({ provider, entity, action });
+}
+
 export function getSyncRecorder(): readonly SyncEvent[] {
   return recorder;
 }
@@ -83,6 +94,7 @@ export function syncAppointmentToAll(
 
   for (const { name, fn } of providers) {
     record(name, 'appointment', action, tenantId, appointmentId);
+    meter(name, 'appointment', action);
     fn(pool, tenantId, appointmentId, action).catch(e =>
       logSyncError(logger, name, 'appointment', action, appointmentId, e)
     );
@@ -109,6 +121,7 @@ export function syncCustomerToAll(
 
   for (const { name, fn } of providers) {
     record(name, 'customer', action, tenantId, customerId);
+    meter(name, 'customer', action);
     fn(pool, tenantId, customerId, action).catch(e =>
       logSyncError(logger, name, 'customer', action, customerId, e)
     );

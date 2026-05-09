@@ -9,6 +9,7 @@
  */
 
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
+import { errorsTotal } from './services/metrics';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -324,6 +325,9 @@ export function logError(
     timestamp: new Date().toISOString(),
     ...data,
   }, `${event}: ${error.message}`);
+  // Counter sibling so dashboards can alert on rate(errors_total[5m])
+  // by event name — much higher signal than scraping log lines.
+  errorsTotal.inc({ event });
 }
 
 // ── JWT Auth Hook ────────────────────────────────────────────────────
@@ -361,6 +365,10 @@ function verifyToken(token: string): JwtPayload | null {
 const PUBLIC_ROUTES = [
   '/health', '/login', '/forgot-password', '/reset-password', '/', '/demo',
   '/billing/webhook',
+  // Prometheus scrape endpoint — auth is via METRICS_TOKEN bearer header
+  // checked inside the route handler (not JWT). When the env var is unset
+  // the route returns 404, so adding it here doesn't expose anything.
+  '/metrics',
   // OAuth callbacks (redirects from external providers — no JWT available)
   '/calendar/auth/google/callback',
   '/calendar/auth/outlook/callback',
