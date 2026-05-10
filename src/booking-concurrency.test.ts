@@ -127,7 +127,7 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
         expect(persisted.rows[0].n).toBe(1);
     });
 
-    it('SAD: 20 concurrent callers for same employee at same time on different resources still has exactly one winner', async () => {
+    it('SAD: 20 concurrent callers for same employee at same time on different resources still has exactly one winner', { timeout: 30_000 }, async () => {
         // WHO: 20 callers competing for Alex's 10am slot
         // WHAT: Same employee_id, same time — even if resources differ, the
         //       employee can only be in one appointment at once
@@ -156,9 +156,29 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
             )
         );
 
-        const results = await Promise.all(calls);
-        const wins = results.filter(r => r.rows[0].success === true);
-        expect(wins).toHaveLength(1);
+        // allSettled (not all) because under extreme concurrency the GiST
+        // exclusion-constraint check can deadlock between two concurrent
+        // transactions, surfacing as `40P01` rejection rather than a clean
+        // TIMESLOT_OCCUPIED return. Both outcomes preserve data integrity
+        // (the constraint guarantees at most one INSERT wins); the agent
+        // prompt would surface a deadlock as "something went wrong, please
+        // try again" which is acceptable user-facing behavior. The
+        // contract this test enforces is "at most one winner across all
+        // 20 callers", not "every loser gets the prettiest error code."
+        const results = await Promise.allSettled(calls);
+        const fulfilled = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
+        const wins = fulfilled.filter(r => r.rows[0].success === true);
+        expect(wins, 'at most one of 20 concurrent callers may book the slot').toHaveLength(1);
+
+        // Belt-and-suspenders: regardless of how many callers got which
+        // error shape, exactly one row must persist for this slot.
+        const persisted = await setup.query(
+            `SELECT COUNT(*)::INT AS n FROM appointments
+             WHERE tenant_id = $1 AND status = 'scheduled'
+             AND start_time = $2::TIMESTAMPTZ`,
+            [tenantId, startISO]
+        );
+        expect(persisted.rows[0].n).toBe(1);
 
         // Cleanup the second resource so we don't leak it into the next test.
         await setup.query("DELETE FROM resources WHERE id = $1", [resource2Id]);

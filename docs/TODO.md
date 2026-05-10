@@ -154,18 +154,9 @@ After shipping slices 1-3 (37→42 E2E tests passing), a coverage analysis ident
 
 ---
 
-## Test debt: 12 backend failures from booking-RPC migration mismatch
+## Test debt — RESOLVED (2026-05-09)
 
-**Surfaced 2026-05-09** during the security review pass 2 full-suite run. Pre-dates that work — confirmed via `git stash` reproducing the same 14 failures (the 2 that flipped between runs are real-DB deadlock flake on the 20-concurrent-callers test).
-
-Migration `20260508000001_assignment_least_skilled_least_busy.sql` rewrote `book_with_scheduling_atomic` to consolidate several rejection cases under a single `NO_AVAILABILITY` error code. Tests expecting the OLDER granular codes (`NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`) weren't updated. Affected files:
-
-- `src/booking-concurrency.test.ts` (2 tests; deadlock flake at high concurrency, not migration-related)
-- `src/scheduling-atomic.test.ts` (3 tests expecting old codes)
-- `src/skill-resource-matching-sweep.test.ts` (5 tests expecting old codes)
-- `src/crm-appointments.test.ts` (3 tests; cause TBD — may be a different state-pollution issue)
-
-Decision needed: is the new RPC behavior (collapse to `NO_AVAILABILITY`) the right shape, or should the RPC restore the granular codes? If the new shape stays, update the tests. If granular codes are correct, revert the consolidation in the RPC. Roughly 1-2 hours of investigation either way.
+The 12 pre-existing test failures surfaced during security pass 2 are now closed. Root cause was migration `20260508000001` accidentally consolidating granular error codes into `NO_AVAILABILITY` during the assignment-policy rewrite. Migration `20260509000002` restores the diagnostics from `20260401000001` while keeping the new fewest-skills assignment policy. Side fixes: tests that relied on alphabetical resource ordering now `DELETE` template-auto-seeded resources first (random tiebreaker post-2026-05-08 broke the determinism); `crm-appointments` tests use `date_trunc('hour', NOW() + ...)` to satisfy the 15-min CHECK constraint; the booking-concurrency 20-caller employee-axis test uses `Promise.allSettled` + 30s timeout (GiST exclusion deadlocks under extreme concurrency are correctness-safe but the loser error code is best-effort). Net: 1,770/1,770 backend tests pass.
 
 The 2026-04-30 fix held until 2026-05-04, after which CI was red on every push for ~3 days due to three independent root causes (postgres image lacked pgvector; `scripts/setup-db.sh` silently swallowed errors due to a `set -e` interaction; dashboard `tsconfig.json` had its `types` directive placed at the JSON root instead of inside `compilerOptions`). All three fixed 2026-05-06 — see `docs/CURRENT_STATUS.md` "May 6: CI rot fixed" for the full disposition. Verified against a fresh `npm ci` install to simulate CI before pushing.
 

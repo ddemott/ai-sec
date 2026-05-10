@@ -205,6 +205,11 @@ describe("Skill + resource matching — per-industry HAPPY paths", () => {
         if (!dbAvailable) return;
 
         const tenantId = await createTenant(root, "Bella's Salon", "salon");
+        // Delete template-auto-seeded resources so "Chair 1" is the only
+        // candidate. The new assignment policy's random() tiebreaker (2026-
+        // 05-08) picks any matching resource, breaking the chairId-specific
+        // assertion below if auto-seeded chairs aren't cleared first.
+        await root.query("DELETE FROM resources WHERE tenant_id = $1", [tenantId]);
         const chairId = await createResourceWithCapabilities(root, tenantId, "Chair 1", []);
         const stylistId = await createEmployee(root, tenantId, "Lila", ["cut", "color"]);
         await createScheduleEntry(root, tenantId, stylistId, "2026-04-15", "09:00", "18:00");

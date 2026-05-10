@@ -144,7 +144,7 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 See `docs/TODO.md` for the unified task list.
 
 ### Test Count (verified 2026-05-09 against real Postgres + dashboard)
-- **1,758 backend tests + 617 dashboard tests = 2,375 passing**, 12 backend pre-existing failures (from migration `20260508000001` RPC error-code change; tracked in TODO), 0 skips
+- **1,770 backend tests + 617 dashboard tests = 2,387 passing**, 0 failures, 0 skips
 - 85 agent tests (`cd agent && npm test`)
 - 55 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
 - 29 live QA tool calls (88 assertions)
@@ -169,7 +169,7 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,758 backend (12 pre-existing failures, see TODO) + 617 dashboard + 85 agent = 2,460 passing + 88 QA assertions | Verified 2026-05-09 against real DB + dashboard, zero TS errors. The 12 failing backend tests pre-date this session — booking RPC error-code expectations from before the `20260508000001` migration update. |
+| **Tests** | 1,770 backend + 617 dashboard + 85 agent = 2,472 passing + 88 QA assertions | All green (verified 2026-05-09 against real DB + dashboard), 0 skips, zero TS errors |
 | **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |

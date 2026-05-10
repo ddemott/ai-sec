@@ -45,15 +45,24 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
         // Create an employee
         const employeeId = await createEmployee(client, tenantId, "Mike Tech");
 
-        // Create two appointments for this customer
+        // Create two appointments for this customer. date_trunc('hour') so
+        // start/end land on :00 — the 15-min CHECK constraint added 2026-
+        // 05-08 (appointments_start_time_15min, appointments_end_time_15min)
+        // rejects NOW()-based times that aren't grid-aligned.
         await client.query(
             `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status, employee_id)
-             VALUES ($1, $2, $3, NOW() + interval '1 day', NOW() + interval '1 day 1 hour', 'Oil Change', 'scheduled', $4)`,
+             VALUES ($1, $2, $3,
+                     date_trunc('hour', NOW() + interval '1 day'),
+                     date_trunc('hour', NOW() + interval '1 day') + interval '1 hour',
+                     'Oil Change', 'scheduled', $4)`,
             [tenantId, resourceId, customerId, employeeId]
         );
         await client.query(
             `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
-             VALUES ($1, $2, $3, NOW() - interval '3 days', NOW() - interval '3 days' + interval '1 hour', 'Tire Rotation', 'completed')`,
+             VALUES ($1, $2, $3,
+                     date_trunc('hour', NOW() - interval '3 days'),
+                     date_trunc('hour', NOW() - interval '3 days') + interval '1 hour',
+                     'Tire Rotation', 'completed')`,
             [tenantId, resourceId, customerId]
         );
 
@@ -106,10 +115,14 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
         // Create a second customer
         const otherCustomerId = await createCustomerFull(client, tenantId, "+15559990000", "Other Customer");
 
-        // Create appointment for the other customer
+        // Create appointment for the other customer (15-min grid required —
+        // see comment above on `date_trunc('hour', ...)` for context).
         await client.query(
             `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
-             VALUES ($1, $2, $3, NOW() + interval '2 days', NOW() + interval '2 days 1 hour', 'Brake Check', 'scheduled')`,
+             VALUES ($1, $2, $3,
+                     date_trunc('hour', NOW() + interval '2 days'),
+                     date_trunc('hour', NOW() + interval '2 days') + interval '1 hour',
+                     'Brake Check', 'scheduled')`,
             [tenantId, resourceId, otherCustomerId]
         );
 
@@ -126,10 +139,13 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
     it("should support canceling an appointment by updating status", async () => {
         if (!dbAvailable) return;
 
-        // Create a scheduled appointment
+        // Create a scheduled appointment (15-min grid required — see above).
         const apptRes = await client.query(
             `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
-             VALUES ($1, $2, $3, NOW() + interval '1 day', NOW() + interval '1 day 1 hour', 'Alignment', 'scheduled')
+             VALUES ($1, $2, $3,
+                     date_trunc('hour', NOW() + interval '1 day'),
+                     date_trunc('hour', NOW() + interval '1 day') + interval '1 hour',
+                     'Alignment', 'scheduled')
              RETURNING id`,
             [tenantId, resourceId, customerId]
         );

@@ -50,7 +50,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation: any user-supplied `tenant_id` (query or body) that doesn't match the JWT's `tenant_id` is rejected with 403 unless the caller is super-admin (added 2026-05-06 after the multi-tenant-isolation probe found cross-tenant data leak via `?tenant_id=` override). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
-- `/supabase/migrations` — 88 SQL migrations.
+- `/supabase/migrations` — 89 SQL migrations.
 - `/supabase/functions` — **Empty** (Vapi edge functions deleted in `661d21d`).
 - `/shared` — Cross-runtime: `getEmbedding.ts`, `scheduling.ts`
 - `/supabase/seed.sql` — Platform admin + DynaTire tenant
@@ -136,7 +136,7 @@ Service layers that exist but lack production callers. **Each is on borrowed tim
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
-**Phase 13 (Production Readiness) in progress.** 1,758 backend (12 pre-existing failures from `20260508001` migration tracked in TODO) + 617 dashboard = 2,375 tests passing (verified 2026-05-09). 85 agent tests, 58 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage. Production security posture lives in `docs/SECURITY.md` (refreshed 2026-05-09 after pass 2 of the security review).
+**Phase 13 (Production Readiness) in progress.** 1,770 backend + 617 dashboard = 2,387 tests passing (verified 2026-05-09; 0 skips, 0 failures). 85 agent tests, 58 Playwright e2e (1 skipped), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage. Production security posture lives in `docs/SECURITY.md` (refreshed 2026-05-09 after pass 2 of the security review).
 
 Remaining blockers: deploy dashboard, set `DASHBOARD_URL`, beta test with DynaTire. Full task list and post-launch backlog in `docs/TODO.md`. Phases 1–12 history in `RESOLVED.md`.
 

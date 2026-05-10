@@ -4,6 +4,26 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-09 — Booking-RPC granular errors restored + 12 pre-existing test failures closed
+
+Same-day follow-up to security pass 2. The full-suite run had surfaced 12 pre-existing failures in 4 test files; this session closes them all. Net green: 1,770/1,770 backend tests pass for the first time today.
+
+**Root cause: granular error codes regressed in migration `20260508000001`.** That migration's intended change was the auto-assignment policy rewrite (alphabetical → fewest-skills + least-busy + random) for senior-time preservation. But the rewrite accidentally collapsed the four-code diagnostic block from migration `20260401000001` (NO_SKILLED_EMPLOYEE / EMPLOYEE_NOT_SCHEDULED / TIMESLOT_OCCUPIED / NO_AVAILABILITY) into a single NO_AVAILABILITY return when the candidate JOIN produced no rows. Real impact: the agent prompt branches on these specific codes — without them, callers hear "nothing's open there" when the actual issue is "we don't have a tech with that skill" — misleading and unhelpful.
+
+**Fix: migration `20260509000002_restore_granular_booking_errors.sql`.** Keeps the 2026-05-08 assignment policy intact and re-incorporates the diagnostic block from `20260401000001`, updated to use `employee_schedule` (the `employee_shifts` table the original used was dropped 2026-04-30). After applying, all `scheduling-atomic.test.ts` and `skill-resource-matching-sweep.test.ts` tests that asserted on specific codes pass cleanly.
+
+**Side fixes along the way:**
+
+- **2 tests needed `DELETE FROM resources` after `createTenant`.** `scheduling-atomic.test.ts` "matches employee by skill and shift" and `skill-resource-matching-sweep.test.ts` "salon: books haircut..." both asserted on a specific resource_id/name. The `auto-shop` and `salon` business templates auto-seed resources via DB trigger; the new assignment policy's `random()` tiebreaker (added 2026-05-08) picks any matching resource. Adding the DELETE matches the existing pattern in test 128 ("fails when all resources are booked") and gives deterministic resource selection.
+- **3 `crm-appointments.test.ts` tests violated the 15-min CHECK constraint.** They inserted appointments with `NOW() + interval '1 day'` which is rarely on a 15-min boundary. Migration `20260508000000` added `appointments_start_time_15min` / `appointments_end_time_15min` checks. Switched to `date_trunc('hour', NOW() + interval '1 day')` to land on `:00`, which satisfies the constraint.
+- **1 booking-concurrency test was `Promise.all` over 20 deadlocking transactions.** Under extreme concurrency, the GiST exclusion-constraint check can deadlock between two transactions; one rolls back with `40P01`. Promise.all rejects fast on first rejection so the test crashed before asserting. Switched to `Promise.allSettled`, kept the at-most-one-winner contract (data integrity preserved), added a defense-in-depth `SELECT COUNT(*)` row-count assertion, and bumped the test timeout to 30s (deadlock detection takes ~1s per pair, cascading deadlocks among 20 callers can exceed 5s). The underlying limitation — that a deadlock-rolled-back loser doesn't see the prettiest error code — is acceptable: data integrity holds, the agent prompt would surface "something went wrong, please try again" which is OK user-facing behavior under that load.
+
+**Files touched:** `supabase/migrations/20260509000002_restore_granular_booking_errors.sql` (new), `src/scheduling-atomic.test.ts`, `src/skill-resource-matching-sweep.test.ts`, `src/crm-appointments.test.ts`, `src/booking-concurrency.test.ts`.
+
+Backend test count: 1,770/1,770 pass (was 1,758 / 1,770 with 12 failing earlier this session).
+
+---
+
 ## 2026-05-09 — Security review pass 2: RLS coverage + JWT/refresh + AGENT_SECRET rotation
 
 Three sub-audits, three findings. New `docs/SECURITY.md` documents the as-shipped posture for future audits.

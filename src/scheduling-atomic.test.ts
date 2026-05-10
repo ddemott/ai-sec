@@ -152,6 +152,12 @@ describe("book_with_scheduling_atomic()", () => {
         it("matches employee by skill and shift", async () => {
             if (!dbAvailable) return;
             const tenantId = await createTenant(root, "Auto Pro", "auto-shop");
+            // Delete template-auto-seeded resources so the test's "Bay 1" is
+            // the only candidate. Without this, the new assignment policy's
+            // random() tiebreaker (added 2026-05-08) picks any matching
+            // resource, and the assertion `result.resource_name === 'Bay 1'`
+            // becomes flaky — auto-seeded "Service Bay 1" matches just as well.
+            await root.query("DELETE FROM resources WHERE tenant_id = $1", [tenantId]);
             const bayId = await createResource(root, tenantId, "Bay 1");
             const empId = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
             // 2026-04-06 is a Monday. Booking RPCs read only employee_schedule.
