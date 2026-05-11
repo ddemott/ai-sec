@@ -212,6 +212,132 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// 2b. QUICK BOOK REAL-TIME — new appointment appears in the grid w/o reload
+// ────────────────────────────────────────────────────────────────────────────
+test('quick book real-time: new appointment appears in the scheduler grid without manual page reload', async ({ page }) => {
+  // WHO: front-desk operator who just submitted a Quick Book and expects
+  //        to see the appointment on the grid without doing anything else.
+  // WHAT: open Quick Book → submit → assert the AppointmentBlock for the
+  //        newly-created row becomes visible in the resource-columns grid
+  //        WITHOUT a page reload (no page.reload() call, URL unchanged).
+  //        The booking response's appointment_id is captured from the live
+  //        POST /appointments/create response so the assertion targets the
+  //        exact row that was just created (no name-collision noise).
+  // WHEN: any successful Quick Book — the SchedulerView's handleQuickBooked
+  //        callback calls useSchedulerData.refresh() which re-fetches the
+  //        date's appointments. If that wiring breaks, the operator would
+  //        book → see the panel close → and the grid would still look empty
+  //        until they refresh the page — a real beta-stopping UX bug that
+  //        unit tests would miss (refresh() is a useCallback closure that
+  //        could be silently dropped from an effect's dep array).
+  // WHERE: SchedulerView.handleQuickBooked → useSchedulerData.fetchData →
+  //        Api.appointments.list → setAppointments → AppointmentBlock render.
+  // WHY: the existing "quick book" test (above) verifies the BOOKING worked
+  //        by checking the DB. This test verifies the GRID worked by checking
+  //        the rendered UI. Both surfaces are required for the operator
+  //        experience; either alone is insufficient.
+  const tag = uniqueTag();
+  let createdId: string | null = null;
+
+  try {
+    await page.goto('/dashboard');
+    await switchToDynaTireTenant(page);
+    await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+    await page.waitForTimeout(1000);
+
+    // Resources sub-view (where Quick Book + the resource-columns grid live)
+    const resourcesTab = page.getByTestId('view-tab-resources');
+    await expect(resourcesTab).toBeVisible({ timeout: 10000 });
+    await resourcesTab.click();
+    await page.waitForTimeout(500);
+
+    // Compute target date: 3 weekdays forward (matching the existing quick
+    // book test's date arithmetic). Then advance the scheduler's date nav by
+    // that many clicks so selectedDate matches the booking date — otherwise
+    // the new appointment lands outside the day-window useSchedulerData
+    // queries and the grid wouldn't show it even with a correct refresh.
+    const target = new Date();
+    target.setDate(target.getDate() + 3);
+    while (target.getDay() === 0 || target.getDay() === 6) {
+      target.setDate(target.getDate() + 1);
+    }
+    const today0 = new Date();
+    today0.setHours(0, 0, 0, 0);
+    const target0 = new Date(target);
+    target0.setHours(0, 0, 0, 0);
+    const daysForward = Math.round((target0.getTime() - today0.getTime()) / 86_400_000);
+    const nextDayBtn = page.getByRole('button', { name: 'Next day' });
+    for (let i = 0; i < daysForward; i++) {
+      await nextDayBtn.click();
+      await page.waitForTimeout(150);
+    }
+
+    // Capture URL before submission — assertion below confirms it didn't
+    // change, i.e. no client-side route push and no reload.
+    const urlBeforeBooking = page.url();
+
+    // Open Quick Book + fill — same prefill pattern as the existing quick
+    // book test (index 1 customer + service, index 0 resource, 10-14 local
+    // hour) so this test fails for "real-time refresh broke" reasons, not
+    // "I picked an unbookable combo" reasons.
+    const quickBookBtn = page.locator('button').filter({ hasText: 'Quick Book' }).first();
+    await expect(quickBookBtn).toBeVisible({ timeout: 10000 });
+    await quickBookBtn.click();
+
+    const panel = page.getByTestId('quick-book-panel');
+    await expect(panel).toBeVisible({ timeout: 5000 });
+
+    await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
+    await page.getByTestId('quick-book-service').selectOption({ index: 1 });
+    await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
+
+    const randomHour = 10 + Math.floor(Math.random() * 5); // 10-14 LOCAL
+    const ymd = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+    const hh = String(randomHour).padStart(2, '0');
+    const startInput = panel.locator('input[type="datetime-local"]').first();
+    const endInput = panel.locator('input[type="datetime-local"]').last();
+    await startInput.fill(`${ymd}T${hh}:15`);
+    await endInput.fill(`${ymd}T${hh}:45`);
+
+    // Listen for the booking POST so we can grab the new appointment_id
+    // directly from the same response the dashboard sees. This is more
+    // reliable than "query DB for newest row" — there's no time-window
+    // ambiguity.
+    const bookingResponsePromise = page.waitForResponse(
+      (resp) => resp.url().includes('/appointments/create') && resp.request().method() === 'POST',
+      { timeout: 10_000 }
+    );
+    await page.getByTestId('quick-book-confirm').click();
+    const bookingResponse = await bookingResponsePromise;
+    const bookingBody = await bookingResponse.json();
+    expect(
+      bookingBody.success,
+      `booking must succeed for the real-time assertion to be meaningful; tag=${tag}, body=${JSON.stringify(bookingBody)}`
+    ).toBe(true);
+    expect(bookingBody.appointment_id, 'booking response must include appointment_id').toBeTruthy();
+    createdId = bookingBody.appointment_id as string;
+
+    // The actual contract: an AppointmentBlock for the new id must become
+    // visible in the grid WITHOUT a page reload. Playwright's `toBeVisible`
+    // auto-waits up to expect.timeout (10s) which is plenty of time for the
+    // refetch + setAppointments + render cycle (typically <1s on a warm
+    // backend).
+    const newBlock = page.locator(`[data-testid="appointment-block-${createdId}"]`);
+    await expect(
+      newBlock,
+      `the new appointment must render in the grid without a page reload; tag=${tag}`
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Belt-and-suspenders: confirm no navigation/reload happened.
+    expect(page.url(), 'URL must not change between booking submit and grid render').toBe(urlBeforeBooking);
+  } finally {
+    if (createdId) {
+      await pool.query('DELETE FROM appointments WHERE id = $1', [createdId]);
+    }
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // 3. EDIT APPOINTMENT — sad path validates, happy path saves to DB
 // ────────────────────────────────────────────────────────────────────────────
 test('edit appointment: time changes persist to DB through PUT /appointments', async ({ page }) => {
