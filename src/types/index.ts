@@ -15,7 +15,7 @@ export * from './voiceCrm.js';
  * GDPR/TCPA compliance requires tracking explicit consent.
  */
 export interface ConsentRecord {
-  id: number;
+  consent_record_id: number;
   tenant_id: string;
   customer_id?: string;
   customer_email?: string;

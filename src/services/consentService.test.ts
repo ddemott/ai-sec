@@ -175,7 +175,7 @@ describe('ConsentService', () => {
       const mockDb = createMockDb();
       mockDb.getConsentRecordsByCustomer.mockResolvedValue([
         {
-          id: '1',
+          consent_record_id: 1,
           consent_type: 'email',
           consent_given: true,
           revoked_at: null,
@@ -186,7 +186,7 @@ describe('ConsentService', () => {
       const result = await service.revokeConsent(1, 'test@example.com', undefined, 'email', 'User requested');
 
       expect(result).toBe(true);
-      expect(mockDb.updateConsentRecord).toHaveBeenCalledWith('1', expect.objectContaining({
+      expect(mockDb.updateConsentRecord).toHaveBeenCalledWith(1, expect.objectContaining({
         revoke_reason: 'User requested',
       }));
     });

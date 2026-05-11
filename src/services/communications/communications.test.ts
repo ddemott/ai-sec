@@ -76,7 +76,7 @@ describe('CommunicationService', () => {
         // Setup: Customer has email consent
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             tenant_id: 'test-tenant-123',
             customer_email: 'customer@example.com',
             consent_type: 'email',
@@ -101,7 +101,7 @@ describe('CommunicationService', () => {
       it('applies email templates correctly', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             consent_type: 'email',
             consent_given: true,
             consent_date: new Date().toISOString(),
@@ -134,7 +134,7 @@ describe('CommunicationService', () => {
       it('sends SMS successfully when customer has consent', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             customer_phone: '+15559876543',
             consent_type: 'sms',
             consent_given: true,
@@ -159,7 +159,7 @@ describe('CommunicationService', () => {
       it('sends both email and SMS when customer has both contacts', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             customer_email: 'customer@example.com',
             consent_type: 'both',
             consent_given: true,
@@ -192,7 +192,7 @@ describe('CommunicationService', () => {
       it('sends reminder with correct hours until appointment', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             consent_type: 'email',
             consent_given: true,
             consent_date: new Date().toISOString(),
@@ -244,7 +244,7 @@ describe('CommunicationService', () => {
       it('fails when customer revoked consent', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             customer_email: 'revoked@example.com',
             consent_type: 'email',
             consent_given: true,
@@ -273,7 +273,7 @@ describe('CommunicationService', () => {
       it('fails with invalid phone number format', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             consent_type: 'sms',
             consent_given: true,
             consent_date: new Date().toISOString(),
@@ -444,7 +444,7 @@ describe('ConsentService', () => {
       it('returns true for valid consent', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             consent_type: 'email',
             consent_given: true,
             consent_date: new Date().toISOString(),
@@ -470,7 +470,7 @@ describe('ConsentService', () => {
       it('revokes consent successfully', async () => {
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             consent_type: 'email',
             consent_given: true,
             consent_date: new Date().toISOString(),
@@ -580,7 +580,7 @@ describe('ConsentService', () => {
             if (email) {
               return [
                 {
-                  id: 1,
+                  consent_record_id: 1,
                   consent_type: 'email',
                   consent_given: true,
                   consent_date: new Date().toISOString(),

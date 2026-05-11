@@ -154,7 +154,7 @@ export interface DatabaseService {
   getAppointmentById(id: string): Promise<AppointmentForReminder | null>;
 
   // Consent operations
-  createConsentRecord(data: Omit<ConsentRecord, 'id'>): Promise<ConsentRecord>;
+  createConsentRecord(data: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord>;
   getConsentRecordsByCustomer(
     tenantId: string,
     customerEmail?: string,
@@ -352,7 +352,7 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Consent Operations ─────────────────────────────────────────────
 
-  async createConsentRecord(data: Omit<ConsentRecord, 'id'>): Promise<ConsentRecord> {
+  async createConsentRecord(data: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord> {
     return this.withTenantClient(data.tenant_id, async (client) => {
       const result = await client.query(
         `INSERT INTO consent_records
@@ -438,7 +438,7 @@ export class PostgresDatabaseService implements DatabaseService {
     if (updates.length === 0) {
       return this.withClient(async (client) => {
         const result = await client.query(
-          'SELECT * FROM consent_records WHERE id = $1',
+          'SELECT * FROM consent_records WHERE consent_record_id = $1',
           [id]
         );
         return result.rows[0] || null;
@@ -450,7 +450,7 @@ export class PostgresDatabaseService implements DatabaseService {
 
     return this.withClient(async (client) => {
       const result = await client.query(
-        `UPDATE consent_records SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+        `UPDATE consent_records SET ${updates.join(', ')} WHERE consent_record_id = $${paramIndex} RETURNING *`,
         values
       );
       return result.rows[0] || null;

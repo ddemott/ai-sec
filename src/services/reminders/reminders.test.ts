@@ -51,7 +51,7 @@ const createMockDb = (): DatabaseService => ({
   createConsentRecord: vi.fn(),
   getConsentRecordsByCustomer: vi.fn().mockResolvedValue([
     {
-      id: 1,
+      consent_record_id: 1,
       consent_type: 'both',
       consent_given: true,
       consent_date: new Date().toISOString(),
@@ -507,7 +507,7 @@ describe('ReminderService', () => {
         // Override consent to return revoked
         vi.mocked(mockDb.getConsentRecordsByCustomer).mockResolvedValue([
           {
-            id: 1,
+            consent_record_id: 1,
             consent_type: 'email',
             consent_given: true,
             consent_date: '2026-01-01T00:00:00Z',

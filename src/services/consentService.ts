@@ -7,8 +7,8 @@ export class ConsentService {
   /**
    * Record customer consent for communications
    */
-  async recordConsent(consentData: Omit<ConsentRecord, 'id'>): Promise<ConsentRecord> {
-    const consent: Omit<ConsentRecord, 'id'> = {
+  async recordConsent(consentData: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord> {
+    const consent: Omit<ConsentRecord, 'consent_record_id'> = {
       ...consentData,
     };
 
@@ -97,7 +97,7 @@ export class ConsentService {
 
     if (consentType === 'both') {
       for (const consent of filteredConsents) {
-        await this.db.updateConsentRecord(consent.id, {
+        await this.db.updateConsentRecord(consent.consent_record_id, {
           revoked_at: new Date().toISOString(),
           revoke_reason: reason || 'User requested opt-out',
         });
@@ -106,7 +106,7 @@ export class ConsentService {
     } else {
       // Only revoke the first matching consent for non-'both' types
       const consent = filteredConsents[0];
-      await this.db.updateConsentRecord(consent.id, {
+      await this.db.updateConsentRecord(consent.consent_record_id, {
         revoked_at: new Date().toISOString(),
         revoke_reason: reason || 'User requested opt-out',
       });
