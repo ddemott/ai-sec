@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-06 (multi-tenant isolation probe + closed two cross-tenant leaks before any commit)
+**Last updated:** 2026-05-11 (E2E coverage sprint: closed Cancel+restore P1, real-time scheduler P1, mobile responsiveness, tenant delete cascade + surfaced/fixed schema bug, version-history restore; stabilized two latent E2E flakes. 7 commits, backend 1,770→1,775, dashboard 617→620, E2E 55→69.)
 
 ---
 
@@ -21,6 +21,28 @@ Code shipped to `main` and merged on origin, but not yet exercised in production
 | **NEEDS-REFACTORING #14 (`pw.txt`)** | IN FLIGHT (decision pending) | Gitignored, never committed; could be a real password or a deliberate scratch note. | User confirms whether to keep or delete. |
 | **Role gating + Logins UI browser-verify** | IN FLIGHT (validation pending) | Unit tests pin both contracts (4 layout + 2 auth backend + 13 user-route + 5 TeamAccessView). Real browser session has not exercised either yet. | `npm start` and walk the test plan in `docs/TODO.md` (Browser-verify entry). |
 | **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
+
+### May 10-11: E2E coverage sprint — 5 P1/P2 items closed, 1 real data-integrity bug surfaced + fixed, 2 latent E2E flakes stabilized (backend 1,770 → 1,775, dashboard 617 → 620, E2E 55 → 69)
+
+Seven commits across two days, all on `origin/main`:
+
+- **`1fb8b11` feat(appointments): reactivate route + UI** — new `POST /appointments/:id/reactivate` (canceled → scheduled with 409 conflict block when slot was rebooked; 400 NOT_CANCELED guard); customer-history rows for canceled appointments are now clickable → ConfirmModal → API → toast (only UI surface for restoring canceled appointments). +5 backend + 3 dashboard + 3 E2E.
+
+- **`492b4cf` test(e2e): real-time scheduler refresh** — pins that QuickBook submit → SchedulerView.handleQuickBooked → useSchedulerData.refresh → grid renders the new AppointmentBlock without a page reload. Captures appointment_id from the live POST response via waitForResponse. +1 E2E.
+
+- **`04a96b4` fix(e2e): stabilize two latent flakes** — workflows smoke replaced seed-dependent customer-name assertion with unconditional scheduler-date-display check (weekend runs had no appointments rendering); quick-book-shift-overrides walked forward to next weekday + fixed broken relative `/shifts/overrides` URL (was hitting dashboard catch-all instead of backend) + skipped service selection (orthogonal to shift-coverage contract) + added try/finally cleanup (test had been "passing by failing" pre-fix).
+
+- **`07103cc` test(e2e): mobile-responsiveness audit** — `mobile-responsive.spec.ts` emulates iPhone 14 (390×844) + Pixel 7 (412×915) viewports via page.setViewportSize, drives the three daily-use flows (today's schedule, Quick Book, customer lookup), asserts no horizontal page overflow + mobile-nav surfaces primary tabs. Audit found no regressions — OutlookLayout's `md:hidden` nav + Tailwind responsive classes work cleanly. +4 E2E.
+
+- **`ae7dd12` feat(schema): tenant-delete cascade gap fix** — new `tenant-delete-cascade.spec.ts` (3 tests: full cascade, cross-tenant isolation, owner-403 authz) **surfaced a real schema bug** — `employees.tenant_id` and `services.tenant_id` were `NOT NULL UUID` but missing the `REFERENCES tenants(id) ON DELETE CASCADE` constraint despite the initial-schema migration declaring it. 77 orphan employee rows + 8 orphan service rows accumulated in local DB. Migration `20260511000000_employees_services_tenant_fk_cascade.sql` cleans orphans + adds the FKs. Pre-fix, tenant offboarding silently leaked employee + service rows — GDPR-grade promise we'd have been breaking at beta scale. **Production Supabase still needs this migration applied.** Migration count 89 → 90. +3 E2E.
+
+- **`f43e535` test(e2e): version-history restore round-trip** — soft-delete a customer → filtered from `/customers` + appears in `/records/customers/deleted` → `/restore` → back in active list + gone from deleted list. Plus two sad-path guards: 404 RECORD_NOT_DELETED on never-deleted, 400 INVALID_TABLE on non-whitelisted table name (pins SQL-injection defense since the route inlines table name). Audit found no regressions — feature was already solid. +3 E2E.
+
+- **`4d30eff` / interleaved docs commits** — TODO.md marks all 5 closed items with detailed notes; TEST_COVERAGE.md tracks the 14 new workflow rows across 4 new spec files.
+
+After-state: backend 1,775/1,775 + dashboard 620/620 + agent 85/85 + 69/69 E2E (7 intentional skips). Zero TS errors. All gates green.
+
+**Outstanding from this sprint:** apply migration `20260511000000` to production Supabase — every tenant offboarding between now and then will leak employee + service rows.
 
 ### May 6: multi-tenant isolation probe + cross-tenant leak fixes (backend 1,551 → 1,592)
 
@@ -143,10 +165,10 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 
 See `docs/TODO.md` for the unified task list.
 
-### Test Count (verified 2026-05-09 against real Postgres + dashboard)
-- **1,770 backend tests + 617 dashboard tests = 2,387 passing**, 0 failures, 0 skips
+### Test Count (verified 2026-05-11 against real Postgres + dashboard)
+- **1,775 backend tests + 620 dashboard tests = 2,395 passing**, 0 failures, 0 skips
 - 85 agent tests (`cd agent && npm test`)
-- 55 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
+- 69 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard + agent)
 - CI now provisions Postgres 16 + applies migrations, so DB-level tests
@@ -160,7 +182,7 @@ See `docs/TODO.md` for the unified task list.
 |-----------|--------|---------|
 | **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 26 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 80 migrations applied, FORCE RLS on all tables. Three new migrations on main awaiting prod apply: `20260501000000` (exclusion constraints) + `20260501000001` (RPC handlers) shipped 2026-05-02 — pre-flight overlap-scan needed; `20260505000000_user_roles.sql` shipped 2026-05-05 — harmless additive ALTER. |
+| **Database** | Live | Supabase Postgres (managed), 90 migrations in repo, FORCE RLS on all tables. **One new migration awaiting prod apply: `20260511000000_employees_services_tenant_fk_cascade.sql` (2026-05-11) — adds missing FK constraints on `employees.tenant_id` + `services.tenant_id` that were lost from the live schema despite the initial-schema migration declaring them; cleans 85 orphan rows locally. Every tenant offboarding leaks employee + service rows until this is applied to prod.** Earlier migrations on main awaiting prod-apply confirmation: `20260501000000` (exclusion constraints) + `20260501000001` (RPC handlers); `20260505000000_user_roles.sql`. |
 | **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
 | **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
 | **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Original ticket `#2850682` superseded 2026-05-01 after 4 days without a human response; new ticket awaiting LERG/porting reviewer. |
@@ -169,8 +191,8 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,770 backend + 617 dashboard + 85 agent = 2,472 passing + 88 QA assertions | All green (verified 2026-05-09 against real DB + dashboard), 0 skips, zero TS errors |
-| **Playwright e2e** | 19 tests (7 critical + 12 functional audit) | Against live dashboard |
+| **Tests** | 1,775 backend + 620 dashboard + 85 agent = 2,480 passing + 88 QA assertions | All green (verified 2026-05-11 against real DB + dashboard), 0 skips, zero TS errors |
+| **Playwright e2e** | 69 passed / 7 skipped | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
