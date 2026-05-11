@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-09 (security pass 2 + booking-RPC granular-error restoration. Pass 2 closed 3 RLS gaps + AGENT_SECRET timing-safe + rotation. Then closed the 12 pre-existing test failures from migration `20260508000001`: that migration's RPC rewrite accidentally collapsed `NO_SKILLED_EMPLOYEE` / `EMPLOYEE_NOT_SCHEDULED` / `TIMESLOT_OCCUPIED` into a single `NO_AVAILABILITY` return, breaking the agent prompt's per-code messaging. New migration `20260509000002` restores granular diagnostics from `20260401000001` while keeping the new fewest-skills + least-busy assignment policy. Side fixes along the way: 2 tests needed `DELETE FROM resources` after `createTenant` to clear template-auto-seeded resources (random tiebreaker post-2026-05-08 broke the deterministic-resource assertions); 3 crm-appointments tests needed `date_trunc('hour', NOW() + ...)` instead of raw `NOW()` (15-min CHECK constraint from migration `20260508000000` rejects off-grid times); 1 booking-concurrency test needed `Promise.allSettled` + 30s timeout + a defense-in-depth row-count assertion (GiST exclusion deadlocks under 20-concurrent-callers extreme load — data integrity preserved, error code is best-effort). Backend 1,752 → 1,770 (+18 across pass 2 work + concurrency-test hardening). Net green: 1,770/1,770. Pass 1 earlier today shipped webhook signature verification + CRM HMAC bug fix.)
+**Last refreshed:** 2026-05-10 (closed P1 "Cancel + restore appointment" via new `POST /appointments/:id/reactivate` route — commit `1fb8b11`. +5 backend route tests, +3 dashboard component tests, +3 E2E tests against real DB with self-contained tenant fixtures. Backend 1,770→1,775; dashboard 617→620; E2E 55→58 passing. Previous refresh 2026-05-09: security pass 2 + booking-RPC granular-error restoration. Pass 2 closed 3 RLS gaps + AGENT_SECRET timing-safe + rotation. Then closed the 12 pre-existing test failures from migration `20260508000001`: that migration's RPC rewrite accidentally collapsed `NO_SKILLED_EMPLOYEE` / `EMPLOYEE_NOT_SCHEDULED` / `TIMESLOT_OCCUPIED` into a single `NO_AVAILABILITY` return, breaking the agent prompt's per-code messaging. New migration `20260509000002` restores granular diagnostics from `20260401000001` while keeping the new fewest-skills + least-busy assignment policy. Side fixes along the way: 2 tests needed `DELETE FROM resources` after `createTenant` to clear template-auto-seeded resources (random tiebreaker post-2026-05-08 broke the deterministic-resource assertions); 3 crm-appointments tests needed `date_trunc('hour', NOW() + ...)` instead of raw `NOW()` (15-min CHECK constraint from migration `20260508000000` rejects off-grid times); 1 booking-concurrency test needed `Promise.allSettled` + 30s timeout + a defense-in-depth row-count assertion (GiST exclusion deadlocks under 20-concurrent-callers extreme load — data integrity preserved, error code is best-effort). Backend 1,752 → 1,770 (+18 across pass 2 work + concurrency-test hardening). Pass 1 earlier 2026-05-09 shipped webhook signature verification + CRM HMAC bug fix.)
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves
 > test counts or coverage percentages (added a test suite, deleted a stale
@@ -12,10 +12,10 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,770 / 1,770 | ✅ | ~120s |
-| Dashboard (`cd dashboard && npm test`) | 617 / 617 | ✅ | ~10s |
+| Backend (`npm test`) | 1,775 / 1,775 | ✅ | ~120s |
+| Dashboard (`cd dashboard && npm test`) | 620 / 620 | ✅ | ~10s |
 | Agent (`cd agent && npm test`) | 85 / 85 | ✅ | ~3s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 55 passed, 7 skipped | ✅ | ~135s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 58 passed, 7 skipped | ✅ | ~135s |
 
 Total unit tests: 2,387 passing (backend + dashboard) + 85 agent.
 
@@ -62,6 +62,9 @@ purpose-built coverage build. Track e2e by **workflows covered** instead.
 | `setup-wizard-to-booking.spec.ts` | wizard finalize → first booking | `/register` → seed services/resource/employee → `/shifts/expand-weekly` → `/appointments/create` succeeds |
 | `setup-wizard-to-booking.spec.ts` | skip-fan-out sad path | same flow minus expand-weekly → booking returns `EMPLOYEE_NOT_SCHEDULED` |
 | `setup-wizard-to-booking.spec.ts` | range coverage | default `weeks_ahead=4` → 28 employee_schedule rows reaching ~27 days out |
+| `appointment-cancel-restore.spec.ts` | reactivate happy round-trip | seed appt → `/cancel` → DB status='canceled' → `/reactivate` → DB status='scheduled' |
+| `appointment-cancel-restore.spec.ts` | slot-rebooked race | cancel A → seed B in A's slot → reactivate A → 409 + TIMESLOT_OCCUPIED + conflict block; A stays canceled, B stays scheduled |
+| `appointment-cancel-restore.spec.ts` | not-canceled guard | reactivate on status='scheduled' → 400 + NOT_CANCELED, no UPDATE issued |
 
 ### Soft-checked workflows (`if (visible)` guards or `logIssue()`)
 
