@@ -18,6 +18,7 @@ import { useActiveTenantId } from '../lib/SessionContext'
 import { Button } from './ui/Button'
 import { CustomerDetailPanel } from './CustomerDetailPanel'
 import { ConfirmModal } from './ui/ConfirmModal'
+import { showToast } from './ui/Toast'
 import { useConfirm } from '../lib/useConfirm'
 
 export default function CRMView() {
@@ -150,6 +151,40 @@ export default function CRMView() {
           }
         } catch (e) {
           console.error(e)
+        }
+      },
+    })
+  }
+
+  function handleReactivateAppointment(appointmentId: string) {
+    confirm({
+      title: 'Reactivate Appointment',
+      message: 'Restore this canceled appointment to the schedule? It will be added back to connected calendars.',
+      confirmLabel: 'Reactivate',
+      onConfirm: async () => {
+        closeConfirm()
+        try {
+          const res = await Api.appointments.reactivate(appointmentId, tenantId)
+          if (res.success) {
+            showToast('Appointment reactivated.', 'success')
+            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.id)
+            return
+          }
+          // Status-conflict semantics: TIMESLOT_OCCUPIED means the slot was
+          // rebooked while this appointment was canceled — operator must
+          // book new instead. NOT_CANCELED means another session already
+          // restored it; refresh shows truth.
+          if (res.error_code === 'TIMESLOT_OCCUPIED') {
+            showToast('That time slot is no longer available. Book a new appointment instead.', 'error')
+          } else if (res.error_code === 'NOT_CANCELED') {
+            showToast('This appointment is already active.', 'info')
+            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.id)
+          } else {
+            showToast(res.error || 'Failed to reactivate appointment.', 'error')
+          }
+        } catch (e) {
+          console.error(e)
+          showToast('Failed to reactivate appointment.', 'error')
         }
       },
     })
@@ -346,6 +381,7 @@ export default function CRMView() {
         onCreate={handleCreate}
         onDelete={handleDelete}
         onCancelAppointment={handleCancelAppointment}
+        onReactivateAppointment={handleReactivateAppointment}
         onCloseMobile={() => { setShowDetailOnMobile(false); setIsCreating(false); }}
       />
       <ConfirmModal {...confirmState} onClose={closeConfirm} />

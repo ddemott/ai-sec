@@ -78,6 +78,7 @@ interface CustomerDetailPanelProps {
   onCreate: () => void
   onDelete: () => void
   onCancelAppointment: (appointmentId: string) => void
+  onReactivateAppointment: (appointmentId: string) => void
   onCloseMobile: () => void
 }
 
@@ -98,6 +99,7 @@ export function CustomerDetailPanel({
   onCreate,
   onDelete,
   onCancelAppointment,
+  onReactivateAppointment,
   onCloseMobile,
 }: CustomerDetailPanelProps) {
   return (
@@ -292,23 +294,50 @@ export function CustomerDetailPanel({
                   </h3>
                   {pastAppointments.length > 0 ? (
                     <div className="space-y-3">
-                      {pastAppointments.map((a) => (
-                        <div key={a.id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
-                            <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
-                              <Clock className="w-3 h-3 mr-1" />
-                              {new Date(a.start_time).toLocaleDateString()} at {new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                            </p>
-                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                              {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
-                            </p>
+                      {pastAppointments.map((a) => {
+                        const isCanceled = a.status === 'canceled';
+                        const dateLabel = `${new Date(a.start_time).toLocaleDateString()} at ${new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+                        const Body = (
+                          <>
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
+                              <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
+                                <Clock className="w-3 h-3 mr-1" />
+                                {dateLabel}
+                              </p>
+                              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                {a.resource_name}{a.employee_name ? ` / ${a.employee_name}` : ''}
+                              </p>
+                            </div>
+                            <Badge variant={a.status === 'completed' ? 'success' : isCanceled ? 'danger' : 'secondary'}>
+                              {a.status === 'completed' ? 'Completed' : isCanceled ? 'Canceled' : a.status}
+                            </Badge>
+                          </>
+                        );
+                        // Canceled rows are clickable to surface the reactivate
+                        // affordance — the only place in the app where a
+                        // canceled appointment is reachable from a click flow.
+                        // Non-canceled history rows stay non-interactive (no
+                        // detail-view route exists for past completed
+                        // appointments yet — out of scope here).
+                        return isCanceled ? (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => onReactivateAppointment(a.id)}
+                            data-testid={`customer-history-canceled-${a.id}`}
+                            aria-label={`Reactivate canceled appointment: ${a.description} on ${dateLabel}`}
+                            className="w-full text-left p-4 rounded-xl shadow-sm flex justify-between items-start transition-colors hover:brightness-110"
+                            style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)', cursor: 'pointer' }}
+                          >
+                            {Body}
+                          </button>
+                        ) : (
+                          <div key={a.id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+                            {Body}
                           </div>
-                          <Badge variant={a.status === 'completed' ? 'success' : a.status === 'canceled' ? 'danger' : 'secondary'}>
-                            {a.status === 'completed' ? 'Completed' : a.status === 'canceled' ? 'Canceled' : a.status}
-                          </Badge>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>No past appointments.</p>

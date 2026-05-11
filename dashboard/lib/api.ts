@@ -330,6 +330,26 @@ export const Api = {
 
     cancel: (id: string, tenantId: string | null) =>
       apiMutate(`/appointments/${id}/cancel`, 'POST', { tenant_id: tenantId }),
+
+    // Reactivate flips a canceled appointment back to scheduled. Returns 409
+    // with `error_code: 'TIMESLOT_OCCUPIED'` + a `conflict` block when the
+    // slot was rebooked while canceled (mirrors /appointments/create's
+    // shape so the dashboard can reuse ConflictModal). Returns 400 with
+    // `error_code: 'NOT_CANCELED'` when the row isn't currently canceled —
+    // the UI should refresh and clear the reactivate affordance.
+    reactivate: (id: string, tenantId: string | null) =>
+      apiMutate<{
+        error_code?: string;
+        conflict?: {
+          appointment_id: string;
+          start_time: string;
+          end_time: string;
+          customer_name: string | null;
+          employee_name: string | null;
+          resource_name: string | null;
+          description: string | null;
+        };
+      }>(`/appointments/${id}/reactivate`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- RESOURCES ---

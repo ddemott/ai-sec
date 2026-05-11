@@ -292,6 +292,98 @@ export function registerAppointmentRoutes(
     return reply.send({ success: true });
   }, 'Failed to cancel appointment'));
 
+  // POST /appointments/:id/reactivate — restore a soft-canceled appointment.
+  // Pairs with /cancel: cancel sets status='canceled' (which the GiST exclusion
+  // constraints exclude from the scheduled set, freeing the slot); reactivate
+  // flips back to 'scheduled', which re-enters the constraint set. If another
+  // booking took the slot while this one was canceled, the UPDATE fails with
+  // PG error 23P01 (exclusion_violation) and the route returns 409 with a
+  // conflict block describing the blocker (mirrors /appointments/create's
+  // 409 + conflict shape so the dashboard can surface "slot is taken — book
+  // a new one instead"). Status guard: only currently-canceled rows can
+  // reactivate (400 on already-scheduled or completed) — keeps the route
+  // idempotent-friendly and prevents accidentally re-firing the create-sync
+  // for a row that was never canceled.
+  app.post('/appointments/:id/reactivate', withHandler(async (req: AppRequest, reply) => {
+    const { id } = req.params as { id: string };
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
+    let outcome: 'success' | 'not_found' | 'not_canceled' | 'conflict' = 'not_found';
+    let conflict: AppointmentConflict | null = null;
+
+    await withTenantClient(tenantId, async (client) => {
+      const sel = await client.query<{
+        status: string;
+        resource_id: string;
+        employee_id: string | null;
+        start_time: string;
+        end_time: string;
+      }>(
+        `SELECT status, resource_id, employee_id::text AS employee_id,
+                start_time::text AS start_time, end_time::text AS end_time
+           FROM appointments
+          WHERE id = $1 AND tenant_id = $2 AND (is_deleted IS NULL OR is_deleted = false)`,
+        [id, tenantId]
+      );
+      if (sel.rows.length === 0) {
+        outcome = 'not_found';
+        return;
+      }
+      const row = sel.rows[0];
+      if (row.status !== 'canceled') {
+        outcome = 'not_canceled';
+        return;
+      }
+
+      try {
+        await client.query(
+          `UPDATE appointments SET status = 'scheduled' WHERE id = $1 AND tenant_id = $2`,
+          [id, tenantId]
+        );
+        outcome = 'success';
+      } catch (err: unknown) {
+        const code = (err as { code?: string } | null)?.code;
+        if (code === '23P01') {
+          conflict = await findOverlappingAppointment(client, {
+            tenantId,
+            resourceId: row.resource_id,
+            employeeId: row.employee_id,
+            startTime: row.start_time,
+            endTime: row.end_time,
+          });
+          outcome = 'conflict';
+          return;
+        }
+        throw err;
+      }
+    });
+
+    if (outcome === 'not_found') {
+      return reply.status(404).send({ success: false, error: 'Appointment not found' });
+    }
+    if (outcome === 'not_canceled') {
+      return reply.status(400).send({
+        success: false,
+        error: 'Only canceled appointments can be reactivated',
+        error_code: 'NOT_CANCELED',
+      });
+    }
+    if (outcome === 'conflict') {
+      return reply.status(409).send({
+        success: false,
+        error: 'That time slot is no longer available',
+        error_code: 'TIMESLOT_OCCUPIED',
+        conflict,
+      });
+    }
+
+    logEvent(req, 'appointment_reactivated', { appointmentId: id });
+    // Re-add to calendars/CRMs — reactivated appointments are scheduled again
+    syncAppointmentToAll(pool, tenantId, id, 'create', req.log);
+    return reply.send({ success: true });
+  }, 'Failed to reactivate appointment'));
+
   app.post('/appointments/:id/update', withHandler(async (req: AppRequest, reply) => {
     const { id } = req.params as { id: string };
     const parsed = AppointmentUpdateSchema.safeParse(req.body);

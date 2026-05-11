@@ -787,6 +787,242 @@ describe('POST /appointments/:id/cancel', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────
+// POST /appointments/:id/reactivate
+// ────────────────────────────────────────────────────────────────────
+
+describe('POST /appointments/:id/reactivate', () => {
+    it('HAPPY: flips canceled→scheduled, fires create-sync, returns success', async () => {
+        // WHO: tenant restoring a canceled appointment from customer history
+        // WHAT: SELECT current row → UPDATE status='scheduled' → sync('create')
+        // WHEN: POST /appointments/:id/reactivate on a canceled row whose slot
+        //       is still free (no exclusion_violation on the UPDATE)
+        // WHERE: reactivate handler (src/routes/appointments.ts)
+        // WHY: pairs with /cancel — cancel set status='canceled' (excluded
+        //       from GiST set, slot freed) and fired sync('delete') to remove
+        //       from external calendars/CRMs; reactivate flips back and fires
+        //       sync('create') to re-add. Without sync('create') the dashboard
+        //       would show the appointment as scheduled but Google Calendar /
+        //       Jobber / etc. would still consider it deleted, drifting the
+        //       state of truth between us and the integrations.
+        handle.queryResponses.push({
+            rows: [{
+                status: 'canceled',
+                resource_id: RESOURCE_ID,
+                employee_id: EMPLOYEE_ID,
+                start_time: '2026-04-15T14:00:00Z',
+                end_time: '2026-04-15T15:00:00Z',
+            }],
+        }); // SELECT
+        handle.queryResponses.push({ rows: [] }); // UPDATE
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/reactivate`,
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true });
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries[0].text).toContain('SELECT status');
+        expect(dataQueries[1].text).toContain("UPDATE appointments SET status = 'scheduled'");
+        expect(dataQueries[1].text).toContain('AND tenant_id = $2');
+        expect(syncAppointmentToAll).toHaveBeenCalledWith(
+            handle.mockPool,
+            TENANT_ID,
+            APPOINTMENT_ID,
+            'create', // re-add to externals (mirrors cancel's 'delete' inversely)
+            expect.anything(),
+        );
+    });
+
+    it('SAD: returns 404 when no row matches the id+tenant+not-deleted predicate', async () => {
+        // WHO: reactivate attempt on a missing/cross-tenant/soft-deleted id
+        // WHAT: SELECT returns zero rows → 404, no UPDATE issued, no sync fired
+        // WHEN: appointment doesn't exist OR is_deleted=true OR belongs to
+        //       another tenant (RLS would have already filtered the latter,
+        //       but the explicit AND tenant_id = $2 + soft-delete clause is
+        //       defense in depth)
+        // WHERE: outcome === 'not_found' branch
+        // WHY: 404 is the right shape for "doesn't exist" — distinct from the
+        //       400 "exists but isn't canceled" case below. UI can route on
+        //       status code to decide whether to refresh customer history
+        //       (404 → row was hard-deleted) vs surface a status-conflict
+        //       toast (400 → row is already scheduled, refresh shows truth).
+        handle.queryResponses.push({ rows: [] }); // SELECT empty
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/reactivate`,
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json()).toEqual({ success: false, error: 'Appointment not found' });
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        // Only the SELECT ran — no UPDATE attempted on a missing row
+        expect(dataQueries).toHaveLength(1);
+    });
+
+    it('SAD: returns 400 NOT_CANCELED when the row is already scheduled', async () => {
+        // WHO: stale-UI reactivate attempt — operator clicks "Reactivate" on
+        //       a row another session already restored (or never canceled)
+        // WHAT: SELECT returns status='scheduled' → 400 NOT_CANCELED, no
+        //       UPDATE, no sync. Symmetric with /cancel's no-op semantics:
+        //       reactivate is a state-machine transition canceled→scheduled,
+        //       not idempotent flip-to-scheduled.
+        // WHEN: operator clicks reactivate on a row that's already scheduled
+        // WHERE: outcome === 'not_canceled' branch
+        // WHY: without this guard, reactivating an already-scheduled row
+        //       would silently fire sync('create') a second time — duplicate
+        //       calendar events on Google / Outlook / Jobber. The error_code
+        //       lets the dashboard distinguish from a 409 "slot taken" so it
+        //       can refresh + show "this appointment is already active"
+        //       rather than the conflict modal.
+        handle.queryResponses.push({
+            rows: [{
+                status: 'scheduled',
+                resource_id: RESOURCE_ID,
+                employee_id: EMPLOYEE_ID,
+                start_time: '2026-04-15T14:00:00Z',
+                end_time: '2026-04-15T15:00:00Z',
+            }],
+        });
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/reactivate`,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({
+            success: false,
+            error: 'Only canceled appointments can be reactivated',
+            error_code: 'NOT_CANCELED',
+        });
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        // Only SELECT ran
+        expect(dataQueries).toHaveLength(1);
+    });
+
+    it('SAD: returns 409 TIMESLOT_OCCUPIED with conflict block when slot was rebooked', async () => {
+        // WHO: operator tries to reactivate a canceled appointment whose slot
+        //       was already rebooked by another customer in the meantime
+        // WHAT: SELECT returns status='canceled' → UPDATE throws PG 23P01
+        //       (exclusion_violation, GiST appointments_no_resource_overlap
+        //       OR appointments_no_employee_overlap fired) → route runs
+        //       findOverlappingAppointment to surface the blocker → 409 with
+        //       conflict block
+        // WHEN: race-condition pattern between cancel and reactivate where
+        //       another booking landed in the freed slot
+        // WHERE: try/catch around UPDATE, code === '23P01' branch
+        // WHY: this is the most important sad path — without it, reactivate
+        //       would surface a generic 500 on a real, common operational
+        //       case (the slot got rebooked while canceled). The conflict
+        //       block matches /appointments/create's 409 shape so the
+        //       dashboard can reuse the existing ConflictModal pattern.
+        const CONFLICT_APPT_ID = '99999999-aaaa-4bbb-8ccc-dddddddddddd';
+
+        // Sequencing the three queries:
+        //   call 1 (SELECT)  → mockImplementationOnce returns canceled row
+        //   call 2 (UPDATE)  → mockImplementationOnce throws PG 23P01
+        //   call 3 (conflict SELECT) → falls through to default impl which
+        //                              pops from queryResponses
+        // Why mockImplementationOnce rather than mockImplementation: Once
+        // is auto-consumed so subsequent tests inherit the default impl
+        // (mockImplementation would persist and poison sibling describes).
+        handle.mockClient.query.mockImplementationOnce(async (text: string, params?: unknown[]) => {
+            handle.queries.push({ text, params: params || [] });
+            return {
+                rows: [{
+                    status: 'canceled',
+                    resource_id: RESOURCE_ID,
+                    employee_id: EMPLOYEE_ID,
+                    start_time: '2026-04-15T14:00:00Z',
+                    end_time: '2026-04-15T15:00:00Z',
+                }],
+            };
+        });
+        handle.mockClient.query.mockImplementationOnce(async (text: string, params?: unknown[]) => {
+            handle.queries.push({ text, params: params || [] });
+            const err: Error & { code?: string } = new Error(
+                'conflicting key value violates exclusion constraint "appointments_no_resource_overlap"'
+            );
+            err.code = '23P01';
+            throw err;
+        });
+        handle.queryResponses.push({
+            rows: [{
+                appointment_id: CONFLICT_APPT_ID,
+                start_time: '2026-04-15T14:00:00Z',
+                end_time: '2026-04-15T15:00:00Z',
+                customer_name: 'New Customer',
+                employee_name: 'Mike',
+                resource_name: 'Bay 1',
+                description: 'Rebooked oil change',
+            }],
+        });
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/reactivate`,
+        });
+
+        expect(res.statusCode).toBe(409);
+        const body = res.json();
+        expect(body).toMatchObject({
+            success: false,
+            error: 'That time slot is no longer available',
+            error_code: 'TIMESLOT_OCCUPIED',
+            conflict: {
+                appointment_id: CONFLICT_APPT_ID,
+                customer_name: 'New Customer',
+                employee_name: 'Mike',
+                resource_name: 'Bay 1',
+            },
+        });
+        // Critical: sync NOT fired on conflict — would push a deleted-then-recreated
+        // event to externals based on a state that didn't actually commit.
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+
+    it('SAD: returns 400 when no tenant context is on the request (auth short-circuit)', async () => {
+        // WHO: reactivate hit without auth context (mirrors the cancel/delete
+        //       short-circuit tests so every destructive single-row endpoint
+        //       has the same gate coverage)
+        // WHAT: requireTenantId() returns null + sends 400 before any DB
+        //       activity. No SELECT, no UPDATE, no sync.
+        // WHEN: missing JWT or middleware ordering bug strips req.auth
+        // WHERE: src/routes/appointments.ts — `if (!tenantId) return`
+        // WHY: pre-fix-pattern this branch could let a SELECT/UPDATE run
+        //       with `tenant_id = $2` bound to undefined → potential
+        //       cross-tenant flip canceled→scheduled. Symmetry with /cancel
+        //       coverage is deliberate.
+        handle.auth.current = null;
+        handle.tenantIdOverride.current = null;
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/reactivate`,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({ error: 'tenant_id is required' });
+        const dataQueries = handle.queries.filter(
+            (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        );
+        expect(dataQueries).toHaveLength(0);
+        expect(syncAppointmentToAll).not.toHaveBeenCalled();
+    });
+});
+
+// ────────────────────────────────────────────────────────────────────
 // POST /appointments/:id/update
 // ────────────────────────────────────────────────────────────────────
 
