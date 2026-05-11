@@ -51,7 +51,6 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
 - `/supabase/migrations` — 92 SQL migrations.
-- `/supabase/functions` — **Empty** (Vapi edge functions deleted in `661d21d`).
 - `/shared` — Cross-runtime: `getEmbedding.ts`, `scheduling.ts`
 - `/supabase/seed.sql` — Platform admin + DynaTire tenant
 - `/scripts` — `qa-live-test.py`, `verify-claude-md.ts` drift detector
