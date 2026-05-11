@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
+import { scheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { findOverlappingAppointment, isOverlapError, type AppointmentConflict } from '../services/conflictLookup';
 import { findNextAvailableSlots, type AvailableSlot } from '../services/availabilitySearch';
@@ -171,6 +172,9 @@ export function registerAppointmentRoutes(
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
       bookingAttemptsTotal.inc({ outcome: 'success', source: 'api' });
       syncAppointmentToAll(pool, body.tenant_id, result.appointment_id, 'create', req.log);
+      // Fire-and-forget: a reminder schedule miss must never fail the booking.
+      // The 4 rows feed the 60s worker tick at src/workers/reminderScheduler.ts.
+      scheduleRemindersForAppointment(withTenantClient, body.tenant_id, result.appointment_id, req.log);
       return reply.send({ success: true, appointment_id: result.appointment_id });
     }
     if (conflict) {

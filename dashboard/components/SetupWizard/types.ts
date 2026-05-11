@@ -26,24 +26,24 @@ export interface EmployeeForm {
 export const EMPTY_EMPLOYEE: EmployeeForm = { first_name: '', last_name: '', email: '', phone: '' }
 
 export interface WizardShift {
-  id: string | number
+  id: string
   /** Optional in SoloWizard (no per-row employee context) — required in
    *  the team wizard where one shifts array spans multiple employees. */
-  employee_id?: string | number
+  employee_id?: string
   day_of_week: number
   start_time: string
   end_time: string
 }
 
 export interface WizardMapping {
-  service_id: string | number
-  employee_id?: string | number
+  service_id: string
+  employee_id?: string
   resource_id?: string
   tenant_id?: string
 }
 
 export interface CoverageItem {
-  service_id: string | number
+  service_id: string
   service_name: string
   check_date?: string
   gap_hours?: number[]
@@ -55,7 +55,7 @@ export interface CoverageItem {
 }
 
 export interface WizardService {
-  id: string | number
+  id: string
   name: string
   description?: string
   duration_minutes: number
@@ -72,7 +72,7 @@ export interface WizardResource {
 }
 
 export interface WizardEmployee {
-  id: string | number
+  id: string
   name: string
   first_name?: string
   last_name?: string
@@ -92,12 +92,12 @@ export interface Step1Props {
   services: WizardService[]
   loading: boolean
   editingService: ServiceForm | null
-  editingServiceId: string | number | null
+  editingServiceId: string | null
   saving: boolean
   error: string | null
   onAdd: () => void
   onEdit: (svc: WizardService) => void
-  onDelete: (id: string | number) => void
+  onDelete: (id: string) => void
   onSave: () => void
   onCancel: () => void
   onChange: (form: ServiceForm) => void
@@ -127,7 +127,7 @@ export interface Step3Props {
   error: string | null
   onAdd: () => void
   onEdit: (emp: WizardEmployee) => void
-  onDelete: (id: string | number) => void
+  onDelete: (id: string) => void
   onSave: () => void
   onCancel: () => void
   onChange: (form: EmployeeForm) => void
@@ -142,7 +142,7 @@ export interface Step4Props {
   selectedEmployeeId: string | null
   onSelectEmployee: (id: string | null) => void
   onToggleShift: (employeeId: string, dayOfWeek: number, startTime: string, endTime: string) => void
-  onUpdateTime: (shiftId: string | number, startTime: string, endTime: string) => void
+  onUpdateTime: (shiftId: string, startTime: string, endTime: string) => void
 }
 
 export interface Step5Props {
@@ -154,8 +154,8 @@ export interface Step5Props {
   loading: boolean
   saving: boolean
   error: string | null
-  onToggleEmployee: (serviceId: string | number, employeeId: string) => void
-  onToggleResource: (serviceId: string | number, resourceId: string) => void
+  onToggleEmployee: (serviceId: string, employeeId: string) => void
+  onToggleResource: (serviceId: string, resourceId: string) => void
 }
 
 export interface Step6Props {

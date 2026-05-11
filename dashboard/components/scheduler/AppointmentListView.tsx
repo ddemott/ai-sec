@@ -4,8 +4,8 @@ import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { formatTimeFromISO } from '../../lib/utils';
 
-interface SchedulerEmployee { id: string | number; name: string }
-interface SchedulerResource { id: string | number; name: string }
+interface SchedulerEmployee { id: string; name: string }
+interface SchedulerResource { id: string; name: string }
 
 interface AppointmentListViewProps {
   appointments: SchedulerAppointment[];

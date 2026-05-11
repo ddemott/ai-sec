@@ -5,7 +5,7 @@ import type { SchedulerAppointment } from './useSchedulerData';
 import { formatHour } from '../../lib/utils';
 
 interface SwimLaneShift { id: string; start_time?: string; end_time?: string }
-interface SwimLaneEmployee { id: string | number; name: string }
+interface SwimLaneEmployee { id: string; name: string }
 
 interface StaffSwimLaneViewProps {
   employees: SwimLaneEmployee[];

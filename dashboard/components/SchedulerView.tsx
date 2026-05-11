@@ -60,7 +60,7 @@ export default function SchedulerView() {
   }>({});
 
   // Employee focus panel state
-  const [focusEmployee, setFocusEmployee] = useState<{ id: string | number; name: string } | null>(null);
+  const [focusEmployee, setFocusEmployee] = useState<{ id: string; name: string } | null>(null);
 
   const {
     appointments,

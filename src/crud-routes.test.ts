@@ -604,18 +604,18 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'to-delete') RETURNING id",
+                "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'to-delete') RETURNING tenant_skill_id",
                 [tenantId]
             );
-            const skillId = insertRes.rows[0].id;
+            const skillId = insertRes.rows[0].tenant_skill_id;
 
             await client.query(
-                "DELETE FROM tenant_skills WHERE id = $1 AND tenant_id = $2",
+                "DELETE FROM tenant_skills WHERE tenant_skill_id = $1 AND tenant_id = $2",
                 [skillId, tenantId]
             );
 
             const check = await client.query(
-                "SELECT * FROM tenant_skills WHERE id = $1",
+                "SELECT * FROM tenant_skills WHERE tenant_skill_id = $1",
                 [skillId]
             );
             expect(check.rows).toHaveLength(0);
@@ -678,10 +678,10 @@ describe("CRUD Routes - Database Level", () => {
             const res = await client.query(
                 `INSERT INTO tenant_skills (tenant_id, name, description)
                  VALUES ($1, 'Tire Balancing', 'Balance and align tires')
-                 RETURNING id`,
+                 RETURNING tenant_skill_id`,
                 [tenantId]
             );
-            const skillId = res.rows[0].id;
+            const skillId = res.rows[0].tenant_skill_id;
             expect(skillId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
             expect(skillId.length).toBe(36);
         });
@@ -691,14 +691,14 @@ describe("CRUD Routes - Database Level", () => {
             const ins = await client.query(
                 `INSERT INTO tenant_skills (tenant_id, name, description)
                  VALUES ($1, 'Oil Change UUID', 'Standard oil change')
-                 RETURNING id`,
+                 RETURNING tenant_skill_id`,
                 [tenantId]
             );
-            const skillId = ins.rows[0].id;
+            const skillId = ins.rows[0].tenant_skill_id;
 
-            await client.query("DELETE FROM tenant_skills WHERE id = $1", [skillId]);
+            await client.query("DELETE FROM tenant_skills WHERE tenant_skill_id = $1", [skillId]);
 
-            const res = await client.query("SELECT * FROM tenant_skills WHERE id = $1", [skillId]);
+            const res = await client.query("SELECT * FROM tenant_skills WHERE tenant_skill_id = $1", [skillId]);
             expect(res.rows.length).toBe(0);
         });
     });

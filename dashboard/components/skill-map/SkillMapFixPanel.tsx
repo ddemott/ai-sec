@@ -6,8 +6,8 @@ import { Button } from '../ui/Button'
 import { showToast } from '../ui/Toast'
 import type { BrokenChain } from './useSkillMapData'
 
-interface FixPanelEntity { id: string | number; name: string; type?: string }
-interface ServiceMapping { service_id: string | number; employee_id?: string | number; resource_id?: string | number }
+interface FixPanelEntity { id: string; name: string; type?: string }
+interface ServiceMapping { service_id: string; employee_id?: string; resource_id?: string }
 
 interface SkillMapFixPanelProps {
   chain: BrokenChain

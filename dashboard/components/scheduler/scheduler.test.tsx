@@ -48,8 +48,8 @@ function makeAppointment(overrides: Partial<SchedulerAppointment> = {}): Schedul
 }
 
 const employees = [
-  { id: 1, name: 'Mike Jones' },
-  { id: 2, name: 'Steve Lee' },
+  { id: 'emp-1', name: 'Mike Jones' },
+  { id: 'emp-2', name: 'Steve Lee' },
 ];
 
 const resources = [
@@ -278,8 +278,8 @@ describe('StaffSwimLaneView', () => {
         shiftsByEmployee={shiftMap}
       />
     );
-    expect(screen.getByTestId('swimlane-row-1')).toBeInTheDocument();
-    expect(screen.getByTestId('swimlane-row-2')).toBeInTheDocument();
+    expect(screen.getByTestId('swimlane-row-emp-1')).toBeInTheDocument();
+    expect(screen.getByTestId('swimlane-row-emp-2')).toBeInTheDocument();
     expect(screen.getByText('Mike Jones')).toBeInTheDocument();
     expect(screen.getByText('Steve Lee')).toBeInTheDocument();
     // WHO: admin | WHAT: see all staff in swimlane rows | WHEN: scheduler loads with employees | WHERE: StaffSwimLaneView | WHY: missing employee rows hide their appointments and shifts entirely
@@ -344,7 +344,7 @@ describe('StaffSwimLaneView', () => {
       />
     );
     // Click on an on-shift cell starts a move — same position = no change, so onShiftResize not called
-    const slot = screen.getByTestId('slot-1-10');
+    const slot = screen.getByTestId('slot-emp-1-10');
     fireEvent.mouseDown(slot);
     fireEvent.mouseUp(slot);
     // No resize called because shift didn't actually move
@@ -371,9 +371,9 @@ describe('StaffSwimLaneView', () => {
       />
     );
     // Single click on off-shift cell creates a 1-hour shift
-    fireEvent.mouseDown(screen.getByTestId('slot-1-8'));
-    fireEvent.mouseUp(screen.getByTestId('slot-1-8'));
-    expect(onShiftDrag).toHaveBeenCalledWith('1', 8, 9);
+    fireEvent.mouseDown(screen.getByTestId('slot-emp-1-8'));
+    fireEvent.mouseUp(screen.getByTestId('slot-emp-1-8'));
+    expect(onShiftDrag).toHaveBeenCalledWith('emp-1', 8, 9);
     // WHO: admin | WHAT: create new shift by clicking off-shift cell | WHEN: click on hatched (unscheduled) time slot | WHERE: StaffSwimLaneView | WHY: allows quick shift creation without opening a separate form
   });
 });
@@ -620,7 +620,7 @@ describe('QuickBookPanel', () => {
         customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
         employees={employees}
         resources={resources}
-        services={[{ id: 1, name: 'Oil Change', duration_minutes: 30 }]}
+        services={[{ id: 'svc-1', name: 'Oil Change', duration_minutes: 30 }]}
         onBooked={() => {}}
       />
     );

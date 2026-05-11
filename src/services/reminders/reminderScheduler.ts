@@ -35,12 +35,8 @@ export class ReminderScheduler {
       // Only schedule future reminders
       if (scheduledFor > now || reminder.type === 'confirmation') {
         await this.scheduleReminder({
-          appointment_id:
-            typeof appointment.id === 'string' ? parseInt(appointment.id, 10) : appointment.id,
-          tenant_id:
-            typeof appointment.tenant_id === 'string'
-              ? parseInt(appointment.tenant_id, 10)
-              : appointment.tenant_id,
+          appointment_id: appointment.id,
+          tenant_id: appointment.tenant_id,
           customer_email: appointment.customer_email || '',
           customer_phone: appointment.customer_phone,
           reminder_type: reminder.type,
@@ -110,7 +106,7 @@ export class ReminderScheduler {
   /**
    * Get all scheduled reminders for a tenant
    */
-  async getScheduledReminders(tenantId: number): Promise<any[]> {
+  async getScheduledReminders(tenantId: string): Promise<any[]> {
     return await this.repository.getScheduledReminders(tenantId);
   }
 

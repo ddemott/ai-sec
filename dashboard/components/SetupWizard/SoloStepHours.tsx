@@ -15,7 +15,7 @@ interface SoloStepHoursProps {
   saving: boolean
   error: string | null
   onToggleDay: (dayOfWeek: number) => void
-  onUpdateTime: (shiftId: string | number, startTime: string, endTime: string) => void
+  onUpdateTime: (shiftId: string, startTime: string, endTime: string) => void
   onApplyToWeekdays: (sourceDow: number) => void
   onCopyDown: (sourceDow: number) => void
 }

@@ -146,8 +146,8 @@ export interface DatabaseService {
   createReminderSchedule(data: ReminderData): Promise<ReminderSchedule>;
   getReminderSchedule(id: string): Promise<ReminderSchedule | null>;
   updateReminderSchedule(id: string, data: Partial<ReminderSchedule>): Promise<ReminderSchedule | null>;
-  getReminderSchedulesByTenant(tenantId: number, status?: string): Promise<ReminderSchedule[]>;
-  getReminderSchedulesByAppointment(appointmentId: string, tenantId: number): Promise<ReminderSchedule[]>;
+  getReminderSchedulesByTenant(tenantId: string, status?: string): Promise<ReminderSchedule[]>;
+  getReminderSchedulesByAppointment(appointmentId: string, tenantId: string): Promise<ReminderSchedule[]>;
   getDueReminders(): Promise<ReminderSchedule[]>;
 
   // Appointment operations
@@ -277,7 +277,7 @@ export class PostgresDatabaseService implements DatabaseService {
   }
 
   async getReminderSchedulesByTenant(
-    tenantId: number,
+    tenantId: string,
     status?: string
   ): Promise<ReminderSchedule[]> {
     return this.withTenantClient(tenantId, async (client) => {
@@ -298,7 +298,7 @@ export class PostgresDatabaseService implements DatabaseService {
 
   async getReminderSchedulesByAppointment(
     appointmentId: string,
-    tenantId: number
+    tenantId: string
   ): Promise<ReminderSchedule[]> {
     return this.withTenantClient(tenantId, async (client) => {
       const result = await client.query(

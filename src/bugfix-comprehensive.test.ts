@@ -247,7 +247,7 @@ describe("DELETE routes return 404 for missing entities", () => {
     const fakeId = "00000000-0000-0000-0000-000000000099";
 
     const res = await client.query(
-      "DELETE FROM tenant_skills WHERE id = $1 AND tenant_id = $2 RETURNING id",
+      "DELETE FROM tenant_skills WHERE tenant_skill_id = $1 AND tenant_id = $2 RETURNING tenant_skill_id",
       [fakeId, tenantA]
     );
     expect(res.rows).toHaveLength(0);

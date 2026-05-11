@@ -25,9 +25,9 @@ import type {
   ChangeSource,
 } from '../types/versionHistory';
 
-/** Row shape returned by get_record_history() RPC (uses version_id, not id) */
+/** Row shape returned by get_record_history() RPC */
 interface RecordHistoryRow {
-  version_id: string;
+  record_version_id: string;
   version_number: number;
   data: Record<string, unknown>;
   changed_fields: string[] | null;
@@ -188,7 +188,7 @@ export function registerVersionHistoryRoutes(
       );
 
       const versions = versionsResult.rows.map(row => ({
-        id: row.version_id,
+        record_version_id: row.record_version_id,
         tenant_id: tenantId,
         table_name: table as VersionedTable,
         record_id: recordId,
@@ -612,7 +612,7 @@ export function registerVersionHistoryRoutes(
       params.push(limitNum, offsetNum);
       const result = await client.query<RecentChange>(
         `SELECT
-          rv.id,
+          rv.record_version_id,
           rv.tenant_id,
           rv.table_name,
           rv.record_id,

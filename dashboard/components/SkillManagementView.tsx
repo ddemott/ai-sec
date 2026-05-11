@@ -113,7 +113,7 @@ export default function SkillManagementView() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {skills.map(skill => (
-          <Card key={skill.id} className="group hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
+          <Card key={skill.tenant_skill_id} className="group hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -125,7 +125,7 @@ export default function SkillManagementView() {
                 </p>
               </div>
               <button 
-                onClick={() => handleDeleteSkill(skill.id)}
+                onClick={() => handleDeleteSkill(skill.tenant_skill_id)}
                 className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all"
               >
                 <Trash2 className="w-4 h-4" />

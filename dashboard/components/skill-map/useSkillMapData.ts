@@ -32,9 +32,9 @@ export type LinkingState = {
   fromType: NodeType
 } | null
 
-interface SkillMapEntity { id: string | number; name: string; type?: string }
-interface ServiceEntity { id: string | number; name: string }
-interface ServiceMappingRecord { service_id: string | number; employee_id?: string | number; resource_id?: string | number }
+interface SkillMapEntity { id: string; name: string; type?: string }
+interface ServiceEntity { id: string; name: string }
+interface ServiceMappingRecord { service_id: string; employee_id?: string; resource_id?: string }
 
 export function useSkillMapData(
   employees: SkillMapEntity[],

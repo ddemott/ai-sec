@@ -423,7 +423,7 @@ export const Api = {
     create: (tenantId: string | null, data: Partial<Service>) =>
       apiMutate<{ service: Service }>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-    update: (id: string | number, tenantId: string | null, data: Partial<Service>) =>
+    update: (id: string, tenantId: string | null, data: Partial<Service>) =>
       apiMutate<{ service: Service }>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
 
     delete: (id: string, tenantId: string | null) =>

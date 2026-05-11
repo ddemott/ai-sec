@@ -56,10 +56,10 @@ async function getScheduledEmployeeId(page: Page, dateStr: string): Promise<stri
     });
     if (!res.ok) return null;
     const rows = await res.json();
-    const row = Array.isArray(rows) ? rows.find((r: { is_off?: boolean; start_time?: string; end_time?: string; employee_id?: string | number }) =>
+    const row = Array.isArray(rows) ? rows.find((r: { is_off?: boolean; start_time?: string; end_time?: string; employee_id?: string }) =>
       !r.is_off && r.start_time && r.end_time && r.employee_id
     ) : null;
-    return row?.employee_id ? String(row.employee_id) : null;
+    return row?.employee_id ?? null;
   }, { dateStr });
 }
 

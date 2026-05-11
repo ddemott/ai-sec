@@ -3,7 +3,7 @@ export interface Appointment {
   tenant_id: string;
   resource_id: string;
   customer_id: string;
-  employee_id?: string | number | null;
+  employee_id?: string | null;
   start_time: string;
   end_time: string;
   status: 'scheduled' | 'completed' | 'canceled';
@@ -147,7 +147,7 @@ export interface BulkEffectiveShift extends EffectiveShift {
 }
 
 export interface Skill {
-  id: string;
+  tenant_skill_id: string;
   tenant_id: string;
   name: string;
   description?: string | null;
@@ -414,7 +414,7 @@ export type VersionedTable =
   | 'resources';
 
 export interface RecordVersion {
-  id: string;
+  record_version_id: string;
   tenant_id: string;
   table_name: VersionedTable;
   record_id: string;
@@ -475,7 +475,7 @@ export interface RecordRestorePreview {
 }
 
 export interface RecentChange {
-  id: string;
+  record_version_id: string;
   tenant_id: string;
   table_name: VersionedTable;
   record_id: string;

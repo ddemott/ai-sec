@@ -27,7 +27,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
 
   // Step 1 — Services
   const [editingService, setEditingService] = useState<ServiceForm | null>(null)
-  const [editingServiceId, setEditingServiceId] = useState<string | number | null>(null)
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
 
   // Step 2 — Resources
   const [editingResource, setEditingResource] = useState<ResourceForm | null>(null)
@@ -118,7 +118,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     finally { setSaving(false) }
   }
 
-  async function deleteService(id: string | number) {
+  async function deleteService(id: string) {
     if (!tenantId) return; setSaving(true); setError(null)
     try {
       const result = await Api.services.delete(String(id), tenantId)
@@ -177,7 +177,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     finally { setSaving(false) }
   }
 
-  async function deleteEmployee(id: string | number) {
+  async function deleteEmployee(id: string) {
     if (!tenantId) return; setSaving(true)
     try { await Api.employees.delete(String(id), tenantId); await refresh() }
     catch (err: unknown) { setError(err instanceof Error ? err.message : String(err) || 'Failed to delete employee') }
@@ -210,7 +210,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     })
   }
 
-  function updateShiftTime(shiftId: string | number, startTime: string, endTime: string) {
+  function updateShiftTime(shiftId: string, startTime: string, endTime: string) {
     setShifts(prev => prev.map(s =>
       String(s.id) === String(shiftId)
         ? { ...s, start_time: startTime, end_time: endTime }
@@ -219,7 +219,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
   }
 
   // --- Assignment toggle ---
-  async function toggleEmployeeAssignment(serviceId: string | number, employeeId: string) {
+  async function toggleEmployeeAssignment(serviceId: string, employeeId: string) {
     if (!tenantId) return
     const exists = serviceEmployeeMappings.some((m: WizardMapping) => m.service_id === serviceId && String(m.employee_id) === String(employeeId))
     setSaving(true); setError(null)
@@ -232,7 +232,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     finally { setSaving(false) }
   }
 
-  async function toggleResourceAssignment(serviceId: string | number, resourceId: string) {
+  async function toggleResourceAssignment(serviceId: string, resourceId: string) {
     if (!tenantId) return
     const exists = serviceResourceMappings.some((m: WizardMapping) => m.service_id === serviceId && m.resource_id === resourceId)
     setSaving(true); setError(null)

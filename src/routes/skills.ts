@@ -39,7 +39,7 @@ export function registerSkillRoutes(
       );
     });
 
-    logEvent(req, 'skill_created', { skillId: res.rows[0].id, name: body.name });
+    logEvent(req, 'skill_created', { skillId: res.rows[0].tenant_skill_id, name: body.name });
     return reply.send({ success: true, skill: res.rows[0] });
   }, 'Failed to create skill'));
 
@@ -49,7 +49,7 @@ export function registerSkillRoutes(
     if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM tenant_skills WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+      return client.query('DELETE FROM tenant_skills WHERE tenant_skill_id = $1 AND tenant_id = $2 RETURNING tenant_skill_id', [id, tenantId]);
     });
 
     if (res.rows.length === 0) {

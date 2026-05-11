@@ -30,7 +30,7 @@ import type { Appointment } from '../lib/types';
 interface AppointmentDetailPanelProps {
   customers: { id: string; name: string; phone: string; tenant_id?: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string }[];
   resources: { id: string; name: string }[];
-  employees: { id: string | number; name: string; type?: string }[];
+  employees: { id: string; name: string; type?: string }[];
   services: { id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };

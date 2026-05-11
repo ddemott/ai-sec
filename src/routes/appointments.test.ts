@@ -37,9 +37,13 @@ import type { FastifyInstance } from 'fastify';
 vi.mock('../services/syncOrchestrator', () => ({
     syncAppointmentToAll: vi.fn(),
 }));
+vi.mock('../services/reminders/scheduleForAppointment', () => ({
+    scheduleRemindersForAppointment: vi.fn(),
+}));
 
 import { registerAppointmentRoutes } from './appointments';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
+import { scheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
 import {
     buildRouteTestApp,
     type RouteTestAppHandle,
@@ -128,6 +132,20 @@ describe('POST /appointments/create', () => {
             TENANT_ID,
             APPOINTMENT_ID,
             'create',
+            expect.anything(),
+        );
+        // WHO: dashboard user creating a future appointment with a customer
+        //      who has a phone on file
+        // WHAT: route fires the reminder-scheduling helper after sync, with
+        //       the same tenant scope and the new appointment_id
+        // WHEN: immediately after the booking RPC succeeds, before responding
+        // WHERE: src/routes/appointments.ts POST /appointments/create
+        // WHY: a regression that drops this call would leave reminders
+        //      unscheduled — the worker would have nothing to deliver
+        expect(scheduleRemindersForAppointment).toHaveBeenCalledWith(
+            expect.any(Function),
+            TENANT_ID,
+            APPOINTMENT_ID,
             expect.anything(),
         );
     });
@@ -278,6 +296,7 @@ describe('POST /appointments/create', () => {
         expect(dataQueries).toHaveLength(1);
         expect(dataQueries[0].text).toContain('book_appointment_atomic');
         expect(syncAppointmentToAll).not.toHaveBeenCalled();
+        expect(scheduleRemindersForAppointment).not.toHaveBeenCalled();
     });
 
     it('SAD: overlap rejection returns 409 + conflict block with existing appointment details', async () => {

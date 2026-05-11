@@ -42,7 +42,7 @@ interface CalendarEvent {
   start: Date;
   end: Date;
   resource_id: string;
-  employee_id?: string | number | null;
+  employee_id?: string | null;
   customers?: Appointment['customers'];
   resources?: Appointment['resources'];
   status: string;

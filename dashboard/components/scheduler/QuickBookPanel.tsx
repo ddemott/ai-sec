@@ -12,9 +12,9 @@ import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 import { ConflictModal, type BookingConflict, type AvailableAlternative } from './ConflictModal';
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
-interface QuickBookEmployee { id: string | number; name: string; skills?: string[] }
+interface QuickBookEmployee { id: string; name: string; skills?: string[] }
 interface QuickBookResource { id: string; name: string }
-interface QuickBookService { id: string | number; name: string; duration_minutes?: number }
+interface QuickBookService { id: string; name: string; duration_minutes?: number }
 
 interface QuickBookPanelProps {
   isOpen: boolean;

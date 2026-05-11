@@ -71,7 +71,7 @@ describe('Version History Routes — Happy Paths', () => {
     queryResponses.push({
       rows: [
         {
-          version_id: VERSION_ID,
+          record_version_id: VERSION_ID,
           version_number: 2,
           data: { name: 'John Doe', phone: '555-1234' },
           changed_fields: ['phone'],
@@ -83,7 +83,7 @@ describe('Version History Routes — Happy Paths', () => {
           changed_at: '2026-04-09T10:00:00Z',
         },
         {
-          version_id: 'v1-id',
+          record_version_id: 'v1-id',
           version_number: 1,
           data: { name: 'John Doe', phone: '555-0000' },
           changed_fields: [],
@@ -108,13 +108,15 @@ describe('Version History Routes — Happy Paths', () => {
     expect(body.table_name).toBe('customers');
     expect(body.current_version).toBe(2);
     expect(body.versions).toHaveLength(2);
+    expect(body.versions[0].record_version_id).toBe(VERSION_ID);
+    expect(body.versions[1].record_version_id).toBe('v1-id');
     expect(body.is_deleted).toBe(false);
   });
 
   it('2. GET /records/:table/:recordId/version/:num returns specific version', async () => {
     queryResponses.push({
       rows: [{
-        id: VERSION_ID,
+        record_version_id: VERSION_ID,
         tenant_id: TENANT_ID,
         table_name: 'customers',
         record_id: RECORD_ID,
@@ -284,7 +286,7 @@ describe('Version History Routes — Happy Paths', () => {
     queryResponses.push({
       rows: [
         {
-          id: VERSION_ID,
+          record_version_id: VERSION_ID,
           tenant_id: TENANT_ID,
           table_name: 'customers',
           record_id: RECORD_ID,

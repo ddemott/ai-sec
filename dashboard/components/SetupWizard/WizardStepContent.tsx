@@ -25,10 +25,10 @@ interface WizardStepContentProps {
   // Step 1 — Services
   services: WizardService[]
   editingService: ServiceForm | null
-  editingServiceId: string | number | null
+  editingServiceId: string | null
   onAddService: () => void
   onEditService: (svc: WizardService) => void
-  onDeleteService: (id: string | number) => void
+  onDeleteService: (id: string) => void
   onSaveService: () => void
   onCancelEditService: () => void
   onChangeService: (form: ServiceForm | null) => void
@@ -50,7 +50,7 @@ interface WizardStepContentProps {
   editingEmployeeId: string | null
   onAddEmployee: () => void
   onEditEmployee: (emp: WizardEmployee) => void
-  onDeleteEmployee: (id: string | number) => void
+  onDeleteEmployee: (id: string) => void
   onSaveEmployee: () => void
   onCancelEditEmployee: () => void
   onChangeEmployee: (form: EmployeeForm | null) => void
@@ -61,14 +61,14 @@ interface WizardStepContentProps {
   selectedShiftEmployee: string | null
   onSelectShiftEmployee: (id: string | null) => void
   onToggleShift: (employeeId: string, dayOfWeek: number, startTime: string, endTime: string) => void
-  onUpdateShiftTime: (shiftId: string | number, startTime: string, endTime: string) => void
+  onUpdateShiftTime: (shiftId: string, startTime: string, endTime: string) => void
 
   // Step 5 — Assignments
   serviceEmployeeMappings: WizardMapping[]
   serviceResourceMappings: WizardMapping[]
   mappingsLoading: boolean
-  onToggleEmployeeAssignment: (serviceId: string | number, employeeId: string) => void
-  onToggleResourceAssignment: (serviceId: string | number, resourceId: string) => void
+  onToggleEmployeeAssignment: (serviceId: string, employeeId: string) => void
+  onToggleResourceAssignment: (serviceId: string, resourceId: string) => void
 
   // Step 6 — Coverage
   coverageData: CoverageItem[]

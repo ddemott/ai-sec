@@ -295,7 +295,7 @@ export function RecordHistoryModal({
               {/* Version timeline */}
               <div className="space-y-3">
                 {history.versions.map((version, idx) => (
-                  <div key={version.id} className="relative">
+                  <div key={version.record_version_id} className="relative">
                     {/* Timeline line */}
                     {idx < history.versions.length - 1 && (
                       <div className="absolute left-4 top-10 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700" />

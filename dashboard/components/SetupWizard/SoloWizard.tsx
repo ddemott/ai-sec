@@ -27,7 +27,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
 
   // Step 1 — Services (reuses team wizard)
   const [editingService, setEditingService] = useState<ServiceForm | null>(null)
-  const [editingServiceId, setEditingServiceId] = useState<string | number | null>(null)
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -143,7 +143,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
     }
   }
 
-  async function handleDeleteService(id: string | number) {
+  async function handleDeleteService(id: string) {
     if (!tenantId) return
     setSaving(true)
     setError(null)
@@ -182,7 +182,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
     })
   }
 
-  function handleUpdateTime(_shiftId: string | number, startTime: string, endTime: string) {
+  function handleUpdateTime(_shiftId: string, startTime: string, endTime: string) {
     // shiftId here is just the day_of_week string (we use it as a stable
     // local key). Pull the day off the existing row and update.
     setShifts(prev => prev.map(s =>

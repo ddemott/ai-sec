@@ -6,7 +6,7 @@ import type { Appointment } from './types'
 export interface AppointmentForm {
   customer_id: string;
   resource_id: string;
-  employee_id: string | number;
+  employee_id: string;
   description: string;
   start_time: string;
   end_time: string;

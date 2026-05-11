@@ -7,7 +7,7 @@ export interface SchedulerAppointment {
   tenant_id: string;
   resource_id: string;
   customer_id: string;
-  employee_id?: string | number | null;
+  employee_id?: string | null;
   start_time: string;
   end_time: string;
   description: string;
@@ -24,9 +24,9 @@ function toDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-interface SchedulerEmployee { id: string | number; name: string }
-interface SchedulerResource { id: string | number; name: string }
-interface SchedulerShift { employee_id?: string | number; start_time?: string; end_time?: string }
+interface SchedulerEmployee { id: string; name: string }
+interface SchedulerResource { id: string; name: string }
+interface SchedulerShift { employee_id?: string; start_time?: string; end_time?: string }
 
 export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);

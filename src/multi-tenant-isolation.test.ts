@@ -109,10 +109,10 @@ async function seedTenant(client: Client, label: string, businessType: string): 
   );
 
   const skillRes = await client.query(
-    `INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, $2) RETURNING id`,
+    `INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, $2) RETURNING tenant_skill_id`,
     [tenantId, `${label}-special-skill`]
   );
-  const skillId = skillRes.rows[0].id;
+  const skillId = skillRes.rows[0].tenant_skill_id;
 
   // Knowledge doc — search_tenant_docs RPC uses pgvector cosine similarity.
   // We seed with a zero-vector embedding stub so the RPC has something to
@@ -424,7 +424,7 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT name FROM tenant_skills WHERE id = $1', [B.skillId]);
+    const check = await setup.query('SELECT name FROM tenant_skills WHERE tenant_skill_id = $1', [B.skillId]);
     expect(check.rows[0]?.name).toBe('B-special-skill');
   });
 

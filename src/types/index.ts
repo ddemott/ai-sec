@@ -37,7 +37,7 @@ export interface ConsentRecord {
  * Tracks STOP/UNSUBSCRIBE requests for compliance.
  */
 export interface OptOutRecord {
-  id?: number;
+  id: number;
   tenantId: string;
   customerEmail?: string;
   customerPhone?: string;
@@ -57,8 +57,8 @@ export interface OptOutRecord {
  */
 export interface ReminderSchedule {
   id: number;
-  appointment_id: number;
-  tenant_id: number;
+  appointment_id: string;
+  tenant_id: string;
   customer_email: string;
   customer_phone?: string;
   reminder_type: 'confirmation' | '72h' | '24h' | '2h';
@@ -74,8 +74,8 @@ export interface ReminderSchedule {
  * Data for creating a new reminder schedule.
  */
 export interface ReminderData {
-  appointment_id: number;
-  tenant_id: number;
+  appointment_id: string;
+  tenant_id: string;
   customer_email: string;
   customer_phone?: string;
   reminder_type: 'confirmation' | '72h' | '24h' | '2h';

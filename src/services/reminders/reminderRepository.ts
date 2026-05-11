@@ -74,7 +74,7 @@ export class ReminderRepository {
   /**
    * Get all scheduled reminders for a tenant
    */
-  async getScheduledReminders(tenantId: number): Promise<ReminderSchedule[]> {
+  async getScheduledReminders(tenantId: string): Promise<ReminderSchedule[]> {
     return await this.db.getReminderSchedulesByTenant(tenantId, 'scheduled');
   }
 
@@ -91,7 +91,7 @@ export class ReminderRepository {
   async cancelAppointmentReminders(appointmentId: string, tenantId: string): Promise<void> {
     const reminders = await this.db.getReminderSchedulesByAppointment(
       appointmentId,
-      parseInt(tenantId, 10),
+      tenantId,
     );
     if (!reminders) return;
 

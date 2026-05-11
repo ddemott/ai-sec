@@ -26,23 +26,15 @@ export class ReminderService {
    * Schedule reminders for a new appointment
    */
   async scheduleAppointmentReminders(appointment: any): Promise<void> {
-    // Normalize appointment fields and ensure IDs are integers, camelCase for all fields
-    // Handle both camelCase (from services) and snake_case (from database) input
+    // Normalize appointment fields to camelCase. IDs are UUID strings
+    // (matches the appointments.id + tenants.id schema), so no integer
+    // coercion happens here — passing them through to the DB layer as-is.
     const normalizedAppointment = {
       ...appointment,
-      id: typeof appointment.id === 'string' ? parseInt(appointment.id, 10) : appointment.id,
-      tenantId:
-        typeof (appointment.tenantId || appointment.tenant_id) === 'string'
-          ? parseInt(appointment.tenantId || appointment.tenant_id, 10)
-          : appointment.tenantId || appointment.tenant_id,
-      serviceId:
-        typeof (appointment.serviceId || appointment.service_id) === 'string'
-          ? parseInt(appointment.serviceId || appointment.service_id, 10)
-          : appointment.serviceId || appointment.service_id,
-      staffId:
-        typeof (appointment.staffId || appointment.staff_id) === 'string'
-          ? parseInt(appointment.staffId || appointment.staff_id, 10)
-          : appointment.staffId || appointment.staff_id,
+      id: appointment.id,
+      tenantId: appointment.tenantId || appointment.tenant_id,
+      serviceId: appointment.serviceId || appointment.service_id,
+      staffId: appointment.staffId || appointment.staff_id,
       customerEmail: appointment.customerEmail || appointment.customer_email,
       customerPhone: appointment.customerPhone || appointment.customer_phone,
       customerName: appointment.customerName || appointment.customer_name,
@@ -108,7 +100,7 @@ export class ReminderService {
       }
 
       await this.db.createReminderSchedule({
-        appointment_id: parseInt(normalizedAppointment.id, 10),
+        appointment_id: normalizedAppointment.id,
         tenant_id: normalizedAppointment.tenantId,
         customer_email: normalizedAppointment.customerEmail,
         customer_phone: normalizedAppointment.customerPhone,
@@ -149,12 +141,7 @@ export class ReminderService {
         scheduledFor: reminder.scheduled_for,
       };
 
-      // Use integer IDs for appointment lookup
-      const appointmentId =
-        typeof normalizedReminder.appointmentId === 'string'
-          ? parseInt(normalizedReminder.appointmentId, 10)
-          : normalizedReminder.appointmentId;
-      const appointment = await this.db.getAppointmentById(appointmentId.toString());
+      const appointment = await this.db.getAppointmentById(normalizedReminder.appointmentId);
       if (!appointment) {
         await this.updateReminderStatus(reminderId, 'failed', 'Appointment not found');
         return;
@@ -220,9 +207,7 @@ export class ReminderService {
    * Cancel all reminders for an appointment
    */
   async cancelAppointmentReminders(appointmentId: string, tenantId: string): Promise<void> {
-    // Use db mock for cancellation and update status for each reminder
-    const intTenantId = typeof tenantId === 'string' ? parseInt(tenantId, 10) : tenantId;
-    const reminders = await this.db.getReminderSchedulesByAppointment(appointmentId, intTenantId);
+    const reminders = await this.db.getReminderSchedulesByAppointment(appointmentId, tenantId);
     if (reminders && reminders.length) {
       for (const reminder of reminders) {
         await this.db.updateReminderSchedule(reminder.id.toString(), { status: 'cancelled' });
@@ -239,8 +224,6 @@ export class ReminderService {
     tenantId: string,
     newDateTime: string,
   ): Promise<void> {
-    // Cancel existing reminders using db mock
-    const __intTenantId = typeof tenantId === 'string' ? parseInt(tenantId, 10) : tenantId;
     await this.cancelAppointmentReminders(appointmentId, tenantId);
 
     // Get the appointment using db mock
@@ -259,10 +242,8 @@ export class ReminderService {
   /**
    * Get all scheduled reminders for a tenant
    */
-  async getScheduledReminders(tenantId: number): Promise<ReminderSchedule[]> {
-    // Use db mock for scheduled reminders
-    const intTenantId = typeof tenantId === 'string' ? parseInt(tenantId, 10) : tenantId;
-    return this.db.getReminderSchedulesByTenant(intTenantId, 'scheduled');
+  async getScheduledReminders(tenantId: string): Promise<ReminderSchedule[]> {
+    return this.db.getReminderSchedulesByTenant(tenantId, 'scheduled');
   }
 
   /**

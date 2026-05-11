@@ -29,7 +29,7 @@ export type VersionedTable =
   | 'resources';
 
 export interface RecordVersion {
-  id: string;
+  record_version_id: string;
   tenant_id: string;
   table_name: VersionedTable;
   record_id: string;
@@ -128,7 +128,7 @@ export interface RecordRestorePreview {
 }
 
 export interface RecentChange {
-  id: string;
+  record_version_id: string;
   tenant_id: string;
   table_name: VersionedTable;
   record_id: string;

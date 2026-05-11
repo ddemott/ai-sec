@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-11 (E2E coverage sprint: closed Cancel+restore P1, real-time scheduler P1, mobile responsiveness, tenant delete cascade + surfaced/fixed schema bug, version-history restore; stabilized two latent E2E flakes. 7 commits, backend 1,770→1,775, dashboard 617→620, E2E 55→69.)
+**Last updated:** 2026-05-11 (E2E coverage sprint continued: closed P2 "Reminder scheduled on appointment create" + surfaced/fixed second schema bug today — `ReminderSchedule.appointment_id`/`tenant_id` were typed `number` but DB columns are UUID; mocked tests hid the gap. Backend 1,775→1,781, E2E 69→71.)
 
 ---
 
@@ -21,6 +21,25 @@ Code shipped to `main` and merged on origin, but not yet exercised in production
 | **NEEDS-REFACTORING #14 (`pw.txt`)** | IN FLIGHT (decision pending) | Gitignored, never committed; could be a real password or a deliberate scratch note. | User confirms whether to keep or delete. |
 | **Role gating + Logins UI browser-verify** | IN FLIGHT (validation pending) | Unit tests pin both contracts (4 layout + 2 auth backend + 13 user-route + 5 TeamAccessView). Real browser session has not exercised either yet. | `npm start` and walk the test plan in `docs/TODO.md` (Browser-verify entry). |
 | **`hold-tenant-config` branch** | superseded, can be deleted | Original 2026-05-01 commit (`e92b3bf`) found unmerged 2026-05-03 during voice-fallback validation. Work redone on main 2026-05-03 as commit `2119451`; nothing on the branch is uniquely valuable now. | User can `git branch -D hold-tenant-config` and `git push origin --delete hold-tenant-config` whenever convenient. |
+
+### May 11 (continued): Reminder-on-create wired + UUID schema bug fixed (backend 1,775 → 1,781, E2E 69 → 71)
+
+Closes the TODO P2 "Reminder scheduled on appointment create" — no production caller had ever wired `scheduleAppointmentReminders` into the appointment-create route despite the service + worker + 24 unit tests + `reminder_schedules` migration all being in place. Picked under "wire + test" disposition (not delete) per the in-flight scope decision.
+
+Surfaced a second schema-bug-hidden-by-mocks: the `ReminderSchedule` and `ReminderData` types in `src/types/index.ts:58-84` (and a duplicate in `src/services/reminders/types.ts`) declared `appointment_id: number` and `tenant_id: number`, but the DB migration (`20260409200000_reminder_and_consent_tables.sql:22-23`) declares both as `UUID NOT NULL REFERENCES …`. Three service files (`reminders/index.ts`, `reminderRepository.ts`, `reminderScheduler.ts`) carried seven `parseInt(uuid, 10)` calls that would have produced `NaN` and crashed every INSERT against real Postgres. The 24 pre-existing unit tests passed because `mockDb.createReminderSchedule` is mocked — exact match for the Build Principle "test it or delete it" failure mode, and the same shape as last week's tenant-FK-cascade find (mock proves the mock works, not the integration).
+
+Fix shape:
+- **Types**: `appointment_id` / `tenant_id` flipped from `number` → `string` in both `src/types/index.ts` and `src/services/reminders/types.ts`. `DatabaseService` interface signatures for `getReminderSchedulesByTenant` / `getReminderSchedulesByAppointment` (and the `PostgresDatabaseService` impl) updated correspondingly. The pre-existing 24 reminder unit tests pass unchanged — the integer IDs they pass in are now structurally wrong, but the mock layer doesn't enforce it.
+- **`parseInt` strips**: 7 calls removed across `reminders/index.ts` (5), `reminderRepository.ts` (1), `reminderScheduler.ts` (1). The `.toString()` calls in `reminderProcessor.ts` are kept — they're no-ops on strings, harmless, removing them is unrequested cleanup.
+- **New focused helper** `src/services/reminders/scheduleForAppointment.ts` (75 lines): takes `withTenantClient + tenantId + appointmentId + logger`, does the customer JOIN + 4 INSERTs in one tenant-scoped transaction. Fire-and-forget — all errors swallowed and logged. Skips silently on past/unparseable start_time or vanished appointment row. Why not reuse `ReminderService.scheduleAppointmentReminders`: that class pulls in `CommunicationService` + `ConsentService` + `TenantConfigService` just to write 4 rows; the heavyweight chain is for the send path, not the schedule path.
+- **Wire** in `src/routes/appointments.ts`: 1-line call after `syncAppointmentToAll`, same fire-and-forget shape (logger-only error path; the booking already committed).
+
+Tests added:
+- 6 helper unit tests in `src/services/reminders/scheduleForAppointment.test.ts` (HAPPY: 4-row offsets + customer info; HAPPY: phone-only customer still writes 4 rows; SAD: past appointment → 0 rows; SAD: vanished appointment → 0 rows; SAD: unparseable start_time → 0 rows; SAD: DB error swallowed + logged, never bubbles).
+- 2 assertions on `src/routes/appointments.test.ts` HAPPY (wire invoked with correct args) + SAD non-overlap rejection (wire NOT invoked when booking fails).
+- 2 new E2E in `dashboard/e2e/reminder-on-create.spec.ts` (HAPPY: 4 rows produced for a future appointment with correct `scheduled_for` math, phone-only customer leaves email NULL; HAPPY: customer with both email + phone populates both columns).
+
+After-state: backend 1,775 → 1,781, dashboard 620 (unchanged), agent 85 (unchanged), E2E 69 → 71 + 7 skipped. Zero TS errors across backend / dashboard / agent. Worker delivery (send path) deliberately out of scope — the ticket's "in dev, no-ops without crashing" parenthetical reflects that the worker has its own consent gate + provider fallback story that doesn't need separate E2E coverage at this layer.
 
 ### May 10-11: E2E coverage sprint — 5 P1/P2 items closed, 1 real data-integrity bug surfaced + fixed, 2 latent E2E flakes stabilized (backend 1,770 → 1,775, dashboard 617 → 620, E2E 55 → 69)
 
@@ -166,9 +185,9 @@ A focused day on durable cleanups. Each item below is a separate commit; the ver
 See `docs/TODO.md` for the unified task list.
 
 ### Test Count (verified 2026-05-11 against real Postgres + dashboard)
-- **1,775 backend tests + 620 dashboard tests = 2,395 passing**, 0 failures, 0 skips
+- **1,781 backend tests + 620 dashboard tests = 2,401 passing**, 0 failures, 0 skips
 - 85 agent tests (`cd agent && npm test`)
-- 69 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
+- 71 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard + agent)
 - CI now provisions Postgres 16 + applies migrations, so DB-level tests
@@ -191,8 +210,8 @@ See `docs/TODO.md` for the unified task list.
 | **QA test suite** | Working | `scripts/qa-live-test.py` — 29 tool calls, 88 assertions against `/agent-tools/*` Fastify routes |
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
-| **Tests** | 1,775 backend + 620 dashboard + 85 agent = 2,480 passing + 88 QA assertions | All green (verified 2026-05-11 against real DB + dashboard), 0 skips, zero TS errors |
-| **Playwright e2e** | 69 passed / 7 skipped | Against live dashboard |
+| **Tests** | 1,781 backend + 620 dashboard + 85 agent = 2,486 passing + 88 QA assertions | All green (verified 2026-05-11 against real DB + dashboard), 0 skips, zero TS errors |
+| **Playwright e2e** | 71 passed / 7 skipped | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |
