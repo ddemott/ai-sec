@@ -26,12 +26,16 @@ function buildTestApp() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   })
 
+  // Point at the same test_db the migrations + seeds populate
+  // (matches src/test-utils.ts ROOT_DB_URL). Hardcoding `database: 'postgres'`
+  // here used to silently pass locally because the developer's `postgres`
+  // database happened to have leftover tables from past runs — but CI's
+  // fresh Postgres instance has the schema only in `test_db`, so the
+  // hardcoded value produced "relation does not exist" → 500 on every
+  // `/tenants` and `/templates` request. Found 2026-05-11.
   const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'postgres',
-    password: 'postgres',
-    port: 5433,
+    connectionString:
+      process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/test_db',
   })
 
   app.get('/health', async () => ({ status: 'ok' }))

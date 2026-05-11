@@ -59,6 +59,16 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
+      - name: Seed database
+        # `src/index.test.ts` asserts `/tenants` and `/templates` return
+        # the seeded rows. Without this step CI's fresh test_db has only
+        # the schema (from migrations) but zero rows — both tests then
+        # see an empty array and fail length > 0. Re-runnable thanks
+        # to `ON CONFLICT DO NOTHING / DO UPDATE` inside seed.sql.
+        run: bash scripts/seed-db.sh
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
+
       - name: TypeScript check
         run: npx tsc --noEmit
 
