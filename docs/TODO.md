@@ -113,6 +113,43 @@ Slices 1–3 build the human-facing surface now. AI prevention items below are T
 - [ ] **AI prevention — pre-flight tool fallback (escalation, only if needed).** If beta data shows the agent skips the availability check >5% of the time despite the prompt rule, ship `/agent-tools/propose-times` returning 3-5 conflict-free 15-minute slots given a window. Server-enforced — agent reads from a list rather than picking arbitrary times. Don't build speculatively; only escalate if prompt-only proves unreliable.
 - [x] ~~**AI prevention — E2E coverage.**~~ Closed 2026-05-09 alongside the prompt-only enforcement above (same scope; the four scenarios are pinned by the four CONVERSATION-SHAPE prompt-content tests). Live conversational behavior is validated end-to-end via `scripts/qa-live-test.py` (29 tool calls / 88 assertions) once Telnyx unblocks; an LLM-in-the-loop harness was deliberately deferred — non-deterministic, costs OpenAI tokens per run, and the "test or delete" Build Principle steers us away from coverage we can't validate against a real surface.
 
+### Database — PK naming convention conversion (in flight, 2026-05-11)
+
+Background: the project's ID convention was ratified in CLAUDE.md on 2026-05-11. PK column is always `<table_singular>_id`, never bare `id`. The win is JOIN symmetry — `appointments.customer_id = customers.customer_id` lets queries use `USING (customer_id)`, and `SELECT *` across joined tables produces unambiguous column names with no aliasing. Existing schema has asymmetric naming (`customers.id` PK but `appointments.customer_id` FK); each table rename closes one asymmetry. Pilots done — pattern is locked in (DROP-then-CREATE for RPCs/views whose return shape includes the column; ALTER TABLE for plain renames; sweep route SQL + dashboard renders + test fixtures + all test mocks).
+
+Pilots done:
+
+- [x] ~~**Pilot 1 — `record_versions.id` → `record_version_id`.**~~ Closed 2026-05-11 (commit `40c57d5`). Migration `20260512000000`. 2 RPCs (`create_record_version`, `get_record_history`) + 1 view (`recent_record_changes`) recreated. Backend 1,781 / dashboard 620 / E2E 71 all green. ~30 min wall-clock.
+- [x] ~~**Pilot 2 — `tenant_skills.id` → `tenant_skill_id`.**~~ Closed 2026-05-11 (commit `40c57d5`). Migration `20260512000001`. No RPCs/views referenced the column — plain ALTER TABLE. ~20 min wall-clock. Caveat: full sweep caught a real-DB test (`bugfix-comprehensive.test.ts`) that targeted runs missed; full backend suite is load-bearing for these renames.
+
+Remaining (ordered cheapest → most blast radius):
+
+**Audit/event tables (SERIAL PKs) — small scope each, ~20 min**
+- [ ] **`reminder_schedules.id` → `reminder_schedule_id`.** Only the worker (`src/workers/reminderScheduler.ts`) + the helper shipped today (`src/services/reminders/scheduleForAppointment.ts`) consume it. SERIAL-PK pilot — exercises the convention against an integer PK for the first time.
+- [ ] **`consent_records.id` → `consent_record_id`.** Only the consent service.
+- [ ] **`opt_out_records.id` → `opt_out_record_id`.** Only the consent service.
+
+**Domain tables (UUID PKs) — medium scope, ~30 min to ~2h each**
+- [ ] **`voice_sessions.id` → `voice_session_id`.** Terminal in the schema; voice agent reads it. ~45 min.
+- [ ] **`tenant_calendar_settings.id` / `tenant_docs.id` / `tenant_integration_settings.id`.** Internal config tables, no inbound FKs. ~30 min each.
+- [ ] **`users.id` → `user_id`.** Touches auth + JWT payload + every authenticated request. ~1h.
+- [ ] **`services.id` → `service_id`.** 2 inbound FKs (`appointments`, `service_employee/_resource`). Touches booking RPCs. ~1-2h.
+- [ ] **`resources.id` → `resource_id`.** 3 inbound FKs (`appointments`, `soft_reservations`, `service_resource`). Touches booking RPCs (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`). ~1-2h. RPC bodies already extracted + rename-applied to `/tmp/rpc_*_new.sql` before the convo pivoted — restartable from there.
+- [ ] **`employees.id` → `employee_id`.** 3 inbound FKs (`appointments`, `employee_schedule`, `service_employee`). Touches booking RPCs + scheduler heavily. ~1-2h.
+- [ ] **`employee_schedule.id` → `employee_schedule_id`.** Read by shift-coverage RPCs. ~30 min.
+
+**High-blast-radius — save for last, each ~2-4h**
+- [ ] **`appointments.id` → `appointment_id`.** Referenced from reminder_schedules, calendar sync, all 4 CRM syncs, sync orchestrator, voice agent. Many SQL JOINs. ~2-3h.
+- [ ] **`customers.id` → `customer_id`.** Second-most-referenced; voice agent reads heavily. ~2-3h.
+- [ ] **`tenants.id` → `tenant_id`.** **20+ inbound FKs** (every tenant-scoped table). The biggest single migration but also the biggest JOIN-symmetry win — after this, every query joining anything to its tenant can use `USING (tenant_id)`. ~3-4h.
+
+### CI rot prevention (next, after the PK conversion above)
+
+Three CI failures on 2026-05-11 surfaced four pre-existing CI-rot bugs that had been silently waiting for someone to push hard enough to trigger them (dashboard `pg`/`bcrypt` missing, shallow-clone strips drift-detector SHAs, deleted `/supabase/functions` dir still listed, `index.test.ts` hardcoded `database: 'postgres'` not `DATABASE_URL`, CI never ran `seed-db.sh`). All fixed in commits `66a6c0f` + `408f152`. To stop new rot from accumulating:
+
+- [ ] **CI green as a hard commit gate.** Add a pre-push hook (or settle for discipline) that refuses to push when CI on the last commit isn't green. The drift detector + CI build is what actually proves the repo is healthy for the next developer (or the same developer on a different machine). Today's pattern of "tests green locally → push → CI red" wastes a CI run and burns goodwill in code review. Implementation options: `.husky/pre-push` hook calling `gh run list --limit 1` and refusing on non-success; or a stricter pre-commit hook that requires the local environment match CI's freshness (e.g. forces `npm ci` + `tsc` + tests before allowing the commit).
+- [ ] **Periodic "fresh clone" rehearsal.** Once a week (or before any branch cut), `git clone` the repo into a new directory, run `npm run bootstrap`, run the full test sweep. If it doesn't work end-to-end from a cold state, that's CI rot in waiting — fix it before it bites a real PR. The four bugs surfaced 2026-05-11 had all been latent for days-to-weeks; a fresh-clone rehearsal would have caught them immediately. Consider scripting this as `scripts/fresh-clone-smoke.sh` and running it from cron.
+
 ### E2E coverage gaps surfaced 2026-05-08 (deep-dive analysis)
 
 After shipping slices 1-3 (37→42 E2E tests passing), a coverage analysis identified concrete gaps in the launch-readiness surface. Tier P0 items closed (multi-tenant isolation E2E, 15-min form-level rejection E2E, two pre-existing flakes fixed); P1/P2 below remain pickable.
