@@ -232,7 +232,7 @@ export class PostgresDatabaseService implements DatabaseService {
   async getReminderSchedule(id: string): Promise<ReminderSchedule | null> {
     return this.withClient(async (client) => {
       const result = await client.query(
-        'SELECT * FROM reminder_schedules WHERE id = $1',
+        'SELECT * FROM reminder_schedules WHERE reminder_schedule_id = $1',
         [id]
       );
       return result.rows[0] || null;
@@ -269,7 +269,7 @@ export class PostgresDatabaseService implements DatabaseService {
 
     return this.withClient(async (client) => {
       const result = await client.query(
-        `UPDATE reminder_schedules SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+        `UPDATE reminder_schedules SET ${updates.join(', ')} WHERE reminder_schedule_id = $${paramIndex} RETURNING *`,
         values
       );
       return result.rows[0] || null;

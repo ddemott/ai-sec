@@ -1,5 +1,5 @@
 export interface ReminderSchedule {
-  id: number;
+  reminder_schedule_id: number;
   appointment_id: string;
   tenant_id: string;
   customer_email: string;

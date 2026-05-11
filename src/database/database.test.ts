@@ -71,7 +71,7 @@ const sampleReminderData: ReminderData = {
 };
 
 const sampleReminderSchedule: ReminderSchedule = {
-  id: 1,
+  reminder_schedule_id: 1,
   appointment_id: 1001,
   tenant_id: 1,
   customer_email: 'customer@example.com',
@@ -150,7 +150,7 @@ describe('PostgresDatabaseService', () => {
 
         expect(result).toEqual(sampleReminderSchedule);
         expect(mockClient.query).toHaveBeenCalledWith(
-          'SELECT * FROM reminder_schedules WHERE id = $1',
+          'SELECT * FROM reminder_schedules WHERE reminder_schedule_id = $1',
           ['1']
         );
       });
@@ -187,7 +187,7 @@ describe('PostgresDatabaseService', () => {
 
         const reminders = [
           sampleReminderSchedule,
-          { ...sampleReminderSchedule, id: 2, reminder_type: '2h' },
+          { ...sampleReminderSchedule, reminder_schedule_id: 2, reminder_type: '2h' },
         ];
         const mockClient = createMockClient([
           { rows: [] }, // set_tenant_context

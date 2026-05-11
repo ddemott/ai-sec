@@ -210,7 +210,7 @@ export class ReminderService {
     const reminders = await this.db.getReminderSchedulesByAppointment(appointmentId, tenantId);
     if (reminders && reminders.length) {
       for (const reminder of reminders) {
-        await this.db.updateReminderSchedule(reminder.id.toString(), { status: 'cancelled' });
+        await this.db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), { status: 'cancelled' });
       }
     }
     return;

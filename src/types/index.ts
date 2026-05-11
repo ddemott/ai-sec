@@ -56,7 +56,7 @@ export interface OptOutRecord {
  * Used by ReminderService to track when reminders should be sent.
  */
 export interface ReminderSchedule {
-  id: number;
+  reminder_schedule_id: number;
   appointment_id: string;
   tenant_id: string;
   customer_email: string;

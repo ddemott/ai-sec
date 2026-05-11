@@ -40,7 +40,7 @@ const createMockConfigService = (): TenantConfigService => ({
 
 const createMockDb = (): DatabaseService => ({
   createReminderSchedule: vi.fn().mockImplementation((data) =>
-    Promise.resolve({ id: 1, ...data, status: 'scheduled' })
+    Promise.resolve({ reminder_schedule_id: 1, ...data, status: 'scheduled' })
   ),
   getReminderSchedule: vi.fn(),
   updateReminderSchedule: vi.fn().mockResolvedValue({}),
@@ -178,7 +178,7 @@ describe('ReminderService', () => {
     describe('processReminder', () => {
       it('processes scheduled reminder successfully', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',
@@ -212,7 +212,7 @@ describe('ReminderService', () => {
 
       it('skips already sent reminders', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',
@@ -237,7 +237,7 @@ describe('ReminderService', () => {
     describe('triggerReminder', () => {
       it('manually triggers a scheduled reminder', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',
@@ -267,9 +267,9 @@ describe('ReminderService', () => {
     describe('cancelAppointmentReminders', () => {
       it('cancels all reminders for an appointment', async () => {
         const mockReminders: ReminderSchedule[] = [
-          { id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '72h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
-          { id: 2, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
-          { id: 3, appointment_id: 123, tenant_id: 1, reminder_type: '2h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
+          { reminder_schedule_id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '72h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
+          { reminder_schedule_id: 2, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
+          { reminder_schedule_id: 3, appointment_id: 123, tenant_id: 1, reminder_type: '2h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
         ];
 
         vi.mocked(mockDb.getReminderSchedulesByAppointment).mockResolvedValue(mockReminders);
@@ -290,7 +290,7 @@ describe('ReminderService', () => {
     describe('rescheduleAppointmentReminders', () => {
       it('cancels old and creates new reminders', async () => {
         const oldReminders: ReminderSchedule[] = [
-          { id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
+          { reminder_schedule_id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'test@test.com', scheduled_for: '' },
         ];
 
         vi.mocked(mockDb.getReminderSchedulesByAppointment).mockResolvedValue(oldReminders);
@@ -319,8 +319,8 @@ describe('ReminderService', () => {
     describe('getScheduledReminders', () => {
       it('returns all scheduled reminders for tenant', async () => {
         const mockReminders: ReminderSchedule[] = [
-          { id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'a@test.com', scheduled_for: '' },
-          { id: 2, appointment_id: 456, tenant_id: 1, reminder_type: '2h', status: 'scheduled', customer_email: 'b@test.com', scheduled_for: '' },
+          { reminder_schedule_id: 1, appointment_id: 123, tenant_id: 1, reminder_type: '24h', status: 'scheduled', customer_email: 'a@test.com', scheduled_for: '' },
+          { reminder_schedule_id: 2, appointment_id: 456, tenant_id: 1, reminder_type: '2h', status: 'scheduled', customer_email: 'b@test.com', scheduled_for: '' },
         ];
 
         vi.mocked(mockDb.getReminderSchedulesByTenant).mockResolvedValue(mockReminders);
@@ -416,7 +416,7 @@ describe('ReminderService', () => {
     describe('processReminder - Appointment Cancelled', () => {
       it('cancels reminder if appointment was cancelled', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',
@@ -450,7 +450,7 @@ describe('ReminderService', () => {
     describe('processReminder - Appointment Already Passed', () => {
       it('cancels reminder if appointment time already passed', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',
@@ -487,7 +487,7 @@ describe('ReminderService', () => {
     describe('processReminder - No Consent', () => {
       it('cancels reminder if customer revoked consent', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',
@@ -534,7 +534,7 @@ describe('ReminderService', () => {
     describe('triggerReminder - Already Processed', () => {
       it('returns false for non-scheduled reminders', async () => {
         const mockReminder: ReminderSchedule = {
-          id: 1,
+          reminder_schedule_id: 1,
           appointment_id: 123,
           tenant_id: 1,
           customer_email: 'customer@example.com',

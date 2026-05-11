@@ -68,13 +68,13 @@ async function processBatch(): Promise<number> {
     let processed = 0;
     for (const reminder of dueReminders.slice(0, MAX_BATCH_SIZE)) {
       try {
-        await reminderService.processReminder(reminder.id.toString());
+        await reminderService.processReminder(reminder.reminder_schedule_id.toString());
         processed++;
       } catch (error) {
-        console.error(`❌ Failed to process reminder ${reminder.id}:`, error);
+        console.error(`❌ Failed to process reminder ${reminder.reminder_schedule_id}:`, error);
         // Mark as failed so we don't retry indefinitely
         try {
-          await db.updateReminderSchedule(reminder.id.toString(), {
+          await db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
             status: 'failed',
             error: error instanceof Error ? error.message : 'Unknown error',
           });

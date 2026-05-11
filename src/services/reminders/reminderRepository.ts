@@ -9,13 +9,13 @@ export class ReminderRepository {
    * Save a reminder schedule to the database
    */
   async saveReminder(reminderData: ReminderData): Promise<string> {
-    const reminder: Omit<ReminderSchedule, 'id'> = {
+    const reminder: Omit<ReminderSchedule, 'reminder_schedule_id'> = {
       ...reminderData,
       status: 'scheduled',
     };
 
     const savedReminder = await this.db.createReminderSchedule(reminder);
-    return savedReminder.id.toString();
+    return savedReminder.reminder_schedule_id.toString();
   }
 
   /**
@@ -97,7 +97,7 @@ export class ReminderRepository {
 
     for (const reminder of reminders) {
       if (reminder.status === 'scheduled') {
-        await this.db.updateReminderSchedule(reminder.id.toString(), { status: 'cancelled' });
+        await this.db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), { status: 'cancelled' });
       }
     }
   }
