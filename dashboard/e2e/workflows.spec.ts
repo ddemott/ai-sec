@@ -101,8 +101,15 @@ test('smoke: admin can load dashboard and view the schedule', async ({ page }) =
   await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
   await expect(page.locator('[data-testid="scheduler-view"]')).toBeVisible({ timeout: 10000 });
 
-  // Seeded appointments visible somewhere on the page (a customer name from the seed)
-  await expect(page.locator('text=/James Kowalski|Sarah Mitchell|Mike Anderson/i').first()).toBeVisible({ timeout: 10000 });
+  // SchedulerView's date nav must also render — proves the sub-components
+  // mounted, not just the outer container. Previously this test asserted
+  // on seeded customer names being visible in the default calendar view,
+  // but that's date-dependent: the default view shows TODAY, and weekend
+  // runs (DynaTire seeds Mon-Fri only) had no appointments → no names
+  // rendered → false-failure on Sundays. The date-display testid is
+  // unconditional and still proves the build loaded cleanly, which is
+  // this test's WHY ("catches build/server drift").
+  await expect(page.locator('[data-testid="scheduler-date-display"]')).toBeVisible({ timeout: 10000 });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
