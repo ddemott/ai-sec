@@ -123,12 +123,12 @@ export class ConsentService {
   /**
    * Record an opt-out request (STOP, UNSUBSCRIBE, etc.)
    */
-  async recordOptOut(optOutData: Omit<OptOutRecord, 'id'>): Promise<OptOutRecord> {
+  async recordOptOut(optOutData: Omit<OptOutRecord, 'optOutRecordId'>): Promise<OptOutRecord> {
     if (!optOutData.tenantId) {
       throw new Error('tenantId is required');
     }
 
-    const camelCaseData: Omit<OptOutRecord, 'id'> = {
+    const camelCaseData: Omit<OptOutRecord, 'optOutRecordId'> = {
       tenantId: optOutData.tenantId,
       customerEmail: optOutData.customerEmail ?? (optOutData as any).customer_email,
       customerPhone: optOutData.customerPhone ?? (optOutData as any).customer_phone,

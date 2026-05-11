@@ -37,7 +37,7 @@ export interface ConsentRecord {
  * Tracks STOP/UNSUBSCRIBE requests for compliance.
  */
 export interface OptOutRecord {
-  id: number;
+  optOutRecordId: number;
   tenantId: string;
   customerEmail?: string;
   customerPhone?: string;

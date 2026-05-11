@@ -164,7 +164,7 @@ export interface DatabaseService {
   updateConsentRecord(id: number, data: Partial<ConsentRecord>): Promise<ConsentRecord | null>;
 
   // Opt-out operations
-  createOptOutRecord(data: Omit<OptOutRecord, 'id'>): Promise<OptOutRecord>;
+  createOptOutRecord(data: Omit<OptOutRecord, 'optOutRecordId'>): Promise<OptOutRecord>;
   getOptOutRecordsByTenant(tenantId: string): Promise<OptOutRecord[]>;
 }
 
@@ -459,7 +459,7 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Opt-Out Operations ─────────────────────────────────────────────
 
-  async createOptOutRecord(data: Omit<OptOutRecord, 'id'>): Promise<OptOutRecord> {
+  async createOptOutRecord(data: Omit<OptOutRecord, 'optOutRecordId'>): Promise<OptOutRecord> {
     return this.withTenantClient(data.tenantId, async (client) => {
       const result = await client.query(
         `INSERT INTO opt_out_records
@@ -467,7 +467,7 @@ export class PostgresDatabaseService implements DatabaseService {
           opt_out_method, original_consent_id, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING
-           id,
+           opt_out_record_id as "optOutRecordId",
            tenant_id as "tenantId",
            customer_email as "customerEmail",
            customer_phone as "customerPhone",
@@ -496,7 +496,7 @@ export class PostgresDatabaseService implements DatabaseService {
     return this.withTenantClient(tenantId, async (client) => {
       const result = await client.query(
         `SELECT
-           id,
+           opt_out_record_id as "optOutRecordId",
            tenant_id as "tenantId",
            customer_email as "customerEmail",
            customer_phone as "customerPhone",
