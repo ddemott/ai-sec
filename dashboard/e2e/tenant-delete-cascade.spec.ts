@@ -99,7 +99,7 @@ async function countTenantRows(tenantId: string): Promise<Record<string, number>
 }
 
 async function tenantExists(tenantId: string): Promise<boolean> {
-  const r = await pool.query('SELECT 1 FROM tenants WHERE id = $1', [tenantId]);
+  const r = await pool.query('SELECT 1 FROM tenants WHERE tenant_id = $1', [tenantId]);
   return r.rowCount === 1;
 }
 
