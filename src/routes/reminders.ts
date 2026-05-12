@@ -197,7 +197,7 @@ export function registerReminderRoutes(
       await client.query(
         `UPDATE reminder_schedules
          SET status = 'cancelled', updated_at = NOW()
-         WHERE id = $1`,
+         WHERE reminder_schedule_id = $1`,
         [id]
       );
 

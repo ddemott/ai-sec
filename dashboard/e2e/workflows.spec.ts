@@ -201,7 +201,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     await page.waitForTimeout(2500);
 
     const dbRes = await pool.query(
-      `SELECT id FROM appointments
+      `SELECT appointment_id AS id FROM appointments
         WHERE tenant_id = $1
           AND created_at >= $2
           AND is_deleted = false
@@ -213,7 +213,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     createdId = dbRes.rows[0].id;
   } finally {
     if (createdId) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [createdId]);
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [createdId]);
     }
   }
 });
@@ -339,7 +339,7 @@ test('quick book real-time: new appointment appears in the scheduler grid withou
     expect(page.url(), 'URL must not change between booking submit and grid render').toBe(urlBeforeBooking);
   } finally {
     if (createdId) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [createdId]);
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [createdId]);
     }
   }
 });
@@ -379,15 +379,15 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     const shiftDate = future.toISOString().slice(0, 10);
 
     const customer = await pool.query(
-      `SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1`,
+      `SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1`,
       [DYNATIRE_ID],
     );
     const resource = await pool.query(
-      `SELECT id FROM resources WHERE tenant_id = $1 LIMIT 1`,
+      `SELECT resource_id AS id FROM resources WHERE tenant_id = $1 LIMIT 1`,
       [DYNATIRE_ID],
     );
     const employee = await pool.query(
-      `SELECT id FROM employees WHERE tenant_id = $1 AND name = 'Mike Rivera' LIMIT 1`,
+      `SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = 'Mike Rivera' LIMIT 1`,
       [DYNATIRE_ID],
     );
     expect(employee.rowCount, 'Mike Rivera must exist in DynaTire seed').toBe(1);
@@ -406,7 +406,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
 
     const insert = await pool.query(
       `INSERT INTO appointments (tenant_id, customer_id, resource_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id AS id`,
       [DYNATIRE_ID, customer.rows[0].id, resource.rows[0].id, employee.rows[0].id, startIso, endIso, description],
     );
     apptId = insert.rows[0].id;
@@ -449,7 +449,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     // Verify DB reflects the *valid* update (sad-path was rejected)
     const after = await pool.query(
       `SELECT EXTRACT(EPOCH FROM start_time) AS s, EXTRACT(EPOCH FROM end_time) AS e
-         FROM appointments WHERE id = $1`,
+         FROM appointments WHERE appointment_id = $1`,
       [apptId],
     );
     expect(after.rowCount).toBe(1);
@@ -457,7 +457,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     expect(Number(after.rows[0].e) * 1000).toBe(newEnd.getTime());
   } finally {
     if (apptId) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
     }
     if (shiftId) {
       await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [shiftId]);
@@ -504,14 +504,14 @@ test('create customer: API insert renders in CRM list and is queryable', async (
 
     // DB verification
     const db = await pool.query(
-      `SELECT phone FROM customers WHERE id = $1 AND tenant_id = $2`,
+      `SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
       [customerId, DYNATIRE_ID],
     );
     expect(db.rowCount).toBe(1);
     expect(db.rows[0].phone).toBe(phone);
   } finally {
     if (customerId) {
-      await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+      await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
     }
   }
 });
@@ -530,7 +530,7 @@ test('front-desk role: cannot see Advanced tabs; stale URL redirects to Home', a
   try {
     const inserted = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING id`,
+       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id AS id`,
       [DYNATIRE_ID, fdEmail, SEED_PASSWORD_HASH, `Front Desk ${tag}`],
     );
     fdUserId = inserted.rows[0].id;
@@ -557,7 +557,7 @@ test('front-desk role: cannot see Advanced tabs; stale URL redirects to Home', a
     await expect(page.locator('text=Service Catalog')).toHaveCount(0);
   } finally {
     if (fdUserId) {
-      await pool.query('DELETE FROM users WHERE id = $1', [fdUserId]);
+      await pool.query('DELETE FROM users WHERE user_id = $1', [fdUserId]);
     }
   }
 });
@@ -589,7 +589,7 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
 
     // Verify user row + password_resets row exist
     const userRow = await pool.query(
-      `SELECT id, role, password_hash FROM users WHERE email = $1 AND tenant_id = $2`,
+      `SELECT user_id AS id, role, password_hash FROM users WHERE email = $1 AND tenant_id = $2`,
       [inviteEmail, DYNATIRE_ID],
     );
     expect(userRow.rowCount).toBe(1);
@@ -605,7 +605,7 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
   } finally {
     if (invitedId) {
       await pool.query('DELETE FROM password_resets WHERE user_id = $1', [invitedId]);
-      await pool.query('DELETE FROM users WHERE id = $1', [invitedId]);
+      await pool.query('DELETE FROM users WHERE user_id = $1', [invitedId]);
     }
   }
 });

@@ -84,7 +84,7 @@ async function getAppointmentStatus(
   appointmentId: string
 ): Promise<string | null> {
   const r = await pool.query(
-    `SELECT status FROM appointments WHERE id = $1 AND tenant_id = $2`,
+    `SELECT status FROM appointments WHERE appointment_id = $1 AND tenant_id = $2`,
     [appointmentId, tenantId]
   );
   return r.rows[0]?.status ?? null;

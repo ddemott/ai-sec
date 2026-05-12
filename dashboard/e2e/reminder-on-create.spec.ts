@@ -81,7 +81,7 @@ async function patchCustomerEmail(
   email: string
 ): Promise<void> {
   await pool.query(
-    `UPDATE customers SET email = $1 WHERE id = $2 AND tenant_id = $3`,
+    `UPDATE customers SET email = $1 WHERE customer_id = $2 AND tenant_id = $3`,
     [email, customerId, tenantId]
   );
 }

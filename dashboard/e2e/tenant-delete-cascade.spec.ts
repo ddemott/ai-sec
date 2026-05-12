@@ -126,7 +126,7 @@ test('cascade: super-admin delete drops the tenant AND all dependent rows across
   //       row is gone AND every count in countTenantRows() returns 0.
   // WHEN: any tenant deletion through the admin surface.
   // WHERE: src/routes/tenants.ts `DELETE /tenants/:id` →
-  //       `DELETE FROM tenants WHERE id = $1` → FK CASCADE.
+  //       `DELETE FROM tenants WHERE tenant_id = $1` → FK CASCADE.
   // WHY: the route does nothing but DELETE the parent row. If a future
   //       migration adds a tenant-scoped table without `ON DELETE
   //       CASCADE`, the delete would succeed at the API layer but leave
@@ -215,7 +215,7 @@ test('isolation: deleting one tenant does not touch any other tenant\'s rows', a
   //       category of dependents. DELETE tenant A. Verify B's row
   //       counts are exactly the same after the delete as before.
   // WHEN: any tenant deletion in a multi-tenant database.
-  // WHERE: FK CASCADE scoping — the DELETE FROM tenants WHERE id =
+  // WHERE: FK CASCADE scoping — the DELETE FROM tenants WHERE tenant_id =
   //       $1 must affect only that tenant's row, not the whole table.
   // WHY: a regression where the cascade somehow scoped wider (a
   //       trigger fires DELETE FROM appointments without a WHERE

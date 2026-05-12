@@ -38,7 +38,7 @@ export function registerProvisioningRoutes(
     const client = await pool.connect();
     try {
       const tenantRes = await client.query(
-        `SELECT id, name, phone_status FROM tenants WHERE tenant_id = $1`,
+        `SELECT tenant_id, name, phone_status FROM tenants WHERE tenant_id = $1`,
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {

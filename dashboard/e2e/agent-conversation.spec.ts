@@ -76,7 +76,7 @@ async function callAgentTool(
 
 async function findEmployeeIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    `SELECT id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
+    `SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
     [DYNATIRE_ID, name]
   );
   if (r.rowCount === 0) throw new Error(`Employee "${name}" not found in DynaTire seed`);
@@ -84,7 +84,7 @@ async function findEmployeeIdByName(name: string): Promise<string> {
 }
 async function findResourceIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    `SELECT id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
+    `SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
     [DYNATIRE_ID, name]
   );
   if (r.rowCount === 0) throw new Error(`Resource "${name}" not found in DynaTire seed`);
@@ -117,7 +117,7 @@ test('conversation: returning caller is greeted by name (customer-context lookup
 
   try {
     const ins = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-Alice Lee`, phone]
     );
     customerId = ins.rows[0].id;
@@ -138,7 +138,7 @@ test('conversation: returning caller is greeted by name (customer-context lookup
     // history may be 'No history' for our just-inserted customer.
     expect(typeof result.history).toBe('string');
   } finally {
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
 
@@ -227,7 +227,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
 
     // Side-effect check: row landed in DB with our tag.
     const row = await pool.query(
-      `SELECT description, status FROM appointments WHERE id = $1`,
+      `SELECT description, status FROM appointments WHERE appointment_id = $1`,
       [result.appointment_id]
     );
     expect(row.rows[0].description).toBe(`${tag}-rotation`);
@@ -235,13 +235,13 @@ test('conversation: tire-rotation request books successfully via book_with_sched
 
     // Customer-create-as-separate-transaction: the customer row exists.
     const cust = await pool.query(
-      `SELECT id, name FROM customers WHERE tenant_id = $1 AND phone = $2`,
+      `SELECT customer_id AS id, name FROM customers WHERE tenant_id = $1 AND phone = $2`,
       [DYNATIRE_ID, phone]
     );
     expect(cust.rowCount).toBe(1);
     expect(cust.rows[0].name).toBe(`${tag}-AgentBookCustomer`);
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [id]);
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
@@ -299,7 +299,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     // unavailable at the requested time → NO_AVAILABILITY for the next
     // booking attempt at that slot, alternatives kick in for 14:30+.
     const ph = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-blocker-customer`, `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`]
     );
     const blockerCust = ph.rows[0].id;
@@ -307,7 +307,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
       const a = await pool.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-         RETURNING id`,
+         RETURNING appointment_id AS id`,
         [DYNATIRE_ID, resId, blockerCust, empId, `${FUTURE}T14:00:00.000Z`, `${FUTURE}T14:30:00.000Z`, `${tag}-blocker`]
       );
       apptIdsToCleanup.push(a.rows[0].id);
@@ -357,9 +357,9 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     expect(cust.rows[0].n, 'customer persists despite booking failure').toBe(1);
 
     // Cleanup the blocker customer too.
-    await pool.query('DELETE FROM customers WHERE id = $1', [blockerCust]);
+    await pool.query('DELETE FROM customers WHERE customer_id = $1', [blockerCust]);
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [id]);
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }

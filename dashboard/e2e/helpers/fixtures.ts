@@ -243,7 +243,7 @@ export async function seedBookingScenario(
  * docs, integrations, etc. So one DELETE removes all of the test's residue.
  */
 export async function cleanTenantData(pool: Pool, tenantId: string): Promise<void> {
-  await pool.query('DELETE FROM tenants WHERE id = $1', [tenantId]);
+  await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
 }
 
 /**
@@ -311,7 +311,7 @@ export async function seedAppointment(
   const res = await pool.query(
     `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING id`,
+       RETURNING appointment_id AS id`,
     [
       tenantId,
       params.resourceId,

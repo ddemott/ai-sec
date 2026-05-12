@@ -92,7 +92,7 @@ async function switchToDynaTireTenant(page: Page) {
 
 async function findDynaTireEmployeeId(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
   return r.rows[0]?.id ?? null;
@@ -100,7 +100,7 @@ async function findDynaTireEmployeeId(name: string): Promise<string | null> {
 
 async function findDynaTireResourceId(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
   return r.rows[0]?.id ?? null;
@@ -108,7 +108,7 @@ async function findDynaTireResourceId(name: string): Promise<string | null> {
 
 async function findDynaTireCustomerId(): Promise<string> {
   const r = await pool.query(
-    'SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1',
+    'SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1',
     [DYNATIRE_ID]
   );
   if (!r.rows[0]?.id) throw new Error('No DynaTire customer found in seed');
@@ -456,7 +456,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     const existing = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING id`,
+       RETURNING appointment_id AS id`,
       [
         DYNATIRE_ID,
         truckId,
@@ -519,7 +519,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     expect(dbRes.rows[0].n).toBe(0);
   } finally {
     for (const id of apptIdsToCleanup) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     }
     if (scheduleIdToCleanup) {
       await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleIdToCleanup]);
@@ -681,7 +681,7 @@ test('edit-overlap: updating an appointment to a taken time returns 409 with con
     expect(updateRes.status, 'overlap edit must not be a 200').toBeGreaterThanOrEqual(400);
 
     const after = await pool.query(
-      `SELECT start_time::text AS s FROM appointments WHERE id = $1`,
+      `SELECT start_time::text AS s FROM appointments WHERE appointment_id = $1`,
       [apptBId]
     );
     expect(after.rows[0].s).toContain(`${date} 15:00:00`);

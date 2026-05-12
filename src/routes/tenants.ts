@@ -105,7 +105,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
     }
     const res = await withPoolClient(pool, client =>
       client.query(
-        'SELECT id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone FROM tenants WHERE tenant_id = $1',
+        'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone FROM tenants WHERE tenant_id = $1',
         [id]
       )
     );

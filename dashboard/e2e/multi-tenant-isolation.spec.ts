@@ -111,8 +111,8 @@ test.beforeAll(async () => {
   // probe. Picks the first match by created_at to be deterministic across
   // re-runs. Fails the spec early if there's only one tenant in the DB.
   const r = await pool.query(
-    `SELECT id FROM tenants
-      WHERE id != $1 AND id != $2
+    `SELECT tenant_id AS id FROM tenants
+      WHERE tenant_id != $1 AND tenant_id != $2
       ORDER BY created_at ASC LIMIT 1`,
     [DYNATIRE_ID, SUPER_ADMIN_ID]
   );
@@ -148,7 +148,7 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
     // Setup: insert a customer in Bella's tenant that we'll try to leak.
     const ins = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone)
-       VALUES ($1, $2, $3) RETURNING id`,
+       VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [OTHER_TENANT_ID, `${tag}-other-secret`, '+15551112222']
     );
     bellaCustomerId = ins.rows[0].id;
@@ -175,7 +175,7 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
     }
   } finally {
     if (bellaCustomerId) {
-      await pool.query('DELETE FROM customers WHERE id = $1', [bellaCustomerId]);
+      await pool.query('DELETE FROM customers WHERE customer_id = $1', [bellaCustomerId]);
     }
   }
 });

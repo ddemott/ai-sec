@@ -79,7 +79,7 @@ async function getApiToken(page: Page): Promise<string> {
 
 async function findEmployeeIdByName(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
   return r.rows[0]?.id ?? null;
@@ -87,7 +87,7 @@ async function findEmployeeIdByName(name: string): Promise<string | null> {
 
 async function findServiceIdByName(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT id FROM services WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT service_id AS id FROM services WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
   return r.rows[0]?.id ?? null;
@@ -95,7 +95,7 @@ async function findServiceIdByName(name: string): Promise<string | null> {
 
 async function findResourceIdByName(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
   return r.rows[0]?.id ?? null;
@@ -187,7 +187,7 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
 
   // Need a customer too — use the first one from the tenant.
   const cust = await pool.query(
-    'SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1',
+    'SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1',
     [DYNATIRE_ID]
   );
   const customerId = cust.rows[0]?.id;
@@ -267,7 +267,7 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     // Pre-INSERT an appointment far enough in the future that it sits
     // alone on its day (easier to find in the List view).
     const customer = await pool.query(
-      'SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1',
+      'SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1',
       [DYNATIRE_ID]
     );
     const truckId = await findResourceIdByName('Truck 1');
@@ -294,7 +294,7 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     const ins = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-       RETURNING id`,
+       RETURNING appointment_id AS id`,
       [DYNATIRE_ID, truckId, customerId, start.toISOString(), end.toISOString(), `${tag}-cross-view-cancel`]
     );
     apptId = ins.rows[0].id;
@@ -327,14 +327,14 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
 
     // DB row is soft-canceled (still exists, status='canceled').
     const after = await pool.query(
-      `SELECT status FROM appointments WHERE id = $1`,
+      `SELECT status FROM appointments WHERE appointment_id = $1`,
       [apptId]
     );
     expect(after.rowCount, 'row must still exist (soft cancel, not hard delete)').toBe(1);
     expect(after.rows[0].status).toBe('canceled');
   } finally {
     if (apptId) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
     }
   }
 });
@@ -361,7 +361,7 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
 
   try {
     const customer = await pool.query(
-      'SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1',
+      'SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1',
       [DYNATIRE_ID]
     );
     const truckId = await findResourceIdByName('Truck 1');
@@ -381,7 +381,7 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
     const insA = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-       RETURNING id`,
+       RETURNING appointment_id AS id`,
       [DYNATIRE_ID, truckId, customerId, start.toISOString(), end.toISOString(), `${tag}-A`]
     );
     ids.push(insA.rows[0].id);
@@ -436,7 +436,7 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
 
     // Both rows exist: A canceled, B scheduled.
     const verify = await pool.query(
-      `SELECT id, status, description FROM appointments
+      `SELECT appointment_id AS id, status, description FROM appointments
         WHERE tenant_id = $1 AND start_time = $2
         ORDER BY description`,
       [DYNATIRE_ID, start.toISOString()]
@@ -448,7 +448,7 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
     expect(b?.status).toBe('scheduled');
   } finally {
     for (const id of ids) {
-      await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     }
   }
 });

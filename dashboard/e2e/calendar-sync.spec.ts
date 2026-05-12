@@ -132,7 +132,7 @@ async function loginAsTenantAdmin(req: APIRequestContext): Promise<string> {
 
 async function findEmployeeIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    'SELECT id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1',
+    'SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1',
     [DYNATIRE_ID, name]
   );
   if (!r.rows[0]) throw new Error(`Employee "${name}" not found in DynaTire seed`);
@@ -141,7 +141,7 @@ async function findEmployeeIdByName(name: string): Promise<string> {
 
 async function findResourceIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    'SELECT id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1',
+    'SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1',
     [DYNATIRE_ID, name]
   );
   if (!r.rows[0]) throw new Error(`Resource "${name}" not found in DynaTire seed`);
@@ -197,7 +197,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     const truckId = await findResourceIdByName('Truck 1');
 
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].id;
@@ -249,9 +249,9 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
       expect(e.tenantId).toBe(DYNATIRE_ID);
     }
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
 
@@ -270,7 +270,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     const mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].id;
@@ -288,7 +288,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     // and pollute the assertion below.
     const aIns = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id AS id`,
       [
         DYNATIRE_ID,
         truckId,
@@ -327,9 +327,9 @@ test('appointment-update dispatches all 5 providers with action=update', async (
       ['calendar', 'hubspot', 'jobber', 'servicetitan', 'square']
     );
   } finally {
-    if (apptId) await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
+    if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
     if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
 
@@ -349,7 +349,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     const mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].id;
@@ -365,7 +365,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
 
     const aIns = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id AS id`,
       [
         DYNATIRE_ID,
         truckId,
@@ -401,9 +401,9 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     );
     apptId = null; // already deleted
   } finally {
-    if (apptId) await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
+    if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
     if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
 
@@ -456,7 +456,7 @@ test('customer-create dispatches to 4 CRMs (no calendar — by contract)', async
       'calendars must NOT receive customer events'
     ).toBeUndefined();
   } finally {
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
 
@@ -472,7 +472,7 @@ test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ requ
 
   try {
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-cust`, phone]
     );
     customerId = cIns.rows[0].id;
@@ -512,7 +512,7 @@ test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ requ
     expect(matching).toHaveLength(4);
     customerId = null; // already deleted
   } finally {
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
 
@@ -538,7 +538,7 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     const mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].id;
@@ -587,8 +587,8 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     const events = await getSyncEvents(request);
     expect(events.filter((e) => e.entity === 'appointment').length).toBeGreaterThanOrEqual(5);
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
-    if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });

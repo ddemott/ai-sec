@@ -145,14 +145,14 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
     const bcryptHash = await bcrypt.hash('password', 10);
     const fd = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING id`,
+       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id AS id`,
       [DYNATIRE_ID, `${tag}-fd@dynatire.com`, bcryptHash, 'Front Desk Test']
     );
     frontDeskUserId = fd.rows[0].id;
 
     const tt = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'owner') RETURNING id`,
+       VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id AS id`,
       [DYNATIRE_ID, `${tag}-target@dynatire.com`, bcryptHash, 'Target Owner']
     );
     inviteeUserId = tt.rows[0].id;
@@ -184,14 +184,14 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
     expect(list.status, 'GET /users must reject front_desk').toBe(403);
 
     // Belt-and-suspenders: target user's role is unchanged.
-    const targetCheck = await pool.query('SELECT role FROM users WHERE id = $1', [inviteeUserId]);
+    const targetCheck = await pool.query('SELECT role FROM users WHERE user_id = $1', [inviteeUserId]);
     expect(targetCheck.rows[0].role).toBe('owner');
   } finally {
     if (frontDeskUserId) {
-      await pool.query('DELETE FROM users WHERE id = $1', [frontDeskUserId]);
+      await pool.query('DELETE FROM users WHERE user_id = $1', [frontDeskUserId]);
     }
     if (inviteeUserId) {
-      await pool.query('DELETE FROM users WHERE id = $1', [inviteeUserId]);
+      await pool.query('DELETE FROM users WHERE user_id = $1', [inviteeUserId]);
     }
     await pool.query(`DELETE FROM users WHERE email LIKE $1`, [`${tag}-%`]);
   }
@@ -226,7 +226,7 @@ test('password-reset: forgot-password → token persisted → reset-password →
     const oldHash = await bcrypt.hash(oldPassword, 10);
     const u = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'owner') RETURNING id`,
+       VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id AS id`,
       [DYNATIRE_ID, email, oldHash, 'Reset Test User']
     );
     userId = u.rows[0].id;

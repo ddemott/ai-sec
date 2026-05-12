@@ -43,7 +43,7 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
 
     // Look up or create Stripe customer
     const tenantRes = await pool.query(
-      'SELECT id, name, stripe_customer_id FROM tenants WHERE tenant_id = $1',
+      'SELECT tenant_id, name, stripe_customer_id FROM tenants WHERE tenant_id = $1',
       [tenant_id]
     );
     if (tenantRes.rows.length === 0) {
