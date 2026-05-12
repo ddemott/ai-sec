@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-05-05 (26 route modules, 83 migrations, 10 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
+**Last verified:** 2026-05-12 (26 route modules, 116 migrations, 10 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
 
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
 
@@ -40,7 +40,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
 - **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (26 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 83 migrations, RLS on every tenant-scoped table
+- **DB**: Postgres + pgvector on Supabase, 116 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
@@ -60,12 +60,12 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── components/               ~60 feature components + ui/ primitives
 │   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
-│   ├── e2e/                      19 Playwright tests
+│   ├── e2e/                      71 Playwright tests (7 intentional skips)
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
 │   ├── functions/                Empty post-661d21d (former vapi-tools deleted with the Vapi rip-out)
-│   ├── migrations/               83 SQL migrations
+│   ├── migrations/               116 SQL migrations
 │   └── seed.sql                  Platform admin + DynaTire tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts

@@ -61,7 +61,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 | **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara`; OpenAI TTS retained as `runFallback()` dead-air guard) |
 | **Backend** | Fastify 4.x, 26 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`) |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 107 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race |
+| **Database** | PostgreSQL + pgvector, 116 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
 | **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes) |
 | **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
@@ -133,7 +133,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── migrations/         83 SQL migrations
+│   ├── migrations/         116 SQL migrations
 │   └── seed.sql            Platform admin + DynaTire demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -145,9 +145,9 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,479 tests)
-cd dashboard && npx vitest run        # Dashboard (498 tests)
-cd dashboard && npx playwright test   # E2e (19 Playwright tests)
+npm test                              # Backend (1,781 tests)
+cd dashboard && npx vitest run        # Dashboard (620 tests)
+cd dashboard && npx playwright test   # E2e (71 Playwright tests, 7 intentional skips)
 python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)
 ```
 

@@ -139,11 +139,11 @@ Pilots done:
 
 Remaining:
 
-**Internal config — open question**
-- [ ] **`tenant_calendar_settings`.** Currently has composite (tenant_id) PK with no surrogate `id` column. Either (a) add a surrogate `tenant_calendar_setting_id` UUID PK before renaming, or (b) leave alone since there's nothing to rename. Decision pending.
+**Internal config — open question (2 tables, same shape)**
+- [ ] **`tenant_calendar_settings` + `appointment_sync_map`.** Both have single-column PKs on FK columns (the parent's PK reused as their own), not surrogate `*_id` UUIDs. `tenant_calendar_settings.tenant_id` was flagged in Part 1; `appointment_sync_map.appointment_id` surfaced during the Part 2 verification audit. Decision: either (a) add surrogate `tenant_calendar_setting_id` / `appointment_sync_map_id` UUIDs to make them strictly rule-compliant, or (b) update CLAUDE.md / CODING_STANDARDS.md to explicitly carve out "1:1 extension tables that re-use their parent's PK" as a third allowed shape alongside surrogate-UUID and junction-composite. Treat them together — same call.
 
 **Sprint summary**
-The PK naming convention conversion is **complete** across all 16 domain entity tables. Every `<table>.id` PK has been renamed to `<table_singular>_id`, every inbound FK already named that way is now symmetric for `USING (col_id)` JOINs, both audit and version triggers are PK-aware via TG_TABLE_NAME CASE, and the create_default_resources trigger function uses the new column. 17 migrations (`20260512000000–16`), forward-only, must land in order on prod. Migration count: 90 → 107.
+The PK naming convention conversion shipped in two parts on the same day. **Part 1** (pilots 1–16, commits `40c57d5` → `f486f6b`) closed every domain entity table. **Part 2** (pilots 17–25, commits `e570197` → `7dd1e1d`) closed the 9 non-domain leaf tables left out of Part 1: `user_feedback`, `soft_reservations`, `audit_log`, `unanswered_questions`, `phone_verifications`, `password_resets`, `call_transcripts`, `call_summaries`, `entity_sync_map`. Two follow-on code-only pilots closed the residue: **Pilot 26** (`ad72daa`) swept ~50 stale `WHERE id` / `RETURNING id` references across `dashboard/e2e/` specs (which aren't in the unit-CI gate) + 5 production routes (`database/index.ts`, `tenants.ts`, `provisioning.ts`, `billing.ts`, `reminders.ts`). **Pilot 27** (`70cfda2`) aligned 8 test mocks with real-DB return shapes and surfaced one hidden production bug: `agentTools.ts /service-catalog` had bare `SELECT id FROM services` that mocked tests never exercised against real Postgres. 26 migrations (`20260512000000–25`), forward-only, must land in order on prod. Migration count: 90 → 116. **Every single-column PK in `public` now follows `<table_singular>_id`** — verification query returns zero rows. Full Part 2 + residue narrative in `RESOLVED.md`.
 
 ### CI rot prevention (next, after the PK conversion above)
 

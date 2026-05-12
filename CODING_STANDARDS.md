@@ -146,7 +146,7 @@ Targeted test runs miss real-DB SQL strings outside the obvious files. Every PK-
 
 ### PK rename recipe
 
-Established across pilots 1–6 (`record_versions`, `tenant_skills`, `reminder_schedules`, `consent_records`, `opt_out_records`, `voice_sessions`):
+Established across pilots 1–6 (`record_versions`, `tenant_skills`, `reminder_schedules`, `consent_records`, `opt_out_records`, `voice_sessions`); applied unchanged through the 26-pilot sprint that closed every single-column PK rename (see `RESOLVED.md` 2026-05-12 for Part 1 + Part 2):
 
 1. **Inventory:** schema + RPCs + views + types + route SQL + dashboard renders + tests. Use `pg_proc` / `pg_views` + grep for `<table>.id` / `<alias>.id` patterns.
 2. **Migration:**

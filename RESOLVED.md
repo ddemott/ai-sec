@@ -22,9 +22,47 @@ Continuation of the same-day PK-rename sprint into the nine leaf tables left out
 
 **After-state (Part 2):** backend 1,781 / dashboard 620 — still green. Zero TS errors. Drift detector clean. **Every single-column PK in the public schema now follows the `<table_singular>_id` convention** — `SELECT tc.table_name, kcu.column_name FROM information_schema.table_constraints tc JOIN key_column_usage kcu USING (constraint_name) WHERE constraint_type = 'PRIMARY KEY' AND table_schema = 'public' AND column_name = 'id'` returns zero rows.
 
-**Remaining (decision-pending):** `tenant_calendar_settings` still has its composite (tenant_id) PK with no surrogate — same situation as Part 1's note; either add a surrogate or leave alone.
+**Remaining (decision-pending):** two tables — `tenant_calendar_settings` (composite (tenant_id) PK, already flagged in Part 1) and `appointment_sync_map` (single-column PK on `appointment_id`, also the FK to appointments). Both are 1:1 extension tables that re-use a parent's PK rather than carrying a surrogate; the strict reading of the rule says they should add a surrogate `*_id` UUID, but the practical reading says they're indistinguishable from junction tables and the FK column already uniquely identifies a row. Worth raising as a single decision rather than two.
 
 **Outstanding for prod-apply:** all 26 PK-rename migrations (`20260512000000–25`) + the older `20260511000000_employees_services_tenant_fk_cascade.sql` are forward-only and must land in order on production Supabase.
+
+---
+
+## 2026-05-12 — PK rename code-residue + test-mock sweep (pilots 26 + 27)
+
+Two follow-on pilots after Part 2 closed the schema-rename work itself. No migrations — pure code/test sweep — but they fixed real production bugs that the unit-test CI gate hadn't been catching.
+
+**Pilot 26 — code-residue sweep** (`ad72daa`):
+
+After the 25 schema-rename pilots, a comprehensive scan found ~50 stale `WHERE id` / `RETURNING id` / `JOIN ... .id` references that the unit-CI gate had missed. Three reasons:
+
+1. **Playwright e2e specs aren't in the unit-CI gate.** `dashboard/e2e/*.spec.ts` runs separately, so stale SQL strings in those specs sat unexercised. Sweep touched 12 spec files: `agent-conversation`, `appointment-cancel-restore`, `auth-flows`, `booking-alignment`, `booking-enforcement`, `calendar-sync`, `helpers/fixtures`, `multi-tenant-isolation`, `reminder-on-create`, `setup-wizard-to-booking`, `tenant-delete-cascade`, `workflows`. Patterns: tenants × 4, users × 8, appointments × ~24, customers × ~20, employees/resources/services SELECTs × ~13. INSERTs use `RETURNING <table>_id AS id` backward-compat alias so existing `.rows[0].id` reads stay valid; SELECTs/UPDATEs/DELETEs switch directly.
+
+2. **Multi-line SQL strings escaped the per-pilot single-line perl one-liners.** `INSERT INTO appointments\n VALUES (...) RETURNING id` was a multi-line template-literal pattern none of the pilot sweeps had caught.
+
+3. **A few production routes had stale `SELECT id, …` lists** where the WHERE clause was correctly renamed but the SELECT projection wasn't. Fixed: `src/database/index.ts:343` (`getAppointmentById` JOIN), `src/routes/tenants.ts` GET `/tenants/:id/config`, `src/routes/provisioning.ts` POST `/provisioning/activate`, `src/routes/billing.ts` Stripe checkout, `src/routes/reminders.ts` PATCH `/reminders/:id/cancel`. The reminders one was a multi-line `UPDATE reminder_schedules ... WHERE id = $1` from pilot 3's residue.
+
+After-state verification: zero stale `id` refs against renamed tables in `src/`, `dashboard/`, `agent/`. Backend 1,781 / dashboard 620 still green.
+
+**Pilot 27 — test-mock alignment + 1 hidden production bug** (`70cfda2`):
+
+Test mocks were the last blind spot. A test that mocks `{rows: [{id: '...'}]}` passes even when the real query now returns `{<table>_id: '...'}` — the mock provides the field name the code reads, regardless of what the DB actually returns. So mocked tests can hide column-name bugs indefinitely.
+
+Comprehensive audit:
+
+- **One real production bug found**: `src/routes/agentTools.ts` GET `/agent-tools/service-catalog` had bare `SELECT id, name, subtitle, … FROM services`. `services.id` was renamed to `service_id` in pilot 10; the route would have errored at runtime (`column "id" does not exist`) on every LLM `get_service_catalog` tool call. Aliased to `service_id AS id` so the LLM response shape stays unchanged.
+
+- **8 test-mock alignments** so mocks match what real-DB queries return (mocks were misleading but didn't cause test failures because the code reads what the mock provides):
+  - `src/auth.test.ts` × 3 mocks — switched from `{id: …}` to `{user_id: …}` to match `SELECT user_id FROM users` and `INSERT users RETURNING user_id` in `bootstrap.ts` / `auth.ts /forgot-password`.
+  - `src/shift-overrides-routes.test.ts` × 1 — switched to `{employee_schedule_id: …}` to match `DELETE FROM employee_schedule … RETURNING employee_schedule_id`.
+  - `src/routes/appointments.test.ts` × 4 — switched to `{appointment_id: …}` for GET (`a.*`) + DELETE + cancel. GET test assertion now reads `body[0].appointment_id` (the real wire field) instead of `body[0].id` which would be undefined against real DB.
+  - `src/services/tenants/bootstrap.test.ts` × 1 — comment-string drift updated.
+
+Verified clean: all sync test mocks (`hubspot-sync.test.ts`, `square-sync.test.ts`, `jobber-sync.test.ts`, `servicetitan-sync.test.ts`) are correct because the routes use `RETURNING customer_id AS id` / `appointment_id AS id` aliases, so `{id: …}` mocks match. Same for most agentTools mocks (routes alias `customer_id AS id` / `employee_id::text AS id` / `resource_id AS id`).
+
+**Pre-existing broken code surfaced but out of scope** — `src/services/tenants/index.ts` async methods (`getTenantConfigAsync`, `getTenantConfigsAsync`, `updateTenantConfigAsync`) reference columns that have **never existed** in the schema (`business_name`, `owner_email`, `phone`, `sms_enabled`, `email_enabled`). Called transitively by `emailService.getBusinessName` / `getNotificationPreferences` and the reminder worker — would error every time the cache misses. CLAUDE.md already flags this whole service as "dormant; delete by default" per Build Principles. Tracked for follow-on cleanup.
+
+**After-state:** backend 1,781 / dashboard 620 — all green. Zero TS errors. Drift detector clean. Working tree clean against `main`.
 
 ---
 
