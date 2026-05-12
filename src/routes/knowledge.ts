@@ -26,7 +26,7 @@ export function registerKnowledgeRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        'SELECT id, title, content, source, created_at FROM tenant_docs WHERE tenant_id = $1 ORDER BY created_at DESC',
+        'SELECT tenant_doc_id, title, content, source, created_at FROM tenant_docs WHERE tenant_id = $1 ORDER BY created_at DESC',
         [tenantId]
       );
     });
@@ -39,7 +39,7 @@ export function registerKnowledgeRoutes(
     if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM tenant_docs WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+      return client.query('DELETE FROM tenant_docs WHERE tenant_doc_id = $1 AND tenant_id = $2 RETURNING tenant_doc_id', [id, tenantId]);
     });
     if (!assertRowAffected(res, reply, 'Knowledge entry')) return;
 
@@ -133,13 +133,13 @@ export function registerKnowledgeRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        'INSERT INTO tenant_docs (tenant_id, title, section, content, source, normalized_text, embedding) VALUES ($1, $2, $3, $4, $5, $6, $7::vector) RETURNING id',
+        'INSERT INTO tenant_docs (tenant_id, title, section, content, source, normalized_text, embedding) VALUES ($1, $2, $3, $4, $5, $6, $7::vector) RETURNING tenant_doc_id',
         [tenantId, question, category || null, combined, source, normalizedText, JSON.stringify(embedding)]
       );
     });
 
-    logEvent(req, 'knowledge_entry_added', { id: res.rows[0].id, source });
-    return reply.send({ success: true, id: res.rows[0].id });
+    logEvent(req, 'knowledge_entry_added', { tenant_doc_id: res.rows[0].tenant_doc_id, source });
+    return reply.send({ success: true, tenant_doc_id: res.rows[0].tenant_doc_id });
   }, 'Failed to add knowledge entry'));
 
   app.put('/knowledge/:id', withHandler(async (req: AppRequest, reply) => {
@@ -168,7 +168,7 @@ export function registerKnowledgeRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        'UPDATE tenant_docs SET title = $1, section = $2, content = $3, source = $4, normalized_text = $5, embedding = $6::vector WHERE id = $7 AND tenant_id = $8 RETURNING id',
+        'UPDATE tenant_docs SET title = $1, section = $2, content = $3, source = $4, normalized_text = $5, embedding = $6::vector WHERE tenant_doc_id = $7 AND tenant_id = $8 RETURNING tenant_doc_id',
         [question, category || null, combined, source, normalizedText, JSON.stringify(embedding), id, tenantId]
       );
     });

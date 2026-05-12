@@ -178,7 +178,7 @@ export default function KnowledgeBaseView() {
         if (doc.source === 'policy-questionnaire' && doc.title) {
           const answerMatch = doc.content.match(/^Q: .+\nA: ([\s\S]+)$/)
           const answer = answerMatch ? answerMatch[1] : doc.content
-          answers.set(doc.title, { id: doc.id, answer })
+          answers.set(doc.title, { id: doc.tenant_doc_id, answer })
         }
       }
       setSavedAnswers(answers)
@@ -201,8 +201,8 @@ export default function KnowledgeBaseView() {
       } else {
         const res = await Api.knowledge.add(tenantId, { question, answer, category })
         if (res.success) {
-          setSavedAnswers(prev => new Map(prev).set(question, { id: res.id, answer }))
-          return res.id
+          setSavedAnswers(prev => new Map(prev).set(question, { id: res.tenant_doc_id, answer }))
+          return res.tenant_doc_id
         }
       }
     } catch (err) {
@@ -247,7 +247,7 @@ export default function KnowledgeBaseView() {
   async function doDelete(id: string) {
     try {
       await Api.knowledge.delete(id, tenantId)
-      setDocs(docs.filter(d => d.id !== id))
+      setDocs(docs.filter(d => d.tenant_doc_id !== id))
       // Also remove from savedAnswers if it was a questionnaire entry
       setSavedAnswers(prev => {
         const next = new Map(prev)
@@ -409,7 +409,7 @@ export default function KnowledgeBaseView() {
                 {filteredDocs.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filteredDocs.map(doc => (
-                      <Card key={doc.id} className="group relative flex flex-col h-full hover:border-orange-200 dark:hover:border-orange-900/50 transition-all duration-300" style={{ borderColor: 'var(--border-soft)' }}>
+                      <Card key={doc.tenant_doc_id} className="group relative flex flex-col h-full hover:border-orange-200 dark:hover:border-orange-900/50 transition-all duration-300" style={{ borderColor: 'var(--border-soft)' }}>
                         <div className="p-5 flex-1 flex flex-col">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
@@ -422,7 +422,7 @@ export default function KnowledgeBaseView() {
                               )}
                             </div>
                             <button
-                              onClick={() => handleDelete(doc.id)}
+                              onClick={() => handleDelete(doc.tenant_doc_id)}
                               className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
                               title="Delete"
                             >

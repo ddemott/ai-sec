@@ -103,7 +103,7 @@ describe("Knowledge ingestion normalization pipeline", () => {
 
     // Query with same embedding should find it
     const res = await client.query(
-      `SELECT id, content, similarity FROM search_tenant_docs($1, $2::vector, 0.5, 5)`,
+      `SELECT tenant_doc_id, content, similarity FROM search_tenant_docs($1, $2::vector, 0.5, 5)`,
       [tenantId, dummyEmbedding]
     );
     expect(res.rows.length).toBe(1);
@@ -125,7 +125,7 @@ describe("Knowledge ingestion normalization pipeline", () => {
     );
 
     const res = await client.query(
-      `SELECT id, content, normalized_text, similarity FROM search_tenant_docs_normalized($1, $2::vector, 0.5, 5)`,
+      `SELECT tenant_doc_id, content, normalized_text, similarity FROM search_tenant_docs_normalized($1, $2::vector, 0.5, 5)`,
       [tenantId, dummyEmbedding]
     );
     expect(res.rows.length).toBe(1);

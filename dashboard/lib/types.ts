@@ -290,7 +290,7 @@ export interface UserFeedback {
 }
 
 export interface KnowledgeEntry {
-  id: string;
+  tenant_doc_id: string;
   title: string | null;
   section: string | null;
   content: string;
