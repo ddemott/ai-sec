@@ -122,7 +122,7 @@ export function registerUserRoutes(
         const userRes = await client.query(
           `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
            VALUES ($1, $2, $3, $4, $5)
-           RETURNING id`,
+           RETURNING user_id`,
           [tenant_id, normalizedEmail, placeholderHash, full_name, role],
         );
         const newUserId = userRes.rows[0].user_id as string;

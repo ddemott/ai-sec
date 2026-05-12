@@ -251,12 +251,12 @@ test('password-reset: forgot-password → token persisted → reset-password →
       `UPDATE password_resets
           SET token_hash = $1
         WHERE user_id = $2 AND used_at IS NULL
-          AND id = (
-            SELECT id FROM password_resets
+          AND password_reset_id = (
+            SELECT password_reset_id FROM password_resets
              WHERE user_id = $2 AND used_at IS NULL
              ORDER BY created_at DESC LIMIT 1
           )
-       RETURNING id`,
+       RETURNING password_reset_id`,
       [knownHash, userId]
     );
     expect(updateRes.rowCount, 'a fresh reset row must exist after forgot-password').toBe(1);
@@ -278,7 +278,7 @@ test('password-reset: forgot-password → token persisted → reset-password →
   } finally {
     if (userId) {
       await pool.query('DELETE FROM password_resets WHERE user_id = $1', [userId]);
-      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+      await pool.query('DELETE FROM users WHERE user_id = $1', [userId]);
     }
   }
 });

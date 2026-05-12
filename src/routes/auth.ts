@@ -173,7 +173,7 @@ export function registerAuthRoutes(
       await client.query('BEGIN');
       try {
         const r = await client.query(
-          `SELECT id, user_id FROM password_resets
+          `SELECT password_reset_id AS id, user_id FROM password_resets
            WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
            FOR UPDATE`,
           [tokenHash]
@@ -189,7 +189,7 @@ export function registerAuthRoutes(
           'UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE user_id = $2',
           [hash, userId]
         );
-        await client.query('UPDATE password_resets SET used_at = NOW() WHERE id = $1', [resetId]);
+        await client.query('UPDATE password_resets SET used_at = NOW() WHERE password_reset_id = $1', [resetId]);
         // Invalidate any other unused tokens for the same user
         await client.query(
           'UPDATE password_resets SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL',

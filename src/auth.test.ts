@@ -500,7 +500,7 @@ describe("Auth Routes — Handler-Level", () => {
       // Verify the queries: BEGIN, SELECT, UPDATE users, UPDATE this reset, UPDATE other resets, COMMIT
       const queries = client.query.mock.calls.map(c => (c[0] as string).trim().split('\n')[0]);
       expect(queries[0]).toBe('BEGIN');
-      expect(queries[1]).toContain('SELECT id, user_id FROM password_resets');
+      expect(queries[1]).toContain('SELECT password_reset_id AS id, user_id FROM password_resets');
       expect(queries[2]).toContain('UPDATE users SET password_hash');
       expect(queries[2]).toContain('password_changed_at = NOW()');
       expect(queries[5]).toBe('COMMIT');
