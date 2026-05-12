@@ -27,7 +27,7 @@ vi.mock('@/lib/VocabularyContext', () => ({
 // Mock static data hook
 const mockRefreshResources = vi.fn()
 let mockResources: Array<{ id: string; name: string; description?: string; is_active?: boolean }> = []
-let mockServices: Array<{ id: string; name: string; description?: string; duration_minutes: number }> = []
+let mockServices: Array<{ service_id: string; name: string; description?: string; duration_minutes: number }> = []
 let mockEmployees: Array<{ id: string; name: string }> = []
 let mockStaticLoading = false
 let mockResourcesError: string | null = null
