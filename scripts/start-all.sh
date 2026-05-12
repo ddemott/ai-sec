@@ -53,7 +53,20 @@ else
   echo "[secretaryhq] ⚠️ Warning: Docker Compose not found. Assuming DB is running elsewhere."
 fi
 
-# 2. Start services concurrently
+# 2. Build the backend so `node dist/src/index.js` runs current source.
+# Without this step, `dist/` may be stale relative to `src/` (the build
+# script is invoked separately, not as part of `npm start`), and the
+# running backend silently serves code that's out of sync with the
+# branch the developer is editing. Surfaced 2026-05-12 when /register
+# returned 500 with "column id does not exist" — dist/ had pre-PK-rename
+# code while src/ was post-rename. Tracked under docs/TODO.md follow-ups.
+echo "[secretaryhq] 🔨 Building backend (npm run build)..."
+if ! npm run build; then
+  echo "[secretaryhq] ❌ Backend build failed — aborting start. Fix the TS errors above before running npm start." >&2
+  exit 1
+fi
+
+# 3. Start services concurrently
 setsid node dist/src/index.js > backend.log 2>&1 &
 echo "Backend server started on port 4001 (dist/src/index.js)"
 (cd dashboard && NODE_ENV=production setsid node server.js > ../dashboard.log 2>&1 &)
