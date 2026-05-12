@@ -429,7 +429,7 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
     const ins = await pool.query(
       `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
        VALUES ($1, $2, $3, now() + interval '10 minutes')
-       RETURNING id`,
+       RETURNING phone_verification_id AS id`,
       [DYNATIRE_ID, phone, codeHash]
     );
     pvId = ins.rows[0].id;
@@ -453,13 +453,13 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
     expect(right.body.success).toBe(true);
 
     const after = await pool.query(
-      `SELECT verified_at FROM phone_verifications WHERE id = $1`,
+      `SELECT verified_at FROM phone_verifications WHERE phone_verification_id = $1`,
       [pvId]
     );
     expect(after.rows[0].verified_at).not.toBeNull();
     void tag;
   } finally {
-    if (pvId) await pool.query('DELETE FROM phone_verifications WHERE id = $1', [pvId]);
+    if (pvId) await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [pvId]);
     await pool.query(`DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`, [DYNATIRE_ID, phone]);
   }
 });

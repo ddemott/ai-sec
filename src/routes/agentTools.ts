@@ -1035,7 +1035,7 @@ export function registerAgentToolRoutes(
         expires_at: string;
         attempt_count: number;
       }>(
-        `SELECT id, code_hash, expires_at, attempt_count
+        `SELECT phone_verification_id AS id, code_hash, expires_at, attempt_count
            FROM phone_verifications
           WHERE tenant_id = $1 AND phone = $2 AND verified_at IS NULL
           ORDER BY created_at DESC
@@ -1057,14 +1057,14 @@ export function registerAgentToolRoutes(
       const match = await bcrypt.compare(args.code, v.code_hash);
       if (match) {
         await client.query(
-          `UPDATE phone_verifications SET verified_at = now() WHERE id = $1`,
+          `UPDATE phone_verifications SET verified_at = now() WHERE phone_verification_id = $1`,
           [v.id]
         );
         return { kind: 'verified' as const };
       }
 
       await client.query(
-        `UPDATE phone_verifications SET attempt_count = attempt_count + 1 WHERE id = $1`,
+        `UPDATE phone_verifications SET attempt_count = attempt_count + 1 WHERE phone_verification_id = $1`,
         [v.id]
       );
       const remaining = MAX_VERIFY_ATTEMPTS - (v.attempt_count + 1);

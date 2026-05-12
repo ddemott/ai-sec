@@ -315,7 +315,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
     const ins = await pool.query(
       `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
        VALUES ($1, $2, $3, now() + interval '10 minutes')
-       RETURNING id`,
+       RETURNING phone_verification_id AS id`,
       [DYNATIRE_ID, phone, codeHash]
     );
     phoneVerificationId = ins.rows[0].id;
@@ -332,7 +332,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
     expect(wrong.body.success, `wrong-code body: ${JSON.stringify(wrong.body)}`).toBe(false);
 
     const afterWrong = await pool.query(
-      `SELECT verified_at FROM phone_verifications WHERE id = $1`,
+      `SELECT verified_at FROM phone_verifications WHERE phone_verification_id = $1`,
       [phoneVerificationId]
     );
     expect(afterWrong.rows[0].verified_at, 'wrong code must NOT mark verified').toBeNull();
@@ -349,13 +349,13 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
     expect(right.body.success, `right-code body: ${JSON.stringify(right.body)}`).toBe(true);
 
     const afterRight = await pool.query(
-      `SELECT verified_at FROM phone_verifications WHERE id = $1`,
+      `SELECT verified_at FROM phone_verifications WHERE phone_verification_id = $1`,
       [phoneVerificationId]
     );
     expect(afterRight.rows[0].verified_at, 'correct code must populate verified_at').not.toBeNull();
   } finally {
     if (phoneVerificationId) {
-      await pool.query('DELETE FROM phone_verifications WHERE id = $1', [phoneVerificationId]);
+      await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [phoneVerificationId]);
     }
     await pool.query(
       `DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`,
