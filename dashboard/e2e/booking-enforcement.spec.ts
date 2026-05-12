@@ -437,7 +437,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
       [DYNATIRE_ID, mikeId, UI_TEST_DATE]
     );
     scheduleIdToCleanup = shiftIns.rows[0].id;
@@ -522,7 +522,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
       await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
     }
     if (scheduleIdToCleanup) {
-      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleIdToCleanup]);
+      await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleIdToCleanup]);
     }
   }
 });

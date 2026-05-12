@@ -206,7 +206,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
     scheduleId = sIns.rows[0].id;
@@ -250,7 +250,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     }
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleId]);
+    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
     if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
   }
 });
@@ -279,7 +279,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
     scheduleId = sIns.rows[0].id;
@@ -328,7 +328,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     );
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleId]);
+    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
     if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
   }
 });
@@ -358,7 +358,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
     scheduleId = sIns.rows[0].id;
@@ -402,7 +402,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     apptId = null; // already deleted
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleId]);
+    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
     if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
   }
 });
@@ -546,7 +546,7 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
     scheduleId = sIns.rows[0].id;
@@ -588,7 +588,7 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     expect(events.filter((e) => e.entity === 'appointment').length).toBeGreaterThanOrEqual(5);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE id = $1', [scheduleId]);
+    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
     if (customerId) await pool.query('DELETE FROM customers WHERE id = $1', [customerId]);
   }
 });

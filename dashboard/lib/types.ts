@@ -123,7 +123,7 @@ export interface Shift {
 }
 
 export interface ScheduleEntry {
-  id: string;
+  employee_schedule_id: string;
   tenant_id: string;
   employee_id: string;
   shift_date: string;  // YYYY-MM-DD

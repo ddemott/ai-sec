@@ -137,7 +137,7 @@ export async function createScheduleEntry(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-         VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, $6) RETURNING id`,
+         VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, $6) RETURNING employee_schedule_id AS id`,
         [tenantId, employeeId, shiftDate, isOff ? null : startTime, isOff ? null : endTime, isOff]
     );
     return res.rows[0].id;

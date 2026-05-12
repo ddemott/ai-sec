@@ -198,7 +198,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
            SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-         RETURNING id`,
+         RETURNING employee_schedule_id AS id`,
         [DYNATIRE_ID, empId, FUTURE]
       );
       shiftIdsToCleanup.push(s.rows[0].id);
@@ -242,7 +242,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     expect(cust.rows[0].name).toBe(`${tag}-AgentBookCustomer`);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE id = $1', [id]);
+    for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [id]);
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
 });
@@ -286,7 +286,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
            SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-         RETURNING id`,
+         RETURNING employee_schedule_id AS id`,
         [DYNATIRE_ID, empId, FUTURE]
       );
       shiftIdsToCleanup.push(s.rows[0].id);
@@ -360,7 +360,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     await pool.query('DELETE FROM customers WHERE id = $1', [blockerCust]);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-    for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE id = $1', [id]);
+    for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [id]);
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
 });

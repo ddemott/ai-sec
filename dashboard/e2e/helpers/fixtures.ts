@@ -184,7 +184,7 @@ export async function seedShift(
          DO UPDATE SET start_time = EXCLUDED.start_time,
                        end_time   = EXCLUDED.end_time,
                        is_off     = false
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
     [tenantId, employeeId, date, hours.start, hours.end]
   );
   return res.rows[0].id as string;

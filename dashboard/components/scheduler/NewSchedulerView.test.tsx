@@ -158,7 +158,7 @@ beforeEach(() => {
     { service_id: 'svc-2', employee_id: 'emp-2' }, // Carlos → Tire Rotation
     { service_id: 'svc-1', employee_id: 'emp-2' }, // Carlos → Oil Change
   ]);
-  mockApi.shifts.schedule.save.mockResolvedValue({ override: { id: 'new-1' } });
+  mockApi.shifts.schedule.save.mockResolvedValue({ override: { employee_schedule_id: 'new-1' } });
 });
 
 describe('NewSchedulerView', () => {

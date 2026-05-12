@@ -108,7 +108,7 @@ export function registerShiftRoutes(
       );
     });
 
-    logEvent(req, 'shift_override_created', { overrideId: res.rows[0].id, employeeId: body.employee_id, date: body.shift_date });
+    logEvent(req, 'shift_override_created', { overrideId: res.rows[0].employee_schedule_id, employeeId: body.employee_id, date: body.shift_date });
     return reply.send({ success: true, override: res.rows[0] });
   }, 'Failed to create shift override'));
 
@@ -125,7 +125,7 @@ export function registerShiftRoutes(
         `UPDATE employee_schedule SET
           start_time = COALESCE($1, start_time), end_time = COALESCE($2, end_time),
           is_off = COALESCE($3, is_off), updated_at = now()
-        WHERE id = $4 AND tenant_id = $5 RETURNING *`,
+        WHERE employee_schedule_id = $4 AND tenant_id = $5 RETURNING *`,
         [body.start_time, body.end_time, body.is_off, id, body.tenant_id]
       );
     });
@@ -143,7 +143,7 @@ export function registerShiftRoutes(
     if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM employee_schedule WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+      return client.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1 AND tenant_id = $2 RETURNING employee_schedule_id', [id, tenantId]);
     });
 
     if (res.rows.length === 0) {

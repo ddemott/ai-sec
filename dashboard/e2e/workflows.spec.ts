@@ -399,7 +399,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
        VALUES ($1, $2, $3, '08:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
          SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-       RETURNING id`,
+       RETURNING employee_schedule_id AS id`,
       [DYNATIRE_ID, employee.rows[0].id, shiftDate],
     );
     shiftId = shiftRes.rows[0].id;
@@ -460,7 +460,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
       await pool.query('DELETE FROM appointments WHERE id = $1', [apptId]);
     }
     if (shiftId) {
-      await pool.query('DELETE FROM employee_schedule WHERE id = $1', [shiftId]);
+      await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [shiftId]);
     }
   }
 });
