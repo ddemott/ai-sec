@@ -357,7 +357,7 @@ export type VoiceSessionOutcome =
   | 'other';
 
 export interface VoiceSession {
-  id: string;
+  voice_session_id: string;
   tenant_id: string;
   call_id: string;
   caller_phone: string;
@@ -379,7 +379,7 @@ export interface VoiceSession {
 }
 
 export interface VoiceSessionDisplay {
-  id: string;
+  voice_session_id: string;
   call_id: string;
   caller_phone: string;
   customer_name: string | null;

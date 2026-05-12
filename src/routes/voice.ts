@@ -211,7 +211,7 @@ export function registerVoiceRoutes(
     const calls = await withTenantClient(tenantId, async (client) => {
       const result = await client.query<VoiceSessionDisplay>(
         `SELECT
-          vs.id,
+          vs.voice_session_id,
           vs.call_id,
           vs.caller_phone,
           vs.customer_id,

@@ -169,7 +169,7 @@ export default function VoiceCallsView() {
             <div className="divide-y">
               {activeCalls.map(call => (
                 <div
-                  key={call.id}
+                  key={call.voice_session_id}
                   className="p-3 hover:brightness-110 cursor-pointer transition-colors"
                   onClick={() => {
                     // Fetch full session details
@@ -232,11 +232,11 @@ export default function VoiceCallsView() {
             <div className="divide-y">
               {callHistory.filter(c => outcomeFilter === 'all' || c.outcome === outcomeFilter).map(call => (
                 <div
-                  key={call.id}
+                  key={call.voice_session_id}
                   className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
-                    selectedCall?.id === call.id ? 'border-l-2' : ''
+                    selectedCall?.voice_session_id === call.voice_session_id ? 'border-l-2' : ''
                   }`}
-                  style={selectedCall?.id === call.id ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' } : undefined}
+                  style={selectedCall?.voice_session_id === call.voice_session_id ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' } : undefined}
                   onClick={() => setSelectedCall(call)}
                 >
                   <div className="flex items-center justify-between mb-1">
