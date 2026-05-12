@@ -57,6 +57,14 @@ CLAUDE.md may reference these rules inline for quick lookup. **This file is the 
 - Rationale: the composite IS the identity. A separate surrogate PK adds a column nobody references and forces an extra unique index on the composite anyway.
 - Existing: `service_employee (service_id, employee_id)`, `service_resource (service_id, resource_id)`.
 
+### 1:1 extension tables
+
+- **Reuse the parent's PK as the child's PK** — no surrogate `<extension>_id` added.
+- Shape: `parent_id UUID PRIMARY KEY REFERENCES parent(parent_id) ON DELETE CASCADE` — the table holds zero-or-one row per parent, attaching optional/specialized fields to a single parent row.
+- Rationale: same reason as junction tables — the relationship IS the identity. The PK-as-FK enforces the "at most one row per parent" invariant at the primary-key level (strictly stronger than a surrogate + a separate `UNIQUE` constraint, which could be dropped or forgotten). A surrogate UUID here would only ever be referenced via the parent's id; nothing else needs it.
+- Existing: `tenant_calendar_settings (tenant_id PRIMARY KEY REFERENCES tenants)` — at most one calendar integration per tenant. `appointment_sync_map (appointment_id PRIMARY KEY REFERENCES appointments)` — at most one external-event link per appointment.
+- JOIN symmetry already holds without a rename: both child PKs share the parent's column name, so `USING (tenant_id)` / `USING (appointment_id)` Just Works.
+
 ### Primary key data types
 
 Two patterns, decided by what kind of row the table holds:
