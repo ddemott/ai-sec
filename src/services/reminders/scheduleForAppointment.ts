@@ -87,3 +87,53 @@ export async function scheduleRemindersForAppointment(
     );
   }
 }
+
+/**
+ * Cancel any pending reminders for an appointment (status='scheduled') and
+ * seed a fresh bundle. Used by `/appointments/:id/update` when the operator
+ * moves an appointment's start_time — without this, the existing reminder
+ * rows fire at the OLD time, surprising both the customer ("why am I getting
+ * a 2pm reminder when my appointment was rescheduled to 4pm?") and the
+ * reception desk ("the customer just showed up at 2pm and we don't have
+ * them").
+ *
+ * Pending reminders are cancelled (not deleted) so the audit trail is
+ * preserved — `status='cancelled'` rows tell the support story when a
+ * customer complains they got conflicting reminders.
+ *
+ * Two-step (cancel-then-seed) rather than one transaction: scheduleFor-
+ * Appointment opens its own pool client, and the brief window between
+ * cancel and seed (sub-millisecond in practice) doesn't matter for
+ * fire-and-forget reminder math. Race with the worker is safe — the worker
+ * filters on `status='scheduled' AND scheduled_for <= now()`, so a
+ * still-cancelled-not-yet-seeded snapshot just yields zero rows for that
+ * appointment.
+ */
+export async function rescheduleRemindersForAppointment(
+  withTenantClient: WithTenantClient,
+  tenantId: string,
+  appointmentId: string,
+  logger?: FastifyBaseLogger,
+): Promise<void> {
+  try {
+    await withTenantClient(tenantId, async (client) => {
+      await client.query(
+        `UPDATE reminder_schedules
+            SET status = 'cancelled', updated_at = NOW()
+          WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'scheduled'`,
+        [appointmentId, tenantId],
+      );
+    });
+  } catch (err) {
+    logger?.error(
+      {
+        err: err instanceof Error ? err.message : err,
+        tenantId,
+        appointmentId,
+      },
+      'Failed to cancel existing reminders for appointment',
+    );
+    // Don't bail — still try to seed fresh reminders.
+  }
+  await scheduleRemindersForAppointment(withTenantClient, tenantId, appointmentId, logger);
+}

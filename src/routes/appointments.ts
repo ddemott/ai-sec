@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
-import { scheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
+import { scheduleRemindersForAppointment, rescheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { findOverlappingAppointment, isOverlapError, type AppointmentConflict } from '../services/conflictLookup';
 import { findNextAvailableSlots, type AvailableSlot } from '../services/availabilitySearch';
@@ -403,6 +403,11 @@ export function registerAppointmentRoutes(
     }
 
     let shortCircuited = false;
+    // Tracks whether the operator changed start_time — used after COMMIT to
+    // decide whether to reschedule reminders. Comparing body.start_time !==
+    // prior is the honest signal: a no-op update that re-submits the same
+    // start_time shouldn't tear down and re-seed reminders.
+    let startTimeChanged = false;
     await withTenantClient(body.tenant_id, async (client) => {
       // Wrap in transaction to ensure atomicity
       await client.query('BEGIN');
@@ -422,6 +427,9 @@ export function registerAppointmentRoutes(
           }
           effectiveStartTime = body.start_time ?? existing.rows[0].start_time;
           effectiveEndTime = body.end_time ?? existing.rows[0].end_time;
+          if (body.start_time && body.start_time !== existing.rows[0].start_time) {
+            startTimeChanged = true;
+          }
           const timeValidationError = validateAppointmentTimeRange(effectiveStartTime, effectiveEndTime);
           if (timeValidationError) {
             await client.query('ROLLBACK');
@@ -494,6 +502,13 @@ export function registerAppointmentRoutes(
     logEvent(req, 'appointment_updated', { appointmentId: id });
     // Sync update to calendars/CRMs
     syncAppointmentToAll(pool, body.tenant_id, id, 'update', req.log);
+    // If the operator moved the appointment in time, cancel the existing
+    // reminder bundle and seed a fresh one so customers don't receive
+    // reminders for the OLD time. Fire-and-forget — a reminder write
+    // failure must never fail the update RPC itself.
+    if (startTimeChanged) {
+      rescheduleRemindersForAppointment(withTenantClient, body.tenant_id, id, req.log);
+    }
     return reply.send({ success: true });
   }, 'Failed to update appointment'));
 }

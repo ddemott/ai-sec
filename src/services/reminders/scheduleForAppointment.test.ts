@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PoolClient } from 'pg';
 
-import { scheduleRemindersForAppointment, type WithTenantClient } from './scheduleForAppointment';
+import {
+  scheduleRemindersForAppointment,
+  rescheduleRemindersForAppointment,
+  type WithTenantClient,
+} from './scheduleForAppointment';
 
 /**
  * Unit coverage for the appointment-create → reminders wire.
@@ -275,5 +279,166 @@ describe('scheduleRemindersForAppointment', () => {
       tenantId: TENANT_ID,
       appointmentId: APPOINTMENT_ID,
     });
+  });
+});
+
+/**
+ * rescheduleRemindersForAppointment — wraps scheduleRemindersForAppointment
+ * with a cancel-then-seed step used by `/appointments/:id/update` when the
+ * operator moves an appointment's start_time. Tests pin:
+ *
+ *   - HAPPY: cancels existing scheduled rows (one UPDATE) AND re-seeds the
+ *     4-row bundle (4 INSERTs).
+ *   - SAD: UPDATE failure on cancel is logged but does NOT block the seed —
+ *     the customer must still get correctly-timed reminders for the new
+ *     start_time even if the audit-trail cancel failed transiently.
+ *   - SAD: seed failure post-cancel is swallowed by the inner helper (same
+ *     contract as the underlying scheduleRemindersForAppointment).
+ */
+describe('rescheduleRemindersForAppointment', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('HAPPY: cancels existing scheduled rows and re-seeds the 4-row bundle', async () => {
+    // WHO: tenant moving an appointment from 14:00 to 16:00.
+    // WHAT: helper issues an UPDATE reminder_schedules SET status='cancelled'
+    //       for the appointment's currently-scheduled rows, then writes 4
+    //       fresh reminder rows.
+    // WHEN: every reschedule that changed start_time (the route's guard).
+    // WHERE: src/services/reminders/scheduleForAppointment.ts
+    //        rescheduleRemindersForAppointment.
+    // WHY: pins the cancel-then-seed sequence + row counts. A regression
+    //      that drops the cancel step would let the worker fire BOTH the
+    //      old and new reminder bundles, double-notifying the customer.
+    const now = new Date('2026-05-11T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const startTime = new Date('2026-05-12T10:00:00Z'); // 24h ahead
+    const { client, queries } = buildMockClient({
+      appointmentRow: {
+        start_time: startTime.toISOString(),
+        customer_email: 'cust@example.com',
+        customer_phone: '+15551234567',
+      },
+    });
+
+    await rescheduleRemindersForAppointment(
+      buildWithTenantClient(client),
+      TENANT_ID,
+      APPOINTMENT_ID,
+    );
+
+    const cancels = queries.filter((q) =>
+      q.text.includes('UPDATE reminder_schedules') && q.text.includes("status = 'cancelled'"),
+    );
+    expect(cancels).toHaveLength(1);
+    expect(cancels[0].params).toEqual([APPOINTMENT_ID, TENANT_ID]);
+
+    const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
+    expect(inserts).toHaveLength(4);
+  });
+
+  it('SAD: UPDATE failure during cancel is logged but does NOT block the seed step', async () => {
+    // WHO: a transient DB blip on the UPDATE — e.g., row lock contention
+    //      with the worker reading the same appointment, or a connection
+    //      that drops mid-statement.
+    // WHAT: helper catches the UPDATE error, logs it, AND STILL CALLS the
+    //       seed step. Customer ends up with the new-time reminders even
+    //       though the audit-trail cancel was lost.
+    // WHEN: rare but real — Postgres lock contention shows up under load.
+    // WHERE: src/services/reminders/scheduleForAppointment.ts — the
+    //        try/catch around the UPDATE statement, AND the unconditional
+    //        seed call below it.
+    // WHY: reminders are customer-facing. The audit trail for cancel
+    //      ("we cancelled the old reminder") is operational nice-to-have;
+    //      the new-time reminder is load-bearing UX. Trade: lose the
+    //      cancel row, keep the customer informed of the right time.
+    let updateCalled = false;
+    let insertCount = 0;
+    const client = {
+      query: vi.fn(async (text: string) => {
+        if (text.includes('UPDATE reminder_schedules')) {
+          updateCalled = true;
+          throw new Error('lock timeout on reminder_schedules');
+        }
+        if (text.includes('FROM appointments a')) {
+          return {
+            rows: [{
+              start_time: '2026-05-12T10:00:00Z',
+              customer_email: 'cust@example.com',
+              customer_phone: '+15551234567',
+            }],
+          };
+        }
+        if (text.includes('INSERT INTO reminder_schedules')) {
+          insertCount++;
+          return { rows: [] };
+        }
+        return { rows: [] };
+      }),
+    } as unknown as PoolClient;
+
+    const logger = {
+      error: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      trace: vi.fn(),
+      fatal: vi.fn(),
+      level: 'info',
+      child: vi.fn(),
+      silent: vi.fn(),
+    };
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-11T10:00:00Z'));
+
+    await rescheduleRemindersForAppointment(
+      buildWithTenantClient(client),
+      TENANT_ID,
+      APPOINTMENT_ID,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      logger as any,
+    );
+
+    expect(updateCalled).toBe(true);
+    expect(insertCount).toBe(4); // seed proceeded despite cancel failure
+    expect(logger.error).toHaveBeenCalled();
+    // The log must surface tenantId + appointmentId so support can find the row
+    expect(logger.error.mock.calls[0][0]).toMatchObject({
+      tenantId: TENANT_ID,
+      appointmentId: APPOINTMENT_ID,
+    });
+  });
+
+  it('SAD: never throws even when both cancel AND seed fail (caller contract)', async () => {
+    // WHO: a complete reminder-subsystem outage — both the cancel UPDATE
+    //      and the seed INSERTs raise.
+    // WHAT: helper returns cleanly (resolves to undefined), never throws.
+    //       The caller (POST /:id/update) must not 500 just because
+    //       reminders fell over.
+    // WHEN: rare double-failure scenario. The contract still has to hold.
+    // WHERE: the catch block around the UPDATE + the underlying
+    //        scheduleRemindersForAppointment's own catch block.
+    // WHY: the update RPC is the user-facing path. A double-failure on
+    //      the fire-and-forget reminder side must not propagate. Pin the
+    //      never-throw contract so a refactor that "improves" the error
+    //      handling (e.g., re-throwing on certain error types) can't
+    //      silently regress the user-facing reliability.
+    const client = {
+      query: vi.fn(async () => {
+        throw new Error('reminder subsystem unreachable');
+      }),
+    } as unknown as PoolClient;
+
+    await expect(
+      rescheduleRemindersForAppointment(
+        buildWithTenantClient(client),
+        TENANT_ID,
+        APPOINTMENT_ID,
+      ),
+    ).resolves.toBeUndefined();
   });
 });

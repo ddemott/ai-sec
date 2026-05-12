@@ -39,11 +39,12 @@ vi.mock('../services/syncOrchestrator', () => ({
 }));
 vi.mock('../services/reminders/scheduleForAppointment', () => ({
     scheduleRemindersForAppointment: vi.fn(),
+    rescheduleRemindersForAppointment: vi.fn(),
 }));
 
 import { registerAppointmentRoutes } from './appointments';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
-import { scheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
+import { scheduleRemindersForAppointment, rescheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
 import {
     buildRouteTestApp,
     type RouteTestAppHandle,
@@ -1368,5 +1369,122 @@ describe('POST /appointments/:id/update', () => {
             'update',
             expect.anything(),
         );
+    });
+
+    it('HAPPY: rescheduleRemindersForAppointment fires when start_time changes', async () => {
+        // WHO: tenant moving an appointment from 14:00 to 16:00 via the
+        //      detail panel — the canonical reschedule case the worker has
+        //      to follow.
+        // WHAT: after the UPDATE commits, the route fires
+        //       rescheduleRemindersForAppointment(withTenantClient, tenant,
+        //       appointmentId, log) — fire-and-forget — so the worker stops
+        //       firing the old-time reminders and seeds fresh ones for the
+        //       new start_time.
+        // WHEN: update payload carries start_time AND it differs from the
+        //       row's current start_time (the SELECT in the handler reads
+        //       the prior value to compare).
+        // WHERE: src/routes/appointments.ts after COMMIT, the
+        //        `if (startTimeChanged) rescheduleRemindersForAppointment(...)`
+        //        branch.
+        // WHY: pinned 2026-05-13. Pre-fix, /appointments/:id/update updated
+        //      the appointment but left reminder_schedules rows pointing at
+        //      the OLD start_time, so the worker fired customer-facing
+        //      reminders ("your appointment is in 2 hours") for a time the
+        //      appointment no longer existed at. Surfaced by the 2026-05-13
+        //      Communications/Reminders TODO reconciliation.
+        handle.queryResponses.push({ rows: [] }); // BEGIN
+        handle.queryResponses.push({ rows: [{ start_time: '2026-04-15T14:00:00Z', end_time: '2026-04-15T15:00:00Z' }] }); // SELECT prior
+        handle.queryResponses.push({ rows: [] }); // UPDATE appointments
+        handle.queryResponses.push({ rows: [] }); // COMMIT
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                start_time: '2026-04-15T16:00:00Z', // moved 2h later
+                end_time: '2026-04-15T17:00:00Z',
+            },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(rescheduleRemindersForAppointment).toHaveBeenCalledTimes(1);
+        expect(rescheduleRemindersForAppointment).toHaveBeenCalledWith(
+            expect.any(Function), // withTenantClient
+            TENANT_ID,
+            APPOINTMENT_ID,
+            expect.anything(), // logger
+        );
+    });
+
+    it('HAPPY: rescheduleRemindersForAppointment does NOT fire when start_time is unchanged', async () => {
+        // WHO: tenant updating ONLY the description / location / employee on
+        //      an appointment — no time change, no need to disturb the
+        //      already-scheduled reminders.
+        // WHAT: the route detects body.start_time === prior.start_time (or
+        //       body.start_time absent entirely) and skips the reschedule
+        //       call. Reminders stay as-is.
+        // WHEN: updates that don't touch the time axis. The dashboard
+        //        detail panel can edit description/customer notes without
+        //        moving the appointment — this is the dominant non-move
+        //        case.
+        // WHERE: same branch as above; the `if (startTimeChanged)` guard.
+        // WHY: tearing down and re-seeding 4 reminders for every cosmetic
+        //      edit would burn DB writes, pollute the audit trail with
+        //      cancelled rows, and risk a brief window where the worker
+        //      sees zero scheduled rows for the appointment (mid-reschedule
+        //      race). The guard pins the no-op case.
+        handle.queryResponses.push({ rows: [] }); // BEGIN
+        handle.queryResponses.push({ rows: [] }); // UPDATE appointments (no SELECT — no start_time in payload)
+        handle.queryResponses.push({ rows: [] }); // COMMIT
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                description: 'Edited note — no time change',
+            },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(rescheduleRemindersForAppointment).not.toHaveBeenCalled();
+    });
+
+    it('HAPPY: same start_time as the existing row does NOT trigger reschedule (no-op submit)', async () => {
+        // WHO: a UX where the dashboard re-submits the entire appointment
+        //      payload on every save, including the unchanged start_time.
+        //      We've seen this pattern from form libraries that don't
+        //      diff-by-field.
+        // WHAT: the route SELECTs the prior start_time, sees it matches
+        //       body.start_time exactly, and SKIPS the reschedule call.
+        //       Tested explicitly because the "any start_time in body"
+        //       heuristic would over-trigger, sending unnecessary
+        //       reschedule traffic on every save.
+        // WHEN: every redundant save the dashboard issues — common shape.
+        // WHERE: src/routes/appointments.ts — the
+        //        `body.start_time !== existing.rows[0].start_time` arm of
+        //        the startTimeChanged flag.
+        // WHY: cheap-but-easy-to-get-wrong heuristic. Without this test, a
+        //      naive refactor ("just check if start_time was sent") would
+        //      churn the reminders table on every form save.
+        handle.queryResponses.push({ rows: [] }); // BEGIN
+        handle.queryResponses.push({ rows: [{ start_time: '2026-04-15T14:00:00Z', end_time: '2026-04-15T15:00:00Z' }] }); // SELECT prior
+        handle.queryResponses.push({ rows: [] }); // UPDATE appointments
+        handle.queryResponses.push({ rows: [] }); // COMMIT
+
+        const res = await app.inject({
+            method: 'POST',
+            url: `/appointments/${APPOINTMENT_ID}/update`,
+            payload: {
+                tenant_id: TENANT_ID,
+                start_time: '2026-04-15T14:00:00Z', // identical to prior
+                end_time: '2026-04-15T15:00:00Z',
+                description: 'Edited note only',
+            },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(rescheduleRemindersForAppointment).not.toHaveBeenCalled();
     });
 });
