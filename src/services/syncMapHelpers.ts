@@ -322,7 +322,7 @@ export async function pullRemoteCustomer(opts: {
             const tenantIdIdx = opts.updateValues.length + 2;
             await client.query(
               `UPDATE customers SET ${opts.updateSetClause}
-               WHERE id = $${localIdIdx} AND tenant_id = $${tenantIdIdx}`,
+               WHERE customer_id = $${localIdIdx} AND tenant_id = $${tenantIdIdx}`,
               [...opts.updateValues, localId, tenantId]
             );
             log.info(`${prefix} — merged ${provider} customer into existing customer (${provider}Id=${externalId} localId=${localId} phone=${fields.phone} — remote was newer)`);
@@ -368,7 +368,7 @@ export async function pullRemoteCustomer(opts: {
           const tenantIdIdx = opts.updateValues.length + 2;
           await client.query(
             `UPDATE customers SET ${opts.updateSetClause}
-             WHERE id = $${localIdIdx} AND tenant_id = $${tenantIdIdx}`,
+             WHERE customer_id = $${localIdIdx} AND tenant_id = $${tenantIdIdx}`,
             [...opts.updateValues, localId, tenantId]
           );
           log.info(`${prefix} — updated local customer from ${provider} (${provider}Id=${externalId} localId=${localId} — remote was newer)`);

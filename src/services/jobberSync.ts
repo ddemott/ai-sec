@@ -300,7 +300,7 @@ export async function pullJobberVisit(
         const insertRes = await client.query(
           `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
            VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-           RETURNING id`,
+           RETURNING appointment_id AS id`,
           [tenantId, resourceId, localCustomerId, visitData.startAt, visitData.endAt, description]
         );
         const localId = insertRes.rows[0].id;
