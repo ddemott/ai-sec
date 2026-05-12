@@ -293,32 +293,32 @@ Shared `syncMapHelpers.ts` extracted. Remaining opportunities:
 
 ## Communications & Reminders Integration
 
-Migrated from ai-secretary, stub implementations need wiring to production DB.
+Migrated from ai-secretary, stub implementations need wiring to production DB. **TODO reconciled against actual code state on 2026-05-13** — most of the original 14-item list shipped between 2026-04-09 and 2026-05-11 but the doc was never updated. Only Phase 5 ops items + one Phase 2 / Phase 3 gap remain.
 
 ### Phase 1: Database Adapter
-- [ ] Create DatabaseService adapter wrapping ai-sec's pool with reminder methods
-- [ ] Create `reminder_schedules` table migration
-- [ ] Wire TenantConfigService to DB (replace InMemoryTenantConfigService)
+- [x] ~~Create DatabaseService adapter wrapping ai-sec's pool with reminder methods.~~ `src/database/index.ts:146-327` exposes full CRUD: `createReminderSchedule`, `getReminderSchedule`, `getReminderSchedulesByTenant`, `getReminderSchedulesByAppointment`, `getDueReminders`, `updateReminderSchedule`.
+- [x] ~~Create `reminder_schedules` table migration.~~ `supabase/migrations/20260409200000_reminder_and_consent_tables.sql:20-46`. Status enum + FK to appointments/tenants with CASCADE + RLS + indexes + triggers.
+- [x] ~~Wire TenantConfigService to DB (replace InMemoryTenantConfigService).~~ `src/services/tenants/index.ts:133-339` `PostgresTenantConfigService` with 1-min TTL cache + `getTenantConfigAsync` + `getNotificationPreferences`. (Note: the agent-tools path now reads `/agent-tools/tenant-config` per call instead — see CLAUDE.md "Migrated, Not Yet Wired"; both paths exist and are live.)
 
 ### Phase 2: Communications
-- [ ] Install and configure nodemailer
-- [ ] Install and configure Twilio SDK for SMS
-- [ ] Wire email/SMS services to real providers
-- [ ] Create tenant notification preferences columns
+- [x] ~~Install and configure nodemailer.~~ `package.json` `"nodemailer": "^8.0.5"` + `@types/nodemailer`. `src/services/communications/emailService.ts:22-28` uses `nodemailer.createTransport` against Gmail SMTP when `NODE_ENV !== 'test'`.
+- [x] ~~Install and configure Twilio SDK for SMS.~~ `package.json` `"twilio": "^5.13.1"`. `src/services/communications/TwilioAdapter.ts` + `ProviderRegistry.ts` thread the provider selection.
+- [x] ~~Wire email/SMS services to real providers.~~ Prod path uses real Gmail SMTP + Twilio when env vars are present; dev/test path falls through to mock adapter. Shape is by-design (Build Principle: "test it or delete it" — the mock keeps the unit suite hermetic).
+- [ ] **Create tenant notification preferences columns.** No migration adds `sms_enabled` / `email_enabled` (or per-channel-per-event prefs) to `tenants`. Config service hardcodes defaults at `src/services/tenants/index.ts:166-169`. Either ship the columns + admin UI, OR explicitly decide hardcoded defaults are good enough for beta + delete this item.
 
 ### Phase 3: Reminders
-- [ ] Wire ReminderScheduler to real cron/timer system
-- [ ] Connect ReminderProcessor to communications service
-- [ ] Add appointment lifecycle hooks (create/update/cancel → schedule/reschedule/cancel reminders)
+- [x] ~~Wire ReminderScheduler to real cron/timer system.~~ `src/workers/reminderScheduler.ts:54-93` — 60s `setInterval` poll + `getDueReminders` batch + SIGTERM/SIGINT graceful shutdown. Runs in prod + when `ENABLE_REMINDER_SCHEDULER=true`.
+- [x] ~~Connect ReminderProcessor to communications service.~~ `src/services/reminders/reminderProcessor.ts:1-237` — calls `CommunicationService.sendAppointmentReminder` / `sendAppointmentConfirmation`, consent-gated via `ConsentService`.
+- [ ] **Appointment lifecycle hooks — only `create` is wired; `update` is not.** `POST /appointments/create` fires `scheduleRemindersForAppointment` at `src/routes/appointments.ts:177` (fire-and-forget). `POST /appointments/:id/cancel` updates `status='canceled'` and the worker filters on status — implicit cancellation, works in practice. **Real gap: `POST /appointments/:id/update`** doesn't reschedule reminders. If an owner moves a 2pm appointment to 4pm, the existing reminder still fires for the old time. Fix: in the update route, after the RPC succeeds and if `start_time` changed, mark the existing `reminder_schedules` rows for this appointment_id as `status='cancelled'` and call `scheduleRemindersForAppointment` again.
 
 ### Phase 4: Testing
-- [ ] Integration tests with real DB for reminder CRUD
-- [ ] E2e test: appointment created → reminder scheduled → sent
+- [x] ~~Integration tests with real DB for reminder CRUD.~~ `src/database/database.test.ts` (5+ CRUD tests) + `src/services/reminders/scheduleForAppointment.test.ts` (6 happy/sad-path tests).
+- [x] ~~E2E test: appointment created → reminder scheduled.~~ `dashboard/e2e/reminder-on-create.spec.ts:122-247` — 4-row offset math + email-only / phone-only / both contact propagation. Worker delivery is deliberately out of scope (would require waiting on the 60s tick + asserting against the mock provider's log; possible but not necessary while Twilio is gated on Telnyx unblock).
 
 ### Phase 5: Ops
-- [ ] Monitoring dashboard for reminder delivery rates
-- [ ] Retry logic for failed sends
-- [ ] Rate limiting for SMS sends
+- [ ] **Monitoring dashboard for reminder delivery rates.** `getSchedulerStatus()` exposes running/processing flags at `src/workers/reminderScheduler.ts:167-175` but no metrics emission. Wire `reminders_sent_total{channel,outcome}` + `reminders_failed_total{channel,reason}` into the existing in-process metrics registry (`src/services/metrics.ts`); Grafana/Loki/Better Stack will pick them up. Beta-blocker only if real delivery volume justifies it.
+- [ ] **Retry logic for failed sends.** `reminderScheduler.ts:74-84` catches exceptions and marks `status='failed'` once — no backoff, no retry queue. Add `retry_count` + `next_retry_at` columns to `reminder_schedules`, exponential backoff (e.g., 5m / 30m / 2h), max-retries cap. Provider 5xx retries; provider 4xx (invalid number, etc.) does not.
+- [ ] **Rate limiting for SMS sends.** No app-level limiter; relies on Twilio's per-account throttle. Add a token-bucket per tenant (e.g., 1 SMS/sec, 60/min) so a bad batch doesn't burn the Twilio rate-limit budget for legitimate sends.
 
 ---
 
