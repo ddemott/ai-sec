@@ -109,7 +109,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const tenantId = await createTenant(root, "Cap Shop", "auto-shop");
 
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Basic Bay', '{}') RETURNING id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Basic Bay', '{}') RETURNING resource_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -141,7 +141,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const tenantId = await createTenant(root, "Cap Shop", "auto-shop");
 
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift', 'oil-drain']) RETURNING id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift', 'oil-drain']) RETURNING resource_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -427,7 +427,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const tenantId = await createTenant(root, "Skill Shop", "auto-shop");
 
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift']) RETURNING id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift']) RETURNING resource_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -564,7 +564,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
 
             const tenantId = await createTenant(root, "Diag Shop", "auto-shop");
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Empty Bay', '{}') RETURNING id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Empty Bay', '{}') RETURNING resource_id as id",
                 [tenantId]
             )).rows[0].id;
             const customerId = await createCustomerFull(root, tenantId, "+15550009876", "Diag Customer");

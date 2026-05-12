@@ -888,7 +888,7 @@ describe('agentTools /scheduling-options', () => {
     //        shared selector, returns option list + diagnostics
     const { app } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'bay-1', capabilities: ['lift', 'oil'] }] },
+        { rows: [{ resource_id: 'bay-1', capabilities: ['lift', 'oil'] }] },
         { rows: [{ id: 'emp-1', skills: ['oil_change'] }] },
         { rows: [] }, // no existing appointments
         {
@@ -925,7 +925,7 @@ describe('agentTools /scheduling-options', () => {
     // WHY: The agent reads the reason aloud to steer the caller
     const { app } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'bay-1', capabilities: ['lift'] }] },
+        { rows: [{ resource_id: 'bay-1', capabilities: ['lift'] }] },
         { rows: [{ id: 'emp-1', skills: ['oil_change'] }] }, // lacks tire_rotation
         { rows: [] },
         {
@@ -979,7 +979,7 @@ describe('agentTools /scheduling-options', () => {
     //        bug; must be pinned.
     const { app } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'bay-1', capabilities: ['oil'] }] },
+        { rows: [{ resource_id: 'bay-1', capabilities: ['oil'] }] },
         { rows: [{ id: 'emp-1', skills: ['oil_change'] }] },
         { rows: [] }, // no existing appointments
         {
@@ -1028,7 +1028,7 @@ describe('agentTools /scheduling-options', () => {
     //        policy change rather than a silent regression.
     const { app } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'bay-1', capabilities: ['oil'] }] },
+        { rows: [{ resource_id: 'bay-1', capabilities: ['oil'] }] },
         { rows: [{ id: 'emp-1', skills: ['oil_change'] }] },
         { rows: [] },
         {

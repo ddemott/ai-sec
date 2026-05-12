@@ -94,7 +94,7 @@ async function createResourceWithCapabilities(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO resources (tenant_id, name, capabilities)
-         VALUES ($1, $2, $3) RETURNING id`,
+         VALUES ($1, $2, $3) RETURNING resource_id as id`,
         [tenantId, name, capabilities]
     );
     return res.rows[0].id;

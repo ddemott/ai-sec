@@ -45,7 +45,7 @@ export async function tableExists(client: Client, tableName: string): Promise<bo
 export async function setupBasicTenant(client: Client) {
     const tRes = await client.query("INSERT INTO tenants (name, business_type) VALUES ('DynaTire', 'mobile-tire') RETURNING id;");
     const tenantId = tRes.rows[0].id;
-    const rRes = await client.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 1') RETURNING id;", [tenantId]);
+    const rRes = await client.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 1') RETURNING resource_id as id;", [tenantId]);
     const resourceId = rRes.rows[0].id;
     const cRes = await client.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550001111', 'Alice') RETURNING id;", [tenantId]);
     const customerId = cRes.rows[0].id;
@@ -103,7 +103,7 @@ export async function createTenant(client: Client, name: string, businessType: s
 
 export async function createResource(client: Client, tenantId: string, name: string, description?: string): Promise<string> {
     const res = await client.query(
-        "INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING resource_id as id",
         [tenantId, name, description || null]
     );
     return res.rows[0].id;

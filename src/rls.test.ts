@@ -145,13 +145,13 @@ describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => 
 
             // Set context to tenant B and try to delete tenant A's resource
             await api.query(`SELECT set_tenant_context($1::UUID)`, [tenantB]);
-            const deleteRes = await api.query("DELETE FROM resources WHERE id = $1 RETURNING id", [resourceA]);
+            const deleteRes = await api.query("DELETE FROM resources WHERE resource_id = $1 RETURNING resource_id as id", [resourceA]);
 
             // Should silently affect 0 rows — route handlers should check rowCount for 404
             expect(deleteRes.rowCount).toBe(0);
 
             // Confirm resource still exists via root
-            const checkRes = await root.query("SELECT name FROM resources WHERE id = $1", [resourceA]);
+            const checkRes = await root.query("SELECT name FROM resources WHERE resource_id = $1", [resourceA]);
             expect(checkRes.rows[0].name).toBe("Protected-Resource");
         });
 
@@ -223,7 +223,7 @@ describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => 
 
             try {
                 await api.query(
-                    "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Sneaky') RETURNING id",
+                    "INSERT INTO resources (tenant_id, name) VALUES ($1, 'Sneaky') RETURNING resource_id as id",
                     [tenantB]
                 );
                 // If it doesn't throw, the row should not be visible to tenant B

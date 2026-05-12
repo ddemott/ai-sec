@@ -101,7 +101,7 @@ export async function findNextAvailableSlots(
         ss.s + ($3 || ' minutes')::interval AS slot_end,
         emp.id AS employee_id,
         emp.name AS employee_name,
-        res.id AS resource_id,
+        res.resource_id AS resource_id,
         res.name AS resource_name,
         COALESCE(array_length(emp.skills, 1), 0) AS skill_count,
         ROW_NUMBER() OVER (
@@ -130,7 +130,7 @@ export async function findNextAvailableSlots(
         AND (array_length($7::text[], 1) IS NULL OR emp.skills @> $7::text[])
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
-           WHERE a.resource_id = res.id
+           WHERE a.resource_id = res.resource_id
              AND a.status = 'scheduled'
              AND (a.is_deleted IS NULL OR a.is_deleted = false)
              AND a.start_time < ss.s + ($3 || ' minutes')::interval

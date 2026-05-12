@@ -119,7 +119,7 @@ async function seedTenant(client: Client, label: string, businessType: string): 
   // return for cross-tenant probes.
   const docRes = await client.query(
     `INSERT INTO tenant_docs (tenant_id, title, content, embedding)
-     VALUES ($1, $2, $3, $4::vector) RETURNING id`,
+     VALUES ($1, $2, $3, $4::vector) RETURNING tenant_doc_id as id`,
     [
       tenantId,
       `${label}-Secret-Policy`,
@@ -400,7 +400,7 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT is_deleted FROM resources WHERE id = $1', [B.resourceId]);
+    const check = await setup.query('SELECT is_deleted FROM resources WHERE resource_id = $1', [B.resourceId]);
     expect(check.rows[0].is_deleted).toBe(false);
   });
 
@@ -436,7 +436,7 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT title FROM tenant_docs WHERE id = $1', [B.knowledgeDocId]);
+    const check = await setup.query('SELECT title FROM tenant_docs WHERE tenant_doc_id = $1', [B.knowledgeDocId]);
     expect(check.rows[0]?.title).toBe('B-Secret-Policy');
   });
 });

@@ -56,6 +56,7 @@ export default function SkillMatrixView() {
     }))
     const res = (resources || []).map(r => ({
       ...r,
+      id: r.resource_id,
       type: 'resource' as const
     }))
     return [...emps, ...res]

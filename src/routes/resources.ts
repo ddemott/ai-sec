@@ -51,7 +51,7 @@ export function registerResourceRoutes(
       );
     });
 
-    logEvent(req, 'resource_created', { resourceId: res.rows[0].id, name: body.name });
+    logEvent(req, 'resource_created', { resourceId: res.rows[0].resource_id, name: body.name });
     return reply.send({ success: true, resource: res.rows[0] });
   }, 'Failed to create resource'));
 
@@ -78,7 +78,7 @@ export function registerResourceRoutes(
       const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
       values.push(id);
       values.push(tenantId);
-      return client.query(`UPDATE resources SET ${setClause} WHERE id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING id`, values);
+      return client.query(`UPDATE resources SET ${setClause} WHERE resource_id = $${values.length - 1} AND tenant_id = $${values.length} RETURNING resource_id`, values);
     });
     if (!assertRowAffected(res, reply, 'Resource')) return;
 
@@ -94,7 +94,7 @@ export function registerResourceRoutes(
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
         `UPDATE resources SET is_deleted = true, deleted_at = NOW(), is_active = false
-         WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+         WHERE resource_id = $1 AND tenant_id = $2 RETURNING resource_id`,
         [id, tenantId]
       );
     });

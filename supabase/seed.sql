@@ -35,11 +35,11 @@ VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'admin@dynatire.com', '$2b$10$hU
 ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- 2. Create bookable resources (service trucks)
-INSERT INTO resources (id, tenant_id, name, description)
+INSERT INTO resources (resource_id, tenant_id, name, description)
 VALUES
     ('18288e57-a958-41e4-be5f-e95a8539a06b', 'f234e471-0e60-4163-86c9-93cfd9338e3a', 'Truck 1', 'Ram ProMaster — main mobile unit, full tire inventory'),
     ('a7c3e912-4b1f-4d8e-9f2a-1c3d5e7f9a0b', 'f234e471-0e60-4163-86c9-93cfd9338e3a', 'Truck 2', 'Ford Transit — backup unit, rotation and flat repair only')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (resource_id) DO NOTHING;
 
 -- 3. Create sample customers (Chicago suburbs)
 INSERT INTO customers (id, tenant_id, phone, name, first_name, last_name, email, address, metadata)
@@ -162,11 +162,11 @@ DECLARE
     v_truck2 UUID := 'a7c3e912-4b1f-4d8e-9f2a-1c3d5e7f9a0b';
     v_tenant UUID := 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 BEGIN
-    SELECT id INTO v_svc_flat FROM services WHERE name = 'Flat Repair (On-site)' AND tenant_id = v_tenant;
-    SELECT id INTO v_svc_swap FROM services WHERE name = 'Seasonal Tire Swap' AND tenant_id = v_tenant;
-    SELECT id INTO v_svc_rotation FROM services WHERE name = 'Tire Rotation' AND tenant_id = v_tenant;
-    SELECT id INTO v_svc_install FROM services WHERE name = 'New Tire Install (x4)' AND tenant_id = v_tenant;
-    SELECT id INTO v_svc_balance FROM services WHERE name = 'Balancing' AND tenant_id = v_tenant;
+    SELECT service_id INTO v_svc_flat FROM services WHERE name = 'Flat Repair (On-site)' AND tenant_id = v_tenant;
+    SELECT service_id INTO v_svc_swap FROM services WHERE name = 'Seasonal Tire Swap' AND tenant_id = v_tenant;
+    SELECT service_id INTO v_svc_rotation FROM services WHERE name = 'Tire Rotation' AND tenant_id = v_tenant;
+    SELECT service_id INTO v_svc_install FROM services WHERE name = 'New Tire Install (x4)' AND tenant_id = v_tenant;
+    SELECT service_id INTO v_svc_balance FROM services WHERE name = 'Balancing' AND tenant_id = v_tenant;
 
     SELECT id INTO v_mike FROM employees WHERE name = 'Mike Rivera' AND tenant_id = v_tenant;
     SELECT id INTO v_carlos FROM employees WHERE name = 'Carlos Vega' AND tenant_id = v_tenant;

@@ -21,7 +21,7 @@ import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
 
 type Resource = {
-  id: string;
+  resource_id: string;
   name: string;
   description?: string | null;
   is_active: boolean;
@@ -92,7 +92,7 @@ export default function ResourceManagerView() {
     if (!selectedResource || !editForm.name.trim()) return;
     setSaving(true);
     try {
-      const res = await Api.resources.update(selectedResource.id, {
+      const res = await Api.resources.update(selectedResource.resource_id, {
         name: editForm.name.trim(),
         description: editForm.description.trim(),
         is_active: editForm.is_active
@@ -204,7 +204,7 @@ export default function ResourceManagerView() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {resources.map(res => (
           <Card 
-            key={res.id} 
+            key={res.resource_id} 
             onClick={() => { 
               setSelectedResource(res); 
               setEditForm({ name: res.name, description: res.description || '', is_active: res.is_active !== false });
@@ -225,8 +225,8 @@ export default function ResourceManagerView() {
             <p className="text-sm mb-4 line-clamp-1" style={{ color: 'var(--text-secondary)' }}>{res.description || 'No description provided'}</p>
             
             <div className="flex flex-wrap gap-1">
-              {(mappings || []).filter(m => m.resource_id === res.id).length > 0 ? (
-                (mappings || []).filter(m => m.resource_id === res.id).map(m => {
+              {(mappings || []).filter(m => m.resource_id === res.resource_id).length > 0 ? (
+                (mappings || []).filter(m => m.resource_id === res.resource_id).map(m => {
                   const s = (services || []).find(s => s.service_id === m.service_id);
                   return s ? (
                     <Badge key={s.service_id} variant="primary" className="text-[10px] uppercase">
@@ -294,11 +294,11 @@ export default function ResourceManagerView() {
             </h4>
             <div className="grid grid-cols-1 gap-2">
               {(services || []).map(service => {
-                const isMapped = (mappings || []).some(m => m.service_id === service.service_id && m.resource_id === selectedResource?.id);
+                const isMapped = (mappings || []).some(m => m.service_id === service.service_id && m.resource_id === selectedResource?.resource_id);
                 return (
                   <button
                     key={service.service_id}
-                    onClick={() => selectedResource && toggleServiceMapping(service.service_id, selectedResource.id)}
+                    onClick={() => selectedResource && toggleServiceMapping(service.service_id, selectedResource.resource_id)}
                     className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-md' : ''}`}
                     style={isMapped ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                   >
@@ -330,7 +330,7 @@ export default function ResourceManagerView() {
                 variant="ghost" 
                 size="sm" 
                 className="text-red-600 dark:text-red-400 font-bold hover:bg-red-50 dark:hover:bg-red-900/10"
-                onClick={() => { if (selectedResource) handleDelete(selectedResource.id); setIsEditModalOpen(false); }}
+                onClick={() => { if (selectedResource) handleDelete(selectedResource.resource_id); setIsEditModalOpen(false); }}
             >
               <Trash2 className="w-4 h-4 mr-2" /> {`Delete ${vocab.resource_label}`}
             </Button>

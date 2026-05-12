@@ -87,7 +87,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   }, [isOpen, tenantId, loading, services.length])
 
   const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ id: s.service_id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
-  const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ id: r.id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
+  const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ id: r.resource_id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
   const activeEmployees: WizardEmployee[] = employees.filter(e => !e.is_deleted && e.is_active !== false).map(e => ({ id: e.id, name: e.name, first_name: e.first_name ?? undefined, last_name: e.last_name ?? undefined, email: e.email ?? undefined, phone: e.phone ?? undefined, type: e.type, is_active: e.is_active }))
 
   const canAdvanceTo = (target: WizardStep): boolean => {

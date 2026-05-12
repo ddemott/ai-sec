@@ -64,7 +64,7 @@ export function filterEmployeesByService<T extends { id: string }>(
  * Filter a resource list to those permitted for the given service. Empty
  * `serviceId` (or a service with no mappings) returns the input unchanged.
  */
-export function filterResourcesByService<T extends { id: string }>(
+export function filterResourcesByService<T extends { resource_id: string }>(
   resources: T[],
   serviceId: string | null,
   serviceResource: Map<string, Set<string>>
@@ -72,5 +72,5 @@ export function filterResourcesByService<T extends { id: string }>(
   if (!serviceId) return resources;
   const allowed = serviceResource.get(serviceId);
   if (!allowed || allowed.size === 0) return resources;
-  return resources.filter((r) => allowed.has(r.id));
+  return resources.filter((r) => allowed.has(r.resource_id));
 }

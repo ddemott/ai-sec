@@ -5,7 +5,7 @@ import SettingsView from './components/SettingsView'
 import { mockJsonResponse } from './lib/test-utils'
 
 // Simple in-memory resources store for mocking
-let mockResources: Array<{ id: string; name: string; description?: string | null; is_active?: boolean }> = []
+let mockResources: Array<{ resource_id: string; name: string; description?: string | null; is_active?: boolean }> = []
 
 // Build a fetch mock that supports resources GET/CREATE/UPDATE
 function buildFetchMock() {
@@ -19,7 +19,7 @@ function buildFetchMock() {
     if (url.endsWith('/resources/create') && init?.method === 'POST') {
       const body = init.body ? JSON.parse(init.body as string) : {}
       const newRes = {
-        id: `res-${mockResources.length + 1}`,
+        resource_id: `res-${mockResources.length + 1}`,
         name: body.name,
         description: body.description ?? null,
         is_active: true,
@@ -32,7 +32,7 @@ function buildFetchMock() {
       const body = init.body ? JSON.parse(init.body as string) : {}
       const id = url.split('/resources/')[1].split('/')[0]
       mockResources = mockResources.map(r =>
-        r.id === id ? { ...r, ...('is_active' in body ? { is_active: body.is_active } : {}) } : r
+        r.resource_id === id ? { ...r, ...('is_active' in body ? { is_active: body.is_active } : {}) } : r
       )
       return mockJsonResponse({ success: true })
     }
@@ -45,7 +45,7 @@ function buildFetchMock() {
 
 beforeEach(() => {
   mockResources = [
-    { id: 'res-1', name: 'Resource 1', description: 'Primary unit', is_active: true },
+    { resource_id: 'res-1', name: 'Resource 1', description: 'Primary unit', is_active: true },
   ]
 
   window.localStorage.setItem('tenantId', 'tenant-owner-1')

@@ -77,7 +77,7 @@ export interface BusinessTemplate {
 }
 
 export interface Resource {
-  id: string;
+  resource_id: string;
   tenant_id: string;
   name: string;
   description?: string | null;

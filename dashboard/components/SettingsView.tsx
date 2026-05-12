@@ -334,7 +334,7 @@ export default function SettingsView() {
                 <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>No {vocab.resource_plural.toLowerCase()} yet. Add your first {vocab.resource_label.toLowerCase()} above.</div>
               ) : (
                 resources.map(r => (
-                  <div key={r.id} className="px-4 py-3 border-t flex items-center justify-between text-sm" style={{ borderColor: 'var(--border-soft)' }}>
+                  <div key={r.resource_id} className="px-4 py-3 border-t flex items-center justify-between text-sm" style={{ borderColor: 'var(--border-soft)' }}>
                     <div>
                       <div className="font-semibold">{r.name}</div>
                       {r.description && (
@@ -344,7 +344,7 @@ export default function SettingsView() {
                     <Button
                       variant="ghost"
                       className="h-8 text-xs px-3"
-                      onClick={() => toggleResourceActive(r.id, r.is_active ?? true)}
+                      onClick={() => toggleResourceActive(r.resource_id, r.is_active ?? true)}
                     >
                       <Badge variant={r.is_active ?? true ? 'success' : 'secondary'}>
                         {r.is_active ?? true ? 'Active' : 'Inactive'}

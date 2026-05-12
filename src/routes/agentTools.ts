@@ -547,8 +547,8 @@ export function registerAgentToolRoutes(
 
     const data = await withTenantClient(args.tenant_id, async (client) => {
       // Resources with union of explicit caps + derived from services.
-      const resRes = await client.query<{ id: string; capabilities: string[] }>(
-        `SELECT r.id,
+      const resRes = await client.query<{ resource_id: string; capabilities: string[] }>(
+        `SELECT r.resource_id,
                 ARRAY(
                   SELECT DISTINCT unnest(
                     r.capabilities ||
@@ -556,13 +556,13 @@ export function registerAgentToolRoutes(
                   )
                 ) AS capabilities
            FROM resources r
-           LEFT JOIN service_resource sr ON r.id = sr.resource_id
+           LEFT JOIN service_resource sr ON r.resource_id = sr.resource_id
            LEFT JOIN services s ON sr.service_id = s.service_id
            LEFT JOIN LATERAL unnest(s.required_resources) cap ON true
           WHERE r.tenant_id = $1
             AND r.is_active = true
             AND (r.is_deleted IS NULL OR r.is_deleted = false)
-          GROUP BY r.id, r.capabilities`,
+          GROUP BY r.resource_id, r.capabilities`,
         [args.tenant_id]
       );
 
@@ -609,7 +609,7 @@ export function registerAgentToolRoutes(
     });
 
     const resources: ResourceCandidate[] = data.resRes.rows.map((r) => ({
-      id: r.id,
+      id: r.resource_id,
       capabilities: r.capabilities || [],
     }));
     const employees: EmployeeCandidate[] = data.empRes.rows.map((e) => ({

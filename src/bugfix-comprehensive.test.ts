@@ -197,12 +197,12 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
     const resA = await createResource(client, tenantA, "Bay A");
 
     const res = await client.query(
-      "UPDATE resources SET name = $1 WHERE id = $2 AND tenant_id = $3",
+      "UPDATE resources SET name = $1 WHERE resource_id = $2 AND tenant_id = $3",
       ["HACKED", resA, tenantB]
     );
     expect(res.rowCount).toBe(0);
 
-    const check = await client.query("SELECT name FROM resources WHERE id = $1", [resA]);
+    const check = await client.query("SELECT name FROM resources WHERE resource_id = $1", [resA]);
     expect(check.rows[0].name).toBe("Bay A");
   });
 

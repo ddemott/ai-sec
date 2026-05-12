@@ -181,6 +181,6 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
         expect(persisted.rows[0].n).toBe(1);
 
         // Cleanup the second resource so we don't leak it into the next test.
-        await setup.query("DELETE FROM resources WHERE id = $1", [resource2Id]);
+        await setup.query("DELETE FROM resources WHERE resource_id = $1", [resource2Id]);
     });
 });

@@ -50,7 +50,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation: any user-supplied `tenant_id` (query or body) that doesn't match the JWT's `tenant_id` is rejected with 403 unless the caller is super-admin (added 2026-05-06 after the multi-tenant-isolation probe found cross-tenant data leak via `?tenant_id=` override). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
-- `/supabase/migrations` — 101 SQL migrations.
+- `/supabase/migrations` — 102 SQL migrations.
 - `/shared` — Cross-runtime: `getEmbedding.ts`, `scheduling.ts`
 - `/supabase/seed.sql` — Platform admin + DynaTire tenant
 - `/scripts` — `qa-live-test.py`, `verify-claude-md.ts` drift detector

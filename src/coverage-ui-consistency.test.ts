@@ -118,7 +118,7 @@ describe("Coverage Backend ↔ Dashboard Consistency", () => {
         // open-hours math doesn't drop the service for resource reasons
         // (the schedule-only RPC actually doesn't filter on resource
         // capability, but we wire it anyway to mirror real seed data).
-        const r = await client.query("SELECT id FROM resources WHERE tenant_id = $1 LIMIT 1", [tenantId]);
+        const r = await client.query("SELECT resource_id as id FROM resources WHERE tenant_id = $1 LIMIT 1", [tenantId]);
         if (r.rows[0]) {
             await client.query(
                 "INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES ($1, $2, $3)",

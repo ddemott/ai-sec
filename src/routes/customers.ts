@@ -131,7 +131,7 @@ export function registerCustomerRoutes(
                 r.name as resource_name,
                 e.name as employee_name
          FROM appointments a
-         LEFT JOIN resources r ON r.id = a.resource_id
+         LEFT JOIN resources r ON r.resource_id = a.resource_id
          LEFT JOIN employees e ON e.id = a.employee_id
          WHERE a.customer_id = $1 AND a.tenant_id = $2 AND a.is_deleted = false
          ORDER BY a.start_time DESC`,

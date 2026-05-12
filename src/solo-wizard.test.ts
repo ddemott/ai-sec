@@ -62,7 +62,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
     it("is_personal should default to false on resources", async () => {
         if (!dbAvailable) return;
         const res = await client.query(
-            `SELECT is_personal FROM resources WHERE id = $1`,
+            `SELECT is_personal FROM resources WHERE resource_id = $1`,
             [resourceId]
         );
         expect(res.rows[0].is_personal).toBe(false);
@@ -99,7 +99,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
         // 3. Auto-create a personal resource (their chair/station)
         const rRes = await client.query(
             `INSERT INTO resources (tenant_id, name, is_personal)
-             VALUES ($1, 'My Station', true) RETURNING id`,
+             VALUES ($1, 'My Station', true) RETURNING resource_id as id`,
             [soloTenantId]
         );
         const personalResourceId = rRes.rows[0].id;

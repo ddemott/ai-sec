@@ -121,6 +121,7 @@ Pilots done:
 
 - [x] ~~**Pilot 1 — `record_versions.id` → `record_version_id`.**~~ Closed 2026-05-11 (commit `40c57d5`). Migration `20260512000000`. 2 RPCs (`create_record_version`, `get_record_history`) + 1 view (`recent_record_changes`) recreated. Backend 1,781 / dashboard 620 / E2E 71 all green. ~30 min wall-clock.
 - [x] ~~**Pilot 2 — `tenant_skills.id` → `tenant_skill_id`.**~~ Closed 2026-05-11 (commit `40c57d5`). Migration `20260512000001`. No RPCs/views referenced the column — plain ALTER TABLE. ~20 min wall-clock. Caveat: full sweep caught a real-DB test (`bugfix-comprehensive.test.ts`) that targeted runs missed; full backend suite is load-bearing for these renames.
+- [x] ~~**Pilot 10 — `resources.id` → `resource_id`.**~~ Closed 2026-05-12. Migration `20260512000011`. Most-entangled pilot to date: 3 RPCs recreated (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`); audit trigger `fn_audit_trigger` upgraded to PK-aware CASE (latent bug — services pilot only fixed `auto_version_trigger`, fn_audit_trigger fires on appointments/customers/resources and would have produced NULL `record_id` rows after the rename); `auto_version_trigger` CASE extended to include resources. Sweep: 11 backend source files (routes/services/availabilitySearch), `src/test-utils.ts`, 13 test files (with `RETURNING resource_id as id` backward-compat alias), `supabase/seed.sql` (also fixed services.id leftover from services pilot), 25 dashboard components/types (Resource.id → resource_id + 5 local types: ResourceColumnsView prop, SchedulerResource, QuickBookResource, DashboardResource, ResourceManagerView local Resource), 4 dashboard test fixtures, polymorphic SkillMatrixView + SkillRelationshipMap mapped at boundary. Backend 1,781 / dashboard 620 / agent 85 all green.
 
 Remaining (ordered cheapest → most blast radius):
 
@@ -134,7 +135,6 @@ Remaining (ordered cheapest → most blast radius):
 - [ ] **`tenant_calendar_settings.id` / `tenant_docs.id` / `tenant_integration_settings.id`.** Internal config tables, no inbound FKs. ~30 min each.
 - [ ] **`users.id` → `user_id`.** Touches auth + JWT payload + every authenticated request. ~1h.
 - [ ] **`services.id` → `service_id`.** 2 inbound FKs (`appointments`, `service_employee/_resource`). Touches booking RPCs. ~1-2h.
-- [ ] **`resources.id` → `resource_id`.** 3 inbound FKs (`appointments`, `soft_reservations`, `service_resource`). Touches booking RPCs (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`). ~1-2h. RPC bodies already extracted + rename-applied to `/tmp/rpc_*_new.sql` before the convo pivoted — restartable from there.
 - [ ] **`employees.id` → `employee_id`.** 3 inbound FKs (`appointments`, `employee_schedule`, `service_employee`). Touches booking RPCs + scheduler heavily. ~1-2h.
 - [ ] **`employee_schedule.id` → `employee_schedule_id`.** Read by shift-coverage RPCs. ~30 min.
 

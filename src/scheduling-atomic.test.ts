@@ -270,9 +270,9 @@ describe("book_with_scheduling_atomic()", () => {
             const tenantId = await createTenant(root, "Full Service", "auto-shop");
             // Bay 1 has lift, Bay 2 doesn't
             const bay1 = await createResource(root, tenantId, "Bay 1");
-            await root.query("UPDATE resources SET capabilities = $1 WHERE id = $2", ['{lift,air-tools}', bay1]);
+            await root.query("UPDATE resources SET capabilities = $1 WHERE resource_id = $2", ['{lift,air-tools}', bay1]);
             const bay2 = await createResource(root, tenantId, "Bay 2");
-            await root.query("UPDATE resources SET capabilities = $1 WHERE id = $2", ['{basic}', bay2]);
+            await root.query("UPDATE resources SET capabilities = $1 WHERE resource_id = $2", ['{basic}', bay2]);
 
             const result = await bookWithScheduling({
                 tenant_id: tenantId,
@@ -297,7 +297,7 @@ describe("book_with_scheduling_atomic()", () => {
             const bay1 = await createResource(root, tenantId, "Bay 1");
             const bay2 = await createResource(root, tenantId, "Bay 2");
             const bay3 = await createResource(root, tenantId, "Bay 3");
-            await root.query("UPDATE resources SET capabilities = $1 WHERE id = ANY($2)", ['{lift,air-tools}', [bay1, bay2, bay3]]);
+            await root.query("UPDATE resources SET capabilities = $1 WHERE resource_id = ANY($2)", ['{lift,air-tools}', [bay1, bay2, bay3]]);
 
             const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change", "brakes"]);
             const emp2 = await createEmployee(root, tenantId, "Bob", ["oil-change", "tires"]);
@@ -362,7 +362,7 @@ describe("book_with_scheduling_atomic()", () => {
             await root.query("DELETE FROM resources WHERE tenant_id = $1", [tenantId]);
 
             const bay1 = await createResource(root, tenantId, "Bay 1");
-            await root.query("UPDATE resources SET capabilities = $1 WHERE id = $2", ['{lift}', bay1]);
+            await root.query("UPDATE resources SET capabilities = $1 WHERE resource_id = $2", ['{lift}', bay1]);
             const emp1 = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
             await createScheduleEntry(root, tenantId, emp1, '2026-04-06', '08:00', '17:00');
 
@@ -374,7 +374,7 @@ describe("book_with_scheduling_atomic()", () => {
                 // OLD approach: 4 separate queries (kept as a perf
                 // baseline; the third now reads employee_schedule).
                 const oldStart = performance.now();
-                await root.query("SELECT id, capabilities FROM resources WHERE tenant_id = $1 AND is_active = true", [tenantId]);
+                await root.query("SELECT resource_id as id, capabilities FROM resources WHERE tenant_id = $1 AND is_active = true", [tenantId]);
                 await root.query("SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true", [tenantId]);
                 await root.query("SELECT employee_id, shift_date, start_time, end_time FROM employee_schedule WHERE tenant_id = $1 AND is_off = false", [tenantId]);
                 await root.query("SELECT resource_id, start_time, end_time FROM appointments WHERE tenant_id = $1 AND status = 'scheduled'", [tenantId]);

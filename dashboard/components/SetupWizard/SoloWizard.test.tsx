@@ -99,7 +99,7 @@ function setupFetchMock() {
           ok: true,
           json: async () => ({
             success: true,
-            resource: { id: RESOURCE_ID, name: 'Main Station' },
+            resource: { resource_id: RESOURCE_ID, name: 'Main Station' },
           }),
         })
       }

@@ -36,8 +36,8 @@ const employees = [
   { id: 'emp-dana', name: 'Dana' },
 ];
 const resources = [
-  { id: 'bay-1', name: 'Bay 1' },
-  { id: 'bay-3', name: 'Bay 3' },
+  { resource_id: 'bay-1', name: 'Bay 1' },
+  { resource_id: 'bay-3', name: 'Bay 3' },
 ];
 const services = [
   { service_id: 'svc-tire', name: 'Tire Mount', duration_minutes: 60 },

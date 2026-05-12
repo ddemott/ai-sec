@@ -320,11 +320,11 @@ export default function ServiceAssignmentView() {
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Authorized {vocab.resource_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {resources.map(res => {
-                    const isMapped = resMappings.some(m => m.service_id === selectedService?.service_id && m.resource_id === res.id)
+                    const isMapped = resMappings.some(m => m.service_id === selectedService?.service_id && m.resource_id === res.resource_id)
                     return (
                       <button 
-                        key={res.id}
-                        onClick={() => selectedService && toggleResourceMapping(selectedService.service_id, res.id)}
+                        key={res.resource_id}
+                        onClick={() => selectedService && toggleResourceMapping(selectedService.service_id, res.resource_id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all`}
                         style={isMapped ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)', borderColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
@@ -444,10 +444,10 @@ export default function ServiceAssignmentView() {
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                 {resources.map(res => (
                   <Card 
-                    key={res.id}
-                    onClick={() => setSelectedResourceIds(prev => prev.includes(res.id) ? prev.filter(id => id !== res.id) : [...prev, res.id])}
-                    className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.id) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    style={selectedResourceIds.includes(res.id) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
+                    key={res.resource_id}
+                    onClick={() => setSelectedResourceIds(prev => prev.includes(res.resource_id) ? prev.filter(id => id !== res.resource_id) : [...prev, res.resource_id])}
+                    className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.resource_id) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    style={selectedResourceIds.includes(res.resource_id) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
                   >
                     <div className="font-bold">{res.name}</div>
                     <div className="text-xs text-gray-500 line-clamp-1">{res.description || 'No description'}</div>

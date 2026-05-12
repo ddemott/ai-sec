@@ -247,12 +247,12 @@ describe("CRUD Routes - Database Level", () => {
 
             // Use the resource created by setupBasicTenant
             await client.query(
-                "UPDATE resources SET name = $1, description = $2 WHERE id = $3",
+                "UPDATE resources SET name = $1, description = $2 WHERE resource_id = $3",
                 ["Updated Truck", "Newly painted", resourceId]
             );
 
             const res = await client.query(
-                "SELECT * FROM resources WHERE id = $1",
+                "SELECT * FROM resources WHERE resource_id = $1",
                 [resourceId]
             );
             expect(res.rows[0].name).toBe("Updated Truck");
@@ -268,12 +268,12 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             await client.query(
-                "UPDATE resources SET is_active = false WHERE id = $1",
+                "UPDATE resources SET is_active = false WHERE resource_id = $1",
                 [resourceId]
             );
 
             const res = await client.query(
-                "SELECT is_active FROM resources WHERE id = $1",
+                "SELECT is_active FROM resources WHERE resource_id = $1",
                 [resourceId]
             );
             expect(res.rows[0].is_active).toBe(false);
@@ -744,7 +744,7 @@ describe("CRUD Routes - Database Level", () => {
 
             const fakeId = "00000000-0000-0000-0000-000000000099";
             const res = await client.query(
-                "DELETE FROM resources WHERE id = $1 AND tenant_id = $2 RETURNING id",
+                "DELETE FROM resources WHERE resource_id = $1 AND tenant_id = $2 RETURNING resource_id as id",
                 [fakeId, tenantId]
             );
 

@@ -126,7 +126,7 @@ export function registerReminderRoutes(
     // Verify reminder belongs to tenant
     const reminder = await withTenantClient(tenantId, async (client) => {
       const result = await client.query(
-        'SELECT * FROM reminder_schedules WHERE id = $1 AND tenant_id = $2',
+        'SELECT * FROM reminder_schedules WHERE reminder_schedule_id = $1 AND tenant_id = $2',
         [id, tenantId]
       );
       return result.rows[0];
@@ -182,7 +182,7 @@ export function registerReminderRoutes(
     // Verify reminder belongs to tenant and cancel it
     const result = await withTenantClient(tenantId, async (client) => {
       const check = await client.query(
-        'SELECT * FROM reminder_schedules WHERE id = $1 AND tenant_id = $2',
+        'SELECT * FROM reminder_schedules WHERE reminder_schedule_id = $1 AND tenant_id = $2',
         [id, tenantId]
       );
 

@@ -26,7 +26,7 @@ vi.mock('@/lib/VocabularyContext', () => ({
 
 // Mock static data hook
 const mockRefreshResources = vi.fn()
-let mockResources: Array<{ id: string; name: string; description?: string; is_active?: boolean }> = []
+let mockResources: Array<{ resource_id: string; name: string; description?: string; is_active?: boolean }> = []
 let mockServices: Array<{ service_id: string; name: string; description?: string; duration_minutes: number }> = []
 let mockEmployees: Array<{ id: string; name: string }> = []
 let mockStaticLoading = false
@@ -262,8 +262,8 @@ describe('BusinessSettingsView', () => {
 
     test('displays existing resources', async () => {
       mockResources = [
-        { id: 'res-1', name: 'Bay 1', description: 'Main bay', is_active: true },
-        { id: 'res-2', name: 'Bay 2', is_active: false },
+        { resource_id: 'res-1', name: 'Bay 1', description: 'Main bay', is_active: true },
+        { resource_id: 'res-2', name: 'Bay 2', is_active: false },
       ]
 
       render(<BusinessSettingsView />)
@@ -278,7 +278,7 @@ describe('BusinessSettingsView', () => {
     })
 
     test('toggles resource active status', async () => {
-      mockResources = [{ id: 'res-1', name: 'Bay 1', is_active: true }]
+      mockResources = [{ resource_id: 'res-1', name: 'Bay 1', is_active: true }]
 
       render(<BusinessSettingsView />)
       await waitFor(() => {

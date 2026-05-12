@@ -29,7 +29,7 @@ import type { Appointment } from '../lib/types';
 
 interface AppointmentDetailPanelProps {
   customers: { id: string; name: string; phone: string; tenant_id?: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string }[];
-  resources: { id: string; name: string }[];
+  resources: { resource_id: string; name: string }[];
   employees: { id: string; name: string; type?: string }[];
   services: { service_id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
@@ -100,7 +100,7 @@ export function AppointmentDetailPanel({
     if (form.employee_id && !eligibleEmployees.some((e) => String(e.id) === form.employee_id)) {
       setForm((prev) => ({ ...prev, employee_id: '' }));
     }
-    if (form.resource_id && !eligibleResources.some((r) => r.id === form.resource_id)) {
+    if (form.resource_id && !eligibleResources.some((r) => r.resource_id === form.resource_id)) {
       setForm((prev) => ({ ...prev, resource_id: '' }));
     }
   }, [eligibleEmployees, eligibleResources, form.employee_id, form.resource_id, setForm]);
@@ -228,7 +228,7 @@ export function AppointmentDetailPanel({
                                           label={vocab.resource_label}
                                           value={form.resource_id}
                                           onChange={e => onFormChange({...form, resource_id: e.target.value})}
-                                          options={eligibleResources.map(r => ({ label: r.name, value: r.id }))}
+                                          options={eligibleResources.map(r => ({ label: r.name, value: r.resource_id }))}
                                       />
                                       <Select
                                           label={`${vocab.employee_label} Assigned`}
@@ -342,7 +342,7 @@ export function AppointmentDetailPanel({
                                   <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid var(--border-soft)' }}>
                                       <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{vocab.resource_label}</span>
                                       <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{
-                                        resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'
+                                        resources.find(r => r.resource_id === selectedAppointment?.resource_id)?.name || 'Unknown'
                                       }</span>
                                   </div>
                                   <div className="flex justify-between items-center">
@@ -366,7 +366,7 @@ export function AppointmentDetailPanel({
                       </div>
                       <Card title="Summary" variant="dark">
                           <p className="text-lg leading-relaxed font-medium italic">
-                              {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
+                              {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.resource_id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
                           </p>
                       </Card>
                   </div>

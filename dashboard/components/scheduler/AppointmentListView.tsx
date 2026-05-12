@@ -5,7 +5,7 @@ import type { SchedulerAppointment } from './useSchedulerData';
 import { formatTimeFromISO } from '../../lib/utils';
 
 interface SchedulerEmployee { id: string; name: string }
-interface SchedulerResource { id: string; name: string }
+interface SchedulerResource { resource_id: string; name: string }
 
 interface AppointmentListViewProps {
   appointments: SchedulerAppointment[];
@@ -44,7 +44,7 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
   };
 
   const findResource = (id: string) => {
-    return resources.find((r) => String(r.id) === String(id));
+    return resources.find((r) => String(r.resource_id) === String(id));
   };
 
   return (

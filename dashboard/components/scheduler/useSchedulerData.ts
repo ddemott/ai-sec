@@ -25,7 +25,7 @@ function toDateString(date: Date): string {
 }
 
 interface SchedulerEmployee { id: string; name: string }
-interface SchedulerResource { id: string; name: string }
+interface SchedulerResource { resource_id: string; name: string }
 interface SchedulerShift { employee_id?: string; start_time?: string; end_time?: string }
 
 export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
@@ -93,7 +93,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
   const appointmentsByResource = useMemo(() => {
     const map = new Map<string, SchedulerAppointment[]>();
     for (const res of resources) {
-      map.set(String(res.id), []);
+      map.set(String(res.resource_id), []);
     }
     for (const appt of appointments) {
       const key = String(appt.resource_id);

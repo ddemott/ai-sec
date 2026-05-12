@@ -14,7 +14,8 @@ import type { BrokenChain } from './useSkillMapData'
 
 export default function SkillRelationshipMap() {
   const tenantId = useActiveTenantId()
-  const { employees, resources, services, loading, refresh } = useStaticData(tenantId)
+  const { employees, resources: rawResources, services, loading, refresh } = useStaticData(tenantId)
+  const resources = rawResources.map(r => ({ id: r.resource_id, name: r.name }))
   const vocab = useVocabulary()
   const {
     employeeNodes,

@@ -53,8 +53,8 @@ const employees = [
 ];
 
 const resources = [
-  { id: 'res-1', name: 'Bay 1' },
-  { id: 'res-2', name: 'Bay 2' },
+  { resource_id: 'res-1', name: 'Bay 1' },
+  { resource_id: 'res-2', name: 'Bay 2' },
 ];
 
 afterEach(() => {

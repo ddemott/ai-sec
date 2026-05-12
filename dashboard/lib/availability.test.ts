@@ -87,15 +87,15 @@ describe('filterEmployeesByService', () => {
 
 describe('filterResourcesByService', () => {
   const resources = [
-    { id: 'bay-1', name: 'Bay 1' },
-    { id: 'bay-2', name: 'Bay 2' },
-    { id: 'bay-3', name: 'Bay 3' },
+    { resource_id: 'bay-1', name: 'Bay 1' },
+    { resource_id: 'bay-2', name: 'Bay 2' },
+    { resource_id: 'bay-3', name: 'Bay 3' },
   ];
   const { serviceResource } = buildMappingMaps(seRows, srRows);
 
   test('filters resources to those mapped to the service', () => {
     const out = filterResourcesByService(resources, 'svc-1', serviceResource);
-    expect(out.map((r) => r.id)).toEqual(['bay-1', 'bay-2']);
+    expect(out.map((r) => r.resource_id)).toEqual(['bay-1', 'bay-2']);
     // WHO: operator who picked Tire Mount (svc-1) | WHAT: Bay 3 hidden because the service can't run there (e.g., Bay 3 is the alignment rack only) | WHEN: service is set | WHERE: filterResourcesByService capability gate | WHY: a tenant that configures resource-capability mapping deserves the same enforcement at the UI level as the RPC provides — operator picking Bay 3 for Tire Mount would land NO_AVAILABILITY at submit; filtering up-front saves that round trip
   });
 

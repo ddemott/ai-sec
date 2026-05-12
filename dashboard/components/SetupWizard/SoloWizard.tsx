@@ -229,7 +229,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         name: resourceName,
         description: 'Auto-created during solo setup',
       })
-      const resourceId = resResult.success && resResult.resource ? resResult.resource.id : null
+      const resourceId = resResult.success && resResult.resource ? resResult.resource.resource_id : null
       if (!resourceId) throw new Error('Failed to create work station')
 
       // 2. Assign all services to employee + resource

@@ -238,7 +238,7 @@ export function registerAppointmentRoutes(
          jsonb_build_object('name', r.name) AS resources
        FROM appointments a
        LEFT JOIN customers c ON c.id = a.customer_id
-       LEFT JOIN resources r ON r.id = a.resource_id
+       LEFT JOIN resources r ON r.resource_id = a.resource_id
        ${whereClause}
        ORDER BY a.start_time ASC`;
 

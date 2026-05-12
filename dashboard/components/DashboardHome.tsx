@@ -47,7 +47,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   }
   interface DashboardEmployee { id: string; name: string; first_name?: string | null; last_name?: string | null; type?: string; is_active: boolean }
   interface DashboardService { service_id: string; name: string }
-  interface DashboardResource { id: string; name: string }
+  interface DashboardResource { resource_id: string; name: string }
 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([])
   const [employees, setEmployees] = useState<DashboardEmployee[]>([])

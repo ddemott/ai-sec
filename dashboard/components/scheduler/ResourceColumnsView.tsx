@@ -6,7 +6,7 @@ import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR, LABEL_WIDTH, formatHourLabel 
 import type { SchedulerAppointment } from './useSchedulerData';
 
 interface ResourceColumnsViewProps {
-  resources: { id: string; name: string }[];
+  resources: { resource_id: string; name: string }[];
   appointmentsByResource: Map<string, SchedulerAppointment[]>;
   shiftsByEmployee: Map<string, { start_time?: string; end_time?: string }[]>;
   employees: { id: string; name: string }[];
@@ -73,7 +73,7 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
       </div>
 
       {resources.map((resource) => {
-        const resId = String(resource.id);
+        const resId = String(resource.resource_id);
         const resAppointments = appointmentsByResource.get(resId) || [];
         const coverageSlots = buildCoverageSlots(resId, resAppointments, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR);
 

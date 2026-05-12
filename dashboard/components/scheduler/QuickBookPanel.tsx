@@ -13,7 +13,7 @@ import { ConflictModal, type BookingConflict, type AvailableAlternative } from '
 
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
 interface QuickBookEmployee { id: string; name: string; skills?: string[] }
-interface QuickBookResource { id: string; name: string }
+interface QuickBookResource { resource_id: string; name: string }
 interface QuickBookService { service_id: string; name: string; duration_minutes?: number }
 
 interface QuickBookPanelProps {
@@ -91,7 +91,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
     if (employeeId && !eligibleEmployees.some((e) => String(e.id) === employeeId)) {
       setEmployeeId('');
     }
-    if (resourceId && !eligibleResources.some((r) => r.id === resourceId)) {
+    if (resourceId && !eligibleResources.some((r) => r.resource_id === resourceId)) {
       setResourceId('');
     }
   }, [eligibleEmployees, eligibleResources, employeeId, resourceId]);
@@ -137,7 +137,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
   useEffect(() => {
     if (isOpen && prefill) {
-      setResourceId(prefill.resourceId || resources[0]?.id || '');
+      setResourceId(prefill.resourceId || resources[0]?.resource_id || '');
       setEmployeeId(prefill.employeeId || '');
       setCustomerId(customers[0]?.id || '');
       setServiceId('');
@@ -266,7 +266,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           label={vocab.resource_label}
           value={resourceId}
           onChange={(e) => setResourceId(e.target.value)}
-          options={eligibleResources.map((r) => ({ label: r.name, value: r.id }))}
+          options={eligibleResources.map((r) => ({ label: r.name, value: r.resource_id }))}
           data-testid="quick-book-resource"
         />
 

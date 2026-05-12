@@ -70,7 +70,7 @@ export async function syncAppointmentToCalendar(
                 r.name as resource_name, s.name as service_name
          FROM appointments a
          LEFT JOIN customers c ON c.id = a.customer_id
-         LEFT JOIN resources r ON r.id = a.resource_id
+         LEFT JOIN resources r ON r.resource_id = a.resource_id
          LEFT JOIN services s ON s.service_id = (
            SELECT sm.service_id FROM service_resource_mapping sm WHERE sm.resource_id = a.resource_id LIMIT 1
          )
@@ -113,7 +113,7 @@ export async function syncAppointmentToCalendar(
         `SELECT a.*, c.name as customer_name, c.phone as customer_phone, r.name as resource_name
          FROM appointments a
          LEFT JOIN customers c ON c.id = a.customer_id
-         LEFT JOIN resources r ON r.id = a.resource_id
+         LEFT JOIN resources r ON r.resource_id = a.resource_id
          WHERE a.id = $1 AND a.tenant_id = $2`,
         [appointmentId, tenantId]
       );
