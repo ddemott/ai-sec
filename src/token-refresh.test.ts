@@ -60,7 +60,7 @@ describe('Fix #14: Token refresh endpoint', () => {
       expect(typeof data.token).toBe('string');
 
       // Verify the new token is valid and has the same payload
-      const decoded = jwt.verify(data.token, JWT_SECRET) as any;
+      const decoded = jwt.verify(data.token, JWT_SECRET) as { tenant_id: string; user_id: string; email: string; exp: number; iat: number };
       expect(decoded.tenant_id).toBe(payload.tenant_id);
       expect(decoded.user_id).toBe(payload.user_id);
       expect(decoded.email).toBe(payload.email);
@@ -72,7 +72,7 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHY: The whole point of refresh is to extend the session
       const payload = { tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a', user_id: 'test-user', email: 'test@test.com' };
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30m' });
-      const originalDecoded = jwt.decode(token) as any;
+      const originalDecoded = jwt.decode(token) as { exp: number; iat: number };
 
       const res = await apiFetch('/auth/refresh', {
         method: 'POST',
@@ -85,7 +85,7 @@ describe('Fix #14: Token refresh endpoint', () => {
       if (!res) return;
 
       const data = await res.json();
-      const newDecoded = jwt.decode(data.token) as any;
+      const newDecoded = jwt.decode(data.token) as { exp: number; iat: number };
 
       // New token should expire later than the original
       expect(newDecoded.exp).toBeGreaterThan(originalDecoded.exp);

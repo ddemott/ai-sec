@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { Pool, PoolClient } from 'pg';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
@@ -14,19 +15,22 @@ const VERSION_ID = '22222222-3333-4444-8555-666666666666';
 let app: FastifyInstance;
 let mockClient: ReturnType<typeof createMockClient>['mockClient'];
 let queryResponses: ReturnType<typeof createMockClient>['queryResponses'];
-let mockPool: any;
+let mockPool: Pool;
+
+// Test-only request shape: the preHandler injects tenantId for the route to read.
+type TenantRequest = FastifyRequest & { tenantId?: string };
 
 function buildApp() {
   const created = createMockClient();
   mockClient = created.mockClient;
   queryResponses = created.queryResponses;
 
-  mockPool = createMockPool(mockClient);
+  mockPool = createMockPool(mockClient) as unknown as Pool;
   const mockWithTenantClient = createMockWithTenantClient(mockClient);
 
   const fastify = Fastify({ logger: false });
 
-  fastify.addHook('preHandler', async (request: any) => {
+  fastify.addHook('preHandler', async (request: TenantRequest) => {
     const tenantId =
       (request.query as Record<string, string>)?.tenant_id ||
       (request.headers['x-tenant-id'] as string);
@@ -35,7 +39,11 @@ function buildApp() {
     }
   });
 
-  registerVersionHistoryRoutes(fastify, mockPool, mockWithTenantClient as any);
+  registerVersionHistoryRoutes(
+    fastify,
+    mockPool,
+    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+  );
 
   return fastify;
 }

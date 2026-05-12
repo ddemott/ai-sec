@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { Pool, PoolClient } from 'pg';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock hubspotClient and hubspotSync modules before importing routes ---
@@ -32,14 +33,17 @@ const DASHBOARD_URL = 'https://localhost:4000';
 let app: FastifyInstance;
 let mockClient: ReturnType<typeof createMockClient>['mockClient'];
 let queryResponses: ReturnType<typeof createMockClient>['queryResponses'];
-let mockPool: any;
+let mockPool: Pool;
+
+// Test-only request shape: the preHandler injects tenantId for the route to read.
+type TenantRequest = FastifyRequest & { tenantId?: string };
 
 function buildApp() {
   const created = createMockClient();
   mockClient = created.mockClient;
   queryResponses = created.queryResponses;
 
-  mockPool = createMockPool(mockClient);
+  mockPool = createMockPool(mockClient) as unknown as Pool;
   const mockWithTenantClient = createMockWithTenantClient(mockClient);
 
   const fastify = Fastify({ logger: false });
@@ -61,7 +65,7 @@ function buildApp() {
   );
 
   // Simulate tenant middleware: inject tenantId from query param or header
-  fastify.addHook('preHandler', async (request: any) => {
+  fastify.addHook('preHandler', async (request: TenantRequest) => {
     const tenantId =
       (request.query as Record<string, string>)?.tenant_id ||
       (request.headers['x-tenant-id'] as string);
@@ -70,7 +74,11 @@ function buildApp() {
     }
   });
 
-  registerHubSpotRoutes(fastify, mockPool, mockWithTenantClient as any);
+  registerHubSpotRoutes(
+    fastify,
+    mockPool,
+    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+  );
 
   return fastify;
 }

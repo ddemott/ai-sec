@@ -9,8 +9,8 @@
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
-import type { PoolClient } from 'pg';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { Pool, PoolClient } from 'pg';
 
 import { registerShiftRoutes } from './routes/shifts';
 
@@ -48,7 +48,7 @@ function buildApp() {
 
   const mockPool = {
     connect: vi.fn(async () => mockClient),
-  } as any;
+  } as unknown as Pool;
 
   const withTenantClient = async <T>(
     _tenantId: string,
@@ -57,14 +57,16 @@ function buildApp() {
 
   const fastify = Fastify({ logger: false });
 
-  fastify.addHook('preHandler', async (request: any) => {
+  // Test-only request shape: the preHandler injects tenantId so the route can read it.
+  type TenantRequest = FastifyRequest & { tenantId?: string };
+  fastify.addHook('preHandler', async (request: TenantRequest) => {
     const tenantId =
       (request.query as Record<string, string>)?.tenant_id ||
       (request.headers['x-tenant-id'] as string);
     if (tenantId) request.tenantId = tenantId;
   });
 
-  registerShiftRoutes(fastify, mockPool, withTenantClient as any);
+  registerShiftRoutes(fastify, mockPool, withTenantClient);
   return fastify;
 }
 
