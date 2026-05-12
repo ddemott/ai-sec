@@ -78,25 +78,25 @@ describe("Tenant reorder (drag-and-drop)", () => {
     //       rows in the assigned sequence
     // WHEN: every save-order action — the route handler at
     //       src/routes/tenants.ts:156 issues exactly this sequence
-    // WHERE: UPDATE tenants SET sort_order = $1 WHERE id = $2
+    // WHERE: UPDATE tenants SET sort_order = $1 WHERE tenant_id = $2
     // WHY: this is the DB-level half of the contract that the route-level
     //      test (tenant-routes.test.ts) verifies. If sort_order updates
     //      didn't actually persist (column dropped, trigger interfering),
     //      the admin would save a new order and see the old one come back
     if (!dbAvailable) return;
 
-    const r1 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING id");
-    const r2 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz B', 'test') RETURNING id");
-    const r3 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz C', 'test') RETURNING id");
+    const r1 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING tenant_id AS id");
+    const r2 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz B', 'test') RETURNING tenant_id AS id");
+    const r3 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz C', 'test') RETURNING tenant_id AS id");
 
     const idA = r1.rows[0].id;
     const idB = r2.rows[0].id;
     const idC = r3.rows[0].id;
 
     // Reorder: C, A, B
-    await client.query("UPDATE tenants SET sort_order = 0 WHERE id = $1", [idC]);
-    await client.query("UPDATE tenants SET sort_order = 1 WHERE id = $1", [idA]);
-    await client.query("UPDATE tenants SET sort_order = 2 WHERE id = $1", [idB]);
+    await client.query("UPDATE tenants SET sort_order = 0 WHERE tenant_id = $1", [idC]);
+    await client.query("UPDATE tenants SET sort_order = 1 WHERE tenant_id = $1", [idA]);
+    await client.query("UPDATE tenants SET sort_order = 2 WHERE tenant_id = $1", [idB]);
 
     const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC");
     expect(res.rows.map((r: any) => r.name)).toEqual(['Biz C', 'Biz A', 'Biz B']);

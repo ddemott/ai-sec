@@ -9,17 +9,18 @@ const getFixedDate = (daysOut: number, hours: number, minutes: number) => {
 }
 
 export const MOCK_TENANT = {
-  id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
   name: 'DynaTire PoC',
   business_type: 'mobile-tire',
   system_prompt: 'You are a professional, helpful secretary for DynaTire...',
+  first_message: null,
   voice_id: 'ba124806-6962-4354-94a0-7607775952f4'
 }
 
 export const MOCK_CUSTOMERS: Customer[] = [
   {
     customer_id: '207b25bb-ef55-4df8-ac89-252f9dcd80b9',
-    tenant_id: MOCK_TENANT.id,
+    tenant_id: MOCK_TENANT.tenant_id,
     phone: '+15551112222',
     name: 'Bob Smith',
     email: 'bob@example.com',
@@ -28,7 +29,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
   },
   {
     customer_id: '97704486-04d4-40ba-85f8-7a82e47e1611',
-    tenant_id: MOCK_TENANT.id,
+    tenant_id: MOCK_TENANT.tenant_id,
     phone: '+15550001111',
     name: 'Alice Johnson',
     email: 'alice@example.com',
@@ -40,7 +41,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
 export const MOCK_APPOINTMENTS: Appointment[] = [
   {
     appointment_id: 'ffaf8ae5-7577-4951-86f3-3ff5c9dd9fd8',
-    tenant_id: MOCK_TENANT.id,
+    tenant_id: MOCK_TENANT.tenant_id,
     resource_id: '18288e57-a958-41e4-be5f-e95a8539a06b',
     customer_id: MOCK_CUSTOMERS[0].customer_id,
     start_time: getFixedDate(1, 9, 0), // Tomorrow at 9:00 AM
@@ -53,7 +54,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
   },
   {
     appointment_id: 'f92d33d3-007e-4508-a5ca-eb1a483c0b07',
-    tenant_id: MOCK_TENANT.id,
+    tenant_id: MOCK_TENANT.tenant_id,
     resource_id: '18288e57-a958-41e4-be5f-e95a8539a06b',
     customer_id: MOCK_CUSTOMERS[1].customer_id,
     start_time: getFixedDate(2, 13, 30), // Day after tomorrow at 1:30 PM

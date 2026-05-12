@@ -635,7 +635,7 @@ describe("Auth - Database Level", () => {
             await client.query("BEGIN");
 
             const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
+                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
                 ["New Business", "mobile-tire"]
             );
             const tenantId = tenantRes.rows[0].id;
@@ -652,7 +652,7 @@ describe("Auth - Database Level", () => {
             expect(userRes.rows[0].full_name).toBe("Owner Name");
 
             // Verify both exist after commit
-            const tenantCheck = await client.query("SELECT * FROM tenants WHERE id = $1", [tenantId]);
+            const tenantCheck = await client.query("SELECT * FROM tenants WHERE tenant_id = $1", [tenantId]);
             const userCheck = await client.query("SELECT * FROM users WHERE tenant_id = $1", [tenantId]);
             expect(tenantCheck.rows).toHaveLength(1);
             expect(userCheck.rows).toHaveLength(1);
@@ -665,7 +665,7 @@ describe("Auth - Database Level", () => {
             await client.query('BEGIN');
 
             const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
+                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
                 ['Test Salon', 'salon']
             );
             const tenantId = tenantRes.rows[0].id;
@@ -685,7 +685,7 @@ describe("Auth - Database Level", () => {
 
             // Verify template defaults were applied via trigger
             const tenantCheck = await client.query(
-                "SELECT system_prompt, voice_id, first_message FROM tenants WHERE id = $1",
+                "SELECT system_prompt, voice_id, first_message FROM tenants WHERE tenant_id = $1",
                 [tenantId]
             );
             expect(tenantCheck.rows[0].system_prompt).toContain('receptionist');
@@ -873,7 +873,7 @@ describe("Auth - Database Level", () => {
                 await client.query("BEGIN");
 
                 await client.query(
-                    "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
+                    "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
                     ["Rollback Test", "salon"]
                 );
 

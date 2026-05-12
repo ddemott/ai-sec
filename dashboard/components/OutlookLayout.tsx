@@ -80,7 +80,7 @@ export function OutlookLayout({
   // they're identified by tenant_id, not by users.role.
   const isFrontDeskOnly = role === 'front_desk' && !isAdmin
   const { theme, setTheme, themeInfo } = useTheme()
-  const [allTenants, setAllTenants] = useState<{ id: string; name: string; business_type: string }[]>([])
+  const [allTenants, setAllTenants] = useState<{ tenant_id: string; name: string; business_type: string }[]>([])
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const tenantBtnRef = useRef<HTMLButtonElement>(null)
@@ -321,13 +321,13 @@ export function OutlookLayout({
           }}>
             {allTenants.map(t => (
               <button
-                key={t.id}
+                key={t.tenant_id}
                 role="option"
-                aria-selected={managedTenantId === t.id}
-                onClick={() => { if (onSelectTenant) onSelectTenant(t.id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('dashboard'); }}
+                aria-selected={managedTenantId === t.tenant_id}
+                onClick={() => { if (onSelectTenant) onSelectTenant(t.tenant_id, t.name); setTenantDropdownOpen(false); if (activeTab === 'all-businesses') setActiveTab('dashboard'); }}
                 className="w-full text-left px-4 py-3 flex flex-col transition-colors border-b hover:brightness-125"
                 style={{
-                  backgroundColor: managedTenantId === t.id ? 'var(--accent-muted)' : undefined,
+                  backgroundColor: managedTenantId === t.tenant_id ? 'var(--accent-muted)' : undefined,
                   borderColor: 'var(--border-soft)',
                 }}
               >

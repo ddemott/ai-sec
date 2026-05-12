@@ -23,7 +23,7 @@ export function registerVocabularyRoutes(
           COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
         FROM tenants t
         LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-        WHERE t.id = $1
+        WHERE t.tenant_id = $1
       `, [tenantId]);
     });
 

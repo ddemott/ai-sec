@@ -279,7 +279,7 @@ export function registerAgentToolRoutes(
   toolRoute(app, '/agent-tools/tenant-config', GetTenantConfigSchema, async (args, reply) => {
     const row = await withTenantClient(args.tenant_id, async (client) => {
       const res = await client.query<{ name: string; timezone: string | null }>(
-        `SELECT name, timezone FROM tenants WHERE id = $1`,
+        `SELECT name, timezone FROM tenants WHERE tenant_id = $1`,
         [args.tenant_id]
       );
       return res.rows[0] ?? null;
@@ -354,7 +354,7 @@ export function registerAgentToolRoutes(
 
     const result = await withTenantClient(args.tenant_id, async (client) => {
       const tz = await client.query<{ timezone: string }>(
-        `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE id = $1`,
+        `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
         [args.tenant_id]
       );
       const ianaTimezone = tz.rows[0]?.timezone || 'America/Chicago';
@@ -934,7 +934,7 @@ export function registerAgentToolRoutes(
     // sender since Telnyx numbers are bidirectional).
     const smsOutcome = await withTenantClient(args.tenant_id, async (client) => {
       const tz = await client.query<{ inbound_phone: string | null }>(
-        `SELECT inbound_phone FROM tenants WHERE id = $1`,
+        `SELECT inbound_phone FROM tenants WHERE tenant_id = $1`,
         [args.tenant_id]
       );
       const fromPhone = tz.rows[0]?.inbound_phone;

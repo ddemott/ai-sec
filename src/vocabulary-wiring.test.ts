@@ -46,7 +46,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                     COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [tenantId]);
 
             expect(res.rows[0].resource_label).toBe('Truck');
@@ -68,7 +68,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                     COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [salonId]);
 
             expect(res.rows[0].resource_label).toBe('Chair');
@@ -87,7 +87,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                     COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [shopId]);
 
             expect(res.rows[0].resource_label).toBe('Bay');
@@ -102,7 +102,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
 
             // Set a tenant-level override
             await client.query(
-                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE id = $1",
+                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE tenant_id = $1",
                 [shopId]
             );
 
@@ -113,7 +113,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                     COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [shopId]);
 
             // Overridden fields use tenant value
@@ -136,7 +136,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                     COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [unknownId]);
 
             expect(res.rows[0].resource_label).toBe('Resource');
@@ -168,7 +168,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                         COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label
                     FROM tenants t
                     LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                    WHERE t.id = $1
+                    WHERE t.tenant_id = $1
                 `, [tid]);
 
                 expect(res.rows[0].resource_label).toBe(bt.resource);
@@ -190,7 +190,7 @@ describe("Vocabulary Wiring: End-to-End", () => {
                     COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [tenantId]);
 
             const vocab = res.rows[0];

@@ -46,7 +46,7 @@ export interface Customer {
 }
 
 export interface Tenant {
-  id: string;
+  tenant_id: string;
   name: string;
   business_type: string;
   // Nullable in the DB schema and routinely null for newly-created tenants

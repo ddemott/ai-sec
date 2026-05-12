@@ -31,7 +31,7 @@ export function TenantCard({
       onDragOver={(e) => onDragOver(e, index)}
       onDragEnd={onDragEnd}
       onClick={onSelect}
-      data-testid={`tenant-card-${tenant.id}`}
+      data-testid={`tenant-card-${tenant.tenant_id}`}
       className={`p-4 border-b cursor-pointer transition flex justify-between items-center
         ${isSelected ? 'border-l-4 shadow-sm' : ''}
         ${isDragging ? 'opacity-50' : ''}`}
@@ -56,7 +56,7 @@ export function TenantCard({
               <Badge variant="secondary" className="mr-2">
                   {tenant.business_type}
               </Badge>
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[100px]">{tenant.id.slice(0,8)}</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[100px]">{tenant.tenant_id.slice(0,8)}</span>
           </div>
         </div>
       </div>

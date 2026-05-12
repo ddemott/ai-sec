@@ -205,7 +205,7 @@ export function TenantEditPanel({
                                           onConfirm: async () => {
                                               closeConfirm();
                                               try {
-                                                  await Api.provisioning.deactivate(selectedTenant.id)
+                                                  await Api.provisioning.deactivate(selectedTenant.tenant_id)
                                                   onTenantUpdate({...selectedTenant, phone_status: 'deprovisioned', inbound_phone: null, telnyx_phone_number_id: null})
                                               } catch (err: unknown) {
                                                   const msg = err instanceof Error ? err.message : 'Failed to deactivate phone';
@@ -245,7 +245,7 @@ export function TenantEditPanel({
                                       const areaCode = areaCodeRef.current?.value?.trim()
                                       onTenantUpdate({...selectedTenant, phone_status: 'provisioning'})
                                       try {
-                                          const result = await Api.provisioning.activate(selectedTenant.id, areaCode || undefined)
+                                          const result = await Api.provisioning.activate(selectedTenant.tenant_id, areaCode || undefined)
                                           onTenantUpdate({
                                               ...selectedTenant,
                                               phone_status: 'active',

@@ -57,7 +57,7 @@ describe("Phone Provisioning", () => {
         it("phone_status defaults to 'inactive'", async () => {
             if (!dbAvailable) return;
             const res = await root.query(
-                'SELECT phone_status FROM tenants WHERE id = $1',
+                'SELECT phone_status FROM tenants WHERE tenant_id = $1',
                 [tenantId]
             );
             expect(res.rows[0].phone_status).toBe('inactive');
@@ -75,11 +75,11 @@ describe("Phone Provisioning", () => {
                     telnyx_phone_number_id = 'tnum_test123',
                     inbound_phone = '+15551234567',
                     phone_status = 'active'
-                WHERE id = $1`,
+                WHERE tenant_id = $1`,
                 [tenantId]
             );
             const active = await root.query(
-                'SELECT telnyx_phone_number_id, inbound_phone, phone_status FROM tenants WHERE id = $1',
+                'SELECT telnyx_phone_number_id, inbound_phone, phone_status FROM tenants WHERE tenant_id = $1',
                 [tenantId]
             );
             expect(active.rows[0]).toEqual({
@@ -93,11 +93,11 @@ describe("Phone Provisioning", () => {
                     telnyx_phone_number_id = NULL,
                     inbound_phone = NULL,
                     phone_status = 'deprovisioned'
-                WHERE id = $1`,
+                WHERE tenant_id = $1`,
                 [tenantId]
             );
             const cleared = await root.query(
-                'SELECT telnyx_phone_number_id, inbound_phone, phone_status FROM tenants WHERE id = $1',
+                'SELECT telnyx_phone_number_id, inbound_phone, phone_status FROM tenants WHERE tenant_id = $1',
                 [tenantId]
             );
             expect(cleared.rows[0]).toEqual({

@@ -226,7 +226,7 @@ describe("Business Vocabulary System", () => {
                     COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [salonId]);
 
             expect(res.rows[0]).toEqual({
@@ -260,7 +260,7 @@ describe("Business Vocabulary System", () => {
         it("should default tenant vocabulary overrides to NULL", async () => {
             if (!dbAvailable) return;
             const res = await client.query(
-                "SELECT resource_label, resource_plural, employee_label, employee_plural, booking_label FROM tenants WHERE id = $1",
+                "SELECT resource_label, resource_plural, employee_label, employee_plural, booking_label FROM tenants WHERE tenant_id = $1",
                 [tenantId]
             );
             expect(res.rows[0].resource_label).toBeNull();
@@ -273,11 +273,11 @@ describe("Business Vocabulary System", () => {
         it("should allow tenant to override vocabulary", async () => {
             if (!dbAvailable) return;
             await client.query(
-                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE id = $1",
+                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE tenant_id = $1",
                 [tenantId]
             );
             const res = await client.query(
-                "SELECT resource_label, resource_plural FROM tenants WHERE id = $1",
+                "SELECT resource_label, resource_plural FROM tenants WHERE tenant_id = $1",
                 [tenantId]
             );
             expect(res.rows[0].resource_label).toBe('Stall');
@@ -290,7 +290,7 @@ describe("Business Vocabulary System", () => {
             // Create a tenant with business_type = 'auto-shop' and partial override
             const shopId = await createTenant(client, "Test Shop", "auto-shop");
             await client.query(
-                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE id = $1",
+                "UPDATE tenants SET resource_label = 'Stall', resource_plural = 'Stalls' WHERE tenant_id = $1",
                 [shopId]
             );
 
@@ -304,7 +304,7 @@ describe("Business Vocabulary System", () => {
                     COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [shopId]);
 
             // resource_label/plural come from tenant override (Stall/Stalls)
@@ -332,7 +332,7 @@ describe("Business Vocabulary System", () => {
                     COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label
                 FROM tenants t
                 LEFT JOIN business_templates bt ON bt.business_type = t.business_type
-                WHERE t.id = $1
+                WHERE t.tenant_id = $1
             `, [bizId]);
 
             expect(res.rows[0].resource_label).toBe('Resource');

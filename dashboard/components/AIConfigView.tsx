@@ -69,7 +69,7 @@ export default function AIConfigView() {
     setSaving(true)
 
     try {
-      const res = await Api.tenants.updateConfig(config.id, {
+      const res = await Api.tenants.updateConfig(config.tenant_id, {
         system_prompt: config.system_prompt,
         voice_id: config.voice_id,
         business_type: config.business_type,

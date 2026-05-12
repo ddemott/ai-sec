@@ -59,7 +59,7 @@ describe("Stripe Lite — Billing", () => {
     if (!dbAvailable) return;
 
     const res = await client.query(
-      `SELECT subscription_status FROM tenants WHERE id = $1`,
+      `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     expect(res.rows[0].subscription_status).toBe('inactive');
@@ -69,7 +69,7 @@ describe("Stripe Lite — Billing", () => {
     if (!dbAvailable) return;
 
     const res = await client.query(
-      `SELECT stripe_customer_id, stripe_subscription_id, subscription_plan FROM tenants WHERE id = $1`,
+      `SELECT stripe_customer_id, stripe_subscription_id, subscription_plan FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     expect(res.rows[0].stripe_customer_id).toBeNull();
@@ -88,12 +88,12 @@ describe("Stripe Lite — Billing", () => {
            stripe_subscription_id = 'sub_test456',
            subscription_status = 'active',
            subscription_plan = 'solo'
-       WHERE id = $1`,
+       WHERE tenant_id = $1`,
       [tenantId]
     );
 
     const res = await client.query(
-      `SELECT subscription_status, subscription_plan, stripe_subscription_id FROM tenants WHERE id = $1`,
+      `SELECT subscription_status, subscription_plan, stripe_subscription_id FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     expect(res.rows[0].subscription_status).toBe('active');
@@ -107,7 +107,7 @@ describe("Stripe Lite — Billing", () => {
     await client.query(
       `UPDATE tenants
        SET stripe_customer_id = 'cus_test123', subscription_status = 'active', subscription_plan = 'growth'
-       WHERE id = $1`,
+       WHERE tenant_id = $1`,
       [tenantId]
     );
 
@@ -117,7 +117,7 @@ describe("Stripe Lite — Billing", () => {
     );
 
     const res = await client.query(
-      `SELECT subscription_status FROM tenants WHERE id = $1`,
+      `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     expect(res.rows[0].subscription_status).toBe('past_due');
@@ -130,7 +130,7 @@ describe("Stripe Lite — Billing", () => {
       `UPDATE tenants
        SET stripe_customer_id = 'cus_test123', stripe_subscription_id = 'sub_test456',
            subscription_status = 'active', subscription_plan = 'solo'
-       WHERE id = $1`,
+       WHERE tenant_id = $1`,
       [tenantId]
     );
 
@@ -142,7 +142,7 @@ describe("Stripe Lite — Billing", () => {
     );
 
     const res = await client.query(
-      `SELECT subscription_status, stripe_subscription_id, subscription_plan FROM tenants WHERE id = $1`,
+      `SELECT subscription_status, stripe_subscription_id, subscription_plan FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     expect(res.rows[0].subscription_status).toBe('canceled');
@@ -156,11 +156,11 @@ describe("Stripe Lite — Billing", () => {
     if (!dbAvailable) return;
 
     await client.query(
-      `UPDATE tenants SET subscription_status = 'active' WHERE id = $1`,
+      `UPDATE tenants SET subscription_status = 'active' WHERE tenant_id = $1`,
       [tenantId]
     );
     const res = await client.query(
-      `SELECT subscription_status FROM tenants WHERE id = $1`,
+      `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     const status = res.rows[0].subscription_status;
@@ -172,7 +172,7 @@ describe("Stripe Lite — Billing", () => {
     if (!dbAvailable) return;
 
     const res = await client.query(
-      `SELECT subscription_status FROM tenants WHERE id = $1`,
+      `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     const status = res.rows[0].subscription_status;
@@ -185,11 +185,11 @@ describe("Stripe Lite — Billing", () => {
     if (!dbAvailable) return;
 
     await client.query(
-      `UPDATE tenants SET subscription_status = 'past_due' WHERE id = $1`,
+      `UPDATE tenants SET subscription_status = 'past_due' WHERE tenant_id = $1`,
       [tenantId]
     );
     const res = await client.query(
-      `SELECT subscription_status FROM tenants WHERE id = $1`,
+      `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     const status = res.rows[0].subscription_status;
@@ -201,11 +201,11 @@ describe("Stripe Lite — Billing", () => {
     if (!dbAvailable) return;
 
     await client.query(
-      `UPDATE tenants SET subscription_status = 'canceled' WHERE id = $1`,
+      `UPDATE tenants SET subscription_status = 'canceled' WHERE tenant_id = $1`,
       [tenantId]
     );
     const res = await client.query(
-      `SELECT subscription_status FROM tenants WHERE id = $1`,
+      `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
     const status = res.rows[0].subscription_status;
@@ -242,11 +242,11 @@ describe("Stripe Lite — Billing", () => {
 
       for (const status of allowedStatuses) {
         await client.query(
-          `UPDATE tenants SET subscription_status = $1 WHERE id = $2`,
+          `UPDATE tenants SET subscription_status = $1 WHERE tenant_id = $2`,
           [status, tenantId]
         );
         const res = await client.query(
-          `SELECT subscription_status FROM tenants WHERE id = $1`,
+          `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
           [tenantId]
         );
         const val = res.rows[0].subscription_status;
@@ -256,11 +256,11 @@ describe("Stripe Lite — Billing", () => {
 
       for (const status of blockedStatuses) {
         await client.query(
-          `UPDATE tenants SET subscription_status = $1 WHERE id = $2`,
+          `UPDATE tenants SET subscription_status = $1 WHERE tenant_id = $2`,
           [status, tenantId]
         );
         const res = await client.query(
-          `SELECT subscription_status FROM tenants WHERE id = $1`,
+          `SELECT subscription_status FROM tenants WHERE tenant_id = $1`,
           [tenantId]
         );
         const val = res.rows[0].subscription_status;
@@ -275,7 +275,7 @@ describe("Stripe Lite — Billing", () => {
 
       const fakeTenantId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
       const res = await client.query(
-        `SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1`,
+        `SELECT subscription_status, subscription_plan FROM tenants WHERE tenant_id = $1`,
         [fakeTenantId]
       );
 
@@ -289,22 +289,22 @@ describe("Stripe Lite — Billing", () => {
 
       // Valid plan names: solo, growth, professional, or NULL
       await client.query(
-        `UPDATE tenants SET subscription_plan = 'solo' WHERE id = $1`,
+        `UPDATE tenants SET subscription_plan = 'solo' WHERE tenant_id = $1`,
         [tenantId]
       );
       const res1 = await client.query(
-        `SELECT subscription_plan FROM tenants WHERE id = $1`,
+        `SELECT subscription_plan FROM tenants WHERE tenant_id = $1`,
         [tenantId]
       );
       expect(res1.rows[0].subscription_plan).toBe('solo');
 
       // NULL is valid (canceled subscription)
       await client.query(
-        `UPDATE tenants SET subscription_plan = NULL WHERE id = $1`,
+        `UPDATE tenants SET subscription_plan = NULL WHERE tenant_id = $1`,
         [tenantId]
       );
       const res2 = await client.query(
-        `SELECT subscription_plan FROM tenants WHERE id = $1`,
+        `SELECT subscription_plan FROM tenants WHERE tenant_id = $1`,
         [tenantId]
       );
       expect(res2.rows[0].subscription_plan).toBeNull();
@@ -315,7 +315,7 @@ describe("Stripe Lite — Billing", () => {
 
       const fakeTenantId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
       const res = await client.query(
-        `UPDATE tenants SET stripe_customer_id = 'cus_phantom' WHERE id = $1`,
+        `UPDATE tenants SET stripe_customer_id = 'cus_phantom' WHERE tenant_id = $1`,
         [fakeTenantId]
       );
 

@@ -84,7 +84,7 @@ beforeEach(() => {
 describe('DELETE /tenants/:id — happy paths', () => {
   it('HAPPY: deletes the tenant when the row exists and returns success', async () => {
     // WHO: super-admin removing a churned customer's tenant
-    // WHAT: route runs `DELETE FROM tenants WHERE id = $1 RETURNING id`,
+    // WHAT: route runs `DELETE FROM tenants WHERE tenant_id = $1 RETURNING id`,
     //       sees rowCount=1 via assertRowAffected, returns { success: true }
     // WHEN: confirm-by-name dialog has resolved + admin confirmed delete
     // WHERE: src/routes/tenants.ts → app.delete('/tenants/:id', ...)

@@ -102,10 +102,10 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
 
       if (tenantsArray.length > 0 && !selectedTenant) {
         const initial = currentTenantId
-          ? (tenantsArray.find(t => t.id === currentTenantId) || tenantsArray[0])
+          ? (tenantsArray.find(t => t.tenant_id === currentTenantId) || tenantsArray[0])
           : tenantsArray[0];
         setSelectedTenant(initial)
-        if (onSelectTenant && !currentTenantId) onSelectTenant(initial.id, initial.name);
+        if (onSelectTenant && !currentTenantId) onSelectTenant(initial.tenant_id, initial.name);
       }
     } catch (e) {
       console.error('Fetch error:', e)
@@ -142,7 +142,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   async function handleSaveOrder() {
     setSavingOrder(true)
     try {
-      const order = tenants.map(t => t.id)
+      const order = tenants.map(t => t.tenant_id)
       const res = await Api.tenants.reorder(order)
       if (res.success) {
         setHasReordered(false)
@@ -175,15 +175,15 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
     }
 
     try {
-      const res = await Api.tenants.update(form.id, normalizedForm as unknown as import('../lib/types').TenantFull)
+      const res = await Api.tenants.update(form.tenant_id, normalizedForm as unknown as import('../lib/types').TenantFull)
 
       if (res.success) {
         setSuccess(true)
         setIsEditing(false)
-        const updatedTenants = tenants.map(t => t.id === form.id ? { ...normalizedForm } : t)
+        const updatedTenants = tenants.map(t => t.tenant_id === form.tenant_id ? { ...normalizedForm } : t)
         setTenants(updatedTenants)
         setSelectedTenant({ ...normalizedForm } as Tenant)
-        if (onSelectTenant) onSelectTenant(form.id, form.name);
+        if (onSelectTenant) onSelectTenant(form.tenant_id, form.name);
       } else {
         setError(res.error || 'Failed to update business attributes')
       }
@@ -204,7 +204,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
     if (!selectedTenant) return
     setDeleting(true)
     try {
-      const res = await Api.tenants.delete(selectedTenant.id)
+      const res = await Api.tenants.delete(selectedTenant.tenant_id)
       if (res.success) {
         setSelectedTenant(null)
         setIsDeleteModalOpen(false)
@@ -337,14 +337,14 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
         <div className="flex-1 overflow-y-auto">
           {tenants.map((t, idx) => (
             <TenantCard
-              key={t.id}
+              key={t.tenant_id}
               tenant={t}
-              isSelected={selectedTenant?.id === t.id}
+              isSelected={selectedTenant?.tenant_id === t.tenant_id}
               isDragging={dragIndex === idx}
               index={idx}
               onSelect={() => {
                 setSelectedTenant(t);
-                if (onSelectTenant) onSelectTenant(t.id, t.name);
+                if (onSelectTenant) onSelectTenant(t.tenant_id, t.name);
               }}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}

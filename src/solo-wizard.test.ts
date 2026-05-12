@@ -40,7 +40,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
     it("team_size should default to 1", async () => {
         if (!dbAvailable) return;
         const res = await client.query(
-            `SELECT team_size FROM tenants WHERE id = $1`,
+            `SELECT team_size FROM tenants WHERE tenant_id = $1`,
             [tenantId]
         );
         expect(res.rows[0].team_size).toBe(1);
@@ -49,11 +49,11 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
     it("team_size can be updated", async () => {
         if (!dbAvailable) return;
         await client.query(
-            `UPDATE tenants SET team_size = 5 WHERE id = $1`,
+            `UPDATE tenants SET team_size = 5 WHERE tenant_id = $1`,
             [tenantId]
         );
         const res = await client.query(
-            `SELECT team_size FROM tenants WHERE id = $1`,
+            `SELECT team_size FROM tenants WHERE tenant_id = $1`,
             [tenantId]
         );
         expect(res.rows[0].team_size).toBe(5);
@@ -84,7 +84,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
         // 1. Create a solo tenant
         const tRes = await client.query(
             `INSERT INTO tenants (name, business_type, team_size)
-             VALUES ('Solo Stylist', 'salon', 1) RETURNING id`
+             VALUES ('Solo Stylist', 'salon', 1) RETURNING tenant_id AS id`
         );
         const soloTenantId = tRes.rows[0].id;
 
@@ -131,7 +131,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
         );
 
         // Verify the full setup
-        const tenant = await client.query(`SELECT team_size FROM tenants WHERE id = $1`, [soloTenantId]);
+        const tenant = await client.query(`SELECT team_size FROM tenants WHERE tenant_id = $1`, [soloTenantId]);
         expect(tenant.rows[0].team_size).toBe(1);
 
         const employees = await client.query(`SELECT * FROM employees WHERE tenant_id = $1`, [soloTenantId]);

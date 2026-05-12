@@ -66,7 +66,7 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
 
         // Create a new tenant with no services
         const tRes = await client.query(
-            `INSERT INTO tenants (name, business_type) VALUES ('Empty Shop', 'auto-shop') RETURNING id`
+            `INSERT INTO tenants (name, business_type) VALUES ('Empty Shop', 'auto-shop') RETURNING tenant_id AS id`
         );
         const emptyTenantId = tRes.rows[0].id;
 

@@ -43,7 +43,7 @@ export async function tableExists(client: Client, tableName: string): Promise<bo
 }
 
 export async function setupBasicTenant(client: Client) {
-    const tRes = await client.query("INSERT INTO tenants (name, business_type) VALUES ('DynaTire', 'mobile-tire') RETURNING id;");
+    const tRes = await client.query("INSERT INTO tenants (name, business_type) VALUES ('DynaTire', 'mobile-tire') RETURNING tenant_id AS id;");
     const tenantId = tRes.rows[0].id;
     const rRes = await client.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 1') RETURNING resource_id as id;", [tenantId]);
     const resourceId = rRes.rows[0].id;
@@ -89,13 +89,13 @@ export async function rollbackTestTransaction(client: Client) {
 export async function createTenant(client: Client, name: string, businessType: string, timezone?: string): Promise<string> {
     if (timezone) {
         const res = await client.query(
-            "INSERT INTO tenants (name, business_type, timezone) VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO tenants (name, business_type, timezone) VALUES ($1, $2, $3) RETURNING tenant_id AS id",
             [name, businessType, timezone]
         );
         return res.rows[0].id;
     }
     const res = await client.query(
-        "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
         [name, businessType]
     );
     return res.rows[0].id;

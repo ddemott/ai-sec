@@ -661,7 +661,7 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
 
   it('SAD: DELETE /tenants/<B> under A JWT must not delete tenant B', async () => {
     if (!dbAvailable) return;
-    const beforeRow = await setup.query('SELECT id FROM tenants WHERE id = $1', [B.id]);
+    const beforeRow = await setup.query('SELECT tenant_id AS id FROM tenants WHERE tenant_id = $1', [B.id]);
     expect(beforeRow.rows).toHaveLength(1);
 
     const res = await app.inject({
@@ -671,7 +671,7 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
     });
     expect([401, 403]).toContain(res.statusCode);
 
-    const afterRow = await setup.query('SELECT id FROM tenants WHERE id = $1', [B.id]);
+    const afterRow = await setup.query('SELECT tenant_id AS id FROM tenants WHERE tenant_id = $1', [B.id]);
     expect(afterRow.rows).toHaveLength(1);
   });
 
@@ -694,9 +694,9 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
       headers: { authorization: `Bearer ${superAdminToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Array<{ id: string }>;
-    expect(body.find(r => r.id === A.id)).toBeTruthy();
-    expect(body.find(r => r.id === B.id)).toBeTruthy();
+    const body = res.json() as Array<{ tenant_id: string }>;
+    expect(body.find(r => r.tenant_id === A.id)).toBeTruthy();
+    expect(body.find(r => r.tenant_id === B.id)).toBeTruthy();
   });
 });
 

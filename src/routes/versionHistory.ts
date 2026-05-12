@@ -49,6 +49,18 @@ const VERSIONED_TABLES: VersionedTable[] = [
 ];
 
 const TableNameSchema = z.enum(['customers', 'appointments', 'voice_sessions', 'employees', 'services', 'resources']);
+
+// PK column for each versioned table (post-2026-05-12 PK rename sprint —
+// CODING_STANDARDS.md ID convention). Used to build dynamic SQL where the
+// table name is parameterized but the WHERE/JOIN needs the right PK column.
+const PK_COLUMN_BY_TABLE: Record<string, string> = {
+  customers: 'customer_id',
+  appointments: 'appointment_id',
+  voice_sessions: 'voice_session_id',
+  employees: 'employee_id',
+  services: 'service_id',
+  resources: 'resource_id',
+};
 const ChangeSourceSchema = z.enum(['local', 'hubspot', 'jobber', 'square', 'servicetitan', 'voice_call', 'system', 'api']);
 
 /**
@@ -173,9 +185,10 @@ export function registerVersionHistoryRoutes(
 
     const history = await withTenantClient(tenantId, async (client) => {
       // Get record info including soft delete status
+      const pkColumn = PK_COLUMN_BY_TABLE[table];
       const recordResult = await client.query(
         `SELECT is_deleted, deleted_at, deleted_by FROM ${table}
-         WHERE id = $1 AND tenant_id = $2`,
+         WHERE ${pkColumn} = $1 AND tenant_id = $2`,
         [recordId, tenantId]
       );
 
@@ -470,10 +483,17 @@ export function registerVersionHistoryRoutes(
       );
       const total = parseInt(countResult.rows[0]?.count || '0');
 
-      // Get deleted records with last version data
+      // Each versioned table has its own renamed PK column post-pilot-sprint
+      // (customers→customer_id, appointments→appointment_id, etc); voice_sessions
+      // uses voice_session_id. Map at SQL build time so the SELECT uses the
+      // right column and aliases it back to `id` for the consumer.
+      const pkColumn = (
+        { customers: 'customer_id', appointments: 'appointment_id', voice_sessions: 'voice_session_id',
+          employees: 'employee_id', services: 'service_id', resources: 'resource_id' } as Record<string, string>
+      )[table];
       const result = await client.query<DeletedRecord>(
         `SELECT
-          t.id,
+          t.${pkColumn} AS id,
           t.tenant_id,
           '${table}' as table_name,
           t.name,
@@ -481,8 +501,8 @@ export function registerVersionHistoryRoutes(
           ${table === 'customers' ? 't.email' : 'NULL as email'},
           t.deleted_at,
           t.deleted_by,
-          (SELECT COUNT(*) FROM record_versions rv WHERE rv.record_id = t.id AND rv.table_name = '${table}') as version_count,
-          (SELECT data FROM record_versions rv WHERE rv.record_id = t.id AND rv.table_name = '${table}'
+          (SELECT COUNT(*) FROM record_versions rv WHERE rv.record_id = t.${pkColumn} AND rv.table_name = '${table}') as version_count,
+          (SELECT data FROM record_versions rv WHERE rv.record_id = t.${pkColumn} AND rv.table_name = '${table}'
            ORDER BY version_number DESC LIMIT 1) as last_data
         FROM ${table} t
         WHERE t.tenant_id = $1 AND t.is_deleted = true
@@ -655,9 +675,10 @@ export function registerVersionHistoryRoutes(
     if (tableError) return reply.status(400).send(tableError);
 
     const preview = await withTenantClient(tenantId, async (client) => {
+      const pkColumn = PK_COLUMN_BY_TABLE[table];
       // Get current record
       const currentResult = await client.query(
-        `SELECT to_jsonb(t.*) as data FROM ${table} t WHERE id = $1 AND tenant_id = $2`,
+        `SELECT to_jsonb(t.*) as data FROM ${table} t WHERE ${pkColumn} = $1 AND tenant_id = $2`,
         [recordId, tenantId]
       );
 

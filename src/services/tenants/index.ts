@@ -193,7 +193,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
     return this.withClient(async (client) => {
       const result = await client.query(
         `SELECT id, name, business_name, owner_email, phone, timezone, sms_enabled, email_enabled
-         FROM tenants WHERE id = $1`,
+         FROM tenants WHERE tenant_id = $1`,
         [tenantId]
       );
 
@@ -288,8 +288,8 @@ export class PostgresTenantConfigService implements TenantConfigService {
       values.push(tenantId);
       const result = await client.query(
         `UPDATE tenants SET ${fields.join(', ')}, updated_at = NOW()
-         WHERE id = $${paramIndex}
-         RETURNING id, name, business_name, owner_email, phone, timezone, sms_enabled, email_enabled`,
+         WHERE tenant_id = $${paramIndex}
+         RETURNING tenant_id AS id, name, business_name, owner_email, phone, timezone, sms_enabled, email_enabled`,
         values
       );
 

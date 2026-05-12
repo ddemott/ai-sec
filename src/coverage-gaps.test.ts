@@ -131,7 +131,7 @@ describe("Coverage Gaps", () => {
         it("should return 0 rows for non-existent tenant UUID", async () => {
             if (!dbAvailable) return;
             const fakeId = "00000000-aaaa-bbbb-cccc-000000000099";
-            const res = await client.query("SELECT * FROM tenants WHERE id = $1", [fakeId]);
+            const res = await client.query("SELECT * FROM tenants WHERE tenant_id = $1", [fakeId]);
             expect(res.rows.length).toBe(0);
         });
 

@@ -187,7 +187,7 @@ describe("Unanswered Questions — Sad Paths", () => {
     if (!dbAvailable) return;
 
     const tenant2Res = await client.query(
-      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING id`
+      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING tenant_id AS id`
     );
     const tenant2Id = tenant2Res.rows[0].id;
 
@@ -226,7 +226,7 @@ describe("Unanswered Questions — Sad Paths", () => {
     if (!dbAvailable) return;
 
     const tenant2Res = await client.query(
-      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING id`
+      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING tenant_id AS id`
     );
     const tenant2Id = tenant2Res.rows[0].id;
 
@@ -279,14 +279,14 @@ describe("Unanswered Questions — Sad Paths", () => {
   it("CASCADE-DELETE: Questions are deleted when tenant is deleted", async () => {
     // WHO: Platform admin deleting a tenant that cancelled their subscription
     // WHAT: All unanswered questions for that tenant are cascade-deleted
-    // WHEN: DELETE FROM tenants WHERE id = $1
+    // WHEN: DELETE FROM tenants WHERE tenant_id = $1
     // WHERE: FK constraint unanswered_questions.tenant_id REFERENCES tenants(id) ON DELETE CASCADE
     // WHY: Without cascade, orphaned questions would accumulate in the DB forever
     //       for tenants that no longer exist
     if (!dbAvailable) return;
 
     const tempTenantRes = await client.query(
-      `INSERT INTO tenants (name, business_type) VALUES ('Temp Biz', 'salon') RETURNING id`
+      `INSERT INTO tenants (name, business_type) VALUES ('Temp Biz', 'salon') RETURNING tenant_id AS id`
     );
     const tempTenantId = tempTenantRes.rows[0].id;
 
@@ -296,7 +296,7 @@ describe("Unanswered Questions — Sad Paths", () => {
     );
 
     // Delete the tenant
-    await client.query(`DELETE FROM tenants WHERE id = $1`, [tempTenantId]);
+    await client.query(`DELETE FROM tenants WHERE tenant_id = $1`, [tempTenantId]);
 
     // Questions should be gone
     const res = await client.query(
@@ -322,12 +322,12 @@ describe("Unanswered Questions — Owner Notification", () => {
     if (!dbAvailable) return;
 
     await client.query(
-      `UPDATE tenants SET owner_phone = '+15559998888' WHERE id = $1`,
+      `UPDATE tenants SET owner_phone = '+15559998888' WHERE tenant_id = $1`,
       [tenantId]
     );
 
     const res = await client.query(
-      `SELECT owner_phone, inbound_phone, name FROM tenants WHERE id = $1`,
+      `SELECT owner_phone, inbound_phone, name FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
 
@@ -345,7 +345,7 @@ describe("Unanswered Questions — Owner Notification", () => {
     if (!dbAvailable) return;
 
     const res = await client.query(
-      `SELECT owner_phone FROM tenants WHERE id = $1`,
+      `SELECT owner_phone FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
 

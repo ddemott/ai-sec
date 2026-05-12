@@ -67,7 +67,7 @@ export async function createTenantWithOwner(
       }
     } else {
       const existing = await client.query(
-        'SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)',
+        'SELECT tenant_id AS id FROM tenants WHERE LOWER(name) = LOWER($1)',
         [params.tenantName]
       );
       if (existing.rows.length > 0) {
@@ -80,7 +80,7 @@ export async function createTenantWithOwner(
     }
 
     const tenantRes = await client.query(
-      'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
+      'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id',
       [params.tenantName, params.businessType]
     );
     const tenantId = tenantRes.rows[0].id;

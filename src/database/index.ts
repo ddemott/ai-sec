@@ -119,7 +119,7 @@ export function createWithTenantClient(pool: Pool): WithTenantClient {
     const client = await pool.connect();
     try {
       // Validate tenant exists (before setting context, so RLS doesn't block the check)
-      const tenantCheck = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+      const tenantCheck = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [tenantId]);
       if (tenantCheck.rows.length === 0) {
         const err = new Error(`Tenant ${tenantId} not found`);
         (err as unknown as { statusCode: number }).statusCode = 404;

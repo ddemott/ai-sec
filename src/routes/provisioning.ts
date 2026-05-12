@@ -38,7 +38,7 @@ export function registerProvisioningRoutes(
     const client = await pool.connect();
     try {
       const tenantRes = await client.query(
-        `SELECT id, name, phone_status FROM tenants WHERE id = $1`,
+        `SELECT id, name, phone_status FROM tenants WHERE tenant_id = $1`,
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
@@ -64,7 +64,7 @@ export function registerProvisioningRoutes(
         });
       }
 
-      await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['provisioning', tenant_id]);
+      await client.query('UPDATE tenants SET phone_status = $1 WHERE tenant_id = $2', ['provisioning', tenant_id]);
 
       let purchasedId: string | null = null;
       let purchasedNumber: string | null = null;
@@ -89,7 +89,7 @@ export function registerProvisioningRoutes(
             telnyx_phone_number_id = $1,
             inbound_phone = $2,
             phone_status = 'active'
-          WHERE id = $3`,
+          WHERE tenant_id = $3`,
           [ordered.id, ordered.phone_number, tenant_id]
         );
 
@@ -116,7 +116,7 @@ export function registerProvisioningRoutes(
           }
         }
 
-        await client.query('UPDATE tenants SET phone_status = $1 WHERE id = $2', ['failed', tenant_id]);
+        await client.query('UPDATE tenants SET phone_status = $1 WHERE tenant_id = $2', ['failed', tenant_id]);
 
         const detail = err instanceof Error ? err.message : String(err);
         logError(req, 'phone_provisioning_failed', err, { tenant_id, purchasedId });
@@ -154,7 +154,7 @@ export function registerProvisioningRoutes(
     const client = await pool.connect();
     try {
       const tenantRes = await client.query(
-        'SELECT telnyx_phone_number_id FROM tenants WHERE id = $1',
+        'SELECT telnyx_phone_number_id FROM tenants WHERE tenant_id = $1',
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {
@@ -180,7 +180,7 @@ export function registerProvisioningRoutes(
           telnyx_phone_number_id = NULL,
           inbound_phone = NULL,
           phone_status = 'deprovisioned'
-        WHERE id = $1`,
+        WHERE tenant_id = $1`,
         [tenant_id]
       );
 
@@ -206,7 +206,7 @@ export function registerProvisioningRoutes(
     const client = await pool.connect();
     try {
       const res = await client.query(
-        'SELECT phone_status, inbound_phone, telnyx_phone_number_id FROM tenants WHERE id = $1',
+        'SELECT phone_status, inbound_phone, telnyx_phone_number_id FROM tenants WHERE tenant_id = $1',
         [tenant_id]
       );
       if (res.rows.length === 0) {

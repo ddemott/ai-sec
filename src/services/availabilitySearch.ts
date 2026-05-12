@@ -75,7 +75,7 @@ export async function findNextAvailableSlots(
   const searchHorizonHours = Math.min(params.searchHorizonHours ?? 24, 168);
 
   const tzRow = await client.query<{ timezone: string | null }>(
-    `SELECT timezone FROM tenants WHERE id = $1`,
+    `SELECT timezone FROM tenants WHERE tenant_id = $1`,
     [tenantId]
   );
   const tenantTz = tzRow.rows[0]?.timezone ?? 'UTC';

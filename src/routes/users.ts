@@ -99,7 +99,7 @@ export function registerUserRoutes(
     // admins inviting into a managed tenant (admin_bypass_users RLS
     // policy gives them tenant-table read; the invite write below uses
     // withTenantClient for the new row so RLS pins the tenant_id).
-    const tenantRow = await pool.query('SELECT name FROM tenants WHERE id = $1', [tenant_id]);
+    const tenantRow = await pool.query('SELECT name FROM tenants WHERE tenant_id = $1', [tenant_id]);
     if (tenantRow.rows.length === 0) {
       return reply.status(404).send({ success: false, error: 'Tenant not found' });
     }

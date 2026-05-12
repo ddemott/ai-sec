@@ -28,7 +28,7 @@ vi.mock('@/lib/SessionContext', () => ({
 function buildFetchMock() {
   const tenants = [
     {
-      id: 'tenant-1',
+      tenant_id: 'tenant-1',
       name: 'DynaTire PoC',
       business_type: 'mobile-tire',
       timezone: 'America/Los_Angeles',

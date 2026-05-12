@@ -43,7 +43,7 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
 
     // Look up or create Stripe customer
     const tenantRes = await pool.query(
-      'SELECT id, name, stripe_customer_id FROM tenants WHERE id = $1',
+      'SELECT id, name, stripe_customer_id FROM tenants WHERE tenant_id = $1',
       [tenant_id]
     );
     if (tenantRes.rows.length === 0) {
@@ -60,7 +60,7 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
       });
       customerId = customer.id;
       await pool.query(
-        'UPDATE tenants SET stripe_customer_id = $1 WHERE id = $2',
+        'UPDATE tenants SET stripe_customer_id = $1 WHERE tenant_id = $2',
         [customerId, tenant_id]
       );
     }
@@ -120,7 +120,7 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
             await pool.query(
               `UPDATE tenants
                SET stripe_subscription_id = $1, subscription_status = 'active', subscription_plan = $2
-               WHERE id = $3`,
+               WHERE tenant_id = $3`,
               [session.subscription, plan, tenantId]
             );
             logEvent(req, 'subscription_activated', { tenantId, plan });
@@ -173,7 +173,7 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
     if (!tenantId) return;
 
     const res = await pool.query(
-      'SELECT subscription_status, subscription_plan FROM tenants WHERE id = $1',
+      'SELECT subscription_status, subscription_plan FROM tenants WHERE tenant_id = $1',
       [tenantId]
     );
     if (res.rows.length === 0) {
@@ -209,7 +209,7 @@ export function subscriptionGate(pool: Pool) {
 
     try {
       const res = await pool.query(
-        'SELECT subscription_status FROM tenants WHERE id = $1',
+        'SELECT subscription_status FROM tenants WHERE tenant_id = $1',
         [tenantId]
       );
       if (res.rows.length === 0) return; // Tenant not found — let route handle

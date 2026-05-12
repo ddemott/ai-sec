@@ -79,7 +79,7 @@ describe('createTenantWithOwner — happy paths', () => {
     expect(queries.map(q => q.text)).toEqual([
       'BEGIN',
       'SELECT user_id FROM users WHERE email = $1',
-      'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
+      'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id',
       expect.stringContaining('INSERT INTO users'),
       'COMMIT',
     ]);
@@ -116,7 +116,7 @@ describe('createTenantWithOwner — happy paths', () => {
     });
 
     expect(result).toEqual({ ok: true, tenantId: TENANT_ID, userId: USER_ID });
-    expect(queries[1].text).toBe('SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)');
+    expect(queries[1].text).toBe('SELECT tenant_id AS id FROM tenants WHERE LOWER(name) = LOWER($1)');
     expect(queries[1].params).toEqual(['Sharp Salon']);
     // user INSERT params: tenantId, email, hash, full, first, last
     const userInsertParams = queries[3].params as unknown[];
@@ -274,7 +274,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
       duplicateCheck: 'tenant_name',
     });
 
-    expect(queries[1].text).toBe('SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)');
+    expect(queries[1].text).toBe('SELECT tenant_id AS id FROM tenants WHERE LOWER(name) = LOWER($1)');
   });
 });
 

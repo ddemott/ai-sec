@@ -98,14 +98,14 @@ describe('Deadlock Prevention: Transaction Isolation in Tests', () => {
 
     // Create a tenant inside the transaction
     const tenantId = await createTenant(client, 'DeadlockTest', 'test-type');
-    const check1 = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+    const check1 = await client.query('SELECT tenant_id AS id FROM tenants WHERE tenant_id = $1', [tenantId]);
     expect(check1.rows.length).toBe(1);
 
     // Rollback should undo the insert
     await rollbackTestTransaction(client);
 
     // Tenant should be gone — rollback undid the insert
-    const check2 = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+    const check2 = await client.query('SELECT tenant_id AS id FROM tenants WHERE tenant_id = $1', [tenantId]);
     expect(check2.rows.length).toBe(0);
   });
 

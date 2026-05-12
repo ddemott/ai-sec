@@ -126,7 +126,7 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
 
       const tenantRes = await client.query(
         `INSERT INTO tenants (name, business_type, timezone)
-         VALUES ($1, $2, $3) RETURNING id`,
+         VALUES ($1, $2, $3) RETURNING tenant_id AS id`,
         ['Test Chicago Business', 'tire_shop', 'America/Chicago']
       );
       testTenantId = tenantRes.rows[0].id;
@@ -162,7 +162,7 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
     if (dbAvailable && client) {
       try {
         if (testTenantId) {
-          await client.query('DELETE FROM tenants WHERE id = $1', [testTenantId]);
+          await client.query('DELETE FROM tenants WHERE tenant_id = $1', [testTenantId]);
         }
       } catch { /* cleanup */ }
       await client.end();
