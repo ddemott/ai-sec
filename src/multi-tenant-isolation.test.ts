@@ -489,7 +489,7 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
     expect(afterCount.rows[0].count).toBe(beforeCount.rows[0].count);
 
     const check = await setup.query(
-      "SELECT id FROM customers WHERE name = 'Injected-Hostile-Customer'"
+      "SELECT customer_id FROM customers WHERE name = 'Injected-Hostile-Customer'"
     );
     expect(check.rows).toHaveLength(0);
   });

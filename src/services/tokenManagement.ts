@@ -173,7 +173,7 @@ export type ChangeSource =
  * try {
  *   await setSyncContext(client, 'hubspot', 'sync-hubspot');
  *   // All subsequent changes will have change_source='hubspot'
- *   await client.query('UPDATE customers SET name = $1 WHERE id = $2', [name, id]);
+ *   await client.query('UPDATE customers SET name = $1 WHERE customer_id = $2', [name, id]);
  * } finally {
  *   await clearSyncContext(client);
  *   client.release();

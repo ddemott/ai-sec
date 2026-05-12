@@ -27,7 +27,7 @@ export interface Appointment {
 }
 
 export interface Customer {
-  id: string;
+  customer_id: string;
   tenant_id: string;
   phone: string;
   name: string; // full name (legacy)

@@ -60,8 +60,8 @@ export default function CRMView() {
 
   useEffect(() => {
     if (selectedCustomer) {
-        fetchHistory(selectedCustomer.id)
-        fetchCustomerAppointments(selectedCustomer.id)
+        fetchHistory(selectedCustomer.customer_id)
+        fetchCustomerAppointments(selectedCustomer.customer_id)
       const { first, last } = splitFullName(selectedCustomer.name || '')
       const derivedFirst = selectedCustomer.first_name || first || ''
       const derivedLast = selectedCustomer.last_name || last || ''
@@ -147,7 +147,7 @@ export default function CRMView() {
         try {
           const res = await Api.appointments.cancel(appointmentId, tenantId)
           if (res.success && selectedCustomer) {
-            fetchCustomerAppointments(selectedCustomer.id)
+            fetchCustomerAppointments(selectedCustomer.customer_id)
           }
         } catch (e) {
           console.error(e)
@@ -167,7 +167,7 @@ export default function CRMView() {
           const res = await Api.appointments.reactivate(appointmentId, tenantId)
           if (res.success) {
             showToast('Appointment reactivated.', 'success')
-            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.id)
+            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.customer_id)
             return
           }
           // Status-conflict semantics: TIMESLOT_OCCUPIED means the slot was
@@ -178,7 +178,7 @@ export default function CRMView() {
             showToast('That time slot is no longer available. Book a new appointment instead.', 'error')
           } else if (res.error_code === 'NOT_CANCELED') {
             showToast('This appointment is already active.', 'info')
-            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.id)
+            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.customer_id)
           } else {
             showToast(res.error || 'Failed to reactivate appointment.', 'error')
           }
@@ -215,7 +215,7 @@ export default function CRMView() {
     setSaving(true)
 
     try {
-      const res = await Api.customers.update(selectedCustomer.id, selectedCustomer.tenant_id, {
+      const res = await Api.customers.update(selectedCustomer.customer_id, selectedCustomer.tenant_id, {
         first_name: editForm.first_name,
         last_name: editForm.last_name,
         name: `${editForm.first_name} ${editForm.last_name}`.trim(),
@@ -280,7 +280,7 @@ export default function CRMView() {
       onConfirm: async () => {
         closeConfirm()
         try {
-          const res = await Api.customers.delete(selectedCustomer.id)
+          const res = await Api.customers.delete(selectedCustomer.customer_id)
           if (res.success) {
             setSelectedCustomer(null)
             fetchCustomers()
@@ -342,19 +342,19 @@ export default function CRMView() {
           )}
           {filteredCustomers.map((c) => (
             <div
-              key={c.id}
+              key={c.customer_id}
               onClick={() => { setSelectedCustomer(c); setIsCreating(false); setShowDetailOnMobile(true); }}
               className={`p-4 cursor-pointer transition flex justify-between items-center
-                ${selectedCustomer?.id === c.id ? 'border-l-4' : ''}`}
+                ${selectedCustomer?.customer_id === c.customer_id ? 'border-l-4' : ''}`}
               style={{
                 borderBottom: '1px solid var(--border-soft)',
-                ...(selectedCustomer?.id === c.id
+                ...(selectedCustomer?.customer_id === c.customer_id
                   ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
                   : {})
               }}
             >
               <div>
-                <p className="text-sm font-semibold" style={{ color: selectedCustomer?.id === c.id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{c.name || 'Unknown'}</p>
+                <p className="text-sm font-semibold" style={{ color: selectedCustomer?.customer_id === c.customer_id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{c.name || 'Unknown'}</p>
                 <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{formatPhone(c.phone)}</p>
               </div>
               <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />

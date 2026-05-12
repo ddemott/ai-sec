@@ -617,7 +617,7 @@ describe('QuickBookPanel', () => {
         isOpen={true}
         onClose={() => {}}
         tenantId="t1"
-        customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
+        customers={[{ customer_id: 'c1', name: 'Alice', phone: '555-0001' }]}
         employees={employees}
         resources={resources}
         services={[{ service_id: 'svc-1', name: 'Oil Change', duration_minutes: 30 }]}
@@ -673,7 +673,7 @@ describe('QuickBookPanel', () => {
         isOpen={true}
         onClose={() => {}}
         tenantId="t1"
-        customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
+        customers={[{ customer_id: 'c1', name: 'Alice', phone: '555-0001' }]}
         employees={employees}
         resources={resources}
         services={[]}
@@ -700,7 +700,7 @@ describe('QuickBookPanel', () => {
         isOpen={true}
         onClose={() => {}}
         tenantId="t1"
-        customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
+        customers={[{ customer_id: 'c1', name: 'Alice', phone: '555-0001' }]}
         employees={employees}
         resources={resources}
         services={[]}

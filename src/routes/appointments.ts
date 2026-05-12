@@ -237,7 +237,7 @@ export function registerAppointmentRoutes(
          ) AS customers,
          jsonb_build_object('name', r.name) AS resources
        FROM appointments a
-       LEFT JOIN customers c ON c.id = a.customer_id
+       LEFT JOIN customers c ON c.customer_id = a.customer_id
        LEFT JOIN resources r ON r.resource_id = a.resource_id
        ${whereClause}
        ORDER BY a.start_time ASC`;
@@ -474,7 +474,7 @@ export function registerAppointmentRoutes(
             if (custFields.length > 0) {
               custValues.push(appt.rows[0].customer_id);
               custValues.push(body.tenant_id);
-              await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE id = $${ci} AND tenant_id = $${ci + 1}`, custValues);
+              await client.query(`UPDATE customers SET ${custFields.join(', ')} WHERE customer_id = $${ci} AND tenant_id = $${ci + 1}`, custValues);
             }
           }
         }

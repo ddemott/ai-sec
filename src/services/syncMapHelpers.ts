@@ -308,7 +308,7 @@ export async function pullRemoteCustomer(opts: {
       if (!syncEntry) {
         // New — check if customer with same phone exists
         const existingRes = await client.query(
-          `SELECT id, updated_at FROM customers WHERE tenant_id = $1 AND phone = $2`,
+          `SELECT customer_id AS id, updated_at FROM customers WHERE tenant_id = $1 AND phone = $2`,
           [tenantId, fields.phone]
         );
 
@@ -340,7 +340,7 @@ export async function pullRemoteCustomer(opts: {
           const insertPlaceholders = insertVals.map((_, i) => `$${i + 1}`).join(', ');
 
           const insertRes = await client.query(
-            `INSERT INTO customers (${insertCols}) VALUES (${insertPlaceholders}) RETURNING id`,
+            `INSERT INTO customers (${insertCols}) VALUES (${insertPlaceholders}) RETURNING customer_id AS id`,
             insertVals
           );
           localId = insertRes.rows[0].id;
@@ -358,7 +358,7 @@ export async function pullRemoteCustomer(opts: {
         }
 
         const localRes = await client.query(
-          `SELECT updated_at FROM customers WHERE id = $1 AND tenant_id = $2`,
+          `SELECT updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
           [localId, tenantId]
         );
         const localUpdatedAt = localRes.rows[0]?.updated_at;

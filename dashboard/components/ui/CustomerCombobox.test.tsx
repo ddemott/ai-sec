@@ -5,11 +5,11 @@ import '@testing-library/jest-dom';
 import { CustomerCombobox, type CustomerOption } from './CustomerCombobox';
 
 const customers: CustomerOption[] = [
-  { id: 'c1', name: 'Alice Smith', phone: '+15555550001' },
-  { id: 'c2', name: 'Bob Smithers', phone: '+15555550002' },
-  { id: 'c3', name: 'Carlos Rivera', phone: '+15558881234' },
-  { id: 'c4', name: 'Dana Lee', phone: null },
-  { id: 'c5', name: null, phone: '+15555550005' }, // edge case: no name
+  { customer_id: 'c1', name: 'Alice Smith', phone: '+15555550001' },
+  { customer_id: 'c2', name: 'Bob Smithers', phone: '+15555550002' },
+  { customer_id: 'c3', name: 'Carlos Rivera', phone: '+15558881234' },
+  { customer_id: 'c4', name: 'Dana Lee', phone: null },
+  { customer_id: 'c5', name: null, phone: '+15555550005' }, // edge case: no name
 ];
 
 // Controlled wrapper so tests can verify selection persists.

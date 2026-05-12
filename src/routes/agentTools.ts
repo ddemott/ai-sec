@@ -317,7 +317,7 @@ export function registerAgentToolRoutes(
 
     const data = await withTenantClient(args.tenant_id, async (client) => {
       const cust = await client.query<{ id: string; name: string }>(
-        `SELECT id, name FROM customers
+        `SELECT customer_id AS id, name FROM customers
           WHERE tenant_id = $1 AND phone = $2
             AND (is_deleted IS NULL OR is_deleted = false)`,
         [args.tenant_id, normalized]

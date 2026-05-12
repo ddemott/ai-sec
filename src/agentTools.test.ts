@@ -1850,7 +1850,7 @@ describe('agentTools customer persistence on booking failure', () => {
     // the RPC. If a future refactor put RPC first, queries would be in a
     // different order and these would fail.
     expect(queries).toHaveLength(3);
-    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Carol']);
     expect(queries[2].text).toContain('book_appointment_atomic');
@@ -1911,7 +1911,7 @@ describe('agentTools customer persistence on booking failure', () => {
     // lookup + slots SQL. The first three are the persistence contract;
     // the trailing two are the next-available alternatives lookup.
     expect(queries.length).toBeGreaterThanOrEqual(3);
-    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);
     expect(queries[2].text).toContain('book_with_scheduling_atomic');
@@ -1957,7 +1957,7 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(queries).toHaveLength(2);
-    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
     expect(queries[1].text).toContain('book_with_scheduling_atomic');
   });
 });

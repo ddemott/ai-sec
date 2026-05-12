@@ -101,7 +101,7 @@ describe("book_with_scheduling_atomic()", () => {
             expect(result.success).toBe(true);
             // Verify customer was created
             const cust = await root.query(
-                "SELECT name, phone FROM customers WHERE id = $1",
+                "SELECT name, phone FROM customers WHERE customer_id = $1",
                 [result.customer_id]
             );
             expect(cust.rows[0].name).toBe('New Person');

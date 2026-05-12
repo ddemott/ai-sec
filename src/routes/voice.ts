@@ -222,7 +222,7 @@ export function registerVoiceRoutes(
           vs.outcome,
           (vs.customer_context->>'is_known_customer')::boolean as is_known_customer
         FROM voice_sessions vs
-        LEFT JOIN customers c ON c.id = vs.customer_id
+        LEFT JOIN customers c ON c.customer_id = vs.customer_id
         WHERE vs.tenant_id = $1 AND vs.status = 'active'
         ORDER BY vs.started_at DESC`,
         [tenantId]
@@ -285,7 +285,7 @@ export function registerVoiceRoutes(
           vs.*,
           c.name as customer_name
         FROM voice_sessions vs
-        LEFT JOIN customers c ON c.id = vs.customer_id
+        LEFT JOIN customers c ON c.customer_id = vs.customer_id
         ${whereClause}
         ORDER BY vs.started_at DESC
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -318,7 +318,7 @@ export function registerVoiceRoutes(
     const context = await withTenantClient(tenantId, async (client) => {
       // Get customer phone to use with context function
       const customerResult = await client.query<{ phone: string }>(
-        'SELECT phone FROM customers WHERE id = $1 AND tenant_id = $2 AND is_deleted = false',
+        'SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
         [customerId, tenantId]
       );
 
@@ -390,7 +390,7 @@ export function registerVoiceRoutes(
     const added = await withTenantClient(tenantId, async (client) => {
       // Verify customer belongs to tenant
       const checkResult = await client.query(
-        'SELECT id FROM customers WHERE id = $1 AND tenant_id = $2 AND is_deleted = false',
+        'SELECT customer_id AS id FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
         [customer_id, tenantId]
       );
 

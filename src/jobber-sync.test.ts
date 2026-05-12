@@ -638,7 +638,7 @@ describe("Jobber Sync — Sad Paths", () => {
     // WHO: syncCustomerToJobber when local customer was deleted between event dispatch and sync execution
     // WHAT: SELECT FROM customers returns 0 rows for the given customer_id — skip push, no GraphQL call
     // WHEN: Race condition where customer deleted while push sync event was queued (e.g., n8n webhook delay)
-    // WHERE: services/jobberSync.ts → syncCustomerToJobber() → SELECT FROM customers WHERE id = $1
+    // WHERE: services/jobberSync.ts → syncCustomerToJobber() → SELECT FROM customers WHERE customer_id = $1
     // WHY: Without this check, system would send empty/null fields to Jobber clientCreate, creating garbage records in the field service system
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);

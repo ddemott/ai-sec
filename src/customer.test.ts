@@ -89,11 +89,11 @@ describe("Customer Management", () => {
         const customerId = await createCustomerFull(client, tenantId, "+15551112222", "Old Name");
 
         await client.query(
-            "UPDATE customers SET timezone = $1, city = $2 WHERE id = $3",
+            "UPDATE customers SET timezone = $1, city = $2 WHERE customer_id = $3",
             ["America/Los_Angeles", "Los Angeles", customerId]
         );
 
-        const checkRes = await client.query("SELECT * FROM customers WHERE id = $1", [customerId]);
+        const checkRes = await client.query("SELECT * FROM customers WHERE customer_id = $1", [customerId]);
         expect(checkRes.rows[0].timezone).toBe("America/Los_Angeles");
         expect(checkRes.rows[0].city).toBe("Los Angeles");
     });

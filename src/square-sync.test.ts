@@ -554,7 +554,7 @@ describe("Square Sync — Sad Paths", () => {
     // WHO: syncCustomerToSquare when local customer was deleted between event dispatch and sync execution
     // WHAT: SELECT FROM customers returns 0 rows for the given customer_id — skip push, no API call
     // WHEN: Race condition where customer deleted while push sync event was queued (e.g., n8n webhook delay)
-    // WHERE: services/squareSync.ts → syncCustomerToSquare() → SELECT FROM customers WHERE id = $1
+    // WHERE: services/squareSync.ts → syncCustomerToSquare() → SELECT FROM customers WHERE customer_id = $1
     // WHY: Without this check, system would send empty/null fields to createCustomer, creating garbage records in Square POS
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);

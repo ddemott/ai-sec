@@ -82,12 +82,12 @@ describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => 
 
         // Try update as A
         await api.query(`SELECT set_tenant_context($1::UUID)`, [tenantA]);
-        const updateRes = await api.query("UPDATE customers SET name = 'Hacker' WHERE id = $1", [customerB]);
+        const updateRes = await api.query("UPDATE customers SET name = 'Hacker' WHERE customer_id = $1", [customerB]);
         expect(updateRes.rowCount).toBe(0);
 
         // Verify Bob is still Bob
         await api.query(`SELECT set_tenant_context($1::UUID)`, [tenantB]);
-        const checkRes = await api.query("SELECT name FROM customers WHERE id = $1", [customerB]);
+        const checkRes = await api.query("SELECT name FROM customers WHERE customer_id = $1", [customerB]);
         expect(checkRes.rows[0].name).toBe('Bob');
     });
 

@@ -70,7 +70,7 @@ describe('getOrCreateCustomerByPhone', () => {
 
     expect(id).toBe('existing-id');
     expect(queries).toHaveLength(1);
-    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
     expect(queries[0].params).toEqual([TENANT_ID, PHONE]);
   });
 
@@ -94,7 +94,7 @@ describe('getOrCreateCustomerByPhone', () => {
 
     expect(id).toBe('new-id');
     expect(queries).toHaveLength(2);
-    expect(queries[0].text).toContain('SELECT id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, PHONE, 'Alice']);
   });

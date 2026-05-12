@@ -80,19 +80,19 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             expect(selectRes.rows.length).toBeGreaterThan(0);
 
             const insertRes = await api.query(
-                "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550009999', 'Test') RETURNING id",
+                "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550009999', 'Test') RETURNING customer_id AS id",
                 [tenantId]
             );
             expect(insertRes.rows[0].id).toBeDefined();
 
             const updateRes = await api.query(
-                "UPDATE customers SET name = 'Updated' WHERE id = $1 RETURNING name",
+                "UPDATE customers SET name = 'Updated' WHERE customer_id = $1 RETURNING name",
                 [insertRes.rows[0].id]
             );
             expect(updateRes.rows[0].name).toBe('Updated');
 
             const deleteRes = await api.query(
-                "DELETE FROM customers WHERE id = $1",
+                "DELETE FROM customers WHERE customer_id = $1",
                 [insertRes.rows[0].id]
             );
             expect(deleteRes.rowCount).toBe(1);
@@ -350,11 +350,11 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const customerB = await createCustomerFull(root, tenantB, "+15550002222", "Secret Bob");
 
             await api.query("SELECT set_tenant_context($1::UUID)", [tenantA]);
-            const deleteRes = await api.query("DELETE FROM customers WHERE id = $1", [customerB]);
+            const deleteRes = await api.query("DELETE FROM customers WHERE customer_id = $1", [customerB]);
             expect(deleteRes.rowCount).toBe(0);
 
             await api.query("SELECT set_tenant_context($1::UUID)", [tenantB]);
-            const checkRes = await api.query("SELECT name FROM customers WHERE id = $1", [customerB]);
+            const checkRes = await api.query("SELECT name FROM customers WHERE customer_id = $1", [customerB]);
             expect(checkRes.rows[0].name).toBe('Secret Bob');
         });
 

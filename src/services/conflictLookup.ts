@@ -74,7 +74,7 @@ export async function findOverlappingAppointment(
             e.name         AS employee_name,
             r.name         AS resource_name
        FROM appointments a
-       LEFT JOIN customers c ON c.id = a.customer_id
+       LEFT JOIN customers c ON c.customer_id = a.customer_id
        LEFT JOIN employees e ON e.employee_id = a.employee_id
        LEFT JOIN resources r ON r.resource_id = a.resource_id
       WHERE a.tenant_id = $1

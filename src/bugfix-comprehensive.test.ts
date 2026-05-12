@@ -75,12 +75,12 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
     const custA = await createCustomer(client, tenantA, "Alice", "+15550001111");
 
     const res = await client.query(
-      "DELETE FROM customers WHERE id = $1 AND tenant_id = $2 RETURNING id",
+      "DELETE FROM customers WHERE customer_id = $1 AND tenant_id = $2 RETURNING customer_id AS id",
       [custA, tenantA]
     );
     expect(res.rowCount).toBe(1);
 
-    const check = await client.query("SELECT id FROM customers WHERE id = $1", [custA]);
+    const check = await client.query("SELECT customer_id AS id FROM customers WHERE customer_id = $1", [custA]);
     expect(check.rows).toHaveLength(0);
   });
 
@@ -95,13 +95,13 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
     const custA = await createCustomer(client, tenantA, "Alice", "+15550001111");
 
     const res = await client.query(
-      "DELETE FROM customers WHERE id = $1 AND tenant_id = $2 RETURNING id",
+      "DELETE FROM customers WHERE customer_id = $1 AND tenant_id = $2 RETURNING customer_id AS id",
       [custA, tenantB]
     );
     expect(res.rowCount).toBe(0);
 
     // Verify custA still exists — tenantB could not delete it
-    const check = await client.query("SELECT id, name FROM customers WHERE id = $1", [custA]);
+    const check = await client.query("SELECT customer_id AS id, name FROM customers WHERE customer_id = $1", [custA]);
     expect(check.rows).toHaveLength(1);
     expect(check.rows[0].name).toBe("Alice");
   });
@@ -117,7 +117,7 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
     const custA = await createCustomer(client, tenantA, "Alice", "+15550001111");
 
     const res = await client.query(
-      "UPDATE customers SET name = $1 WHERE id = $2 AND tenant_id = $3 RETURNING id",
+      "UPDATE customers SET name = $1 WHERE customer_id = $2 AND tenant_id = $3 RETURNING customer_id AS id",
       ["Alice Updated", custA, tenantA]
     );
     expect(res.rowCount).toBe(1);
@@ -134,12 +134,12 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
     const custA = await createCustomer(client, tenantA, "Alice", "+15550001111");
 
     const res = await client.query(
-      "UPDATE customers SET name = $1 WHERE id = $2 AND tenant_id = $3",
+      "UPDATE customers SET name = $1 WHERE customer_id = $2 AND tenant_id = $3",
       ["HACKED", custA, tenantB]
     );
     expect(res.rowCount).toBe(0);
 
-    const check = await client.query("SELECT name FROM customers WHERE id = $1", [custA]);
+    const check = await client.query("SELECT name FROM customers WHERE customer_id = $1", [custA]);
     expect(check.rows[0].name).toBe("Alice");
   });
 

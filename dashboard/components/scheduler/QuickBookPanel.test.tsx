@@ -30,7 +30,7 @@ vi.mock('@/lib/VocabularyContext', () => ({
 // Imported after mocks.
 import { QuickBookPanel } from './QuickBookPanel';
 
-const customers = [{ id: 'c-1', name: 'Alice', phone: '+15555550001' }];
+const customers = [{ customer_id: 'c-1', name: 'Alice', phone: '+15555550001' }];
 const employees = [
   { id: 'emp-mike', name: 'Mike' },
   { id: 'emp-dana', name: 'Dana' },

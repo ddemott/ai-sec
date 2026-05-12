@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { formatPhone } from '../../lib/phone';
 
 export interface CustomerOption {
-  id: string;
+  customer_id: string;
   name?: string | null;
   phone?: string | null;
 }
@@ -92,7 +92,7 @@ export function CustomerCombobox({
       >
         <option value="">{promptLabel}</option>
         {filtered.map((c) => (
-          <option key={c.id} value={c.id}>
+          <option key={c.customer_id} value={c.customer_id}>
             {c.name || '(no name)'}
             {c.phone ? ` (${formatPhone(c.phone)})` : ''}
           </option>

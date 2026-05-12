@@ -31,7 +31,7 @@ export async function getOrCreateCustomerByPhone(
 ): Promise<string> {
   return withTenantClient(tenantId, async (client) => {
     const existing = await client.query<{ id: string }>(
-      `SELECT id FROM customers
+      `SELECT customer_id AS id FROM customers
         WHERE tenant_id = $1 AND phone = $2
           AND (is_deleted IS NULL OR is_deleted = false)`,
       [tenantId, phoneNormalized]
@@ -41,7 +41,7 @@ export async function getOrCreateCustomerByPhone(
     }
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO customers (tenant_id, phone, name)
-         VALUES ($1, $2, $3) RETURNING id`,
+         VALUES ($1, $2, $3) RETURNING customer_id AS id`,
       [tenantId, phoneNormalized, name]
     );
     return inserted.rows[0].id;

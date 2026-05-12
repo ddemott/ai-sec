@@ -47,7 +47,7 @@ export async function setupBasicTenant(client: Client) {
     const tenantId = tRes.rows[0].id;
     const rRes = await client.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 1') RETURNING resource_id as id;", [tenantId]);
     const resourceId = rRes.rows[0].id;
-    const cRes = await client.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550001111', 'Alice') RETURNING id;", [tenantId]);
+    const cRes = await client.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550001111', 'Alice') RETURNING customer_id AS id;", [tenantId]);
     const customerId = cRes.rows[0].id;
 
     return { tenantId, resourceId, customerId };
@@ -153,7 +153,7 @@ export async function createService(client: Client, tenantId: string, name: stri
 
 export async function createCustomer(client: Client, tenantId: string, name: string, phone: string): Promise<string> {
     const res = await client.query(
-        "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3) RETURNING customer_id AS id",
         [tenantId, phone, name]
     );
     return res.rows[0].id;
@@ -161,7 +161,7 @@ export async function createCustomer(client: Client, tenantId: string, name: str
 
 export async function createCustomerFull(client: Client, tenantId: string, phone: string, name: string, email?: string): Promise<string> {
     const res = await client.query(
-        "INSERT INTO customers (tenant_id, phone, name, email) VALUES ($1, $2, $3, $4) RETURNING id",
+        "INSERT INTO customers (tenant_id, phone, name, email) VALUES ($1, $2, $3, $4) RETURNING customer_id AS id",
         [tenantId, phone, name, email || null]
     );
     return res.rows[0].id;

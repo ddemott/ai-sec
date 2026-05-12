@@ -67,7 +67,7 @@ export async function syncCustomerToJobber(
 
     // Fetch local customer
     const custRes = await client.query(
-      `SELECT id, name, phone, email, address, metadata, updated_at FROM customers WHERE id = $1 AND tenant_id = $2`,
+      `SELECT customer_id AS id, name, phone, email, address, metadata, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
       [customerId, tenantId]
     );
     const cust = custRes.rows[0];
@@ -155,7 +155,7 @@ export async function syncAppointmentToJobber(
       `SELECT a.*, c.name as customer_name, c.phone as customer_phone,
               r.name as resource_name
        FROM appointments a
-       LEFT JOIN customers c ON c.id = a.customer_id
+       LEFT JOIN customers c ON c.customer_id = a.customer_id
        LEFT JOIN resources r ON r.resource_id = a.resource_id
        WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
       [appointmentId, tenantId]
@@ -282,7 +282,7 @@ export async function pullJobberVisit(
 
       // Get default resource for this tenant
       const resourceRes = await client.query(
-        `SELECT id FROM resources WHERE tenant_id = $1 AND (is_active = true OR is_active IS NULL) ORDER BY created_at LIMIT 1`,
+        `SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND (is_active = true OR is_active IS NULL) ORDER BY created_at LIMIT 1`,
         [tenantId]
       );
       if (resourceRes.rows.length === 0) {

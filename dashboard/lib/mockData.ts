@@ -18,7 +18,7 @@ export const MOCK_TENANT = {
 
 export const MOCK_CUSTOMERS: Customer[] = [
   {
-    id: '207b25bb-ef55-4df8-ac89-252f9dcd80b9',
+    customer_id: '207b25bb-ef55-4df8-ac89-252f9dcd80b9',
     tenant_id: MOCK_TENANT.id,
     phone: '+15551112222',
     name: 'Bob Smith',
@@ -27,7 +27,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     metadata: { vehicle: '2022 Honda Civic', notes: 'Prefers morning appointments' }
   },
   {
-    id: '97704486-04d4-40ba-85f8-7a82e47e1611',
+    customer_id: '97704486-04d4-40ba-85f8-7a82e47e1611',
     tenant_id: MOCK_TENANT.id,
     phone: '+15550001111',
     name: 'Alice Johnson',
@@ -42,7 +42,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     appointment_id: 'ffaf8ae5-7577-4951-86f3-3ff5c9dd9fd8',
     tenant_id: MOCK_TENANT.id,
     resource_id: '18288e57-a958-41e4-be5f-e95a8539a06b',
-    customer_id: MOCK_CUSTOMERS[0].id,
+    customer_id: MOCK_CUSTOMERS[0].customer_id,
     start_time: getFixedDate(1, 9, 0), // Tomorrow at 9:00 AM
     end_time: getFixedDate(1, 10, 0),
     description: 'Standard Maintenance',
@@ -55,7 +55,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     appointment_id: 'f92d33d3-007e-4508-a5ca-eb1a483c0b07',
     tenant_id: MOCK_TENANT.id,
     resource_id: '18288e57-a958-41e4-be5f-e95a8539a06b',
-    customer_id: MOCK_CUSTOMERS[1].id,
+    customer_id: MOCK_CUSTOMERS[1].customer_id,
     start_time: getFixedDate(2, 13, 30), // Day after tomorrow at 1:30 PM
     end_time: getFixedDate(2, 14, 30),
     description: 'Flat Tire Repair',
@@ -69,7 +69,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
 export const MOCK_SUMMARIES = [
   {
     id: 's1',
-    customer_id: MOCK_CUSTOMERS[0].id,
+    customer_id: MOCK_CUSTOMERS[0].customer_id,
     summary: 'Bob called to ask about pricing for winter tires.',
     created_at: new Date(Date.now() - 86400000).toISOString()
   }

@@ -189,12 +189,12 @@ describe('Medium Bug Fixes', () => {
             if (!dbAvailable) return;
             // customerId comes from setupBasicTenant ("Alice")
             await client.query(
-                `UPDATE customers SET first_name = 'Jane', last_name = 'Smith' WHERE id = $1`,
+                `UPDATE customers SET first_name = 'Jane', last_name = 'Smith' WHERE customer_id = $1`,
                 [customerId]
             );
 
             const res = await client.query(
-                `SELECT name FROM customers WHERE id = $1`,
+                `SELECT name FROM customers WHERE customer_id = $1`,
                 [customerId]
             );
             expect(res.rows[0].name).toBe('Jane Smith');

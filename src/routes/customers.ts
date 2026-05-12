@@ -104,7 +104,7 @@ export function registerCustomerRoutes(
            first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
            address = $6, address_line2 = $7, city = $8, state = $9,
            postal_code = $10, metadata = $11, timezone = $12
-         WHERE id = $13 AND tenant_id = $14 RETURNING id`,
+         WHERE customer_id = $13 AND tenant_id = $14 RETURNING customer_id`,
         [body.first_name || null, body.last_name || null, body.name || null,
          body.phone, body.email, body.address, body.address_line2 || null,
          body.city || null, body.state || null, body.postal_code || null,
@@ -150,7 +150,7 @@ export function registerCustomerRoutes(
     syncCustomerToAll(pool, tenantId, id, 'delete', req.log);
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM customers WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+      return client.query('DELETE FROM customers WHERE customer_id = $1 AND tenant_id = $2 RETURNING customer_id', [id, tenantId]);
     });
     if (!assertRowAffected(res, reply, 'Customer')) return;
 

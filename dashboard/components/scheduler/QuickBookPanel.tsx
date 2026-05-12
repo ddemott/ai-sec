@@ -11,7 +11,7 @@ import { filterEmployeesByService, filterResourcesByService } from '../../lib/av
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 import { ConflictModal, type BookingConflict, type AvailableAlternative } from './ConflictModal';
 
-interface QuickBookCustomer { id: string; name?: string; phone?: string }
+interface QuickBookCustomer { customer_id: string; name?: string; phone?: string }
 interface QuickBookEmployee { id: string; name: string; skills?: string[] }
 interface QuickBookResource { resource_id: string; name: string }
 interface QuickBookService { service_id: string; name: string; duration_minutes?: number }
@@ -139,7 +139,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
     if (isOpen && prefill) {
       setResourceId(prefill.resourceId || resources[0]?.resource_id || '');
       setEmployeeId(prefill.employeeId || '');
-      setCustomerId(customers[0]?.id || '');
+      setCustomerId(customers[0]?.customer_id || '');
       setServiceId('');
       setError('');
       setSaving(false);
@@ -241,7 +241,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
         {/* Customer search */}
         <CustomerCombobox
-          customers={customers.map((c) => ({ id: c.id, name: c.name ?? null, phone: c.phone ?? null }))}
+          customers={customers.map((c) => ({ customer_id: c.customer_id, name: c.name ?? null, phone: c.phone ?? null }))}
           value={customerId}
           onChange={setCustomerId}
           selectTestId="quick-book-customer"

@@ -154,7 +154,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   const calendarMax = new Date(2000, 0, 1, 23, 59, 59);
   const calendarScrollTo = new Date(2000, 0, 1, 7, 0, 0);
 
-  const findCustomerById = (id: string) => customers.find(c => c.id === id)
+  const findCustomerById = (id: string) => customers.find(c => c.customer_id === id)
 
   useEffect(() => {
     fetchAppointments()
@@ -328,7 +328,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
 
     let targetTenantId = tenantId
     if (tenantId === SUPER_ADMIN_TENANT_ID) {
-      const selectedCustomerObj = customers.find(c => c.id === form.customer_id)
+      const selectedCustomerObj = customers.find(c => c.customer_id === form.customer_id)
       if (selectedCustomerObj) {
         targetTenantId = selectedCustomerObj.tenant_id
       } else {
@@ -416,7 +416,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
     setSelectedAppointment(null)
     const now = new Date()
     const inOneHour = new Date(now.getTime() + 60 * 60 * 1000)
-    const defaultCustomerId = customers[0]?.id || ''
+    const defaultCustomerId = customers[0]?.customer_id || ''
     const defaultCustomer = findCustomerById(defaultCustomerId)
     const defaultLocation = formatCustomerAddress(defaultCustomer)
     setDraftEvent({ start: now, end: inOneHour })
