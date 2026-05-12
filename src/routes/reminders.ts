@@ -66,7 +66,7 @@ export function registerReminderRoutes(
       let query = `
         SELECT rs.*, a.start_time as appointment_time, a.description as appointment_description
         FROM reminder_schedules rs
-        LEFT JOIN appointments a ON rs.appointment_id = a.id
+        LEFT JOIN appointments a ON rs.appointment_id = a.appointment_id
         WHERE rs.tenant_id = $1
       `;
       const params: any[] = [tenantId];

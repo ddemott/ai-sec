@@ -127,7 +127,7 @@ export function registerCustomerRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        `SELECT a.id, a.start_time, a.end_time, a.status, a.description, a.location,
+        `SELECT a.appointment_id, a.start_time, a.end_time, a.status, a.description, a.location,
                 r.name as resource_name,
                 e.name as employee_name
          FROM appointments a

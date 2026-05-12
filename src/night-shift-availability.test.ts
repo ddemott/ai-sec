@@ -69,7 +69,7 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
 
     // Cleanup
     if (result.rows[0].appointment_id) {
-      await client.query("DELETE FROM appointments WHERE id = $1", [result.rows[0].appointment_id]);
+      await client.query("DELETE FROM appointments WHERE appointment_id = $1", [result.rows[0].appointment_id]);
     }
   });
 
@@ -89,7 +89,7 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     expect(result.rows[0].success).toBe(true);
 
     if (result.rows[0].appointment_id) {
-      await client.query("DELETE FROM appointments WHERE id = $1", [result.rows[0].appointment_id]);
+      await client.query("DELETE FROM appointments WHERE appointment_id = $1", [result.rows[0].appointment_id]);
     }
   });
 

@@ -80,7 +80,7 @@ describe('Low Bug Fixes', () => {
             expect(res.rows[0].success).toBe(true);
 
             const apt = await client.query(
-                `SELECT start_time, end_time FROM appointments WHERE id = $1`,
+                `SELECT start_time, end_time FROM appointments WHERE appointment_id = $1`,
                 [res.rows[0].appointment_id]
             );
             const start = new Date(apt.rows[0].start_time);

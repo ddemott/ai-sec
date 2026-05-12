@@ -58,7 +58,7 @@ describe("AI Tools: Modular Integration", () => {
         expect(bookRes.rows[0].success).toBe(true);
 
         const stored = await client.query(
-            "SELECT start_time, end_time FROM appointments WHERE id = $1",
+            "SELECT start_time, end_time FROM appointments WHERE appointment_id = $1",
             [bookRes.rows[0].appointment_id]
         );
 

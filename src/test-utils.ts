@@ -173,7 +173,7 @@ export async function createAppointment(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status, employee_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING appointment_id AS id`,
         [tenantId, resourceId, customerId, startTime, endTime, description, status || 'scheduled', employeeId || null]
     );
     return res.rows[0].id;

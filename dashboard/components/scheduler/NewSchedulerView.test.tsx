@@ -20,7 +20,7 @@ const mockServices = [
 
 const mockAppointments = [
   {
-    id: 'appt-1',
+    appointment_id: 'appt-1',
     tenant_id: 't1',
     resource_id: 'res-1',
     customer_id: 'cust-1',
@@ -33,7 +33,7 @@ const mockAppointments = [
     resources: { name: 'Bay 1' },
   },
   {
-    id: 'appt-2',
+    appointment_id: 'appt-2',
     tenant_id: 't1',
     resource_id: 'res-1',
     customer_id: 'cust-2',
@@ -46,7 +46,7 @@ const mockAppointments = [
     resources: { name: 'Bay 1' },
   },
   {
-    id: 'appt-3',
+    appointment_id: 'appt-3',
     tenant_id: 't1',
     resource_id: 'res-2',
     customer_id: 'cust-3',
@@ -1040,7 +1040,7 @@ describe('NewSchedulerView', () => {
       test('does not crash when appointment has empty string start_time or end_time', () => {
         const badAppointments = [
           {
-            id: 'appt-bad-1',
+            appointment_id: 'appt-bad-1',
             tenant_id: 't1',
             resource_id: 'res-1',
             customer_id: 'cust-1',

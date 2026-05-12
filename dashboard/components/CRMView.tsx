@@ -28,7 +28,7 @@ export default function CRMView() {
   const [summaries, setSummaries] = useState<{ id: string; customer_id: string; summary: string; call_timestamp?: string; created_at?: string; has_transcript?: boolean }[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
-  const [customerAppointments, setCustomerAppointments] = useState<{ id: string; start_time: string; end_time: string; status: string; description: string; resource_name?: string; employee_name?: string; location?: string }[]>([])
+  const [customerAppointments, setCustomerAppointments] = useState<{ appointment_id: string; start_time: string; end_time: string; status: string; description: string; resource_name?: string; employee_name?: string; location?: string }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const { state: confirmState, confirm, close: closeConfirm } = useConfirm()
 

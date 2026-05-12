@@ -121,7 +121,7 @@ describe('book_appointment_atomic — service_employee mapping enforcement', () 
         expect(result.appointment_id).toBeTruthy();
         expect(result.error_message).toBeNull();
         // Service id persisted on the new row.
-        const row = await root.query('SELECT service_id FROM appointments WHERE id = $1', [result.appointment_id]);
+        const row = await root.query('SELECT service_id FROM appointments WHERE appointment_id = $1', [result.appointment_id]);
         expect(row.rows[0].service_id).toBe(svcId);
         // WHO: front-desk operator booking Mike for Tire Mount with the dashboard's alignment filter — Mike appears in the dropdown because he has a service_employee row | WHAT: RPC accepts the booking, persists service_id | WHEN: every dashboard booking once /appointments/create threads serviceId through | WHERE: book_appointment_atomic mapping check + INSERT | WHY: this is the load-bearing happy path — pin both the accept (operator's pick passes the new gate) and the persistence (downstream "what services has Mike performed today" queries can rely on service_id, no free-text matching against description)
     });

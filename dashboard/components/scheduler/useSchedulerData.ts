@@ -3,7 +3,7 @@ import { Api } from '../../lib/api';
 import type { BulkEffectiveShift } from '../../lib/types';
 
 export interface SchedulerAppointment {
-  id: string;
+  appointment_id: string;
   tenant_id: string;
   resource_id: string;
   customer_id: string;

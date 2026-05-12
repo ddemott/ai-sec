@@ -39,7 +39,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
 
 export const MOCK_APPOINTMENTS: Appointment[] = [
   {
-    id: 'ffaf8ae5-7577-4951-86f3-3ff5c9dd9fd8',
+    appointment_id: 'ffaf8ae5-7577-4951-86f3-3ff5c9dd9fd8',
     tenant_id: MOCK_TENANT.id,
     resource_id: '18288e57-a958-41e4-be5f-e95a8539a06b',
     customer_id: MOCK_CUSTOMERS[0].id,
@@ -52,7 +52,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     resources: { name: 'Service Truck 1' }
   },
   {
-    id: 'f92d33d3-007e-4508-a5ca-eb1a483c0b07',
+    appointment_id: 'f92d33d3-007e-4508-a5ca-eb1a483c0b07',
     tenant_id: MOCK_TENANT.id,
     resource_id: '18288e57-a958-41e4-be5f-e95a8539a06b',
     customer_id: MOCK_CUSTOMERS[1].id,

@@ -148,7 +148,7 @@ test('AppointmentView: can modify and save an appointment', async () => {
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(`https://localhost:4001/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
+      expect.stringContaining(`https://localhost:4001/appointments/${MOCK_APPOINTMENTS[0].appointment_id}/update`),
       expect.objectContaining({ method: 'POST' })
     )
   })
@@ -171,7 +171,7 @@ test('AppointmentView: canceling confirmation reverts changes and does not save'
   fireEvent.click(keepOriginalButton)
 
   expect(global.fetch).not.toHaveBeenCalledWith(
-    expect.stringContaining(`/appointments/${MOCK_APPOINTMENTS[0].id}/update`),
+    expect.stringContaining(`/appointments/${MOCK_APPOINTMENTS[0].appointment_id}/update`),
     expect.objectContaining({ method: 'POST' })
   )
   // WHO: tenant user | WHAT: cancel confirmation dialog | WHEN: after clicking Update but before confirming | WHERE: AppointmentView confirmation modal | WHY: user must be able to back out of changes without accidentally saving

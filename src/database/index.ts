@@ -327,7 +327,7 @@ export class PostgresDatabaseService implements DatabaseService {
     return this.withClient(async (client) => {
       const result = await client.query(
         `SELECT
-          a.id,
+          a.appointment_id AS id,
           a.tenant_id as "tenantId",
           a.customer_id as "customerId",
           c.email as "customerEmail",
@@ -343,7 +343,7 @@ export class PostgresDatabaseService implements DatabaseService {
         LEFT JOIN customers c ON a.customer_id = c.id
         LEFT JOIN services s ON a.service_id = s.service_id
         LEFT JOIN employees e ON a.employee_id = e.employee_id
-        WHERE a.id = $1 AND a.is_deleted = false`,
+        WHERE a.appointment_id = $1 AND a.is_deleted = false`,
         [id]
       );
       return result.rows[0] || null;

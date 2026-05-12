@@ -69,7 +69,7 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
         }
 
         return (
-          <React.Fragment key={appt.id}>
+          <React.Fragment key={appt.appointment_id}>
             {gapWarning}
             <div
               role="button"
@@ -78,7 +78,7 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
               style={{ ['--tw-ring-color' as string]: 'var(--accent)' }}
               onClick={(e) => onAppointmentClick?.(appt, e)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAppointmentClick?.(appt, e as unknown as React.MouseEvent); } }}
-              data-testid={`list-item-${appt.id}`}
+              data-testid={`list-item-${appt.appointment_id}`}
             >
               {/* Time */}
               <div className="w-24 flex-shrink-0">

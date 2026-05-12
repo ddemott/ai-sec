@@ -42,7 +42,7 @@ describe("Appointment date-range filter", () => {
   async function createAppointment(startTime: string, endTime: string) {
     const res = await client.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description)
-       VALUES ($1, $2, $3, $4, $5, 'Test appt') RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, 'Test appt') RETURNING appointment_id AS id`,
       [tenantId, resourceId, customerId, startTime, endTime]
     );
     return res.rows[0].id;

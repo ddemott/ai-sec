@@ -73,7 +73,7 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
       }}
       onClick={(e) => onClick?.(appointment, e)}
       title={`${customerName} — ${appointment.description}`}
-      data-testid={`appointment-block-${appointment.id}`}
+      data-testid={`appointment-block-${appointment.appointment_id}`}
     >
       {width < 0.04 ? (
         <span

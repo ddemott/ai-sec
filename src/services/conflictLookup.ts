@@ -68,7 +68,7 @@ export async function findOverlappingAppointment(
   const { tenantId, resourceId, employeeId, startTime, endTime } = params;
 
   const res = await client.query<AppointmentConflict>(
-    `SELECT a.id::text     AS appointment_id,
+    `SELECT a.appointment_id::text AS appointment_id,
             a.start_time, a.end_time, a.description,
             c.name         AS customer_name,
             e.name         AS employee_name,

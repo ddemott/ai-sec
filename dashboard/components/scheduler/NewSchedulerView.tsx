@@ -391,7 +391,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   const handleAppointmentClick = useCallback((appointment: SchedulerAppointment, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setApptPopover(prev =>
-      prev?.appointment.id === appointment.id ? null : { appointment, anchorRect: rect }
+      prev?.appointment.appointment_id === appointment.appointment_id ? null : { appointment, anchorRect: rect }
     );
     setProfileCard(null); // close profile card if open
   }, []);
@@ -933,7 +933,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                         />
                         {empAppointments.map((appt) => (
                           <AppointmentBlockNew
-                            key={appt.id}
+                            key={appt.appointment_id}
                             appointment={appt}
                             colW={colW}
                             services={services}
@@ -989,7 +989,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
                   {(appointmentsByEmployee.get('unassigned') || []).map((appt) => (
                     <AppointmentBlockNew
-                      key={appt.id}
+                      key={appt.appointment_id}
                       appointment={appt}
                       colW={colW}
                       services={services}
@@ -1203,7 +1203,7 @@ function AppointmentBlockNew({ appointment, colW, services, onClick }: Appointme
       }}
       title={`${customerName} — ${serviceName}`}
       onClick={(e) => onClick?.(appointment, e)}
-      data-testid={`appt-block-${appointment.id}`}
+      data-testid={`appt-block-${appointment.appointment_id}`}
     >
       <span className="block truncate leading-tight">{customerName}</span>
       {width > 60 && (

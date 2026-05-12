@@ -633,7 +633,7 @@ describe('GET /appointments', () => {
 describe('DELETE /appointments/:id', () => {
     it('HAPPY: hard-deletes the row, fires sync, returns success', async () => {
         // WHO: tenant owner deleting an appointment
-        // WHAT: DELETE FROM appointments WHERE id AND tenant_id, also fires
+        // WHAT: DELETE FROM appointments WHERE appointment_id AND tenant_id, also fires
         //       sync('delete') BEFORE the DELETE so external systems see the
         //       cancellation
         // WHEN: DELETE /appointments/:id

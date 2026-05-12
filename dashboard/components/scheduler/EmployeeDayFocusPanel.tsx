@@ -102,10 +102,10 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
             <div className="space-y-2">
               {sorted.map((appt) => (
                 <div
-                  key={appt.id}
+                  key={appt.appointment_id}
                   className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-[#222] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
                   onClick={(e) => onAppointmentClick?.(appt, e)}
-                  data-testid={`focus-item-${appt.id}`}
+                  data-testid={`focus-item-${appt.appointment_id}`}
                 >
                   <div className="flex-shrink-0">
                     <div className="text-xs font-bold text-gray-900 dark:text-gray-100">{formatTimeFromISO(appt.start_time)}</div>

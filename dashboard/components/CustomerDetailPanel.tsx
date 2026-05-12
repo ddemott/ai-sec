@@ -51,7 +51,7 @@ interface CallSummary {
 }
 
 interface CustomerAppointment {
-  id: string
+  appointment_id: string
   start_time: string
   end_time: string
   status: string
@@ -260,7 +260,7 @@ export function CustomerDetailPanel({
                   {upcomingAppointments.length > 0 ? (
                     <div className="space-y-3">
                       {upcomingAppointments.map((a) => (
-                        <div key={a.id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+                        <div key={a.appointment_id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
                           <div className="space-y-1">
                             <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{a.description}</p>
                             <p className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
@@ -274,7 +274,7 @@ export function CustomerDetailPanel({
                           </div>
                           <div className="flex items-center space-x-2">
                             <Badge variant="primary">Scheduled</Badge>
-                            <Button variant="danger" size="sm" onClick={() => onCancelAppointment(a.id)} aria-label="Cancel appointment">
+                            <Button variant="danger" size="sm" onClick={() => onCancelAppointment(a.appointment_id)} aria-label="Cancel appointment">
                               <XCircle className="w-4 h-4" />
                             </Button>
                           </div>
@@ -322,10 +322,10 @@ export function CustomerDetailPanel({
                         // appointments yet — out of scope here).
                         return isCanceled ? (
                           <button
-                            key={a.id}
+                            key={a.appointment_id}
                             type="button"
-                            onClick={() => onReactivateAppointment(a.id)}
-                            data-testid={`customer-history-canceled-${a.id}`}
+                            onClick={() => onReactivateAppointment(a.appointment_id)}
+                            data-testid={`customer-history-canceled-${a.appointment_id}`}
                             aria-label={`Reactivate canceled appointment: ${a.description} on ${dateLabel}`}
                             className="w-full text-left p-4 rounded-xl shadow-sm flex justify-between items-start transition-colors hover:brightness-110"
                             style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)', cursor: 'pointer' }}
@@ -333,7 +333,7 @@ export function CustomerDetailPanel({
                             {Body}
                           </button>
                         ) : (
-                          <div key={a.id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+                          <div key={a.appointment_id} className="p-4 rounded-xl shadow-sm flex justify-between items-start" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
                             {Body}
                           </div>
                         );

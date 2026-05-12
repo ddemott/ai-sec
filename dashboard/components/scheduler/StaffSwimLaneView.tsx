@@ -382,7 +382,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
           {/* Appointment blocks */}
           {empAppointments.map((appt) => (
             <AppointmentBlock
-              key={appt.id}
+              key={appt.appointment_id}
               appointment={appt}
               onClick={onAppointmentClick}
               colorClass={colorClass}

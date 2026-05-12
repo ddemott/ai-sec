@@ -157,7 +157,7 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
       "2026-05-01 10:00:00", "2026-05-01 11:00:00", "Test");
 
     const res = await client.query(
-      "DELETE FROM appointments WHERE id = $1 AND tenant_id = $2 RETURNING id",
+      "DELETE FROM appointments WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id",
       [apptA, tenantA]
     );
     expect(res.rowCount).toBe(1);
@@ -177,12 +177,12 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
       "2026-05-01 10:00:00", "2026-05-01 11:00:00", "Test");
 
     const res = await client.query(
-      "DELETE FROM appointments WHERE id = $1 AND tenant_id = $2 RETURNING id",
+      "DELETE FROM appointments WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id",
       [apptA, tenantB]
     );
     expect(res.rowCount).toBe(0);
 
-    const check = await client.query("SELECT id FROM appointments WHERE id = $1", [apptA]);
+    const check = await client.query("SELECT appointment_id AS id FROM appointments WHERE appointment_id = $1", [apptA]);
     expect(check.rows).toHaveLength(1);
   });
 

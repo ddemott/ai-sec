@@ -157,7 +157,7 @@ export async function syncAppointmentToJobber(
        FROM appointments a
        LEFT JOIN customers c ON c.id = a.customer_id
        LEFT JOIN resources r ON r.resource_id = a.resource_id
-       WHERE a.id = $1 AND a.tenant_id = $2`,
+       WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
       [appointmentId, tenantId]
     );
     const appt = apptRes.rows[0];
@@ -317,7 +317,7 @@ export async function pullJobberVisit(
         }
 
         const localRes = await client.query(
-          `SELECT updated_at FROM appointments WHERE id = $1 AND tenant_id = $2`,
+          `SELECT updated_at FROM appointments WHERE appointment_id = $1 AND tenant_id = $2`,
           [localId, tenantId]
         );
         const localUpdatedAt = localRes.rows[0]?.updated_at;
@@ -325,7 +325,7 @@ export async function pullJobberVisit(
         if (isRemoteNewer(remoteUpdatedAt, localUpdatedAt)) {
           await client.query(
             `UPDATE appointments SET start_time = $1, end_time = $2, description = COALESCE($3, description)
-             WHERE id = $4 AND tenant_id = $5`,
+             WHERE appointment_id = $4 AND tenant_id = $5`,
             [visitData.startAt, visitData.endAt, description, localId, tenantId]
           );
           log.info(`${prefix} — updated local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} — remote was newer)`);

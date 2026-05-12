@@ -104,7 +104,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   // Calendar events for react-big-calendar
   const calendarEvents = useMemo(() => {
     return appointments.map((a: Appointment) => ({
-      id: a.id,
+      id: a.appointment_id,
       title: a.description || (a.customers?.name || vocab.booking_label),
       start: new Date(a.start_time),
       end: new Date(a.end_time),
@@ -171,7 +171,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   useEffect(() => {
     if (!initialEditAppointmentId) return;
     if (appointments.length === 0) return;
-    const appt = appointments.find(a => a.id === initialEditAppointmentId);
+    const appt = appointments.find(a => a.appointment_id === initialEditAppointmentId);
     if (!appt) {
       onInitialEditConsumed?.();
       return;
@@ -244,12 +244,12 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           setSelectedAppointment(null)
         }
       } else if (selectId) {
-        const newlyCreated = data.find((a: Appointment) => a.id === selectId)
+        const newlyCreated = data.find((a: Appointment) => a.appointment_id === selectId)
         if (newlyCreated) setSelectedAppointment(newlyCreated)
       } else if (!selectedAppointment) {
         setSelectedAppointment(data[0])
       } else {
-        const updated = data.find((a: Appointment) => a.id === selectedAppointment.id)
+        const updated = data.find((a: Appointment) => a.appointment_id === selectedAppointment.appointment_id)
         if (updated) setSelectedAppointment(updated)
       }
     } catch {
@@ -282,7 +282,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
     setError("");
 
     try {
-      const res = await Api.appointments.update(selectedAppointment.id, selectedAppointment.tenant_id, {
+      const res = await Api.appointments.update(selectedAppointment.appointment_id, selectedAppointment.tenant_id, {
           ...form,
           start_time: toISOStringWithOffset(form.start_time),
           end_time: toISOStringWithOffset(form.end_time),
@@ -397,7 +397,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
       // backend soft-cancel route also drops the slot from synced
       // calendars + CRMs, matching what an operator expects from
       // "cancel."
-      const res = await Api.appointments.cancel(selectedAppointment.id, tenantId)
+      const res = await Api.appointments.cancel(selectedAppointment.appointment_id, tenantId)
       if (res.success) {
           setSelectedAppointment(null)
           fetchAppointments()
@@ -454,7 +454,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   const cancelUpdate = () => {
     if (originalAppointment) {
       setAppointments(prev =>
-        prev.map(a => (a.id === originalAppointment.id ? originalAppointment : a))
+        prev.map(a => (a.appointment_id === originalAppointment.appointment_id ? originalAppointment : a))
       )
       setSelectedAppointment(originalAppointment as Appointment)
     }
@@ -529,19 +529,19 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
               onView={(view: CalendarViewType) => setCalendarView(view)}
               onNavigate={(date: Date) => setCalendarDate(date)}
               onSelectEvent={(event: CalendarEvent) => {
-                setSelectedAppointment(appointments.find(a => a.id === event.id) || null)
+                setSelectedAppointment(appointments.find(a => a.appointment_id === event.id) || null)
                 setShowDetailOnMobile(true)
                 setIsCreating(false)
                 setCalendarDate(new Date(event.start))
               }}
               onEventDrop={({ event, start, end }: DnDEventArgs) => {
-                const apt = appointments.find(a => a.id === event.id)
+                const apt = appointments.find(a => a.appointment_id === event.id)
                 if (!apt) return
                 setOriginalAppointment(apt as Appointment)
                 const startIso = (start as Date).toISOString()
                 const endIso = (end as Date).toISOString()
 
-                setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, start_time: startIso, end_time: endIso } : a))
+                setAppointments(prev => prev.map(a => a.appointment_id === apt.appointment_id ? { ...a, start_time: startIso, end_time: endIso } : a))
                 setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
                 setIsEditing(true)
                 setIsCreating(false)
@@ -554,13 +554,13 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
                 setShowConfirmModal(true)
               }}
               onEventResize={({ event, start, end }: DnDEventArgs) => {
-                const apt = appointments.find(a => a.id === event.id)
+                const apt = appointments.find(a => a.appointment_id === event.id)
                 if (!apt) return
                 setOriginalAppointment(apt as Appointment)
                 const startIso = (start as Date).toISOString()
                 const endIso = (end as Date).toISOString()
 
-                setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, start_time: startIso, end_time: endIso } : a))
+                setAppointments(prev => prev.map(a => a.appointment_id === apt.appointment_id ? { ...a, start_time: startIso, end_time: endIso } : a))
                 setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
                 setIsEditing(true)
                 setIsCreating(false)
@@ -573,13 +573,13 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
                 setShowConfirmModal(true)
               }}
               eventPropGetter={(event: CalendarEvent) => {
-                const isSelected = selectedAppointment && event.id === selectedAppointment.id;
+                const isSelected = selectedAppointment && event.id === selectedAppointment.appointment_id;
                 let color = '#3b82f6';
                 if (!event.resource_id) {
                   color = '#6b7280';
                 }
                 const overlaps = appointments.filter(a => {
-                  if (a.id === event.id) return false;
+                  if (a.appointment_id === event.id) return false;
                   const aStart = new Date(a.start_time);
                   const aEnd = new Date(a.end_time);
                   const eStart = new Date(event.start);

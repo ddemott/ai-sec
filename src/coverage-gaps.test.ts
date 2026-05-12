@@ -50,7 +50,7 @@ describe("Coverage Gaps", () => {
             const res = await client.query(
                 `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description)
                  VALUES ($1, $2, $3, '2026-04-01 09:00:00+00', '2026-04-01 10:00:00+00', 'Oil change')
-                 RETURNING id`,
+                 RETURNING appointment_id AS id`,
                 [tenantId, resourceId, customerId]
             );
             appointmentId = res.rows[0].id;
@@ -59,10 +59,10 @@ describe("Coverage Gaps", () => {
         it("should update start_time and end_time", async () => {
             if (!dbAvailable) return;
             await client.query(
-                `UPDATE appointments SET start_time = '2026-04-01 11:00:00+00', end_time = '2026-04-01 12:00:00+00' WHERE id = $1`,
+                `UPDATE appointments SET start_time = '2026-04-01 11:00:00+00', end_time = '2026-04-01 12:00:00+00' WHERE appointment_id = $1`,
                 [appointmentId]
             );
-            const res = await client.query("SELECT start_time, end_time FROM appointments WHERE id = $1", [appointmentId]);
+            const res = await client.query("SELECT start_time, end_time FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(new Date(res.rows[0].start_time).toISOString()).toBe("2026-04-01T11:00:00.000Z");
             expect(new Date(res.rows[0].end_time).toISOString()).toBe("2026-04-01T12:00:00.000Z");
         });
@@ -70,26 +70,26 @@ describe("Coverage Gaps", () => {
         it("should update description", async () => {
             if (!dbAvailable) return;
             await client.query(
-                "UPDATE appointments SET description = 'Tire rotation' WHERE id = $1",
+                "UPDATE appointments SET description = 'Tire rotation' WHERE appointment_id = $1",
                 [appointmentId]
             );
-            const res = await client.query("SELECT description FROM appointments WHERE id = $1", [appointmentId]);
+            const res = await client.query("SELECT description FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(res.rows[0].description).toBe("Tire rotation");
         });
 
         it("should update resource_id", async () => {
             if (!dbAvailable) return;
             const newResourceId = await createResource(client, tenantId, "Truck 2");
-            await client.query("UPDATE appointments SET resource_id = $1 WHERE id = $2", [newResourceId, appointmentId]);
-            const res = await client.query("SELECT resource_id FROM appointments WHERE id = $1", [appointmentId]);
+            await client.query("UPDATE appointments SET resource_id = $1 WHERE appointment_id = $2", [newResourceId, appointmentId]);
+            const res = await client.query("SELECT resource_id FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(res.rows[0].resource_id).toBe(newResourceId);
         });
 
         it("should update employee_id as UUID", async () => {
             if (!dbAvailable) return;
             const employeeId = await createEmployee(client, tenantId, "John");
-            await client.query("UPDATE appointments SET employee_id = $1 WHERE id = $2", [employeeId, appointmentId]);
-            const res = await client.query("SELECT employee_id FROM appointments WHERE id = $1", [appointmentId]);
+            await client.query("UPDATE appointments SET employee_id = $1 WHERE appointment_id = $2", [employeeId, appointmentId]);
+            const res = await client.query("SELECT employee_id FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(res.rows[0].employee_id).toBe(employeeId);
             // Verify UUID format
             expect(employeeId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -107,12 +107,12 @@ describe("Coverage Gaps", () => {
                      description = 'Full service',
                      resource_id = $1,
                      employee_id = $2
-                 WHERE id = $3`,
+                 WHERE appointment_id = $3`,
                 [newResourceId, employeeId, appointmentId]
             );
 
             const res = await client.query(
-                "SELECT start_time, end_time, description, resource_id, employee_id FROM appointments WHERE id = $1",
+                "SELECT start_time, end_time, description, resource_id, employee_id FROM appointments WHERE appointment_id = $1",
                 [appointmentId]
             );
             const row = res.rows[0];
@@ -168,7 +168,7 @@ describe("Coverage Gaps", () => {
             const res = await client.query(
                 `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, status)
                  VALUES ($1, $2, $3, '2026-04-05 10:00:00+00', '2026-04-05 11:00:00+00', 'scheduled')
-                 RETURNING id`,
+                 RETURNING appointment_id AS id`,
                 [tenantId, resourceId, customerId]
             );
             appointmentId = res.rows[0].id;
@@ -176,15 +176,15 @@ describe("Coverage Gaps", () => {
 
         it("should update status to canceled", async () => {
             if (!dbAvailable) return;
-            await client.query("UPDATE appointments SET status = 'canceled' WHERE id = $1", [appointmentId]);
-            const res = await client.query("SELECT status FROM appointments WHERE id = $1", [appointmentId]);
+            await client.query("UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1", [appointmentId]);
+            const res = await client.query("SELECT status FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(res.rows[0].status).toBe("canceled");
         });
 
         it("should still exist after cancellation", async () => {
             if (!dbAvailable) return;
-            await client.query("UPDATE appointments SET status = 'canceled' WHERE id = $1", [appointmentId]);
-            const res = await client.query("SELECT id, status FROM appointments WHERE id = $1", [appointmentId]);
+            await client.query("UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1", [appointmentId]);
+            const res = await client.query("SELECT appointment_id AS id, status FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(res.rows.length).toBe(1);
             expect(res.rows[0].status).toBe("canceled");
         });
@@ -199,11 +199,11 @@ describe("Coverage Gaps", () => {
             );
 
             // Cancel the first one
-            await client.query("UPDATE appointments SET status = 'canceled' WHERE id = $1", [appointmentId]);
+            await client.query("UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1", [appointmentId]);
 
             // Calendar filter: exclude canceled
             const res = await client.query(
-                "SELECT id FROM appointments WHERE tenant_id = $1 AND status != 'canceled' AND is_deleted = false",
+                "SELECT appointment_id AS id FROM appointments WHERE tenant_id = $1 AND status != 'canceled' AND is_deleted = false",
                 [tenantId]
             );
             expect(res.rows.length).toBe(1);

@@ -58,19 +58,19 @@ export function AppointmentListSidebar({
         )}
         {appointments.map((apt) => (
           <div
-            key={apt.id}
+            key={apt.appointment_id}
             onClick={() => onSelectAppointment(apt)}
             className={`p-4 cursor-pointer transition flex justify-between items-start
-              ${selectedAppointment?.id === apt.id ? 'border-l-4 shadow-sm' : ''}`}
+              ${selectedAppointment?.appointment_id === apt.appointment_id ? 'border-l-4 shadow-sm' : ''}`}
             style={{
               borderBottom: '1px solid var(--border-soft)',
-              ...(selectedAppointment?.id === apt.id
+              ...(selectedAppointment?.appointment_id === apt.appointment_id
                 ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
                 : {})
             }}
           >
             <div>
-              <p className="text-sm font-semibold" style={{ color: selectedAppointment?.id === apt.id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>
+              <p className="text-sm font-semibold" style={{ color: selectedAppointment?.appointment_id === apt.appointment_id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>
                 {apt.customers?.name || 'Unknown'}
               </p>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1 truncate max-w-[180px]">

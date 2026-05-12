@@ -89,7 +89,7 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
               </div>
               <div className="relative min-h-[64px]" style={{ width: hourCount * hourWidth }}>
                 {resAppointments.map((appt) => (
-                  <AppointmentBlock key={appt.id} appointment={appt} onClick={onAppointmentClick} hourWidth={hourWidth} />
+                  <AppointmentBlock key={appt.appointment_id} appointment={appt} onClick={onAppointmentClick} hourWidth={hourWidth} />
                 ))}
               </div>
             </div>

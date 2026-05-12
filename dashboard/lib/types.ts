@@ -1,5 +1,5 @@
 export interface Appointment {
-  id: string;
+  appointment_id: string;
   tenant_id: string;
   resource_id: string;
   customer_id: string;

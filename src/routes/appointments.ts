@@ -142,7 +142,7 @@ export function registerAppointmentRoutes(
             required_resources: string[] | null;
           }>(
             `SELECT duration_minutes, required_skills, required_resources
-               FROM services WHERE id = $1 AND tenant_id = $2`,
+               FROM services WHERE service_id = $1 AND tenant_id = $2`,
             [body.service_id, body.tenant_id]
           );
           if (svcRes.rows[0]) {
@@ -266,7 +266,7 @@ export function registerAppointmentRoutes(
     syncAppointmentToAll(pool, tenantId, id, 'delete', req.log);
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM appointments WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+      return client.query('DELETE FROM appointments WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id', [id, tenantId]);
     });
     if (!assertRowAffected(res, reply, 'Appointment')) return;
 
@@ -282,7 +282,7 @@ export function registerAppointmentRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id",
+        "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id",
         [id, tenantId]
       );
     });
@@ -327,7 +327,7 @@ export function registerAppointmentRoutes(
         `SELECT status, resource_id, employee_id::text AS employee_id,
                 start_time::text AS start_time, end_time::text AS end_time
            FROM appointments
-          WHERE id = $1 AND tenant_id = $2 AND (is_deleted IS NULL OR is_deleted = false)`,
+          WHERE appointment_id = $1 AND tenant_id = $2 AND (is_deleted IS NULL OR is_deleted = false)`,
         [id, tenantId]
       );
       if (sel.rows.length === 0) {
@@ -342,7 +342,7 @@ export function registerAppointmentRoutes(
 
       try {
         await client.query(
-          `UPDATE appointments SET status = 'scheduled' WHERE id = $1 AND tenant_id = $2`,
+          `UPDATE appointments SET status = 'scheduled' WHERE appointment_id = $1 AND tenant_id = $2`,
           [id, tenantId]
         );
         outcome = 'success';
@@ -411,7 +411,7 @@ export function registerAppointmentRoutes(
         let effectiveEndTime = body.end_time ?? null;
         if (body.start_time || body.end_time) {
           const existing = await client.query<{ start_time: string; end_time: string }>(
-            'SELECT start_time::text AS start_time, end_time::text AS end_time FROM appointments WHERE id = $1 AND tenant_id = $2 AND is_deleted = false',
+            'SELECT start_time::text AS start_time, end_time::text AS end_time FROM appointments WHERE appointment_id = $1 AND tenant_id = $2 AND is_deleted = false',
             [id, body.tenant_id]
           );
           if (existing.rows.length === 0) {
@@ -453,17 +453,17 @@ export function registerAppointmentRoutes(
         }
 
         if (fields.length > 0) {
-          values.push(id); // WHERE id = $N
+          values.push(id); // WHERE appointment_id = $N
           values.push(body.tenant_id); // AND tenant_id = $N+1
           await client.query(
-            `UPDATE appointments SET ${fields.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1}`,
+            `UPDATE appointments SET ${fields.join(', ')} WHERE appointment_id = $${idx} AND tenant_id = $${idx + 1}`,
             values
           );
         }
 
         // Update customer info if provided
         if (body.customer_name || body.customer_phone || body.customer_notes) {
-          const appt = await client.query('SELECT customer_id FROM appointments WHERE id = $1 AND is_deleted = false', [id]);
+          const appt = await client.query('SELECT customer_id FROM appointments WHERE appointment_id = $1 AND is_deleted = false', [id]);
           if (appt.rows[0]?.customer_id) {
             const custFields: string[] = [];
             const custValues: unknown[] = [];

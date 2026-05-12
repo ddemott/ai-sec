@@ -32,7 +32,7 @@ import type { SchedulerAppointment } from './useSchedulerData';
 
 function makeAppointment(overrides: Partial<SchedulerAppointment> = {}): SchedulerAppointment {
   return {
-    id: 'appt-1',
+    appointment_id: 'appt-1',
     tenant_id: 'tenant-1',
     resource_id: 'res-1',
     customer_id: 'cust-1',
@@ -449,8 +449,8 @@ describe('AppointmentListView', () => {
 
   test('renders appointments in chronological order', () => {
     const appts = [
-      makeAppointment({ id: 'a2', start_time: '2026-03-19T14:00:00Z', end_time: '2026-03-19T15:00:00Z', customers: { name: 'Bob' } }),
-      makeAppointment({ id: 'a1', start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z', customers: { name: 'Alice' } }),
+      makeAppointment({ appointment_id: 'a2', start_time: '2026-03-19T14:00:00Z', end_time: '2026-03-19T15:00:00Z', customers: { name: 'Bob' } }),
+      makeAppointment({ appointment_id: 'a1', start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z', customers: { name: 'Alice' } }),
     ];
 
     render(
@@ -468,8 +468,8 @@ describe('AppointmentListView', () => {
 
   test('shows gap warning for gaps > 1 hour', () => {
     const appts = [
-      makeAppointment({ id: 'a1', start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z' }),
-      makeAppointment({ id: 'a2', start_time: '2026-03-19T13:00:00Z', end_time: '2026-03-19T14:00:00Z' }),
+      makeAppointment({ appointment_id: 'a1', start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z' }),
+      makeAppointment({ appointment_id: 'a2', start_time: '2026-03-19T13:00:00Z', end_time: '2026-03-19T14:00:00Z' }),
     ];
 
     render(
@@ -486,8 +486,8 @@ describe('AppointmentListView', () => {
 
   test('hides canceled appointments', () => {
     const appts = [
-      makeAppointment({ id: 'a1', status: 'canceled', customers: { name: 'Canceled Guy' } }),
-      makeAppointment({ id: 'a2', customers: { name: 'Active Alice' } }),
+      makeAppointment({ appointment_id: 'a1', status: 'canceled', customers: { name: 'Canceled Guy' } }),
+      makeAppointment({ appointment_id: 'a2', customers: { name: 'Active Alice' } }),
     ];
 
     render(
@@ -555,7 +555,7 @@ describe('EmployeeDayFocusPanel', () => {
   test('shows appointment count and utilization stats', () => {
     const appts = [
       makeAppointment({ start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z' }),
-      makeAppointment({ id: 'appt-2', start_time: '2026-03-19T11:00:00Z', end_time: '2026-03-19T12:00:00Z' }),
+      makeAppointment({ appointment_id: 'appt-2', start_time: '2026-03-19T11:00:00Z', end_time: '2026-03-19T12:00:00Z' }),
     ];
     const shifts = [{ start_time: '09:00', end_time: '17:00' }];
 

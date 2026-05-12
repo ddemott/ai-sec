@@ -50,7 +50,7 @@ const baseEditForm = {
 };
 
 const canceledAppt = {
-  id: 'appt-canceled',
+  appointment_id: 'appt-canceled',
   start_time: '2026-04-15T14:00:00Z',
   end_time: '2026-04-15T15:00:00Z',
   status: 'canceled',
@@ -60,7 +60,7 @@ const canceledAppt = {
 };
 
 const completedAppt = {
-  id: 'appt-completed',
+  appointment_id: 'appt-completed',
   start_time: '2026-04-10T14:00:00Z',
   end_time: '2026-04-10T15:00:00Z',
   status: 'completed',
@@ -113,7 +113,7 @@ describe('CustomerDetailPanel — appointment history reactivate affordance', ()
     const onReactivate = vi.fn();
     renderPanel({ pastAppointments: [canceledAppt], onReactivateAppointment: onReactivate });
 
-    const row = screen.getByTestId(`customer-history-canceled-${canceledAppt.id}`);
+    const row = screen.getByTestId(`customer-history-canceled-${canceledAppt.appointment_id}`);
     expect(row.tagName).toBe('BUTTON');
     // Visible cue — the Canceled badge must render before/with the button
     // so the operator knows what they're about to act on.
@@ -123,7 +123,7 @@ describe('CustomerDetailPanel — appointment history reactivate affordance', ()
 
     fireEvent.click(row);
     expect(onReactivate).toHaveBeenCalledTimes(1);
-    expect(onReactivate).toHaveBeenCalledWith(canceledAppt.id);
+    expect(onReactivate).toHaveBeenCalledWith(canceledAppt.appointment_id);
   });
 
   it('SAD: a completed history row renders as a non-interactive div (no reactivate handler invoked on click)', () => {
@@ -145,7 +145,7 @@ describe('CustomerDetailPanel — appointment history reactivate affordance', ()
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('Brake pads')).toBeInTheDocument();
     // No button data-testid for the completed row — only canceled rows get the testid
-    expect(screen.queryByTestId(`customer-history-canceled-${completedAppt.id}`)).toBeNull();
+    expect(screen.queryByTestId(`customer-history-canceled-${completedAppt.appointment_id}`)).toBeNull();
     // Defensive: if a button somehow rendered with the row's id, it shouldn't
     // call onReactivate — but since it doesn't render, the click can't fire.
     expect(onReactivate).not.toHaveBeenCalled();
@@ -174,9 +174,9 @@ describe('CustomerDetailPanel — appointment history reactivate affordance', ()
     expect(screen.getByText('Completed')).toBeInTheDocument();
 
     // Only the canceled row is wired to reactivate
-    fireEvent.click(screen.getByTestId(`customer-history-canceled-${canceledAppt.id}`));
+    fireEvent.click(screen.getByTestId(`customer-history-canceled-${canceledAppt.appointment_id}`));
     expect(onReactivate).toHaveBeenCalledTimes(1);
-    expect(onReactivate).toHaveBeenCalledWith(canceledAppt.id);
+    expect(onReactivate).toHaveBeenCalledWith(canceledAppt.appointment_id);
 
     // Clicking the completed row's text doesn't call reactivate (no handler bound)
     fireEvent.click(screen.getByText('Brake pads'));

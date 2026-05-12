@@ -68,7 +68,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
 
         // Query that the new endpoint should use
         const res = await client.query(
-            `SELECT a.id, a.start_time, a.end_time, a.status, a.description, a.location,
+            `SELECT a.appointment_id AS id, a.start_time, a.end_time, a.status, a.description, a.location,
                     r.name as resource_name,
                     e.name as employee_name
              FROM appointments a
@@ -95,7 +95,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
         if (!dbAvailable) return;
 
         const res = await client.query(
-            `SELECT a.id, a.start_time, a.end_time, a.status, a.description, a.location,
+            `SELECT a.appointment_id AS id, a.start_time, a.end_time, a.status, a.description, a.location,
                     r.name as resource_name,
                     e.name as employee_name
              FROM appointments a
@@ -128,7 +128,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
 
         // Query for original customer should return nothing
         const res = await client.query(
-            `SELECT a.id FROM appointments a
+            `SELECT a.appointment_id FROM appointments a
              WHERE a.customer_id = $1 AND a.tenant_id = $2`,
             [customerId, tenantId]
         );
@@ -146,19 +146,19 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
                      date_trunc('hour', NOW() + interval '1 day'),
                      date_trunc('hour', NOW() + interval '1 day') + interval '1 hour',
                      'Alignment', 'scheduled')
-             RETURNING id`,
+             RETURNING appointment_id AS id`,
             [tenantId, resourceId, customerId]
         );
         const appointmentId = apptRes.rows[0].id;
 
         // Cancel it (status update, not delete)
         await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2",
             [appointmentId, tenantId]
         );
 
         const checkRes = await client.query(
-            "SELECT status FROM appointments WHERE id = $1",
+            "SELECT status FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(checkRes.rows[0].status).toBe('canceled');

@@ -67,7 +67,7 @@ describe("TDD: Schema and Atomic Booking (Refactored)", () => {
         expect(result.rows[0].appointment_id).not.toBeNull();
 
         const row = await client.query(
-            "SELECT start_time, end_time FROM appointments WHERE id = $1",
+            "SELECT start_time, end_time FROM appointments WHERE appointment_id = $1",
             [result.rows[0].appointment_id]
         );
 

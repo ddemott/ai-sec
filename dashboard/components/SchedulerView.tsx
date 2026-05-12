@@ -88,7 +88,7 @@ export default function SchedulerView() {
     (appt: SchedulerAppointment, e: React.MouseEvent) => {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setApptPopover(prev =>
-        prev?.appointment.id === appt.id ? null : { appointment: appt, anchorRect: rect }
+        prev?.appointment.appointment_id === appt.appointment_id ? null : { appointment: appt, anchorRect: rect }
       );
     }, []);
 

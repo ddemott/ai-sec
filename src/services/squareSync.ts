@@ -150,7 +150,7 @@ export async function syncAppointmentToSquare(
        FROM appointments a
        LEFT JOIN customers c ON c.id = a.customer_id
        LEFT JOIN resources r ON r.resource_id = a.resource_id
-       WHERE a.id = $1 AND a.tenant_id = $2`,
+       WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
       [appointmentId, tenantId]
     );
     const appt = apptRes.rows[0];
@@ -289,7 +289,7 @@ export async function pullSquareBooking(
 
         await client.query(
           `UPDATE appointments SET start_time = $1, end_time = $2, status = $3, customer_id = COALESCE($4, customer_id)
-           WHERE id = $5 AND tenant_id = $6`,
+           WHERE appointment_id = $5 AND tenant_id = $6`,
           [startTime.toISOString(), endTime.toISOString(), status, localCustomerId, localId, tenantId]
         );
 

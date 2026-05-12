@@ -170,7 +170,7 @@ export async function syncAppointmentToServiceTitan(
        FROM appointments a
        LEFT JOIN customers c ON c.id = a.customer_id
        LEFT JOIN resources r ON r.resource_id = a.resource_id
-       WHERE a.id = $1 AND a.tenant_id = $2`,
+       WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
       [appointmentId, tenantId]
     );
     const appt = apptRes.rows[0];
@@ -310,7 +310,7 @@ export async function pullServiceTitanJob(
 
         await client.query(
           `UPDATE appointments SET description = COALESCE($1, description), status = $2
-           WHERE id = $3 AND tenant_id = $4`,
+           WHERE appointment_id = $3 AND tenant_id = $4`,
           [jobData.summary, jobData.status === 'Canceled' ? 'canceled' : 'scheduled', localId, tenantId]
         );
 

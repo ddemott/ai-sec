@@ -44,7 +44,7 @@ export async function scheduleRemindersForAppointment(
         `SELECT a.start_time, c.email AS customer_email, c.phone AS customer_phone
            FROM appointments a
            LEFT JOIN customers c ON c.id = a.customer_id AND c.tenant_id = a.tenant_id
-          WHERE a.id = $1 AND a.tenant_id = $2`,
+          WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
         [appointmentId, tenantId],
       );
       const row = rows[0];

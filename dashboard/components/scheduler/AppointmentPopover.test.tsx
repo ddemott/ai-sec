@@ -7,7 +7,7 @@ import type { SchedulerAppointment } from './useSchedulerData';
 
 function makeAppt(overrides: Partial<SchedulerAppointment> = {}): SchedulerAppointment {
   return {
-    id: 'appt-1',
+    appointment_id: 'appt-1',
     tenant_id: 't-1',
     resource_id: 'r-1',
     customer_id: 'c-1',

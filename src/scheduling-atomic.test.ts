@@ -339,7 +339,7 @@ describe("book_with_scheduling_atomic()", () => {
 
                 // Clean up the appointment so next iteration can book the same slot
                 if (res.rows[0].success) {
-                    await root.query("DELETE FROM appointments WHERE id = $1", [res.rows[0].appointment_id]);
+                    await root.query("DELETE FROM appointments WHERE appointment_id = $1", [res.rows[0].appointment_id]);
                 }
             }
 
@@ -396,7 +396,7 @@ describe("book_with_scheduling_atomic()", () => {
                 newTimes.push(performance.now() - newStart);
 
                 if (res.rows[0].success) {
-                    await root.query("DELETE FROM appointments WHERE id = $1", [res.rows[0].appointment_id]);
+                    await root.query("DELETE FROM appointments WHERE appointment_id = $1", [res.rows[0].appointment_id]);
                 }
             }
 

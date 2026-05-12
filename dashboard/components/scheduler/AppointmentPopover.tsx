@@ -179,7 +179,7 @@ export function AppointmentPopover({
         <>
           <div style={{ height: 1, background: 'var(--border-soft, #333)', margin: '0 16px' }} />
           <button
-            onClick={() => onOpenDetails(appointment.id)}
+            onClick={() => onOpenDetails(appointment.appointment_id)}
             className="w-full px-4 py-2.5 text-xs font-bold text-left flex items-center gap-2 transition-colors hover:brightness-125"
             style={{ color: 'var(--accent, #3b82f6)' }}
             data-testid="appointment-popover-details"
@@ -202,7 +202,7 @@ export function AppointmentPopover({
           <div className="flex gap-2 px-4 py-3">
             {onEdit && (
               <button
-                onClick={() => onEdit(appointment.id)}
+                onClick={() => onEdit(appointment.appointment_id)}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-colors hover:brightness-125"
                 style={{
                   background: 'var(--accent-muted, rgba(59,130,246,0.15))',
@@ -217,7 +217,7 @@ export function AppointmentPopover({
             )}
             {onCancel && (
               <button
-                onClick={() => onCancel(appointment.id)}
+                onClick={() => onCancel(appointment.appointment_id)}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-bold transition-colors hover:brightness-125"
                 style={{
                   background: 'var(--danger-muted, rgba(239,68,68,0.12))',

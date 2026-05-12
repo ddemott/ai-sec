@@ -106,7 +106,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
 
       // Cleanup
       if (result.rows[0].appointment_id) {
-        await client.query("DELETE FROM appointments WHERE id = $1", [result.rows[0].appointment_id]);
+        await client.query("DELETE FROM appointments WHERE appointment_id = $1", [result.rows[0].appointment_id]);
       }
       await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
     });

@@ -40,7 +40,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   })
 
   interface DashboardAppointment {
-    id: string; start_time: string; end_time?: string; status: string; description?: string; customer_name?: string;
+    appointment_id: string; start_time: string; end_time?: string; status: string; description?: string; customer_name?: string;
     employee_id?: string | null;
     customers?: { name?: string; first_name?: string; last_name?: string; phone?: string };
     resources?: { name?: string };
@@ -292,7 +292,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                 : appt.customer_name
               return (
                 <div
-                  key={appt.id}
+                  key={appt.appointment_id}
                   className="flex items-center gap-3 p-3 rounded-lg border"
                   style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
                 >

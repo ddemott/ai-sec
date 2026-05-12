@@ -97,7 +97,7 @@ describe("Appointment Update & Cancel", () => {
         const { appointmentId } = await bookAppointment();
 
         const res = await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id, status",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id, status",
             [appointmentId, tenantId]
         );
 
@@ -111,12 +111,12 @@ describe("Appointment Update & Cancel", () => {
         const { appointmentId } = await bookAppointment();
 
         await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2",
             [appointmentId, tenantId]
         );
 
         const res = await client.query(
-            "SELECT id, status FROM appointments WHERE id = $1",
+            "SELECT appointment_id AS id, status FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(res.rows.length).toBe(1);
@@ -127,7 +127,7 @@ describe("Appointment Update & Cancel", () => {
         if (!dbAvailable) return;
 
         const res = await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id",
             ['00000000-0000-0000-0000-000000000000', tenantId]
         );
 
@@ -141,7 +141,7 @@ describe("Appointment Update & Cancel", () => {
         const fakeTenantId = '00000000-0000-0000-0000-999999999999';
 
         const res = await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE id = $1 AND tenant_id = $2 RETURNING id",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id",
             [appointmentId, fakeTenantId]
         );
 
@@ -149,7 +149,7 @@ describe("Appointment Update & Cancel", () => {
 
         // Original still active
         const check = await client.query(
-            "SELECT status FROM appointments WHERE id = $1",
+            "SELECT status FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(check.rows[0].status).not.toBe("canceled");
@@ -174,7 +174,7 @@ describe("Appointment Update & Cancel", () => {
 
         // Verify appointment was updated
         const appt = await client.query(
-            "SELECT description, location, start_time FROM appointments WHERE id = $1",
+            "SELECT description, location, start_time FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(appt.rows[0].description).toBe('Tire Rotation');
@@ -223,10 +223,10 @@ describe("Appointment Update & Cancel", () => {
 
         const { appointmentId } = await bookAppointment();
 
-        await client.query("DELETE FROM appointments WHERE id = $1", [appointmentId]);
+        await client.query("DELETE FROM appointments WHERE appointment_id = $1", [appointmentId]);
 
         const res = await client.query(
-            "SELECT id FROM appointments WHERE id = $1",
+            "SELECT appointment_id AS id FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(res.rows.length).toBe(0);
@@ -239,7 +239,7 @@ describe("Appointment Update & Cancel", () => {
 
         // Cancel
         await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE id = $1",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1",
             [appointmentId]
         );
 
