@@ -93,7 +93,7 @@ export function registerAnalyticsRoutes(
           `SELECT f.*, u.full_name as user_name, t.name as tenant_name
            FROM user_feedback f
            LEFT JOIN users u ON u.user_id = f.user_id
-           LEFT JOIN tenants t ON t.id = f.tenant_id
+           LEFT JOIN tenants t ON t.tenant_id = f.tenant_id
            ORDER BY f.created_at DESC
            LIMIT 200`
         );
@@ -105,7 +105,7 @@ export function registerAnalyticsRoutes(
       return client.query(
         `SELECT f.*, u.full_name as user_name
          FROM user_feedback f
-         LEFT JOIN users u ON u.id = f.user_id
+         LEFT JOIN users u ON u.user_id = f.user_id
          WHERE f.tenant_id = $1
          ORDER BY f.created_at DESC
          LIMIT 100`,
