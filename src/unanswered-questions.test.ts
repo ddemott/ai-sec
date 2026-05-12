@@ -129,20 +129,20 @@ describe("Unanswered Questions — Happy Paths", () => {
     const insertRes = await client.query(
       `INSERT INTO unanswered_questions (tenant_id, question, caller_phone)
        VALUES ($1, 'Do you offer financing?', '+15559876543')
-       RETURNING id`,
+       RETURNING unanswered_question_id AS id`,
       [tenantId]
     );
     const questionId = insertRes.rows[0].id;
 
     // Resolve it
     await client.query(
-      `UPDATE unanswered_questions SET resolved = true WHERE id = $1 AND tenant_id = $2`,
+      `UPDATE unanswered_questions SET resolved = true WHERE unanswered_question_id = $1 AND tenant_id = $2`,
       [questionId, tenantId]
     );
 
     // Verify it no longer appears in unresolved list
     const res = await client.query(
-      `SELECT id FROM unanswered_questions WHERE tenant_id = $1 AND resolved = false`,
+      `SELECT unanswered_question_id FROM unanswered_questions WHERE tenant_id = $1 AND resolved = false`,
       [tenantId]
     );
     expect(res.rows).toHaveLength(0);
@@ -220,7 +220,7 @@ describe("Unanswered Questions — Sad Paths", () => {
     // WHO: A malicious or buggy API call trying to resolve Tenant A's question as Tenant B
     // WHAT: UPDATE with wrong tenant_id affects 0 rows — question stays unresolved
     // WHEN: PATCH /knowledge/unanswered/:id/resolve with mismatched tenant
-    // WHERE: UPDATE unanswered_questions WHERE id = $1 AND tenant_id = $2
+    // WHERE: UPDATE unanswered_questions WHERE unanswered_question_id = $1 AND tenant_id = $2
     // WHY: Without the tenant_id check in the WHERE clause, any authenticated user
     //       could resolve other tenants' questions, hiding KB gaps from those owners
     if (!dbAvailable) return;
@@ -231,21 +231,21 @@ describe("Unanswered Questions — Sad Paths", () => {
     const tenant2Id = tenant2Res.rows[0].id;
 
     const insertRes = await client.query(
-      `INSERT INTO unanswered_questions (tenant_id, question) VALUES ($1, 'My question') RETURNING id`,
+      `INSERT INTO unanswered_questions (tenant_id, question) VALUES ($1, 'My question') RETURNING unanswered_question_id AS id`,
       [tenantId]
     );
     const questionId = insertRes.rows[0].id;
 
     // Try to resolve as wrong tenant
     const updateRes = await client.query(
-      `UPDATE unanswered_questions SET resolved = true WHERE id = $1 AND tenant_id = $2`,
+      `UPDATE unanswered_questions SET resolved = true WHERE unanswered_question_id = $1 AND tenant_id = $2`,
       [questionId, tenant2Id]
     );
     expect(updateRes.rowCount).toBe(0);
 
     // Verify still unresolved
     const checkRes = await client.query(
-      `SELECT resolved FROM unanswered_questions WHERE id = $1`,
+      `SELECT resolved FROM unanswered_questions WHERE unanswered_question_id = $1`,
       [questionId]
     );
     expect(checkRes.rows[0].resolved).toBe(false);
@@ -300,7 +300,7 @@ describe("Unanswered Questions — Sad Paths", () => {
 
     // Questions should be gone
     const res = await client.query(
-      `SELECT id FROM unanswered_questions WHERE tenant_id = $1`,
+      `SELECT unanswered_question_id FROM unanswered_questions WHERE tenant_id = $1`,
       [tempTenantId]
     );
     expect(res.rows).toHaveLength(0);
