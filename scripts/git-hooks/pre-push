@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# pre-push — refuse `git push` when the last CI run on this branch failed.
+#
+# Closes docs/TODO.md "CI rot prevention → CI green as a hard commit gate"
+# (the partner item to scripts/fresh-clone-smoke.sh). The pattern this exists
+# to break: tests green locally → push → CI red → next developer (or you on
+# a different machine) pulls broken main. Five CI failures across May 11
+# (dashboard pg/bcrypt missing, shallow-clone strips drift-detector SHAs,
+# deleted /supabase/functions dir still listed, index.test.ts hardcoded
+# database name, CI never ran seed-db.sh) all matched this shape: each was
+# green locally, red in CI, and silently blocked someone else's PR.
+#
+# WHO   : developer pushing a branch that has an existing CI run history
+# WHAT  : look up the latest `gh run list` for the current branch. If the
+#         most recent run's `conclusion` is anything other than `success`
+#         AND its `status` is not `in_progress`/`queued`/`waiting`, refuse
+#         the push with a clear diagnostic. Otherwise let it through.
+# WHEN  : every push EXCEPT when SKIP_CI_PUSH_CHECK=1 is in the environment
+#         (the bypass for pushing a CI-fixing commit that itself needs to
+#         land before CI can go green again)
+# WHERE : .git/hooks/pre-push — installed via `git config core.hooksPath
+#         scripts/git-hooks` once per clone
+# WHY   : matches the "fix CI before next push" discipline without forcing
+#         every contributor onto husky / a postinstall hook. The check is
+#         minimal: one gh call, one jq parse, exit 0 / 1 / skip. Five
+#         escape hatches keep it from being a foot-gun:
+#           1. SKIP_CI_PUSH_CHECK=1 bypass for CI-fix pushes
+#           2. Detached HEAD → allow (no branch to query)
+#           3. gh not installed → allow (don't block on missing tool)
+#           4. jq not installed → allow (same reason)
+#           5. No CI history for this branch → allow (first push)
+#
+# Setup (one-time per clone):
+#   git config core.hooksPath scripts/git-hooks
+# Bypass for a single push:
+#   SKIP_CI_PUSH_CHECK=1 git push
+
+set -euo pipefail
+
+if [[ "${SKIP_CI_PUSH_CHECK:-}" == "1" ]]; then
+    echo "pre-push: SKIP_CI_PUSH_CHECK=1 set — skipping CI gate" >&2
+    exit 0
+fi
+
+# Determine the branch being pushed. With no explicit ref `git push` uses
+# the upstream of the current HEAD; that's what we want to query.
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+if [[ -z "$BRANCH" ]]; then
+    echo "pre-push: detached HEAD — no branch context, skipping CI gate" >&2
+    exit 0
+fi
+
+# Tools that aren't installed → skip rather than fail. The hook should
+# degrade gracefully on machines without gh/jq (e.g., CI itself, fresh
+# clones before `gh auth login`).
+if ! command -v gh >/dev/null 2>&1; then
+    echo "pre-push: gh CLI not installed — install + run 'gh auth login' to enable CI gate" >&2
+    exit 0
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "pre-push: jq not installed — install to enable CI gate" >&2
+    exit 0
+fi
+
+# Query the most recent CI run for this branch. If gh fails (auth not set
+# up, offline, repo doesn't have Actions enabled, etc.) we degrade to
+# allowing the push — the hook is best-effort, not a security control.
+RESULT="$(gh run list --branch "$BRANCH" --limit 1 --json status,conclusion 2>/dev/null || echo "[]")"
+if [[ -z "$RESULT" ]] || [[ "$RESULT" == "[]" ]]; then
+    echo "pre-push: no CI history for branch '$BRANCH' — first push, allowing" >&2
+    exit 0
+fi
+
+STATUS="$(echo "$RESULT" | jq -r '.[0].status // empty')"
+CONCLUSION="$(echo "$RESULT" | jq -r '.[0].conclusion // empty')"
+
+# A run in flight has conclusion="" — allow, because we don't know yet.
+# A successful run has conclusion="success" — allow.
+# Anything else (failure / cancelled / timed_out / action_required) is a block.
+if [[ "$CONCLUSION" == "success" ]] || [[ -z "$CONCLUSION" ]]; then
+    exit 0
+fi
+
+# A still-running status can pair with a stale conclusion if the API
+# returned the previous run. Belt-and-suspenders: if the status is
+# in-flight, allow regardless of conclusion.
+case "$STATUS" in
+    in_progress|queued|waiting|requested|pending)
+        exit 0
+        ;;
+esac
+
+echo "" >&2
+echo "pre-push: BLOCKED" >&2
+echo "  Last CI run on '$BRANCH' was: $CONCLUSION (status=$STATUS)" >&2
+echo "  Fix CI before pushing, or bypass for a CI-fix commit:" >&2
+echo "    SKIP_CI_PUSH_CHECK=1 git push" >&2
+exit 1
