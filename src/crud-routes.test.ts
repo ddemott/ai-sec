@@ -339,13 +339,13 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, 'Old Svc', 30, 50.00) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, 'Old Svc', 30, 50.00) RETURNING service_id as id",
                 [tenantId]
             );
             const svcId = insertRes.rows[0].id;
 
             const res = await client.query(
-                "UPDATE services SET name = COALESCE($1, name), description = COALESCE($2, description), duration_minutes = COALESCE($3, duration_minutes), price = COALESCE($4, price), updated_at = NOW() WHERE id = $5 RETURNING *",
+                "UPDATE services SET name = COALESCE($1, name), description = COALESCE($2, description), duration_minutes = COALESCE($3, duration_minutes), price = COALESCE($4, price), updated_at = NOW() WHERE service_id = $5 RETURNING *",
                 ["New Svc", "Updated desc", 45, 75.00, svcId]
             );
 
@@ -364,7 +364,7 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, 'Deletable', 30) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, 'Deletable', 30) RETURNING service_id as id",
                 [tenantId]
             );
             const svcId = insertRes.rows[0].id;
@@ -376,9 +376,9 @@ describe("CRUD Routes - Database Level", () => {
             );
             expect(parseInt(mappings.rows[0].count)).toBe(0);
 
-            await client.query("DELETE FROM services WHERE id = $1", [svcId]);
+            await client.query("DELETE FROM services WHERE service_id = $1", [svcId]);
 
-            const check = await client.query("SELECT * FROM services WHERE id = $1", [svcId]);
+            const check = await client.query("SELECT * FROM services WHERE service_id = $1", [svcId]);
             expect(check.rows).toHaveLength(0);
         });
 

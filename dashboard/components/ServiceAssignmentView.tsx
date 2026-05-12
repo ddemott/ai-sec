@@ -24,7 +24,7 @@ import { Modal } from './ui/Modal'
 import { Badge } from './ui/Badge'
 
 type Service = {
-  id: string
+  service_id: string
   name: string
   description?: string
   duration_minutes: number
@@ -84,7 +84,7 @@ export default function ServiceAssignmentView() {
       const res = await Api.services.create(tenantId, { ...wizardData })
       if (!res.success) throw new Error(res.error || "Failed to save service")
       
-      const serviceId = res.service.id
+      const serviceId = res.service.service_id
 
       // Save Mappings
       await Promise.all([
@@ -109,7 +109,7 @@ export default function ServiceAssignmentView() {
     setSaving(true)
     setActionError(null)
     try {
-      const res = await Api.services.update(selectedService.id, tenantId, editForm)
+      const res = await Api.services.update(selectedService.service_id, tenantId, editForm)
       if (res.success) {
         refresh()
         setIsEditModalOpen(false)
@@ -227,7 +227,7 @@ export default function ServiceAssignmentView() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {services.map(service => (
           <Card 
-            key={service.id} 
+            key={service.service_id} 
             className="relative group cursor-pointer transition-all"
             onClick={() => {
               setSelectedService(service);
@@ -247,12 +247,12 @@ export default function ServiceAssignmentView() {
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Wrench className="w-3 h-3 mr-2" style={{ color: 'var(--accent-soft)' }} />
                 <span className="text-gray-400">{vocab.resource_plural}: </span>
-                <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.id).length} assigned</span>
+                <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.service_id).length} assigned</span>
               </div>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Users className="w-3 h-3 mr-2 text-green-500" />
                 <span className="text-gray-400">{vocab.employee_plural}: </span>
-                <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{empMappings.filter(m => m.service_id === service.id).length} authorized</span>
+                <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{empMappings.filter(m => m.service_id === service.service_id).length} authorized</span>
               </div>
             </div>
           </Card>
@@ -320,11 +320,11 @@ export default function ServiceAssignmentView() {
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Authorized {vocab.resource_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {resources.map(res => {
-                    const isMapped = resMappings.some(m => m.service_id === selectedService?.id && m.resource_id === res.id)
+                    const isMapped = resMappings.some(m => m.service_id === selectedService?.service_id && m.resource_id === res.id)
                     return (
                       <button 
                         key={res.id}
-                        onClick={() => selectedService && toggleResourceMapping(selectedService.id, res.id)}
+                        onClick={() => selectedService && toggleResourceMapping(selectedService.service_id, res.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all`}
                         style={isMapped ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)', borderColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
@@ -338,11 +338,11 @@ export default function ServiceAssignmentView() {
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Qualified {vocab.employee_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {employees.filter(e => e.type !== 'user').map(emp => {
-                    const isMapped = empMappings.some(m => m.service_id === selectedService?.id && m.employee_id === emp.id)
+                    const isMapped = empMappings.some(m => m.service_id === selectedService?.service_id && m.employee_id === emp.id)
                     return (
                       <button 
                         key={emp.id}
-                        onClick={() => selectedService && toggleEmployeeMapping(selectedService.id, emp.id)}
+                        onClick={() => selectedService && toggleEmployeeMapping(selectedService.service_id, emp.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-green-600 text-white border-green-600' : ''}`}
                         style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
@@ -360,7 +360,7 @@ export default function ServiceAssignmentView() {
               variant="ghost" 
               className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 w-full justify-center"
               icon={Trash2}
-              onClick={() => selectedService && handleDeleteService(selectedService.id)}
+              onClick={() => selectedService && handleDeleteService(selectedService.service_id)}
             >
               Delete Service Permanently
             </Button>

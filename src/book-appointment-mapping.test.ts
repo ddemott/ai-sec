@@ -196,7 +196,7 @@ describe('book_appointment_atomic — service_employee mapping enforcement', () 
         // Configure required_skills on the service, do NOT create service_employee row.
         // This is the legacy model from when ai-sec used array-based skill matching.
         await root.query(
-            `UPDATE services SET required_skills = ARRAY['brake-cert'] WHERE id = $1`,
+            `UPDATE services SET required_skills = ARRAY['brake-cert'] WHERE service_id = $1`,
             [svcId]
         );
         await createScheduleEntry(root, tenantId, empId, '2026-07-01', '08:00', '17:00');

@@ -213,7 +213,7 @@ export default function BusinessSettingsView() {
     setSavingService(true)
     setServiceError(null)
     try {
-      const res = await Api.services.update(editingService.id, tenantId, {
+      const res = await Api.services.update(editingService.service_id, tenantId, {
         name: editingService.name.trim(),
         description: editingService.description?.trim() || undefined,
         duration_minutes: editingService.duration_minutes,
@@ -373,7 +373,7 @@ export default function BusinessSettingsView() {
                 <div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>No services yet. Add what you offer so clients can book.</div>
               ) : (
                 services.map(s => (
-                  <div key={s.id} className="px-4 py-3 border-t first:border-t-0 flex items-center justify-between text-sm" style={{ borderColor: 'var(--border-soft)' }}>
+                  <div key={s.service_id} className="px-4 py-3 border-t first:border-t-0 flex items-center justify-between text-sm" style={{ borderColor: 'var(--border-soft)' }}>
                     <div>
                       <div className="font-semibold">{s.name}</div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -390,7 +390,7 @@ export default function BusinessSettingsView() {
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDeleteService(s.id, s.name)}
+                        onClick={() => handleDeleteService(s.service_id, s.name)}
                         className="p-1.5 rounded-md transition-colors"
                         style={{ color: 'var(--red)' }}
                         title="Remove"

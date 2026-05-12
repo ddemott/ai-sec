@@ -169,7 +169,7 @@ export default function SkillMatrixView() {
                 Entity
               </th>
               {(services || []).map(service => (
-                <th key={service.id} className="p-4 text-center text-[10px] font-bold uppercase tracking-widest border-l min-w-[150px]" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-soft)' }}>
+                <th key={service.service_id} className="p-4 text-center text-[10px] font-bold uppercase tracking-widest border-l min-w-[150px]" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-soft)' }}>
                   {service.name}
                 </th>
               ))}
@@ -191,18 +191,18 @@ export default function SkillMatrixView() {
                 </td>
                 {(services || []).map(service => {
                   const isMapped = entity.type === 'employee'
-                    ? (empMappings || []).some(m => m.employee_id === entity.id && m.service_id === service.id)
-                    : (resMappings || []).some(m => m.resource_id === entity.id && m.service_id === service.id)
+                    ? (empMappings || []).some(m => m.employee_id === entity.id && m.service_id === service.service_id)
+                    : (resMappings || []).some(m => m.resource_id === entity.id && m.service_id === service.service_id)
                   
                   return (
                     <td 
-                      key={service.id} 
+                      key={service.service_id} 
                       className="p-0 border-b border-l text-center"
                       style={{ borderColor: 'var(--border-soft)' }}
                     >
                       <button
                         disabled={saving}
-                        onClick={() => toggleMapping(entity.type, entity.id, service.id)}
+                        onClick={() => toggleMapping(entity.type, entity.id, service.service_id)}
                         className={`w-full h-full p-4 flex items-center justify-center transition-all ${isMapped ? '' : 'text-gray-300 dark:text-gray-800 hover:text-gray-400 dark:hover:text-gray-700'}`}
                         style={isMapped ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
                       >

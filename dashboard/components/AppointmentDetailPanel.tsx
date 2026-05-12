@@ -31,7 +31,7 @@ interface AppointmentDetailPanelProps {
   customers: { id: string; name: string; phone: string; tenant_id?: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string }[];
   resources: { id: string; name: string }[];
   employees: { id: string; name: string; type?: string }[];
-  services: { id: string; name: string; duration_minutes: number }[];
+  services: { service_id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };
   findCustomerById: (id: string) => { id: string; name: string; phone: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string } | undefined;
@@ -79,7 +79,7 @@ export function AppointmentDetailPanel({
   const currentServiceId = useMemo(() => {
     if (!form.description) return null;
     const svc = services.find((s) => s.name === form.description);
-    return svc ? String(svc.id) : null;
+    return svc ? String(svc.service_id) : null;
   }, [form.description, services]);
   const eligibleEmployees = useMemo(
     () => filterEmployeesByService(employees, currentServiceId, maps.serviceEmployee),

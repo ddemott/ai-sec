@@ -116,7 +116,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -148,7 +148,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -177,7 +177,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -401,7 +401,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -434,7 +434,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install'], ARRAY['tire-lift']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install'], ARRAY['tire-lift']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -569,7 +569,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             )).rows[0].id;
             const customerId = await createCustomerFull(root, tenantId, "+15550009876", "Diag Customer");
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Special Service', 60, ARRAY['hydraulic-lift']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Special Service', 60, ARRAY['hydraulic-lift']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 
@@ -605,7 +605,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Expert Service', 60, ARRAY['advanced-repair']) RETURNING id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Expert Service', 60, ARRAY['advanced-repair']) RETURNING service_id as id",
                 [tenantId]
             )).rows[0].id;
 

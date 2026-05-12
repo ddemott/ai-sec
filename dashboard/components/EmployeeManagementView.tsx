@@ -221,8 +221,8 @@ export default function EmployeeManagementView() {
             <div className="flex flex-wrap gap-1">
               {(mappings || []).filter(m => m.employee_id === emp.id).length > 0 ? (
                 (mappings || []).filter(m => m.employee_id === emp.id).map(m => {
-                  const s = (services || []).find(s => s.id === m.service_id)
-                  return s ? <Badge key={s.id} variant="primary">{s.name}</Badge> : null
+                  const s = (services || []).find(s => s.service_id === m.service_id)
+                  return s ? <Badge key={s.service_id} variant="primary">{s.name}</Badge> : null
                 })
               ) : (
                 <span className="text-xs text-gray-400 italic">No services provided</span>
@@ -300,11 +300,11 @@ export default function EmployeeManagementView() {
               </h4>
               <div className="grid grid-cols-1 gap-2">
                 {(services || []).map(service => {
-                  const isMapped = (mappings || []).some(m => m.service_id === service.id && m.employee_id === selectedEmployee.id)
+                  const isMapped = (mappings || []).some(m => m.service_id === service.service_id && m.employee_id === selectedEmployee.id)
                   return (
-                    <button 
-                      key={service.id}
-                      onClick={() => toggleService(service.id, selectedEmployee.id)}
+                    <button
+                      key={service.service_id}
+                      onClick={() => toggleService(service.service_id, selectedEmployee.id)}
                       className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-lg' : ''}`}
                       style={isMapped ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                     >

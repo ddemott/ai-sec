@@ -412,7 +412,7 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT is_deleted FROM services WHERE id = $1', [B.serviceId]);
+    const check = await setup.query('SELECT is_deleted FROM services WHERE service_id = $1', [B.serviceId]);
     expect(check.rows[0].is_deleted).toBe(false);
   });
 

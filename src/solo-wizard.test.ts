@@ -107,12 +107,12 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
         // 4. Create services
         const s1 = await client.query(
             `INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, price)
-             VALUES ($1, 'Haircut', 'Classic cut & style', 'Full haircut with wash and style.', 30, 35.00) RETURNING id`,
+             VALUES ($1, 'Haircut', 'Classic cut & style', 'Full haircut with wash and style.', 30, 35.00) RETURNING service_id as id`,
             [soloTenantId]
         );
         const s2 = await client.query(
             `INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, price)
-             VALUES ($1, 'Color', 'Full color treatment', 'Color application with gloss finish.', 90, 120.00) RETURNING id`,
+             VALUES ($1, 'Color', 'Full color treatment', 'Color application with gloss finish.', 90, 120.00) RETURNING service_id as id`,
             [soloTenantId]
         );
         const serviceId1 = s1.rows[0].id;

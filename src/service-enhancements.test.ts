@@ -97,18 +97,18 @@ describe("Service Enhancements: subtitle and description columns", () => {
         if (!dbAvailable) return;
         const ins = await client.query(
             `INSERT INTO services (tenant_id, name, duration_minutes)
-             VALUES ($1, 'Flat Repair', 20) RETURNING id`,
+             VALUES ($1, 'Flat Repair', 20) RETURNING service_id as id`,
             [tenantId]
         );
         const id = ins.rows[0].id;
 
         await client.query(
-            `UPDATE services SET subtitle = $1, description = $2 WHERE id = $3`,
+            `UPDATE services SET subtitle = $1, description = $2 WHERE service_id = $3`,
             ["Emergency flat fix", "We patch or plug your flat tire on-site.", id]
         );
 
         const res = await client.query(
-            `SELECT subtitle, description FROM services WHERE id = $1`,
+            `SELECT subtitle, description FROM services WHERE service_id = $1`,
             [id]
         );
         expect(res.rows[0].subtitle).toBe("Emergency flat fix");

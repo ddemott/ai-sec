@@ -557,7 +557,7 @@ export function registerAgentToolRoutes(
                 ) AS capabilities
            FROM resources r
            LEFT JOIN service_resource sr ON r.id = sr.resource_id
-           LEFT JOIN services s ON sr.service_id = s.id
+           LEFT JOIN services s ON sr.service_id = s.service_id
            LEFT JOIN LATERAL unnest(s.required_resources) cap ON true
           WHERE r.tenant_id = $1
             AND r.is_active = true

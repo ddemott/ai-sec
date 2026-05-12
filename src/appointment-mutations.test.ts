@@ -41,7 +41,7 @@ describe("Appointment Update & Cancel", () => {
 
     async function createService(name: string, duration: number) {
         const res = await client.query(
-            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, $3) RETURNING service_id as id",
             [tenantId, name, duration]
         );
         return res.rows[0].id;

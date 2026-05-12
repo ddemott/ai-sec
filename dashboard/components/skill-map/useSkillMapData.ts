@@ -33,7 +33,7 @@ export type LinkingState = {
 } | null
 
 interface SkillMapEntity { id: string; name: string; type?: string }
-interface ServiceEntity { id: string; name: string }
+interface ServiceEntity { service_id: string; name: string }
 interface ServiceMappingRecord { service_id: string; employee_id?: string; resource_id?: string }
 
 export function useSkillMapData(
@@ -93,10 +93,10 @@ export function useSkillMapData(
 
     // Build service nodes (middle column — these ARE the "skills" in the map)
     const svcNodes: SkillMapNode[] = (services || []).map(s => ({
-      id: `skill-${s.id}`,
+      id: `skill-${s.service_id}`,
       type: 'skill' as NodeType,
       name: s.name,
-      rawId: s.id,
+      rawId: s.service_id,
     }))
 
     // Build connections from mapping tables (deduplicated by connection id)

@@ -14,8 +14,8 @@ const mockEmployees = [
 ];
 
 const mockServices = [
-  { id: 'svc-1', tenant_id: 't1', name: 'Oil Change', duration_minutes: 30 },
-  { id: 'svc-2', tenant_id: 't1', name: 'Tire Rotation', duration_minutes: 45 },
+  { service_id: 'svc-1', tenant_id: 't1', name: 'Oil Change', duration_minutes: 30 },
+  { service_id: 'svc-2', tenant_id: 't1', name: 'Tire Rotation', duration_minutes: 45 },
 ];
 
 const mockAppointments = [

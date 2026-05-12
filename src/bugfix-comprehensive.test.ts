@@ -217,12 +217,12 @@ describe("Tenant isolation on DELETE/UPDATE queries", () => {
     const svcA = await createService(client, tenantA, "Oil Change", 30);
 
     const res = await client.query(
-      "UPDATE services SET name = $1 WHERE id = $2 AND tenant_id = $3",
+      "UPDATE services SET name = $1 WHERE service_id = $2 AND tenant_id = $3",
       ["HACKED", svcA, tenantB]
     );
     expect(res.rowCount).toBe(0);
 
-    const check = await client.query("SELECT name FROM services WHERE id = $1", [svcA]);
+    const check = await client.query("SELECT name FROM services WHERE service_id = $1", [svcA]);
     expect(check.rows[0].name).toBe("Oil Change");
   });
 });

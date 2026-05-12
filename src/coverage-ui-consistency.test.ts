@@ -110,7 +110,7 @@ describe("Coverage Backend ↔ Dashboard Consistency", () => {
 
     async function seedService(name: string): Promise<string> {
         const res = await client.query(
-            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, 30) RETURNING id",
+            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, 30) RETURNING service_id as id",
             [tenantId, name]
         );
         const sid = res.rows[0].id;

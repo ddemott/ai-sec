@@ -300,7 +300,7 @@ describe('BusinessSettingsView', () => {
     beforeEach(() => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
       mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
-      mockServices = [{ id: 'svc-1', name: 'Haircut', duration_minutes: 30, description: 'Standard cut' }]
+      mockServices = [{ service_id: 'svc-1', name: 'Haircut', duration_minutes: 30, description: 'Standard cut' }]
     })
 
     test('shows solo-specific header text', async () => {
@@ -704,7 +704,7 @@ describe('BusinessSettingsView', () => {
     test('handles service without description', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
       mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
-      mockServices = [{ id: 'svc-1', name: 'Quick Trim', duration_minutes: 15 }]
+      mockServices = [{ service_id: 'svc-1', name: 'Quick Trim', duration_minutes: 15 }]
 
       render(<BusinessSettingsView />)
       await waitFor(() => {
@@ -716,7 +716,7 @@ describe('BusinessSettingsView', () => {
     test('switches from add mode to edit mode when edit is clicked', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
       mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
-      mockServices = [{ id: 'svc-1', name: 'Haircut', duration_minutes: 30 }]
+      mockServices = [{ service_id: 'svc-1', name: 'Haircut', duration_minutes: 30 }]
 
       render(<BusinessSettingsView />)
       await waitFor(() => {

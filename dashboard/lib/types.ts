@@ -101,7 +101,7 @@ export interface Employee {
 }
 
 export interface Service {
-  id: string;
+  service_id: string;
   tenant_id: string;
   name: string;
   subtitle?: string;

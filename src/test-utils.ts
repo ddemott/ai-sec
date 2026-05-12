@@ -145,10 +145,10 @@ export async function createScheduleEntry(
 
 export async function createService(client: Client, tenantId: string, name: string, durationMinutes: number, price?: number): Promise<string> {
     const res = await client.query(
-        "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, $2, $3, $4) RETURNING id",
+        "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, $2, $3, $4) RETURNING service_id",
         [tenantId, name, durationMinutes, price || null]
     );
-    return res.rows[0].id;
+    return res.rows[0].service_id;
 }
 
 export async function createCustomer(client: Client, tenantId: string, name: string, phone: string): Promise<string> {

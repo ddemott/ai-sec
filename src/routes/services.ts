@@ -36,7 +36,7 @@ export function registerServiceRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        `SELECT id, name, subtitle, description, duration_minutes, price
+        `SELECT service_id, name, subtitle, description, duration_minutes, price
          FROM services WHERE tenant_id = $1 AND is_deleted = false ORDER BY name ASC`,
         [tenantId]
       );
@@ -68,7 +68,7 @@ export function registerServiceRoutes(
       );
     });
 
-    logEvent(req, 'service_created', { serviceId: res.rows[0].id, name: body.name });
+    logEvent(req, 'service_created', { serviceId: res.rows[0].service_id, name: body.name });
     return reply.send({ success: true, service: res.rows[0] });
   }, 'Failed to create service'));
 
@@ -84,7 +84,7 @@ export function registerServiceRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE id = $6 AND tenant_id = $7 RETURNING *',
+        'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE service_id = $6 AND tenant_id = $7 RETURNING *',
         [body.name, body.subtitle, body.description, body.duration_minutes, body.price, id, tenantId]
       );
     });
@@ -106,7 +106,7 @@ export function registerServiceRoutes(
         // Remove mappings first, then delete the service
         await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
         await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
-        const deleteRes = await client.query('DELETE FROM services WHERE id = $1 AND tenant_id = $2 RETURNING id', [id, tenantId]);
+        const deleteRes = await client.query('DELETE FROM services WHERE service_id = $1 AND tenant_id = $2 RETURNING service_id', [id, tenantId]);
         await client.query('COMMIT');
         return deleteRes;
       } catch (err) {

@@ -14,7 +14,7 @@ import { ConflictModal, type BookingConflict, type AvailableAlternative } from '
 interface QuickBookCustomer { id: string; name?: string; phone?: string }
 interface QuickBookEmployee { id: string; name: string; skills?: string[] }
 interface QuickBookResource { id: string; name: string }
-interface QuickBookService { id: string; name: string; duration_minutes?: number }
+interface QuickBookService { service_id: string; name: string; duration_minutes?: number }
 
 interface QuickBookPanelProps {
   isOpen: boolean;
@@ -155,7 +155,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   // Update description and end time when service changes
   useEffect(() => {
     if (serviceId) {
-      const svc = services.find((s) => String(s.id) === serviceId);
+      const svc = services.find((s) => String(s.service_id) === serviceId);
       if (svc && svc.duration_minutes && startTime) {
         const start = new Date(startTime);
         const end = new Date(start.getTime() + svc.duration_minutes * 60000);
@@ -180,7 +180,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
     setSaving(true);
     setError('');
 
-    const svc = services.find((s) => String(s.id) === serviceId);
+    const svc = services.find((s) => String(s.service_id) === serviceId);
     const description = svc?.name || 'Walk-in';
 
     try {
@@ -256,7 +256,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           onChange={(e) => setServiceId(e.target.value)}
           options={[
             { label: 'Walk-in (no service)', value: '' },
-            ...services.map((s) => ({ label: `${s.name} (${s.duration_minutes}min)`, value: String(s.id) })),
+            ...services.map((s) => ({ label: `${s.name} (${s.duration_minutes}min)`, value: String(s.service_id) })),
           ]}
           data-testid="quick-book-service"
         />

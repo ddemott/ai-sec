@@ -234,8 +234,8 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
 
       // 2. Assign all services to employee + resource
       for (const svc of services) {
-        await Api.mappings.assignServiceEmployee(String(svc.id), ownerEmployeeId, tenantId)
-        await Api.mappings.assignServiceResource(String(svc.id), resourceId, tenantId)
+        await Api.mappings.assignServiceEmployee(String(svc.service_id), ownerEmployeeId, tenantId)
+        await Api.mappings.assignServiceResource(String(svc.service_id), resourceId, tenantId)
       }
 
       // 3. Fan the in-memory weekly pattern out into 4 weeks of
@@ -268,7 +268,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   if (!isOpen) return null
 
   const wizardServices: WizardService[] = (services || []).map(s => ({
-    id: s.id,
+    id: s.service_id,
     name: s.name,
     description: s.description || '',
     duration_minutes: s.duration_minutes,

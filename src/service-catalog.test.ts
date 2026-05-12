@@ -47,7 +47,7 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
 
         // Simulate the catalog query (same SQL as the endpoint uses)
         const res = await client.query(
-            `SELECT id, name, subtitle, description, duration_minutes, price
+            `SELECT service_id as id, name, subtitle, description, duration_minutes, price
              FROM services WHERE tenant_id = $1 ORDER BY name ASC`,
             [tenantId]
         );
@@ -71,7 +71,7 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
         const emptyTenantId = tRes.rows[0].id;
 
         const res = await client.query(
-            `SELECT id, name, subtitle, description, duration_minutes, price
+            `SELECT service_id as id, name, subtitle, description, duration_minutes, price
              FROM services WHERE tenant_id = $1 ORDER BY name ASC`,
             [emptyTenantId]
         );
@@ -108,8 +108,8 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
         const serviceId = await createService(client, tenantId, "Legacy Service", 60, 100);
 
         const res = await client.query(
-            `SELECT id, name, subtitle, description, duration_minutes, price
-             FROM services WHERE id = $1`,
+            `SELECT service_id as id, name, subtitle, description, duration_minutes, price
+             FROM services WHERE service_id = $1`,
             [serviceId]
         );
 

@@ -620,7 +620,7 @@ describe('QuickBookPanel', () => {
         customers={[{ id: 'c1', name: 'Alice', phone: '555-0001' }]}
         employees={employees}
         resources={resources}
-        services={[{ id: 'svc-1', name: 'Oil Change', duration_minutes: 30 }]}
+        services={[{ service_id: 'svc-1', name: 'Oil Change', duration_minutes: 30 }]}
         onBooked={() => {}}
       />
     );

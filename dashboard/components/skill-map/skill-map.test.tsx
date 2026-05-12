@@ -24,9 +24,9 @@ const mockResources = [
 ]
 
 const mockServices = [
-  { id: 'svc-uuid-1', name: 'Oil Change', duration_minutes: 30 },
-  { id: 'svc-uuid-2', name: 'Tire Rotation', duration_minutes: 45 },
-  { id: 'svc-uuid-3', name: 'Brake Service', duration_minutes: 60 },
+  { service_id: 'svc-uuid-1', name: 'Oil Change', duration_minutes: 30 },
+  { service_id: 'svc-uuid-2', name: 'Tire Rotation', duration_minutes: 45 },
+  { service_id: 'svc-uuid-3', name: 'Brake Service', duration_minutes: 60 },
 ]
 
 const mockEmpMappings = [

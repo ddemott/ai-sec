@@ -352,7 +352,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
             end_time: toISOStringWithOffset(form.end_time),
             employee_id: form.employee_id || null,
             customer_phone: form.customer_phone,
-            service_id: matchedSvc ? matchedSvc.id : null,
+            service_id: matchedSvc ? matchedSvc.service_id : null,
         })
         if (res.success) {
           setIsCreating(false)

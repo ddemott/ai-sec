@@ -145,7 +145,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     const map = new Map<string, string[]>();
     for (const m of empMappings) {
       const empId = String(m.employee_id);
-      const svc = services.find(s => String(s.id) === String(m.service_id));
+      const svc = services.find(s => String(s.service_id) === String(m.service_id));
       if (svc) {
         const list = map.get(empId) || [];
         list.push(svc.name);

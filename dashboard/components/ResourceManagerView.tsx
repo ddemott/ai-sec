@@ -227,9 +227,9 @@ export default function ResourceManagerView() {
             <div className="flex flex-wrap gap-1">
               {(mappings || []).filter(m => m.resource_id === res.id).length > 0 ? (
                 (mappings || []).filter(m => m.resource_id === res.id).map(m => {
-                  const s = (services || []).find(s => s.id === m.service_id);
+                  const s = (services || []).find(s => s.service_id === m.service_id);
                   return s ? (
-                    <Badge key={s.id} variant="primary" className="text-[10px] uppercase">
+                    <Badge key={s.service_id} variant="primary" className="text-[10px] uppercase">
                       {s.name}
                     </Badge>
                   ) : null;
@@ -294,11 +294,11 @@ export default function ResourceManagerView() {
             </h4>
             <div className="grid grid-cols-1 gap-2">
               {(services || []).map(service => {
-                const isMapped = (mappings || []).some(m => m.service_id === service.id && m.resource_id === selectedResource?.id);
+                const isMapped = (mappings || []).some(m => m.service_id === service.service_id && m.resource_id === selectedResource?.id);
                 return (
-                  <button 
-                    key={service.id}
-                    onClick={() => selectedResource && toggleServiceMapping(service.id, selectedResource.id)}
+                  <button
+                    key={service.service_id}
+                    onClick={() => selectedResource && toggleServiceMapping(service.service_id, selectedResource.id)}
                     className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-md' : ''}`}
                     style={isMapped ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                   >

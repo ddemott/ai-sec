@@ -40,8 +40,8 @@ const resources = [
   { id: 'bay-3', name: 'Bay 3' },
 ];
 const services = [
-  { id: 'svc-tire', name: 'Tire Mount', duration_minutes: 60 },
-  { id: 'svc-open', name: 'Inspection', duration_minutes: 30 },
+  { service_id: 'svc-tire', name: 'Tire Mount', duration_minutes: 60 },
+  { service_id: 'svc-open', name: 'Inspection', duration_minutes: 30 },
 ];
 
 beforeEach(() => {
