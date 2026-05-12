@@ -116,9 +116,9 @@ DECLARE
     v_start DATE;
     v_end DATE;
 BEGIN
-    SELECT id INTO v_mike_id FROM employees WHERE name = 'Mike Rivera' AND tenant_id = v_tenant_id;
-    SELECT id INTO v_carlos_id FROM employees WHERE name = 'Carlos Vega' AND tenant_id = v_tenant_id;
-    SELECT id INTO v_dana_id FROM employees WHERE name = 'Dana Okafor' AND tenant_id = v_tenant_id;
+    SELECT employee_id INTO v_mike_id FROM employees WHERE name = 'Mike Rivera' AND tenant_id = v_tenant_id;
+    SELECT employee_id INTO v_carlos_id FROM employees WHERE name = 'Carlos Vega' AND tenant_id = v_tenant_id;
+    SELECT employee_id INTO v_dana_id FROM employees WHERE name = 'Dana Okafor' AND tenant_id = v_tenant_id;
 
     -- Seed 2 weeks of shifts (current week Monday through next week Friday)
     v_start := CURRENT_DATE - EXTRACT(DOW FROM CURRENT_DATE)::INT + 1; -- this Monday
@@ -168,9 +168,9 @@ BEGIN
     SELECT service_id INTO v_svc_install FROM services WHERE name = 'New Tire Install (x4)' AND tenant_id = v_tenant;
     SELECT service_id INTO v_svc_balance FROM services WHERE name = 'Balancing' AND tenant_id = v_tenant;
 
-    SELECT id INTO v_mike FROM employees WHERE name = 'Mike Rivera' AND tenant_id = v_tenant;
-    SELECT id INTO v_carlos FROM employees WHERE name = 'Carlos Vega' AND tenant_id = v_tenant;
-    SELECT id INTO v_dana FROM employees WHERE name = 'Dana Okafor' AND tenant_id = v_tenant;
+    SELECT employee_id INTO v_mike FROM employees WHERE name = 'Mike Rivera' AND tenant_id = v_tenant;
+    SELECT employee_id INTO v_carlos FROM employees WHERE name = 'Carlos Vega' AND tenant_id = v_tenant;
+    SELECT employee_id INTO v_dana FROM employees WHERE name = 'Dana Okafor' AND tenant_id = v_tenant;
 
     -- All techs can do flat repair
     INSERT INTO service_employee (service_id, employee_id, tenant_id) VALUES

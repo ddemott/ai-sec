@@ -76,7 +76,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
     await withClient(async (client) => {
       // Get an employee with skills
       const empRes = await client.query(
-        "SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id as id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (empRes.rows.length === 0) return; // skip if no employees
@@ -120,7 +120,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
     // WHY: is_off must block bookings — that's the whole point of the column
     await withClient(async (client) => {
       const empRes = await client.query(
-        "SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id as id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (empRes.rows.length === 0) return;
@@ -195,7 +195,7 @@ describe('Fix #2: check_coverage_gaps with employee_schedule', () => {
     await withClient(async (client) => {
       // Get all active employees
       const emps = await client.query(
-        "SELECT id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
+        "SELECT employee_id as id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
         [TEST_TENANT_ID]
       );
       if (emps.rows.length === 0) return;
@@ -359,7 +359,7 @@ describe('get_effective_shifts RPC integration', () => {
   test('HAPPY: override takes precedence over pattern', async () => {
     await withClient(async (client) => {
       const emp = await client.query(
-        "SELECT id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id as id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (emp.rows.length === 0) return;
@@ -395,7 +395,7 @@ describe('get_effective_shifts RPC integration', () => {
   test('SAD: is_off override shows as off, not pattern hours', async () => {
     await withClient(async (client) => {
       const emp = await client.query(
-        "SELECT id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id as id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (emp.rows.length === 0) return;

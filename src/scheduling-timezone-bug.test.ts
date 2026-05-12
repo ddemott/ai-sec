@@ -140,7 +140,7 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
 
       const employeeRes = await client.query(
         `INSERT INTO employees (tenant_id, name, skills, is_active)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
+         VALUES ($1, $2, $3, $4) RETURNING employee_id as id`,
         [testTenantId, 'Test Mechanic', ['tire_rotation'], true]
       );
       testEmployeeId = employeeRes.rows[0].id;

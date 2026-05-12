@@ -58,7 +58,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
         LIMIT 1
       ),
       active_employees AS (
-        SELECT id FROM employees
+        SELECT employee_id FROM employees
         WHERE tenant_id = $1 AND is_active = true
           AND (is_deleted IS NULL OR is_deleted = false)
       ),
@@ -68,7 +68,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
           es.end_time::text AS end_time
         FROM active_employees ae
         JOIN employee_schedule es
-          ON es.employee_id = ae.id
+          ON es.employee_id = ae.employee_id
           AND es.tenant_id = $1
           AND es.shift_date = $3::date
           AND es.is_off = false

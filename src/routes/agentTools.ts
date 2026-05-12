@@ -567,7 +567,7 @@ export function registerAgentToolRoutes(
       );
 
       const empRes = await client.query<{ id: string; skills: string[] }>(
-        `SELECT id::text AS id, skills
+        `SELECT employee_id::text AS id, skills
            FROM employees
           WHERE tenant_id = $1 AND is_active = true
             AND (is_deleted IS NULL OR is_deleted = false)`,
@@ -782,7 +782,7 @@ export function registerAgentToolRoutes(
             LIMIT 1
          ),
          active_employees AS (
-           SELECT id FROM employees
+           SELECT employee_id FROM employees
             WHERE tenant_id = $1 AND is_active = true
               AND (is_deleted IS NULL OR is_deleted = false)
          ),
@@ -792,7 +792,7 @@ export function registerAgentToolRoutes(
                   es.end_time::text AS end_time
              FROM active_employees ae
              JOIN employee_schedule es
-               ON es.employee_id = ae.id
+               ON es.employee_id = ae.employee_id
               AND es.tenant_id = $1
               AND es.shift_date = $3::date
               AND es.is_off = false

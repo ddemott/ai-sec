@@ -375,7 +375,7 @@ describe("book_with_scheduling_atomic()", () => {
                 // baseline; the third now reads employee_schedule).
                 const oldStart = performance.now();
                 await root.query("SELECT resource_id as id, capabilities FROM resources WHERE tenant_id = $1 AND is_active = true", [tenantId]);
-                await root.query("SELECT id, skills FROM employees WHERE tenant_id = $1 AND is_active = true", [tenantId]);
+                await root.query("SELECT employee_id as id, skills FROM employees WHERE tenant_id = $1 AND is_active = true", [tenantId]);
                 await root.query("SELECT employee_id, shift_date, start_time, end_time FROM employee_schedule WHERE tenant_id = $1 AND is_off = false", [tenantId]);
                 await root.query("SELECT resource_id, start_time, end_time FROM appointments WHERE tenant_id = $1 AND status = 'scheduled'", [tenantId]);
                 oldTimes.push(performance.now() - oldStart);

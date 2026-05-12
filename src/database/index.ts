@@ -342,7 +342,7 @@ export class PostgresDatabaseService implements DatabaseService {
         FROM appointments a
         LEFT JOIN customers c ON a.customer_id = c.id
         LEFT JOIN services s ON a.service_id = s.service_id
-        LEFT JOIN employees e ON a.employee_id = e.id
+        LEFT JOIN employees e ON a.employee_id = e.employee_id
         WHERE a.id = $1 AND a.is_deleted = false`,
         [id]
       );

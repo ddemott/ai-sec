@@ -37,7 +37,7 @@ export function registerEmployeeRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(`
-        SELECT id::text, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
+        SELECT employee_id::text AS id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
         FROM employees WHERE tenant_id = $1 AND is_deleted = false
         UNION ALL
         SELECT user_id::text as id, COALESCE(full_name, email) as name, NULL as first_name, NULL as last_name, email, NULL as phone, '{}'::text[] as skills, true as is_active, 'user' as type
@@ -65,7 +65,7 @@ export function registerEmployeeRoutes(
       );
     });
 
-    logEvent(req, 'employee_created', { employeeId: res.rows[0].id, name: displayName });
+    logEvent(req, 'employee_created', { employeeId: res.rows[0].employee_id, name: displayName });
     return reply.send({ success: true, employee: res.rows[0] });
   }, 'Failed to create employee'));
 
@@ -77,7 +77,7 @@ export function registerEmployeeRoutes(
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
         `UPDATE employees SET is_deleted = true, deleted_at = NOW(), is_active = false, updated_at = NOW()
-         WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+         WHERE employee_id = $1 AND tenant_id = $2 RETURNING employee_id`,
         [id, tenantId]
       );
     });
@@ -115,7 +115,7 @@ export function registerEmployeeRoutes(
           skills = COALESCE($6, skills),
           is_active = COALESCE($7, is_active),
           updated_at = NOW()
-        WHERE id = $8 AND tenant_id = $9 RETURNING *`,
+        WHERE employee_id = $8 AND tenant_id = $9 RETURNING *`,
         [displayName, body.first_name, body.last_name, body.email, body.phone, body.skills, body.is_active, id, tenantId]
       );
     });

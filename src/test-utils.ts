@@ -111,7 +111,7 @@ export async function createResource(client: Client, tenantId: string, name: str
 
 export async function createEmployee(client: Client, tenantId: string, name: string, skills?: string[]): Promise<string> {
     const res = await client.query(
-        "INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING id",
+        "INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING employee_id as id",
         [tenantId, name, skills || []]
     );
     return res.rows[0].id;

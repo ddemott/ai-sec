@@ -136,7 +136,7 @@ describe("Coverage Backend ↔ Dashboard Consistency", () => {
         serviceIds: string[]
     ): Promise<string> {
         const res = await client.query(
-            "INSERT INTO employees (tenant_id, name) VALUES ($1, $2) RETURNING id",
+            "INSERT INTO employees (tenant_id, name) VALUES ($1, $2) RETURNING employee_id as id",
             [tenantId, name]
         );
         const eid = res.rows[0].id;

@@ -203,7 +203,7 @@ describe('Deadlock Prevention: Application Lock Ordering', () => {
     const fs = require('fs');
     const src = fs.readFileSync('src/routes/employees.ts', 'utf8');
     // The UPDATE query must include AND tenant_id
-    expect(src).toContain('WHERE id = $8 AND tenant_id = $9 RETURNING');
+    expect(src).toContain('WHERE employee_id = $8 AND tenant_id = $9 RETURNING');
   });
 
   it('HAPPY: appointment update transaction follows appointments → customers order', async () => {

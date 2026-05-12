@@ -99,7 +99,7 @@ export async function findNextAvailableSlots(
       SELECT
         ss.s AS slot_start,
         ss.s + ($3 || ' minutes')::interval AS slot_end,
-        emp.id AS employee_id,
+        emp.employee_id AS employee_id,
         emp.name AS employee_name,
         res.resource_id AS resource_id,
         res.name AS resource_name,
@@ -114,7 +114,7 @@ export async function findNextAvailableSlots(
       CROSS JOIN resources res
       CROSS JOIN employees emp
       JOIN employee_schedule es
-        ON es.employee_id = emp.id
+        ON es.employee_id = emp.employee_id
        AND es.tenant_id = $4
        AND es.shift_date = (ss.s AT TIME ZONE $5)::date
        AND es.is_off = false
@@ -138,7 +138,7 @@ export async function findNextAvailableSlots(
         )
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
-           WHERE a.employee_id = emp.id
+           WHERE a.employee_id = emp.employee_id
              AND a.status = 'scheduled'
              AND (a.is_deleted IS NULL OR a.is_deleted = false)
              AND a.start_time < ss.s + ($3 || ' minutes')::interval

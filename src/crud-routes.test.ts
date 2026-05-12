@@ -60,7 +60,7 @@ describe("CRUD Routes - Database Level", () => {
             );
 
             const res = await client.query(
-                `SELECT id::text, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
+                `SELECT employee_id::text AS id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
                  FROM employees WHERE tenant_id = $1
                  ORDER BY name ASC`,
                 [tenantId]
@@ -107,7 +107,7 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, 'Old Name', 'Old', 'Name', $2) RETURNING id",
+                "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, 'Old Name', 'Old', 'Name', $2) RETURNING employee_id as id",
                 [tenantId, ["flat-repair"]]
             );
             const empId = insertRes.rows[0].id;
@@ -119,7 +119,7 @@ describe("CRUD Routes - Database Level", () => {
                     last_name = COALESCE($3, last_name),
                     skills = COALESCE($4, skills),
                     updated_at = NOW()
-                 WHERE id = $5 RETURNING *`,
+                 WHERE employee_id = $5 RETURNING *`,
                 ["New Name", "New", "Name", ["flat-repair", "tire-install"], empId]
             );
 
@@ -178,7 +178,7 @@ describe("CRUD Routes - Database Level", () => {
             );
 
             const res = await client.query(
-                `SELECT id::text, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
+                `SELECT employee_id::text AS id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
                  FROM employees WHERE tenant_id = $1
                  UNION ALL
                  SELECT user_id::text as id, COALESCE(full_name, email) as name, NULL as first_name, NULL as last_name, email, NULL as phone, '{}'::text[] as skills, true as is_active, 'user' as type

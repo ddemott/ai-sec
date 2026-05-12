@@ -388,7 +388,7 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
     expect(res.statusCode).toBe(404);
 
     // Verify B's employee is intact via root client
-    const check = await setup.query('SELECT is_deleted FROM employees WHERE id = $1', [B.employeeId]);
+    const check = await setup.query('SELECT is_deleted FROM employees WHERE employee_id = $1', [B.employeeId]);
     expect(check.rows[0].is_deleted).toBe(false);
   });
 

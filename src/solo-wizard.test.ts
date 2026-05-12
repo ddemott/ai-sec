@@ -91,7 +91,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
         // 2. Auto-create the owner as an employee
         const eRes = await client.query(
             `INSERT INTO employees (tenant_id, name, skills)
-             VALUES ($1, 'Owner', ARRAY['cuts', 'color']) RETURNING id`,
+             VALUES ($1, 'Owner', ARRAY['cuts', 'color']) RETURNING employee_id as id`,
             [soloTenantId]
         );
         const employeeId = eRes.rows[0].id;

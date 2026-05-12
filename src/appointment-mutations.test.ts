@@ -49,7 +49,7 @@ describe("Appointment Update & Cancel", () => {
 
     async function createEmployee(name: string) {
         const res = await client.query(
-            "INSERT INTO employees (tenant_id, name, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING id",
+            "INSERT INTO employees (tenant_id, name, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING employee_id as id",
             [tenantId, name, name.split(' ')[0], name.split(' ')[1] || '']
         );
         return res.rows[0].id;

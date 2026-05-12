@@ -64,7 +64,7 @@ describe("Coverage Gap Detection", () => {
         serviceIds: string[]
     ) {
         const res = await client.query(
-            "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, $2, $3, $4, $5) RETURNING employee_id as id",
             [tenantId, name, name.split(' ')[0], name.split(' ')[1] || '', skills]
         );
         const empId = res.rows[0].id;
@@ -311,7 +311,7 @@ describe("Coverage Gap Detection", () => {
         const svcId = await seedService("Welding", 45);
         const empId = await seedEmployee("Deleted Worker", [], [1, 2, 3, 4, 5], '08:00', '17:00', [svcId]);
 
-        await client.query("UPDATE employees SET is_deleted = true, deleted_at = now() WHERE id = $1", [empId]);
+        await client.query("UPDATE employees SET is_deleted = true, deleted_at = now() WHERE employee_id = $1", [empId]);
 
         const res = await client.query(
             "SELECT * FROM check_coverage_gaps($1, '2026-03-16'::DATE, '2026-03-22'::DATE)",
