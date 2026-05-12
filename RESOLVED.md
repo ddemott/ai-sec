@@ -4,6 +4,50 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-12 — PK naming convention conversion: pilots 1–12 in one day
+
+Twelve consecutive table renames closing the asymmetric-PK pattern (`<table>.id` vs `<other>.<table>_id`) across most of the schema. The ID convention was ratified in `CLAUDE.md` on 2026-05-11: PK column is always `<table_singular>_id`, never bare `id`. The payoff is JOIN symmetry — `appointments.customer_id = customers.customer_id` lets queries use `USING (customer_id)`, and `SELECT *` across joined tables produces unambiguous column names with no aliasing. Each pilot was a focused commit, CI-green on first try (with one follow-up CI fix-up for a missed local test-file type in the services pilot).
+
+Migration count 90 → 103.
+
+**Pilots in order:**
+
+- `40c57d5` — **Pilots 1 + 2 (bundled): `record_versions.id → record_version_id` + `tenant_skills.id → tenant_skill_id`.** Migrations `20260512000000` + `20260512000001`. record_versions had 2 RPCs (`create_record_version`, `get_record_history`) + 1 view (`recent_record_changes`) requiring recreation; tenant_skills was a plain ALTER TABLE. Set the rename recipe template the remaining pilots followed.
+- `29c27c1` — **Pilot 3: `reminder_schedules.id → reminder_schedule_id`.** Migration `20260512000002`. First SERIAL-PK pilot — proved the convention works against integer PKs as well as UUIDs.
+- `a89fd50` — **Pilot 4: `consent_records.id → consent_record_id`.** Migration `20260512000003`. SERIAL PK; only the consent service consumes it.
+- `cb88e6c` — **Pilot 5: `opt_out_records.id → opt_out_record_id`.** Migration `20260512000004`. Same shape as pilot 4.
+- `df44c50` — **Pilot 6: `voice_sessions.id → voice_session_id`.** Migration `20260512000005`. Terminal in the schema (no inbound FKs); `start_voice_session` RPC's `RETURNING id INTO v_session_id` recreated with the new column.
+- `6607873` — **Pilots 7 + 8 (bundled): `tenant_docs.id` + `tenant_integration_settings.id`.** Migration `20260512000006`. No-inbound-FK config tables; sweep surface identical. `tenant_calendar_settings` deferred — its current schema has a composite (tenant_id) PK with no surrogate id column; need to decide whether to add one before renaming.
+- `c02ac5c` — **Pilot 9: `users.id → user_id`.** Migration `20260512000007`. Touched auth + JWT payload + every authenticated request, plus the polymorphic `book_appointment_atomic` `assignment_id` lookup which checks users-or-employees by id. Dashboard `User.id → user_id` swept across components.
+- `4e65bb1` — **Pilot 10: `services.id → service_id` (+ audit trigger fix).** Migrations `20260512000008` + `20260512000009` + `20260512000010`. First UUID-PK with significant booking-RPC entanglement: `book_appointment_atomic` + `check_coverage_gaps` recreated. **Surfaced the `auto_version_trigger` latent bug** — the trigger fires on 6 versioned tables and originally read `OLD.id`/`NEW.id` directly. After the voice_sessions rename earlier in the day the trigger was technically broken for voice_sessions inserts but not exercised in test paths; the services rename surfaced it broadly. Trigger rewritten as PK-aware CASE on `TG_TABLE_NAME`. Migration `20260512000010` restored two behaviors the first rewrite dropped: `SECURITY DEFINER` (required to insert into record_versions despite RLS) and the cascade-delete guard that skips versioning when the parent tenant is being deleted. 14 dashboard components touched (Service.id → service_id + 5 local Service-shape types).
+- `e4f173c` — **Follow-up CI fix on pilot 10.** Pilot 10's commit message claimed all local Service-shape types were aligned, but a local `Service`-shape type inside `BusinessSettingsView.test.tsx:30` mockServices declaration was missed. CI dashboard tsc turned red on first push; this fix-up landed before the next pilot started. Pure type-alignment — 1 line.
+- `d682ecf` — **Pilot 11: `resources.id → resource_id` (+ fn_audit_trigger fix).** Migration `20260512000011`. Most-entangled pilot to date: 3 RPCs recreated (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`). **Surfaced a second latent trigger bug** — `fn_audit_trigger` (which fires on appointments / customers / resources, NOT services or voice_sessions) was missed by the services pilot's `auto_version_trigger` rewrite because it's a separate trigger. After the resources rename, `fn_audit_trigger` would have produced NULL `record_id` rows in audit_log on every resources mutation. Same CASE-on-TG_TABLE_NAME pattern applied. Sweep: 11 backend source files, 13 test files (with `RETURNING resource_id as id` backward-compat alias to keep existing `.rows[0].id` reads stable), `supabase/seed.sql` (also fixed services.id leftover from the services pilot), 25 dashboard components/types, 4 dashboard test fixtures, polymorphic `SkillMatrixView` + `SkillRelationshipMap` mapped at boundary (their entities are shared between employees and resources via a `{id, name, type?}` shape).
+- `b8287b9` — **Pilot 12: `employees.id → employee_id`.** Migration `20260512000012`. 4 RPCs recreated (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`, `check_coverage_gaps`) plus a 5th (`check_availability_with_tz`) caught only when the night-shift test suite went red post-migration — easy to miss because it lives in a separate migration (`20260430000002`) from the other booking RPCs. `auto_version_trigger` CASE extended; `fn_audit_trigger` verified NOT installed on employees so no change needed there. `get_effective_shifts` / `get_effective_shifts_bulk` not touched — they reference `employee_schedule.employee_id` (an FK column, already correctly named), not `employees.id`. Backend kept `employee_id::text AS id` aliasing on the GET /employees endpoint so the polymorphic employees+users UNION shape stays intact — dashboard untouched.
+
+**Trigger evolution** — both versioning + audit triggers now CASE on TG_TABLE_NAME:
+
+```sql
+v_pk_column := CASE TG_TABLE_NAME
+  WHEN 'voice_sessions' THEN 'voice_session_id'
+  WHEN 'services'       THEN 'service_id'
+  WHEN 'resources'      THEN 'resource_id'
+  WHEN 'employees'      THEN 'employee_id'
+  ELSE 'id'  -- appointments, customers, tenants still bare 'id' until they rename
+END;
+```
+
+Each subsequent pilot adds one CASE branch. The pattern decays gracefully — when the final three high-blast-radius tables (`appointments`, `customers`, `tenants`) rename, every entry maps to its `<table_singular>_id` and the CASE could collapse to a single derived lookup. Not worth doing until those final renames land.
+
+**Standing authorization** — after the first two pilots (manually approved per-commit), the user granted standing autonomous-commit authorization: continue through pilots without re-asking as long as each pilot's commit lands cleanly with CI green on first try. Saved as `feedback_pk_rename_standing_auth.md`. Triggered exactly one pause (services pilot's CI red on the dashboard tsc miss); pilots 11 + 12 both shipped under autonomous flow.
+
+**After-state:** backend 1,781 / dashboard 620 / agent 85 — all green. Zero TS errors across backend / dashboard / agent. Drift detector clean. Working tree clean post-pilot-12.
+
+**Remaining PK renames:** `employee_schedule.id → employee_schedule_id` (small, ~30 min — shift-coverage RPCs read it), `appointments.id → appointment_id` (~2-3h — referenced from reminder_schedules / calendar sync / 4 CRM syncs / sync orchestrator / voice agent), `customers.id → customer_id` (~2-3h — second-most-referenced; voice agent reads heavily), `tenants.id → tenant_id` (~3-4h — 20+ inbound FKs; the biggest single migration and the biggest JOIN-symmetry win). Plus the open question on `tenant_calendar_settings` (no current `id` column).
+
+**Outstanding for next session:** the 13 PK-rename migrations + the older `20260511000000_employees_services_tenant_fk_cascade.sql` all still need to land on production Supabase. The renames are forward-only and must land in order on prod before any application code deployed against prod expects the renamed columns.
+
+---
+
 ## 2026-05-11 — E2E coverage sprint: 5 P1/P2 items + real schema bug fix
 
 Seven commits across this date and 2026-05-10, all on `origin/main`. Closes the largest single-session block of P1/P2 E2E coverage to date, AND surfaces a real data-integrity bug that the audits would have caught at beta scale.

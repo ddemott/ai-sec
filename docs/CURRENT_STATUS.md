@@ -1,5 +1,5 @@
 # SecretaryHQ — Current Status
-**Last updated:** 2026-05-11 (E2E coverage sprint continued: closed P2 "Reminder scheduled on appointment create" + surfaced/fixed second schema bug today — `ReminderSchedule.appointment_id`/`tenant_id` were typed `number` but DB columns are UUID; mocked tests hid the gap. Backend 1,775→1,781, E2E 69→71.)
+**Last updated:** 2026-05-12 (PK naming convention conversion sprint: shipped pilots 1 through 12 in a single day. Tables renamed: `record_versions`, `tenant_skills`, `reminder_schedules`, `consent_records`, `opt_out_records`, `voice_sessions`, `tenant_docs`, `tenant_integration_settings`, `users`, `services`, `resources`, `employees`. 13 new migrations (20260512000000–12). Trigger rewrites: both `auto_version_trigger` and `fn_audit_trigger` are now PK-aware via TG_TABLE_NAME CASE mapping. Backend 1,781 / dashboard 620 / agent 85 all green. Migration count 90 → 103.)
 
 ---
 
@@ -201,7 +201,7 @@ See `docs/TODO.md` for the unified task list.
 |-----------|--------|---------|
 | **Backend API** | Live | `https://ai-sec-production.up.railway.app/` — Fastify, 26 route modules, Railway auto-deploy from main |
 | **Landing page** | Live | Full marketing page at root URL with features, pricing, demo mockup |
-| **Database** | Live | Supabase Postgres (managed), 90 migrations in repo, FORCE RLS on all tables. **One new migration awaiting prod apply: `20260511000000_employees_services_tenant_fk_cascade.sql` (2026-05-11) — adds missing FK constraints on `employees.tenant_id` + `services.tenant_id` that were lost from the live schema despite the initial-schema migration declaring them; cleans 85 orphan rows locally. Every tenant offboarding leaks employee + service rows until this is applied to prod.** Earlier migrations on main awaiting prod-apply confirmation: `20260501000000` (exclusion constraints) + `20260501000001` (RPC handlers); `20260505000000_user_roles.sql`. |
+| **Database** | Live | Supabase Postgres (managed), 103 migrations in repo, FORCE RLS on all tables. **14 migrations awaiting prod apply:** `20260501000000` (exclusion constraints) + `20260501000001` (RPC handlers); `20260505000000_user_roles.sql`; `20260511000000_employees_services_tenant_fk_cascade.sql` (orphan-row leak fix — see [[in-flight]]); the 13-migration PK rename sprint `20260512000000–12` (one ALTER TABLE per pilot plus three trigger rewrites). The PK renames are forward-only and have to land in pilot order on prod — any application code deployed against prod expects the renamed columns post-trigger-rewrite. |
 | **LiveKit agent worker** | Live | Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn` registered with LiveKit Cloud |
 | **Phone provisioning** | Working (code) | `POST /provisioning/activate` searches Telnyx inventory, purchases, assigns to SIP Connection `livekit-outbound` |
 | **DynaTire phone** | Provisioned, **unreachable** | `+1-630-937-9478` (Telnyx) — Telnyx-side config verified clean; calls return "not in service" upstream. Original ticket `#2850682` superseded 2026-05-01 after 4 days without a human response; new ticket awaiting LERG/porting reviewer. |
