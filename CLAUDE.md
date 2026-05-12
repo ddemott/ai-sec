@@ -3,7 +3,7 @@
 ## Project Overview
 Multi-tenant AI receptionist for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Inbound calls → voice AI books appointments, answers policy questions via RAG, syncs with external calendars. **HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded** — they never appear in templates, adapters, UI, or copy.
 
-History of completed phases, retired migrations, and resolved bug sweeps lives in `RESOLVED.md`.
+History of completed phases, retired migrations, and resolved bug sweeps lives in `RESOLVED.md`. Naming conventions (DB columns, PKs, FKs, test fixtures) and the migration recipe live in `CODING_STANDARDS.md` — that file is the source of truth for those rules; CLAUDE.md may quote them inline for quick lookup.
 
 ## What's in flight
 See `docs/CURRENT_STATUS.md` → "What's in flight" for the full list. Two persistent items today:
