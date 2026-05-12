@@ -88,7 +88,7 @@ describe("Auth Routes — Handler-Level", () => {
       registerAuthRoutes(app, pool, generateToken);
 
       queryResponses.push({ rows: [{
-        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
         email: 'test@example.com', password_hash: '$hash', full_name: 'Test User',
       }] });
 
@@ -102,7 +102,7 @@ describe("Auth Routes — Handler-Level", () => {
       const realHash = await bcrypt.hash('pass123', 10);
       queryResponses.length = 0;
       queryResponses.push({ rows: [{
-        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
         email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
         role: 'owner',
       }] });
@@ -136,7 +136,7 @@ describe("Auth Routes — Handler-Level", () => {
 
       const realHash = await bcrypt.hash('pass123', 10);
       queryResponses.push({ rows: [{
-        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
         email: 'desk@example.com', password_hash: realHash, full_name: 'Desk Staff',
         role: 'front_desk',
       }] });
@@ -172,7 +172,7 @@ describe("Auth Routes — Handler-Level", () => {
 
       const realHash = await bcrypt.hash('pass123', 10);
       queryResponses.push({ rows: [{
-        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
         email: 'legacy@example.com', password_hash: realHash, full_name: 'Legacy',
         role: 'unknown_future_role',
       }] });
@@ -228,7 +228,7 @@ describe("Auth Routes — Handler-Level", () => {
 
       const realHash = await bcrypt.hash('correctpass', 10);
       queryResponses.push({ rows: [{
-        id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
         email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
       }] });
 
@@ -641,14 +641,14 @@ describe("Auth - Database Level", () => {
             const tenantId = tenantRes.rows[0].id;
 
             const userRes = await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING id, full_name",
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, full_name",
                 [tenantId, "new@biz.com", hash, "Owner Name"]
             );
 
             await client.query("COMMIT");
 
             expect(tenantId).toBeDefined();
-            expect(userRes.rows[0].id).toBeDefined();
+            expect(userRes.rows[0].user_id).toBeDefined();
             expect(userRes.rows[0].full_name).toBe("Owner Name");
 
             // Verify both exist after commit
@@ -673,7 +673,7 @@ describe("Auth - Database Level", () => {
             const hash = await hashPassword('testpass123');
 
             const userRes = await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING id, tenant_id, email, full_name",
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, tenant_id, email, full_name",
                 [tenantId, 'owner@testsalon.com', hash, 'Salon Owner']
             );
 
@@ -786,11 +786,11 @@ describe("Auth - Database Level", () => {
             );
 
             const res = await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 2') RETURNING id",
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 2') RETURNING user_id",
                 [t2Id, hash]
             );
 
-            expect(res.rows[0].id).toBeTruthy();
+            expect(res.rows[0].user_id).toBeTruthy();
         });
 
         it("should detect duplicate email across tenants via application-level check", async () => {
@@ -805,7 +805,7 @@ describe("Auth - Database Level", () => {
             );
 
             // Application-level check used by /register
-            const existing = await client.query("SELECT id FROM users WHERE email = $1", ["crosscheck@test.com"]);
+            const existing = await client.query("SELECT user_id FROM users WHERE email = $1", ["crosscheck@test.com"]);
             expect(existing.rows.length).toBeGreaterThan(0);
         });
 
@@ -822,14 +822,14 @@ describe("Auth - Database Level", () => {
 
             // Simulate the registration check query
             const existingUser = await client.query(
-                "SELECT id FROM users WHERE email = $1",
+                "SELECT user_id FROM users WHERE email = $1",
                 ["exists@test.com"]
             );
             expect(existingUser.rows.length).toBeGreaterThan(0);
 
             // For a new email, should return empty
             const newUser = await client.query(
-                "SELECT id FROM users WHERE email = $1",
+                "SELECT user_id FROM users WHERE email = $1",
                 ["fresh@test.com"]
             );
             expect(newUser.rows).toHaveLength(0);

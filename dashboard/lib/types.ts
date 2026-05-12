@@ -504,7 +504,7 @@ export interface VersionComparison {
 // response: minimal user record + an `is_self` flag the server attaches
 // so the UI can disable role-edit / disable-self controls.
 export interface TeamUser {
-  id: string;
+  user_id: string;
   email: string;
   full_name: string | null;
   role: 'owner' | 'front_desk';

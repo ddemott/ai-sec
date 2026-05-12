@@ -65,7 +65,7 @@ export function registerUserRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        `SELECT id::text, email, full_name, role, created_at
+        `SELECT user_id::text, email, full_name, role, created_at
          FROM users
          WHERE tenant_id = $1
          ORDER BY created_at ASC`,
@@ -76,7 +76,7 @@ export function registerUserRoutes(
     const selfId = req.auth?.user_id ?? null;
     return reply.send({
       success: true,
-      users: res.rows.map((u) => ({ ...u, is_self: u.id === selfId })),
+      users: res.rows.map((u) => ({ ...u, is_self: u.user_id === selfId })),
     });
   }, 'Failed to list users'));
 
@@ -125,7 +125,7 @@ export function registerUserRoutes(
            RETURNING id`,
           [tenant_id, normalizedEmail, placeholderHash, full_name, role],
         );
-        const newUserId = userRes.rows[0].id as string;
+        const newUserId = userRes.rows[0].user_id as string;
         await client.query(
           `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
            VALUES ($1, $2, 'email', NOW() + ($3 || ' minutes')::interval)`,
@@ -178,7 +178,7 @@ export function registerUserRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        `UPDATE users SET role = $1 WHERE id = $2 AND tenant_id = $3 RETURNING id, role`,
+        `UPDATE users SET role = $1 WHERE user_id = $2 AND tenant_id = $3 RETURNING user_id, role`,
         [parsed.data.role, id, tenantId],
       );
     });

@@ -186,10 +186,10 @@ export async function hashPassword(password: string): Promise<string> {
 export async function createUser(client: Client, tenantId: string, email: string, password: string, fullName: string): Promise<string> {
     const hash = await hashPassword(password);
     const res = await client.query(
-        "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING id",
+        "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id",
         [tenantId, email, hash, fullName]
     );
-    return res.rows[0].id;
+    return res.rows[0].user_id;
 }
 
 // ── Service mapping helpers ───────────────────────────────────────────

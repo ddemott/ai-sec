@@ -55,7 +55,7 @@ export async function createTenantWithOwner(
 
     if (params.duplicateCheck === 'email') {
       const existing = await client.query(
-        'SELECT id FROM users WHERE email = $1',
+        'SELECT user_id FROM users WHERE email = $1',
         [params.ownerEmail]
       );
       if (existing.rows.length > 0) {
@@ -91,7 +91,7 @@ export async function createTenantWithOwner(
     const userRes = await client.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, first_name, last_name)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id`,
+       RETURNING user_id`,
       [
         tenantId,
         params.ownerEmail,
@@ -101,7 +101,7 @@ export async function createTenantWithOwner(
         params.ownerLastName ?? null,
       ]
     );
-    const userId = userRes.rows[0].id;
+    const userId = userRes.rows[0].user_id;
 
     await client.query('COMMIT');
     return { ok: true, tenantId, userId };

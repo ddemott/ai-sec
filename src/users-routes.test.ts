@@ -104,8 +104,8 @@ describe('GET /users — happy paths', () => {
     //      but should never even be attempted by the UI
     queryResponses.push({
       rows: [
-        { id: OWNER_USER_ID, email: 'owner@biz.com', full_name: 'Owner', role: 'owner', created_at: '2026-01-01' },
-        { id: OTHER_USER_ID, email: 'desk@biz.com', full_name: 'Desk Staff', role: 'front_desk', created_at: '2026-02-01' },
+        { user_id: OWNER_USER_ID, email: 'owner@biz.com', full_name: 'Owner', role: 'owner', created_at: '2026-01-01' },
+        { user_id: OTHER_USER_ID, email: 'desk@biz.com', full_name: 'Desk Staff', role: 'front_desk', created_at: '2026-02-01' },
       ],
       rowCount: 2,
     });
@@ -116,8 +116,8 @@ describe('GET /users — happy paths', () => {
     const body = res.json();
     expect(body.success).toBe(true);
     expect(body.users).toHaveLength(2);
-    expect(body.users[0]).toMatchObject({ id: OWNER_USER_ID, role: 'owner', is_self: true });
-    expect(body.users[1]).toMatchObject({ id: OTHER_USER_ID, role: 'front_desk', is_self: false });
+    expect(body.users[0]).toMatchObject({ user_id: OWNER_USER_ID, role: 'owner', is_self: true });
+    expect(body.users[1]).toMatchObject({ user_id: OTHER_USER_ID, role: 'front_desk', is_self: false });
   });
 });
 
@@ -173,7 +173,7 @@ describe('POST /users/invite — happy paths', () => {
     vi.mocked(sysmail.sendUserInviteEmail).mockClear();
 
     queryResponses.push({ rows: [{ name: 'DynaTire' }], rowCount: 1 }); // tenants lookup
-    queryResponses.push({ rows: [{ id: OTHER_USER_ID }], rowCount: 1 }); // INSERT users
+    queryResponses.push({ rows: [{ user_id: OTHER_USER_ID }], rowCount: 1 }); // INSERT users
     queryResponses.push({ rows: [], rowCount: 1 }); // INSERT password_resets
 
     const res = await app.inject({
@@ -301,7 +301,7 @@ describe('PATCH /users/:id/role — happy paths', () => {
     // WHERE: src/routes/users.ts → app.patch('/users/:id/role', ...)
     // WHY: lets the owner trust the UI dropdown — the SQL must touch
     //      exactly one row scoped to their tenant
-    queryResponses.push({ rows: [{ id: OTHER_USER_ID, role: 'owner' }], rowCount: 1 });
+    queryResponses.push({ rows: [{ user_id: OTHER_USER_ID, role: 'owner' }], rowCount: 1 });
 
     const res = await app.inject({
       method: 'PATCH',
@@ -347,7 +347,7 @@ describe('PATCH /users/:id/role — sad paths', () => {
     //      doesn't accidentally lock super-admins out of /users for
     //      no real safety gain
     authStub = { tenant_id: SUPER_ADMIN_TENANT, user_id: OWNER_USER_ID, email: 'admin@biz.com', role: 'owner' };
-    queryResponses.push({ rows: [{ id: OWNER_USER_ID, role: 'front_desk' }], rowCount: 1 });
+    queryResponses.push({ rows: [{ user_id: OWNER_USER_ID, role: 'front_desk' }], rowCount: 1 });
 
     const res = await app.inject({
       method: 'PATCH',

@@ -62,7 +62,7 @@ describe('createTenantWithOwner — happy paths', () => {
       { rows: [] },                          // BEGIN
       { rows: [] },                          // SELECT id FROM users (none)
       { rows: [{ id: TENANT_ID }] },         // INSERT tenant RETURNING id
-      { rows: [{ id: USER_ID }] },           // INSERT user RETURNING id
+      { rows: [{ user_id: USER_ID }] },           // INSERT user RETURNING id
       { rows: [] },                          // COMMIT
     ]);
 
@@ -78,7 +78,7 @@ describe('createTenantWithOwner — happy paths', () => {
     expect(result).toEqual({ ok: true, tenantId: TENANT_ID, userId: USER_ID });
     expect(queries.map(q => q.text)).toEqual([
       'BEGIN',
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT user_id FROM users WHERE email = $1',
       'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING id',
       expect.stringContaining('INSERT INTO users'),
       'COMMIT',
@@ -100,7 +100,7 @@ describe('createTenantWithOwner — happy paths', () => {
       { rows: [] },                          // BEGIN
       { rows: [] },                          // SELECT FROM tenants (none)
       { rows: [{ id: TENANT_ID }] },         // INSERT tenant
-      { rows: [{ id: USER_ID }] },           // INSERT user
+      { rows: [{ user_id: USER_ID }] },      // INSERT user RETURNING user_id
       { rows: [] },                          // COMMIT
     ]);
 
@@ -136,7 +136,7 @@ describe('createTenantWithOwner — happy paths', () => {
     //      blank" — and we want the former here.
     const { pool, queries } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ id: USER_ID }] }, { rows: [] },
+      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -162,7 +162,7 @@ describe('createTenantWithOwner — happy paths', () => {
     //      plaintext credentials into the DB. Worth a direct guard.
     const { pool, queries } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ id: USER_ID }] }, { rows: [] },
+      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -217,7 +217,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
     });
     expect(queries.map(q => q.text)).toEqual([
       'BEGIN',
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT user_id FROM users WHERE email = $1',
       'ROLLBACK',
     ]);
     expect(client.release).toHaveBeenCalled();
@@ -262,7 +262,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
     //      glancing at the dropdown.
     const { pool, queries } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ id: USER_ID }] }, { rows: [] },
+      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -323,7 +323,7 @@ describe('createTenantWithOwner — error propagation', () => {
     //      cheapest test that catches a regression in the finally.
     const { pool, client } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ id: USER_ID }] }, { rows: [] },
+      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {

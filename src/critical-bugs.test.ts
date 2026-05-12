@@ -200,11 +200,11 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
             );
 
             const result = await root.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'admin@example.com', '$2b$10$fakehash', 'Admin B') RETURNING id;",
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'admin@example.com', '$2b$10$fakehash', 'Admin B') RETURNING user_id;",
                 [tenantB]
             );
 
-            expect(result.rows[0].id).toBeDefined();
+            expect(result.rows[0].user_id).toBeDefined();
         });
 
         it("should still reject duplicate email within the same tenant", async () => {
@@ -298,16 +298,16 @@ describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
             const tenantB = await createTenant(root, "B", "t");
 
             const userB = (await root.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'secret@b.com', '$2b$10$fakehash', 'Secret User') RETURNING id;",
+                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'secret@b.com', '$2b$10$fakehash', 'Secret User') RETURNING user_id;",
                 [tenantB]
-            )).rows[0].id;
+            )).rows[0].user_id;
 
             await api.query("SELECT set_tenant_context($1::UUID)", [tenantA]);
-            const updateRes = await api.query("UPDATE users SET full_name = 'Hacked' WHERE id = $1", [userB]);
+            const updateRes = await api.query("UPDATE users SET full_name = 'Hacked' WHERE user_id = $1", [userB]);
             expect(updateRes.rowCount).toBe(0);
 
             await api.query("SELECT set_tenant_context($1::UUID)", [tenantB]);
-            const checkRes = await api.query("SELECT full_name FROM users WHERE id = $1", [userB]);
+            const checkRes = await api.query("SELECT full_name FROM users WHERE user_id = $1", [userB]);
             expect(checkRes.rows[0].full_name).toBe('Secret User');
         });
     });

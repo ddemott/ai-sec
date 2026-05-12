@@ -26,11 +26,11 @@ vi.mock('./ui/Toast', () => ({
 import TeamAccessView from './TeamAccessView'
 
 const ownerRow = {
-  id: 'owner-1', email: 'owner@biz.com', full_name: 'Owner Boss',
+  user_id: 'owner-1', email: 'owner@biz.com', full_name: 'Owner Boss',
   role: 'owner' as const, created_at: '2026-01-01', is_self: true,
 }
 const deskRow = {
-  id: 'desk-1', email: 'desk@biz.com', full_name: 'Desk Staff',
+  user_id: 'desk-1', email: 'desk@biz.com', full_name: 'Desk Staff',
   role: 'front_desk' as const, created_at: '2026-02-01', is_self: false,
 }
 

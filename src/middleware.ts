@@ -417,7 +417,7 @@ export function registerJwtAuthHook(app: FastifyInstance, pool: Pool) {
     if (decoded.iat) {
       const client = await pool.connect();
       try {
-        const r = await client.query('SELECT password_changed_at FROM users WHERE id = $1', [decoded.user_id]);
+        const r = await client.query('SELECT password_changed_at FROM users WHERE user_id = $1', [decoded.user_id]);
         const changedAt = r.rows[0]?.password_changed_at as Date | undefined;
         if (changedAt && Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
           return reply.status(401).send({ success: false, error: 'Session expired — please log in again' });

@@ -59,14 +59,14 @@ export function registerAuthRoutes(
     const role: UserRole = (user.role === 'front_desk' ? 'front_desk' : 'owner');
     const token = generateToken({
       tenant_id: user.tenant_id,
-      user_id: user.id,
+      user_id: user.user_id,
       email: user.email,
       role,
     });
     return reply.send({
       success: true,
       tenant_id: user.tenant_id,
-      user_id: user.id,
+      user_id: user.user_id,
       user_name: user.full_name,
       role,
       token,
@@ -135,7 +135,7 @@ export function registerAuthRoutes(
     }
     const email = parsed.data.email.toLowerCase();
     const user = await withPoolClient(pool, async (client) => {
-      const res = await client.query('SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1', [email]);
+      const res = await client.query('SELECT user_id FROM users WHERE LOWER(email) = $1 LIMIT 1', [email]);
       return res.rows[0];
     });
     if (user) {
@@ -146,7 +146,7 @@ export function registerAuthRoutes(
         await client.query(
           `INSERT INTO password_resets (user_id, token_hash, channel, ip, expires_at)
            VALUES ($1, $2, 'email', $3, NOW() + ($4 || ' minutes')::interval)`,
-          [user.id, tokenHash, ip, RESET_TTL_MINUTES]
+          [user.user_id, tokenHash, ip, RESET_TTL_MINUTES]
         );
       });
       const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
@@ -186,7 +186,7 @@ export function registerAuthRoutes(
         const bcrypt = await import('bcrypt');
         const hash = await bcrypt.hash(new_password, 10);
         await client.query(
-          'UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE id = $2',
+          'UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE user_id = $2',
           [hash, userId]
         );
         await client.query('UPDATE password_resets SET used_at = NOW() WHERE id = $1', [resetId]);

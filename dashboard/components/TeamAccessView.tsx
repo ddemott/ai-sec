@@ -74,11 +74,11 @@ export default function TeamAccessView() {
 
   const handleRoleChange = async (user: TeamUser, nextRole: Role) => {
     if (!tenantId || nextRole === user.role) return
-    setPendingRoleId(user.id)
-    const res = await Api.users.updateRole(user.id, tenantId, nextRole)
+    setPendingRoleId(user.user_id)
+    const res = await Api.users.updateRole(user.user_id, tenantId, nextRole)
     setPendingRoleId(null)
     if (res.success) {
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, role: nextRole } : u)))
+      setUsers((prev) => prev.map((u) => (u.user_id === user.user_id ? { ...u, role: nextRole } : u)))
       showToast(`${user.email} is now ${ROLE_LABEL[nextRole]}`, 'success')
     } else {
       showToast(res.error || 'Could not update role', 'error')
@@ -118,7 +118,7 @@ export default function TeamAccessView() {
           <ul className="space-y-2" role="list">
             {users.map((u) => (
               <li
-                key={u.id}
+                key={u.user_id}
                 className="flex items-center justify-between gap-4 p-4 border rounded-xl"
                 style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
               >
@@ -141,11 +141,11 @@ export default function TeamAccessView() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <label className="sr-only" htmlFor={`role-${u.id}`}>Role for {u.email}</label>
+                  <label className="sr-only" htmlFor={`role-${u.user_id}`}>Role for {u.email}</label>
                   <select
-                    id={`role-${u.id}`}
+                    id={`role-${u.user_id}`}
                     value={u.role}
-                    disabled={u.is_self || pendingRoleId === u.id}
+                    disabled={u.is_self || pendingRoleId === u.user_id}
                     onChange={(e) => void handleRoleChange(u, e.target.value as Role)}
                     className="text-xs rounded-md px-2 py-1.5 outline-none transition disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
