@@ -537,14 +537,14 @@ describe('GET /appointments', () => {
         // WHERE: appointments.ts non-super-admin path (line ~127)
         // WHY: the WHERE includes a.tenant_id = $1 filter for non-admin callers;
         //       missing this filter would expose other tenants' appointments
-        handle.queryResponses.push({ rows: [{ id: APPOINTMENT_ID, customer_id: CUSTOMER_ID }] });
+        handle.queryResponses.push({ rows: [{ appointment_id: APPOINTMENT_ID, customer_id: CUSTOMER_ID }] });
 
         const res = await app.inject({ method: 'GET', url: '/appointments' });
 
         expect(res.statusCode).toBe(200);
         const body = res.json();
         expect(Array.isArray(body)).toBe(true);
-        expect(body[0].id).toBe(APPOINTMENT_ID);
+        expect(body[0].appointment_id).toBe(APPOINTMENT_ID);
 
         const dataQueries = handle.queries.filter(
             (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
@@ -568,7 +568,7 @@ describe('GET /appointments', () => {
             email: 'admin@platform',
             role: 'owner',
         };
-        handle.queryResponses.push({ rows: [{ id: APPOINTMENT_ID }] });
+        handle.queryResponses.push({ rows: [{ appointment_id: APPOINTMENT_ID }] });
 
         const res = await app.inject({ method: 'GET', url: '/appointments' });
 
@@ -641,7 +641,7 @@ describe('DELETE /appointments/:id', () => {
         // WHY: sync-before-delete is intentional — if sync fires after the
         //       row is gone, the orchestrator can't read the row to know
         //       which external IDs to cancel
-        handle.queryResponses.push({ rows: [{ id: APPOINTMENT_ID }] });
+        handle.queryResponses.push({ rows: [{ appointment_id: APPOINTMENT_ID }] });
 
         const res = await app.inject({
             method: 'DELETE',
@@ -734,7 +734,7 @@ describe('POST /appointments/:id/cancel', () => {
         // WHY: distinct from DELETE because it preserves the row (audit /
         //       customer history); but external systems should treat it
         //       like a delete since the slot is now free
-        handle.queryResponses.push({ rows: [{ id: APPOINTMENT_ID }] });
+        handle.queryResponses.push({ rows: [{ appointment_id: APPOINTMENT_ID }] });
 
         const res = await app.inject({
             method: 'POST',

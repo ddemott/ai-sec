@@ -297,7 +297,7 @@ export function registerAgentToolRoutes(
   toolRoute(app, '/agent-tools/service-catalog', GetServiceCatalogSchema, async (args, reply) => {
     const res = await withTenantClient(args.tenant_id, (client) =>
       client.query(
-        `SELECT id, name, subtitle, description, duration_minutes, price
+        `SELECT service_id AS id, name, subtitle, description, duration_minutes, price
            FROM services
           WHERE tenant_id = $1 AND is_deleted = false
           ORDER BY name ASC`,

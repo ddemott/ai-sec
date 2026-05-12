@@ -300,7 +300,7 @@ describe("Auth Routes — Handler-Level", () => {
       // BEGIN
       queryResponses.push({ rows: [] });
       // Check existing user — FOUND
-      queryResponses.push({ rows: [{ id: 'existing' }] });
+      queryResponses.push({ rows: [{ user_id: 'existing' }] });
       // ROLLBACK
       queryResponses.push({ rows: [] });
 
@@ -330,7 +330,7 @@ describe("Auth Routes — Handler-Level", () => {
       // INSERT tenant
       queryResponses.push({ rows: [{ id: TENANT_ID_MOCK }] });
       // INSERT user
-      queryResponses.push({ rows: [{ id: USER_ID_MOCK, full_name: 'Dale' }] });
+      queryResponses.push({ rows: [{ user_id: USER_ID_MOCK }] });
       // COMMIT
       queryResponses.push({ rows: [] });
 
@@ -404,7 +404,7 @@ describe("Auth Routes — Handler-Level", () => {
       registerAuthRoutes(app, pool, generateToken);
 
       // SELECT user — found
-      queryResponses.push({ rows: [{ id: USER_ID_MOCK }] });
+      queryResponses.push({ rows: [{ user_id: USER_ID_MOCK }] });
       // INSERT password_resets
       queryResponses.push({ rows: [] });
 

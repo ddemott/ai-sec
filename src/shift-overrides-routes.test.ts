@@ -290,7 +290,7 @@ describe('DELETE /shifts/overrides/:id — happy paths', () => {
     // WHERE: src/routes/shifts.ts → app.delete('/shifts/overrides/:id', ...)
     // WHY: removing an override should restore the employee's default
     //      schedule for that date — the absence of the row is the signal
-    queryResponses.push({ rows: [{ id: OVERRIDE_ID }], rowCount: 1 });
+    queryResponses.push({ rows: [{ employee_schedule_id: OVERRIDE_ID }], rowCount: 1 });
 
     const res = await app.inject({
       method: 'DELETE',

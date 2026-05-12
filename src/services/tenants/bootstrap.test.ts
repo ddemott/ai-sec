@@ -60,9 +60,9 @@ describe('createTenantWithOwner — happy paths', () => {
     //      a half-registered email block retries.
     const { pool, queries } = buildMockPool([
       { rows: [] },                          // BEGIN
-      { rows: [] },                          // SELECT id FROM users (none)
-      { rows: [{ id: TENANT_ID }] },         // INSERT tenant RETURNING id
-      { rows: [{ user_id: USER_ID }] },           // INSERT user RETURNING id
+      { rows: [] },                          // SELECT user_id FROM users (none)
+      { rows: [{ id: TENANT_ID }] },         // INSERT tenant RETURNING tenant_id AS id
+      { rows: [{ user_id: USER_ID }] },      // INSERT user RETURNING user_id
       { rows: [] },                          // COMMIT
     ]);
 
