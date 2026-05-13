@@ -27,7 +27,7 @@ import { getPool } from '../../database/index.js';
  * fields here is the honest shape.
  */
 export interface TenantConfig {
-  id: string | number;
+  tenantId: string | number;
   name: string;
   phone?: string;
   timezone?: string;
@@ -83,7 +83,7 @@ export class InMemoryTenantConfigService implements TenantConfigService {
   constructor(initialConfigs?: TenantConfig[]) {
     if (initialConfigs) {
       for (const config of initialConfigs) {
-        this.configs.set(String(config.id), config);
+        this.configs.set(String(config.tenantId), config);
       }
     }
   }
@@ -113,7 +113,7 @@ export class InMemoryTenantConfigService implements TenantConfigService {
    * Add a tenant configuration
    */
   addTenantConfig(config: TenantConfig): void {
-    this.configs.set(String(config.id), config);
+    this.configs.set(String(config.tenantId), config);
   }
 
   /**
@@ -180,7 +180,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
     email_enabled: boolean;
   }): TenantConfig {
     return {
-      id: row.tenant_id,
+      tenantId: row.tenant_id,
       name: row.name,
       phone: row.owner_phone ?? undefined,
       timezone: row.timezone || 'America/Chicago',
@@ -226,7 +226,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
 
       const configs = result.rows.map((row) => this.rowToConfig(row));
       for (const config of configs) {
-        const key = String(config.id);
+        const key = String(config.tenantId);
         this.cache.set(key, config);
         this.cacheExpiry.set(key, Date.now() + this.cacheTTL);
       }
@@ -309,7 +309,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
 // Export default instances
 export const tenantConfigService = new InMemoryTenantConfigService([
   {
-    id: '1',
+    tenantId: '1',
     name: 'Demo Tenant',
     timezone: 'America/New_York',
     settings: {

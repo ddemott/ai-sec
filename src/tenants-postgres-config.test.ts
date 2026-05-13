@@ -79,7 +79,7 @@ describe("PostgresTenantConfigService against real schema", () => {
         const config = await service.getTenantConfig(tenantId);
 
         expect(config).not.toBeNull();
-        expect(config!.id).toBe(tenantId);
+        expect(config!.tenantId).toBe(tenantId);
         expect(config!.name).toBe("PgConfigHappy");
         expect(config!.phone).toBe("+15551234567");
         expect(config!.timezone).toBe("America/Chicago");

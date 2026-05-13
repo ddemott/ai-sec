@@ -14,7 +14,7 @@ import type { DatabaseService } from '../../database/index.js';
 // ── Mock Setup ───────────────────────────────────────────────────────
 
 const mockTenantConfig: TenantConfig = {
-  id: 'test-tenant-123',
+  tenantId: 'test-tenant-123',
   name: 'Test Business',
   phone: '+15551234567',
   timezone: 'America/Chicago',
