@@ -812,3 +812,111 @@ describe('Probe 6: RLS configuration on tables fixed 2026-05-09', () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Probe 7: malformed tenant_id sanitization (2026-05-13)
+//
+// The dashboard occasionally fires requests with `?tenant_id=undefined`
+// (literal string) when `useActiveTenantId()` hasn't resolved yet — a
+// race between the initial render and the session-context hydrate. Pre-fix,
+// the literal `"undefined"` falls through to withTenantClient() which
+// hands it to Postgres's UUID parser and gets back error 22P02
+// (`invalid input syntax for type uuid: "undefined"`), surfacing as a
+// 500 to the caller and tripping the dashboard's React error boundary.
+//
+// Post-fix, tenantMiddleware rejects any non-UUID tenant_id value with
+// a clean 400 BEFORE the value reaches the DB. The dashboard error
+// boundary catches the 400 the same way and renders the same generic
+// "Something went wrong" — but the backend log now shows a clear
+// `malformed_tenant_id` warning instead of an obscure pg stack trace,
+// and Sentry/Prometheus get a different signal (400 ≠ 500).
+//
+// The original incident vector was actually the dashboard build being
+// stale (May 8 build still had `tenant.id.slice(0,8)` in TenantCard);
+// the malformed-tenant_id path was a symptom of that broader problem.
+// But the backend hardening stands on its own: any caller that sends
+// garbage in `?tenant_id=` gets a meaningful error, not a server crash.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('Probe 7: malformed tenant_id sanitization', () => {
+  it('SAD: ?tenant_id=undefined returns 400 with a clear error', async () => {
+    // WHO: dashboard with a stale build (or a hook that hasn't resolved)
+    // WHAT: the literal string "undefined" was being passed as tenant_id
+    // WHEN: 2026-05-13 — observed live when the May 8 dashboard build
+    //       ran against a May 12-renamed backend; `tenant.id` was undefined
+    //       in the bundled chunk, got coerced to "undefined" on URL build
+    // WHERE: src/middleware.ts tenantMiddleware UUID gate (added 2026-05-13)
+    // WHY:  pre-fix this hit withTenantClient → pg UUID parser → 500.
+    //       Now it's caught at the middleware door and 400'd with the
+    //       offending value echoed back so the dashboard can log it.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/customers?tenant_id=undefined`,
+      headers: { authorization: `Bearer ${A.token}` },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: string };
+    expect(body.error).toMatch(/tenant_id must be a valid UUID/);
+    expect(body.error).toContain('"undefined"');
+  });
+
+  it('SAD: ?tenant_id=null returns 400', async () => {
+    // WHY: same shape as "undefined" but covers the null-stringification
+    //      pattern (`String(null) === "null"`). Catching both keeps the
+    //      gate symmetric across the two common JS-falsy → URL paths.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/customers?tenant_id=null`,
+      headers: { authorization: `Bearer ${A.token}` },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toMatch(/tenant_id must be a valid UUID/);
+  });
+
+  it('SAD: ?tenant_id=not-a-uuid returns 400', async () => {
+    // WHY: any non-UUID string should be rejected, not just the two
+    //      common JS-falsy patterns. Letting garbage through to the DB
+    //      layer is the bug; the gate should be format-strict.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/customers?tenant_id=not-a-uuid`,
+      headers: { authorization: `Bearer ${A.token}` },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('SAD: POST /customers with body.tenant_id="undefined" returns 400', async () => {
+    // WHY: the gate has to cover the body path too — Probe 3 already
+    //      proved that body.tenant_id is a viable injection vector and
+    //      the same parser ends up reading both. Either source rejecting
+    //      a malformed value keeps the DB layer's UUID parser unreachable
+    //      via either surface.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/customers',
+      headers: { authorization: `Bearer ${A.token}` },
+      payload: { tenant_id: 'undefined', name: 'X', phone: '+15550000000' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toMatch(/tenant_id must be a valid UUID/);
+  });
+
+  it('HAPPY: ?tenant_id=<valid-uuid> still works after the gate', async () => {
+    // WHY: regression check — the gate must not break legitimate calls.
+    //      Probe 4 already covers the cross-tenant override happy path
+    //      and the no-override happy path; this is the third leg —
+    //      a same-tenant explicit override (most common dashboard pattern)
+    //      must continue to return 200 once the malformed gate is in place.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/customers?tenant_id=${A.id}`,
+      headers: { authorization: `Bearer ${A.token}` },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+});

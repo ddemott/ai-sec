@@ -226,6 +226,33 @@ export function tenantMiddleware(app: FastifyInstance) {
     const SUPER_ADMIN = '00000000-0000-0000-0000-000000000000';
     const queryTenant = (request.query as Record<string, string>)?.tenant_id;
     const bodyTenant = (request.body as Record<string, string>)?.tenant_id;
+
+    // Reject the literal strings "undefined"/"null"/anything-not-a-UUID
+    // that a stale dashboard build or an unresolved React hook can send
+    // before the active-tenant context has materialised. Without this
+    // guard the value falls through to withTenantClient() which hands it
+    // to Postgres's UUID parser and gets `invalid input syntax for type
+    // uuid: "undefined"` (Postgres error 22P02) — surfaced as a 500 to
+    // the caller and as a React error boundary in the dashboard. Catch
+    // it at the door instead. Empty string is treated as "not provided"
+    // and falls through to the JWT tenant_id below.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const malformed = [queryTenant, bodyTenant].find(
+      (t) => t !== undefined && t !== null && t !== '' && !UUID_RE.test(t)
+    );
+    if (malformed !== undefined) {
+      request.log.warn({
+        event: 'malformed_tenant_id',
+        value: malformed,
+        url: request.url,
+      }, 'malformed_tenant_id');
+      reply.status(400).send({
+        success: false,
+        error: `tenant_id must be a valid UUID (received: ${JSON.stringify(malformed)})`,
+      });
+      return reply;
+    }
+
     const candidate = queryTenant || bodyTenant;
     const jwtTenant = request.auth?.tenant_id;
     const isSuperAdmin = jwtTenant === SUPER_ADMIN;

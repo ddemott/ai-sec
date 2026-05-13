@@ -317,25 +317,35 @@ describe("tenantMiddleware", () => {
     return hookFn;
   }
 
+  // Real UUIDs (not synthetic strings) — the malformed-tenant_id gate
+  // added 2026-05-13 rejects anything that doesn't match the UUID regex,
+  // including the old 'from-query' / 'from-body' / 'tid-123' fixtures.
+  // Switching every fixture to a valid v4 UUID makes the tests exercise
+  // the actual production code path; the synthetic strings always were
+  // a defect — real Postgres would have rejected them at any FK check.
+  const FAKE_QUERY_TENANT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  const FAKE_BODY_TENANT = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  const FAKE_JWT_TENANT = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
   it("extracts tenant_id from query params (WHO: dashboard API call | WHAT: query.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: dashboard passes tenant_id as query param)", async () => {
     const hook = setupMiddleware();
-    const req = createMockRequest({ query: { tenant_id: 'from-query' } });
+    const req = createMockRequest({ query: { tenant_id: FAKE_QUERY_TENANT } });
     await hook(req, {});
-    expect(req.tenantId).toBe('from-query');
+    expect(req.tenantId).toBe(FAKE_QUERY_TENANT);
   });
 
   it("extracts tenant_id from body (WHO: POST route | WHAT: body.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: some mutations send tenant_id in body)", async () => {
     const hook = setupMiddleware();
-    const req = createMockRequest({ body: { tenant_id: 'from-body' } });
+    const req = createMockRequest({ body: { tenant_id: FAKE_BODY_TENANT } });
     await hook(req, {});
-    expect(req.tenantId).toBe('from-body');
+    expect(req.tenantId).toBe(FAKE_BODY_TENANT);
   });
 
   it("extracts tenant_id from auth token (WHO: JWT-authenticated request | WHAT: auth.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: fallback when not in query/body)", async () => {
     const hook = setupMiddleware();
-    const req = createMockRequest({ auth: { tenant_id: 'from-jwt' } });
+    const req = createMockRequest({ auth: { tenant_id: FAKE_JWT_TENANT } });
     await hook(req, {});
-    expect(req.tenantId).toBe('from-jwt');
+    expect(req.tenantId).toBe(FAKE_JWT_TENANT);
   });
 
   it("skips exempt routes like /login (WHO: public endpoint | WHAT: /login skipped by middleware | WHERE: tenantMiddleware isTenantExempt | WHY: login happens before tenant context exists)", async () => {
@@ -401,12 +411,12 @@ describe("tenantMiddleware", () => {
   it("enriches logger with tenant context (WHO: tenant-scoped request | WHAT: req.log gets tenantId+userId child | WHERE: tenantMiddleware preHandler | WHY: structured logging for log aggregation)", async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({
-      query: { tenant_id: 'tid-123' },
+      query: { tenant_id: FAKE_QUERY_TENANT },
       auth: { user_id: 'uid-456' },
     });
     await hook(req, {});
     expect(req.log.child).toHaveBeenCalledWith({
-      tenantId: 'tid-123',
+      tenantId: FAKE_QUERY_TENANT,
       userId: 'uid-456',
     });
   });
@@ -507,10 +517,10 @@ describe("tenantMiddleware", () => {
     //      route's own auth check produce the appropriate error
     const hook = setupMiddleware();
     const reply = createMockReply();
-    const req = createMockRequest({ query: { tenant_id: 'tid-from-query' } });
+    const req = createMockRequest({ query: { tenant_id: FAKE_QUERY_TENANT } });
     await hook(req, reply);
     expect(reply.statusCode).toBe(200); // gate didn't fire
-    expect(req.tenantId).toBe('tid-from-query');
+    expect(req.tenantId).toBe(FAKE_QUERY_TENANT);
   });
 });
 

@@ -66,6 +66,20 @@ if ! npm run build; then
   exit 1
 fi
 
+# Same staleness problem applies to the dashboard. The dashboard server
+# runs from `dashboard/.next/standalone`, which is produced by
+# `cd dashboard && npm run build`. Without rebuilding, the bundled JS
+# can be out of sync with `dashboard/components/` — exact same shape as
+# the backend dist/ regression. Surfaced 2026-05-13 when TenantCard.tsx
+# crashed with "Cannot read properties of undefined (reading 'slice')"
+# because the May 8 build had `tenant.id` baked in while the May 12
+# rename had switched the source to `tenant.tenant_id`.
+echo "[secretaryhq] 🔨 Building dashboard (cd dashboard && npm run build)..."
+if ! (cd dashboard && npm run build); then
+  echo "[secretaryhq] ❌ Dashboard build failed — aborting start. Fix the TS/build errors above before running npm start." >&2
+  exit 1
+fi
+
 # 3. Start services concurrently
 setsid node dist/src/index.js > backend.log 2>&1 &
 echo "Backend server started on port 4001 (dist/src/index.js)"
