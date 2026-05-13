@@ -1,14 +1,30 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/Button';
+import {
+  isSameDayInTimeZone,
+  makeNoonUtcDateFromCalendar,
+  relativeCalendarDays,
+} from '../../lib/dateInTimeZone';
 
 interface SchedulerDateNavProps {
   selectedDate: Date;
   onDateChange: (date: Date) => void;
+  /**
+   * Optional tenant IANA timezone (e.g., `America/Chicago`). When provided,
+   * today/yesterday/tomorrow are computed in that timezone — so a Los
+   * Angeles admin reviewing a Chicago tenant at 11pm PST sees the chips
+   * track Chicago's calendar, not LA's. Falls back to browser local time
+   * when unset (the SchedulerView passes `undefined` while
+   * `useTenantTimezone()` is still loading; we don't want to flash empty
+   * state on initial render).
+   */
+  tenantTimezone?: string;
 }
 
-function formatDate(date: Date): string {
+function formatDate(date: Date, timeZone?: string): string {
   return date.toLocaleDateString('en-US', {
+    timeZone,
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -32,12 +48,38 @@ function startOfDay(date: Date): Date {
 // audit theme).
 const TOUCH_TARGET = 'min-w-[48px] min-h-[48px]';
 
-export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate, onDateChange }) => {
-  const today = startOfDay(new Date());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate, onDateChange, tenantTimezone }) => {
+  // Two branches: tenant-TZ-aware (preferred) vs the legacy browser-TZ
+  // computation. The legacy branch is preserved so a tenant whose config
+  // hasn't loaded yet (or whose timezone column is somehow NULL) still
+  // sees a working date-nav. Switching on `tenantTimezone` truthiness keeps
+  // the prop optional + backwards-compatible with the 500+ existing
+  // scheduler tests.
+  let yesterday: Date;
+  let today: Date;
+  let tomorrow: Date;
+  let isYesterday: boolean;
+  let isToday: boolean;
+  let isTomorrow: boolean;
+
+  if (tenantTimezone) {
+    const rels = relativeCalendarDays(new Date(), tenantTimezone);
+    yesterday = makeNoonUtcDateFromCalendar(rels.yesterday);
+    today = makeNoonUtcDateFromCalendar(rels.today);
+    tomorrow = makeNoonUtcDateFromCalendar(rels.tomorrow);
+    isYesterday = isSameDayInTimeZone(selectedDate, yesterday, tenantTimezone);
+    isToday = isSameDayInTimeZone(selectedDate, today, tenantTimezone);
+    isTomorrow = isSameDayInTimeZone(selectedDate, tomorrow, tenantTimezone);
+  } else {
+    today = startOfDay(new Date());
+    yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    isYesterday = isSameDay(selectedDate, yesterday);
+    isToday = isSameDay(selectedDate, today);
+    isTomorrow = isSameDay(selectedDate, tomorrow);
+  }
 
   const goToPrev = () => {
     const prev = new Date(selectedDate);
@@ -50,10 +92,6 @@ export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate
     next.setDate(next.getDate() + 1);
     onDateChange(next);
   };
-
-  const isYesterday = isSameDay(selectedDate, yesterday);
-  const isToday = isSameDay(selectedDate, today);
-  const isTomorrow = isSameDay(selectedDate, tomorrow);
 
   return (
     <div className="flex items-center gap-3" data-testid="scheduler-date-nav">
@@ -101,7 +139,7 @@ export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate
         <ChevronRight className="w-4 h-4" />
       </Button>
       <span className="text-sm font-bold text-gray-900 dark:text-gray-100" data-testid="scheduler-date-display">
-        {formatDate(selectedDate)}
+        {formatDate(selectedDate, tenantTimezone)}
       </span>
     </div>
   );

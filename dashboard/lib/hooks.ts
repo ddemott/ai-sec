@@ -191,3 +191,40 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
 
   return { maps, loading, refresh };
 }
+
+/**
+ * Fetch the active tenant's IANA timezone via /tenants/:id/config.
+ *
+ * Returns `undefined` while loading or on fetch error — the scheduler's
+ * date-nav uses that to fall back to browser-local time rather than flash
+ * empty state. Once resolved, returns the timezone string (e.g.,
+ * `America/Chicago`).
+ *
+ * Why a dedicated hook rather than extending useStaticData: timezone is a
+ * scalar property of the tenant row, not a list of entities. Tying it to
+ * the 5-parallel-fetch useStaticData would couple unrelated render
+ * lifecycles — a refetch of customers/employees/etc. would needlessly
+ * re-fetch the timezone, and vice versa.
+ */
+export function useTenantTimezone(): string | undefined {
+  const tenantId = useActiveTenantId();
+  const [timezone, setTimezone] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!tenantId) {
+      setTimezone(undefined);
+      return;
+    }
+    let cancelled = false;
+    Api.tenants.getConfig(tenantId)
+      .then((data) => {
+        if (!cancelled) setTimezone(data?.timezone);
+      })
+      .catch(() => {
+        if (!cancelled) setTimezone(undefined);
+      });
+    return () => { cancelled = true; };
+  }, [tenantId]);
+
+  return timezone;
+}

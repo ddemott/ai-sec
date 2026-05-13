@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { Api } from '../lib/api';
-import { useStaticData } from '../lib/hooks'
+import { useStaticData, useTenantTimezone } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { showToast } from './ui/Toast';
@@ -22,6 +22,7 @@ export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
 export default function SchedulerView() {
   const tenantId = useActiveTenantId();
   const vocab = useVocabulary();
+  const tenantTimezone = useTenantTimezone();
 
   const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType }[] = [
     { key: 'calendar', label: 'Calendar', icon: Calendar },
@@ -208,7 +209,7 @@ export default function SchedulerView() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+            <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} tenantTimezone={tenantTimezone} />
             {activeView === 'resources' && (
               <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                 <button

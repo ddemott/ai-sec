@@ -170,6 +170,93 @@ describe('SchedulerDateNav', () => {
     expect(screen.getByTestId('date-chip-tomorrow')).toHaveAttribute('aria-pressed', 'false');
     // WHO: operator browsing a date several days out via the Chevron arrows | WHAT: all three chips show un-pressed state | WHEN: selectedDate is more than ±1 day from today | WHERE: SchedulerDateNav active-chip detection | WHY: a chip showing "pressed" while the user is on an unrelated date would be a lie; the chips' job is to advertise "click here to jump to X" — they're not a date-display widget
   });
+
+  // --- Tenant-timezone-aware behavior (docs/TODO.md P2, closed 2026-05-13) ---
+
+  test('with tenantTimezone, Today chip computes against tenant calendar — not browser calendar', () => {
+    // WHO: super-admin in some other browser TZ reviewing a Chicago tenant's
+    //      schedule. Real-world: at the time this test runs in CI/local, the
+    //      browser's getDate() vs. Chicago's calendar date may or may not
+    //      agree. The aria-pressed state must reflect Chicago's calendar
+    //      regardless.
+    // WHAT: when selectedDate is a noon-UTC anchor for "today in Chicago",
+    //       the Today chip's aria-pressed is true.
+    // WHEN: any cross-TZ admin session.
+    // WHERE: SchedulerDateNav's tenantTimezone-aware branch.
+    // WHY: pin that the TZ branch actually fires when the prop is provided.
+    //      A regression that ignored the prop would still pass the prop-less
+    //      tests above but fail this one — surfaces the wiring break loud.
+    const now = new Date();
+    const tz = 'America/Chicago';
+    const todayParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(now);
+    const y = Number(todayParts.find(p => p.type === 'year')?.value);
+    const m = Number(todayParts.find(p => p.type === 'month')?.value);
+    const d = Number(todayParts.find(p => p.type === 'day')?.value);
+    const todayInTz = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)); // noon UTC anchor
+    render(<SchedulerDateNav selectedDate={todayInTz} onDateChange={() => {}} tenantTimezone={tz} />);
+    expect(screen.getByTestId('date-chip-today')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('date-chip-yesterday')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('date-chip-tomorrow')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('with tenantTimezone, Tomorrow chip uses TZ-aware noon-UTC anchor for onChange', () => {
+    // WHO: operator clicking Tomorrow on a tenant in Asia/Tokyo while their
+    //      browser is in UTC. Without the TZ-aware path, clicking "Tomorrow"
+    //      would set selectedDate to browser-local-tomorrow — which might be
+    //      tomorrow OR two-days-ahead in Tokyo depending on time of day.
+    // WHAT: clicking the Tomorrow chip fires onDateChange with a Date whose
+    //       Tokyo calendar tuple matches tomorrow-in-Tokyo.
+    // WHEN: forward-of-UTC tenants under any admin browser TZ.
+    // WHERE: SchedulerDateNav's tomorrow target computation.
+    // WHY: pins the FORWARD-zone branch of the TZ-aware path. Catches a
+    //      regression where the +24h math accidentally subtracts.
+    const onChange = vi.fn();
+    const tz = 'Asia/Tokyo';
+    render(<SchedulerDateNav selectedDate={new Date('2000-01-01T00:00:00Z')} onDateChange={onChange} tenantTimezone={tz} />);
+    fireEvent.click(screen.getByTestId('date-chip-tomorrow'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const passed = onChange.mock.calls[0][0] as Date;
+
+    // Compute tomorrow-in-Tokyo independently of the helper, then assert the
+    // dispatched Date matches.
+    const tomorrowInstant = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(tomorrowInstant);
+    const y = Number(parts.find(p => p.type === 'year')?.value);
+    const m = Number(parts.find(p => p.type === 'month')?.value);
+    const d = Number(parts.find(p => p.type === 'day')?.value);
+
+    expect(passed.getUTCFullYear()).toBe(y);
+    expect(passed.getUTCMonth()).toBe(m - 1);
+    expect(passed.getUTCDate()).toBe(d);
+    expect(passed.getUTCHours()).toBe(12); // noon-UTC anchor
+  });
+
+  test('without tenantTimezone, falls back to legacy browser-TZ behavior (backwards compat)', () => {
+    // WHO: any caller that doesn't yet pass tenantTimezone — including the
+    //      ~500 existing scheduler tests that predate this prop.
+    // WHAT: omit the prop entirely, click Today, assert the legacy
+    //       startOfDay(new Date()) shape is preserved (00:00 in browser TZ).
+    // WHEN: the prop-load race during SchedulerView's first render, while
+    //       useTenantTimezone() is still resolving the fetch.
+    // WHERE: SchedulerDateNav's else-branch of the tenantTimezone gate.
+    // WHY: pin the backwards-compatibility contract. If a refactor removes
+    //      the legacy branch (because "tenantTimezone is always present"),
+    //      the first-render flash would show no chip pressed — UX regression.
+    const onChange = vi.fn();
+    render(<SchedulerDateNav selectedDate={new Date()} onDateChange={onChange} />);
+    fireEvent.click(screen.getByTestId('date-chip-today'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const passed = onChange.mock.calls[0][0] as Date;
+    // Legacy: hours/minutes/seconds zeroed (startOfDay), date matches browser today
+    expect(passed.getHours()).toBe(0);
+    expect(passed.getMinutes()).toBe(0);
+    expect(passed.getSeconds()).toBe(0);
+    expect(passed.getDate()).toBe(new Date().getDate());
+  });
 });
 
 // --- TimeGrid ---
