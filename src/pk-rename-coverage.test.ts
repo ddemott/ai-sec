@@ -20,7 +20,12 @@
  * Origin: the rename sprint (2026-05-12) renamed `id` → `<table>_id` on
  * 25 tables. After cleanup (2026-05-13) only 44% of renamed PKs had
  * real-DB coverage; the rest were either mocked-only or untouched in
- * any test. This file closes the gap for the 13 tables that lacked it.
+ * any test. This file closes the gap for the tables that lacked focused
+ * PK-by-name probes — initially 14 tables, extended to 18 in the same
+ * day's follow-up so the thinly-covered tail (password_resets,
+ * unanswered_questions, tenant_docs, tenant_skills — each only 1-3
+ * real-DB tests touching the renamed PK elsewhere) gets defense-in-depth
+ * symmetric with the heavily-touched ones.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
@@ -621,6 +626,264 @@ describe("PK rename coverage — real-DB integration", () => {
       );
       expect(upd.rowCount).toBe(1);
       expect(upd.rows[0].sync_status).toBe("pending");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // password_resets.password_reset_id (UUID)
+  // ─────────────────────────────────────────────────────────────────────
+  describe("password_resets", () => {
+    it("INSERT returns password_reset_id, SELECT by password_reset_id finds it", async () => {
+      // WHO: /auth/forgot-password route writing a reset-token row
+      // WHAT: New row's PK column is password_reset_id (UUID), not id
+      // WHEN: Every password-reset request + every owner-invite magic link
+      // WHERE: src/routes/auth.ts forgot-password + src/routes/users.ts invite
+      // WHY: A regression to `RETURNING id` would silently return undefined,
+      //      so the magic-link email would carry an unusable token — every
+      //      owner-invite + every password reset would break, but only at
+      //      verify time (well after the email is already sent).
+      if (!dbAvailable) return;
+
+      const userRes = await client.query(
+        `INSERT INTO users (tenant_id, email, password_hash, full_name)
+         VALUES ($1, 'pwreset-test@example.com', 'bcrypt-stub', 'PW Reset Test')
+         RETURNING user_id`,
+        [tenantId],
+      );
+      const userId = userRes.rows[0].user_id;
+
+      const ins = await client.query(
+        `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
+         VALUES ($1, 'hash-abc', 'email', now() + interval '72 hours')
+         RETURNING password_reset_id, channel`,
+        [userId],
+      );
+      expect(ins.rows).toHaveLength(1);
+      const prid = ins.rows[0].password_reset_id;
+      expect(prid).toMatch(UUID_RE);
+      expect(ins.rows[0].channel).toBe("email");
+
+      const sel = await client.query(
+        `SELECT password_reset_id, used_at FROM password_resets WHERE password_reset_id = $1`,
+        [prid],
+      );
+      expect(sel.rows[0].password_reset_id).toBe(prid);
+      expect(sel.rows[0].used_at).toBeNull();
+    });
+
+    it("UPDATE by password_reset_id marks used_at on token consumption", async () => {
+      // WHY: /reset-password marks the token used by password_reset_id after
+      //      verifying the hash. A reverted column would leave used_at NULL,
+      //      letting the same magic link be reused indefinitely — security
+      //      regression, not just a UX bug.
+      if (!dbAvailable) return;
+
+      const userRes = await client.query(
+        `INSERT INTO users (tenant_id, email, password_hash, full_name)
+         VALUES ($1, 'pwreset-upd@example.com', 'bcrypt-stub', 'PW Reset Upd')
+         RETURNING user_id`,
+        [tenantId],
+      );
+      const userId = userRes.rows[0].user_id;
+
+      const ins = await client.query(
+        `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
+         VALUES ($1, 'hash-def', 'email', now() + interval '72 hours')
+         RETURNING password_reset_id`,
+        [userId],
+      );
+      const prid = ins.rows[0].password_reset_id;
+
+      const upd = await client.query(
+        `UPDATE password_resets SET used_at = now()
+         WHERE password_reset_id = $1 RETURNING used_at`,
+        [prid],
+      );
+      expect(upd.rowCount).toBe(1);
+      expect(upd.rows[0].used_at).toBeTruthy();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // unanswered_questions.unanswered_question_id (UUID)
+  // ─────────────────────────────────────────────────────────────────────
+  describe("unanswered_questions", () => {
+    it("INSERT returns unanswered_question_id, SELECT by unanswered_question_id finds it", async () => {
+      // WHO: Voice agent's record_unanswered_question tool writing a KB-gap row
+      // WHAT: New row's PK column is unanswered_question_id (UUID), not id
+      // WHEN: Every call where the caller asks something the KB can't answer
+      // WHERE: src/routes/knowledge.ts → POST /knowledge/unanswered
+      // WHY: A regression to `RETURNING id` would silently lose the new row's
+      //      ID; the owner-notify side-effect keyed on the new row would
+      //      never fire, and KB gaps would accumulate invisibly while the
+      //      tool itself appeared to succeed.
+      if (!dbAvailable) return;
+
+      const ins = await client.query(
+        `INSERT INTO unanswered_questions (tenant_id, question, caller_phone, call_id)
+         VALUES ($1, 'Do you mount run-flat tires?', '+15558675309', 'call-uq-1')
+         RETURNING unanswered_question_id, owner_notified, resolved`,
+        [tenantId],
+      );
+      expect(ins.rows).toHaveLength(1);
+      const uqid = ins.rows[0].unanswered_question_id;
+      expect(uqid).toMatch(UUID_RE);
+      expect(ins.rows[0].owner_notified).toBe(false);
+      expect(ins.rows[0].resolved).toBe(false);
+
+      const sel = await client.query(
+        `SELECT unanswered_question_id, question FROM unanswered_questions
+         WHERE unanswered_question_id = $1`,
+        [uqid],
+      );
+      expect(sel.rows[0].unanswered_question_id).toBe(uqid);
+      expect(sel.rows[0].question).toBe("Do you mount run-flat tires?");
+    });
+
+    it("UPDATE by unanswered_question_id flips resolved to true", async () => {
+      // WHY: Owner UI marks a question resolved by unanswered_question_id.
+      //      If the column were missing the UPDATE would affect 0 rows and
+      //      the dashboard's "Unanswered" badge would never decrement.
+      if (!dbAvailable) return;
+
+      const ins = await client.query(
+        `INSERT INTO unanswered_questions (tenant_id, question)
+         VALUES ($1, 'Pending question')
+         RETURNING unanswered_question_id`,
+        [tenantId],
+      );
+      const uqid = ins.rows[0].unanswered_question_id;
+
+      const upd = await client.query(
+        `UPDATE unanswered_questions SET resolved = true
+         WHERE unanswered_question_id = $1 RETURNING resolved`,
+        [uqid],
+      );
+      expect(upd.rowCount).toBe(1);
+      expect(upd.rows[0].resolved).toBe(true);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // tenant_docs.tenant_doc_id (UUID)
+  // ─────────────────────────────────────────────────────────────────────
+  describe("tenant_docs", () => {
+    it("INSERT returns tenant_doc_id, SELECT by tenant_doc_id finds it", async () => {
+      // WHO: Knowledge-upload route writing a policy/manual chunk
+      // WHAT: New row's PK column is tenant_doc_id (UUID), not id
+      // WHEN: Every doc upload via POST /knowledge/upload (and the seed path
+      //       that bootstraps a tenant's policy answers)
+      // WHERE: src/routes/knowledge.ts → tenant_docs INSERT chain
+      // WHY: A regression to `RETURNING id` would silently return undefined,
+      //      and the per-chunk embedding follow-up that keys on the new doc
+      //      would target a NULL FK — RAG retrieval would return nothing
+      //      for the uploaded doc on every subsequent call.
+      if (!dbAvailable) return;
+
+      const ins = await client.query(
+        `INSERT INTO tenant_docs (tenant_id, title, section, content, source)
+         VALUES ($1, 'Cancellation Policy', 'Policies',
+                 '24-hour notice required for cancellations.', 'manual')
+         RETURNING tenant_doc_id, title`,
+        [tenantId],
+      );
+      expect(ins.rows).toHaveLength(1);
+      const tdid = ins.rows[0].tenant_doc_id;
+      expect(tdid).toMatch(UUID_RE);
+      expect(ins.rows[0].title).toBe("Cancellation Policy");
+
+      const sel = await client.query(
+        `SELECT tenant_doc_id, content FROM tenant_docs WHERE tenant_doc_id = $1`,
+        [tdid],
+      );
+      expect(sel.rows[0].tenant_doc_id).toBe(tdid);
+      expect(sel.rows[0].content).toContain("24-hour notice");
+    });
+
+    it("DELETE by tenant_doc_id removes the row", async () => {
+      // WHY: /knowledge/:id DELETE removes a chunk by tenant_doc_id. If the
+      //      column were missing the DELETE would affect 0 rows and stale
+      //      KB chunks would persist forever — owner could never edit policy.
+      if (!dbAvailable) return;
+
+      const ins = await client.query(
+        `INSERT INTO tenant_docs (tenant_id, content, source)
+         VALUES ($1, 'Obsolete policy text', 'manual')
+         RETURNING tenant_doc_id`,
+        [tenantId],
+      );
+      const tdid = ins.rows[0].tenant_doc_id;
+
+      const del = await client.query(
+        `DELETE FROM tenant_docs WHERE tenant_doc_id = $1`,
+        [tdid],
+      );
+      expect(del.rowCount).toBe(1);
+
+      const sel = await client.query(
+        `SELECT tenant_doc_id FROM tenant_docs WHERE tenant_doc_id = $1`,
+        [tdid],
+      );
+      expect(sel.rows).toHaveLength(0);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // tenant_skills.tenant_skill_id (UUID)
+  // ─────────────────────────────────────────────────────────────────────
+  describe("tenant_skills", () => {
+    it("INSERT returns tenant_skill_id, SELECT by tenant_skill_id finds it", async () => {
+      // WHO: Setup wizard / skills admin creating a tenant-defined skill row
+      // WHAT: New row's PK column is tenant_skill_id (UUID), not id
+      // WHEN: Every skill add via the wizard's StepAssignments + admin UI
+      // WHERE: src/routes/employees.ts skills sub-routes → tenant_skills INSERT
+      // WHY: A regression to `RETURNING id` would silently return undefined,
+      //      so the immediate service↔skill mapping the wizard chains on top
+      //      would key against a NULL skill — wizard appears to succeed but
+      //      the booking RPC's skill-match never finds the skill at call time.
+      if (!dbAvailable) return;
+
+      const ins = await client.query(
+        `INSERT INTO tenant_skills (tenant_id, name, description)
+         VALUES ($1, 'TPMS reset', 'Tire pressure monitor reset')
+         RETURNING tenant_skill_id, name`,
+        [tenantId],
+      );
+      expect(ins.rows).toHaveLength(1);
+      const tsid = ins.rows[0].tenant_skill_id;
+      expect(tsid).toMatch(UUID_RE);
+      expect(ins.rows[0].name).toBe("TPMS reset");
+
+      const sel = await client.query(
+        `SELECT tenant_skill_id, description FROM tenant_skills WHERE tenant_skill_id = $1`,
+        [tsid],
+      );
+      expect(sel.rows[0].tenant_skill_id).toBe(tsid);
+      expect(sel.rows[0].description).toContain("Tire pressure");
+    });
+
+    it("UPDATE by tenant_skill_id changes the description", async () => {
+      // WHY: Skill rename / description edit keys on tenant_skill_id. If the
+      //      column were missing the UPDATE would affect 0 rows and the
+      //      dashboard's skill-edit form would silently no-op — owner sees
+      //      the new description in the form but never persisted.
+      if (!dbAvailable) return;
+
+      const ins = await client.query(
+        `INSERT INTO tenant_skills (tenant_id, name, description)
+         VALUES ($1, 'Alignment', 'Two-wheel alignment')
+         RETURNING tenant_skill_id`,
+        [tenantId],
+      );
+      const tsid = ins.rows[0].tenant_skill_id;
+
+      const upd = await client.query(
+        `UPDATE tenant_skills SET description = 'Four-wheel alignment'
+         WHERE tenant_skill_id = $1 RETURNING description`,
+        [tsid],
+      );
+      expect(upd.rowCount).toBe(1);
+      expect(upd.rows[0].description).toBe("Four-wheel alignment");
     });
   });
 });

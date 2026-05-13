@@ -26,6 +26,8 @@ Pure `id` → `<table>_id` renames across the surfaces that the per-pilot sweeps
 
 **After-state:** backend 1,781 → 1,860 (+79 from `pk-rename-coverage.test.ts` real-DB exercises); dashboard 620 → 631 (+11); agent 85 unchanged. Zero TS errors across backend / dashboard / agent. Drift detector still clean. The May 12 verification query (`PK column = 'id'` across `public` schema) still returns zero rows. **Coverage statement is now genuine, not just structural** — every renamed PK is exercised by name against real Postgres in CI.
 
+**Same-day follow-up — focused probes for the thinly-covered tail:** a coverage matrix run after the initial commit showed 4 renamed surrogate tables (`password_resets`, `unanswered_questions`, `tenant_docs`, `tenant_skills`) had only 1-3 other real-DB tests touching their renamed PKs — far less defense-in-depth than the heavily-touched ones (customers/employees/resources/services all have 14+ files). Added 8 focused INSERT/SELECT/UPDATE/DELETE-by-renamed-PK probes (2 per table) so a regression to bare `id` on any of these would fail loudly in a test named after the affected table, not transitively through a route-level failure. Each probe carries the WHY: lost magic-link tokens (password_resets — security-grade), invisible KB-gap rows (unanswered_questions — silent owner-notify drop), broken RAG retrieval (tenant_docs — every call's policy answers), or skill-edit no-op (tenant_skills — wizard appears to succeed but skill never persists). Backend 1,860 → 1,868. The header on `pk-rename-coverage.test.ts` updated to reflect 14 → 18 tables covered.
+
 ---
 
 ## 2026-05-12 — PK naming convention conversion, Part 2: **non-domain cleanup (9 pilots, 9 migrations)**
