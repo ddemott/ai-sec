@@ -9,8 +9,8 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
-import type { PoolClient } from 'pg';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { Pool, PoolClient } from 'pg';
 
 import { registerAnalyticsRoutes } from './routes/analytics';
 
@@ -41,14 +41,16 @@ function buildApp() {
   const mockPool = {
     connect: vi.fn(async () => mockClient),
     query: vi.fn(async (text: string, params?: unknown[]) => mockClient.query(text, params)),
-  } as any;
+  } as unknown as Pool;
 
   const withTenantClient = async <T>(_tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> =>
     fn(mockClient as unknown as PoolClient);
 
   const fastify = Fastify({ logger: false });
 
-  fastify.addHook('preHandler', async (request: any) => {
+  // Test-only request shape: the preHandler injects tenantId for the route to read.
+  type TenantRequest = FastifyRequest & { tenantId?: string };
+  fastify.addHook('preHandler', async (request: TenantRequest) => {
     const tenantId =
       (request.query as Record<string, string>)?.tenant_id ||
       (request.headers['x-tenant-id'] as string);
@@ -57,7 +59,7 @@ function buildApp() {
     }
   });
 
-  registerAnalyticsRoutes(fastify, mockPool, withTenantClient as any);
+  registerAnalyticsRoutes(fastify, mockPool, withTenantClient);
   return fastify;
 }
 
