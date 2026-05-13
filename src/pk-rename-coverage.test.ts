@@ -388,13 +388,18 @@ describe("PK rename coverage — real-DB integration", () => {
   // opt_out_records.opt_out_record_id (SERIAL)
   // ─────────────────────────────────────────────────────────────────────
   describe("opt_out_records", () => {
-    it("INSERT returns opt_out_record_id; original_consent_id FK still binds", async () => {
+    it("INSERT returns opt_out_record_id; original_consent_record_id FK still binds", async () => {
       // WHO: SMS STOP reply handler logging the opt-out
-      // WHAT: opt_out_record_id is SERIAL; original_consent_id FK points back
-      //      at consent_records.consent_record_id (also SERIAL).
+      // WHAT: opt_out_record_id is SERIAL; original_consent_record_id FK
+      //      points back at consent_records.consent_record_id (also SERIAL).
+      //      Column name follows CLAUDE.md sub-rule (b) — role prefix
+      //      `original_` + suffix `_consent_record_id` so the name
+      //      self-describes the referenced table.
       // WHERE: SMS webhook receiver → ConsentService.recordOptOut
       // WHY: Audit trail of who opted out + when. A column-rename regression
-      //      here would lose the consent → opt-out link on every STOP.
+      //      here would lose the consent → opt-out link on every STOP. The
+      //      May 13 pilot-4 follow-up rename (20260513000002) is what pinned
+      //      the column under the standard name; this test pins the contract.
       if (!dbAvailable) return;
 
       // Seed a consent row to FK against
@@ -410,14 +415,14 @@ describe("PK rename coverage — real-DB integration", () => {
       const ins = await client.query(
         `INSERT INTO opt_out_records
            (tenant_id, customer_phone, opt_out_type, opt_out_date, opt_out_method,
-            original_consent_id, notes)
+            original_consent_record_id, notes)
          VALUES ($1, '+15553334444', 'sms', now(), 'stop', $2, 'Customer texted STOP')
-         RETURNING opt_out_record_id, original_consent_id`,
+         RETURNING opt_out_record_id, original_consent_record_id`,
         [tenantId, consentId],
       );
       const ooid = ins.rows[0].opt_out_record_id;
       expect(typeof ooid).toBe("number");
-      expect(ins.rows[0].original_consent_id).toBe(consentId);
+      expect(ins.rows[0].original_consent_record_id).toBe(consentId);
 
       const sel = await client.query(
         `SELECT opt_out_record_id, opt_out_method FROM opt_out_records

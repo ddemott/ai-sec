@@ -464,7 +464,7 @@ export class PostgresDatabaseService implements DatabaseService {
       const result = await client.query(
         `INSERT INTO opt_out_records
          (tenant_id, customer_email, customer_phone, opt_out_type, opt_out_date,
-          opt_out_method, original_consent_id, notes)
+          opt_out_method, original_consent_record_id, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING
            opt_out_record_id as "optOutRecordId",
@@ -474,7 +474,7 @@ export class PostgresDatabaseService implements DatabaseService {
            opt_out_type as "optOutType",
            opt_out_date as "optOutDate",
            opt_out_method as "optOutMethod",
-           original_consent_id as "originalConsentId",
+           original_consent_record_id as "originalConsentRecordId",
            notes,
            created_at as "createdAt"`,
         [
@@ -484,7 +484,7 @@ export class PostgresDatabaseService implements DatabaseService {
           data.optOutType,
           data.optOutDate,
           data.optOutMethod,
-          data.originalConsentId || null,
+          data.originalConsentRecordId || null,
           data.notes || null,
         ]
       );
@@ -503,7 +503,7 @@ export class PostgresDatabaseService implements DatabaseService {
            opt_out_type as "optOutType",
            opt_out_date as "optOutDate",
            opt_out_method as "optOutMethod",
-           original_consent_id as "originalConsentId",
+           original_consent_record_id as "originalConsentRecordId",
            notes,
            created_at as "createdAt"
          FROM opt_out_records WHERE tenant_id = $1 ORDER BY opt_out_date DESC`,

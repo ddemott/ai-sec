@@ -136,7 +136,8 @@ export class ConsentService {
       optOutDate:
         optOutData.optOutDate ?? (optOutData as any).opt_out_date ?? new Date().toISOString(),
       optOutMethod: optOutData.optOutMethod ?? (optOutData as any).opt_out_method,
-      originalConsentId: optOutData.originalConsentId ?? (optOutData as any).original_consent_id,
+      originalConsentRecordId:
+        optOutData.originalConsentRecordId ?? (optOutData as any).original_consent_record_id,
       notes: optOutData.notes,
     };
 

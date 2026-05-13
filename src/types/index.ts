@@ -44,7 +44,7 @@ export interface OptOutRecord {
   optOutType: 'email' | 'sms' | 'both';
   optOutDate: string; // ISO date string
   optOutMethod: 'stop' | 'unsubscribe' | 'web_form' | 'verbal' | 'complaint';
-  originalConsentId?: number;
+  originalConsentRecordId?: number;
   notes?: string;
   createdAt?: string;
 }
