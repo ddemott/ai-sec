@@ -1,6 +1,7 @@
 import type { Appointment } from '../../types/index.js';
 import { CommunicationService } from '../communications/index.js';
 import { ConsentService } from '../consentService.js';
+import { remindersSentTotal, remindersSkippedTotal } from '../metrics.js';
 
 import type { ReminderRepository } from './reminderRepository.js';
 import type { ReminderSchedule } from './types.js';
@@ -33,6 +34,7 @@ export class ReminderProcessor {
         reminder.tenant_id.toString(),
       );
       if (!appointment) {
+        remindersSkippedTotal.inc({ reason: 'appointment_not_found' });
         await this.repository.updateReminderStatus(reminderId, 'failed', 'Appointment not found');
         return;
       }
@@ -42,6 +44,7 @@ export class ReminderProcessor {
       const now = new Date();
 
       if (appointment.status === 'cancelled' || appointmentDateTime <= now) {
+        remindersSkippedTotal.inc({ reason: 'appointment_cancelled' });
         await this.repository.updateReminderStatus(
           reminderId,
           'cancelled',
@@ -53,6 +56,7 @@ export class ReminderProcessor {
       // Check communication consent
       const hasConsent = await this.checkCommunicationConsent(reminder, appointment);
       if (!hasConsent) {
+        remindersSkippedTotal.inc({ reason: 'no_consent' });
         await this.repository.updateReminderStatus(
           reminderId,
           'cancelled',
@@ -70,6 +74,7 @@ export class ReminderProcessor {
       }
     } catch (error) {
       console.error(`Error processing reminder ${reminderId}:`, error);
+      remindersSkippedTotal.inc({ reason: 'processing_error' });
       await this.repository.updateReminderStatus(reminderId, 'failed', error instanceof Error ? error.message : 'Unknown error');
     }
   }
@@ -188,6 +193,10 @@ export class ReminderProcessor {
             );
             emailSent = result.email?.success || false;
           }
+          remindersSentTotal.inc({
+            channel: 'email',
+            outcome: emailSent ? 'success' : 'failure',
+          });
         }
       }
 
@@ -224,6 +233,10 @@ export class ReminderProcessor {
             });
             smsSent = result.success;
           }
+          remindersSentTotal.inc({
+            channel: 'sms',
+            outcome: smsSent ? 'success' : 'failure',
+          });
         }
       }
 

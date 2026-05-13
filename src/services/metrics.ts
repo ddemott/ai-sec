@@ -287,3 +287,24 @@ export const errorsTotal = registry.counter(
   'errors_total',
   'Errors logged via logError(), partitioned by event name'
 );
+
+// Reminder delivery outcomes per channel. Closes TODO.md Phase 5
+// "Monitoring dashboard for reminder delivery rates." A regression that
+// silently breaks Twilio or Gmail SMTP shows up here as
+// outcome="failure" climbing while outcome="success" flattens — long
+// before a customer reports a missed appointment. Plot
+// `rate(reminders_sent_total{outcome="success"}[5m]) /
+//  rate(reminders_sent_total[5m])` as the per-channel success rate.
+export const remindersSentTotal = registry.counter(
+  'reminders_sent_total',
+  'Reminder delivery attempts, partitioned by channel (email, sms) and outcome (success, failure)'
+);
+
+// Reminders that did NOT make it to a delivery attempt — appointment
+// vanished / cancelled / time passed / no consent recorded. High volume
+// in any single reason bucket is a UX signal (e.g. consent dropping off
+// means callers aren't being asked to opt in correctly).
+export const remindersSkippedTotal = registry.counter(
+  'reminders_skipped_total',
+  'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, no_consent, processing_error)'
+);
