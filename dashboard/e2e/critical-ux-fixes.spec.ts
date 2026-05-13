@@ -1,5 +1,5 @@
-import { test, expect, Page } from '@playwright/test';
-
+import { test, expect } from './helpers/test';
+import { Page } from '@playwright/test';
 // Helper: navigate to a tab by clicking it in the sidebar
 async function navigateToTab(page: Page, tabLabel: string) {
   await page.locator(`text=${tabLabel}`).first().click();

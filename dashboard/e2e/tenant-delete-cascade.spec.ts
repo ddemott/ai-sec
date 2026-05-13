@@ -33,7 +33,8 @@
  *     verifies the cascade is scoped to the deleted tenant_id, not a
  *     schema-wide DELETE.
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import {
   BACKEND_URL,

@@ -9,7 +9,8 @@
  * Setup: backend on https://localhost:4001, dashboard on https://localhost:4000,
  * Postgres on localhost:5433 with DynaTire seed data.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { Page } from '@playwright/test';
 import { Pool } from 'pg';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';

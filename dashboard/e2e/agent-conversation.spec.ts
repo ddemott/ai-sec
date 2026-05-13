@@ -26,7 +26,8 @@
  * its own employee_schedule + appointment fixtures in `try`, cleans up
  * in `finally`. Independent of other test files; runs in any order.
  */
-import { test, expect, APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';

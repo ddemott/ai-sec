@@ -14,7 +14,8 @@
  * inbox or Twilio mock — same data path the real provider would
  * deliver, just intercepted at the persistence layer.
  */
-import { test, expect, Page, APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { Page, APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { createHash, randomUUID } from 'crypto'; // createHash for password-reset token (sha256), randomUUID for token plaintext
 import { readFileSync } from 'fs';

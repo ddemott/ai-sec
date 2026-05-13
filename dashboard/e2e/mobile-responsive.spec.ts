@@ -28,8 +28,8 @@
  *     (the booking-/customer-/scheduler-spec files own those contracts).
  *     Keeps the mobile spec stable across seed-data changes.
  */
-import { test, expect, type Page } from '@playwright/test';
-
+import { test, expect } from './helpers/test';
+import { type Page } from '@playwright/test';
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
 // Mobile viewports for the audit. Sizes lifted from the Playwright

@@ -38,7 +38,8 @@
  * employee_schedule + customer + appointment fixtures and cleans them
  * up in `finally`, per the test-isolation feedback memory.
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';

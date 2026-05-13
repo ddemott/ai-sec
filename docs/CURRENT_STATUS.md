@@ -187,7 +187,7 @@ See `docs/TODO.md` for the unified task list.
 ### Test Count (verified 2026-05-13 against real Postgres + dashboard)
 - **1,873 backend tests + 631 dashboard tests = 2,504 passing**, 0 failures, 0 skips
 - 85 agent tests (`cd agent && npm test`)
-- 71 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
+- 85 Playwright e2e + 7 skip-guarded (run with `SYNC_TEST_RECORDER=1` to flip them on)
 - 29 live QA tool calls (88 assertions)
 - Zero TypeScript errors (`npx tsc --noEmit` clean on backend + dashboard + agent)
 - CI now provisions Postgres 16 + applies migrations, so DB-level tests
@@ -211,7 +211,7 @@ See `docs/TODO.md` for the unified task list.
 | **Stripe billing** | Configured | Webhook registered at `/billing/webhook`, test keys + price IDs set |
 | **Local dev** | Working | `npm start` runs backend (4001) + dashboard (4000), dotenv loads `.env` |
 | **Tests** | 1,873 backend + 631 dashboard + 85 agent = 2,589 passing + 88 QA assertions | All green (verified 2026-05-13 against real DB + dashboard), 0 skips, zero TS errors |
-| **Playwright e2e** | 71 passed / 7 skipped | Against live dashboard |
+| **Playwright e2e** | 85 passed / 7 skipped | Against live dashboard |
 | **Google Calendar sync** | Working | OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Outlook Calendar sync** | Working | Microsoft Graph API, OAuth flow, token refresh, auto-sync on create/update/delete/cancel |
 | **Jobber CRM sync** | Working | Bidirectional sync (push+pull), timestamp-based merge, OAuth, GraphQL API, webhooks |

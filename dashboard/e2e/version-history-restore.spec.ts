@@ -33,7 +33,8 @@
  * RecordHistoryModal "Restore" button) are component-tested separately;
  * this spec pins the backend contract those components depend on.
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import {
   BACKEND_URL,
@@ -83,13 +84,14 @@ async function listCustomersAs(
   req: APIRequestContext,
   token: string,
   tenantId: string
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<Array<{ customer_id: string; name: string }>> {
   const res = await req.get(`${BACKEND_URL}/customers?tenant_id=${tenantId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(res.status(), 'list customers must succeed').toBe(200);
   const body = await res.json();
-  // GET /customers returns the array directly (not wrapped in success/data)
+  // GET /customers returns the array directly (not wrapped in success/data).
+  // Rows shaped with `customer_id` (post-pilot-15 rename), not bare `id`.
   return Array.isArray(body) ? body : [];
 }
 
@@ -97,11 +99,15 @@ async function listDeletedCustomersAs(
   req: APIRequestContext,
   token: string,
   tenantId: string
-): Promise<{ records: Array<{ id: string; name: string }>; total: number }> {
+): Promise<{ records: Array<{ record_id: string; name: string }>; total: number }> {
   const res = await req.get(`${BACKEND_URL}/records/customers/deleted?tenant_id=${tenantId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(res.status(), 'list deleted customers must succeed').toBe(200);
+  // The /records/:table/deleted route deliberately aliases the table's
+  // PK column (customer_id, employee_id, etc.) to `record_id` so all
+  // soft-deletable tables produce one consistent response shape. The
+  // dashboard DeletedRecordsPanel reads `.record_id` for the same reason.
   return await res.json();
 }
 

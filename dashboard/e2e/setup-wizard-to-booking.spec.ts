@@ -41,7 +41,8 @@
  * — every call has a 1:1 backend route, so simulating the finalize
  * via direct HTTP is faithful to the production code path.
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';

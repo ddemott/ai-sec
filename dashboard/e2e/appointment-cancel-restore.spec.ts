@@ -38,7 +38,8 @@
  * minimal entities → drive the scenario via direct HTTP → DELETE FROM
  * tenants in `finally` (cascade clears all dependent rows in one stmt).
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import {
   BACKEND_URL,

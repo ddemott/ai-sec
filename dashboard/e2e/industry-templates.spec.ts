@@ -33,7 +33,8 @@
  *     fallback path still works; this is the shape ai_platform_v1 also
  *     hits (no DB template row, falls through to defaults)
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';

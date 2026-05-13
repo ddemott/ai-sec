@@ -37,7 +37,7 @@
  * DELETE FROM tenants in `finally` (cascades to reminder_schedules via
  * the appointment FK).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/test';
 import { Pool } from 'pg';
 import {
   BACKEND_URL,

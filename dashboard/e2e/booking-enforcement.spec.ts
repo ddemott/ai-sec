@@ -33,7 +33,8 @@
  * Setup: backend on https://localhost:4001, dashboard on
  * https://localhost:4000, Postgres on localhost:5433.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { Page } from '@playwright/test';
 import { Pool } from 'pg';
 import {
   PG_URL,

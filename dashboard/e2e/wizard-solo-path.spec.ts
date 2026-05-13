@@ -34,7 +34,8 @@
  * Mirrors setup-wizard-to-booking.spec.ts's API-only design: each test owns
  * its own tenant lifecycle, DELETEs on cleanup (FK cascade).
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from './helpers/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
