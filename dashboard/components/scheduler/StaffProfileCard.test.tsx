@@ -7,7 +7,7 @@ import type { Employee } from '../../lib/types';
 
 // Minimal fixture — the card only reads name + type from Employee.
 const employee: Employee = {
-  id: 'emp-1',
+  employee_id: 'emp-1',
   tenant_id: 't1',
   name: 'Carlos Rivera',
   is_active: true,

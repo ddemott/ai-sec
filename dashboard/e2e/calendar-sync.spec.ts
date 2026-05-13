@@ -132,20 +132,20 @@ async function loginAsTenantAdmin(req: APIRequestContext): Promise<string> {
 
 async function findEmployeeIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    'SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1',
+    'SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1',
     [DYNATIRE_ID, name]
   );
   if (!r.rows[0]) throw new Error(`Employee "${name}" not found in DynaTire seed`);
-  return r.rows[0].id;
+  return r.rows[0].employee_id;
 }
 
 async function findResourceIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    'SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1',
+    'SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1',
     [DYNATIRE_ID, name]
   );
   if (!r.rows[0]) throw new Error(`Resource "${name}" not found in DynaTire seed`);
-  return r.rows[0].id;
+  return r.rows[0].resource_id;
 }
 
 test.beforeAll(() => {
@@ -197,19 +197,19 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     const truckId = await findResourceIdByName('Truck 1');
 
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
-    customerId = cIns.rows[0].id;
+    customerId = cIns.rows[0].customer_id;
 
     const sIns = await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id AS id`,
+       RETURNING employee_schedule_id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].id;
+    scheduleId = sIns.rows[0].employee_schedule_id;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request); // login won't dispatch sync but be defensive
@@ -270,25 +270,25 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     const mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
-    customerId = cIns.rows[0].id;
+    customerId = cIns.rows[0].customer_id;
 
     const sIns = await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id AS id`,
+       RETURNING employee_schedule_id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].id;
+    scheduleId = sIns.rows[0].employee_schedule_id;
 
     // Pre-insert directly so creation doesn't dispatch 5 sync events
     // and pollute the assertion below.
     const aIns = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id AS id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id`,
       [
         DYNATIRE_ID,
         truckId,
@@ -299,7 +299,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
         tag,
       ]
     );
-    apptId = aIns.rows[0].id;
+    apptId = aIns.rows[0].appointment_id;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
@@ -349,23 +349,23 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     const mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
-    customerId = cIns.rows[0].id;
+    customerId = cIns.rows[0].customer_id;
 
     const sIns = await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id AS id`,
+       RETURNING employee_schedule_id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].id;
+    scheduleId = sIns.rows[0].employee_schedule_id;
 
     const aIns = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id AS id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id`,
       [
         DYNATIRE_ID,
         truckId,
@@ -376,7 +376,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
         tag,
       ]
     );
-    apptId = aIns.rows[0].id;
+    apptId = aIns.rows[0].appointment_id;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
@@ -440,7 +440,7 @@ test('customer-create dispatches to 4 CRMs (no calendar — by contract)', async
 
     expect(res.status(), 'customer-create must succeed').toBe(200);
     expect(body.success).toBe(true);
-    customerId = (body.customer as { id: string }).id;
+    customerId = (body.customer as { customer_id: string }).customer_id;
 
     await new Promise((r) => setTimeout(r, 500));
     const events = await getSyncEvents(request);
@@ -472,10 +472,10 @@ test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ requ
 
   try {
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-cust`, phone]
     );
-    customerId = cIns.rows[0].id;
+    customerId = cIns.rows[0].customer_id;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
@@ -538,18 +538,18 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     const mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
-    customerId = cIns.rows[0].id;
+    customerId = cIns.rows[0].customer_id;
     const sIns = await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id AS id`,
+       RETURNING employee_schedule_id`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].id;
+    scheduleId = sIns.rows[0].employee_schedule_id;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);

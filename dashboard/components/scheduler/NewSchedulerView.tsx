@@ -200,7 +200,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
   // Sync staff order with baseEmployees when they change
   useEffect(() => {
-    const ids = baseEmployees.map(e => String(e.id));
+    const ids = baseEmployees.map(e => String(e.employee_id));
     // Only reset if the set of employee IDs changed (not just reordering)
     const currentSet = new Set(savedOrder);
     const newSet = new Set(ids);
@@ -224,7 +224,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // Ordered employees based on staffOrder
   const employees = useMemo(() => {
     if (staffOrder.length === 0) return baseEmployees;
-    const empMap = new Map(baseEmployees.map(e => [String(e.id), e]));
+    const empMap = new Map(baseEmployees.map(e => [String(e.employee_id), e]));
     const ordered: Employee[] = [];
     for (const id of staffOrder) {
       const emp = empMap.get(id);
@@ -232,7 +232,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     }
     // Add any employees not in the order (newly added)
     for (const emp of baseEmployees) {
-      if (!staffOrder.includes(String(emp.id))) {
+      if (!staffOrder.includes(String(emp.employee_id))) {
         ordered.push(emp);
       }
     }
@@ -439,7 +439,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // --- Compute profile card data (Item #4) ---
   const profileCardEmployee = useMemo(() => {
     if (!profileCard) return null;
-    return employees.find(e => String(e.id) === profileCard.employeeId) || null;
+    return employees.find(e => String(e.employee_id) === profileCard.employeeId) || null;
   }, [profileCard, employees]);
 
   const profileCardData = useMemo(() => {
@@ -485,7 +485,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
   const handleMarkOffClick = useCallback(() => {
     if (!profileCardEmployee || !tenantId) return;
-    const employeeId = profileCardEmployee.id;
+    const employeeId = profileCardEmployee.employee_id;
     const employeeName = profileCardEmployee.name;
     const tzOffsetMs = selectedDate.getTimezoneOffset() * 60000;
     const shiftDate = new Date(selectedDate.getTime() - tzOffsetMs).toISOString().slice(0, 10);
@@ -531,7 +531,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // --- Compute row heights for skills mode (Item #5) ---
   const getRowHeight = useCallback((emp: Employee): number => {
     if (viewMode !== 'skills') return ROW_HEIGHT;
-    const skillCount = employeeSkillsMap.get(String(emp.id))?.length || 0;
+    const skillCount = employeeSkillsMap.get(String(emp.employee_id))?.length || 0;
     return Math.max(SKILL_ROW_MIN_HEIGHT, Math.min(skillCount * SKILL_BAR_HEIGHT + 10, 200));
   }, [viewMode, employeeSkillsMap]);
 
@@ -748,14 +748,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               const rowH = getRowHeight(emp);
               return (
                 <div
-                  key={String(emp.id)}
+                  key={String(emp.employee_id)}
                   role="button"
                   tabIndex={0}
                   draggable
                   onDragStart={() => handleDragStart(idx)}
                   onDragOver={(e) => handleDragOver(e, idx)}
                   onDragEnd={handleDragEnd}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStaffNameClick(String(emp.id), e as unknown as React.MouseEvent); } }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStaffNameClick(String(emp.employee_id), e as unknown as React.MouseEvent); } }}
                   className="flex items-center px-1.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-inset"
                   style={{
                     ['--tw-ring-color' as string]: 'var(--accent)',
@@ -765,14 +765,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                     opacity: dragIndex === idx ? 0.5 : 1,
                     transform: dragIndex === idx ? 'scale(1.02)' : 'none',
                   }}
-                  onClick={(e) => handleStaffNameClick(String(emp.id), e)}
+                  onClick={(e) => handleStaffNameClick(String(emp.employee_id), e)}
                   onMouseEnter={(e) => {
                     (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted, rgba(59,130,246,0.1))';
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLElement).style.background = 'transparent';
                   }}
-                  data-testid={`staff-name-${emp.id}`}
+                  data-testid={`staff-name-${emp.employee_id}`}
                 >
                   {/* Drag handle (Item #6) */}
                   <div
@@ -780,7 +780,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                     style={{ color: 'var(--text-muted, #666)' }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-secondary, #aaa)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted, #666)'; }}
-                    data-testid={`drag-handle-${emp.id}`}
+                    data-testid={`drag-handle-${emp.employee_id}`}
                   >
                     <GripDots />
                   </div>
@@ -863,7 +863,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
             )}
             <div style={{ width: totalGridWidth, minHeight: '100%' }}>
               {employees.map((emp) => {
-                const empId = String(emp.id);
+                const empId = String(emp.employee_id);
                 const empAppointments = appointmentsByEmployee.get(empId) || [];
                 const rowH = getRowHeight(emp);
 
@@ -1038,7 +1038,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
           appointment={apptPopover.appointment}
           employeeName={
             apptPopover.appointment.employee_id
-              ? employees.find(e => String(e.id) === String(apptPopover.appointment.employee_id))?.name || null
+              ? employees.find(e => String(e.employee_id) === String(apptPopover.appointment.employee_id))?.name || null
               : null
           }
           resourceName={apptPopover.appointment.resources?.name || null}
@@ -1144,7 +1144,7 @@ function SkillBars({ employee, employeeSkills, shifts, colW, skillColorMap, open
               opacity: 0.8,
             }}
             title={skill}
-            data-testid={`skill-bar-${employee.id}-${i}`}
+            data-testid={`skill-bar-${employee.employee_id}-${i}`}
           >
             {/* Label at left edge — hide if bar is too narrow */}
             {barWidth > 50 && (

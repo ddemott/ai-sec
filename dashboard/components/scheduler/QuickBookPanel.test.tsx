@@ -32,8 +32,8 @@ import { QuickBookPanel } from './QuickBookPanel';
 
 const customers = [{ customer_id: 'c-1', name: 'Alice', phone: '+15555550001' }];
 const employees = [
-  { id: 'emp-mike', name: 'Mike' },
-  { id: 'emp-dana', name: 'Dana' },
+  { employee_id: 'emp-mike', name: 'Mike' },
+  { employee_id: 'emp-dana', name: 'Dana' },
 ];
 const resources = [
   { resource_id: 'bay-1', name: 'Bay 1' },

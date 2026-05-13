@@ -60,7 +60,7 @@ describe("CRUD Routes - Database Level", () => {
             );
 
             const res = await client.query(
-                `SELECT employee_id::text AS id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
+                `SELECT employee_id::text AS employee_id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
                  FROM employees WHERE tenant_id = $1
                  ORDER BY name ASC`,
                 [tenantId]
@@ -107,10 +107,10 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, 'Old Name', 'Old', 'Name', $2) RETURNING employee_id as id",
+                "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, 'Old Name', 'Old', 'Name', $2) RETURNING employee_id",
                 [tenantId, ["flat-repair"]]
             );
-            const empId = insertRes.rows[0].id;
+            const empId = insertRes.rows[0].employee_id;
 
             const res = await client.query(
                 `UPDATE employees SET
@@ -178,10 +178,10 @@ describe("CRUD Routes - Database Level", () => {
             );
 
             const res = await client.query(
-                `SELECT employee_id::text AS id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
+                `SELECT employee_id::text AS employee_id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
                  FROM employees WHERE tenant_id = $1
                  UNION ALL
-                 SELECT user_id::text as id, COALESCE(full_name, email) as name, NULL as first_name, NULL as last_name, email, NULL as phone, '{}'::text[] as skills, true as is_active, 'user' as type
+                 SELECT user_id::text as employee_id, COALESCE(full_name, email) as name, NULL as first_name, NULL as last_name, email, NULL as phone, '{}'::text[] as skills, true as is_active, 'user' as type
                  FROM users WHERE tenant_id = $1
                  ORDER BY name ASC`,
                 [tenantId]
@@ -339,10 +339,10 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, 'Old Svc', 30, 50.00) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, price) VALUES ($1, 'Old Svc', 30, 50.00) RETURNING service_id",
                 [tenantId]
             );
-            const svcId = insertRes.rows[0].id;
+            const svcId = insertRes.rows[0].service_id;
 
             const res = await client.query(
                 "UPDATE services SET name = COALESCE($1, name), description = COALESCE($2, description), duration_minutes = COALESCE($3, duration_minutes), price = COALESCE($4, price), updated_at = NOW() WHERE service_id = $5 RETURNING *",
@@ -364,10 +364,10 @@ describe("CRUD Routes - Database Level", () => {
             if (!dbAvailable) return;
 
             const insertRes = await client.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, 'Deletable', 30) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, 'Deletable', 30) RETURNING service_id",
                 [tenantId]
             );
-            const svcId = insertRes.rows[0].id;
+            const svcId = insertRes.rows[0].service_id;
 
             // Verify no mappings
             const mappings = await client.query(
@@ -744,7 +744,7 @@ describe("CRUD Routes - Database Level", () => {
 
             const fakeId = "00000000-0000-0000-0000-000000000099";
             const res = await client.query(
-                "DELETE FROM resources WHERE resource_id = $1 AND tenant_id = $2 RETURNING resource_id as id",
+                "DELETE FROM resources WHERE resource_id = $1 AND tenant_id = $2 RETURNING resource_id",
                 [fakeId, tenantId]
             );
 

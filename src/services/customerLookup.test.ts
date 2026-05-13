@@ -58,7 +58,7 @@ describe('getOrCreateCustomerByPhone', () => {
     // WHY: Inserting again would create a duplicate-customer row and
     //       fail any future UNIQUE(tenant_id, phone) constraint
     const { withTenantClient, queries } = buildWithTenantClient([
-      { rows: [{ id: 'existing-id' }] },
+      { rows: [{ customer_id: 'existing-id' }] },
     ]);
 
     const id = await getOrCreateCustomerByPhone(
@@ -70,7 +70,7 @@ describe('getOrCreateCustomerByPhone', () => {
 
     expect(id).toBe('existing-id');
     expect(queries).toHaveLength(1);
-    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[0].params).toEqual([TENANT_ID, PHONE]);
   });
 
@@ -82,7 +82,7 @@ describe('getOrCreateCustomerByPhone', () => {
     //       create customers, which is exactly the coupling we're undoing
     const { withTenantClient, queries } = buildWithTenantClient([
       { rows: [] },
-      { rows: [{ id: 'new-id' }] },
+      { rows: [{ customer_id: 'new-id' }] },
     ]);
 
     const id = await getOrCreateCustomerByPhone(
@@ -94,7 +94,7 @@ describe('getOrCreateCustomerByPhone', () => {
 
     expect(id).toBe('new-id');
     expect(queries).toHaveLength(2);
-    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, PHONE, 'Alice']);
   });
@@ -108,7 +108,7 @@ describe('getOrCreateCustomerByPhone', () => {
     //       data; treating deleted as missing keeps the new contact clean
     const { withTenantClient, queries } = buildWithTenantClient([
       { rows: [] }, // soft-deleted match excluded by the WHERE clause
-      { rows: [{ id: 'fresh-id' }] },
+      { rows: [{ customer_id: 'fresh-id' }] },
     ]);
 
     const id = await getOrCreateCustomerByPhone(
@@ -133,7 +133,7 @@ describe('getOrCreateCustomerByPhone', () => {
     //       schema, which is exactly what the multi-tenant probe (2026-05-06)
     //       was added to catch
     const { withTenantClient, observedTenantIds } = buildWithTenantClient([
-      { rows: [{ id: 'x' }] },
+      { rows: [{ customer_id: 'x' }] },
     ]);
     await getOrCreateCustomerByPhone(withTenantClient, TENANT_ID, PHONE, 'X');
     expect(observedTenantIds).toEqual([TENANT_ID]);

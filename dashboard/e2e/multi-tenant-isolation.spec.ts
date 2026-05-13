@@ -111,7 +111,7 @@ test.beforeAll(async () => {
   // probe. Picks the first match by created_at to be deterministic across
   // re-runs. Fails the spec early if there's only one tenant in the DB.
   const r = await pool.query(
-    `SELECT tenant_id AS id FROM tenants
+    `SELECT tenant_id FROM tenants
       WHERE tenant_id != $1 AND tenant_id != $2
       ORDER BY created_at ASC LIMIT 1`,
     [DYNATIRE_ID, SUPER_ADMIN_ID]
@@ -121,7 +121,7 @@ test.beforeAll(async () => {
       'No second tenant exists for cross-tenant isolation probe — re-run seed-db.sh'
     );
   }
-  OTHER_TENANT_ID = r.rows[0].id;
+  OTHER_TENANT_ID = r.rows[0].tenant_id;
 });
 test.afterAll(async () => {
   await pool.end();
@@ -148,10 +148,10 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
     // Setup: insert a customer in Bella's tenant that we'll try to leak.
     const ins = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone)
-       VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+       VALUES ($1, $2, $3) RETURNING customer_id`,
       [OTHER_TENANT_ID, `${tag}-other-secret`, '+15551112222']
     );
-    bellaCustomerId = ins.rows[0].id;
+    bellaCustomerId = ins.rows[0].customer_id;
 
     // Login as DynaTire user — gets JWT scoped to DynaTire.
     const auth = await loginAs(page, 'admin@dynatire.com', 'password');

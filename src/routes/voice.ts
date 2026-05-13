@@ -97,7 +97,7 @@ export function registerVoiceRoutes(
       call_id,
       caller_phone,
       is_known_customer: context.is_known_customer,
-      customer_id: context.customer?.id,
+      customer_id: context.customer?.customer_id,
     });
 
     // Emit real-time event if Socket.IO is available
@@ -390,7 +390,7 @@ export function registerVoiceRoutes(
     const added = await withTenantClient(tenantId, async (client) => {
       // Verify customer belongs to tenant
       const checkResult = await client.query(
-        'SELECT customer_id AS id FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
+        'SELECT customer_id FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
         [customer_id, tenantId]
       );
 

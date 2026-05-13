@@ -145,17 +145,17 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
     const bcryptHash = await bcrypt.hash('password', 10);
     const fd = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id AS id`,
+       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id`,
       [DYNATIRE_ID, `${tag}-fd@dynatire.com`, bcryptHash, 'Front Desk Test']
     );
-    frontDeskUserId = fd.rows[0].id;
+    frontDeskUserId = fd.rows[0].user_id;
 
     const tt = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id AS id`,
+       VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id`,
       [DYNATIRE_ID, `${tag}-target@dynatire.com`, bcryptHash, 'Target Owner']
     );
-    inviteeUserId = tt.rows[0].id;
+    inviteeUserId = tt.rows[0].user_id;
 
     // Log in as the front_desk user.
     const auth = await loginAs(request, `${tag}-fd@dynatire.com`, 'password');
@@ -226,10 +226,10 @@ test('password-reset: forgot-password → token persisted → reset-password →
     const oldHash = await bcrypt.hash(oldPassword, 10);
     const u = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id AS id`,
+       VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id`,
       [DYNATIRE_ID, email, oldHash, 'Reset Test User']
     );
-    userId = u.rows[0].id;
+    userId = u.rows[0].user_id;
 
     // Confirm initial login works.
     const initialLogin = await loginAs(request, email, oldPassword);
@@ -315,10 +315,10 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
     const ins = await pool.query(
       `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
        VALUES ($1, $2, $3, now() + interval '10 minutes')
-       RETURNING phone_verification_id AS id`,
+       RETURNING phone_verification_id`,
       [DYNATIRE_ID, phone, codeHash]
     );
-    phoneVerificationId = ins.rows[0].id;
+    phoneVerificationId = ins.rows[0].phone_verification_id;
 
     // SAD: wrong code is rejected without marking the row verified.
     const wrong = await apiPost(

@@ -25,7 +25,7 @@ export default function CRMView() {
   const tenantId = useActiveTenantId();
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [summaries, setSummaries] = useState<{ id: string; customer_id: string; summary: string; call_timestamp?: string; created_at?: string; has_transcript?: boolean }[]>([])
+  const [summaries, setSummaries] = useState<{ call_summary_id: string; customer_id: string; summary: string; call_timestamp?: string; created_at?: string; has_transcript?: boolean }[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
   const [customerAppointments, setCustomerAppointments] = useState<{ appointment_id: string; start_time: string; end_time: string; status: string; description: string; resource_name?: string; employee_name?: string; location?: string }[]>([])

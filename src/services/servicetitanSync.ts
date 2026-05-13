@@ -87,7 +87,7 @@ export async function syncCustomerToServiceTitan(
     const syncEntry = await syncMapFindByLocalId(client, tenantId, 'servicetitan', 'customer', customerId);
 
     const custRes = await client.query(
-      `SELECT customer_id AS id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
+      `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
       [customerId, tenantId]
     );
     const cust = custRes.rows[0];
@@ -293,10 +293,10 @@ export async function pullServiceTitanJob(
 
         const insertRes = await client.query(
           `INSERT INTO appointments (tenant_id, customer_id, start_time, end_time, description, status)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING appointment_id AS id`,
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING appointment_id`,
           [tenantId, localCustomerId, startTime, endTime, jobData.summary || 'ServiceTitan Job', jobData.status === 'Canceled' ? 'canceled' : 'scheduled']
         );
-        const localId = insertRes.rows[0].id;
+        const localId = insertRes.rows[0].appointment_id;
 
         await syncMapUpsertOnPull(client, tenantId, 'servicetitan', 'appointment', localId, stId, remoteUpdatedAt);
         log.info(`${prefix} — created local appointment from ServiceTitan job (servicetitanId=${stId} localId=${localId})`);

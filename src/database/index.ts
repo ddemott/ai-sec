@@ -327,7 +327,7 @@ export class PostgresDatabaseService implements DatabaseService {
     return this.withClient(async (client) => {
       const result = await client.query(
         `SELECT
-          a.appointment_id AS id,
+          a.appointment_id as "appointmentId",
           a.tenant_id as "tenantId",
           a.customer_id as "customerId",
           c.email as "customerEmail",

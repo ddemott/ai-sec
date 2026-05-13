@@ -59,7 +59,7 @@ const mockCall = {
       cancelled: 1,
       no_shows: 0,
       upcoming_appointments: [
-        { id: 'apt-1', start_time: '2026-04-15T10:00:00Z', description: 'Haircut' },
+        { appointment_id: 'apt-1', start_time: '2026-04-15T10:00:00Z', description: 'Haircut' },
       ],
     },
     notes: [

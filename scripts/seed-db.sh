@@ -30,11 +30,18 @@ if [ ! -f "$SEED_FILE" ]; then
 fi
 
 echo "  Applying supabase/seed.sql..."
-if ! psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f "$SEED_FILE" > /dev/null 2>&1; then
-  echo "  WARNING: Some seed data may already exist. Check output above."
-else
-  echo "[secretaryhq] Seed data applied successfully."
-fi
+# Capture psql output so a real failure (e.g. schema drift breaking the
+# seed) surfaces with the actual error. Previously this redirected to
+# /dev/null and treated every failure as "data already exists" — which
+# silently hid the seed.sql being out-of-date relative to the schema
+# from 2026-05-12 through 2026-05-13. ON_ERROR_STOP=1 + the captured
+# output means a future regression is immediately visible in CI.
+SEED_OUTPUT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f "$SEED_FILE" 2>&1) || {
+  echo "[secretaryhq] ERROR: seed application failed:"
+  echo "$SEED_OUTPUT" | sed 's/^/    /'
+  exit 1
+}
+echo "[secretaryhq] Seed data applied successfully."
 
 echo "[secretaryhq] Done. Platform admin + DynaTire demo tenant seeded."
 echo "  Login: admin@secretaryhq.com / password (platform admin)"

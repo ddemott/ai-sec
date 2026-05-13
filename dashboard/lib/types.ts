@@ -87,7 +87,7 @@ export interface Resource {
 }
 
 export interface Employee {
-  id: string;
+  employee_id: string;
   tenant_id: string;
   name: string;
   first_name?: string | null;
@@ -110,16 +110,6 @@ export interface Service {
   price?: number | null;
   required_skills?: string[];
   required_resources?: string[];
-}
-
-export interface Shift {
-  id: string;
-  tenant_id: string;
-  employee_id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  is_active: boolean;
 }
 
 export interface ScheduleEntry {
@@ -266,7 +256,7 @@ export interface CoverageItem {
 }
 
 export interface CallSummary {
-  id: string;
+  call_summary_id: string;
   tenant_id: string;
   customer_id: string;
   call_id: string;
@@ -277,7 +267,7 @@ export interface CallSummary {
 }
 
 export interface UserFeedback {
-  id: string;
+  user_feedback_id: string;
   tenant_id: string;
   user_id?: string;
   page: string;
@@ -309,7 +299,7 @@ export interface CustomerNote {
 }
 
 export interface AppointmentSummary {
-  id: string;
+  appointment_id: string;
   start_time: string;
   end_time: string;
   status: string;
@@ -329,7 +319,7 @@ export interface AppointmentHistory {
 export interface CustomerContext {
   is_known_customer: boolean;
   customer: {
-    id: string;
+    customer_id: string;
     name: string | null;
     phone: string;
     email: string | null;
@@ -440,7 +430,7 @@ export interface RecordHistoryResponse {
 }
 
 export interface DeletedRecord {
-  id: string;
+  record_id: string;
   tenant_id: string;
   table_name: VersionedTable;
   name: string | null;

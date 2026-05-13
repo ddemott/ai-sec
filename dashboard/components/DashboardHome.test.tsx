@@ -57,9 +57,9 @@ beforeEach(() => {
   // and hide the dashboard content under test.
   mockApi.employees.list
     .mockReset()
-    .mockResolvedValue([{ id: 'e1', name: 'Alice', type: 'employee', is_active: true }])
-  mockApi.services.list.mockReset().mockResolvedValue([{ id: 's1', name: 'Oil Change' }])
-  mockApi.resources.list.mockReset().mockResolvedValue([{ id: 'r1', name: 'Bay 1' }])
+    .mockResolvedValue([{ employee_id: 'e1', name: 'Alice', type: 'employee', is_active: true }])
+  mockApi.services.list.mockReset().mockResolvedValue([{ service_id: 's1', name: 'Oil Change' }])
+  mockApi.resources.list.mockReset().mockResolvedValue([{ resource_id: 'r1', name: 'Bay 1' }])
   mockApi.shifts.schedule.forDate.mockReset().mockResolvedValue([])
   mockApi.templates.listFull.mockReset().mockResolvedValue([])
 })
@@ -159,7 +159,7 @@ describe('DashboardHome — Today\'s Schedule empty state', () => {
     // WHAT: The staff-shifts link is hidden when there's only one
     //        employee — it would just show them their own shift
     mockApi.employees.list.mockResolvedValue([
-      { id: 'e1', name: 'Solo', type: 'employee', is_active: true },
+      { employee_id: 'e1', name: 'Solo', type: 'employee', is_active: true },
     ])
     render(<DashboardHome />)
     await screen.findByText(/nothing booked for today yet/i)
@@ -170,9 +170,9 @@ describe('DashboardHome — Today\'s Schedule empty state', () => {
     // WHO: Shop with 3+ techs
     // WHAT: Both "View this week" and "See staff shifts" are offered
     mockApi.employees.list.mockResolvedValue([
-      { id: 'e1', name: 'Alice', type: 'employee', is_active: true },
-      { id: 'e2', name: 'Bob', type: 'employee', is_active: true },
-      { id: 'e3', name: 'Charlie', type: 'employee', is_active: true },
+      { employee_id: 'e1', name: 'Alice', type: 'employee', is_active: true },
+      { employee_id: 'e2', name: 'Bob', type: 'employee', is_active: true },
+      { employee_id: 'e3', name: 'Charlie', type: 'employee', is_active: true },
     ])
     render(<DashboardHome />)
     await screen.findByText(/nothing booked for today yet/i)

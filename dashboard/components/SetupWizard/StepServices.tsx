@@ -31,7 +31,7 @@ export function Step1Services({
         <div className="space-y-2 mb-4">
           {services.map((svc: WizardService) => (
             <div
-              key={svc.id}
+              key={svc.service_id}
               className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
             >
               <div className="flex-1 min-w-0">
@@ -61,7 +61,7 @@ export function Step1Services({
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(svc.id) }}
+                  onClick={(e) => { e.stopPropagation(); onDelete(svc.service_id) }}
                   className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                   title="Delete"
                 >

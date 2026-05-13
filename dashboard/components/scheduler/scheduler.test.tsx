@@ -48,8 +48,8 @@ function makeAppointment(overrides: Partial<SchedulerAppointment> = {}): Schedul
 }
 
 const employees = [
-  { id: 'emp-1', name: 'Mike Jones' },
-  { id: 'emp-2', name: 'Steve Lee' },
+  { employee_id: 'emp-1', name: 'Mike Jones' },
+  { employee_id: 'emp-2', name: 'Steve Lee' },
 ];
 
 const resources = [

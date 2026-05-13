@@ -82,9 +82,9 @@ export function registerCustomerRoutes(
       );
     });
 
-    logEvent(req, 'customer_created', { customerId: res.rows[0].id, name: body.name });
+    logEvent(req, 'customer_created', { customerId: res.rows[0].customer_id, name: body.name });
     // Fire-and-forget CRM sync
-    syncCustomerToAll(pool, body.tenant_id, res.rows[0].id, 'create', req.log);
+    syncCustomerToAll(pool, body.tenant_id, res.rows[0].customer_id, 'create', req.log);
     return reply.send({ success: true, customer: res.rows[0] });
   }, 'Failed to create customer'));
 

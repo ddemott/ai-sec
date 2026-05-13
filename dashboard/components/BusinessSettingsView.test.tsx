@@ -28,7 +28,7 @@ vi.mock('@/lib/VocabularyContext', () => ({
 const mockRefreshResources = vi.fn()
 let mockResources: Array<{ resource_id: string; name: string; description?: string; is_active?: boolean }> = []
 let mockServices: Array<{ service_id: string; name: string; description?: string; duration_minutes: number }> = []
-let mockEmployees: Array<{ id: string; name: string }> = []
+let mockEmployees: Array<{ employee_id: string; name: string }> = []
 let mockStaticLoading = false
 let mockResourcesError: string | null = null
 
@@ -299,7 +299,7 @@ describe('BusinessSettingsView', () => {
   describe('Happy Paths - Solo Mode', () => {
     beforeEach(() => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = [{ service_id: 'svc-1', name: 'Haircut', duration_minutes: 30, description: 'Standard cut' }]
     })
 
@@ -476,7 +476,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows service name required error when adding empty service', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = []
 
       render(<BusinessSettingsView />)
@@ -496,7 +496,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows error when service creation fails', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = []
       mockCreateService.mockResolvedValue({ success: false })
 
@@ -519,7 +519,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows connection error when service creation throws', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = []
       mockCreateService.mockRejectedValue(new Error('Network error'))
 
@@ -542,7 +542,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows empty services message when no services exist', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = []
 
       render(<BusinessSettingsView />)
@@ -568,7 +568,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows no schedule message when shifts are empty', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockGetShiftSchedule.mockResolvedValue([])
 
       render(<BusinessSettingsView />)
@@ -620,7 +620,7 @@ describe('BusinessSettingsView', () => {
 
     test('hides Resources section in solo mode', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
 
       render(<BusinessSettingsView />)
       await waitFor(() => {
@@ -630,7 +630,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows shifts loading state', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockGetShiftSchedule.mockImplementation(() => new Promise(() => {}))
 
       render(<BusinessSettingsView />)
@@ -641,7 +641,7 @@ describe('BusinessSettingsView', () => {
 
     test('fetches shifts for solo employee', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockGetShiftSchedule.mockResolvedValue([
         { shift_date: '2026-04-09', start_time: '09:00:00', end_time: '17:00:00', is_off: false },
       ])
@@ -659,7 +659,7 @@ describe('BusinessSettingsView', () => {
 
     test('shows Off indicator for days off', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockGetShiftSchedule.mockResolvedValue([
         { shift_date: '2026-04-09', is_off: true },
       ])
@@ -684,7 +684,7 @@ describe('BusinessSettingsView', () => {
 
     test('clears service error when canceling add form', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = []
 
       render(<BusinessSettingsView />)
@@ -703,7 +703,7 @@ describe('BusinessSettingsView', () => {
 
     test('handles service without description', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = [{ service_id: 'svc-1', name: 'Quick Trim', duration_minutes: 15 }]
 
       render(<BusinessSettingsView />)
@@ -715,7 +715,7 @@ describe('BusinessSettingsView', () => {
 
     test('switches from add mode to edit mode when edit is clicked', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 })
-      mockEmployees = [{ id: 'emp-1', name: 'Dale' }]
+      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }]
       mockServices = [{ service_id: 'svc-1', name: 'Haircut', duration_minutes: 30 }]
 
       render(<BusinessSettingsView />)

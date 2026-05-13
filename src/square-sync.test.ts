@@ -397,7 +397,7 @@ describe("Square Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT new customer — return new ID
-    queryResponses.push({ rows: [{ id: 'new-local-id' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-local-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -427,7 +427,7 @@ describe("Square Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -460,7 +460,7 @@ describe("Square Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -690,7 +690,7 @@ describe("Square Sync — Pull Booking", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT appointment
-    queryResponses.push({ rows: [{ id: 'new-appt-id' }] });
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -724,7 +724,7 @@ describe("Square Sync — Pull Booking", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT appointment
-    queryResponses.push({ rows: [{ id: 'new-appt-id' }] });
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -846,12 +846,12 @@ describe("Square Sync — Full Sync with Data", () => {
     // pullSquareCustomer: sync map, phone check, INSERT customer, INSERT sync map
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
-    queryResponses.push({ rows: [{ id: 'new-local-1' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-local-1' }] });
     queryResponses.push({ rows: [] });
 
     // pullSquareBooking: booking sync map, INSERT appointment, INSERT sync map
     queryResponses.push({ rows: [] });
-    queryResponses.push({ rows: [{ id: 'new-appt-1' }] });
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-1' }] });
     queryResponses.push({ rows: [] });
 
     // UPDATE last_sync_at
@@ -900,7 +900,7 @@ describe("Square Sync — Full Sync with Data", () => {
     // Second customer succeeds: sync map, phone check, INSERT, sync map
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
-    queryResponses.push({ rows: [{ id: 'new-2' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-2' }] });
     queryResponses.push({ rows: [] });
 
     // No bookings

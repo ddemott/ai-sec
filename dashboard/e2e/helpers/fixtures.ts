@@ -126,7 +126,7 @@ export async function createEmployeeAs(
   });
   expect(res.status(), `employee ${fullName} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.employee.id as string;
+  return body.employee.employee_id as string;
 }
 
 export async function createResourceAs(
@@ -141,7 +141,7 @@ export async function createResourceAs(
   });
   expect(res.status(), `resource ${name} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.resource.id as string;
+  return body.resource.resource_id as string;
 }
 
 export async function createCustomerAs(
@@ -157,7 +157,7 @@ export async function createCustomerAs(
   });
   expect(res.status(), `customer ${name} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.customer.id as string;
+  return body.customer.customer_id as string;
 }
 
 /**
@@ -184,10 +184,10 @@ export async function seedShift(
          DO UPDATE SET start_time = EXCLUDED.start_time,
                        end_time   = EXCLUDED.end_time,
                        is_off     = false
-       RETURNING employee_schedule_id AS id`,
+       RETURNING employee_schedule_id`,
     [tenantId, employeeId, date, hours.start, hours.end]
   );
-  return res.rows[0].id as string;
+  return res.rows[0].employee_schedule_id as string;
 }
 
 /**
@@ -311,7 +311,7 @@ export async function seedAppointment(
   const res = await pool.query(
     `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING appointment_id AS id`,
+       RETURNING appointment_id`,
     [
       tenantId,
       params.resourceId,
@@ -322,5 +322,5 @@ export async function seedAppointment(
       params.description,
     ]
   );
-  return res.rows[0].id as string;
+  return res.rows[0].appointment_id as string;
 }

@@ -92,7 +92,7 @@ export default function ShiftManagementView() {
   // Auto-select first employee when list loads
   useEffect(() => {
     if (!selectedEmployeeId && employees.length > 0) {
-      setSelectedEmployeeId(employees[0].id)
+      setSelectedEmployeeId(employees[0].employee_id)
     }
   }, [employees, selectedEmployeeId])
 
@@ -279,11 +279,11 @@ export default function ShiftManagementView() {
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {activeEmployees.map(emp => (
               <button
-                key={emp.id}
-                onClick={() => { setSelectedEmployeeId(emp.id); hasAutoScrolled.current = false }}
-                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.id ? 'text-white shadow-lg scale-105' : ''}`}
-                style={selectedEmployeeId === emp.id ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
-                data-testid={`shift-employee-${emp.id}`}
+                key={emp.employee_id}
+                onClick={() => { setSelectedEmployeeId(emp.employee_id); hasAutoScrolled.current = false }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedEmployeeId === emp.employee_id ? 'text-white shadow-lg scale-105' : ''}`}
+                style={selectedEmployeeId === emp.employee_id ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
+                data-testid={`shift-employee-${emp.employee_id}`}
               >
                 {emp.name}
               </button>

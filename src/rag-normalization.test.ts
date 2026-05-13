@@ -84,10 +84,10 @@ describe("RAG Normalization Layer", () => {
     // Create a customer first
     const custRes = await client.query(
       `INSERT INTO customers (tenant_id, first_name, last_name, phone)
-       VALUES ($1, 'Test', 'Customer', '+15551234567') RETURNING customer_id AS id`,
+       VALUES ($1, 'Test', 'Customer', '+15551234567') RETURNING customer_id`,
       [tenantId]
     );
-    const customerId = custRes.rows[0].id;
+    const customerId = custRes.rows[0].customer_id;
 
     const original = "Customer called about getting their brakes done, mentioned they like working with Mike";
     const normalized = "Customer inquired about brake service. Prefers technician Mike.";

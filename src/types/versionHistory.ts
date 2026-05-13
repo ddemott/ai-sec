@@ -61,7 +61,7 @@ export interface RecordHistoryResponse {
 }
 
 export interface DeletedRecord {
-  id: string;
+  record_id: string;
   tenant_id: string;
   table_name: VersionedTable;
   name: string | null;

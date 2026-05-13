@@ -64,10 +64,10 @@ describe("Coverage Gap Detection", () => {
         serviceIds: string[]
     ) {
         const res = await client.query(
-            "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, $2, $3, $4, $5) RETURNING employee_id as id",
+            "INSERT INTO employees (tenant_id, name, first_name, last_name, skills) VALUES ($1, $2, $3, $4, $5) RETURNING employee_id",
             [tenantId, name, name.split(' ')[0], name.split(' ')[1] || '', skills]
         );
-        const empId = res.rows[0].id;
+        const empId = res.rows[0].employee_id;
 
         for (const dow of shiftDays) {
             const shiftDate = TEST_WEEK_BY_DOW[dow];
@@ -89,10 +89,10 @@ describe("Coverage Gap Detection", () => {
 
     async function seedService(name: string, duration: number, assignResource = true) {
         const res = await client.query(
-            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, $3) RETURNING service_id as id",
+            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, $3) RETURNING service_id",
             [tenantId, name, duration]
         );
-        const svcId = res.rows[0].id;
+        const svcId = res.rows[0].service_id;
 
         if (assignResource) {
             await client.query(

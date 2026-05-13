@@ -391,7 +391,7 @@ export default function VoiceCallsView() {
                           <h5 className="text-sm font-medium text-gray-700 mb-2">Upcoming</h5>
                           <div className="space-y-2">
                             {customerContext.appointment_history.upcoming_appointments.map(apt => (
-                              <div key={apt.id} className="rounded p-2 text-sm" style={{ backgroundColor: 'var(--accent-muted)' }}>
+                              <div key={apt.appointment_id} className="rounded p-2 text-sm" style={{ backgroundColor: 'var(--accent-muted)' }}>
                                 <p className="font-medium">
                                   {new Date(apt.start_time).toLocaleDateString()} at{' '}
                                   {new Date(apt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

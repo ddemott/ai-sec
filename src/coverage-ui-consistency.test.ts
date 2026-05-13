@@ -110,19 +110,19 @@ describe("Coverage Backend ↔ Dashboard Consistency", () => {
 
     async function seedService(name: string): Promise<string> {
         const res = await client.query(
-            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, 30) RETURNING service_id as id",
+            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, 30) RETURNING service_id",
             [tenantId, name]
         );
-        const sid = res.rows[0].id;
+        const sid = res.rows[0].service_id;
         // Make sure resource→service mapping exists so the new RPC's
         // open-hours math doesn't drop the service for resource reasons
         // (the schedule-only RPC actually doesn't filter on resource
         // capability, but we wire it anyway to mirror real seed data).
-        const r = await client.query("SELECT resource_id as id FROM resources WHERE tenant_id = $1 LIMIT 1", [tenantId]);
+        const r = await client.query("SELECT resource_id FROM resources WHERE tenant_id = $1 LIMIT 1", [tenantId]);
         if (r.rows[0]) {
             await client.query(
                 "INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES ($1, $2, $3)",
-                [tenantId, sid, r.rows[0].id]
+                [tenantId, sid, r.rows[0].resource_id]
             );
         }
         return sid;
@@ -136,10 +136,10 @@ describe("Coverage Backend ↔ Dashboard Consistency", () => {
         serviceIds: string[]
     ): Promise<string> {
         const res = await client.query(
-            "INSERT INTO employees (tenant_id, name) VALUES ($1, $2) RETURNING employee_id as id",
+            "INSERT INTO employees (tenant_id, name) VALUES ($1, $2) RETURNING employee_id",
             [tenantId, name]
         );
-        const eid = res.rows[0].id;
+        const eid = res.rows[0].employee_id;
         for (const dow of shiftDows) {
             await client.query(
                 `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)

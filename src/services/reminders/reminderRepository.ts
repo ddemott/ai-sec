@@ -30,7 +30,7 @@ export class ReminderRepository {
 
     // Transform from camelCase (AppointmentForReminder) to snake_case (Appointment)
     return {
-      id: appointment.id,
+      appointment_id: appointment.appointmentId,
       tenant_id: appointment.tenantId,
       customer_id: appointment.customerId,
       customer_name: appointment.customerName,

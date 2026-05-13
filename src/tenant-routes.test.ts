@@ -84,7 +84,7 @@ beforeEach(() => {
 describe('DELETE /tenants/:id — happy paths', () => {
   it('HAPPY: deletes the tenant when the row exists and returns success', async () => {
     // WHO: super-admin removing a churned customer's tenant
-    // WHAT: route runs `DELETE FROM tenants WHERE tenant_id = $1 RETURNING id`,
+    // WHAT: route runs `DELETE FROM tenants WHERE tenant_id = $1 RETURNING tenant_id`,
     //       sees rowCount=1 via assertRowAffected, returns { success: true }
     // WHEN: confirm-by-name dialog has resolved + admin confirmed delete
     // WHERE: src/routes/tenants.ts → app.delete('/tenants/:id', ...)
@@ -93,7 +93,7 @@ describe('DELETE /tenants/:id — happy paths', () => {
     //      (so a race-condition double-delete returns 404 not silent success),
     //      and (c) emit the audit log event so support can trace which user
     //      destroyed which tenant
-    queryResponses.push({ rows: [{ id: TENANT_ID_A }], rowCount: 1 });
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 });
 
     const res = await app.inject({ method: 'DELETE', url: `/tenants/${TENANT_ID_A}` });
 

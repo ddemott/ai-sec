@@ -8,9 +8,9 @@ const mockRefreshStaticData = vi.fn();
 const mockRefreshScheduler = vi.fn();
 
 const mockEmployees = [
-  { id: 'emp-1', tenant_id: 't1', name: 'Mike Jones', skills: ['Oil Change', 'Tire Rotation'], is_active: true, type: 'employee' as const },
-  { id: 'emp-2', tenant_id: 't1', name: 'Carlos Rivera', skills: ['Tire Rotation', 'Balancing'], is_active: true, type: 'employee' as const },
-  { id: 'emp-3', tenant_id: 't1', name: 'Admin User', skills: [], is_active: true, type: 'user' as const },
+  { employee_id: 'emp-1', tenant_id: 't1', name: 'Mike Jones', skills: ['Oil Change', 'Tire Rotation'], is_active: true, type: 'employee' as const },
+  { employee_id: 'emp-2', tenant_id: 't1', name: 'Carlos Rivera', skills: ['Tire Rotation', 'Balancing'], is_active: true, type: 'employee' as const },
+  { employee_id: 'emp-3', tenant_id: 't1', name: 'Admin User', skills: [], is_active: true, type: 'user' as const },
 ];
 
 const mockServices = [

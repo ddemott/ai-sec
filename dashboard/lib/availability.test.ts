@@ -52,9 +52,9 @@ describe('buildMappingMaps', () => {
 
 describe('filterEmployeesByService', () => {
   const employees = [
-    { id: 'emp-mike', name: 'Mike' },
-    { id: 'emp-carlos', name: 'Carlos' },
-    { id: 'emp-dana', name: 'Dana' },
+    { employee_id: 'emp-mike', name: 'Mike' },
+    { employee_id: 'emp-carlos', name: 'Carlos' },
+    { employee_id: 'emp-dana', name: 'Dana' },
   ];
   const { serviceEmployee } = buildMappingMaps(seRows, srRows);
 
@@ -66,8 +66,8 @@ describe('filterEmployeesByService', () => {
 
   test('filters to only mapped employees when service has assignments', () => {
     const out = filterEmployeesByService(employees, 'svc-1', serviceEmployee);
-    expect(out.map((e) => e.id)).toEqual(['emp-mike', 'emp-carlos']);
-    expect(out.find((e) => e.id === 'emp-dana')).toBeUndefined();
+    expect(out.map((e) => e.employee_id)).toEqual(['emp-mike', 'emp-carlos']);
+    expect(out.find((e) => e.employee_id === 'emp-dana')).toBeUndefined();
     // WHO: front-desk operator picking Mike vs Carlos vs Dana for a Tire Mount | WHAT: Dana drops out of the dropdown because she has no svc-1 row | WHEN: service is selected | WHERE: filterEmployeesByService skill gate | WHY: this is the headline feature — pre-fix, Dana was selectable, the operator booked her, then Mike's customer arrived and Dana didn't know how to mount tires; this filter prevents that operational failure at the UI level
   });
 

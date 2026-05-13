@@ -24,8 +24,8 @@ function win(from: string, to: string): TimeWindow {
   return { from: new Date(from), to: new Date(to) };
 }
 
-const resource: ResourceCandidate = { id: 'bay-1', capabilities: ['oil-change'] };
-const employee: EmployeeCandidate = { id: 'mike', skills: ['oil-change'] };
+const resource: ResourceCandidate = { resource_id: 'bay-1', capabilities: ['oil-change'] };
+const employee: EmployeeCandidate = { employee_id: 'mike', skills: ['oil-change'] };
 
 // Weekly pattern: Mike works Mon-Fri 8-5
 const patternShifts: Shift[] = [1, 2, 3, 4, 5].map(dow => ({
@@ -172,7 +172,7 @@ describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
       // WHO: Mike (off) and Sarah (no override, pattern applies)
       // WHAT: Sarah should still be available even though Mike is off
       // WHY: Overrides are per-employee
-      const sarah: EmployeeCandidate = { id: 'sarah', skills: ['oil-change'] };
+      const sarah: EmployeeCandidate = { employee_id: 'sarah', skills: ['oil-change'] };
       const sarahShifts: Shift[] = [1, 2, 3, 4, 5].map(dow => ({
         employee_id: 'sarah',
         day_of_week: dow,

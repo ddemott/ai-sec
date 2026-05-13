@@ -51,7 +51,7 @@ const OWNER_EMPLOYEE_ID = '11111111-2222-3333-8444-555555555555'
 const RESOURCE_ID = 'a1b2c3d4-e5f6-4789-ab12-cdef34567890'
 
 const MOCK_SERVICES = [
-  { id: 'svc-1', name: 'Oil Change', duration_minutes: 30, price: 50 },
+  { service_id: 'svc-1', name: 'Oil Change', duration_minutes: 30, price: 50 },
 ]
 
 /**
@@ -79,7 +79,7 @@ function setupFetchMock() {
           json: async () => ({
             success: true,
             employee: {
-              id: OWNER_EMPLOYEE_ID,
+              employee_id: OWNER_EMPLOYEE_ID,
               name: 'Solo Owner',
               first_name: 'Solo',
               last_name: 'Owner',

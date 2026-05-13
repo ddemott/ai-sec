@@ -90,7 +90,7 @@ export interface ReminderData {
  * Includes both raw DB fields (snake_case) and convenience fields (for reminders).
  */
 export interface Appointment {
-  id: string;
+  appointment_id: string;
   tenant_id: string;
   customer_id?: string;
   service_id?: string;
@@ -122,7 +122,7 @@ export interface Appointment {
  * Uses camelCase to match ReminderService expectations.
  */
 export interface AppointmentForReminder {
-  id: string;
+  appointmentId: string;
   tenantId: string;
   customerId?: string;
   customerEmail?: string;

@@ -50,10 +50,10 @@ describe("Coverage Gaps", () => {
             const res = await client.query(
                 `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description)
                  VALUES ($1, $2, $3, '2026-04-01 09:00:00+00', '2026-04-01 10:00:00+00', 'Oil change')
-                 RETURNING appointment_id AS id`,
+                 RETURNING appointment_id`,
                 [tenantId, resourceId, customerId]
             );
-            appointmentId = res.rows[0].id;
+            appointmentId = res.rows[0].appointment_id;
         });
 
         it("should update start_time and end_time", async () => {
@@ -168,10 +168,10 @@ describe("Coverage Gaps", () => {
             const res = await client.query(
                 `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, status)
                  VALUES ($1, $2, $3, '2026-04-05 10:00:00+00', '2026-04-05 11:00:00+00', 'scheduled')
-                 RETURNING appointment_id AS id`,
+                 RETURNING appointment_id`,
                 [tenantId, resourceId, customerId]
             );
-            appointmentId = res.rows[0].id;
+            appointmentId = res.rows[0].appointment_id;
         });
 
         it("should update status to canceled", async () => {
@@ -184,7 +184,7 @@ describe("Coverage Gaps", () => {
         it("should still exist after cancellation", async () => {
             if (!dbAvailable) return;
             await client.query("UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1", [appointmentId]);
-            const res = await client.query("SELECT appointment_id AS id, status FROM appointments WHERE appointment_id = $1", [appointmentId]);
+            const res = await client.query("SELECT appointment_id, status FROM appointments WHERE appointment_id = $1", [appointmentId]);
             expect(res.rows.length).toBe(1);
             expect(res.rows[0].status).toBe("canceled");
         });
@@ -203,11 +203,11 @@ describe("Coverage Gaps", () => {
 
             // Calendar filter: exclude canceled
             const res = await client.query(
-                "SELECT appointment_id AS id FROM appointments WHERE tenant_id = $1 AND status != 'canceled' AND is_deleted = false",
+                "SELECT appointment_id FROM appointments WHERE tenant_id = $1 AND status != 'canceled' AND is_deleted = false",
                 [tenantId]
             );
             expect(res.rows.length).toBe(1);
-            expect(res.rows[0].id).not.toBe(appointmentId);
+            expect(res.rows[0].appointment_id).not.toBe(appointmentId);
         });
     });
 });

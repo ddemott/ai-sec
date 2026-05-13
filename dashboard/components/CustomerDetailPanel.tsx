@@ -42,7 +42,7 @@ interface EditForm {
 }
 
 interface CallSummary {
-  id: string
+  call_summary_id: string
   customer_id: string
   summary: string
   call_timestamp?: string
@@ -352,7 +352,7 @@ export function CustomerDetailPanel({
                   </h3>
                   <div className="space-y-4">
                     {summaries.length > 0 ? summaries.map((s) => (
-                      <div key={s.id} className="p-5 rounded-xl shadow-sm" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+                      <div key={s.call_summary_id} className="p-5 rounded-xl shadow-sm" style={{ border: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
                         <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
                           <span className="font-bold uppercase" style={{ color: 'var(--accent-soft)' }}>AI Summary</span>
                           <span>{new Date(s.call_timestamp || s.created_at || '').toLocaleDateString()}</span>

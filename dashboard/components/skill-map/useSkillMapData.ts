@@ -32,13 +32,14 @@ export type LinkingState = {
   fromType: NodeType
 } | null
 
-interface SkillMapEntity { id: string; name: string; type?: string }
+interface SkillMapEmployee { employee_id: string; name: string; type?: string }
+interface SkillMapResource { resource_id: string; name: string }
 interface ServiceEntity { service_id: string; name: string }
 interface ServiceMappingRecord { service_id: string; employee_id?: string; resource_id?: string }
 
 export function useSkillMapData(
-  employees: SkillMapEntity[],
-  resources: SkillMapEntity[],
+  employees: SkillMapEmployee[],
+  resources: SkillMapResource[],
   services: ServiceEntity[],
   tenantId: string | null,
   onDataChanged?: () => void
@@ -77,18 +78,18 @@ export function useSkillMapData(
     const empNodes: SkillMapNode[] = (employees || [])
       .filter(e => e.type !== 'user')
       .map(e => ({
-        id: `emp-${e.id}`,
+        id: `emp-${e.employee_id}`,
         type: 'employee' as NodeType,
         name: e.name,
-        rawId: e.id,
+        rawId: e.employee_id,
       }))
 
     // Build resource nodes
     const resNodes: SkillMapNode[] = (resources || []).map(r => ({
-      id: `res-${r.id}`,
+      id: `res-${r.resource_id}`,
       type: 'resource' as NodeType,
       name: r.name,
-      rawId: r.id,
+      rawId: r.resource_id,
     }))
 
     // Build service nodes (middle column — these ARE the "skills" in the map)

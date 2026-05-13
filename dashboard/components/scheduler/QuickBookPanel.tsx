@@ -12,7 +12,7 @@ import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 import { ConflictModal, type BookingConflict, type AvailableAlternative } from './ConflictModal';
 
 interface QuickBookCustomer { customer_id: string; name?: string; phone?: string }
-interface QuickBookEmployee { id: string; name: string; skills?: string[] }
+interface QuickBookEmployee { employee_id: string; name: string; skills?: string[] }
 interface QuickBookResource { resource_id: string; name: string }
 interface QuickBookService { service_id: string; name: string; duration_minutes?: number }
 
@@ -88,7 +88,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   // operator never submits an employee/resource that's no longer in the
   // dropdown but whose id still lives in form state.
   useEffect(() => {
-    if (employeeId && !eligibleEmployees.some((e) => String(e.id) === employeeId)) {
+    if (employeeId && !eligibleEmployees.some((e) => String(e.employee_id) === employeeId)) {
       setEmployeeId('');
     }
     if (resourceId && !eligibleResources.some((r) => r.resource_id === resourceId)) {
@@ -124,7 +124,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       // override before submit.)
       return a.name.localeCompare(b.name);
     });
-    setEmployeeId(String(sorted[0].id));
+    setEmployeeId(String(sorted[0].employee_id));
     autoSuggestedRef.current = serviceId;
   }, [serviceId, employeeId, eligibleEmployees]);
 
@@ -277,7 +277,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           onChange={(e) => setEmployeeId(e.target.value)}
           options={[
             { label: 'Unassigned', value: '' },
-            ...eligibleEmployees.map((e) => ({ label: e.name, value: String(e.id) })),
+            ...eligibleEmployees.map((e) => ({ label: e.name, value: String(e.employee_id) })),
           ]}
           data-testid="quick-book-employee"
         />

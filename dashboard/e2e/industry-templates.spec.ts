@@ -210,7 +210,7 @@ async function createCustomer(
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
-    return (body.customer.customer_id ?? body.customer.id) as string;
+    return body.customer.customer_id as string;
 }
 
 test.beforeAll(() => {

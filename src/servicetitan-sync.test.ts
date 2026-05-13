@@ -370,7 +370,7 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT new customer — return new ID
-    queryResponses.push({ rows: [{ id: 'new-local-id' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-local-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -400,7 +400,7 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -433,7 +433,7 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -699,7 +699,7 @@ describe("ServiceTitan Sync — Pull Job", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT appointment
-    queryResponses.push({ rows: [{ id: 'new-appt-id' }] });
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -730,7 +730,7 @@ describe("ServiceTitan Sync — Pull Job", () => {
 
     queryResponses.push({ rows: [{ local_id: 'local-cust-1' }] }); // customer sync
     queryResponses.push({ rows: [] }); // job sync map — new
-    queryResponses.push({ rows: [{ id: 'new-appt' }] }); // INSERT
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt' }] }); // INSERT
     queryResponses.push({ rows: [] }); // INSERT sync map
 
     const jobData: servicetitan.ServiceTitanJob = {
@@ -944,13 +944,13 @@ describe("ServiceTitan Sync — Full Sync with Data", () => {
     // pullServiceTitanCustomer: sync map, phone check, INSERT customer, INSERT sync map
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
-    queryResponses.push({ rows: [{ id: 'new-local-1' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-local-1' }] });
     queryResponses.push({ rows: [] });
 
     // pullServiceTitanJob: customer sync, job sync map, INSERT appointment, INSERT sync map
     queryResponses.push({ rows: [{ local_id: 'new-local-1' }] });
     queryResponses.push({ rows: [] });
-    queryResponses.push({ rows: [{ id: 'new-appt-1' }] });
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-1' }] });
     queryResponses.push({ rows: [] });
 
     // UPDATE last_sync_at

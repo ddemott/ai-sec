@@ -47,7 +47,7 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
 
         // Simulate the catalog query (same SQL as the endpoint uses)
         const res = await client.query(
-            `SELECT service_id as id, name, subtitle, description, duration_minutes, price
+            `SELECT service_id, name, subtitle, description, duration_minutes, price
              FROM services WHERE tenant_id = $1 ORDER BY name ASC`,
             [tenantId]
         );
@@ -66,12 +66,12 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
 
         // Create a new tenant with no services
         const tRes = await client.query(
-            `INSERT INTO tenants (name, business_type) VALUES ('Empty Shop', 'auto-shop') RETURNING tenant_id AS id`
+            `INSERT INTO tenants (name, business_type) VALUES ('Empty Shop', 'auto-shop') RETURNING tenant_id`
         );
-        const emptyTenantId = tRes.rows[0].id;
+        const emptyTenantId = tRes.rows[0].tenant_id;
 
         const res = await client.query(
-            `SELECT service_id as id, name, subtitle, description, duration_minutes, price
+            `SELECT service_id, name, subtitle, description, duration_minutes, price
              FROM services WHERE tenant_id = $1 ORDER BY name ASC`,
             [emptyTenantId]
         );
@@ -108,7 +108,7 @@ describe("Service Catalog endpoint (GET /services/catalog)", () => {
         const serviceId = await createService(client, tenantId, "Legacy Service", 60, 100);
 
         const res = await client.query(
-            `SELECT service_id as id, name, subtitle, description, duration_minutes, price
+            `SELECT service_id, name, subtitle, description, duration_minutes, price
              FROM services WHERE service_id = $1`,
             [serviceId]
         );

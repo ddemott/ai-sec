@@ -69,7 +69,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
 
 export const MOCK_SUMMARIES = [
   {
-    id: 's1',
+    call_summary_id: 's1',
     customer_id: MOCK_CUSTOMERS[0].customer_id,
     summary: 'Bob called to ask about pricing for winter tires.',
     created_at: new Date(Date.now() - 86400000).toISOString()

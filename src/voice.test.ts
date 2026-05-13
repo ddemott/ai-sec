@@ -405,7 +405,7 @@ describe('Voice Routes — Happy Paths', () => {
     // WHY: Prevents notes from being attached to deleted customers, which
     //      would hide audit trail in the dashboard (deleted view excludes
     //      them from default filters).
-    queryResponses.push({ rows: [{ id: CUSTOMER_ID }] });
+    queryResponses.push({ rows: [{ customer_id: CUSTOMER_ID }] });
     queryResponses.push({ rows: [{ added: true }] });
 
     await app.inject({
@@ -421,7 +421,7 @@ describe('Voice Routes — Happy Paths', () => {
 
   it('10. POST /voice/customer/note adds note to customer', async () => {
     // Customer exists check
-    queryResponses.push({ rows: [{ id: CUSTOMER_ID }] });
+    queryResponses.push({ rows: [{ customer_id: CUSTOMER_ID }] });
     // add_customer_note function
     queryResponses.push({ rows: [{ added: true }] });
 

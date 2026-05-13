@@ -5,7 +5,7 @@ import type { SchedulerAppointment } from './useSchedulerData';
 import { formatHour } from '../../lib/utils';
 
 interface SwimLaneShift { id: string; start_time?: string; end_time?: string }
-interface SwimLaneEmployee { id: string; name: string }
+interface SwimLaneEmployee { employee_id: string; name: string }
 
 interface StaffSwimLaneViewProps {
   employees: SwimLaneEmployee[];
@@ -402,7 +402,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     >
       <TimeGrid hourWidth={hourWidth} />
       {employees.map((emp, empIdx) => {
-        const empId = String(emp.id);
+        const empId = String(emp.employee_id);
         const empAppointments = appointmentsByEmployee.get(empId) || [];
         const empShifts = shiftsByEmployee.get(empId) || [];
         const colorClass = getEmployeeColor(empId, empIdx);

@@ -55,7 +55,7 @@ export interface CoverageItem {
 }
 
 export interface WizardService {
-  id: string
+  service_id: string
   name: string
   description?: string
   duration_minutes: number
@@ -64,7 +64,7 @@ export interface WizardService {
 }
 
 export interface WizardResource {
-  id: string
+  resource_id: string
   name: string
   description?: string
   is_deleted?: boolean
@@ -72,7 +72,7 @@ export interface WizardResource {
 }
 
 export interface WizardEmployee {
-  id: string
+  employee_id: string
   name: string
   first_name?: string
   last_name?: string

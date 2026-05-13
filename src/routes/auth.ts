@@ -173,7 +173,7 @@ export function registerAuthRoutes(
       await client.query('BEGIN');
       try {
         const r = await client.query(
-          `SELECT password_reset_id AS id, user_id FROM password_resets
+          `SELECT password_reset_id, user_id FROM password_resets
            WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
            FOR UPDATE`,
           [tokenHash]
@@ -182,7 +182,7 @@ export function registerAuthRoutes(
           await client.query('ROLLBACK');
           return { invalid: true };
         }
-        const { id: resetId, user_id: userId } = r.rows[0];
+        const { password_reset_id: resetId, user_id: userId } = r.rows[0];
         const bcrypt = await import('bcrypt');
         const hash = await bcrypt.hash(new_password, 10);
         await client.query(

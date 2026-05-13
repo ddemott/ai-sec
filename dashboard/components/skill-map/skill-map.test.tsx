@@ -13,14 +13,14 @@ import { Api } from '../../lib/api'
 
 // --- Mock data ---
 const mockEmployees = [
-  { id: 'emp-uuid-1', name: 'Alice', type: 'employee' },
-  { id: 'emp-uuid-2', name: 'Bob', type: 'employee' },
-  { id: 'emp-uuid-3', name: 'Admin', type: 'user' }, // should be filtered out
+  { employee_id: 'emp-uuid-1', name: 'Alice', type: 'employee' },
+  { employee_id: 'emp-uuid-2', name: 'Bob', type: 'employee' },
+  { employee_id: 'emp-uuid-3', name: 'Admin', type: 'user' }, // should be filtered out
 ]
 
 const mockResources = [
-  { id: 'res-uuid-1', name: 'Bay 1' },
-  { id: 'res-uuid-2', name: 'Bay 2' },
+  { resource_id: 'res-uuid-1', name: 'Bay 1' },
+  { resource_id: 'res-uuid-2', name: 'Bay 2' },
 ]
 
 const mockServices = [

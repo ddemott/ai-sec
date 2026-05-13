@@ -80,10 +80,10 @@ async function createServiceWithRequirements(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO services (tenant_id, name, duration_minutes, required_skills, required_resources)
-         VALUES ($1, $2, $3, $4, $5) RETURNING service_id as id`,
+         VALUES ($1, $2, $3, $4, $5) RETURNING service_id`,
         [tenantId, name, durationMinutes, requiredSkills, requiredResources]
     );
-    return res.rows[0].id;
+    return res.rows[0].service_id;
 }
 
 async function createResourceWithCapabilities(
@@ -94,10 +94,10 @@ async function createResourceWithCapabilities(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO resources (tenant_id, name, capabilities)
-         VALUES ($1, $2, $3) RETURNING resource_id as id`,
+         VALUES ($1, $2, $3) RETURNING resource_id`,
         [tenantId, name, capabilities]
     );
-    return res.rows[0].id;
+    return res.rows[0].resource_id;
 }
 
 // ── RPC wrapper ──────────────────────────────────────────────────────

@@ -198,7 +198,7 @@ describe('agentTools auth', () => {
     process.env.AGENT_SECRET = 'new-primary-secret-32+chars';
     process.env.AGENT_SECRET_OLD = SECRET;
     const { app } = buildApp({
-      queryResponses: [{ rows: [{ id: 'svc-1', name: 'Test', duration_minutes: 30 }] }],
+      queryResponses: [{ rows: [{ service_id: 'svc-1', name: 'Test', duration_minutes: 30 }] }],
     });
     const res = await app.inject({
       method: 'POST',
@@ -365,7 +365,7 @@ describe('agentTools /customer-context', () => {
     //        recent summaries together
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'cust1', name: 'Alice' }] },
+        { rows: [{ customer_id: 'cust1', name: 'Alice' }] },
         { rows: [{ summary: 'Booked oil change' }, { summary: 'Asked about winter tires' }] },
       ],
     });
@@ -603,7 +603,7 @@ describe('agentTools /book-appointment', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] },                           // existing-customer SELECT
-        { rows: [{ id: 'new-customer-id' }] },  // INSERT new customer
+        { rows: [{ customer_id: 'new-customer-id' }] },  // INSERT new customer
         {
           rows: [
             { success: true, appointment_id: 'appt-1', error_message: null },
@@ -637,7 +637,7 @@ describe('agentTools /book-appointment', () => {
     // WHAT: Route must short-circuit the INSERT when SELECT returns a row
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'existing-cust' }] },
+        { rows: [{ customer_id: 'existing-cust' }] },
         {
           rows: [
             { success: true, appointment_id: 'appt-2', error_message: null },
@@ -664,7 +664,7 @@ describe('agentTools /book-appointment', () => {
     // WHY: Voice flow needs a string the LLM can speak — not an HTTP 500
     const { app } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'c1' }] },
+        { rows: [{ customer_id: 'c1' }] },
         {
           rows: [
             {
@@ -784,7 +784,7 @@ describe('agentTools /book-appointment', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         // Step 1 inside getOrCreateCustomerByPhone: SELECT customer
-        { rows: [{ id: 'existing-cust' }] },
+        { rows: [{ customer_id: 'existing-cust' }] },
         // Step 2: book_appointment_atomic returns overlap error
         {
           rows: [
@@ -850,7 +850,7 @@ describe('agentTools /book-appointment', () => {
     //       on "already booked" strings.
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'existing-cust' }] },
+        { rows: [{ customer_id: 'existing-cust' }] },
         {
           rows: [
             {
@@ -889,7 +889,7 @@ describe('agentTools /scheduling-options', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ resource_id: 'bay-1', capabilities: ['lift', 'oil'] }] },
-        { rows: [{ id: 'emp-1', skills: ['oil_change'] }] },
+        { rows: [{ employee_id: 'emp-1', skills: ['oil_change'] }] },
         { rows: [] }, // no existing appointments
         {
           rows: [
@@ -926,7 +926,7 @@ describe('agentTools /scheduling-options', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ resource_id: 'bay-1', capabilities: ['lift'] }] },
-        { rows: [{ id: 'emp-1', skills: ['oil_change'] }] }, // lacks tire_rotation
+        { rows: [{ employee_id: 'emp-1', skills: ['oil_change'] }] }, // lacks tire_rotation
         { rows: [] },
         {
           rows: [
@@ -980,7 +980,7 @@ describe('agentTools /scheduling-options', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ resource_id: 'bay-1', capabilities: ['oil'] }] },
-        { rows: [{ id: 'emp-1', skills: ['oil_change'] }] },
+        { rows: [{ employee_id: 'emp-1', skills: ['oil_change'] }] },
         { rows: [] }, // no existing appointments
         {
           rows: [
@@ -1029,7 +1029,7 @@ describe('agentTools /scheduling-options', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ resource_id: 'bay-1', capabilities: ['oil'] }] },
-        { rows: [{ id: 'emp-1', skills: ['oil_change'] }] },
+        { rows: [{ employee_id: 'emp-1', skills: ['oil_change'] }] },
         { rows: [] },
         {
           rows: [
@@ -1069,7 +1069,7 @@ describe('agentTools /book-with-scheduling', () => {
       queryResponses: [
         // The customerLookup helper runs first (separate transaction) — an
         // existing customer match short-circuits the INSERT branch.
-        { rows: [{ id: 'cust-1' }] },
+        { rows: [{ customer_id: 'cust-1' }] },
         {
           rows: [
             {
@@ -1118,7 +1118,7 @@ describe('agentTools /book-with-scheduling', () => {
     const { app } = buildApp({
       queryResponses: [
         // customerLookup helper finds an existing row before the RPC fires.
-        { rows: [{ id: 'cust-occupied' }] },
+        { rows: [{ customer_id: 'cust-occupied' }] },
         {
           rows: [
             {
@@ -1165,7 +1165,7 @@ describe('agentTools /book-with-scheduling', () => {
     // WHAT: Route must never crash the agent — fall back cleanly
     const { app } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'cust-fallback' }] }, // customer SELECT succeeds first
+        { rows: [{ customer_id: 'cust-fallback' }] }, // customer SELECT succeeds first
         { rows: [] },                         // RPC returns no row
         // findNextAvailableSlots: tz + slots
         { rows: [{ timezone: 'America/Chicago' }] },
@@ -1457,7 +1457,7 @@ describe('agentTools /send-verification-code', () => {
         { rows: [{ inbound_phone: '+15550001000' }] }, // tenant lookup
         { rows: [{ c: '0' }] }, // per-phone count (0 sends in last hour)
         { rows: [{ c: '5' }] }, // per-tenant count (well under 100/day)
-        { rows: [{ id: 'verif-1' }] }, // INSERT phone_verifications
+        { rows: [{ phone_verification_id: 'verif-1' }] }, // INSERT phone_verifications
       ],
     });
     const res = await post(app, '/agent-tools/send-verification-code', {
@@ -1626,7 +1626,7 @@ describe('agentTools /send-verification-code', () => {
         { rows: [{ inbound_phone: '+15550001000' }] },
         { rows: [{ c: '0' }] },
         { rows: [{ c: '0' }] },
-        { rows: [{ id: 'verif-1' }] }, // INSERT still happens
+        { rows: [{ phone_verification_id: 'verif-1' }] }, // INSERT still happens
       ],
     });
     const res = await post(app, '/agent-tools/send-verification-code', {
@@ -1824,7 +1824,7 @@ describe('agentTools customer persistence on booking failure', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] },                            // SELECT — no existing row
-        { rows: [{ id: 'newly-created' }] },     // INSERT — customer persists
+        { rows: [{ customer_id: 'newly-created' }] },     // INSERT — customer persists
         {
           rows: [
             {
@@ -1850,7 +1850,7 @@ describe('agentTools customer persistence on booking failure', () => {
     // the RPC. If a future refactor put RPC first, queries would be in a
     // different order and these would fail.
     expect(queries).toHaveLength(3);
-    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Carol']);
     expect(queries[2].text).toContain('book_appointment_atomic');
@@ -1869,7 +1869,7 @@ describe('agentTools customer persistence on booking failure', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] },                            // SELECT — no existing row
-        { rows: [{ id: 'sched-customer' }] },    // INSERT — customer persists
+        { rows: [{ customer_id: 'sched-customer' }] },    // INSERT — customer persists
         {
           rows: [
             {
@@ -1911,7 +1911,7 @@ describe('agentTools customer persistence on booking failure', () => {
     // lookup + slots SQL. The first three are the persistence contract;
     // the trailing two are the next-available alternatives lookup.
     expect(queries.length).toBeGreaterThanOrEqual(3);
-    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);
     expect(queries[2].text).toContain('book_with_scheduling_atomic');
@@ -1923,7 +1923,7 @@ describe('agentTools customer persistence on booking failure', () => {
     //       (mirroring the equivalent test for book-appointment above)
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ id: 'cust-known' }] },
+        { rows: [{ customer_id: 'cust-known' }] },
         {
           rows: [
             {
@@ -1957,7 +1957,7 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(queries).toHaveLength(2);
-    expect(queries[0].text).toContain('SELECT customer_id AS id FROM customers');
+    expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('book_with_scheduling_atomic');
   });
 });

@@ -11,7 +11,7 @@ interface FocusShift { start_time?: string; end_time?: string }
 interface EmployeeDayFocusPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  employee: { id: string; name: string } | null;
+  employee: { employee_id: string; name: string } | null;
   appointments: SchedulerAppointment[];
   shifts: FocusShift[];
   onAppointmentClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;

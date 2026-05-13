@@ -493,7 +493,7 @@ export function registerVersionHistoryRoutes(
       )[table];
       const result = await client.query<DeletedRecord>(
         `SELECT
-          t.${pkColumn} AS id,
+          t.${pkColumn} AS record_id,
           t.tenant_id,
           '${table}' as table_name,
           t.name,

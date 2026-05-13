@@ -76,7 +76,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
     await withClient(async (client) => {
       // Get an employee with skills
       const empRes = await client.query(
-        "SELECT employee_id as id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (empRes.rows.length === 0) return; // skip if no employees
@@ -90,7 +90,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
 
       await client.query(
         "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3, '08:00', '17:00', false) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = '08:00', end_time = '17:00', is_off = false",
-        [TEST_TENANT_ID, emp.id, dateStr]
+        [TEST_TENANT_ID, emp.employee_id, dateStr]
       );
 
       // Attempt to book at 10am
@@ -108,7 +108,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
       if (result.rows[0].appointment_id) {
         await client.query("DELETE FROM appointments WHERE appointment_id = $1", [result.rows[0].appointment_id]);
       }
-      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.employee_id, dateStr]);
     });
   });
 
@@ -120,7 +120,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
     // WHY: is_off must block bookings — that's the whole point of the column
     await withClient(async (client) => {
       const empRes = await client.query(
-        "SELECT employee_id as id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id, skills FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (empRes.rows.length === 0) return;
@@ -136,7 +136,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
       // Create is_off entry for that date
       await client.query(
         "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
-        [TEST_TENANT_ID, emp.id, dateStr]
+        [TEST_TENANT_ID, emp.employee_id, dateStr]
       );
 
       // Attempt to book at 10am on the day-off
@@ -145,7 +145,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
 
       const result = await client.query(
         "SELECT * FROM book_with_scheduling_atomic($1, '+16085559999', 'Test DayOff', 'Day off test', NULL, NULL, $2::TIMESTAMPTZ, $3::TIMESTAMPTZ, NULL, NULL, $4, '{}', NULL, $5, NULL, 30)",
-        [TEST_TENANT_ID, startTime, endTime, emp.skills, emp.id.toString()]
+        [TEST_TENANT_ID, startTime, endTime, emp.skills, emp.employee_id.toString()]
       );
 
       // Should fail because employee is off
@@ -153,7 +153,7 @@ describe('Fix #1: Booking RPC override is_off logic', () => {
       expect(['EMPLOYEE_NOT_SCHEDULED', 'NO_AVAILABILITY']).toContain(result.rows[0].error_code);
 
       // Cleanup
-      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.employee_id, dateStr]);
       // Clean up any customer created by the RPC
       await client.query("DELETE FROM customers WHERE tenant_id = $1 AND phone = '+16085559999'", [TEST_TENANT_ID]);
     });
@@ -195,7 +195,7 @@ describe('Fix #2: check_coverage_gaps with employee_schedule', () => {
     await withClient(async (client) => {
       // Get all active employees
       const emps = await client.query(
-        "SELECT employee_id as id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
+        "SELECT employee_id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false)",
         [TEST_TENANT_ID]
       );
       if (emps.rows.length === 0) return;
@@ -209,7 +209,7 @@ describe('Fix #2: check_coverage_gaps with employee_schedule', () => {
       for (const emp of emps.rows) {
         await client.query(
           "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
-          [TEST_TENANT_ID, emp.id, dateStr]
+          [TEST_TENANT_ID, emp.employee_id, dateStr]
         );
       }
 
@@ -359,7 +359,7 @@ describe('get_effective_shifts RPC integration', () => {
   test('HAPPY: override takes precedence over pattern', async () => {
     await withClient(async (client) => {
       const emp = await client.query(
-        "SELECT employee_id as id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (emp.rows.length === 0) return;
@@ -371,12 +371,12 @@ describe('get_effective_shifts RPC integration', () => {
 
       await client.query(
         "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off) VALUES ($1, $2, $3, '10:00', '14:00', false) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = '10:00', end_time = '14:00', is_off = false",
-        [TEST_TENANT_ID, emp.rows[0].id, dateStr]
+        [TEST_TENANT_ID, emp.rows[0].employee_id, dateStr]
       );
 
       const result = await client.query(
         "SELECT * FROM get_effective_shifts($1, $2, $3::DATE, $3::DATE)",
-        [TEST_TENANT_ID, emp.rows[0].id, dateStr]
+        [TEST_TENANT_ID, emp.rows[0].employee_id, dateStr]
       );
 
       // Should show override
@@ -388,14 +388,14 @@ describe('get_effective_shifts RPC integration', () => {
       }
 
       // Cleanup
-      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].employee_id, dateStr]);
     });
   });
 
   test('SAD: is_off override shows as off, not pattern hours', async () => {
     await withClient(async (client) => {
       const emp = await client.query(
-        "SELECT employee_id as id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
+        "SELECT employee_id FROM employees WHERE tenant_id = $1 AND is_active = true AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1",
         [TEST_TENANT_ID]
       );
       if (emp.rows.length === 0) return;
@@ -406,12 +406,12 @@ describe('get_effective_shifts RPC integration', () => {
 
       await client.query(
         "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true) ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET is_off = true, start_time = NULL, end_time = NULL",
-        [TEST_TENANT_ID, emp.rows[0].id, dateStr]
+        [TEST_TENANT_ID, emp.rows[0].employee_id, dateStr]
       );
 
       const result = await client.query(
         "SELECT * FROM get_effective_shifts($1, $2, $3::DATE, $3::DATE)",
-        [TEST_TENANT_ID, emp.rows[0].id, dateStr]
+        [TEST_TENANT_ID, emp.rows[0].employee_id, dateStr]
       );
 
       const row = result.rows.find((r: { shift_date: string }) => String(r.shift_date).includes(dateStr.replace(/-/g, '')));
@@ -421,7 +421,7 @@ describe('get_effective_shifts RPC integration', () => {
       }
 
       // Cleanup
-      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].id, dateStr]);
+      await client.query("DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3", [TEST_TENANT_ID, emp.rows[0].employee_id, dateStr]);
     });
   });
 });

@@ -97,10 +97,10 @@ describe("Service Enhancements: subtitle and description columns", () => {
         if (!dbAvailable) return;
         const ins = await client.query(
             `INSERT INTO services (tenant_id, name, duration_minutes)
-             VALUES ($1, 'Flat Repair', 20) RETURNING service_id as id`,
+             VALUES ($1, 'Flat Repair', 20) RETURNING service_id`,
             [tenantId]
         );
-        const id = ins.rows[0].id;
+        const id = ins.rows[0].service_id;
 
         await client.query(
             `UPDATE services SET subtitle = $1, description = $2 WHERE service_id = $3`,

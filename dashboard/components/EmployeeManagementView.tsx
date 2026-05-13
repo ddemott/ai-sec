@@ -22,7 +22,7 @@ import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
 
 type Employee = {
-  id: string
+  employee_id: string
   name: string
   first_name?: string | null
   last_name?: string | null
@@ -86,7 +86,7 @@ export default function EmployeeManagementView() {
     if (!selectedEmployee || !editForm.first_name.trim()) return
     setSaving(true)
     try {
-      const res = await Api.employees.update(selectedEmployee.id, {
+      const res = await Api.employees.update(selectedEmployee.employee_id, {
         first_name: editForm.first_name.trim(),
         last_name: editForm.last_name.trim(),
         email: editForm.email.trim() || undefined,
@@ -187,7 +187,7 @@ export default function EmployeeManagementView() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {(employees || []).filter(e => e.type !== 'user').map(emp => (
           <Card 
-            key={emp.id} 
+            key={emp.employee_id} 
             onClick={() => {
               setSelectedEmployee(emp);
               setEditForm({
@@ -219,8 +219,8 @@ export default function EmployeeManagementView() {
             )}
 
             <div className="flex flex-wrap gap-1">
-              {(mappings || []).filter(m => m.employee_id === emp.id).length > 0 ? (
-                (mappings || []).filter(m => m.employee_id === emp.id).map(m => {
+              {(mappings || []).filter(m => m.employee_id === emp.employee_id).length > 0 ? (
+                (mappings || []).filter(m => m.employee_id === emp.employee_id).map(m => {
                   const s = (services || []).find(s => s.service_id === m.service_id)
                   return s ? <Badge key={s.service_id} variant="primary">{s.name}</Badge> : null
                 })
@@ -300,11 +300,11 @@ export default function EmployeeManagementView() {
               </h4>
               <div className="grid grid-cols-1 gap-2">
                 {(services || []).map(service => {
-                  const isMapped = (mappings || []).some(m => m.service_id === service.service_id && m.employee_id === selectedEmployee.id)
+                  const isMapped = (mappings || []).some(m => m.service_id === service.service_id && m.employee_id === selectedEmployee.employee_id)
                   return (
                     <button
                       key={service.service_id}
-                      onClick={() => toggleService(service.service_id, selectedEmployee.id)}
+                      onClick={() => toggleService(service.service_id, selectedEmployee.employee_id)}
                       className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-lg' : ''}`}
                       style={isMapped ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
                     >
@@ -327,7 +327,7 @@ export default function EmployeeManagementView() {
                 variant="ghost" 
                 className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 w-full justify-center"
                 icon={Trash2}
-                onClick={() => handleDeleteEmployee(selectedEmployee.id)}
+                onClick={() => handleDeleteEmployee(selectedEmployee.employee_id)}
               >
                 {`Remove ${vocab.employee_label}`}
               </Button>

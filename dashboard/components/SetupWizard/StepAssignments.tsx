@@ -50,7 +50,7 @@ export function Step5Assignments({
       ) : (
         <div className="space-y-4">
           {services.map((svc: WizardService) => (
-            <div key={svc.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222] p-4">
+            <div key={svc.service_id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222] p-4">
               <div className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">{svc.name}</div>
 
               {/* Employee assignments */}
@@ -59,11 +59,11 @@ export function Step5Assignments({
                   <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">{vocab.employee_plural}</div>
                   <div className="flex flex-wrap gap-1.5">
                     {employees.map((emp: WizardEmployee) => {
-                      const assigned = isEmployeeAssigned(svc.id, String(emp.id))
+                      const assigned = isEmployeeAssigned(svc.service_id, String(emp.employee_id))
                       return (
                         <button
-                          key={emp.id}
-                          onClick={() => onToggleEmployee(svc.id, String(emp.id))}
+                          key={emp.employee_id}
+                          onClick={() => onToggleEmployee(svc.service_id, String(emp.employee_id))}
                           disabled={saving}
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                             assigned
@@ -85,11 +85,11 @@ export function Step5Assignments({
                   <div className="text-xs font-bold text-gray-400 uppercase mb-1.5">{vocab.resource_plural}</div>
                   <div className="flex flex-wrap gap-1.5">
                     {resources.map((res: WizardResource) => {
-                      const assigned = isResourceAssigned(svc.id, res.id)
+                      const assigned = isResourceAssigned(svc.service_id, res.resource_id)
                       return (
                         <button
-                          key={res.id}
-                          onClick={() => onToggleResource(svc.id, res.id)}
+                          key={res.resource_id}
+                          onClick={() => onToggleResource(svc.service_id, res.resource_id)}
                           disabled={saving}
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                             assigned

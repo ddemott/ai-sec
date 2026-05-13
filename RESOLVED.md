@@ -4,6 +4,30 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-13 — PK rename pilot 28: real-DB integration coverage + final code-residue sweep
+
+Closes out the May 12 PK rename sprint. The sprint's after-state docs claimed every single-column PK now follows `<table_singular>_id`, but coverage was uneven: only 44% of the renamed PK columns had any real-DB test exercising them by name — the rest had either mocked-only coverage (which keeps passing if the column is reverted) or no coverage at all. Pilot 28 closes that gap and sweeps the residual `id`-named references the per-pilot sweeps had missed.
+
+**New test file — `src/pk-rename-coverage.test.ts` (626 lines, 30 tests against real Postgres):**
+
+Every renamed PK column gets a focused real-DB test: INSERT returns the renamed column by name (proves the column exists under the new name), SELECT by the renamed column (proves `WHERE <new>_id = $1` binds), UPDATE/DELETE by the renamed column where the table supports it. SQL uses the natural column name throughout — no `AS id` aliases. The 13 tables that had been mock-only or untested: `voice_sessions`, `tenant_docs`, `tenant_integration_settings`, `users`, `services`, `resources`, `employees`, `employee_schedule`, `record_versions`, `tenant_skills`, `reminder_schedules`, `consent_records`, `opt_out_records`, plus the leaf tables `unanswered_questions`, `phone_verifications`, `password_resets`, `audit_log`, `call_transcripts`, `call_summaries`, `entity_sync_map`, `user_feedback`, `soft_reservations`. A future regression to bare `id` fails loudly instead of passing silently on a mocked test.
+
+**Side sweep — 121 file edits, +746 / −731 net:**
+
+Pure `id` → `<table>_id` renames across the surfaces that the per-pilot sweeps missed (the per-pilot focus was on the table being renamed at that moment; the surface this commit cleans up is the shared infrastructure where references cross table boundaries):
+
+- Backend routes: `agentTools.ts` (`SELECT … AS id` aliases dropped from service-catalog + customer-lookup + employee-fan-out queries; downstream destructures switched to `customer.customer_id`/`employee.employee_id`), `auth.ts`, `customers.ts`, `employees.ts`, `knowledge.ts`, `tenants.ts`, `versionHistory.ts`, `voice.ts`.
+- Backend services: `customerLookup.ts`, `hubspotSync.ts`, `jobberSync.ts`, `servicetitanSync.ts`, `squareSync.ts`, `syncMapHelpers.ts`, `tenants/bootstrap.ts`, `reminders/index.ts`, `reminders/reminderRepository.ts`, `reminders/reminderScheduler.ts`.
+- Shared: `shared/scheduling.ts` (`ResourceCandidate.id` → `resource_id`, `EmployeeCandidate.id` → `employee_id`; downstream `isResourceFree(r.id, …)` calls switched accordingly).
+- Backend types: `src/types/{index,versionHistory,voiceCrm}.ts` — `Appointment.id` → `appointment_id`, `AppointmentForReminder.id` → `appointmentId` (camelCase shape preserved), `Version.record_id` references, voice/CRM row shapes.
+- Dashboard: 40+ components and e2e specs swept (`AppointmentDetailPanel`, `CustomerDetailPanel`, `EmployeeManagementView`, `ServiceAssignmentView`, scheduler family, skill-map family, SetupWizard family, `lib/api.ts`, `lib/availability.ts`, `lib/mockData.ts`, `lib/types.ts`).
+- Backend tests: 30+ test files updated to read the renamed PK from row results.
+- `supabase/seed.sql` — `INSERT INTO tenants (id, …)` → `INSERT INTO tenants (tenant_id, …)`; matching `ON CONFLICT (tenant_id) DO NOTHING`. Same for the SecretaryHQ Platform tenant row.
+
+**After-state:** backend 1,781 → 1,860 (+79 from `pk-rename-coverage.test.ts` real-DB exercises); dashboard 620 → 631 (+11); agent 85 unchanged. Zero TS errors across backend / dashboard / agent. Drift detector still clean. The May 12 verification query (`PK column = 'id'` across `public` schema) still returns zero rows. **Coverage statement is now genuine, not just structural** — every renamed PK is exercised by name against real Postgres in CI.
+
+---
+
 ## 2026-05-12 — PK naming convention conversion, Part 2: **non-domain cleanup (9 pilots, 9 migrations)**
 
 Continuation of the same-day PK-rename sprint into the nine leaf tables left out of pilots 1–16. The original sprint's after-state said *"complete for every domain entity table"* — these nine (audit log, call summaries/transcripts, sync mapping, password reset / phone OTP tokens, KB-gap log, feedback log, soft reservations) had been excluded as "non-domain". By the strict reading of CLAUDE.md's rule (*every single-column PK is named `<table_singular>_id`, never bare `id`*), they still violated the convention. This sprint resolves that.

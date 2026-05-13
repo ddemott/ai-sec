@@ -126,24 +126,24 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
 
       const tenantRes = await client.query(
         `INSERT INTO tenants (name, business_type, timezone)
-         VALUES ($1, $2, $3) RETURNING tenant_id AS id`,
+         VALUES ($1, $2, $3) RETURNING tenant_id`,
         ['Test Chicago Business', 'tire_shop', 'America/Chicago']
       );
-      testTenantId = tenantRes.rows[0].id;
+      testTenantId = tenantRes.rows[0].tenant_id;
 
       const resourceRes = await client.query(
         `INSERT INTO resources (tenant_id, name, description, capabilities)
-         VALUES ($1, $2, $3, $4) RETURNING resource_id as id`,
+         VALUES ($1, $2, $3, $4) RETURNING resource_id`,
         [testTenantId, 'Test Bay 1', 'Test resource', ['tire_rotation']]
       );
-      testResourceId = resourceRes.rows[0].id;
+      testResourceId = resourceRes.rows[0].resource_id;
 
       const employeeRes = await client.query(
         `INSERT INTO employees (tenant_id, name, skills, is_active)
-         VALUES ($1, $2, $3, $4) RETURNING employee_id as id`,
+         VALUES ($1, $2, $3, $4) RETURNING employee_id`,
         [testTenantId, 'Test Mechanic', ['tire_rotation'], true]
       );
-      testEmployeeId = employeeRes.rows[0].id;
+      testEmployeeId = employeeRes.rows[0].employee_id;
 
       // Schedule the test Friday (2026-04-03) 8 AM - 6 PM. Booking
       // RPCs read employee_schedule directly; weekly patterns are

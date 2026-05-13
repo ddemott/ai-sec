@@ -92,27 +92,27 @@ async function switchToDynaTireTenant(page: Page) {
 
 async function findDynaTireEmployeeId(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
-  return r.rows[0]?.id ?? null;
+  return r.rows[0]?.employee_id ?? null;
 }
 
 async function findDynaTireResourceId(name: string): Promise<string | null> {
   const r = await pool.query(
-    'SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
+    'SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
     [DYNATIRE_ID, name]
   );
-  return r.rows[0]?.id ?? null;
+  return r.rows[0]?.resource_id ?? null;
 }
 
 async function findDynaTireCustomerId(): Promise<string> {
   const r = await pool.query(
-    'SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1',
+    'SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1',
     [DYNATIRE_ID]
   );
-  if (!r.rows[0]?.id) throw new Error('No DynaTire customer found in seed');
-  return r.rows[0].id;
+  if (!r.rows[0]?.customer_id) throw new Error('No DynaTire customer found in seed');
+  return r.rows[0].customer_id;
 }
 
 function uniqueTag(): string {
@@ -437,10 +437,10 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id AS id`,
+       RETURNING employee_schedule_id`,
       [DYNATIRE_ID, mikeId, UI_TEST_DATE]
     );
-    scheduleIdToCleanup = shiftIns.rows[0].id;
+    scheduleIdToCleanup = shiftIns.rows[0].employee_schedule_id;
 
     // Pre-clean any residue at this exact slot from a previously-failed run.
     await pool.query(
@@ -456,7 +456,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     const existing = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-       RETURNING appointment_id AS id`,
+       RETURNING appointment_id`,
       [
         DYNATIRE_ID,
         truckId,
@@ -467,7 +467,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
         `${tag}-blocker`,
       ]
     );
-    apptIdsToCleanup.push(existing.rows[0].id);
+    apptIdsToCleanup.push(existing.rows[0].appointment_id);
 
     await ensureLoggedIn(page);
     await switchToDynaTireTenant(page);

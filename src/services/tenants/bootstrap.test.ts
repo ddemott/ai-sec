@@ -61,7 +61,7 @@ describe('createTenantWithOwner — happy paths', () => {
     const { pool, queries } = buildMockPool([
       { rows: [] },                          // BEGIN
       { rows: [] },                          // SELECT user_id FROM users (none)
-      { rows: [{ id: TENANT_ID }] },         // INSERT tenant RETURNING tenant_id AS id
+      { rows: [{ tenant_id: TENANT_ID }] },         // INSERT tenant RETURNING tenant_id
       { rows: [{ user_id: USER_ID }] },      // INSERT user RETURNING user_id
       { rows: [] },                          // COMMIT
     ]);
@@ -79,7 +79,7 @@ describe('createTenantWithOwner — happy paths', () => {
     expect(queries.map(q => q.text)).toEqual([
       'BEGIN',
       'SELECT user_id FROM users WHERE email = $1',
-      'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id',
+      'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id',
       expect.stringContaining('INSERT INTO users'),
       'COMMIT',
     ]);
@@ -99,7 +99,7 @@ describe('createTenantWithOwner — happy paths', () => {
     const { pool, queries } = buildMockPool([
       { rows: [] },                          // BEGIN
       { rows: [] },                          // SELECT FROM tenants (none)
-      { rows: [{ id: TENANT_ID }] },         // INSERT tenant
+      { rows: [{ tenant_id: TENANT_ID }] },         // INSERT tenant
       { rows: [{ user_id: USER_ID }] },      // INSERT user RETURNING user_id
       { rows: [] },                          // COMMIT
     ]);
@@ -116,7 +116,7 @@ describe('createTenantWithOwner — happy paths', () => {
     });
 
     expect(result).toEqual({ ok: true, tenantId: TENANT_ID, userId: USER_ID });
-    expect(queries[1].text).toBe('SELECT tenant_id AS id FROM tenants WHERE LOWER(name) = LOWER($1)');
+    expect(queries[1].text).toBe('SELECT tenant_id FROM tenants WHERE LOWER(name) = LOWER($1)');
     expect(queries[1].params).toEqual(['Sharp Salon']);
     // user INSERT params: tenantId, email, hash, full, first, last
     const userInsertParams = queries[3].params as unknown[];
@@ -136,7 +136,7 @@ describe('createTenantWithOwner — happy paths', () => {
     //      blank" — and we want the former here.
     const { pool, queries } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -162,7 +162,7 @@ describe('createTenantWithOwner — happy paths', () => {
     //      plaintext credentials into the DB. Worth a direct guard.
     const { pool, queries } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -198,7 +198,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
     //      created, then user INSERT fails because email is taken).
     const { pool, client, queries } = buildMockPool([
       { rows: [] },                            // BEGIN
-      { rows: [{ id: 'existing-user-id' }] },  // SELECT user — FOUND
+      { rows: [{ user_id: 'existing-user-id' }] },  // SELECT user — FOUND
       { rows: [] },                            // ROLLBACK
     ]);
 
@@ -232,7 +232,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
     //      check is verified separately below.
     const { pool, queries } = buildMockPool([
       { rows: [] },
-      { rows: [{ id: 'existing-tenant' }] },
+      { rows: [{ tenant_id: 'existing-tenant' }] },
       { rows: [] },
     ]);
 
@@ -262,7 +262,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
     //      glancing at the dropdown.
     const { pool, queries } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -274,7 +274,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
       duplicateCheck: 'tenant_name',
     });
 
-    expect(queries[1].text).toBe('SELECT tenant_id AS id FROM tenants WHERE LOWER(name) = LOWER($1)');
+    expect(queries[1].text).toBe('SELECT tenant_id FROM tenants WHERE LOWER(name) = LOWER($1)');
   });
 });
 
@@ -323,7 +323,7 @@ describe('createTenantWithOwner — error propagation', () => {
     //      cheapest test that catches a regression in the finally.
     const { pool, client } = buildMockPool([
       { rows: [] }, { rows: [] },
-      { rows: [{ id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {

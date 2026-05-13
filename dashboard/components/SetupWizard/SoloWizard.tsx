@@ -111,7 +111,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         skills: [],
       })
       if (res.success && res.employee) {
-        setOwnerEmployeeId(String(res.employee.id))
+        setOwnerEmployeeId(String(res.employee.employee_id))
       } else {
         setError(res.error || 'Failed to create your staff profile')
       }
@@ -268,7 +268,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   if (!isOpen) return null
 
   const wizardServices: WizardService[] = (services || []).map(s => ({
-    id: s.service_id,
+    service_id: s.service_id,
     name: s.name,
     description: s.description || '',
     duration_minutes: s.duration_minutes,
@@ -326,7 +326,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
               onAdd={() => { setEditingService({ ...EMPTY_SERVICE }); setEditingServiceId(null) }}
               onEdit={(svc: WizardService) => {
                 setEditingService({ name: svc.name, description: svc.description || '', duration_minutes: svc.duration_minutes, price: svc.price ?? undefined })
-                setEditingServiceId(svc.id)
+                setEditingServiceId(svc.service_id)
               }}
               onDelete={handleDeleteService}
               onSave={handleSaveService}

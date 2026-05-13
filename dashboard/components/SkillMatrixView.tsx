@@ -48,15 +48,18 @@ export default function SkillMatrixView() {
     }
   }
 
-  // Combine employees and resources into a single list of entities
+  // Combine employees and resources into a single list of entities.
+  // Both branches expose `entity_id` so the table can key, compare, and
+  // toggle without caring which underlying domain table the row came from.
   const entities = useMemo(() => {
     const emps = (employees || []).filter(e => e.type !== 'user').map(e => ({
       ...e,
+      entity_id: e.employee_id,
       type: 'employee' as const
     }))
     const res = (resources || []).map(r => ({
       ...r,
-      id: r.resource_id,
+      entity_id: r.resource_id,
       type: 'resource' as const
     }))
     return [...emps, ...res]
@@ -178,7 +181,7 @@ export default function SkillMatrixView() {
           </thead>
           <tbody>
             {filteredEntities.map((entity, idx) => (
-              <tr key={`${entity.type}-${entity.id}`} className={idx % 2 === 0 ? 'bg-white/50 dark:bg-white/5' : ''}>
+              <tr key={`${entity.type}-${entity.entity_id}`} className={idx % 2 === 0 ? 'bg-white/50 dark:bg-white/5' : ''}>
                 <td className="p-4 border-b sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
                   <div className="flex items-center">
                     <div className={`p-1.5 rounded-lg mr-3 ${entity.type === 'employee' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : ''}`} style={entity.type === 'resource' ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}>
@@ -192,8 +195,8 @@ export default function SkillMatrixView() {
                 </td>
                 {(services || []).map(service => {
                   const isMapped = entity.type === 'employee'
-                    ? (empMappings || []).some(m => m.employee_id === entity.id && m.service_id === service.service_id)
-                    : (resMappings || []).some(m => m.resource_id === entity.id && m.service_id === service.service_id)
+                    ? (empMappings || []).some(m => m.employee_id === entity.entity_id && m.service_id === service.service_id)
+                    : (resMappings || []).some(m => m.resource_id === entity.entity_id && m.service_id === service.service_id)
                   
                   return (
                     <td 
@@ -203,7 +206,7 @@ export default function SkillMatrixView() {
                     >
                       <button
                         disabled={saving}
-                        onClick={() => toggleMapping(entity.type, entity.id, service.service_id)}
+                        onClick={() => toggleMapping(entity.type, entity.entity_id, service.service_id)}
                         className={`w-full h-full p-4 flex items-center justify-center transition-all ${isMapped ? '' : 'text-gray-300 dark:text-gray-800 hover:text-gray-400 dark:hover:text-gray-700'}`}
                         style={isMapped ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
                       >

@@ -84,39 +84,39 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
         // 1. Create a solo tenant
         const tRes = await client.query(
             `INSERT INTO tenants (name, business_type, team_size)
-             VALUES ('Solo Stylist', 'salon', 1) RETURNING tenant_id AS id`
+             VALUES ('Solo Stylist', 'salon', 1) RETURNING tenant_id`
         );
-        const soloTenantId = tRes.rows[0].id;
+        const soloTenantId = tRes.rows[0].tenant_id;
 
         // 2. Auto-create the owner as an employee
         const eRes = await client.query(
             `INSERT INTO employees (tenant_id, name, skills)
-             VALUES ($1, 'Owner', ARRAY['cuts', 'color']) RETURNING employee_id as id`,
+             VALUES ($1, 'Owner', ARRAY['cuts', 'color']) RETURNING employee_id`,
             [soloTenantId]
         );
-        const employeeId = eRes.rows[0].id;
+        const employeeId = eRes.rows[0].employee_id;
 
         // 3. Auto-create a personal resource (their chair/station)
         const rRes = await client.query(
             `INSERT INTO resources (tenant_id, name, is_personal)
-             VALUES ($1, 'My Station', true) RETURNING resource_id as id`,
+             VALUES ($1, 'My Station', true) RETURNING resource_id`,
             [soloTenantId]
         );
-        const personalResourceId = rRes.rows[0].id;
+        const personalResourceId = rRes.rows[0].resource_id;
 
         // 4. Create services
         const s1 = await client.query(
             `INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, price)
-             VALUES ($1, 'Haircut', 'Classic cut & style', 'Full haircut with wash and style.', 30, 35.00) RETURNING service_id as id`,
+             VALUES ($1, 'Haircut', 'Classic cut & style', 'Full haircut with wash and style.', 30, 35.00) RETURNING service_id`,
             [soloTenantId]
         );
         const s2 = await client.query(
             `INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, price)
-             VALUES ($1, 'Color', 'Full color treatment', 'Color application with gloss finish.', 90, 120.00) RETURNING service_id as id`,
+             VALUES ($1, 'Color', 'Full color treatment', 'Color application with gloss finish.', 90, 120.00) RETURNING service_id`,
             [soloTenantId]
         );
-        const serviceId1 = s1.rows[0].id;
-        const serviceId2 = s2.rows[0].id;
+        const serviceId1 = s1.rows[0].service_id;
+        const serviceId2 = s2.rows[0].service_id;
 
         // 5. Assign all services to the sole employee and resource
         await client.query(

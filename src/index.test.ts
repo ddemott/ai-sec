@@ -124,9 +124,22 @@ beforeAll(async () => {
   await app.ready()
 
   try {
-    // Probe DB availability once for DB-backed routes
+    // Probe DB availability once for DB-backed routes.
     const client = await pool.connect()
     await client.query('SELECT 1')
+
+    // Own our data lifecycle. The seeded platform admin tenant gets
+    // wiped by any earlier-running test file that calls clearDB() (≈25
+    // files truncate `tenants CASCADE`), so GET /tenants would
+    // intermittently return an empty array and the next assertion
+    // would fail. Insert idempotently so this test no longer depends
+    // on global seed state.
+    await client.query(
+      `INSERT INTO tenants (tenant_id, name, business_type, timezone)
+       VALUES ('00000000-0000-0000-0000-000000000000', 'index.test seed', 'platform-admin', 'America/Chicago')
+       ON CONFLICT (tenant_id) DO NOTHING`,
+    )
+
     client.release()
   } catch (err) {
     dbAvailable = false

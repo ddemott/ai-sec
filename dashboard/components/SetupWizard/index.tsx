@@ -86,9 +86,9 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tenantId, loading, services.length])
 
-  const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ id: s.service_id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
-  const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ id: r.resource_id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
-  const activeEmployees: WizardEmployee[] = employees.filter(e => !e.is_deleted && e.is_active !== false).map(e => ({ id: e.id, name: e.name, first_name: e.first_name ?? undefined, last_name: e.last_name ?? undefined, email: e.email ?? undefined, phone: e.phone ?? undefined, type: e.type, is_active: e.is_active }))
+  const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ service_id: s.service_id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
+  const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ resource_id: r.resource_id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
+  const activeEmployees: WizardEmployee[] = employees.filter(e => !e.is_deleted && e.is_active !== false).map(e => ({ employee_id: e.employee_id, name: e.name, first_name: e.first_name ?? undefined, last_name: e.last_name ?? undefined, email: e.email ?? undefined, phone: e.phone ?? undefined, type: e.type, is_active: e.is_active }))
 
   const canAdvanceTo = (target: WizardStep): boolean => {
     if (target <= step) return true // backward always allowed
@@ -116,16 +116,16 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
       // employee's pattern is fanned independently.
       for (const emp of activeEmployees) {
         const empPattern = crud.shifts
-          .filter(s => String(s.employee_id) === String(emp.id) && s.start_time && s.end_time)
+          .filter(s => String(s.employee_id) === String(emp.employee_id) && s.start_time && s.end_time)
           .map(s => ({
             day_of_week: s.day_of_week,
             start_time: s.start_time.slice(0, 5),
             end_time: s.end_time.slice(0, 5),
           }))
         try {
-          await Api.shifts.expandWeekly(tenantId, String(emp.id), empPattern)
+          await Api.shifts.expandWeekly(tenantId, String(emp.employee_id), empPattern)
         } catch (err) {
-          console.warn(`Failed to expand weekly schedule for employee ${emp.id}:`, err)
+          console.warn(`Failed to expand weekly schedule for employee ${emp.employee_id}:`, err)
         }
       }
     }

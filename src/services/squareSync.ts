@@ -68,7 +68,7 @@ export async function syncCustomerToSquare(
     const syncEntry = await syncMapFindByLocalId(client, tenantId, 'square', 'customer', customerId);
 
     const custRes = await client.query(
-      `SELECT customer_id AS id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
+      `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
       [customerId, tenantId]
     );
     const cust = custRes.rows[0];
@@ -272,10 +272,10 @@ export async function pullSquareBooking(
       if (!syncEntry) {
         const insertRes = await client.query(
           `INSERT INTO appointments (tenant_id, customer_id, start_time, end_time, status)
-           VALUES ($1, $2, $3, $4, $5) RETURNING appointment_id AS id`,
+           VALUES ($1, $2, $3, $4, $5) RETURNING appointment_id`,
           [tenantId, localCustomerId, startTime.toISOString(), endTime.toISOString(), status]
         );
-        const localId = insertRes.rows[0].id;
+        const localId = insertRes.rows[0].appointment_id;
 
         await syncMapUpsertOnPull(client, tenantId, 'square', 'appointment', localId, squareId, remoteUpdatedAt);
         log.info(`${prefix} — created local appointment from Square booking (squareId=${squareId} localId=${localId})`);

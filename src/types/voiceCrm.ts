@@ -8,7 +8,7 @@
  * Customer information from the CRM
  */
 export interface CustomerInfo {
-  id: string;
+  customer_id: string;
   name: string | null;
   phone: string;
   email: string | null;
@@ -20,7 +20,7 @@ export interface CustomerInfo {
  * Appointment summary for customer context
  */
 export interface AppointmentSummary {
-  id: string;
+  appointment_id: string;
   start_time: string;
   end_time: string;
   status: string;

@@ -49,7 +49,7 @@ export function buildMappingMaps(
  * Filter an employee list to those qualified for the given service. Empty
  * `serviceId` (or a service with no mappings) returns the input unchanged.
  */
-export function filterEmployeesByService<T extends { id: string }>(
+export function filterEmployeesByService<T extends { employee_id: string }>(
   employees: T[],
   serviceId: string | null,
   serviceEmployee: Map<string, Set<string>>
@@ -57,7 +57,7 @@ export function filterEmployeesByService<T extends { id: string }>(
   if (!serviceId) return employees;
   const skilled = serviceEmployee.get(serviceId);
   if (!skilled || skilled.size === 0) return employees;
-  return employees.filter((e) => skilled.has(String(e.id)));
+  return employees.filter((e) => skilled.has(String(e.employee_id)));
 }
 
 /**

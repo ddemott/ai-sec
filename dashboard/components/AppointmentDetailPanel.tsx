@@ -30,7 +30,7 @@ import type { Appointment } from '../lib/types';
 interface AppointmentDetailPanelProps {
   customers: { customer_id: string; name: string; phone: string; tenant_id?: string; address?: string; address_line2?: string; city?: string; state?: string; postal_code?: string }[];
   resources: { resource_id: string; name: string }[];
-  employees: { id: string; name: string; type?: string }[];
+  employees: { employee_id: string; name: string; type?: string }[];
   services: { service_id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };
@@ -97,7 +97,7 @@ export function AppointmentDetailPanel({
   // narrows them out, so submitting can't carry an id that's no longer in
   // the dropdown.
   useEffect(() => {
-    if (form.employee_id && !eligibleEmployees.some((e) => String(e.id) === form.employee_id)) {
+    if (form.employee_id && !eligibleEmployees.some((e) => String(e.employee_id) === form.employee_id)) {
       setForm((prev) => ({ ...prev, employee_id: '' }));
     }
     if (form.resource_id && !eligibleResources.some((r) => r.resource_id === form.resource_id)) {
@@ -236,7 +236,7 @@ export function AppointmentDetailPanel({
                                           onChange={e => onFormChange({...form, employee_id: e.target.value})}
                                           options={[
                                             { label: 'Unassigned', value: '' },
-                                            ...eligibleEmployees.map(e => ({ label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`, value: e.id.toString() }))
+                                            ...eligibleEmployees.map(e => ({ label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`, value: e.employee_id.toString() }))
                                           ]}
                                       />
                                   </div>
@@ -348,7 +348,7 @@ export function AppointmentDetailPanel({
                                   <div className="flex justify-between items-center">
                                       <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{`${vocab.employee_label} Assigned`}</span>
                                       <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                                        {employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name || 'Unassigned'}
+                                        {employees.find(e => e.employee_id.toString() === selectedAppointment?.employee_id?.toString())?.name || 'Unassigned'}
                                       </span>
                                   </div>
                                   {!!selectedAppointment?.customers?.metadata?.notes && (
@@ -366,7 +366,7 @@ export function AppointmentDetailPanel({
                       </div>
                       <Card title="Summary" variant="dark">
                           <p className="text-lg leading-relaxed font-medium italic">
-                              {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.resource_id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
+                              {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find(r => r.resource_id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find(e => e.employee_id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find(e => e.employee_id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
                           </p>
                       </Card>
                   </div>

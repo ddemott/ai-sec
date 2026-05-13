@@ -90,7 +90,7 @@ export function DeletedRecordsPanel({
   }
 
   function openCopyModal(record: DeletedRecord) {
-    setCopyModal({ sourceId: record.id, sourceData: record.last_data || {} })
+    setCopyModal({ sourceId: record.record_id, sourceData: record.last_data || {} })
     setSelectedFields(new Set())
     setSelectedTarget('')
   }
@@ -183,16 +183,16 @@ export function DeletedRecordsPanel({
           <div className="space-y-3">
             {filteredRecords.map(record => (
               <div
-                key={record.id}
+                key={record.record_id}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               >
                 {/* Record header */}
                 <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800">
                   <button
-                    onClick={() => toggleRecord(record.id)}
+                    onClick={() => toggleRecord(record.record_id)}
                     className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                   >
-                    {expandedRecords.has(record.id) ? (
+                    {expandedRecords.has(record.record_id) ? (
                       <ChevronDown className="w-4 h-4" />
                     ) : (
                       <ChevronRight className="w-4 h-4" />
@@ -216,7 +216,7 @@ export function DeletedRecordsPanel({
 
                   <div className="flex gap-2">
                     <button
-                      onClick={() => onViewHistory?.(record.id, record.name || 'Record')}
+                      onClick={() => onViewHistory?.(record.record_id, record.name || 'Record')}
                       className="p-2 text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
                       title="View history"
                     >
@@ -233,11 +233,11 @@ export function DeletedRecordsPanel({
                       <Copy className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleRestore(record.id)}
-                      disabled={restoring === record.id}
+                      onClick={() => handleRestore(record.record_id)}
+                      disabled={restoring === record.record_id}
                       className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
                     >
-                      {restoring === record.id ? (
+                      {restoring === record.record_id ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                       ) : (
                         <RotateCcw className="w-4 h-4" />
@@ -248,7 +248,7 @@ export function DeletedRecordsPanel({
                 </div>
 
                 {/* Expanded data */}
-                {expandedRecords.has(record.id) && record.last_data && (
+                {expandedRecords.has(record.record_id) && record.last_data && (
                   <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                     <h4 className="text-xs font-semibold text-gray-500 uppercase mb-3">Last Known Data</h4>
                     <div className="grid grid-cols-2 gap-2 text-sm">

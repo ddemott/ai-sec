@@ -43,12 +43,12 @@ export async function tableExists(client: Client, tableName: string): Promise<bo
 }
 
 export async function setupBasicTenant(client: Client) {
-    const tRes = await client.query("INSERT INTO tenants (name, business_type) VALUES ('DynaTire', 'mobile-tire') RETURNING tenant_id AS id;");
-    const tenantId = tRes.rows[0].id;
-    const rRes = await client.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 1') RETURNING resource_id as id;", [tenantId]);
-    const resourceId = rRes.rows[0].id;
-    const cRes = await client.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550001111', 'Alice') RETURNING customer_id AS id;", [tenantId]);
-    const customerId = cRes.rows[0].id;
+    const tRes = await client.query("INSERT INTO tenants (name, business_type) VALUES ('DynaTire', 'mobile-tire') RETURNING tenant_id;");
+    const tenantId = tRes.rows[0].tenant_id;
+    const rRes = await client.query("INSERT INTO resources (tenant_id, name) VALUES ($1, 'Truck 1') RETURNING resource_id;", [tenantId]);
+    const resourceId = rRes.rows[0].resource_id;
+    const cRes = await client.query("INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550001111', 'Alice') RETURNING customer_id;", [tenantId]);
+    const customerId = cRes.rows[0].customer_id;
 
     return { tenantId, resourceId, customerId };
 }
@@ -89,32 +89,32 @@ export async function rollbackTestTransaction(client: Client) {
 export async function createTenant(client: Client, name: string, businessType: string, timezone?: string): Promise<string> {
     if (timezone) {
         const res = await client.query(
-            "INSERT INTO tenants (name, business_type, timezone) VALUES ($1, $2, $3) RETURNING tenant_id AS id",
+            "INSERT INTO tenants (name, business_type, timezone) VALUES ($1, $2, $3) RETURNING tenant_id",
             [name, businessType, timezone]
         );
-        return res.rows[0].id;
+        return res.rows[0].tenant_id;
     }
     const res = await client.query(
-        "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
+        "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
         [name, businessType]
     );
-    return res.rows[0].id;
+    return res.rows[0].tenant_id;
 }
 
 export async function createResource(client: Client, tenantId: string, name: string, description?: string): Promise<string> {
     const res = await client.query(
-        "INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING resource_id as id",
+        "INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING resource_id",
         [tenantId, name, description || null]
     );
-    return res.rows[0].id;
+    return res.rows[0].resource_id;
 }
 
 export async function createEmployee(client: Client, tenantId: string, name: string, skills?: string[]): Promise<string> {
     const res = await client.query(
-        "INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING employee_id as id",
+        "INSERT INTO employees (tenant_id, name, skills) VALUES ($1, $2, $3) RETURNING employee_id",
         [tenantId, name, skills || []]
     );
-    return res.rows[0].id;
+    return res.rows[0].employee_id;
 }
 
 /**
@@ -137,10 +137,10 @@ export async function createScheduleEntry(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-         VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, $6) RETURNING employee_schedule_id AS id`,
+         VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, $6) RETURNING employee_schedule_id`,
         [tenantId, employeeId, shiftDate, isOff ? null : startTime, isOff ? null : endTime, isOff]
     );
-    return res.rows[0].id;
+    return res.rows[0].employee_schedule_id;
 }
 
 export async function createService(client: Client, tenantId: string, name: string, durationMinutes: number, price?: number): Promise<string> {
@@ -153,18 +153,18 @@ export async function createService(client: Client, tenantId: string, name: stri
 
 export async function createCustomer(client: Client, tenantId: string, name: string, phone: string): Promise<string> {
     const res = await client.query(
-        "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3) RETURNING customer_id AS id",
+        "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3) RETURNING customer_id",
         [tenantId, phone, name]
     );
-    return res.rows[0].id;
+    return res.rows[0].customer_id;
 }
 
 export async function createCustomerFull(client: Client, tenantId: string, phone: string, name: string, email?: string): Promise<string> {
     const res = await client.query(
-        "INSERT INTO customers (tenant_id, phone, name, email) VALUES ($1, $2, $3, $4) RETURNING customer_id AS id",
+        "INSERT INTO customers (tenant_id, phone, name, email) VALUES ($1, $2, $3, $4) RETURNING customer_id",
         [tenantId, phone, name, email || null]
     );
-    return res.rows[0].id;
+    return res.rows[0].customer_id;
 }
 
 export async function createAppointment(
@@ -173,10 +173,10 @@ export async function createAppointment(
 ): Promise<string> {
     const res = await client.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status, employee_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING appointment_id AS id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING appointment_id`,
         [tenantId, resourceId, customerId, startTime, endTime, description, status || 'scheduled', employeeId || null]
     );
-    return res.rows[0].id;
+    return res.rows[0].appointment_id;
 }
 
 export async function hashPassword(password: string): Promise<string> {

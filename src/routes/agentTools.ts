@@ -297,7 +297,7 @@ export function registerAgentToolRoutes(
   toolRoute(app, '/agent-tools/service-catalog', GetServiceCatalogSchema, async (args, reply) => {
     const res = await withTenantClient(args.tenant_id, (client) =>
       client.query(
-        `SELECT service_id AS id, name, subtitle, description, duration_minutes, price
+        `SELECT service_id, name, subtitle, description, duration_minutes, price
            FROM services
           WHERE tenant_id = $1 AND is_deleted = false
           ORDER BY name ASC`,
@@ -316,8 +316,8 @@ export function registerAgentToolRoutes(
     }
 
     const data = await withTenantClient(args.tenant_id, async (client) => {
-      const cust = await client.query<{ id: string; name: string }>(
-        `SELECT customer_id AS id, name FROM customers
+      const cust = await client.query<{ customer_id: string; name: string }>(
+        `SELECT customer_id, name FROM customers
           WHERE tenant_id = $1 AND phone = $2
             AND (is_deleted IS NULL OR is_deleted = false)`,
         [args.tenant_id, normalized]
@@ -329,7 +329,7 @@ export function registerAgentToolRoutes(
           WHERE customer_id = $1
           ORDER BY created_at DESC
           LIMIT 3`,
-        [customer.id]
+        [customer.customer_id]
       );
       return { customer, summaries: sums.rows };
     });
@@ -566,8 +566,8 @@ export function registerAgentToolRoutes(
         [args.tenant_id]
       );
 
-      const empRes = await client.query<{ id: string; skills: string[] }>(
-        `SELECT employee_id::text AS id, skills
+      const empRes = await client.query<{ employee_id: string; skills: string[] }>(
+        `SELECT employee_id::text AS employee_id, skills
            FROM employees
           WHERE tenant_id = $1 AND is_active = true
             AND (is_deleted IS NULL OR is_deleted = false)`,
@@ -609,11 +609,11 @@ export function registerAgentToolRoutes(
     });
 
     const resources: ResourceCandidate[] = data.resRes.rows.map((r) => ({
-      id: r.resource_id,
+      resource_id: r.resource_id,
       capabilities: r.capabilities || [],
     }));
     const employees: EmployeeCandidate[] = data.empRes.rows.map((e) => ({
-      id: e.id,
+      employee_id: e.employee_id,
       skills: e.skills || [],
     }));
     const existingAppointments: ExistingAppointment[] = data.apptRes.rows.map((a) => ({
@@ -1030,12 +1030,12 @@ export function registerAgentToolRoutes(
     const result = await withTenantClient(args.tenant_id, async (client) => {
       // Most recent unverified row for this phone.
       const row = await client.query<{
-        id: string;
+        phone_verification_id: string;
         code_hash: string;
         expires_at: string;
         attempt_count: number;
       }>(
-        `SELECT phone_verification_id AS id, code_hash, expires_at, attempt_count
+        `SELECT phone_verification_id, code_hash, expires_at, attempt_count
            FROM phone_verifications
           WHERE tenant_id = $1 AND phone = $2 AND verified_at IS NULL
           ORDER BY created_at DESC
@@ -1058,14 +1058,14 @@ export function registerAgentToolRoutes(
       if (match) {
         await client.query(
           `UPDATE phone_verifications SET verified_at = now() WHERE phone_verification_id = $1`,
-          [v.id]
+          [v.phone_verification_id]
         );
         return { kind: 'verified' as const };
       }
 
       await client.query(
         `UPDATE phone_verifications SET attempt_count = attempt_count + 1 WHERE phone_verification_id = $1`,
-        [v.id]
+        [v.phone_verification_id]
       );
       const remaining = MAX_VERIFY_ATTEMPTS - (v.attempt_count + 1);
       return { kind: 'wrong' as const, remaining };

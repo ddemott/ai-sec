@@ -11,13 +11,13 @@ export interface TimeWindow {
 }
 
 export interface ResourceCandidate {
-  id: string;
+  resource_id: string;
   type?: string;
   capabilities: string[];
 }
 
 export interface EmployeeCandidate {
-  id: string;
+  employee_id: string;
   skills: string[];
   onShift?: boolean;
 }
@@ -156,7 +156,7 @@ export function selectAssignments(args: {
 
   // Step 2: Filter capable resources by availability
   const availableResources = capableResources.filter((r) =>
-    isResourceFree(r.id, win, existing)
+    isResourceFree(r.resource_id, win, existing)
   );
 
   const needEmployee = !!(requirements.requiredEmployeeSkills && requirements.requiredEmployeeSkills.length > 0);
@@ -172,7 +172,7 @@ export function selectAssignments(args: {
         skilledEmployees++;
         const onShift = e.onShift !== undefined
           ? e.onShift
-          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);
+          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.employee_id, win, shifts, overrides) : true);
         if (onShift) {
           onShiftEmployees++;
         }
@@ -202,7 +202,7 @@ export function selectAssignments(args: {
     const sortedEmployees = [...employees].sort((a, b) => {
       const skillDiff = (a.skills?.length ?? 0) - (b.skills?.length ?? 0);
       if (skillDiff !== 0) return skillDiff;
-      const busyDiff = todayBusyCount(a.id) - todayBusyCount(b.id);
+      const busyDiff = todayBusyCount(a.employee_id) - todayBusyCount(b.employee_id);
       if (busyDiff !== 0) return busyDiff;
       // Random tiebreaker so equally-skilled and equally-busy employees
       // rotate over time. Manager can override via UI.
@@ -212,14 +212,14 @@ export function selectAssignments(args: {
       for (const e of sortedEmployees) {
         const onShift = e.onShift !== undefined
           ? e.onShift
-          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.id, win, shifts, overrides) : true);
+          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.employee_id, win, shifts, overrides) : true);
         if (!onShift) continue;
         if (!hasAll(e.skills, requirements.requiredEmployeeSkills)) continue;
-        options.push({ resourceId: r.id, employeeId: e.id });
+        options.push({ resourceId: r.resource_id, employeeId: e.employee_id });
       }
     }
   } else {
-    options = availableResources.map((r) => ({ resourceId: r.id }));
+    options = availableResources.map((r) => ({ resourceId: r.resource_id }));
   }
 
   if (requirements.preferredResourceId) {

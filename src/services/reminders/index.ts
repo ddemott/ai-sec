@@ -27,11 +27,13 @@ export class ReminderService {
    */
   async scheduleAppointmentReminders(appointment: any): Promise<void> {
     // Normalize appointment fields to camelCase. IDs are UUID strings
-    // (matches the appointments.id + tenants.id schema), so no integer
-    // coercion happens here — passing them through to the DB layer as-is.
+    // (matches the appointments.appointment_id + tenants.tenant_id schema),
+    // so no integer coercion happens here — passing them through to the
+    // DB layer as-is. Accepts both camelCase (appointmentId) and snake_case
+    // (appointment_id) shapes since callers vary.
     const normalizedAppointment = {
       ...appointment,
-      id: appointment.id,
+      appointmentId: appointment.appointmentId || appointment.appointment_id,
       tenantId: appointment.tenantId || appointment.tenant_id,
       serviceId: appointment.serviceId || appointment.service_id,
       staffId: appointment.staffId || appointment.staff_id,
@@ -100,7 +102,7 @@ export class ReminderService {
       }
 
       await this.db.createReminderSchedule({
-        appointment_id: normalizedAppointment.id,
+        appointment_id: normalizedAppointment.appointmentId,
         tenant_id: normalizedAppointment.tenantId,
         customer_email: normalizedAppointment.customerEmail,
         customer_phone: normalizedAppointment.customerPhone,

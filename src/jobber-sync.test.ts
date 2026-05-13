@@ -407,7 +407,7 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT new customer — return new ID
-    queryResponses.push({ rows: [{ id: 'new-local-id' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-local-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -437,7 +437,7 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -470,7 +470,7 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -787,13 +787,13 @@ describe("Jobber Sync — Pull Visit", () => {
     queryResponses.push({ rows: [{ local_id: 'local-cust-1' }] });
 
     // resources query — found
-    queryResponses.push({ rows: [{ id: RESOURCE_ID }] });
+    queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] });
 
     // check visit sync map — new
     queryResponses.push({ rows: [] });
 
     // INSERT appointment
-    queryResponses.push({ rows: [{ id: 'new-appt-id' }] });
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-id' }] });
 
     // INSERT visit sync map
     queryResponses.push({ rows: [] });
@@ -817,7 +817,7 @@ describe("Jobber Sync — Pull Visit", () => {
     queryResponses.push({ rows: [{ local_id: 'local-cust-1' }] });
 
     // resources query — found
-    queryResponses.push({ rows: [{ id: RESOURCE_ID }] });
+    queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] });
 
     // check visit sync map — existing with older timestamp
     queryResponses.push({ rows: [{ local_id: 'existing-appt-id', remote_updated_at: '2026-03-20T10:00:00Z' }] });
@@ -850,7 +850,7 @@ describe("Jobber Sync — Pull Visit", () => {
     queryResponses.push({ rows: [{ local_id: 'local-cust-1' }] });
 
     // resources
-    queryResponses.push({ rows: [{ id: RESOURCE_ID }] });
+    queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] });
 
     // visit sync map — existing with older timestamp
     queryResponses.push({ rows: [{ local_id: 'existing-appt-id', remote_updated_at: '2026-03-20T10:00:00Z' }] });
@@ -880,7 +880,7 @@ describe("Jobber Sync — Pull Visit", () => {
     // customer sync map
     queryResponses.push({ rows: [{ local_id: 'local-cust-1' }] });
     // resources
-    queryResponses.push({ rows: [{ id: RESOURCE_ID }] });
+    queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] });
     // visit sync map — same timestamp
     queryResponses.push({ rows: [{ local_id: 'existing-appt', remote_updated_at: ts }] });
 
@@ -945,15 +945,15 @@ describe("Jobber Sync — Full Sync", () => {
     // sync map check, phone check, INSERT customer, INSERT sync map
     queryResponses.push({ rows: [] }); // sync map
     queryResponses.push({ rows: [] }); // phone check
-    queryResponses.push({ rows: [{ id: 'new-local-1' }] }); // INSERT customer
+    queryResponses.push({ rows: [{ customer_id: 'new-local-1' }] }); // INSERT customer
     queryResponses.push({ rows: [] }); // INSERT sync map
 
     // For each pullJobberVisit call (1 visit):
     // customer sync map, resources, visit sync map, INSERT appointment, INSERT sync map
     queryResponses.push({ rows: [{ local_id: 'new-local-1' }] }); // customer sync
-    queryResponses.push({ rows: [{ id: RESOURCE_ID }] }); // resources
+    queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] }); // resources
     queryResponses.push({ rows: [] }); // visit sync map
-    queryResponses.push({ rows: [{ id: 'new-appt-1' }] }); // INSERT appointment
+    queryResponses.push({ rows: [{ appointment_id: 'new-appt-1' }] }); // INSERT appointment
     queryResponses.push({ rows: [] }); // INSERT sync map
 
     // UPDATE last_sync_at

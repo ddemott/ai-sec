@@ -45,7 +45,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     customers?: { name?: string; first_name?: string; last_name?: string; phone?: string };
     resources?: { name?: string };
   }
-  interface DashboardEmployee { id: string; name: string; first_name?: string | null; last_name?: string | null; type?: string; is_active: boolean }
+  interface DashboardEmployee { employee_id: string; name: string; first_name?: string | null; last_name?: string | null; type?: string; is_active: boolean }
   interface DashboardService { service_id: string; name: string }
   interface DashboardResource { resource_id: string; name: string }
 
@@ -375,7 +375,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
 function WeekView({ tenantId, employees, vocab, onNavigate }: {
   tenantId: string | null
-  employees: { id: string; name: string; first_name?: string | null; last_name?: string | null }[]
+  employees: { employee_id: string; name: string; first_name?: string | null; last_name?: string | null }[]
   vocab: { booking_label: string; employee_label: string }
   onNavigate?: (tab: Tab) => void
 }) {
@@ -411,7 +411,7 @@ function WeekView({ tenantId, employees, vocab, onNavigate }: {
           date,
           count: dayAppts.length,
           appts: dayAppts.slice(0, 4).map(a => {
-            const empName = a.employee_id && employees.find(e => e.id === String(a.employee_id))
+            const empName = a.employee_id && employees.find(e => e.employee_id === String(a.employee_id))
             return {
               time: new Date(a.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
               desc: a.description || vocab.booking_label,
@@ -430,9 +430,9 @@ function WeekView({ tenantId, employees, vocab, onNavigate }: {
       const shiftMap: Record<string, { name: string; start: string; end: string; isOff: boolean }[]> = {}
       try {
         const shiftPromises = employees.map(emp =>
-          Api.shifts.schedule.forDate(tenantId, emp.id, days[0], days[6])
-            .then(shifts => ({ empId: emp.id, empName: emp.first_name || emp.name, shifts }))
-            .catch(() => ({ empId: emp.id, empName: emp.first_name || emp.name, shifts: [] }))
+          Api.shifts.schedule.forDate(tenantId, emp.employee_id, days[0], days[6])
+            .then(shifts => ({ empId: emp.employee_id, empName: emp.first_name || emp.name, shifts }))
+            .catch(() => ({ empId: emp.employee_id, empName: emp.first_name || emp.name, shifts: [] }))
         )
         const results = await Promise.all(shiftPromises)
         for (const { empName, shifts } of results) {

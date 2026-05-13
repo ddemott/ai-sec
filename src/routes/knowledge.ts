@@ -189,7 +189,7 @@ export function registerKnowledgeRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
-        `SELECT unanswered_question_id AS id, question, caller_phone, call_id, caller_message, owner_notified, resolved, created_at
+        `SELECT unanswered_question_id, question, caller_phone, call_id, caller_message, owner_notified, resolved, created_at
          FROM unanswered_questions
          WHERE tenant_id = $1 AND resolved = false
          ORDER BY created_at DESC

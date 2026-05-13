@@ -126,7 +126,7 @@ async function createServiceAs(
   });
   expect(res.status(), `service ${name} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.service.id as string;
+  return body.service.service_id as string;
 }
 
 async function createResourceAs(
@@ -141,7 +141,7 @@ async function createResourceAs(
   });
   expect(res.status(), `resource ${name} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.resource.id as string;
+  return body.resource.resource_id as string;
 }
 
 async function createEmployeeAs(
@@ -161,7 +161,7 @@ async function createEmployeeAs(
   });
   expect(res.status(), `employee ${fullName} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.employee.id as string;
+  return body.employee.employee_id as string;
 }
 
 async function createCustomerAs(
@@ -177,7 +177,7 @@ async function createCustomerAs(
   });
   expect(res.status(), `customer ${name} create must succeed`).toBe(200);
   const body = await res.json();
-  return body.customer.id as string;
+  return body.customer.customer_id as string;
 }
 
 async function expandWeeklyAs(

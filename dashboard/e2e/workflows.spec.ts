@@ -201,7 +201,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     await page.waitForTimeout(2500);
 
     const dbRes = await pool.query(
-      `SELECT appointment_id AS id FROM appointments
+      `SELECT appointment_id FROM appointments
         WHERE tenant_id = $1
           AND created_at >= $2
           AND is_deleted = false
@@ -210,7 +210,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
       [DYNATIRE_ID, beforeClick.toISOString()],
     );
     expect(dbRes.rowCount, `expected a new appointment created after ${beforeClick.toISOString()}; tag=${description}`).toBeGreaterThanOrEqual(1);
-    createdId = dbRes.rows[0].id;
+    createdId = dbRes.rows[0].appointment_id;
   } finally {
     if (createdId) {
       await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [createdId]);
@@ -379,15 +379,15 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     const shiftDate = future.toISOString().slice(0, 10);
 
     const customer = await pool.query(
-      `SELECT customer_id AS id FROM customers WHERE tenant_id = $1 LIMIT 1`,
+      `SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1`,
       [DYNATIRE_ID],
     );
     const resource = await pool.query(
-      `SELECT resource_id AS id FROM resources WHERE tenant_id = $1 LIMIT 1`,
+      `SELECT resource_id FROM resources WHERE tenant_id = $1 LIMIT 1`,
       [DYNATIRE_ID],
     );
     const employee = await pool.query(
-      `SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = 'Mike Rivera' LIMIT 1`,
+      `SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = 'Mike Rivera' LIMIT 1`,
       [DYNATIRE_ID],
     );
     expect(employee.rowCount, 'Mike Rivera must exist in DynaTire seed').toBe(1);
@@ -399,17 +399,17 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
        VALUES ($1, $2, $3, '08:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
          SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-       RETURNING employee_schedule_id AS id`,
-      [DYNATIRE_ID, employee.rows[0].id, shiftDate],
+       RETURNING employee_schedule_id`,
+      [DYNATIRE_ID, employee.rows[0].employee_id, shiftDate],
     );
-    shiftId = shiftRes.rows[0].id;
+    shiftId = shiftRes.rows[0].employee_schedule_id;
 
     const insert = await pool.query(
       `INSERT INTO appointments (tenant_id, customer_id, resource_id, employee_id, start_time, end_time, description, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id AS id`,
-      [DYNATIRE_ID, customer.rows[0].id, resource.rows[0].id, employee.rows[0].id, startIso, endIso, description],
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id`,
+      [DYNATIRE_ID, customer.rows[0].customer_id, resource.rows[0].resource_id, employee.rows[0].employee_id, startIso, endIso, description],
     );
-    apptId = insert.rows[0].id;
+    apptId = insert.rows[0].appointment_id;
 
     // Edit via API (reuses the same PUT /appointments/:id route the UI calls).
     // We don't drive the form because (a) controlled-input fills don't reliably
@@ -530,10 +530,10 @@ test('front-desk role: cannot see Advanced tabs; stale URL redirects to Home', a
   try {
     const inserted = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id AS id`,
+       VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id`,
       [DYNATIRE_ID, fdEmail, SEED_PASSWORD_HASH, `Front Desk ${tag}`],
     );
-    fdUserId = inserted.rows[0].id;
+    fdUserId = inserted.rows[0].user_id;
 
     await loginAs(page, fdEmail, 'password');
 
@@ -589,13 +589,13 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
 
     // Verify user row + password_resets row exist
     const userRow = await pool.query(
-      `SELECT user_id AS id, role, password_hash FROM users WHERE email = $1 AND tenant_id = $2`,
+      `SELECT user_id, role, password_hash FROM users WHERE email = $1 AND tenant_id = $2`,
       [inviteEmail, DYNATIRE_ID],
     );
     expect(userRow.rowCount).toBe(1);
     expect(userRow.rows[0].role).toBe('front_desk');
     expect(userRow.rows[0].password_hash, 'placeholder hash should be present').toBeTruthy();
-    invitedId = userRow.rows[0].id;
+    invitedId = userRow.rows[0].user_id;
 
     const resetRow = await pool.query(
       `SELECT 1 FROM password_resets WHERE user_id = $1 AND expires_at > NOW()`,

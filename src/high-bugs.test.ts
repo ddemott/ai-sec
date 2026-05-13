@@ -80,20 +80,20 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             expect(selectRes.rows.length).toBeGreaterThan(0);
 
             const insertRes = await api.query(
-                "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550009999', 'Test') RETURNING customer_id AS id",
+                "INSERT INTO customers (tenant_id, phone, name) VALUES ($1, '+15550009999', 'Test') RETURNING customer_id",
                 [tenantId]
             );
-            expect(insertRes.rows[0].id).toBeDefined();
+            expect(insertRes.rows[0].customer_id).toBeDefined();
 
             const updateRes = await api.query(
                 "UPDATE customers SET name = 'Updated' WHERE customer_id = $1 RETURNING name",
-                [insertRes.rows[0].id]
+                [insertRes.rows[0].customer_id]
             );
             expect(updateRes.rows[0].name).toBe('Updated');
 
             const deleteRes = await api.query(
                 "DELETE FROM customers WHERE customer_id = $1",
-                [insertRes.rows[0].id]
+                [insertRes.rows[0].customer_id]
             );
             expect(deleteRes.rowCount).toBe(1);
         });
@@ -109,16 +109,16 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const tenantId = await createTenant(root, "Cap Shop", "auto-shop");
 
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Basic Bay', '{}') RETURNING resource_id as id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Basic Bay', '{}') RETURNING resource_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].resource_id;
 
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -141,16 +141,16 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const tenantId = await createTenant(root, "Cap Shop", "auto-shop");
 
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift', 'oil-drain']) RETURNING resource_id as id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift', 'oil-drain']) RETURNING resource_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].resource_id;
 
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-lift']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -177,9 +177,9 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -401,9 +401,9 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -427,16 +427,16 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             const tenantId = await createTenant(root, "Skill Shop", "auto-shop");
 
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift']) RETURNING resource_id as id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Full Bay', ARRAY['tire-lift']) RETURNING resource_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].resource_id;
 
             const customerId = await createCustomerFull(root, tenantId, "+15550001111", "Alice");
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install'], ARRAY['tire-lift']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills, required_resources) VALUES ($1, 'Tire Install', 60, ARRAY['tire-install'], ARRAY['tire-lift']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -564,14 +564,14 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
 
             const tenantId = await createTenant(root, "Diag Shop", "auto-shop");
             const resourceId = (await root.query(
-                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Empty Bay', '{}') RETURNING resource_id as id",
+                "INSERT INTO resources (tenant_id, name, capabilities) VALUES ($1, 'Empty Bay', '{}') RETURNING resource_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].resource_id;
             const customerId = await createCustomerFull(root, tenantId, "+15550009876", "Diag Customer");
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Special Service', 60, ARRAY['hydraulic-lift']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_resources) VALUES ($1, 'Special Service', 60, ARRAY['hydraulic-lift']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
@@ -605,9 +605,9 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
             await createScheduleEntry(root, tenantId, employeeId, '2026-04-01', '08:00', '18:00');
 
             const serviceId = (await root.query(
-                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Expert Service', 60, ARRAY['advanced-repair']) RETURNING service_id as id",
+                "INSERT INTO services (tenant_id, name, duration_minutes, required_skills) VALUES ($1, 'Expert Service', 60, ARRAY['advanced-repair']) RETURNING service_id",
                 [tenantId]
-            )).rows[0].id;
+            )).rows[0].service_id;
 
             const result = await root.query(
                 "SELECT * FROM book_appointment_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",

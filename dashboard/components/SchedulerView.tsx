@@ -61,7 +61,7 @@ export default function SchedulerView() {
   }>({});
 
   // Employee focus panel state
-  const [focusEmployee, setFocusEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [focusEmployee, setFocusEmployee] = useState<{ employee_id: string; name: string } | null>(null);
 
   const {
     appointments,
@@ -305,8 +305,8 @@ export default function SchedulerView() {
         isOpen={!!focusEmployee}
         onClose={() => setFocusEmployee(null)}
         employee={focusEmployee}
-        appointments={focusEmployee ? (appointmentsByEmployee.get(String(focusEmployee.id)) || []) : []}
-        shifts={focusEmployee ? (shiftsByEmployee.get(String(focusEmployee.id)) || []) : []}
+        appointments={focusEmployee ? (appointmentsByEmployee.get(String(focusEmployee.employee_id)) || []) : []}
+        shifts={focusEmployee ? (shiftsByEmployee.get(String(focusEmployee.employee_id)) || []) : []}
         onAppointmentClick={handleAppointmentClick}
       />
 
@@ -316,7 +316,7 @@ export default function SchedulerView() {
           appointment={apptPopover.appointment}
           employeeName={
             apptPopover.appointment.employee_id
-              ? employees.find(e => String(e.id) === String(apptPopover.appointment.employee_id))?.name || null
+              ? employees.find(e => String(e.employee_id) === String(apptPopover.appointment.employee_id))?.name || null
               : null
           }
           resourceName={apptPopover.appointment.resources?.name || null}

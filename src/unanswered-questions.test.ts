@@ -129,10 +129,10 @@ describe("Unanswered Questions — Happy Paths", () => {
     const insertRes = await client.query(
       `INSERT INTO unanswered_questions (tenant_id, question, caller_phone)
        VALUES ($1, 'Do you offer financing?', '+15559876543')
-       RETURNING unanswered_question_id AS id`,
+       RETURNING unanswered_question_id`,
       [tenantId]
     );
-    const questionId = insertRes.rows[0].id;
+    const questionId = insertRes.rows[0].unanswered_question_id;
 
     // Resolve it
     await client.query(
@@ -187,9 +187,9 @@ describe("Unanswered Questions — Sad Paths", () => {
     if (!dbAvailable) return;
 
     const tenant2Res = await client.query(
-      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING tenant_id AS id`
+      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING tenant_id`
     );
-    const tenant2Id = tenant2Res.rows[0].id;
+    const tenant2Id = tenant2Res.rows[0].tenant_id;
 
     await client.query(
       `INSERT INTO unanswered_questions (tenant_id, question) VALUES ($1, 'Tenant A question')`,
@@ -226,15 +226,15 @@ describe("Unanswered Questions — Sad Paths", () => {
     if (!dbAvailable) return;
 
     const tenant2Res = await client.query(
-      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING tenant_id AS id`
+      `INSERT INTO tenants (name, business_type) VALUES ('Other Biz', 'salon') RETURNING tenant_id`
     );
-    const tenant2Id = tenant2Res.rows[0].id;
+    const tenant2Id = tenant2Res.rows[0].tenant_id;
 
     const insertRes = await client.query(
-      `INSERT INTO unanswered_questions (tenant_id, question) VALUES ($1, 'My question') RETURNING unanswered_question_id AS id`,
+      `INSERT INTO unanswered_questions (tenant_id, question) VALUES ($1, 'My question') RETURNING unanswered_question_id`,
       [tenantId]
     );
-    const questionId = insertRes.rows[0].id;
+    const questionId = insertRes.rows[0].unanswered_question_id;
 
     // Try to resolve as wrong tenant
     const updateRes = await client.query(
@@ -286,9 +286,9 @@ describe("Unanswered Questions — Sad Paths", () => {
     if (!dbAvailable) return;
 
     const tempTenantRes = await client.query(
-      `INSERT INTO tenants (name, business_type) VALUES ('Temp Biz', 'salon') RETURNING tenant_id AS id`
+      `INSERT INTO tenants (name, business_type) VALUES ('Temp Biz', 'salon') RETURNING tenant_id`
     );
-    const tempTenantId = tempTenantRes.rows[0].id;
+    const tempTenantId = tempTenantRes.rows[0].tenant_id;
 
     await client.query(
       `INSERT INTO unanswered_questions (tenant_id, question) VALUES ($1, 'Will be deleted')`,

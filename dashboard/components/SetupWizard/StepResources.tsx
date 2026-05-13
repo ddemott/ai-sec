@@ -31,7 +31,7 @@ export function Step2Resources({
         <div className="space-y-2 mb-4">
           {resources.map((res: WizardResource) => (
             <div
-              key={res.id}
+              key={res.resource_id}
               className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
             >
               <div className="flex-1 min-w-0">
@@ -46,7 +46,7 @@ export function Step2Resources({
                 <button onClick={() => onEdit(res)} className="p-1.5 text-gray-400 transition-colors" onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-soft)' }} onMouseLeave={e => { e.currentTarget.style.color = '' }} title="Edit">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => onDelete(res.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                <button onClick={() => onDelete(res.resource_id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

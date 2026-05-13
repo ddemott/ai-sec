@@ -119,7 +119,7 @@ async function seedTenant(client: Client, label: string, businessType: string): 
   // return for cross-tenant probes.
   const docRes = await client.query(
     `INSERT INTO tenant_docs (tenant_id, title, content, embedding)
-     VALUES ($1, $2, $3, $4::vector) RETURNING tenant_doc_id as id`,
+     VALUES ($1, $2, $3, $4::vector) RETURNING tenant_doc_id`,
     [
       tenantId,
       `${label}-Secret-Policy`,
@@ -127,7 +127,7 @@ async function seedTenant(client: Client, label: string, businessType: string): 
       `[${new Array(1536).fill(0).join(',')}]`,
     ]
   );
-  const knowledgeDocId = docRes.rows[0].id;
+  const knowledgeDocId = docRes.rows[0].tenant_doc_id;
 
   return {
     id: tenantId,
@@ -661,7 +661,7 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
 
   it('SAD: DELETE /tenants/<B> under A JWT must not delete tenant B', async () => {
     if (!dbAvailable) return;
-    const beforeRow = await setup.query('SELECT tenant_id AS id FROM tenants WHERE tenant_id = $1', [B.id]);
+    const beforeRow = await setup.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [B.id]);
     expect(beforeRow.rows).toHaveLength(1);
 
     const res = await app.inject({
@@ -671,7 +671,7 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
     });
     expect([401, 403]).toContain(res.statusCode);
 
-    const afterRow = await setup.query('SELECT tenant_id AS id FROM tenants WHERE tenant_id = $1', [B.id]);
+    const afterRow = await setup.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [B.id]);
     expect(afterRow.rows).toHaveLength(1);
   });
 

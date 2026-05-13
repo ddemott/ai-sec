@@ -41,18 +41,18 @@ describe("Appointment Update & Cancel", () => {
 
     async function createService(name: string, duration: number) {
         const res = await client.query(
-            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, $3) RETURNING service_id as id",
+            "INSERT INTO services (tenant_id, name, duration_minutes) VALUES ($1, $2, $3) RETURNING service_id",
             [tenantId, name, duration]
         );
-        return res.rows[0].id;
+        return res.rows[0].service_id;
     }
 
     async function createEmployee(name: string) {
         const res = await client.query(
-            "INSERT INTO employees (tenant_id, name, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING employee_id as id",
+            "INSERT INTO employees (tenant_id, name, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING employee_id",
             [tenantId, name, name.split(' ')[0], name.split(' ')[1] || '']
         );
-        return res.rows[0].id;
+        return res.rows[0].employee_id;
     }
 
     async function bookAppointment(opts: { employeeId?: string; serviceId?: string } = {}) {
@@ -97,7 +97,7 @@ describe("Appointment Update & Cancel", () => {
         const { appointmentId } = await bookAppointment();
 
         const res = await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id, status",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id, status",
             [appointmentId, tenantId]
         );
 
@@ -116,7 +116,7 @@ describe("Appointment Update & Cancel", () => {
         );
 
         const res = await client.query(
-            "SELECT appointment_id AS id, status FROM appointments WHERE appointment_id = $1",
+            "SELECT appointment_id, status FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(res.rows.length).toBe(1);
@@ -127,7 +127,7 @@ describe("Appointment Update & Cancel", () => {
         if (!dbAvailable) return;
 
         const res = await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id",
             ['00000000-0000-0000-0000-000000000000', tenantId]
         );
 
@@ -141,7 +141,7 @@ describe("Appointment Update & Cancel", () => {
         const fakeTenantId = '00000000-0000-0000-0000-999999999999';
 
         const res = await client.query(
-            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id AS id",
+            "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1 AND tenant_id = $2 RETURNING appointment_id",
             [appointmentId, fakeTenantId]
         );
 
@@ -226,7 +226,7 @@ describe("Appointment Update & Cancel", () => {
         await client.query("DELETE FROM appointments WHERE appointment_id = $1", [appointmentId]);
 
         const res = await client.query(
-            "SELECT appointment_id AS id FROM appointments WHERE appointment_id = $1",
+            "SELECT appointment_id FROM appointments WHERE appointment_id = $1",
             [appointmentId]
         );
         expect(res.rows.length).toBe(0);

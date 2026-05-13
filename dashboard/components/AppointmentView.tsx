@@ -423,7 +423,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
     setForm({
       customer_id: defaultCustomerId,
       resource_id: resources[0]?.resource_id || '',
-      employee_id: employees[0]?.id || '',
+      employee_id: employees[0]?.employee_id || '',
       description: '',
       start_time: toLocalISO(now),
       end_time: toLocalISO(inOneHour),

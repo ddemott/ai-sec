@@ -64,7 +64,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
     if (!requireSuperAdmin(req, reply)) return;
     const { id } = req.params as { id: string };
     const res = await withPoolClient(pool, client =>
-      client.query('DELETE FROM tenants WHERE tenant_id = $1 RETURNING tenant_id AS id', [id])
+      client.query('DELETE FROM tenants WHERE tenant_id = $1 RETURNING tenant_id', [id])
     );
     if (!assertRowAffected(res, reply, 'Tenant')) return;
     logEvent(req, 'tenant_deleted', { tenantId: id });
@@ -84,7 +84,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
         `UPDATE tenants SET
             name = $1, business_type = $2, timezone = $3, voice_id = $4,
             system_prompt = $5, first_message = $6, owner_phone = $7, inbound_phone = $8
-         WHERE tenant_id = $9 RETURNING tenant_id AS id`,
+         WHERE tenant_id = $9 RETURNING tenant_id`,
         [body.name, body.business_type, body.timezone, body.voice_id,
          body.system_prompt, body.first_message, body.owner_phone, body.inbound_phone, id]
       )
@@ -128,7 +128,7 @@ export function registerTenantRoutes(app: FastifyInstance<any, any, any>, pool: 
     const body = parsed.data;
     const res = await withPoolClient(pool, client =>
       client.query(
-        'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE tenant_id = $5 RETURNING tenant_id AS id',
+        'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE tenant_id = $5 RETURNING tenant_id',
         [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
       )
     );

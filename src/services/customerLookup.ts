@@ -30,20 +30,20 @@ export async function getOrCreateCustomerByPhone(
   name: string
 ): Promise<string> {
   return withTenantClient(tenantId, async (client) => {
-    const existing = await client.query<{ id: string }>(
-      `SELECT customer_id AS id FROM customers
+    const existing = await client.query<{ customer_id: string }>(
+      `SELECT customer_id FROM customers
         WHERE tenant_id = $1 AND phone = $2
           AND (is_deleted IS NULL OR is_deleted = false)`,
       [tenantId, phoneNormalized]
     );
     if (existing.rows.length > 0) {
-      return existing.rows[0].id;
+      return existing.rows[0].customer_id;
     }
-    const inserted = await client.query<{ id: string }>(
+    const inserted = await client.query<{ customer_id: string }>(
       `INSERT INTO customers (tenant_id, phone, name)
-         VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+         VALUES ($1, $2, $3) RETURNING customer_id`,
       [tenantId, phoneNormalized, name]
     );
-    return inserted.rows[0].id;
+    return inserted.rows[0].customer_id;
   });
 }

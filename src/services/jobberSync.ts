@@ -67,7 +67,7 @@ export async function syncCustomerToJobber(
 
     // Fetch local customer
     const custRes = await client.query(
-      `SELECT customer_id AS id, name, phone, email, address, metadata, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
+      `SELECT customer_id, name, phone, email, address, metadata, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
       [customerId, tenantId]
     );
     const cust = custRes.rows[0];
@@ -282,14 +282,14 @@ export async function pullJobberVisit(
 
       // Get default resource for this tenant
       const resourceRes = await client.query(
-        `SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND (is_active = true OR is_active IS NULL) ORDER BY created_at LIMIT 1`,
+        `SELECT resource_id FROM resources WHERE tenant_id = $1 AND (is_active = true OR is_active IS NULL) ORDER BY created_at LIMIT 1`,
         [tenantId]
       );
       if (resourceRes.rows.length === 0) {
         log.warn(`${prefix} — skipped: tenant ${tenantId} has no active resources (needed to create appointment)`);
         return;
       }
-      const resourceId = resourceRes.rows[0].id;
+      const resourceId = resourceRes.rows[0].resource_id;
 
       // Check sync map
       const syncEntry = await syncMapFindByExternalId(client, tenantId, 'jobber', 'appointment', jobberId);
@@ -300,10 +300,10 @@ export async function pullJobberVisit(
         const insertRes = await client.query(
           `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
            VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
-           RETURNING appointment_id AS id`,
+           RETURNING appointment_id`,
           [tenantId, resourceId, localCustomerId, visitData.startAt, visitData.endAt, description]
         );
-        const localId = insertRes.rows[0].id;
+        const localId = insertRes.rows[0].appointment_id;
 
         await syncMapUpsertOnPull(client, tenantId, 'jobber', 'appointment', localId, jobberId, remoteUpdatedAt);
         log.info(`${prefix} — created local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} description=${description})`);

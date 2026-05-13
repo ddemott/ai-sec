@@ -68,7 +68,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
 
         // Query that the new endpoint should use
         const res = await client.query(
-            `SELECT a.appointment_id AS id, a.start_time, a.end_time, a.status, a.description, a.location,
+            `SELECT a.appointment_id, a.start_time, a.end_time, a.status, a.description, a.location,
                     r.name as resource_name,
                     e.name as employee_name
              FROM appointments a
@@ -95,7 +95,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
         if (!dbAvailable) return;
 
         const res = await client.query(
-            `SELECT a.appointment_id AS id, a.start_time, a.end_time, a.status, a.description, a.location,
+            `SELECT a.appointment_id, a.start_time, a.end_time, a.status, a.description, a.location,
                     r.name as resource_name,
                     e.name as employee_name
              FROM appointments a
@@ -146,10 +146,10 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
                      date_trunc('hour', NOW() + interval '1 day'),
                      date_trunc('hour', NOW() + interval '1 day') + interval '1 hour',
                      'Alignment', 'scheduled')
-             RETURNING appointment_id AS id`,
+             RETURNING appointment_id`,
             [tenantId, resourceId, customerId]
         );
-        const appointmentId = apptRes.rows[0].id;
+        const appointmentId = apptRes.rows[0].appointment_id;
 
         // Cancel it (status update, not delete)
         await client.query(

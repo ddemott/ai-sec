@@ -16,8 +16,8 @@ function makeAppt(overrides: Partial<SchedulerAppointment> = {}): SchedulerAppoi
     end_time: '2026-07-01T15:00:00Z',
     description: 'Tire Mount',
     status: 'scheduled',
-    customers: { id: 'c-1', name: 'Alice', phone: '+15555550001' },
-    resources: { id: 'r-1', name: 'Bay 1' },
+    customers: { customer_id: 'c-1', name: 'Alice', phone: '+15555550001' },
+    resources: { resource_id: 'r-1', name: 'Bay 1' },
     ...overrides,
   } as unknown as SchedulerAppointment;
 }

@@ -328,7 +328,7 @@ describe("Auth Routes — Handler-Level", () => {
       // Check existing — none
       queryResponses.push({ rows: [] });
       // INSERT tenant
-      queryResponses.push({ rows: [{ id: TENANT_ID_MOCK }] });
+      queryResponses.push({ rows: [{ tenant_id: TENANT_ID_MOCK }] });
       // INSERT user
       queryResponses.push({ rows: [{ user_id: USER_ID_MOCK }] });
       // COMMIT
@@ -480,7 +480,7 @@ describe("Auth Routes — Handler-Level", () => {
       // BEGIN
       queryResponses.push({ rows: [] });
       // SELECT password_resets — found, unused, not expired
-      queryResponses.push({ rows: [{ id: 'reset-id', user_id: USER_ID_MOCK }] });
+      queryResponses.push({ rows: [{ password_reset_id: 'reset-id', user_id: USER_ID_MOCK }] });
       // UPDATE users (password + password_changed_at)
       queryResponses.push({ rows: [] });
       // UPDATE password_resets SET used_at (this token)
@@ -500,7 +500,7 @@ describe("Auth Routes — Handler-Level", () => {
       // Verify the queries: BEGIN, SELECT, UPDATE users, UPDATE this reset, UPDATE other resets, COMMIT
       const queries = client.query.mock.calls.map(c => (c[0] as string).trim().split('\n')[0]);
       expect(queries[0]).toBe('BEGIN');
-      expect(queries[1]).toContain('SELECT password_reset_id AS id, user_id FROM password_resets');
+      expect(queries[1]).toContain('SELECT password_reset_id, user_id FROM password_resets');
       expect(queries[2]).toContain('UPDATE users SET password_hash');
       expect(queries[2]).toContain('password_changed_at = NOW()');
       expect(queries[5]).toBe('COMMIT');
@@ -635,10 +635,10 @@ describe("Auth - Database Level", () => {
             await client.query("BEGIN");
 
             const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
+                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
                 ["New Business", "mobile-tire"]
             );
-            const tenantId = tenantRes.rows[0].id;
+            const tenantId = tenantRes.rows[0].tenant_id;
 
             const userRes = await client.query(
                 "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, full_name",
@@ -665,10 +665,10 @@ describe("Auth - Database Level", () => {
             await client.query('BEGIN');
 
             const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
+                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
                 ['Test Salon', 'salon']
             );
-            const tenantId = tenantRes.rows[0].id;
+            const tenantId = tenantRes.rows[0].tenant_id;
 
             const hash = await hashPassword('testpass123');
 
@@ -873,7 +873,7 @@ describe("Auth - Database Level", () => {
                 await client.query("BEGIN");
 
                 await client.query(
-                    "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id AS id",
+                    "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
                     ["Rollback Test", "salon"]
                 );
 

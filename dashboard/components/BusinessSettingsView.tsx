@@ -63,10 +63,10 @@ export default function BusinessSettingsView() {
 
   useEffect(() => {
     if (isSolo && soloEmployee && tenantId) {
-      fetchShifts(soloEmployee.id)
+      fetchShifts(soloEmployee.employee_id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSolo, soloEmployee?.id, tenantId])
+  }, [isSolo, soloEmployee?.employee_id, tenantId])
 
   async function fetchTenantConfig() {
     try {

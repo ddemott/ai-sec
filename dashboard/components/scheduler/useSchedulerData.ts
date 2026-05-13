@@ -24,7 +24,7 @@ function toDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-interface SchedulerEmployee { id: string; name: string }
+interface SchedulerEmployee { employee_id: string; name: string }
 interface SchedulerResource { resource_id: string; name: string }
 interface SchedulerShift { employee_id?: string; start_time?: string; end_time?: string }
 
@@ -74,7 +74,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
   const appointmentsByEmployee = useMemo(() => {
     const map = new Map<string, SchedulerAppointment[]>();
     for (const emp of employees) {
-      map.set(String(emp.id), []);
+      map.set(String(emp.employee_id), []);
     }
     map.set('unassigned', []);
     for (const appt of appointments) {
@@ -111,7 +111,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
   const shiftsByEmployee = useMemo(() => {
     const map = new Map<string, SchedulerShift[]>();
     for (const emp of employees) {
-      map.set(String(emp.id), []);
+      map.set(String(emp.employee_id), []);
     }
     for (const shift of allShifts) {
       if (shift.is_off || !shift.start_time || !shift.end_time) continue;

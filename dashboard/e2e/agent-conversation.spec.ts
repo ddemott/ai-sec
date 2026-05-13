@@ -76,19 +76,19 @@ async function callAgentTool(
 
 async function findEmployeeIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    `SELECT employee_id AS id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
+    `SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
     [DYNATIRE_ID, name]
   );
   if (r.rowCount === 0) throw new Error(`Employee "${name}" not found in DynaTire seed`);
-  return r.rows[0].id;
+  return r.rows[0].employee_id;
 }
 async function findResourceIdByName(name: string): Promise<string> {
   const r = await pool.query(
-    `SELECT resource_id AS id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
+    `SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
     [DYNATIRE_ID, name]
   );
   if (r.rowCount === 0) throw new Error(`Resource "${name}" not found in DynaTire seed`);
-  return r.rows[0].id;
+  return r.rows[0].resource_id;
 }
 
 test.beforeAll(() => {
@@ -117,10 +117,10 @@ test('conversation: returning caller is greeted by name (customer-context lookup
 
   try {
     const ins = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-Alice Lee`, phone]
     );
-    customerId = ins.rows[0].id;
+    customerId = ins.rows[0].customer_id;
 
     const res = await callAgentTool(request, '/agent-tools/customer-context', {
       tenant_id: DYNATIRE_ID,
@@ -198,10 +198,10 @@ test('conversation: tire-rotation request books successfully via book_with_sched
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
            SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-         RETURNING employee_schedule_id AS id`,
+         RETURNING employee_schedule_id`,
         [DYNATIRE_ID, empId, FUTURE]
       );
-      shiftIdsToCleanup.push(s.rows[0].id);
+      shiftIdsToCleanup.push(s.rows[0].employee_schedule_id);
     }
 
     const res = await callAgentTool(request, '/agent-tools/book-with-scheduling', {
@@ -235,7 +235,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
 
     // Customer-create-as-separate-transaction: the customer row exists.
     const cust = await pool.query(
-      `SELECT customer_id AS id, name FROM customers WHERE tenant_id = $1 AND phone = $2`,
+      `SELECT customer_id, name FROM customers WHERE tenant_id = $1 AND phone = $2`,
       [DYNATIRE_ID, phone]
     );
     expect(cust.rowCount).toBe(1);
@@ -286,10 +286,10 @@ test('conversation: full-busy slot returns next_available alternatives the agent
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
            SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-         RETURNING employee_schedule_id AS id`,
+         RETURNING employee_schedule_id`,
         [DYNATIRE_ID, empId, FUTURE]
       );
-      shiftIdsToCleanup.push(s.rows[0].id);
+      shiftIdsToCleanup.push(s.rows[0].employee_schedule_id);
     }
 
     // Pre-book every tire-rotation-qualified tech (Carlos, Dana, Mike all
@@ -299,18 +299,18 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     // unavailable at the requested time → NO_AVAILABILITY for the next
     // booking attempt at that slot, alternatives kick in for 14:30+.
     const ph = await pool.query(
-      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id AS id`,
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [DYNATIRE_ID, `${tag}-blocker-customer`, `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`]
     );
-    const blockerCust = ph.rows[0].id;
+    const blockerCust = ph.rows[0].customer_id;
     for (const [empId, resId] of [[carlosId, truck1], [danaId, truck2], [mikeId, serviceTruck1]]) {
       const a = await pool.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
-         RETURNING appointment_id AS id`,
+         RETURNING appointment_id`,
         [DYNATIRE_ID, resId, blockerCust, empId, `${FUTURE}T14:00:00.000Z`, `${FUTURE}T14:30:00.000Z`, `${tag}-blocker`]
       );
-      apptIdsToCleanup.push(a.rows[0].id);
+      apptIdsToCleanup.push(a.rows[0].appointment_id);
     }
 
     // Now try to book — should fail, with alternatives.
@@ -429,10 +429,10 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
     const ins = await pool.query(
       `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
        VALUES ($1, $2, $3, now() + interval '10 minutes')
-       RETURNING phone_verification_id AS id`,
+       RETURNING phone_verification_id`,
       [DYNATIRE_ID, phone, codeHash]
     );
-    pvId = ins.rows[0].id;
+    pvId = ins.rows[0].phone_verification_id;
 
     // Wrong code — agent reads the failure message verbatim.
     const wrong = await callAgentTool(request, '/agent-tools/verify-phone-code', {

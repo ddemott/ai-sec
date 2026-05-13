@@ -2,13 +2,13 @@
 -- All test data is Chicago / Chicagoland / Chicago suburbs
 
 -- 0. Create a Platform Tenant for the SecretaryHQ Admin (Super Admin)
-INSERT INTO tenants (id, name, business_type, timezone)
+INSERT INTO tenants (tenant_id, name, business_type, timezone)
 VALUES (
     '00000000-0000-0000-0000-000000000000',
     'SecretaryHQ Platform',
     'platform-admin',
     'America/Chicago'
-) ON CONFLICT (id) DO NOTHING;
+) ON CONFLICT (tenant_id) DO NOTHING;
 
 -- 0b. Create a SecretaryHQ Admin User (Platform Admin)
 INSERT INTO users (tenant_id, email, password_hash, full_name)
@@ -16,7 +16,7 @@ VALUES ('00000000-0000-0000-0000-000000000000', 'admin@secretaryhq.com', '$2b$10
 ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- 1. Create DynaTire tenant (mobile tire service in Naperville/Aurora area)
-INSERT INTO tenants (id, name, business_type, timezone, system_prompt, voice_id)
+INSERT INTO tenants (tenant_id, name, business_type, timezone, system_prompt, voice_id)
 VALUES (
     'f234e471-0e60-4163-86c9-93cfd9338e3a',
     'DynaTire Mobile Service',
@@ -24,7 +24,7 @@ VALUES (
     'America/Chicago',
     'You are a professional, helpful secretary for DynaTire Mobile Service, a mobile tire shop serving the western Chicago suburbs including Naperville, Aurora, Wheaton, and Downers Grove. You help customers book tire services, answer questions about pricing and availability, and provide friendly, knowledgeable service.',
     'ba124806-6962-4354-94a0-7607775952f4'
-) ON CONFLICT (id) DO UPDATE SET
+) ON CONFLICT (tenant_id) DO UPDATE SET
     name = EXCLUDED.name,
     timezone = EXCLUDED.timezone,
     system_prompt = EXCLUDED.system_prompt;
@@ -42,14 +42,14 @@ VALUES
 ON CONFLICT (resource_id) DO NOTHING;
 
 -- 3. Create sample customers (Chicago suburbs)
-INSERT INTO customers (id, tenant_id, phone, name, first_name, last_name, email, address, metadata)
+INSERT INTO customers (customer_id, tenant_id, phone, name, first_name, last_name, email, address, metadata)
 VALUES
     ('207b25bb-ef55-4df8-ac89-252f9dcd80b9', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550101', 'James Kowalski', 'James', 'Kowalski', 'jkowalski@email.com', '1842 Washington St, Naperville, IL 60540', '{"vehicle": "2020 Chevy Silverado", "notes": "Asks about fleet pricing for his construction company"}'),
     ('97704486-04d4-40ba-85f8-7a82e47e1611', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550102', 'Sarah Chen', 'Sarah', 'Chen', 'sarah.chen@email.com', '305 Fox Run Dr, Wheaton, IL 60187', '{"vehicle": "2019 Honda CRV", "notes": "Prefers Mike Rivera, wants Michelin tires"}'),
     ('c3d4e5f6-7890-1234-5678-9abcdef01234', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550103', 'Tom Bradley', 'Tom', 'Bradley', 'tombradley@email.com', '4710 Bauer Rd, Downers Grove, IL 60515', '{"vehicle": "2022 Ford F-150", "notes": "Call only, no texts. Prefers Michelin Defenders."}'),
     ('d4e5f6a7-8901-2345-6789-0abcdef12345', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550104', 'Linda Park', 'Linda', 'Park', 'lpark@email.com', '892 Ogden Ave, Aurora, IL 60504', '{"vehicle": "2021 Toyota Camry", "notes": "Regular rotation every 6 months. Prefers Carlos Vega."}'),
     ('e5f6a7b8-9012-3456-7890-1abcdef23456', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550105', 'Robert Diaz', 'Robert', 'Diaz', 'rdiaz@email.com', '2200 75th St, Woodridge, IL 60517', '{"vehicle": "2023 Toyota Tacoma", "notes": "New customer, referred by James Kowalski"}')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (customer_id) DO NOTHING;
 
 -- 4. Create appointments (today and tomorrow, Chicago time)
 INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
@@ -78,7 +78,7 @@ BEGIN
     INSERT INTO tenants (name, business_type, timezone)
     VALUES ('Bella''s Hair Studio', 'salon', 'America/Chicago')
     ON CONFLICT DO NOTHING
-    RETURNING id INTO v_new_tenant_id;
+    RETURNING tenant_id INTO v_new_tenant_id;
 
     IF v_new_tenant_id IS NOT NULL THEN
         INSERT INTO users (tenant_id, email, password_hash, full_name)

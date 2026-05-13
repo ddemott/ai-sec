@@ -140,7 +140,7 @@ describe('Low Bug Fixes', () => {
             const res = await client.query(
                 `INSERT INTO customers (tenant_id, phone, name, metadata)
                  VALUES ($1, '+15550000098', 'ObjMeta', '{"key": "value"}'::jsonb)
-                 RETURNING customer_id AS id`,
+                 RETURNING customer_id`,
                 [tenantId]
             );
             expect(res.rows.length).toBe(1);
@@ -151,7 +151,7 @@ describe('Low Bug Fixes', () => {
             const res = await client.query(
                 `INSERT INTO customers (tenant_id, phone, name, metadata)
                  VALUES ($1, '+15550000097', 'NullMeta', NULL)
-                 RETURNING customer_id AS id`,
+                 RETURNING customer_id`,
                 [tenantId]
             );
             expect(res.rows.length).toBe(1);

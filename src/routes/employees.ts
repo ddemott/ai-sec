@@ -37,10 +37,10 @@ export function registerEmployeeRoutes(
 
     const res = await withTenantClient(tenantId, async (client) => {
       return client.query(`
-        SELECT employee_id::text AS id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
+        SELECT employee_id::text AS employee_id, name, first_name, last_name, email, phone, skills, is_active, 'employee' as type
         FROM employees WHERE tenant_id = $1 AND is_deleted = false
         UNION ALL
-        SELECT user_id::text as id, COALESCE(full_name, email) as name, NULL as first_name, NULL as last_name, email, NULL as phone, '{}'::text[] as skills, true as is_active, 'user' as type
+        SELECT user_id::text as employee_id, COALESCE(full_name, email) as name, NULL as first_name, NULL as last_name, email, NULL as phone, '{}'::text[] as skills, true as is_active, 'user' as type
         FROM users WHERE tenant_id = $1
         ORDER BY name ASC
       `, [tenantId]);

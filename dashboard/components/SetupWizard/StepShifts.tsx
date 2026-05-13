@@ -11,7 +11,7 @@ export function Step4Shifts({
   selectedEmployeeId, onSelectEmployee, onToggleShift, onUpdateTime,
 }: Step4Props) {
   const vocab = useVocabulary()
-  const selectedEmployee = employees.find((e: WizardEmployee) => String(e.id) === String(selectedEmployeeId))
+  const selectedEmployee = employees.find((e: WizardEmployee) => String(e.employee_id) === String(selectedEmployeeId))
   const employeeShifts = shifts.filter((s: WizardShift) => String(s.employee_id) === String(selectedEmployeeId))
 
   function getShiftForDay(dow: number) {
@@ -36,12 +36,12 @@ export function Step4Shifts({
           {/* Employee selector */}
           <div className="flex flex-wrap gap-2 mb-4">
             {employees.map((emp: WizardEmployee) => {
-              const empShiftCount = shifts.filter((s: WizardShift) => String(s.employee_id) === String(emp.id)).length
-              const isSelected = String(emp.id) === String(selectedEmployeeId)
+              const empShiftCount = shifts.filter((s: WizardShift) => String(s.employee_id) === String(emp.employee_id)).length
+              const isSelected = String(emp.employee_id) === String(selectedEmployeeId)
               return (
                 <button
-                  key={emp.id}
-                  onClick={() => onSelectEmployee(isSelected ? null : String(emp.id))}
+                  key={emp.employee_id}
+                  onClick={() => onSelectEmployee(isSelected ? null : String(emp.employee_id))}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     isSelected
                       ? 'ring-2'
@@ -70,7 +70,7 @@ export function Step4Shifts({
                   >
                     {/* Day toggle */}
                     <button
-                      onClick={() => onToggleShift(String(selectedEmployee.id), dow, '08:00', '17:00')}
+                      onClick={() => onToggleShift(String(selectedEmployee.employee_id), dow, '08:00', '17:00')}
                       disabled={saving}
                       className={`w-12 text-sm font-medium rounded-md py-1 transition-colors ${
                         shift

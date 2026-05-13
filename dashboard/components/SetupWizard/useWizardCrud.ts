@@ -99,7 +99,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
 
   // --- Service CRUD ---
   const startAddService = () => { setEditingService({ ...EMPTY_SERVICE }); setEditingServiceId(null); setError(null) }
-  const startEditService = (svc: WizardService) => { setEditingService({ name: svc.name || '', description: svc.description || '', duration_minutes: svc.duration_minutes || 30, price: svc.price ?? undefined }); setEditingServiceId(svc.id); setError(null) }
+  const startEditService = (svc: WizardService) => { setEditingService({ name: svc.name || '', description: svc.description || '', duration_minutes: svc.duration_minutes || 30, price: svc.price ?? undefined }); setEditingServiceId(svc.service_id); setError(null) }
   const cancelEditService = () => { setEditingService(null); setEditingServiceId(null); setError(null) }
 
   async function saveService() {
@@ -131,7 +131,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
 
   // --- Resource CRUD ---
   const startAddResource = () => { setEditingResource({ ...EMPTY_RESOURCE }); setEditingResourceId(null); setError(null) }
-  const startEditResource = (res: WizardResource) => { setEditingResource({ name: res.name || '', description: res.description || '' }); setEditingResourceId(res.id); setError(null) }
+  const startEditResource = (res: WizardResource) => { setEditingResource({ name: res.name || '', description: res.description || '' }); setEditingResourceId(res.resource_id); setError(null) }
   const cancelEditResource = () => { setEditingResource(null); setEditingResourceId(null); setError(null) }
 
   async function saveResource() {
@@ -158,7 +158,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
 
   // --- Employee CRUD ---
   const startAddEmployee = () => { setEditingEmployee({ ...EMPTY_EMPLOYEE }); setEditingEmployeeId(null); setError(null) }
-  const startEditEmployee = (emp: WizardEmployee) => { setEditingEmployee({ first_name: emp.first_name || '', last_name: emp.last_name || '', email: emp.email || '', phone: emp.phone || '' }); setEditingEmployeeId(String(emp.id)); setError(null) }
+  const startEditEmployee = (emp: WizardEmployee) => { setEditingEmployee({ first_name: emp.first_name || '', last_name: emp.last_name || '', email: emp.email || '', phone: emp.phone || '' }); setEditingEmployeeId(String(emp.employee_id)); setError(null) }
   const cancelEditEmployee = () => { setEditingEmployee(null); setEditingEmployeeId(null); setError(null) }
 
   async function saveEmployee() {

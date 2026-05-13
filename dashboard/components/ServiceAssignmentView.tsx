@@ -338,11 +338,11 @@ export default function ServiceAssignmentView() {
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Qualified {vocab.employee_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {employees.filter(e => e.type !== 'user').map(emp => {
-                    const isMapped = empMappings.some(m => m.service_id === selectedService?.service_id && m.employee_id === emp.id)
+                    const isMapped = empMappings.some(m => m.service_id === selectedService?.service_id && m.employee_id === emp.employee_id)
                     return (
                       <button 
-                        key={emp.id}
-                        onClick={() => selectedService && toggleEmployeeMapping(selectedService.service_id, emp.id)}
+                        key={emp.employee_id}
+                        onClick={() => selectedService && toggleEmployeeMapping(selectedService.service_id, emp.employee_id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-green-600 text-white border-green-600' : ''}`}
                         style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
@@ -472,10 +472,10 @@ export default function ServiceAssignmentView() {
               <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
                 {employees.filter(e => e.type !== 'user').map(emp => (
                   <Card 
-                    key={emp.id}
-                    onClick={() => setSelectedEmployeeIds(prev => prev.includes(emp.id.toString()) ? prev.filter(id => id !== emp.id.toString()) : [...prev, emp.id.toString()])}
-                    className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.id.toString()) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    style={selectedEmployeeIds.includes(emp.id.toString()) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
+                    key={emp.employee_id}
+                    onClick={() => setSelectedEmployeeIds(prev => prev.includes(emp.employee_id.toString()) ? prev.filter(id => id !== emp.employee_id.toString()) : [...prev, emp.employee_id.toString()])}
+                    className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.employee_id.toString()) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    style={selectedEmployeeIds.includes(emp.employee_id.toString()) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
                   >
                     <div className="font-bold">{emp.name}</div>
                     <div className="text-xs text-gray-500 line-clamp-1">Qualified for mapped services</div>

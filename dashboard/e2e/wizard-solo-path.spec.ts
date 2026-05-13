@@ -184,9 +184,7 @@ async function createCustomer(
     });
     expect(res.status()).toBe(200);
     const body = await res.json();
-    // Customers route keeps a backward-compat `id` alias on RETURNING, but the
-    // canonical post-rename key is customer_id. Prefer it, fall back to id.
-    return (body.customer.customer_id ?? body.customer.id) as string;
+    return body.customer.customer_id as string;
 }
 
 test.beforeAll(() => {

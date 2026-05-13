@@ -83,7 +83,7 @@ const sampleReminderSchedule: ReminderSchedule = {
   updated_at: '2026-04-14T10:00:00.000Z',
 };
 
-const sampleConsentRecord: Omit<ConsentRecord, 'id'> = {
+const sampleConsentRecord: Omit<ConsentRecord, 'consent_record_id'> = {
   tenant_id: 1,
   customer_email: 'customer@example.com',
   customer_phone: '+15551234567',
@@ -95,7 +95,7 @@ const sampleConsentRecord: Omit<ConsentRecord, 'id'> = {
   ip_address: '192.168.1.1',
 };
 
-const sampleOptOutRecord: Omit<OptOutRecord, 'id'> = {
+const sampleOptOutRecord: Omit<OptOutRecord, 'optOutRecordId'> = {
   tenantId: 1,
   customerEmail: 'customer@example.com',
   customerPhone: '+15551234567',
@@ -710,13 +710,13 @@ describe('PostgresDatabaseService', () => {
         // WHERE: createConsentRecord method
         // WHY: Consent can be recorded before customer record exists
 
-        const anonymousConsent: Omit<ConsentRecord, 'id'> = {
+        const anonymousConsent: Omit<ConsentRecord, 'consent_record_id'> = {
           ...sampleConsentRecord,
           customer_id: undefined,
         };
         const mockClient = createMockClient([
           { rows: [] }, // set_tenant_context
-          { rows: [{ id: 1, ...anonymousConsent }] }, // INSERT
+          { rows: [{ consent_record_id: 1, ...anonymousConsent }] }, // INSERT
         ]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
@@ -789,7 +789,7 @@ describe('PostgresDatabaseService', () => {
 
         const mockClient = createMockClient([
           { rows: [] }, // set_tenant_context
-          { rows: [{ id: 1, ...sampleConsentRecord }] }, // SELECT
+          { rows: [{ consent_record_id: 1, ...sampleConsentRecord }] }, // SELECT
         ]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);

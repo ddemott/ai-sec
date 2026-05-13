@@ -85,13 +85,13 @@ describe("Tenant reorder (drag-and-drop)", () => {
     //      the admin would save a new order and see the old one come back
     if (!dbAvailable) return;
 
-    const r1 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING tenant_id AS id");
-    const r2 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz B', 'test') RETURNING tenant_id AS id");
-    const r3 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz C', 'test') RETURNING tenant_id AS id");
+    const r1 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING tenant_id");
+    const r2 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz B', 'test') RETURNING tenant_id");
+    const r3 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz C', 'test') RETURNING tenant_id");
 
-    const idA = r1.rows[0].id;
-    const idB = r2.rows[0].id;
-    const idC = r3.rows[0].id;
+    const idA = r1.rows[0].tenant_id;
+    const idB = r2.rows[0].tenant_id;
+    const idC = r3.rows[0].tenant_id;
 
     // Reorder: C, A, B
     await client.query("UPDATE tenants SET sort_order = 0 WHERE tenant_id = $1", [idC]);

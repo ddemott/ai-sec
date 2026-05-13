@@ -4,7 +4,7 @@ import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { formatTimeFromISO } from '../../lib/utils';
 
-interface SchedulerEmployee { id: string; name: string }
+interface SchedulerEmployee { employee_id: string; name: string }
 interface SchedulerResource { resource_id: string; name: string }
 
 interface AppointmentListViewProps {
@@ -40,7 +40,7 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
 
   const findEmployee = (id: string | null) => {
     if (!id) return null;
-    return employees.find((e) => String(e.id) === String(id));
+    return employees.find((e) => String(e.employee_id) === String(id));
   };
 
   const findResource = (id: string) => {

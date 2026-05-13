@@ -362,7 +362,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // INSERT new customer — return new ID
-    queryResponses.push({ rows: [{ id: 'new-local-id' }] });
+    queryResponses.push({ rows: [{ customer_id: 'new-local-id' }] });
 
     // INSERT sync map
     queryResponses.push({ rows: [] });
@@ -393,7 +393,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -426,7 +426,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });

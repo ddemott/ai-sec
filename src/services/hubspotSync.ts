@@ -61,7 +61,7 @@ export async function syncCustomerToHubSpot(
     const syncEntry = await syncMapFindByLocalId(client, tenantId, 'hubspot', 'customer', customerId);
 
     const custRes = await client.query(
-      `SELECT customer_id AS id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
+      `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
       [customerId, tenantId]
     );
     const cust = custRes.rows[0];

@@ -35,7 +35,7 @@ export class ReminderScheduler {
       // Only schedule future reminders
       if (scheduledFor > now || reminder.type === 'confirmation') {
         await this.scheduleReminder({
-          appointment_id: appointment.id,
+          appointment_id: appointment.appointment_id,
           tenant_id: appointment.tenant_id,
           customer_email: appointment.customer_email || '',
           customer_phone: appointment.customer_phone,

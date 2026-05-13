@@ -6,13 +6,14 @@ import { Button } from '../ui/Button'
 import { showToast } from '../ui/Toast'
 import type { BrokenChain } from './useSkillMapData'
 
-interface FixPanelEntity { id: string; name: string; type?: string }
+interface FixPanelEmployee { employee_id: string; name: string; type?: string }
+interface FixPanelResource { resource_id: string; name: string }
 interface ServiceMapping { service_id: string; employee_id?: string; resource_id?: string }
 
 interface SkillMapFixPanelProps {
   chain: BrokenChain
-  employees: FixPanelEntity[]
-  resources: FixPanelEntity[]
+  employees: FixPanelEmployee[]
+  resources: FixPanelResource[]
   tenantId: string | null
   empMappings?: ServiceMapping[]
   resMappings?: ServiceMapping[]
@@ -29,17 +30,17 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
   // Employees NOT already assigned to this service
   const eligibleEmployees = (employees || [])
     .filter(e => e.type !== 'user')
-    .filter(e => !empMappings.some(m => String(m.service_id) === serviceId && String(m.employee_id) === String(e.id)))
+    .filter(e => !empMappings.some(m => String(m.service_id) === serviceId && String(m.employee_id) === String(e.employee_id)))
 
   // Resources NOT already assigned to this service
   const eligibleResources = (resources || [])
-    .filter(r => !resMappings.some(m => String(m.service_id) === serviceId && String(m.resource_id) === String(r.id)))
+    .filter(r => !resMappings.some(m => String(m.service_id) === serviceId && String(m.resource_id) === String(r.resource_id)))
 
-  async function assignEmployee(emp: FixPanelEntity) {
+  async function assignEmployee(emp: FixPanelEmployee) {
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.mappings.assignServiceEmployee(serviceId, String(emp.id), tenantId)
+      await Api.mappings.assignServiceEmployee(serviceId, String(emp.employee_id), tenantId)
       onFixed()
     } catch (err) {
       console.error('Failed to assign employee to service', err)
@@ -49,11 +50,11 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
     }
   }
 
-  async function assignResource(res: FixPanelEntity) {
+  async function assignResource(res: FixPanelResource) {
     if (!tenantId) return
     setSaving(true)
     try {
-      await Api.mappings.assignServiceResource(serviceId, String(res.id), tenantId)
+      await Api.mappings.assignServiceResource(serviceId, String(res.resource_id), tenantId)
       onFixed()
     } catch (err) {
       console.error('Failed to assign resource to service', err)
@@ -81,7 +82,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
           <div className="flex flex-wrap gap-1">
             {eligibleEmployees.map(emp => (
               <Button
-                key={emp.id}
+                key={emp.employee_id}
                 size="sm"
                 variant="secondary"
                 disabled={saving}
@@ -101,7 +102,7 @@ export default function SkillMapFixPanel({ chain, employees, resources, tenantId
           <div className="flex flex-wrap gap-1">
             {eligibleResources.map(res => (
               <Button
-                key={res.id}
+                key={res.resource_id}
                 size="sm"
                 variant="secondary"
                 disabled={saving}

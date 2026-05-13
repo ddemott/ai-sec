@@ -50,8 +50,8 @@ describe('Scheduling selector – salon scenarios', () => {
     //       Alex too, the agent might book the wrong stylist on a tie
     //       and frustrate a customer with a regular stylist relationship.
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
-      { id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -85,8 +85,8 @@ describe('Scheduling selector – salon scenarios', () => {
     //       qualified peer keeps the booking flow alive; the agent will
     //       phrase it as "Suzy's booked then, but Alex is available — ok?"
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
-      { id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
     ];
 
     const existing = [appt('suzy', '2026-06-01T10:00:00Z', '2026-06-01T11:00:00Z')];
@@ -121,8 +121,8 @@ describe('Scheduling selector – salon scenarios', () => {
     //       for the agent to relay ("our one stylist is booked then").
     //       Ben's existence as a non-stylist shouldn't dilute the count.
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
-      { id: 'ben', type: 'STYLIST', capabilities: [] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'ben', type: 'STYLIST', capabilities: [] },
     ];
 
     const existing = [appt('suzy', '2026-06-01T10:00:00Z', '2026-06-01T11:00:00Z')];
@@ -157,9 +157,9 @@ describe('Scheduling selector – salon scenarios', () => {
     //       so it can apply secondary tie-breakers (load balancing,
     //       round-robin, etc.) instead of arbitrarily picking one.
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
-      { id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
-      { id: 'ben', type: 'STYLIST', capabilities: [] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'ben', type: 'STYLIST', capabilities: [] },
     ];
 
     const existing = [appt('suzy', '2026-06-01T09:00:00Z', '2026-06-01T10:00:00Z')];
@@ -203,13 +203,13 @@ describe('Scheduling selector – auto shop scenarios', () => {
     //       but pre-filtering at the selector keeps the agent from
     //       offering a slot that will then fail the RPC.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
-      { id: 'bay4', type: 'BAY', capabilities: ['alignment', 'tire-change'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay4', type: 'BAY', capabilities: ['alignment', 'tire-change'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'], onShift: true },
-      { id: 'rick', skills: ['alignment', 'oil-change'], onShift: true },
+      { employee_id: 'john', skills: ['oil-change'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment', 'oil-change'], onShift: true },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -246,12 +246,12 @@ describe('Scheduling selector – auto shop scenarios', () => {
     //       implies "we don't do that here." The reason string drives
     //       which message the agent reads.
     const resources: ResourceCandidate[] = [
-      { id: 'bay4', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay4', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'], onShift: true },
-      { id: 'rick', skills: ['alignment'], onShift: false },
+      { employee_id: 'john', skills: ['oil-change'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment'], onShift: false },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -286,11 +286,11 @@ describe('Scheduling selector – auto shop scenarios', () => {
     //       actual constraint and the customer might pick a different
     //       bay-friendly time.
     const resources: ResourceCandidate[] = [
-      { id: 'bay4', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay4', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'rick', skills: ['alignment'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment'], onShift: true },
     ];
 
     const existing = [appt('bay4', '2026-10-01T10:00:00Z', '2026-10-01T11:00:00Z')];
@@ -325,13 +325,13 @@ describe('Scheduling selector – auto shop scenarios', () => {
     //       the full pool to make a smart pick. Determinism in the order
     //       matters for tests + for predictable behavior under tie-breaks.
     const resources: ResourceCandidate[] = [
-      { id: 'bay4', type: 'BAY', capabilities: ['alignment'] },
-      { id: 'bay5', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay4', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay5', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'rick', skills: ['alignment'], onShift: true },
-      { id: 'sara', skills: ['alignment'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment'], onShift: true },
+      { employee_id: 'sara', skills: ['alignment'], onShift: true },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -416,7 +416,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       which is different from "we don't offer that service" or
     //       "we're closed today."
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -451,14 +451,14 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       trust it. Re-evaluating from shifts=[] would force every
     //       caller to pass the full schedule, which is wasteful.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     // onShift is undefined, so it falls through to inline shift check — no shifts means default true
     // But with an explicit empty shifts array and no onShift flag, the employee is considered on-shift (default behavior).
     // To test a true "no shifts" sad path, we need onShift: false explicitly.
     const employees: EmployeeCandidate[] = [
-      { id: 'rick', skills: ['alignment'], onShift: false },
+      { employee_id: 'rick', skills: ['alignment'], onShift: false },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -494,7 +494,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       trusts its inputs.
     const invertedWindow = window('2026-06-01T11:00:00Z', '2026-06-01T10:00:00Z');
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
     ];
 
     // An inverted window (end < start) means overlaps() will never be true for existing appts,
@@ -528,7 +528,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       create off-the-clock work.
     const lateWindow = window('2026-06-01T17:00:00Z', '2026-06-01T18:00:00Z');
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
     ];
 
     // Shift ends at 17:00, appointment starts at 17:00 — employee should NOT be on shift
@@ -537,7 +537,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'] }, // no onShift flag, uses inline shift check
+      { employee_id: 'john', skills: ['oil-change'] }, // no onShift flag, uses inline shift check
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -572,7 +572,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     // Window: 16:00–18:00, shift covers only 09:00–17:00
     const spanWindow = window('2026-06-01T16:00:00Z', '2026-06-01T18:00:00Z');
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
     ];
 
     const shifts: Shift[] = [
@@ -580,7 +580,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'] },
+      { employee_id: 'john', skills: ['oil-change'] },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -614,7 +614,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       atomic-booking RPC's GiST exclusion constraints use the
     //       same half-open semantics — they have to agree.
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
     ];
 
     // Existing appointment ends exactly when our window starts
@@ -647,8 +647,8 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       options ("I don't see that name on our list — Suzy and Alex
     //       are available though"), which is recoverable.
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
-      { id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'suzy', type: 'STYLIST', capabilities: ['cut'] },
+      { resource_id: 'alex', type: 'STYLIST', capabilities: ['cut'] },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -679,11 +679,11 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       output so a regression in the cross-product loop surfaces
     //       here before it affects multi-resource scenarios.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'rick', skills: ['alignment'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment'], onShift: true },
     ];
 
     // preferredResourceId is a resource preference, not employee —
@@ -716,12 +716,12 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       than a generic "no availability." Embedding the skill name
     //       in the diagnostic also helps operators audit gaps.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['advanced-diag'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['advanced-diag'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'], onShift: true },
-      { id: 'rick', skills: ['alignment'], onShift: true },
+      { employee_id: 'john', skills: ['oil-change'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment'], onShift: true },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -755,8 +755,8 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       agent something useful to say ("we don't have a paint booth")
     //       and helps operators see expansion opportunities.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
-      { id: 'bay2', type: 'BAY', capabilities: ['tire-change'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay2', type: 'BAY', capabilities: ['tire-change'] },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -788,13 +788,13 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       today but nobody does alignments"), and operators may want
     //       to see this as a training-gap signal.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['alignment'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'], onShift: true },
-      { id: 'sara', skills: ['tire-change'], onShift: true },
-      { id: 'mike', skills: ['oil-change', 'tire-change'], onShift: true },
+      { employee_id: 'john', skills: ['oil-change'], onShift: true },
+      { employee_id: 'sara', skills: ['tire-change'], onShift: true },
+      { employee_id: 'mike', skills: ['oil-change', 'tire-change'], onShift: true },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -827,13 +827,13 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     //       reflects the post-capability-filter pool. Helps the agent
     //       phrase "all our bays are booked then" naturally.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
-      { id: 'bay2', type: 'BAY', capabilities: ['oil-change'] },
-      { id: 'bay3', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay2', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay3', type: 'BAY', capabilities: ['oil-change'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'], onShift: true },
+      { employee_id: 'john', skills: ['oil-change'], onShift: true },
     ];
 
     const existing = [
@@ -881,15 +881,15 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     //       single counter surfaces immediately rather than only
     //       showing up via downstream agent-prompt confusion.
     const resources: ResourceCandidate[] = [
-      { id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
-      { id: 'bay2', type: 'BAY', capabilities: ['alignment'] },
-      { id: 'bay3', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay1', type: 'BAY', capabilities: ['oil-change'] },
+      { resource_id: 'bay2', type: 'BAY', capabilities: ['alignment'] },
+      { resource_id: 'bay3', type: 'BAY', capabilities: ['oil-change'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'john', skills: ['oil-change'], onShift: true },
-      { id: 'rick', skills: ['alignment'], onShift: true },
-      { id: 'sara', skills: ['oil-change'], onShift: false },
+      { employee_id: 'john', skills: ['oil-change'], onShift: true },
+      { employee_id: 'rick', skills: ['alignment'], onShift: true },
+      { employee_id: 'sara', skills: ['oil-change'], onShift: false },
     ];
 
     const { options, diagnostics } = selectAssignments({
@@ -925,8 +925,8 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     //       busy" vs. "all 2 resource busy"). Bad pluralization erodes
     //       the polish of the agent's voice.
     const resources: ResourceCandidate[] = [
-      { id: 'r1', capabilities: ['x'] },
-      { id: 'r2', capabilities: ['x'] },
+      { resource_id: 'r1', capabilities: ['x'] },
+      { resource_id: 'r2', capabilities: ['x'] },
     ];
 
     const existing = [
@@ -954,13 +954,13 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     //       pinning both keeps the contract symmetrical for both axes
     //       (resources vs. employees).
     const resources: ResourceCandidate[] = [
-      { id: 'r1', capabilities: ['x'] },
+      { resource_id: 'r1', capabilities: ['x'] },
     ];
 
     const employees: EmployeeCandidate[] = [
-      { id: 'e1', skills: ['x'], onShift: false },
-      { id: 'e2', skills: ['x'], onShift: false },
-      { id: 'e3', skills: ['x'], onShift: false },
+      { employee_id: 'e1', skills: ['x'], onShift: false },
+      { employee_id: 'e2', skills: ['x'], onShift: false },
+      { employee_id: 'e3', skills: ['x'], onShift: false },
     ];
 
     const { diagnostics } = selectAssignments({
@@ -989,7 +989,7 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     //       better than synthesizing fake employees to match an
     //       always-on pipeline.
     const resources: ResourceCandidate[] = [
-      { id: 'suzy', capabilities: ['cut'] },
+      { resource_id: 'suzy', capabilities: ['cut'] },
     ];
 
     const { diagnostics } = selectAssignments({
@@ -1018,14 +1018,14 @@ describe('selectAssignments — least-skilled-qualified auto-assignment policy (
   //        policy preserves senior-tech availability for jobs only they
   //        can do (e.g. Balancing — only Mike has it in DynaTire's seed).
 
-  const seedResources = [{ id: 'truck-1', capabilities: ['mobile-truck'] }];
+  const seedResources = [{ resource_id: 'truck-1', capabilities: ['mobile-truck'] }];
   const seedWindow = { from: new Date('2026-06-01T09:00:00Z'), to: new Date('2026-06-01T10:00:00Z') };
 
   it('HAPPY: tire rotation — Mike (5 skills) does NOT win when 3-skill techs qualify', () => {
     const employees = [
-      { id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
-      { id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
-      { id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+      { employee_id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
+      { employee_id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
+      { employee_id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
     ];
     const { options } = selectAssignments({
       requirements: {
@@ -1045,9 +1045,9 @@ describe('selectAssignments — least-skilled-qualified auto-assignment policy (
 
   it('HAPPY: balancing — Mike wins by elimination (only-qualified)', () => {
     const employees = [
-      { id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
-      { id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
-      { id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+      { employee_id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
+      { employee_id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
+      { employee_id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
     ];
     const { options } = selectAssignments({
       requirements: {
@@ -1065,9 +1065,9 @@ describe('selectAssignments — least-skilled-qualified auto-assignment policy (
 
   it('HAPPY: tire install — Dana (3) wins over Mike (5)', () => {
     const employees = [
-      { id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
-      { id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
-      { id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+      { employee_id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
+      { employee_id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
+      { employee_id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
     ];
     const { options } = selectAssignments({
       requirements: {
