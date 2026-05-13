@@ -146,8 +146,8 @@ test('restore-happy: soft-deleted customer disappears from the list and comes ba
     // Pre-delete: customer in the active list, deleted list empty
     let active = await listCustomersAs(request, tenant.token, tenant.tenantId);
     let deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.id === customerId), 'customer should be in active list before delete').toBeTruthy();
-    expect(deleted.records.find((c) => c.id === customerId), 'customer should NOT be in deleted list before delete').toBeFalsy();
+    expect(active.find((c) => c.customer_id === customerId), 'customer should be in active list before delete').toBeTruthy();
+    expect(deleted.records.find((c) => c.record_id === customerId), 'customer should NOT be in deleted list before delete').toBeFalsy();
 
     // Soft-delete
     const del = await softDeleteAs(request, tenant.token, 'customers', customerId);
@@ -157,8 +157,8 @@ test('restore-happy: soft-deleted customer disappears from the list and comes ba
     // Post-delete: filtered out of active, present in deleted
     active = await listCustomersAs(request, tenant.token, tenant.tenantId);
     deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.id === customerId), 'customer should be filtered from active list after delete').toBeFalsy();
-    expect(deleted.records.find((c) => c.id === customerId), 'customer should appear in deleted list after delete').toBeTruthy();
+    expect(active.find((c) => c.customer_id === customerId), 'customer should be filtered from active list after delete').toBeFalsy();
+    expect(deleted.records.find((c) => c.record_id === customerId), 'customer should appear in deleted list after delete').toBeTruthy();
     expect(deleted.total, 'deleted total should be at least 1').toBeGreaterThanOrEqual(1);
 
     // Restore
@@ -169,8 +169,8 @@ test('restore-happy: soft-deleted customer disappears from the list and comes ba
     // Post-restore: back in active, gone from deleted
     active = await listCustomersAs(request, tenant.token, tenant.tenantId);
     deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.id === customerId), 'customer should be back in active list after restore').toBeTruthy();
-    expect(deleted.records.find((c) => c.id === customerId), 'customer should be gone from deleted list after restore').toBeFalsy();
+    expect(active.find((c) => c.customer_id === customerId), 'customer should be back in active list after restore').toBeTruthy();
+    expect(deleted.records.find((c) => c.record_id === customerId), 'customer should be gone from deleted list after restore').toBeFalsy();
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
@@ -207,7 +207,7 @@ test('restore-not-deleted: POST /restore on a record that was never deleted retu
 
     // Pre-condition: customer is NOT deleted
     const active = await listCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.id === customerId)).toBeTruthy();
+    expect(active.find((c) => c.customer_id === customerId)).toBeTruthy();
 
     const restored = await restoreAs(request, tenant.token, 'customers', customerId);
     expect(restored.status, `expected 404; body=${JSON.stringify(restored.body)}`).toBe(404);
@@ -218,9 +218,9 @@ test('restore-not-deleted: POST /restore on a record that was never deleted retu
     // Post-condition: customer state unchanged — still in active list,
     // still not in deleted list. The 404 fires without flipping any bit.
     const stillActive = await listCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(stillActive.find((c) => c.id === customerId), 'customer must remain active after rejected restore').toBeTruthy();
+    expect(stillActive.find((c) => c.customer_id === customerId), 'customer must remain active after rejected restore').toBeTruthy();
     const deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(deleted.records.find((c) => c.id === customerId), 'customer must NOT be in deleted list').toBeFalsy();
+    expect(deleted.records.find((c) => c.record_id === customerId), 'customer must NOT be in deleted list').toBeFalsy();
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }

@@ -491,7 +491,15 @@ test('create customer: API insert renders in CRM list and is queryable', async (
       return { status: res.status, body: await res.json() };
     }, { token, name: customerName, phone, tenantId: DYNATIRE_ID });
     expect(created.status, `expected 200 from /customers/create, got ${JSON.stringify(created)}`).toBe(200);
-    customerId = created.body?.customer?.id ?? created.body?.id ?? null;
+    // /customers/create returns the new row under `customer` with PK
+    // column `customer_id` post-rename. Multiple fallbacks so the test
+    // isn't brittle to incidental route-shape refactors.
+    customerId =
+      created.body?.customer?.customer_id ??
+      created.body?.customer?.id ??
+      created.body?.customer_id ??
+      created.body?.id ??
+      null;
     expect(customerId, 'expected returned customer id').toBeTruthy();
 
     // Navigate to Customers view, refresh, and assert our row shows

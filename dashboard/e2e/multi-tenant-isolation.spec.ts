@@ -271,7 +271,12 @@ test('isolation: super-admin CAN read across tenants (positive control)', async 
   const tenants = await apiGet(page, auth.token, '/tenants');
   expect(tenants.status).toBe(200);
   expect(Array.isArray(tenants.body), 'super-admin gets a tenant list').toBe(true);
-  const ids = (tenants.body as Array<{ id: string }>).map((t) => t.id);
+  // GET /tenants returns rows with the renamed `tenant_id` PK column
+  // (May 12 pilot 16). No backward-compat `AS id` alias was added on this
+  // route — unlike /customers and a handful of others — so reading `.id`
+  // here would silently produce an array of undefineds and the
+  // .toContain() below would fail. Origin: 2026-05-13 audit.
+  const ids = (tenants.body as Array<{ tenant_id: string }>).map((t) => t.tenant_id);
   expect(ids, 'super-admin sees DynaTire').toContain(DYNATIRE_ID);
   expect(ids, 'super-admin sees other tenant').toContain(OTHER_TENANT_ID);
 
