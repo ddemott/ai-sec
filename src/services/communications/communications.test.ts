@@ -16,8 +16,6 @@ import type { DatabaseService } from '../../database/index.js';
 const mockTenantConfig: TenantConfig = {
   id: 'test-tenant-123',
   name: 'Test Business',
-  businessName: 'Test Business LLC',
-  email: 'contact@testbusiness.com',
   phone: '+15551234567',
   timezone: 'America/Chicago',
   settings: {
@@ -28,15 +26,15 @@ const mockTenantConfig: TenantConfig = {
 };
 
 const createMockConfigService = (): TenantConfigService => ({
-  getTenantConfig: vi.fn().mockReturnValue(mockTenantConfig),
-  getTenantConfigs: vi.fn().mockReturnValue([mockTenantConfig]),
-  updateTenantConfig: vi.fn().mockReturnValue(mockTenantConfig),
-  getBusinessName: vi.fn().mockResolvedValue('Test Business LLC'),
+  getTenantConfig: vi.fn().mockResolvedValue(mockTenantConfig),
+  getTenantConfigs: vi.fn().mockResolvedValue([mockTenantConfig]),
+  updateTenantConfig: vi.fn().mockResolvedValue(mockTenantConfig),
+  getBusinessName: vi.fn().mockResolvedValue('Test Business'),
   getNotificationPreferences: vi.fn().mockResolvedValue({
     smsEnabled: true,
     emailEnabled: true,
     reminderHours: [72, 24, 2],
-    contactInfo: { phone: '+15551234567', email: 'contact@testbusiness.com' },
+    contactInfo: { phone: '+15551234567' },
   }),
 });
 
@@ -295,7 +293,7 @@ describe('CommunicationService', () => {
 
     describe('sendEmail - Tenant Not Found', () => {
       it('fails when tenant config does not exist', async () => {
-        vi.mocked(configService.getTenantConfig).mockReturnValue(null);
+        vi.mocked(configService.getTenantConfig).mockResolvedValue(null);
 
         const result = await communicationService.sendEmail('nonexistent-tenant', {
           to: 'customer@example.com',

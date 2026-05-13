@@ -3,19 +3,32 @@
  * Database-backed implementation for communications and reminder services.
  *
  * Reads tenant configuration from the existing `tenants` table.
+ *
+ * All methods are async. Earlier shapes mixed sync (cache-only) and async
+ * (DB-backed) variants on the interface — every real caller already
+ * `await`'d the sync methods anyway, and the cache-only path silently
+ * returned null when the cache was cold. Consolidated 2026-05-13 to a
+ * single async surface that always reads through the cache; the
+ * Postgres impl caches per-tenant for 1 minute to keep email/reminder
+ * hot paths off the DB without forcing callers to think about warm-up.
  */
 
 import { Pool, PoolClient } from 'pg';
 import { getPool } from '../../database/index.js';
 
 /**
- * Tenant configuration interface
+ * Tenant configuration interface.
+ *
+ * Field set mirrors the real `tenants` table schema. There is no separate
+ * `business_name` or `owner_email` column today — `name` is the business's
+ * display name and the only contact channel stored at tenant level is
+ * `owner_phone` (surfaced here as `phone`). Adding either would require a
+ * schema migration AND a UI to populate it; until that ships, dropping the
+ * fields here is the honest shape.
  */
 export interface TenantConfig {
   id: string | number;
   name: string;
-  businessName?: string;
-  email?: string;
   phone?: string;
   timezone?: string;
   settings?: {
@@ -27,7 +40,12 @@ export interface TenantConfig {
 }
 
 /**
- * Notification preferences for a tenant
+ * Notification preferences for a tenant.
+ *
+ * `contactInfo.email` is omitted: the schema has no tenant-level email
+ * column (a tenant's owner email is stored on the `users` table, not
+ * `tenants`). If a future product call introduces a tenant-level reply-to
+ * address, add the column + the field together so the type stays honest.
  */
 export interface NotificationPreferences {
   smsEnabled: boolean;
@@ -35,18 +53,22 @@ export interface NotificationPreferences {
   reminderHours: number[];
   contactInfo?: {
     phone?: string;
-    email?: string;
     address?: string;
   };
 }
 
 /**
- * Interface for tenant configuration service
+ * Interface for tenant configuration service. All methods are async —
+ * the Postgres impl caches per-tenant for 1 minute to keep email/reminder
+ * hot paths off the DB.
  */
 export interface TenantConfigService {
-  getTenantConfig(tenantId: string | number): TenantConfig | null;
-  getTenantConfigs(): TenantConfig[];
-  updateTenantConfig(tenantId: string | number, config: Partial<TenantConfig>): TenantConfig | null;
+  getTenantConfig(tenantId: string | number): Promise<TenantConfig | null>;
+  getTenantConfigs(): Promise<TenantConfig[]>;
+  updateTenantConfig(
+    tenantId: string | number,
+    config: Partial<TenantConfig>
+  ): Promise<TenantConfig | null>;
   getBusinessName(tenantId: string | number): Promise<string>;
   getNotificationPreferences(tenantId: string | number): Promise<NotificationPreferences>;
 }
@@ -66,18 +88,18 @@ export class InMemoryTenantConfigService implements TenantConfigService {
     }
   }
 
-  getTenantConfig(tenantId: string | number): TenantConfig | null {
+  async getTenantConfig(tenantId: string | number): Promise<TenantConfig | null> {
     return this.configs.get(String(tenantId)) || null;
   }
 
-  getTenantConfigs(): TenantConfig[] {
+  async getTenantConfigs(): Promise<TenantConfig[]> {
     return Array.from(this.configs.values());
   }
 
-  updateTenantConfig(
+  async updateTenantConfig(
     tenantId: string | number,
     updates: Partial<TenantConfig>
-  ): TenantConfig | null {
+  ): Promise<TenantConfig | null> {
     const existing = this.configs.get(String(tenantId));
     if (!existing) {
       return null;
@@ -101,26 +123,19 @@ export class InMemoryTenantConfigService implements TenantConfigService {
     return this.configs.delete(String(tenantId));
   }
 
-  /**
-   * Get business name for a tenant
-   */
   async getBusinessName(tenantId: string | number): Promise<string> {
-    const config = this.getTenantConfig(tenantId);
-    return config?.businessName || config?.name || 'Business';
+    const config = await this.getTenantConfig(tenantId);
+    return config?.name || 'Business';
   }
 
-  /**
-   * Get notification preferences for a tenant
-   */
   async getNotificationPreferences(tenantId: string | number): Promise<NotificationPreferences> {
-    const config = this.getTenantConfig(tenantId);
+    const config = await this.getTenantConfig(tenantId);
     return {
       smsEnabled: config?.settings?.smsEnabled ?? true,
       emailEnabled: config?.settings?.emailEnabled ?? true,
       reminderHours: config?.settings?.reminderHours ?? [72, 24, 2],
       contactInfo: {
         phone: config?.phone,
-        email: config?.email,
       },
     };
   }
@@ -128,7 +143,9 @@ export class InMemoryTenantConfigService implements TenantConfigService {
 
 /**
  * Database-backed tenant configuration service.
- * Reads tenant config from the tenants table.
+ * Reads tenant config from the tenants table. Per-tenant TTL cache keeps
+ * email/reminder hot paths off the DB; cache invalidates on write or
+ * after 1 minute, whichever comes first.
  */
 export class PostgresTenantConfigService implements TenantConfigService {
   private pool: Pool;
@@ -154,13 +171,18 @@ export class PostgresTenantConfigService implements TenantConfigService {
     return expiry !== undefined && Date.now() < expiry;
   }
 
-  private rowToConfig(row: any): TenantConfig {
+  private rowToConfig(row: {
+    tenant_id: string;
+    name: string;
+    owner_phone: string | null;
+    timezone: string | null;
+    sms_enabled: boolean;
+    email_enabled: boolean;
+  }): TenantConfig {
     return {
-      id: row.id,
+      id: row.tenant_id,
       name: row.name,
-      businessName: row.business_name,
-      email: row.owner_email,
-      phone: row.phone,
+      phone: row.owner_phone ?? undefined,
       timezone: row.timezone || 'America/Chicago',
       settings: {
         smsEnabled: row.sms_enabled !== false, // Default true
@@ -171,20 +193,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
     };
   }
 
-  getTenantConfig(tenantId: string | number): TenantConfig | null {
-    const key = String(tenantId);
-    if (this.isCacheValid(key)) {
-      return this.cache.get(key) || null;
-    }
-    // Synchronous method can't wait for DB - return cached or null
-    // The async version should be used in production
-    return this.cache.get(key) || null;
-  }
-
-  /**
-   * Async version for actual DB lookup
-   */
-  async getTenantConfigAsync(tenantId: string | number): Promise<TenantConfig | null> {
+  async getTenantConfig(tenantId: string | number): Promise<TenantConfig | null> {
     const key = String(tenantId);
     if (this.isCacheValid(key)) {
       return this.cache.get(key) || null;
@@ -192,7 +201,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
 
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT id, name, business_name, owner_email, phone, timezone, sms_enabled, email_enabled
+        `SELECT tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled
          FROM tenants WHERE tenant_id = $1`,
         [tenantId]
       );
@@ -208,18 +217,10 @@ export class PostgresTenantConfigService implements TenantConfigService {
     });
   }
 
-  getTenantConfigs(): TenantConfig[] {
-    // Return cached configs for sync access
-    return Array.from(this.cache.values());
-  }
-
-  /**
-   * Async version for actual DB lookup
-   */
-  async getTenantConfigsAsync(): Promise<TenantConfig[]> {
+  async getTenantConfigs(): Promise<TenantConfig[]> {
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT id, name, business_name, owner_email, phone, timezone, sms_enabled, email_enabled
+        `SELECT tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled
          FROM tenants ORDER BY name`
       );
 
@@ -233,25 +234,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
     });
   }
 
-  updateTenantConfig(
-    tenantId: string | number,
-    updates: Partial<TenantConfig>
-  ): TenantConfig | null {
-    // Sync method updates cache only
-    const key = String(tenantId);
-    const existing = this.cache.get(key);
-    if (!existing) {
-      return null;
-    }
-    const updated = { ...existing, ...updates };
-    this.cache.set(key, updated);
-    return updated;
-  }
-
-  /**
-   * Async version for actual DB update
-   */
-  async updateTenantConfigAsync(
+  async updateTenantConfig(
     tenantId: string | number,
     updates: Partial<TenantConfig>
   ): Promise<TenantConfig | null> {
@@ -264,16 +247,8 @@ export class PostgresTenantConfigService implements TenantConfigService {
         fields.push(`name = $${paramIndex++}`);
         values.push(updates.name);
       }
-      if (updates.businessName !== undefined) {
-        fields.push(`business_name = $${paramIndex++}`);
-        values.push(updates.businessName);
-      }
-      if (updates.email !== undefined) {
-        fields.push(`owner_email = $${paramIndex++}`);
-        values.push(updates.email);
-      }
       if (updates.phone !== undefined) {
-        fields.push(`phone = $${paramIndex++}`);
+        fields.push(`owner_phone = $${paramIndex++}`);
         values.push(updates.phone);
       }
       if (updates.timezone !== undefined) {
@@ -282,14 +257,14 @@ export class PostgresTenantConfigService implements TenantConfigService {
       }
 
       if (fields.length === 0) {
-        return this.getTenantConfigAsync(tenantId);
+        return this.getTenantConfig(tenantId);
       }
 
       values.push(tenantId);
       const result = await client.query(
-        `UPDATE tenants SET ${fields.join(', ')}, updated_at = NOW()
+        `UPDATE tenants SET ${fields.join(', ')}
          WHERE tenant_id = $${paramIndex}
-         RETURNING tenant_id AS id, name, business_name, owner_email, phone, timezone, sms_enabled, email_enabled`,
+         RETURNING tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled`,
         values
       );
 
@@ -313,26 +288,19 @@ export class PostgresTenantConfigService implements TenantConfigService {
     this.cacheExpiry.clear();
   }
 
-  /**
-   * Get business name for a tenant
-   */
   async getBusinessName(tenantId: string | number): Promise<string> {
-    const config = await this.getTenantConfigAsync(tenantId);
-    return config?.businessName || config?.name || 'Business';
+    const config = await this.getTenantConfig(tenantId);
+    return config?.name || 'Business';
   }
 
-  /**
-   * Get notification preferences for a tenant
-   */
   async getNotificationPreferences(tenantId: string | number): Promise<NotificationPreferences> {
-    const config = await this.getTenantConfigAsync(tenantId);
+    const config = await this.getTenantConfig(tenantId);
     return {
       smsEnabled: config?.settings?.smsEnabled ?? true,
       emailEnabled: config?.settings?.emailEnabled ?? true,
       reminderHours: config?.settings?.reminderHours ?? [72, 24, 2],
       contactInfo: {
         phone: config?.phone,
-        email: config?.email,
       },
     };
   }
@@ -343,8 +311,6 @@ export const tenantConfigService = new InMemoryTenantConfigService([
   {
     id: '1',
     name: 'Demo Tenant',
-    businessName: 'Demo Business',
-    email: 'demo@example.com',
     timezone: 'America/New_York',
     settings: {
       smsEnabled: true,

@@ -123,7 +123,7 @@ export class EmailService {
       duration: data.duration || 60,
       businessName: businessName,
       businessPhone: notificationPrefs.contactInfo?.phone,
-      businessEmail: notificationPrefs.contactInfo?.email,
+      businessEmail: undefined, // No tenant-level email column today
       businessAddress: undefined, // Not currently stored
       notes: data.notes,
       reason: data.reason,
@@ -150,7 +150,7 @@ export class EmailService {
         return this.templateService.generateWelcomeEmail({
           businessName,
           businessPhone: notificationPrefs.contactInfo?.phone,
-          businessEmail: notificationPrefs.contactInfo?.email,
+          businessEmail: undefined, // No tenant-level email column today
           businessAddress: undefined,
         });
 

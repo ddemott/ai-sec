@@ -14,8 +14,6 @@ import type { ReminderSchedule } from './types.js';
 const mockTenantConfig: TenantConfig = {
   id: 'test-tenant-123',
   name: 'Test Business',
-  businessName: 'Test Business LLC',
-  email: 'contact@testbusiness.com',
   phone: '+15551234567',
   timezone: 'America/Chicago',
   settings: {
@@ -26,15 +24,15 @@ const mockTenantConfig: TenantConfig = {
 };
 
 const createMockConfigService = (): TenantConfigService => ({
-  getTenantConfig: vi.fn().mockReturnValue(mockTenantConfig),
-  getTenantConfigs: vi.fn().mockReturnValue([mockTenantConfig]),
-  updateTenantConfig: vi.fn().mockReturnValue(mockTenantConfig),
-  getBusinessName: vi.fn().mockResolvedValue('Test Business LLC'),
+  getTenantConfig: vi.fn().mockResolvedValue(mockTenantConfig),
+  getTenantConfigs: vi.fn().mockResolvedValue([mockTenantConfig]),
+  updateTenantConfig: vi.fn().mockResolvedValue(mockTenantConfig),
+  getBusinessName: vi.fn().mockResolvedValue('Test Business'),
   getNotificationPreferences: vi.fn().mockResolvedValue({
     smsEnabled: true,
     emailEnabled: true,
     reminderHours: [72, 24, 2],
-    contactInfo: { phone: '+15551234567', email: 'contact@testbusiness.com' },
+    contactInfo: { phone: '+15551234567' },
   }),
 });
 
@@ -385,7 +383,7 @@ describe('ReminderService', () => {
           status: 'scheduled',
         };
 
-        await reminderService.scheduleAppointmentReminders(appointment as any);
+        await reminderService.scheduleAppointmentReminders(appointment);
 
         expect(mockDb.createReminderSchedule).not.toHaveBeenCalled();
         // WHO: system | WHAT: missing date handling
@@ -604,7 +602,7 @@ describe('ReminderService', () => {
         status: 'scheduled',
       };
 
-      await reminderService.scheduleAppointmentReminders(snakeCaseAppointment as any);
+      await reminderService.scheduleAppointmentReminders(snakeCaseAppointment);
 
       expect(mockDb.createReminderSchedule).toHaveBeenCalled();
       const call = vi.mocked(mockDb.createReminderSchedule).mock.calls[0][0];

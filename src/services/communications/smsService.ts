@@ -25,7 +25,7 @@ export class SMSService {
    */
   async sendSMS(tenantId: string, message: SMSMessage): Promise<CommunicationResult> {
     try {
-      const tenantConfig = this.configService.getTenantConfig(tenantId);
+      const tenantConfig = await this.configService.getTenantConfig(tenantId);
       if (!tenantConfig) {
         throw new Error(`Tenant '${tenantId}' configuration not found`);
       }
