@@ -30,7 +30,7 @@ const SQUARE_CUSTOMER_ID = 'sq-cust-001';
 const SQUARE_BOOKING_ID = 'sq-book-001';
 const RESOURCE_ID = 'res-0001';
 
-function makeIntegrationSettings(overrides: Record<string, any> = {}) {
+function makeIntegrationSettings(overrides: Record<string, unknown> = {}) {
   return {
     access_token: 'valid-access-token',
     refresh_token: 'valid-refresh-token',
@@ -40,7 +40,7 @@ function makeIntegrationSettings(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeCustomerRow(overrides: Record<string, any> = {}) {
+function makeCustomerRow(overrides: Record<string, unknown> = {}) {
   return {
     id: CUSTOMER_ID,
     name: 'John Doe',
@@ -52,7 +52,7 @@ function makeCustomerRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeAppointmentRow(overrides: Record<string, any> = {}) {
+function makeAppointmentRow(overrides: Record<string, unknown> = {}) {
   return {
     id: APPOINTMENT_ID,
     tenant_id: TENANT_ID,
@@ -70,7 +70,7 @@ function makeAppointmentRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeSquareCustomerData(overrides: Record<string, any> = {}): square.SquareCustomer {
+function makeSquareCustomerData(overrides: Record<string, unknown> = {}): square.SquareCustomer {
   return {
     id: SQUARE_CUSTOMER_ID,
     given_name: 'Jane',

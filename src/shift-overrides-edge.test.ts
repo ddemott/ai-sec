@@ -282,7 +282,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       );
 
       // Should show 10-2, not 8-5
-      const working = res.rows.filter((r: any) => !r.is_off);
+      const working = res.rows.filter((r: { is_off: boolean }) => !r.is_off);
       expect(working.length).toBe(1);
       expect(working[0].start_time).toContain('10:00');
       expect(working[0].end_time).toContain('14:00');
@@ -307,7 +307,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
         [tenantId, employeeId, dateStr]
       );
 
-      const working = res.rows.filter((r: any) => !r.is_off);
+      const working = res.rows.filter((r: { is_off: boolean }) => !r.is_off);
       expect(working.length).toBe(0);
     });
 

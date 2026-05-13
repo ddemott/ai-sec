@@ -146,7 +146,7 @@ describe("getAuthUrl", () => {
     const url = getAuthUrl(TENANT_ID)!;
     const parsed = new URL(url);
     const state = parsed.searchParams.get("state")!;
-    const decoded = jwt.verify(state, JWT_SECRET) as any;
+    const decoded = jwt.verify(state, JWT_SECRET) as { tenantId: string; purpose: string };
     expect(decoded.tenantId).toBe(TENANT_ID);
     expect(decoded.purpose).toBe("jobber-oauth");
   });

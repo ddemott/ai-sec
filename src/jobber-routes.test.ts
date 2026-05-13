@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import crypto from 'crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock jobberClient and jobberSync modules before importing routes ---
@@ -71,7 +71,7 @@ function buildApp() {
   );
 
   // Simulate tenant middleware: inject tenantId from query param or header
-  fastify.addHook('preHandler', async (request: any) => {
+  fastify.addHook('preHandler', async (request: FastifyRequest & { tenantId?: string }) => {
     const tenantId =
       (request.query as Record<string, string>)?.tenant_id ||
       (request.headers['x-tenant-id'] as string);
@@ -80,7 +80,7 @@ function buildApp() {
     }
   });
 
-  registerJobberRoutes(fastify, mockPool, mockWithTenantClient as any);
+  registerJobberRoutes(fastify, mockPool, mockWithTenantClient as unknown as Parameters<typeof registerJobberRoutes>[2]);
 
   return fastify;
 }

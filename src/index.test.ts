@@ -62,7 +62,7 @@ function buildTestApp() {
 
   // Minimal /appointments/create endpoint for validation and wiring tests
   app.post('/appointments/create', async (req, reply) => {
-    const body = req.body as any
+    const body = req.body as Record<string, unknown>
 
     const required = [
       'tenant_id',
@@ -105,7 +105,7 @@ function buildTestApp() {
 
   // Calendar sync stub endpoint
   app.post('/calendar/sync', async (req, reply) => {
-    const payload = req.body as any
+    const payload = req.body as { provider?: string } | undefined
     // For now we just acknowledge receipt; real provider-specific logic will come later
     return reply.status(202).send({ status: 'accepted', source: payload?.provider || 'unknown' })
   })

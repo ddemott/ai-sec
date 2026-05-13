@@ -33,7 +33,7 @@ const RESOURCE_ID = 'res-0001';
 const APP_KEY = 'test-app-key';
 const TENANT_SID = '999888777';
 
-function makeIntegrationSettings(overrides: Record<string, any> = {}) {
+function makeIntegrationSettings(overrides: Record<string, unknown> = {}) {
   return {
     access_token: 'valid-access-token',
     refresh_token: 'valid-refresh-token',
@@ -44,7 +44,7 @@ function makeIntegrationSettings(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeCustomerRow(overrides: Record<string, any> = {}) {
+function makeCustomerRow(overrides: Record<string, unknown> = {}) {
   return {
     id: CUSTOMER_ID,
     name: 'John Doe',
@@ -56,7 +56,7 @@ function makeCustomerRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeAppointmentRow(overrides: Record<string, any> = {}) {
+function makeAppointmentRow(overrides: Record<string, unknown> = {}) {
   return {
     id: APPOINTMENT_ID,
     tenant_id: TENANT_ID,
@@ -74,7 +74,7 @@ function makeAppointmentRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeServiceTitanCustomerData(overrides: Record<string, any> = {}): servicetitan.ServiceTitanCustomer {
+function makeServiceTitanCustomerData(overrides: Record<string, unknown> = {}): servicetitan.ServiceTitanCustomer {
   return {
     id: ST_CUSTOMER_ID,
     name: 'Jane Smith',

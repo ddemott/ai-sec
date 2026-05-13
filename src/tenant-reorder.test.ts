@@ -99,7 +99,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
     await client.query("UPDATE tenants SET sort_order = 2 WHERE tenant_id = $1", [idB]);
 
     const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC");
-    expect(res.rows.map((r: any) => r.name)).toEqual(['Biz C', 'Biz A', 'Biz B']);
+    expect(res.rows.map((r: { name: string }) => r.name)).toEqual(['Biz C', 'Biz A', 'Biz B']);
   });
 
   it("ORDER BY sort_order ASC, created_at DESC matches tenant listing query", async () => {
@@ -120,7 +120,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
     await client.query("INSERT INTO tenants (name, business_type, sort_order) VALUES ('Third', 'test', 1)");
 
     const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC, created_at DESC");
-    expect(res.rows.map((r: any) => r.name)).toEqual(['Second', 'Third', 'First']);
+    expect(res.rows.map((r: { name: string }) => r.name)).toEqual(['Second', 'Third', 'First']);
   });
 
   it("tenants with same sort_order fall back to created_at DESC", async () => {

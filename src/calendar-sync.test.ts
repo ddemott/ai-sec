@@ -281,7 +281,7 @@ describe("Calendar Sync — Happy Paths", () => {
 
     // Verify sync map INSERT happened
     const lastInsertCall = mockClient.query.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && call[0].includes('INSERT INTO appointment_sync_map')
+      (call: [string, unknown[]?]) => typeof call[0] === 'string' && call[0].includes('INSERT INTO appointment_sync_map')
     );
     expect(lastInsertCall).toBeDefined();
   });

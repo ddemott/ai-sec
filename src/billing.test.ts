@@ -48,7 +48,7 @@ describe("Stripe Lite — Billing", () => {
        AND column_name IN ('stripe_customer_id', 'stripe_subscription_id', 'subscription_status', 'subscription_plan')
        ORDER BY column_name`
     );
-    const cols = res.rows.map((r: any) => r.column_name);
+    const cols = res.rows.map((r: { column_name: string }) => r.column_name);
     expect(cols).toContain('stripe_customer_id');
     expect(cols).toContain('stripe_subscription_id');
     expect(cols).toContain('subscription_status');

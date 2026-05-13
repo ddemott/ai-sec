@@ -29,7 +29,7 @@ const HUBSPOT_CONTACT_ID = 'hs-contact-001';
 const HUBSPOT_MEETING_ID = 'hs-meeting-001';
 const RESOURCE_ID = 'res-0001';
 
-function makeIntegrationSettings(overrides: Record<string, any> = {}) {
+function makeIntegrationSettings(overrides: Record<string, unknown> = {}) {
   return {
     access_token: 'valid-access-token',
     refresh_token: 'valid-refresh-token',
@@ -39,7 +39,7 @@ function makeIntegrationSettings(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeCustomerRow(overrides: Record<string, any> = {}) {
+function makeCustomerRow(overrides: Record<string, unknown> = {}) {
   return {
     id: CUSTOMER_ID,
     name: 'John Doe',
@@ -51,7 +51,7 @@ function makeCustomerRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeAppointmentRow(overrides: Record<string, any> = {}) {
+function makeAppointmentRow(overrides: Record<string, unknown> = {}) {
   return {
     id: APPOINTMENT_ID,
     tenant_id: TENANT_ID,
@@ -69,7 +69,7 @@ function makeAppointmentRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeHubSpotContactData(overrides: Record<string, any> = {}): hubspot.HubSpotContact {
+function makeHubSpotContactData(overrides: Record<string, unknown> = {}): hubspot.HubSpotContact {
   return {
     id: HUBSPOT_CONTACT_ID,
     properties: {
@@ -83,14 +83,14 @@ function makeHubSpotContactData(overrides: Record<string, any> = {}): hubspot.Hu
   };
 }
 
-import { createMockClient as createBaseMockClient, createMockPool } from './test-utils-mock';
+import { createMockClient as createBaseMockClient, createMockPool, type MockQuery, type MockResponse } from './test-utils-mock';
 
 // Wrap the shared mock client with a getDataQueries() helper that filters out
 // session-variable queries (vi-mock-calls shape, indexed positionally).
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: any[][] } }).mock.calls.filter(
+    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
       (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
     );
   return { ...base, getDataQueries };
@@ -272,10 +272,10 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     // WHERE: services/hubspotSync.ts → syncAppointmentToHubSpot() → syncCustomerToHubSpot() → createContact + createMeeting
     // WHY: Without cascade sync, associateMeetingToContact would fail with invalid contact ID — HubSpot requires valid contact for association
     const queries: MockQuery[] = [];
-    const allResponses: Array<{ rows: any[]; rowCount?: number }> = [];
+    const allResponses: MockResponse[] = [];
 
     const mockClient = {
-      query: vi.fn(async (text: string, params?: any[]) => {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
         queries.push({ text, params: params || [] });
         return allResponses.shift() || { rows: [], rowCount: 0 };
       }),

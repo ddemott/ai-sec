@@ -178,9 +178,9 @@ describe("getAuthUrl", () => {
     // WHERE: googleCalendar.ts getAuthUrl() -> jwt.sign() -> state param
     // WHY: without signed state, attackers could forge OAuth callbacks to connect their Google account to another tenant (CSRF)
     setGoogleEnv();
-    mockGenerateAuthUrl.mockImplementation((opts: any) => {
+    mockGenerateAuthUrl.mockImplementation((opts: { state: string }) => {
       // Verify the state is a valid JWT
-      const decoded = jwt.verify(opts.state, JWT_SECRET) as any;
+      const decoded = jwt.verify(opts.state, JWT_SECRET) as { tenantId: string; purpose: string };
       expect(decoded.tenantId).toBe(TENANT_ID);
       expect(decoded.purpose).toBe("google-calendar-oauth");
       return "https://accounts.google.com/auth";

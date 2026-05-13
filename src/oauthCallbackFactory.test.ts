@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Pool } from "pg";
 import { createOAuthCallbackHandler } from "./services/oauthCallbackFactory";
 
 // ── Mock helpers ─────────────────────────────────────────────────────
@@ -23,8 +24,8 @@ function createMockClient() {
   };
 }
 
-function createMockPool(mockClient: any) {
-  return { connect: vi.fn(async () => mockClient) } as any;
+function createMockPool(mockClient: ReturnType<typeof createMockClient>): Pool {
+  return { connect: vi.fn(async () => mockClient) } as unknown as Pool;
 }
 
 function createMockApp() {

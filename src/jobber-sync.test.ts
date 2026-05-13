@@ -33,7 +33,7 @@ const JOBBER_VISIT_ID = 'Z2lkOi8vSm9iYmVyL1Zpc2l0LzQ1Ng==';
 const JOBBER_JOB_ID = 'Z2lkOi8vSm9iYmVyL0pvYi83ODk=';
 const RESOURCE_ID = 'res-0001';
 
-function makeIntegrationSettings(overrides: Record<string, any> = {}) {
+function makeIntegrationSettings(overrides: Record<string, unknown> = {}) {
   return {
     access_token: 'valid-access-token',
     refresh_token: 'valid-refresh-token',
@@ -43,7 +43,7 @@ function makeIntegrationSettings(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeCustomerRow(overrides: Record<string, any> = {}) {
+function makeCustomerRow(overrides: Record<string, unknown> = {}) {
   return {
     id: CUSTOMER_ID,
     name: 'John Doe',
@@ -56,7 +56,7 @@ function makeCustomerRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeAppointmentRow(overrides: Record<string, any> = {}) {
+function makeAppointmentRow(overrides: Record<string, unknown> = {}) {
   return {
     id: APPOINTMENT_ID,
     tenant_id: TENANT_ID,
@@ -73,7 +73,7 @@ function makeAppointmentRow(overrides: Record<string, any> = {}) {
   };
 }
 
-function makeJobberClientData(overrides: Record<string, any> = {}): jobber.JobberClient {
+function makeJobberClientData(overrides: Record<string, unknown> = {}): jobber.JobberClient {
   return {
     id: JOBBER_CLIENT_ID,
     firstName: 'Jane',
@@ -89,7 +89,7 @@ function makeJobberClientData(overrides: Record<string, any> = {}): jobber.Jobbe
   };
 }
 
-function makeJobberVisitData(overrides: Record<string, any> = {}): jobber.JobberVisit {
+function makeJobberVisitData(overrides: Record<string, unknown> = {}): jobber.JobberVisit {
   return {
     id: JOBBER_VISIT_ID,
     title: 'Tire Rotation',

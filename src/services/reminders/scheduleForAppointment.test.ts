@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PoolClient } from 'pg';
+import type { FastifyBaseLogger } from 'fastify';
 
 import {
   scheduleRemindersForAppointment,
@@ -269,8 +270,7 @@ describe('scheduleRemindersForAppointment', () => {
         buildWithTenantClient(client),
         TENANT_ID,
         APPOINTMENT_ID,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        logger as any,
+        logger as unknown as FastifyBaseLogger,
       ),
     ).resolves.toBeUndefined();
 
@@ -399,8 +399,7 @@ describe('rescheduleRemindersForAppointment', () => {
       buildWithTenantClient(client),
       TENANT_ID,
       APPOINTMENT_ID,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      logger as any,
+      logger as unknown as FastifyBaseLogger,
     );
 
     expect(updateCalled).toBe(true);

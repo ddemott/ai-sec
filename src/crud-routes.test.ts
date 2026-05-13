@@ -214,7 +214,7 @@ describe("CRUD Routes - Database Level", () => {
             );
 
             expect(res.rows.length).toBeGreaterThanOrEqual(1);
-            const names = res.rows.map((r: any) => r.name);
+            const names = res.rows.map((r: { name: string }) => r.name);
             expect(names).toContain("Truck 1");
         });
 

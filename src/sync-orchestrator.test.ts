@@ -10,6 +10,7 @@
  * during the suite.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Pool } from 'pg';
 
 // Mock all 5 provider modules so the orchestrator's `.catch()` never runs
 // against a real DB pool. Each fn returns Promise<void> — the orchestrator
@@ -47,9 +48,9 @@ const APPT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const CUST_ID = '99999999-8888-7777-6666-555555555555';
 
 // Pool isn't actually used inside the mocked provider fns, but the
-// orchestrator's signature requires one — a `{} as any` keeps TS happy
+// orchestrator's signature requires one — a typed cast keeps TS happy
 // without dragging pg into a unit test.
-const FAKE_POOL: any = {};
+const FAKE_POOL = {} as Pool;
 
 describe('syncOrchestrator recorder', () => {
   let originalEnv: string | undefined;

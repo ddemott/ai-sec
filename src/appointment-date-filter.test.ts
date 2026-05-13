@@ -50,7 +50,7 @@ describe("Appointment date-range filter", () => {
 
   async function queryAppointments(params: { tenant_id: string; start_date?: string; end_date?: string }) {
     const conditions: string[] = ['a.tenant_id = $1'];
-    const values: any[] = [params.tenant_id];
+    const values: (string | number)[] = [params.tenant_id];
     let idx = 2;
 
     if (params.start_date) {
@@ -146,7 +146,7 @@ describe("Appointment date-range filter", () => {
       end_date: '2026-03-20T00:00:00Z',
     });
     expect(rows.length).toBe(3);
-    const times = rows.map((r: any) => new Date(r.start_time).getTime());
+    const times = rows.map((r: { start_time: string }) => new Date(r.start_time).getTime());
     expect(times[0]).toBeLessThan(times[1]);
     expect(times[1]).toBeLessThan(times[2]);
   });
