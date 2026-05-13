@@ -61,6 +61,7 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - Bootstrap: `npm run bootstrap` (deps + DB + migrations + seed + tests)
 - Migrate: `npm run db:migrate [-- "postgres://..."]`
 - Seed: `npm run db:seed [-- "postgres://..."]`
+- Rebuild from scratch: `npm run db:rebuild [-- --yes]` (DROP SCHEMA public + apply all migrations + seed). End-to-end validation of the migration chain. Refuses non-localhost URLs unless `--force`; refuses without confirmation unless `--yes`. Use before a branch cut, after a migration-heavy PR, or whenever the local DB has gotten weird.
 - Start: `npm start` (Dashboard https://localhost:4000, Backend https://localhost:4001)
 - Test: `npm test` (backend), `cd dashboard && npm test`, `cd dashboard && npx playwright test` (e2e)
 - Login: `daledemott@gmail.com` / `password`

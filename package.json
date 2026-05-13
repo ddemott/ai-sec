@@ -15,6 +15,7 @@
     "bootstrap": "bash scripts/bootstrap.sh",
     "db:migrate": "bash scripts/setup-db.sh",
     "db:seed": "bash scripts/seed-db.sh",
+    "db:rebuild": "bash scripts/rebuild-db.sh",
     "start": "bash scripts/start-all.sh",
     "restart": "bash scripts/restart-all.sh",
     "build": "tsc -p ."
