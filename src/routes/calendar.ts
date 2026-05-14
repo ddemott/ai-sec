@@ -1,5 +1,5 @@
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -40,7 +40,7 @@ export function registerCalendarRoutes(
 
   // --- Google OAuth: Callback (Google redirects here) ---
   // This route is public (no JWT) — auth is via the signed state param
-  app.get('/calendar/auth/google/callback', async (req: any, reply: any) => {
+  app.get('/calendar/auth/google/callback', async (req: AppRequest, reply: FastifyReply) => {
     const { code, state, error: oauthError } = req.query as Record<string, string>;
 
     const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
@@ -115,7 +115,7 @@ export function registerCalendarRoutes(
 
   // --- Outlook OAuth: Callback (Microsoft redirects here) ---
   // This route is public (no JWT) — auth is via the signed state param
-  app.get('/calendar/auth/outlook/callback', async (req: any, reply: any) => {
+  app.get('/calendar/auth/outlook/callback', async (req: AppRequest, reply: FastifyReply) => {
     const { code, state, error: oauthError } = req.query as Record<string, string>;
 
     const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
@@ -169,7 +169,7 @@ export function registerCalendarRoutes(
 
   // --- Calendar sync webhook (n8n or internal trigger) ---
   app.post('/calendar/sync', withHandler(async (req: AppRequest, reply) => {
-    const body = req.body as any;
+    const body = req.body as { provider?: string } | undefined;
     return reply.status(202).send({ status: 'accepted', source: body?.provider || 'unknown' });
   }, 'Failed to sync calendar'));
 

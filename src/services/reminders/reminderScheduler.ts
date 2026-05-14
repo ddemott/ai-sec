@@ -1,4 +1,4 @@
-import type { Appointment } from '../../types/index.js';
+import type { Appointment, ReminderSchedule } from '../../types/index.js';
 import type { ReminderRepository } from './reminderRepository.js';
 import type { ReminderData } from './types.js';
 
@@ -106,7 +106,7 @@ export class ReminderScheduler {
   /**
    * Get all scheduled reminders for a tenant
    */
-  async getScheduledReminders(tenantId: string): Promise<any[]> {
+  async getScheduledReminders(tenantId: string): Promise<ReminderSchedule[]> {
     return await this.repository.getScheduledReminders(tenantId);
   }
 

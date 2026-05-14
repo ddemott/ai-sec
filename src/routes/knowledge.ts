@@ -51,7 +51,11 @@ export function registerKnowledgeRoutes(
     const data = await req.file();
     if (!data) return reply.status(400).send({ success: false, error: 'No file uploaded' });
 
-    const tenantId = (data.fields.tenant_id as any)?.value;
+    // Fastify multipart: text fields arrive on `data.fields[key]` shaped
+    // as `{ value: string, type: 'field' }` (file fields have `type: 'file'`).
+    // Naming the optional `value` slot is narrower than bare `any` while
+    // still accepting the union shape the parser produces.
+    const tenantId = (data.fields.tenant_id as { value?: string } | undefined)?.value;
     if (!tenantId) return reply.status(400).send({ success: false, error: 'tenant_id is required' });
 
     // Validate file type — only accept text and PDF files
@@ -69,7 +73,14 @@ export function registerKnowledgeRoutes(
     let text = '';
 
     if (filename.toLowerCase().endsWith('.pdf')) {
-      const pdfData = await (pdfParse as any)(buffer);
+      // pdf-parse's installed types declare the import as a namespace
+      // but at runtime the default-imported value is callable. The
+      // double-cast through `unknown` is the canonical TS pattern for
+      // this exact "the types say one thing, the runtime does another"
+      // shape — narrower than bare `any` because the function signature
+      // (input + return-field name) is pinned.
+      const pdfFn = pdfParse as unknown as (buf: Buffer) => Promise<{ text: string }>;
+      const pdfData = await pdfFn(buffer);
       text = pdfData.text;
     } else {
       text = buffer.toString('utf8');
