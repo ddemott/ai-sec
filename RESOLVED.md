@@ -4,6 +4,44 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-14 — Per-tenant SMS rate limiter + 429 retry-policy carve-out
+
+Closes TODO Phase 5 Ops "Rate limiting for SMS sends." Pre-fix the project relied entirely on Twilio's account-wide throttle to bound SMS volume — a single tenant batching 200 reminders could exhaust the per-second budget for everyone else on the same Twilio account. New behavior caps each tenant individually so a noisy tenant only slows itself down.
+
+**Implementation:**
+
+- New `src/services/communications/smsRateLimit.ts`:
+  - `SmsRateLimiter` class — token bucket per `tenantId`, refilled lazily on each `acquire()` call based on elapsed wall-clock time.
+  - Defaults: capacity=60, refillRate=1/sec (matches the TODO spec line "1 SMS/sec, 60/min"). Both env-configurable via `SMS_RATE_LIMIT_CAPACITY` / `SMS_RATE_LIMIT_REFILL_PER_SEC` for production tuning without a code change.
+  - `acquire(tenantId)` throws `RateLimitedError` with `status: 429` and `retryAfterMs` (computed from bucket state — how long until the next whole token).
+  - `tryAcquire(tenantId)` is the boolean alternative for call sites that prefer a flag.
+  - Fresh tenants start with a full bucket so a small first send doesn't immediately rate-limit.
+  - Defensive: a clock running backwards (NTP adjustment, DST boundary) doesn't refill the bucket.
+  - Singleton `smsRateLimiter` shared across the process; tests construct fresh instances for isolation.
+
+- Wiring in `src/services/communications/smsService.ts`:
+  - `SMSService.sendSMS` calls `smsRateLimiter.acquire(tenantId)` after the consent check, before the provider call. On `RateLimitedError`, re-throws so the worker's retry policy sees the structured error.
+  - `sendSystemSMS` deliberately does NOT rate-limit — opt-out confirmations are themselves bounded by inbound STOP/UNSUBSCRIBE volume, and dropping one would leave a customer wondering whether their opt-out took effect.
+
+- Retry policy carve-out in `src/services/reminders/retryPolicy.ts`:
+  - `isRetryable` now special-cases HTTP 429 as retryable before applying the generic "4xx → don't retry" rule. 429 is HTTP's canonical "wait and retry" signal — both the new in-process limiter and Twilio's external throttle emit it. Without this carve-out the reminder retry policy would mark rate-limited rows failed immediately, defeating the whole feature.
+
+**Composition with retry logic (yesterday's commit):** rate-limited send → `RateLimitedError` (status 429) → reminder retry policy sees retryable → row's `retry_count` increments + `next_retry_at` set to now + 5/30/120 min → worker picks up after backoff → bucket has likely refilled → send succeeds. Zero new error plumbing required.
+
+**Tests added** (+10 backend total):
+
+- `src/services/communications/smsRateLimit.test.ts` (9 unit tests): fresh-bucket-full; drain-and-block at capacity; refill-rate math; capacity-cap (quiet tenants don't accumulate unbounded budget); RateLimitedError carries status=429 + retryAfterMs; **separate-tenants-have-independent-buckets** (load-bearing — the entire point of the feature); tryAcquire boolean shape; reset() for tests; clock-going-backwards defense.
+- `src/services/reminders/retryPolicy.test.ts` (+1 test): 429 retryable carve-out. Existing 4xx-non-retryable test pinned the inverse — together they document the exact policy line.
+
+**Configuration knobs for production tuning** (no code change needed):
+
+- `SMS_RATE_LIMIT_CAPACITY` — max burst size (default 60). Raise for tenants with legitimate bulk-send needs.
+- `SMS_RATE_LIMIT_REFILL_PER_SEC` — sustained rate (default 1.0). Raise to allow more sustained throughput per tenant.
+
+**After-state:** backend 1,893 → 1,903 (+10). Zero TS errors. Drift detector clean. No migration needed — pure in-memory rate limiting.
+
+---
+
 ## 2026-05-14 — Beta customer onboarding guide
 
 Closes TODO Pre-launch hardening "Beta customer onboarding guide" — pre-fix the next beta customer would have needed a screen-share with the founder to get from "I'd like to try this" to "my voice AI is taking real calls." Now `docs/BETA_ONBOARDING.md` (~280 lines) walks through it.

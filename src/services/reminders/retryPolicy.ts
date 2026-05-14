@@ -56,7 +56,14 @@ export function isRetryable(error: unknown): boolean {
   const e = error as { status?: number; statusCode?: number };
   const status = e.status ?? e.statusCode;
   if (typeof status !== 'number') return true; // no HTTP status info → retryable
-  if (status >= 400 && status < 500) return false; // 4xx → don't retry
+  // 429 (Too Many Requests) is technically a 4xx but it's the canonical
+  // "wait and retry later" signal — both Twilio's per-account throttle
+  // and our own per-tenant SMS rate limiter
+  // (src/services/communications/smsRateLimit.ts) emit it. Treating it
+  // as retryable lets the existing 5m/30m/2h backoff naturally handle
+  // bucket-refill timing.
+  if (status === 429) return true;
+  if (status >= 400 && status < 500) return false; // other 4xx → don't retry
   return true; // 5xx or anything else → retryable
 }
 

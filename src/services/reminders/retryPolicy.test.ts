@@ -43,6 +43,25 @@ describe('isRetryable', () => {
     expect(isRetryable({ statusCode: 499 })).toBe(false);
   });
 
+  it('HAPPY: 429 (Too Many Requests) is retryable despite being 4xx', () => {
+    // WHO   : SMSService throws RateLimitedError when the per-tenant
+    //         token bucket is dry; Twilio's account-wide throttle also
+    //         returns 429.
+    // WHAT  : isRetryable({status: 429}) → true (special-cased above
+    //         the generic 4xx → false rule)
+    // WHEN  : sustained-rate-exceeded send attempts
+    // WHERE : retryPolicy.isRetryable — 429 carve-out
+    // WHY   : 429 is HTTP's canonical "wait and retry" signal. Without
+    //         this special case the reminder retry policy would mark
+    //         the row failed immediately and we'd lose the message;
+    //         worse, the per-tenant rate limit
+    //         (src/services/communications/smsRateLimit.ts) is the
+    //         primary path so this case fires under normal load, not
+    //         just exotic provider errors.
+    expect(isRetryable({ status: 429 })).toBe(true);
+    expect(isRetryable({ statusCode: 429 })).toBe(true);
+  });
+
   it('HAPPY: returns true for an error with no status field (conservative default)', () => {
     // WHY: network errors (DNS failure, connection refused) and generic
     //      thrown Errors have no HTTP status. We retry rather than fail —

@@ -12,7 +12,7 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,893 / 1,893 | ✅ | ~120s |
+| Backend (`npm test`) | 1,903 / 1,903 | ✅ | ~120s |
 | Dashboard (`cd dashboard && npm test`) | 631 / 631 | ✅ | ~10s |
 | Agent (`cd agent && npm test`) | 85 / 85 | ✅ | ~3s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 85 passed, 7 skipped | ✅ | ~140s |

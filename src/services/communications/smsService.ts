@@ -2,6 +2,7 @@ import type { TenantConfigService } from '../tenants/index.js';
 import type { ConsentService } from '../consentService.js';
 import type { SMSMessage, CommunicationResult } from './types.js';
 import { providerRegistry } from './ProviderRegistry.js';
+import { smsRateLimiter, RateLimitedError } from './smsRateLimit.js';
 
 export class SMSService {
   private static simulationNoticeLogged = false;
@@ -47,6 +48,13 @@ export class SMSService {
         }
       }
 
+      // Per-tenant token-bucket rate limit (1 SMS/sec sustained, 60-token
+      // burst by default). Throws RateLimitedError with `status: 429` when
+      // the bucket is dry; the worker's retry policy treats 429 as
+      // retryable and the bucket refills before the retry fires.
+      // See src/services/communications/smsRateLimit.ts for the policy.
+      smsRateLimiter.acquire(tenantId);
+
       // Use tenant's provider if configured, otherwise use default
       const provider = providerRegistry.getDefaultProvider();
 
@@ -83,6 +91,14 @@ export class SMSService {
         messageId: result.messageSid,
       };
     } catch (error) {
+      // RateLimitedError carries `status: 429` so the worker's retry
+      // policy can pick it up as retryable without inspecting the
+      // message string. Re-throw so the worker sees the structured
+      // error; the catch in the worker converts to the per-row
+      // status='scheduled' + retry_count++ disposition.
+      if (error instanceof RateLimitedError) {
+        throw error;
+      }
       console.error('❌ Error sending SMS:', error);
       return {
         success: false,
@@ -92,7 +108,11 @@ export class SMSService {
   }
 
   /**
-   * Send SMS without consent checking (for system messages like opt-out confirmations)
+   * Send SMS without consent checking (for system messages like opt-out confirmations).
+   * Bypasses the per-tenant rate limit: opt-out confirmations are bounded
+   * by inbound STOP/UNSUBSCRIBE volume (which is itself rate-limited by
+   * the carrier), and dropping one would leave a customer wondering
+   * whether their opt-out took effect.
    */
   async sendSystemSMS(tenantId: string, message: SMSMessage): Promise<CommunicationResult> {
     try {
