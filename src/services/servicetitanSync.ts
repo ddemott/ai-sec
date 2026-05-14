@@ -96,7 +96,11 @@ export async function syncCustomerToServiceTitan(
       return;
     }
 
-    const customerPayload: Record<string, any> = {
+    // The ServiceTitan createCustomer/updateCustomer signatures accept the
+    // same shape; using the strict type here lets TS catch a typo'd
+    // field name at compile time instead of a 4xx response from
+    // ServiceTitan at runtime.
+    const customerPayload: { name: string; email?: string; phoneNumber?: string } = {
       name: cust.name || 'Customer',
     };
     if (cust.phone) customerPayload.phoneNumber = cust.phone;
@@ -105,7 +109,7 @@ export async function syncCustomerToServiceTitan(
     if (!syncEntry || action === 'create') {
       // Create in ServiceTitan
       const created = await servicetitan.createCustomer(
-        tokens.accessToken, tokens.appKey, tokens.tenantSid, customerPayload as any
+        tokens.accessToken, tokens.appKey, tokens.tenantSid, customerPayload
       );
 
       await syncMapUpsertOnCreate(
@@ -189,15 +193,25 @@ export async function syncAppointmentToServiceTitan(
       ? `${appt.description} - ${appt.customer_name || 'Customer'}`
       : `Appointment - ${appt.customer_name || 'Customer'}`;
 
-    const jobPayload: Record<string, any> = {
+    // Same compile-time-safety reasoning as customerPayload above. The
+    // createJob signature requires `customerId: number` (no optional);
+    // we use a union so we can build the partial payload first then
+    // narrow before the createJob call.
+    const jobPayload: { summary: string; scheduledDate: string; customerId?: number } = {
       summary,
       scheduledDate: new Date(appt.start_time).toISOString(),
     };
     if (servicetitanCustomerId) jobPayload.customerId = servicetitanCustomerId;
 
     if (!syncEntry || action === 'create') {
+      if (!jobPayload.customerId) {
+        log.warn(`${prefix} — skipped: cannot create ServiceTitan job without customerId`);
+        return;
+      }
       const job = await servicetitan.createJob(
-        tokens.accessToken, tokens.appKey, tokens.tenantSid, jobPayload as any
+        tokens.accessToken, tokens.appKey, tokens.tenantSid,
+        // Narrowed: customerId is now confirmed defined; TS can see it.
+        { customerId: jobPayload.customerId, summary: jobPayload.summary, scheduledDate: jobPayload.scheduledDate }
       );
 
       await syncMapUpsertOnCreate(
@@ -207,7 +221,12 @@ export async function syncAppointmentToServiceTitan(
       log.info(`${prefix} — appointment pushed to ServiceTitan as job (servicetitanId=${job.id} customer=${appt.customer_name})`);
     } else {
       const externalId = syncEntry.external_id;
-      const updatePayload: Record<string, any> = { ...jobPayload };
+      // updateJob's signature is { summary?, scheduledDate?, status? } — same
+      // strict shape catches typo'd fields at compile time.
+      const updatePayload: { summary?: string; scheduledDate?: string; status?: string } = {
+        summary: jobPayload.summary,
+        scheduledDate: jobPayload.scheduledDate,
+      };
       if (appt.status === 'canceled') updatePayload.status = 'Canceled';
 
       await servicetitan.updateJob(

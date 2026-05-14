@@ -128,16 +128,31 @@ export class ConsentService {
       throw new Error('tenantId is required');
     }
 
+    // Some callers (webhook receivers, raw-JSON POSTs from external
+    // systems) send snake_case keys instead of the camelCase shape the
+    // OptOutRecord type declares. The fallback chain accepts either —
+    // the OptOutSnakeShape alias names exactly which snake-case keys
+    // we recognize so the cast is specific instead of bare `any`.
+    type OptOutSnakeShape = Partial<{
+      customer_email: string;
+      customer_phone: string;
+      opt_out_type: OptOutRecord['optOutType'];
+      opt_out_date: string;
+      opt_out_method: OptOutRecord['optOutMethod'];
+      original_consent_record_id: number;
+    }>;
+    const snake = optOutData as OptOutSnakeShape;
+
     const camelCaseData: Omit<OptOutRecord, 'optOutRecordId'> = {
       tenantId: optOutData.tenantId,
-      customerEmail: optOutData.customerEmail ?? (optOutData as any).customer_email,
-      customerPhone: optOutData.customerPhone ?? (optOutData as any).customer_phone,
-      optOutType: optOutData.optOutType ?? (optOutData as any).opt_out_type,
+      customerEmail: optOutData.customerEmail ?? snake.customer_email,
+      customerPhone: optOutData.customerPhone ?? snake.customer_phone,
+      optOutType: optOutData.optOutType ?? snake.opt_out_type,
       optOutDate:
-        optOutData.optOutDate ?? (optOutData as any).opt_out_date ?? new Date().toISOString(),
-      optOutMethod: optOutData.optOutMethod ?? (optOutData as any).opt_out_method,
+        optOutData.optOutDate ?? snake.opt_out_date ?? new Date().toISOString(),
+      optOutMethod: optOutData.optOutMethod ?? snake.opt_out_method,
       originalConsentRecordId:
-        optOutData.originalConsentRecordId ?? (optOutData as any).original_consent_record_id,
+        optOutData.originalConsentRecordId ?? snake.original_consent_record_id,
       notes: optOutData.notes,
     };
 

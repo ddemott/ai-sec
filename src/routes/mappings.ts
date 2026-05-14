@@ -31,7 +31,7 @@ export function registerMappingRoutes(
   }, 'Failed to fetch employee mappings'));
 
   app.post('/services/:serviceId/employees/:employeeId/assign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, employeeId } = req.params as any;
+    const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
     if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
       return reply.status(400).send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
     }
@@ -50,7 +50,7 @@ export function registerMappingRoutes(
   }, 'Failed to assign employee to service'));
 
   app.post('/services/:serviceId/employees/:employeeId/unassign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, employeeId } = req.params as any;
+    const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
     if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
       return reply.status(400).send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
     }
@@ -69,7 +69,7 @@ export function registerMappingRoutes(
   }, 'Failed to unassign employee'));
 
   app.post('/services/:serviceId/resources/:resourceId/assign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, resourceId } = req.params as any;
+    const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
     if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
       return reply.status(400).send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
     }
@@ -88,7 +88,7 @@ export function registerMappingRoutes(
   }, 'Failed to assign resource to service'));
 
   app.post('/services/:serviceId/resources/:resourceId/unassign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, resourceId } = req.params as any;
+    const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
     if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
       return reply.status(400).send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
     }

@@ -195,16 +195,21 @@ export function registerAppointmentRoutes(
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
-    const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
-    const offset = parseInt((req.query as any)['offset']) || 0;
-    const startDate = (req.query as any)['start_date'] || null;
-    const endDate = (req.query as any)['end_date'] || null;
+    const query = req.query as Record<string, string | undefined>;
+    const limit = Math.min(parseInt(query['limit'] ?? '') || 200, 1000);
+    const offset = parseInt(query['offset'] ?? '') || 0;
+    const startDate = query['start_date'] || null;
+    const endDate = query['end_date'] || null;
 
     const isSuperAdmin = tenantId === SUPER_ADMIN_TENANT_ID;
 
-    // Build WHERE clauses and params dynamically for date filtering
+    // Build WHERE clauses and params dynamically for date filtering.
+    // params is a pg parameterized-query value list — Postgres accepts
+    // any JS primitive (string | number | boolean | Date | null) plus
+    // arrays of same; `unknown[]` names "we don't statically know the
+    // type per slot" without the bare `any[]` permission.
     const conditions: string[] = ['a.is_deleted = false'];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIdx = 1;
 
     if (!isSuperAdmin) {

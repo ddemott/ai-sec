@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import Stripe from 'stripe';
 import { withHandler, logEvent, logError, requireTenantId, type AppRequest } from '../middleware';
 
@@ -13,9 +13,23 @@ const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
 function getStripe(): Stripe | null {
   if (!STRIPE_SECRET_KEY) return null;
-  return new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-02-24.acacia' as any });
+  // The installed Stripe SDK's `apiVersion` literal union doesn't include
+  // every release date — we pin to a specific version that may be newer
+  // than the SDK's known set. Cast through `Stripe.StripeConfig['apiVersion']`
+  // names the exact slot we're filling instead of bare `any`.
+  return new Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: '2025-02-24.acacia' as Stripe.StripeConfig['apiVersion'],
+  });
 }
 
+// `FastifyInstance<any, any, any>` is a framework-boundary case: the app
+// is constructed in `src/index.ts` with http2 (`http2: true`), which
+// pins the generic params to http2 server types — incompatible with
+// the default-typed `FastifyInstance` here. Every route module accepts
+// the loosened generics for the same reason. Genuine fix is to thread
+// http2-typed `FastifyInstance` through every module; the wide signature
+// here is the conventional Fastify pattern when the server isn't
+// known by the consumer.
 export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool: Pool) {
   // POST /billing/checkout — create a Stripe Checkout session
   app.post('/billing/checkout', withHandler(async (req: AppRequest, reply) => {
@@ -26,7 +40,7 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
 
     const tenant_id = requireTenantId(req, reply);
     if (!tenant_id) return;
-    const { plan } = (req.body as any) || {};
+    const { plan } = (req.body as { plan?: string } | undefined) || {};
     if (!plan || !['solo', 'growth', 'professional'].includes(plan)) {
       return reply.status(400).send({ success: false, error: 'plan must be "solo", "growth", or "professional"' });
     }
@@ -98,8 +112,11 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
 
     let event: Stripe.Event;
     try {
-      // Access raw body from Fastify's rawBody property (requires rawBody plugin or config)
-      const rawBody = (req as any).rawBody;
+      // Access raw body from Fastify's rawBody property. The base
+      // FastifyRequest type doesn't declare it (it's added by a plugin
+      // / instance config), so a focused intersection type names exactly
+      // what we're reaching for rather than dropping to `any`.
+      const rawBody = (req as AppRequest & { rawBody?: string | Buffer }).rawBody;
       if (!rawBody) {
         throw new Error('Raw body not available — ensure Fastify rawBody is configured');
       }
@@ -191,18 +208,21 @@ export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool:
 export function subscriptionGate(pool: Pool) {
   const EXEMPT_PREFIXES = ['/health', '/login', '/billing', '/register'];
 
-  return async (request: any, reply: any) => {
+  return async (request: AppRequest, reply: FastifyReply) => {
     if (request.method === 'OPTIONS') return;
 
     const urlPath = request.url.split('?')[0];
     if (EXEMPT_PREFIXES.some(p => urlPath.startsWith(p)) || urlPath === '/') return;
 
-    // Get tenant_id from auth token, query param, or body
-    const auth = (request as any).auth;
+    // Get tenant_id from auth token, query param, or body. AppRequest
+    // already carries the optional `auth` field, so no cast needed for
+    // the JWT side. Query and body are unknown-shape on FastifyRequest
+    // by default — a Record-of-string cast names exactly what we read.
+    const auth = request.auth;
     const tenantId =
       auth?.tenant_id ||
-      (request.query as any)?.tenant_id ||
-      (request.body as any)?.tenant_id;
+      (request.query as Record<string, string> | undefined)?.tenant_id ||
+      (request.body as Record<string, string> | undefined)?.tenant_id;
 
     if (!tenantId) return; // No tenant context — let route handle auth
     if (tenantId === SUPER_ADMIN_TENANT_ID) return; // Super-admin exempt
