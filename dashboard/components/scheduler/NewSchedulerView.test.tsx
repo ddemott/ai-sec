@@ -235,17 +235,20 @@ describe('NewSchedulerView', () => {
   });
 
   describe('Business hours shading', () => {
+    // 2026-05-13: opacities bumped from 0.2/0.15 → 0.45/0.35 after the user
+    // reported "can't see business hours very easily." The original values
+    // were near-invisible on dark themes (rgba(0,0,0,0.15) on a near-black
+    // surface). These tests pin the new, higher-contrast values so a future
+    // regression to the old subtle values fails fast.
     test('hours outside business hours (8-17) have dark background', () => {
       render(<NewSchedulerView />);
-      // Hour 6 is outside business hours (before 8am) — header uses 0.2 opacity
       const earlyHour = screen.getByTestId('hour-cell-6');
       expect(earlyHour.style.background).toContain('rgba(0');
-      expect(earlyHour.style.background).toContain('0.2)');
+      expect(earlyHour.style.background).toContain('0.45)');
 
-      // Hour 20 is outside business hours (after 5pm)
       const lateHour = screen.getByTestId('hour-cell-20');
       expect(lateHour.style.background).toContain('rgba(0');
-      expect(lateHour.style.background).toContain('0.2)');
+      expect(lateHour.style.background).toContain('0.45)');
     });
 
     test('hours inside business hours have transparent background', () => {
@@ -256,14 +259,26 @@ describe('NewSchedulerView', () => {
 
     test('slot cells also have business hours shading', () => {
       render(<NewSchedulerView />);
-      // A slot outside business hours
       const earlySlot = screen.getByTestId('slot-emp-1-5');
       expect(earlySlot.style.background).toContain('rgba(0');
-      expect(earlySlot.style.background).toContain('0.15)');
+      expect(earlySlot.style.background).toContain('0.35)');
 
-      // A slot inside business hours
       const businessSlot = screen.getByTestId('slot-emp-1-10');
       expect(businessSlot.style.background).toBe('transparent');
+    });
+
+    test('open/close boundary hours show an accent left-border in the header', () => {
+      // WHY: pre-fix the only visual cue for the boundary was the shading
+      // color change, which is subtle even at the bumped opacity. The
+      // accent border gives a crisp at-a-glance edge between closed and
+      // open hours. Pin the border-left so the boundary remains visible
+      // through any future style sweep.
+      render(<NewSchedulerView />);
+      const openBoundary = screen.getByTestId('hour-cell-8'); // 8am, first open hour
+      expect(openBoundary.style.borderLeft).toMatch(/2px solid/);
+
+      const closeBoundary = screen.getByTestId('hour-cell-17'); // 5pm, first closed hour
+      expect(closeBoundary.style.borderLeft).toMatch(/2px solid/);
     });
   });
 

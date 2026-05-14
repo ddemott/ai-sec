@@ -882,6 +882,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
             <div className="flex" style={{ width: totalGridWidth }}>
               {HOURS.map((h) => {
                 const isOutsideBusiness = h < openHour || h >= closeHour;
+                // Mark the open/close boundaries with an accent-colored
+                // left border so the transition from "closed" to "open"
+                // hours is visible at a glance. Pre-fix the rgba(0,0,0,0.2)
+                // outside-business overlay was nearly invisible on dark
+                // themes (near-black on near-black) — the user reported
+                // "can't see business hours very easily" on 2026-05-13.
+                const isOpenBoundary = h === openHour && openHour > 0;
+                const isCloseBoundary = h === closeHour && closeHour < 24;
                 return (
                   <div
                     key={h}
@@ -889,8 +897,13 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                     style={{
                       width: colW,
                       height: HEADER_HEIGHT,
-                      color: 'var(--text-muted, #888)',
-                      background: isOutsideBusiness ? 'rgba(0,0,0,0.2)' : 'transparent',
+                      color: isOutsideBusiness ? 'var(--text-muted, #666)' : 'var(--text-secondary, #aaa)',
+                      // Bumped from 0.2 → 0.45 so the outside-business
+                      // band is clearly visible on both light and dark
+                      // themes. Inside-business stays transparent so
+                      // the underlying surface color reads through.
+                      background: isOutsideBusiness ? 'rgba(0,0,0,0.45)' : 'transparent',
+                      borderLeft: (isOpenBoundary || isCloseBoundary) ? '2px solid var(--accent, #3b82f6)' : undefined,
                       borderRight: '1px solid var(--border-soft)',
                     }}
                     data-testid={`hour-cell-${h}`}
@@ -967,7 +980,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                             style={{
                               width: colW,
                               height: rowH,
-                              background: isOutsideBusiness ? 'rgba(0,0,0,0.15)' : 'transparent',
+                              background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
                               borderRight: '1px solid var(--border-soft)',
                             }}
                             data-testid={`slot-${empId}-${h}`}
@@ -1033,7 +1046,11 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                           style={{
                             width: colW,
                             height: ROW_HEIGHT,
-                            background: isOutsideBusiness ? 'rgba(0,0,0,0.15)' : 'transparent',
+                            background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
+                            borderLeft:
+                              (h === openHour && openHour > 0) || (h === closeHour && closeHour < 24)
+                                ? '2px solid var(--accent, #3b82f6)'
+                                : undefined,
                             borderRight: '1px solid var(--border-soft)',
                           }}
                         />
