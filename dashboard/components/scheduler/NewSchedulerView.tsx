@@ -400,6 +400,58 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     setApptPopover(null);
   }, []);
 
+  // Soft-cancel from popover (Staff sub-tab). Mirrors SchedulerView's
+  // handlePopoverCancel but lives here because NewSchedulerView fetches
+  // its own data and owns its own refresh — SchedulerView's handler
+  // would refresh the parent's data set, not this view's. 2026-05-13:
+  // added after the user reported "no delete button" — the popover
+  // was rendered without onCancel so its action buttons never showed.
+  const handleApptCancel = useCallback(async (appointmentId: string) => {
+    if (!tenantId) return;
+    if (!confirm('Cancel this appointment? The slot will free up but the record stays for history.')) return;
+    try {
+      const res = await Api.appointments.cancel(appointmentId, tenantId);
+      if (res.success) {
+        showToast('Appointment canceled', 'success');
+        setApptPopover(null);
+        refreshScheduler();
+      } else {
+        showToast(res.error || 'Failed to cancel appointment', 'error');
+      }
+    } catch {
+      showToast('Connection error — could not cancel appointment', 'error');
+    }
+  }, [tenantId, refreshScheduler]);
+
+  // Drag-to-move from a Staff-lane block. Block already snapped delta
+  // to 15 min and called us with the resolved minute count. We compute
+  // new start/end ISO times and PUT them; the GiST exclusion constraint
+  // in the booking RPC catches any race-conflict (409 → toast + revert
+  // via refreshScheduler).
+  const handleApptMove = useCallback(async (appointmentId: string, deltaMinutes: number) => {
+    if (!tenantId || deltaMinutes === 0) return;
+    const appt = appointments.find(a => a.appointment_id === appointmentId);
+    if (!appt) return;
+    const newStart = new Date(new Date(appt.start_time).getTime() + deltaMinutes * 60_000).toISOString();
+    const newEnd = new Date(new Date(appt.end_time).getTime() + deltaMinutes * 60_000).toISOString();
+    try {
+      const res = await Api.appointments.update(appointmentId, tenantId, {
+        start_time: newStart,
+        end_time: newEnd,
+      });
+      if (res.success) {
+        showToast(`Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, 'success');
+        refreshScheduler();
+      } else {
+        showToast(res.error || 'Could not move appointment', 'error');
+        refreshScheduler(); // snap visual back to DB state
+      }
+    } catch {
+      showToast('Connection error — appointment not moved', 'error');
+      refreshScheduler();
+    }
+  }, [tenantId, appointments, refreshScheduler]);
+
   // --- Drag-to-reorder handlers (Item #6) ---
   const handleDragStart = useCallback((index: number) => {
     setDragIndex(index);
@@ -938,6 +990,8 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                             colW={colW}
                             services={services}
                             onClick={handleAppointmentClick}
+                            onDelete={handleApptCancel}
+                            onMove={handleApptMove}
                           />
                         ))}
                       </>
@@ -993,6 +1047,9 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                       appointment={appt}
                       colW={colW}
                       services={services}
+                      onClick={handleAppointmentClick}
+                      onDelete={handleApptCancel}
+                      onMove={handleApptMove}
                     />
                   ))}
                 </div>
@@ -1044,6 +1101,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
           resourceName={apptPopover.appointment.resources?.name || null}
           anchorRect={apptPopover.anchorRect}
           onClose={handleApptPopoverClose}
+          onCancel={handleApptCancel}
         />
       )}
     </div>
@@ -1173,9 +1231,24 @@ interface AppointmentBlockNewProps {
   colW: number;
   services: Service[];
   onClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
+  /** Hover-trash → soft-cancel. Hidden for already-canceled rows. */
+  onDelete?: (appointmentId: string) => void;
+  /**
+   * Outlook-style drag-to-move (Staff sub-tab). Parent receives the
+   * 15-min-snapped delta and computes/persists the new start_time +
+   * end_time via Api.appointments.update. Click-vs-drag is
+   * disambiguated by the 4px threshold below.
+   */
+  onMove?: (appointmentId: string, deltaMinutes: number) => void;
 }
 
-function AppointmentBlockNew({ appointment, colW, services, onClick }: AppointmentBlockNewProps) {
+// Same constants as scheduler/AppointmentBlock.tsx — keep in sync if
+// either value changes. 4px is the standard click-vs-drag threshold;
+// 15 min matches the booking-form grid.
+const NEW_CLICK_DRAG_THRESHOLD_PX = 4;
+const NEW_SNAP_MIN = 15;
+
+function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, onMove }: AppointmentBlockNewProps) {
   const startH = toFractionalHour(appointment.start_time);
   const endH = toFractionalHour(appointment.end_time);
   const duration = Math.max(endH - startH, 0.25); // min 15 min visual
@@ -1186,10 +1259,61 @@ function AppointmentBlockNew({ appointment, colW, services, onClick }: Appointme
   const customerName = appointment.customers?.name || 'Unknown';
   const serviceName = findServiceName(appointment.description, services);
   const statusColors = getStatusColor(appointment.status);
+  const isCanceled = appointment.status === 'canceled';
+
+  // Drag state. Same shape as scheduler/AppointmentBlock.tsx but with
+  // pixel-positioned math (colW px per hour, not percentage of parent).
+  const [drag, setDrag] = useState<{ startX: number; deltaPx: number } | null>(null);
+  const dragRef = useRef<typeof drag>(null);
+  dragRef.current = drag;
+  const minutesPerPx = 60 / colW;
+
+  useEffect(() => {
+    if (!drag) return;
+    const onMouseMove = (e: MouseEvent) => {
+      const cur = dragRef.current;
+      if (!cur) return;
+      setDrag({ ...cur, deltaPx: e.clientX - cur.startX });
+    };
+    const onMouseUp = () => {
+      const cur = dragRef.current;
+      if (!cur) return;
+      const deltaPx = cur.deltaPx;
+      setDrag(null);
+      if (Math.abs(deltaPx) < NEW_CLICK_DRAG_THRESHOLD_PX) return; // click, not drag
+      const rawMinutes = deltaPx * minutesPerPx;
+      const deltaMinutes = Math.round(rawMinutes / NEW_SNAP_MIN) * NEW_SNAP_MIN;
+      if (deltaMinutes !== 0 && onMove) {
+        onMove(appointment.appointment_id, deltaMinutes);
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [drag, minutesPerPx, appointment.appointment_id, onMove]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!onMove || isCanceled || e.button !== 0) return;
+    setDrag({ startX: e.clientX, deltaPx: 0 });
+  };
+
+  const handleTrashClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) onDelete(appointment.appointment_id);
+  };
+
+  const isDragging = drag !== null && Math.abs(drag.deltaPx) >= NEW_CLICK_DRAG_THRESHOLD_PX;
+  const dragStyle = drag
+    ? { transform: `translateX(${drag.deltaPx}px)`, opacity: 0.7, zIndex: 20 as const }
+    : {};
+  const showTrash = onDelete && !isCanceled && !isDragging;
 
   return (
     <div
-      className="absolute rounded px-1.5 py-0.5 text-xs font-bold truncate cursor-pointer transition-opacity hover:opacity-90"
+      className={`group absolute rounded px-1.5 py-0.5 text-xs font-bold truncate transition-opacity hover:opacity-90 ${isCanceled ? 'cursor-pointer' : onMove ? 'cursor-move' : 'cursor-pointer'}`}
       style={{
         left,
         width: Math.max(width, 20),
@@ -1198,16 +1322,31 @@ function AppointmentBlockNew({ appointment, colW, services, onClick }: Appointme
         background: statusColors.bg,
         border: `1px solid ${statusColors.border}`,
         color: statusColors.text,
-        zIndex: 2,
+        zIndex: drag ? 20 : 2,
         fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+        ...dragStyle,
       }}
       title={`${customerName} — ${serviceName}`}
+      onMouseDown={handleMouseDown}
       onClick={(e) => onClick?.(appointment, e)}
       data-testid={`appt-block-${appointment.appointment_id}`}
     >
       <span className="block truncate leading-tight">{customerName}</span>
       {width > 60 && (
         <span className="block truncate leading-tight text-[10px] opacity-80">{serviceName}</span>
+      )}
+      {showTrash && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={handleTrashClick}
+          className="absolute top-0.5 right-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/30 transition-opacity"
+          title="Cancel this appointment"
+          aria-label="Cancel appointment"
+          data-testid={`appt-block-delete-${appointment.appointment_id}`}
+        >
+          <X className="w-3 h-3" style={{ color: statusColors.text }} />
+        </button>
       )}
     </div>
   );

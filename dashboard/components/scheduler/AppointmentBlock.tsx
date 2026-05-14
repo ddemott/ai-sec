@@ -1,11 +1,29 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR } from './TimeGrid';
 
 interface AppointmentBlockProps {
   appointment: SchedulerAppointment;
   onClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
+  /**
+   * Hover-revealed trash icon → soft-cancel. Parent owns the confirm
+   * prompt + API call; child only fires the intent. Hidden for already-
+   * canceled appointments (the row stays but the operator can't cancel
+   * twice). When omitted, no trash icon renders — the block behaves
+   * exactly as it did pre-2026-05-13.
+   */
+  onDelete?: (appointmentId: string) => void;
+  /**
+   * Outlook-style drag-to-move. Parent computes new start_time/end_time
+   * from `deltaMinutes` (positive = right/later, negative = left/earlier)
+   * and calls the update API. Snap is fixed at 15 minutes — anything
+   * smaller is treated as a click rather than a drag. When omitted, the
+   * block is not draggable.
+   */
+  onMove?: (appointmentId: string, deltaMinutes: number) => void;
   colorClass?: string;
+  /** Hour-cell pixel width — needed to convert drag-delta-pixels to minutes. */
   hourWidth?: number;
 }
 
@@ -42,10 +60,21 @@ export function getTimeSpan(startStr: string, endStr: string, startHour: number,
   return { left, width: Math.max(right - left, 0.02) }; // min 2% width
 }
 
+// Click-vs-drag disambiguation: a horizontal move smaller than this counts
+// as a click; anything larger starts a drag. 4px is the standard threshold
+// across most drag UX (allows for tiny mouse jitter on a click).
+const CLICK_DRAG_THRESHOLD_PX = 4;
+// Snap drags to a 15-minute grid to match the booking-form convention
+// (every appointment time the booking flow accepts is a multiple of 15).
+const SNAP_MIN = 15;
+
 export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
   appointment,
   onClick,
+  onDelete,
+  onMove,
   colorClass,
+  hourWidth = 60,
 }) => {
   const { left, width } = getTimeSpan(
     appointment.start_time,
@@ -62,16 +91,108 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
   };
   const sc = statusColors[appointment.status] || statusColors.scheduled;
 
+  // Drag state lives in the block. We deliberately don't lift this into
+  // the parent — every block knows its own drag deltas, and the parent
+  // only learns the final move via onMove(id, deltaMinutes). Avoids a
+  // re-render of every sibling block on every mouse-move.
+  const [drag, setDrag] = useState<{ startX: number; deltaPx: number } | null>(null);
+  const dragRef = useRef<typeof drag>(null);
+  dragRef.current = drag;
+
+  // Pixel → minute conversion. Container width is (END-START)*hourWidth
+  // pixels; a one-hour span renders at hourWidth pixels, so 60 minutes
+  // span hourWidth px → 1 minute = hourWidth/60 px (and 1 px = 60/hourWidth
+  // minutes). At the default hourWidth=60 this is 1:1.
+  const minutesPerPx = 60 / hourWidth;
+
+  useEffect(() => {
+    if (!drag) return;
+    const onMouseMove = (e: MouseEvent) => {
+      const current = dragRef.current;
+      if (!current) return;
+      setDrag({ ...current, deltaPx: e.clientX - current.startX });
+    };
+    const onMouseUp = () => {
+      const current = dragRef.current;
+      if (!current) return;
+      const deltaPx = current.deltaPx;
+      setDrag(null);
+      if (Math.abs(deltaPx) < CLICK_DRAG_THRESHOLD_PX) {
+        // It was actually a click. The block's onClick fires below; do
+        // not also fire onMove with a near-zero delta (which would
+        // round to 0 minutes and no-op the API anyway, but the round-
+        // trip wastes a request).
+        return;
+      }
+      const rawMinutes = deltaPx * minutesPerPx;
+      const deltaMinutes = Math.round(rawMinutes / SNAP_MIN) * SNAP_MIN;
+      if (deltaMinutes !== 0 && onMove) {
+        onMove(appointment.appointment_id, deltaMinutes);
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [drag, minutesPerPx, appointment.appointment_id, onMove]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Drag is opt-in via onMove. Canceled appointments are read-only —
+    // dragging a canceled row would create a confusing "moved a dead
+    // record" state and the booking RPC rejects updates against
+    // status='canceled' anyway.
+    if (!onMove || isCanceled) return;
+    // Left-button only. Right-click stays available for future context-
+    // menu work without colliding with drag.
+    if (e.button !== 0) return;
+    setDrag({ startX: e.clientX, deltaPx: 0 });
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // If the user just released after a drag, onMove already fired in
+    // mouseup and we suppress the click. drag is reset to null by then,
+    // but the click event still bubbles — guard on the raw distance
+    // moved during the most recent drag cycle.
+    onClick?.(appointment, e);
+  };
+
+  const handleTrashClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) onDelete(appointment.appointment_id);
+  };
+
+  // Visual feedback during drag: shift the block by the pixel-delta so
+  // the user sees the ghost track their cursor. CSS transform avoids
+  // re-laying out the row.
+  const dragStyle = drag
+    ? {
+        transform: `translateX(${drag.deltaPx}px)`,
+        opacity: 0.7,
+        zIndex: 20,
+      }
+    : {};
+  const isDragging = drag !== null && Math.abs(drag.deltaPx) >= CLICK_DRAG_THRESHOLD_PX;
+
+  // Trash icon visibility: revealed by `group-hover` so we don't need
+  // local hover state. The icon is suppressed during drag (no point
+  // letting the user click delete on a ghost block) and on canceled
+  // rows (already non-actionable).
+  const showTrash = onDelete && !isCanceled && !isDragging;
+
   return (
     <div
-      className={`absolute top-1 bottom-1 rounded px-1.5 py-0.5 text-xs font-bold truncate cursor-pointer hover:opacity-90 transition-opacity ${colorClass || ''} ${isCanceled ? 'opacity-40 line-through' : ''}`}
+      className={`group absolute top-1 bottom-1 rounded px-1.5 py-0.5 text-xs font-bold truncate hover:opacity-90 transition-opacity ${colorClass || ''} ${isCanceled ? 'opacity-40 line-through cursor-pointer' : onMove ? 'cursor-move' : 'cursor-pointer'}`}
       style={{
         left: `${left * 100}%`,
         width: `${width * 100}%`,
         background: sc.bg || undefined,
         color: sc.text,
+        ...dragStyle,
       }}
-      onClick={(e) => onClick?.(appointment, e)}
+      onMouseDown={handleMouseDown}
+      onClick={handleClick}
       title={`${customerName} — ${appointment.description}`}
       data-testid={`appointment-block-${appointment.appointment_id}`}
     >
@@ -83,6 +204,19 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
         />
       ) : (
         customerName
+      )}
+      {showTrash && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()} // don't start a drag from the trash
+          onClick={handleTrashClick}
+          className="absolute top-0.5 right-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/30 transition-opacity"
+          title="Cancel this appointment"
+          aria-label="Cancel appointment"
+          data-testid={`appointment-block-delete-${appointment.appointment_id}`}
+        >
+          <Trash2 className="w-3 h-3" style={{ color: sc.text }} />
+        </button>
       )}
     </div>
   );

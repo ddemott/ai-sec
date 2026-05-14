@@ -12,6 +12,10 @@ interface StaffSwimLaneViewProps {
   appointmentsByEmployee: Map<string, SchedulerAppointment[]>;
   shiftsByEmployee: Map<string, SwimLaneShift[]>;
   onAppointmentClick?: (appointment: SchedulerAppointment) => void;
+  /** Hover-trash on an appointment block → parent owns confirm + API call. */
+  onAppointmentDelete?: (appointmentId: string) => void;
+  /** Drag-to-move on an appointment block. deltaMinutes is snapped to 15. */
+  onAppointmentMove?: (appointmentId: string, deltaMinutes: number) => void;
   onShiftDrag?: (employeeId: string, startHour: number, endHour: number) => void;
   onShiftDelete?: (shiftId: string) => void;
   onShiftResize?: (shiftId: string, startHour: number, endHour: number) => void;
@@ -59,6 +63,8 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   appointmentsByEmployee,
   shiftsByEmployee,
   onAppointmentClick,
+  onAppointmentDelete,
+  onAppointmentMove,
   onShiftDrag,
   onShiftDelete,
   onShiftResize,
@@ -385,6 +391,8 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
               key={appt.appointment_id}
               appointment={appt}
               onClick={onAppointmentClick}
+              onDelete={onAppointmentDelete}
+              onMove={onAppointmentMove}
               colorClass={colorClass}
               hourWidth={hourWidth}
             />

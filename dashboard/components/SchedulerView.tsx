@@ -131,6 +131,58 @@ export default function SchedulerView() {
     refreshScheduler();
   }, [refreshScheduler]);
 
+  // Soft-cancel from the hover-trash icon on an appointment block.
+  // Same shape as handlePopoverCancel above but called from the block
+  // directly (no popover round-trip). The confirm() is intentional —
+  // a one-click delete on a scheduled appointment is too punishing for
+  // a misclick. Origin: 2026-05-13 — user reported "no delete button"
+  // for appointments; the hover-trash gives a direct affordance.
+  const handleAppointmentDelete = useCallback(async (appointmentId: string) => {
+    if (!tenantId) return;
+    if (!confirm('Cancel this appointment? The slot will free up but the record stays for history.')) return;
+    try {
+      const res = await Api.appointments.cancel(appointmentId, tenantId);
+      if (res.success) {
+        showToast('Appointment canceled', 'success');
+        refreshScheduler();
+      } else {
+        showToast(res.error || 'Failed to cancel appointment', 'error');
+      }
+    } catch {
+      showToast('Connection error — could not cancel appointment', 'error');
+    }
+  }, [tenantId, refreshScheduler]);
+
+  // Outlook-style drag-to-move. The block already snapped the delta
+  // to a 15-min grid (matches the booking-form gridding); we compute
+  // the new start/end timestamps from the delta and PUT them. The
+  // GiST exclusion constraint in book_with_scheduling_atomic catches
+  // any race-conflict (409 → toast + refresh, which snaps the visual
+  // back to the DB-of-record position).
+  const handleAppointmentMove = useCallback(async (appointmentId: string, deltaMinutes: number) => {
+    if (!tenantId || deltaMinutes === 0) return;
+    const appt = appointments.find(a => a.appointment_id === appointmentId);
+    if (!appt) return;
+    const newStart = new Date(new Date(appt.start_time).getTime() + deltaMinutes * 60_000).toISOString();
+    const newEnd = new Date(new Date(appt.end_time).getTime() + deltaMinutes * 60_000).toISOString();
+    try {
+      const res = await Api.appointments.update(appointmentId, tenantId, {
+        start_time: newStart,
+        end_time: newEnd,
+      });
+      if (res.success) {
+        showToast(`Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, 'success');
+        refreshScheduler();
+      } else {
+        showToast(res.error || 'Could not move appointment', 'error');
+        refreshScheduler();
+      }
+    } catch {
+      showToast('Connection error — appointment not moved', 'error');
+      refreshScheduler();
+    }
+  }, [tenantId, appointments, refreshScheduler]);
+
   // Single Quick Book opener — used by the toolbar button (no args) and by
   // empty-cell clicks on the Staff/Calendar sub-tabs (with cell prefill).
   // Caller-supplied date wins over selectedDate so the Staff sub-tab's own
@@ -276,6 +328,8 @@ export default function SchedulerView() {
             shiftsByEmployee={shiftsByEmployee}
             employees={employees}
             onAppointmentClick={handleAppointmentClick}
+            onAppointmentDelete={handleAppointmentDelete}
+            onAppointmentMove={handleAppointmentMove}
             hourWidth={hourWidth}
           />
         )}
