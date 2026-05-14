@@ -38,7 +38,7 @@ export function registerAnalyticsRoutes(
   app.get('/call-summaries', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
-    const customerId = (req.query as any).customer_id;
+    const customerId = (req.query as { customer_id?: string }).customer_id;
     if (!customerId) {
       return reply.status(400).send({ success: false, error: 'customer_id is required' });
     }

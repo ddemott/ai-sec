@@ -69,7 +69,7 @@ export function registerReminderRoutes(
         LEFT JOIN appointments a ON rs.appointment_id = a.appointment_id
         WHERE rs.tenant_id = $1
       `;
-      const params: any[] = [tenantId];
+      const params: unknown[] = [tenantId];
 
       if (status) {
         query += ` AND rs.status = $${params.length + 1}`;
@@ -86,7 +86,7 @@ export function registerReminderRoutes(
     // Get total count
     const total = await withTenantClient(tenantId, async (client) => {
       let query = 'SELECT COUNT(*) FROM reminder_schedules WHERE tenant_id = $1';
-      const params: any[] = [tenantId];
+      const params: unknown[] = [tenantId];
 
       if (status) {
         query += ' AND status = $2';

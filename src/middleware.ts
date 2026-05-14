@@ -343,7 +343,14 @@ export function logError(
   req.log.error({
     event,
     error_message: error.message,
-    error_code: (error as any).code || (error as any).statusCode || null,
+    // Errors from various sources carry their own non-standard
+    // diagnostic fields: pg errors have `code`, fetch/HTTP errors
+    // have `statusCode`. The Error base type doesn't declare either —
+    // the intersection types name exactly the optional shapes we read.
+    error_code:
+      (error as Error & { code?: string }).code ||
+      (error as Error & { statusCode?: number }).statusCode ||
+      null,
     error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
     route: req.url,
     method: req.method,
@@ -377,7 +384,11 @@ type JwtPayload = { tenant_id: string; user_id: string; email: string; role: Use
  * mid-flight. New tokens always carry an explicit role.
  */
 export function generateToken(payload: { tenant_id: string; user_id: string; email: string; role: UserRole }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as any });
+  // jsonwebtoken's `expiresIn` is typed as `string | number` in older
+  // versions but the runtime accepts ms-format strings like "8h".
+  // SignOptions['expiresIn'] is the exact slot we're filling — narrower
+  // than bare `any` while still accepting the env-derived string.
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as jwt.SignOptions['expiresIn'] });
 }
 
 function verifyToken(token: string): JwtPayload | null {

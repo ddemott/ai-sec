@@ -46,8 +46,9 @@ export function registerCustomerRoutes(
   app.get('/customers', withHandler(async (req: AppRequest, reply) => {
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
-    const limit = Math.min(parseInt((req.query as any)['limit']) || 200, 1000);
-    const offset = parseInt((req.query as any)['offset']) || 0;
+    const query = req.query as Record<string, string | undefined>;
+    const limit = Math.min(parseInt(query['limit'] ?? '') || 200, 1000);
+    const offset = parseInt(query['offset'] ?? '') || 0;
 
     if (tenantId === SUPER_ADMIN_TENANT_ID) {
       const res = await withPoolClient(pool, (client) =>

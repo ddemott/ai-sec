@@ -70,7 +70,7 @@ export function registerEmployeeRoutes(
   }, 'Failed to create employee'));
 
   app.delete('/employees/:id/delete', withHandler(async (req: AppRequest, reply) => {
-    const id = (req.params as any).id;
+    const id = (req.params as { id: string }).id;
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
@@ -90,7 +90,7 @@ export function registerEmployeeRoutes(
   }, 'Failed to delete employee'));
 
   app.post('/employees/:id/update', withHandler(async (req: AppRequest, reply) => {
-    const id = (req.params as any).id;
+    const id = (req.params as { id: string }).id;
     const parsed = UpdateEmployeeSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });

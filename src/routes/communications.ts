@@ -28,14 +28,14 @@ const SendEmailSchema = z.object({
   body: z.string().min(1).max(10000),
   html: z.string().max(50000).optional(),
   template: z.string().optional(),
-  templateData: z.record(z.string(), z.any()).optional(),
+  templateData: z.record(z.string(), z.unknown()).optional(),
 });
 
 const SendSMSSchema = z.object({
   to: z.string().min(10).max(20),
   body: z.string().min(1).max(1600),
   template: z.string().optional(),
-  templateData: z.record(z.string(), z.any()).optional(),
+  templateData: z.record(z.string(), z.unknown()).optional(),
 });
 
 const RecordConsentSchema = z.object({

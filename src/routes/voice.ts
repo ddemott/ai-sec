@@ -352,7 +352,7 @@ export function registerVoiceRoutes(
     if (!tenantId) return;
 
     const { customerId } = req.params as { customerId: string };
-    const limit = Math.min(parseInt((req.query as any).limit || '20'), 100);
+    const limit = Math.min(parseInt((req.query as { limit?: string }).limit || '20'), 100);
 
     const calls = await withTenantClient(tenantId, async (client) => {
       const result = await client.query<VoiceSession>(
