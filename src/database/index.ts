@@ -259,6 +259,19 @@ export class PostgresDatabaseService implements DatabaseService {
       updates.push(`error = $${paramIndex++}`);
       values.push(data.error);
     }
+    // Retry-policy fields (migration 20260514000000). The worker writes
+    // these on a transient failure to schedule the next attempt; nothing
+    // outside the worker should be touching them, but the SET clause
+    // accepts them to keep the API symmetric with the ReminderSchedule
+    // type.
+    if (data.retry_count !== undefined) {
+      updates.push(`retry_count = $${paramIndex++}`);
+      values.push(data.retry_count);
+    }
+    if (data.next_retry_at !== undefined) {
+      updates.push(`next_retry_at = $${paramIndex++}`);
+      values.push(data.next_retry_at);
+    }
 
     if (updates.length === 0) {
       return this.getReminderSchedule(id);
@@ -310,10 +323,17 @@ export class PostgresDatabaseService implements DatabaseService {
   }
 
   async getDueReminders(): Promise<ReminderSchedule[]> {
+    // The next_retry_at filter holds back rows that failed a previous
+    // attempt and are still in their backoff window. A NULL value means
+    // either the original attempt (no prior failure) or — for rows
+    // pre-dating migration 20260514000000 — the column didn't exist yet.
+    // Either way, NULL is "pick it up if scheduled_for is due."
     return this.withClient(async (client) => {
       const result = await client.query(
         `SELECT * FROM reminder_schedules
-         WHERE status = 'scheduled' AND scheduled_for <= NOW()
+         WHERE status = 'scheduled'
+           AND scheduled_for <= NOW()
+           AND (next_retry_at IS NULL OR next_retry_at <= NOW())
          ORDER BY scheduled_for
          LIMIT 100`
       );

@@ -4,6 +4,49 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-14 — Retry logic for failed reminder sends
+
+Closes TODO Phase 5 Ops "Retry logic for failed sends." Pre-fix, `src/workers/reminderScheduler.ts` caught any send failure and immediately flipped the row to `status='failed'` — meaning a single transient Twilio 5xx or DNS blip lost the reminder permanently. The cure surface is one migration + one new module + one worker rewrite.
+
+**Migration `20260514000000_reminder_retry_columns.sql`** adds two columns to `reminder_schedules`:
+
+- `retry_count INT NOT NULL DEFAULT 0` — counts attempts spent; 0 = original attempt has not yet failed.
+- `next_retry_at TIMESTAMPTZ` (nullable) — earliest pickup time after a transient failure. NULL = original attempt or terminal state.
+
+Plus a partial index on `(scheduled_for, next_retry_at) WHERE status='scheduled'` so the worker's batch query stays fast as the row count grows.
+
+**Policy module `src/services/reminders/retryPolicy.ts`** (pure helpers, no DB / no provider calls):
+
+- `MAX_RETRIES = 3` — total retry attempts before permanent failure (4 total send attempts).
+- `BACKOFF_MIN = [5, 30, 120]` — wait minutes before the 1st / 2nd / 3rd retry. Matches the policy line in the TODO ("5m / 30m / 2h").
+- `isRetryable(error)` — `false` for 4xx HTTP errors (input is broken; re-send produces same result), `true` for 5xx and any error without HTTP status info (conservative: better over-retry than lose).
+- `nextRetryAt(currentRetryCount, now?)` — returns the timestamp for the next attempt, or `null` if MAX exhausted. `now` injectable for tests.
+- `decideRetry(error, currentRetryCount, now?)` — top-level composition; returns `{action: 'retry', nextRetryCount, nextRetryAt}` or `{action: 'fail', reason: 'non_retryable' | 'max_retries_exceeded'}`. Worker calls this once per failure and acts on the result.
+
+**Worker rewrite** in `src/workers/reminderScheduler.ts` catch block:
+
+Pre-fix: any error → `status='failed'`.
+Post-fix: catch error → `decideRetry(err, row.retry_count ?? 0)` → either `UPDATE reminder_schedules SET status='scheduled', retry_count=N+1, next_retry_at=...` (transient + budget remaining) or `UPDATE ... SET status='failed', error='msg (reason: max_retries_exceeded)'` (4xx or budget exhausted). The `4xx vs max-retries` distinction surfaces in the `error` column for operator diagnostics.
+
+**Pickup-query change** in `src/database/index.ts:getDueReminders`:
+
+```sql
+WHERE status = 'scheduled'
+  AND scheduled_for <= NOW()
+  AND (next_retry_at IS NULL OR next_retry_at <= NOW())  -- NEW
+```
+
+The `IS NULL` branch preserves back-compat: rows that have never failed (or that pre-date the migration) still qualify on the original `scheduled_for` clock. Rows mid-backoff are held back until their next_retry_at clears.
+
+**Tests added**:
+
+- `src/services/reminders/retryPolicy.test.ts` (13 unit) — `isRetryable` against 4xx / 5xx / network / no-status / 3xx-and-6xx edge cases; `nextRetryAt` against each backoff slot + MAX-exhausted; `decideRetry` composition; `BACKOFF_MIN.length === MAX_RETRIES` invariant.
+- `src/reminder-retry-worker.test.ts` (7 real-DB integration) — schema introspection of the two new columns; pickup-query temporal contract across the 3 next_retry_at states (NULL / future / past); end-to-end worker write path for 5xx-retryable, 4xx-non-retryable, and 5xx-at-MAX-retries dispositions.
+
+After-state: backend 1,873 → 1,893 (+20); migration count 121 → 122. Zero TS errors across backend / dashboard / agent. **Outstanding for prod-apply**: `20260514000000` joins the queue with the other 35 pending migrations. Production reminder workers will continue marking-failed-on-first-error until prod is migrated; the worker code is backward-compatible (it reads `retry_count ?? 0` so missing-column rows would behave as the pre-fix did — but the column-add migration is forward-only so this safety net only applies during the deployment gap).
+
+---
+
 ## 2026-05-13 — PK rename pilot 28: real-DB integration coverage + final code-residue sweep
 
 Closes out the May 12 PK rename sprint. The sprint's after-state docs claimed every single-column PK now follows `<table_singular>_id`, but coverage was uneven: only 44% of the renamed PK columns had any real-DB test exercising them by name — the rest had either mocked-only coverage (which keeps passing if the column is reverted) or no coverage at all. Pilot 28 closes that gap and sweeps the residual `id`-named references the per-pilot sweeps had missed.

@@ -66,6 +66,21 @@ export interface ReminderSchedule {
   sent_at?: string;
   status: 'scheduled' | 'sent' | 'failed' | 'cancelled';
   error?: string;
+  /**
+   * Number of retry attempts already spent on this row. 0 = original
+   * attempt hasn't failed yet. Increments up to MAX_RETRIES (3) before
+   * the worker flips status to 'failed' permanently.
+   * Added 2026-05-14 — see migration 20260514000000.
+   */
+  retry_count?: number;
+  /**
+   * Earliest timestamp the worker may pick this row up again. NULL =
+   * either the original attempt (not yet retried) or the row is in a
+   * terminal status. The pickup query in getDueReminders filters on
+   * `next_retry_at IS NULL OR next_retry_at <= NOW()`.
+   * Added 2026-05-14 — see migration 20260514000000.
+   */
+  next_retry_at?: string;
   created_at?: string;
   updated_at?: string;
 }

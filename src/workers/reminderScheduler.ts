@@ -13,6 +13,7 @@
 
 import { createDatabaseService, type DatabaseService } from '../database/index.js';
 import { ReminderService } from '../services/reminders/index.js';
+import { decideRetry, MAX_RETRIES } from '../services/reminders/retryPolicy.js';
 import { createTenantConfigService, type TenantConfigService } from '../services/tenants/index.js';
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -72,12 +73,31 @@ async function processBatch(): Promise<number> {
         processed++;
       } catch (error) {
         console.error(`❌ Failed to process reminder ${reminder.reminder_schedule_id}:`, error);
-        // Mark as failed so we don't retry indefinitely
+        // Decide retry vs. permanent failure based on the error's HTTP
+        // status (when present) and the row's current retry_count.
+        // 4xx + exhausted retries → flip to 'failed'. Otherwise schedule
+        // the next attempt with exponential backoff (5m / 30m / 2h).
+        // Policy lives in src/services/reminders/retryPolicy.ts.
+        const currentRetryCount = reminder.retry_count ?? 0;
+        const decision = decideRetry(error, currentRetryCount);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         try {
-          await db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
-            status: 'failed',
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+          if (decision.action === 'retry') {
+            await db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
+              status: 'scheduled', // stay scheduled — worker picks up again after backoff
+              error: errorMessage, // keep latest error visible for debugging
+              retry_count: decision.nextRetryCount,
+              next_retry_at: decision.nextRetryAt.toISOString(),
+            });
+            console.log(
+              `🔁 Retry ${decision.nextRetryCount}/${MAX_RETRIES} scheduled for reminder ${reminder.reminder_schedule_id} at ${decision.nextRetryAt.toISOString()}`
+            );
+          } else {
+            await db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
+              status: 'failed',
+              error: `${errorMessage} (reason: ${decision.reason})`,
+            });
+          }
         } catch (updateError) {
           console.error(`❌ Failed to update reminder status:`, updateError);
         }
