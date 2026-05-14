@@ -4,6 +4,30 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-14 — Beta customer onboarding guide
+
+Closes TODO Pre-launch hardening "Beta customer onboarding guide" — pre-fix the next beta customer would have needed a screen-share with the founder to get from "I'd like to try this" to "my voice AI is taking real calls." Now `docs/BETA_ONBOARDING.md` (~280 lines) walks through it.
+
+**Contents:**
+
+1. Pre-flight checklist — 8 items to collect before Day 1 (business name, timezone, employees + phones, services + duration/price, resources, weekly hours, skill-service mapping, policy answers). Explicitly flags timezone as "get this right on Day 1 — changing later requires re-converting historical timestamps."
+2. Dashboard tab tour — the 4 primary tabs (Home / Schedule / Customers / Calls) + the 3 Back Office sub-tabs (My Business / My Team / AI & Knowledge), with what each is for.
+3. Setup wizard — all 7 steps (Business type → Employees → Resources → Services → Assignments → Shifts → Go live) with what each step asks for and the most common mistakes (skipping shifts, service-skill mismatch, wrong timezone).
+4. First test call — 4 scripted scenarios (book an appointment, ask a policy question, try an unavailable time, try a service you don't offer) with the expected AI behavior for each.
+5. Knowledge base setup — the 9 policy categories with the questions to fill in first per category. PDF/doc upload path noted.
+6. Daily workflow — the 5-min morning check (Home → flagged calls → mark-off-today). Frames most days as "I open Home and that's it; the AI handles everything else."
+7. Weekly Copy Week — explains the date-based `employee_schedule` model + the Friday-afternoon copy-forward ritual. Includes the failure symptom (>4-week-out callers get "no availability") so the operator knows what to look for.
+8. Common admin tasks — 7 entries (add employee, add service, update hours, mark off today, cancel appointment, move appointment via drag, invite front-desk login) each with the exact dashboard location.
+9. Troubleshooting — 6 real failure modes likely to surface in beta (phone rings but AI never picks up, booked outside shifts, customer got wrong-time reminder, missing call in Calls tab, wrong price, "Something went wrong" boundary), each with diagnostic steps and root-cause hypothesis order.
+10. Escalation — support email + status page + founder direct line for the first 30 days of beta.
+11. HIPAA-excluded-verticals note — preserved from CLAUDE.md, called out so prospective beta customers know up-front.
+
+**Out of scope** (left to the founder's first-30-days direct line): screenshots/screen-recordings, video walkthrough, per-template playbooks beyond mobile-tire's DynaTire example. Those are higher-fidelity content for later; this doc gets a beta customer unblocked on Day 1 without a human in the loop.
+
+No code changes; pure docs. Linked from `docs/TODO.md` close note. Backend tests unchanged (1,893). Migration count unchanged (122). Drift detector clean.
+
+---
+
 ## 2026-05-14 — Retry logic for failed reminder sends
 
 Closes TODO Phase 5 Ops "Retry logic for failed sends." Pre-fix, `src/workers/reminderScheduler.ts` caught any send failure and immediately flipped the row to `status='failed'` — meaning a single transient Twilio 5xx or DNS blip lost the reminder permanently. The cure surface is one migration + one new module + one worker rewrite.
