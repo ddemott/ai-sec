@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { Client } from "pg";
-import { getRootClient, createTenant } from "./test-utils";
+import { getRootClient, createTenant, skipIfDbDown } from "./test-utils";
 
 /**
  * Schema + behavior coverage for the per-tenant notification preferences
@@ -25,6 +25,7 @@ import { getRootClient, createTenant } from "./test-utils";
 describe("tenants notification preferences columns", () => {
     let root: Client;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

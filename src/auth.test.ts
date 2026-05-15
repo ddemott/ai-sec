@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, createTenant, createUser, hashPassword } from "./test-utils";
+import { getRootClient, clearDB, createTenant, createUser, hashPassword, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 import type { FastifyReply } from "fastify";
 import bcrypt from "bcrypt";
@@ -549,6 +549,7 @@ describe("Auth Routes — Handler-Level", () => {
 describe("Auth - Database Level", () => {
     let client: Client;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createService } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createService, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("Service Catalog endpoint (GET /services/catalog)", () => {
     let client: Client;
     let tenantId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

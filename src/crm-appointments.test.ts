@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createEmployee, createCustomerFull, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createEmployee, createCustomerFull, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("CRM Unified: Customer Appointments Endpoint", () => {
@@ -8,6 +8,7 @@ describe("CRM Unified: Customer Appointments Endpoint", () => {
     let resourceId: string;
     let customerId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

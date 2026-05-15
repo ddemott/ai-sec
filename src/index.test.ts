@@ -12,10 +12,11 @@
  * (WHO/WHAT/WHEN/WHERE/WHY) header so a sad-path failure tells the
  * debugger what behavior was expected and why.
  */
-import { beforeAll, afterAll, describe, expect, it } from 'vitest'
+import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { Pool } from 'pg'
+import { skipIfDbDown } from './test-utils'
 
 // Minimal replica of the app wiring for route-level tests without starting the real server
 function buildTestApp() {
@@ -116,6 +117,7 @@ function buildTestApp() {
 let app: ReturnType<typeof Fastify>
 let pool: Pool
 let dbAvailable = true
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable))
 
 beforeAll(async () => {
   const built = buildTestApp()

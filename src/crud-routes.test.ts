@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("CRUD Routes - Database Level", () => {
@@ -8,6 +8,7 @@ describe("CRUD Routes - Database Level", () => {
     let resourceId: string;
     let customerId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

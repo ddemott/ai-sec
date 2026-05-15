@@ -44,6 +44,9 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')"
             );
             if (!res.rows[0].exists) {
+                if (process.env.REQUIRE_DB_TESTS === '1') {
+                    throw new Error('employee_schedule missing in test_db — run `npm run db:migrate` against test_db before running with REQUIRE_DB_TESTS=1');
+                }
                 console.warn('[booking-concurrency] employee_schedule missing, skipping');
                 return;
             }
@@ -57,6 +60,14 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
             pool = new Pool({ connectionString: ROOT_DB_URL, max: N + 5 });
             dbAvailable = true;
         } catch (err) {
+            // REQUIRE_DB_TESTS=1 turns DB-down from "silent skip" into a hard
+            // failure. Use it in CI and any setting where a missing DB must
+            // not masquerade as a green test run. Locally, DB-down still
+            // routes through ctx.skip() in each `it` so the test shows as
+            // SKIPPED (not PASSED). Origin: 2026-05-15 — the prior pattern
+            // returned early from each `it`, which Vitest reports as PASSED
+            // even though zero assertions ran.
+            if (process.env.REQUIRE_DB_TESTS === '1') throw err;
             console.warn('[booking-concurrency] DB not available:', err);
         }
     });
@@ -77,13 +88,13 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
         await createScheduleEntry(setup, tenantId, employeeId, '2026-07-01', '08:00', '17:00');
     });
 
-    it('SAD: 20 concurrent callers for the same slot — exactly one books, others get TIMESLOT_OCCUPIED', async () => {
+    it('SAD: 20 concurrent callers for the same slot — exactly one books, others get TIMESLOT_OCCUPIED', async (ctx) => {
         // WHO: 20 separate voice-agent sessions, each with a unique caller phone
         // WHAT: All call book_with_scheduling_atomic for 2026-07-01 10:00–10:30 CDT
         // WHEN: Promise.all fires them within the same JS tick across N pool connections
         // WHERE: Inside the RPC, between the find-pair NOT EXISTS check and the INSERT
         // WHY: We promise the user "exactly one wins; everyone else hears it's taken."
-        if (!dbAvailable) return;
+        if (!dbAvailable) { ctx.skip(); return; }
 
         const startISO = '2026-07-01T10:00:00-05:00';
         const endISO = '2026-07-01T10:30:00-05:00';
@@ -127,14 +138,14 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
         expect(persisted.rows[0].n).toBe(1);
     });
 
-    it('SAD: 20 concurrent callers for same employee at same time on different resources still has exactly one winner', { timeout: 30_000 }, async () => {
+    it('SAD: 20 concurrent callers for same employee at same time on different resources still has exactly one winner', { timeout: 30_000 }, async (ctx) => {
         // WHO: 20 callers competing for Alex's 10am slot
         // WHAT: Same employee_id, same time — even if resources differ, the
         //       employee can only be in one appointment at once
         // WHEN: Concurrent calls
         // WHERE: Employee-overlap check inside the RPC
         // WHY: Double-booking the employee is just as bad as double-booking the resource
-        if (!dbAvailable) return;
+        if (!dbAvailable) { ctx.skip(); return; }
 
         // Add a second resource so the find-pair query has alternatives. The
         // employee constraint should still force exactly one winner.

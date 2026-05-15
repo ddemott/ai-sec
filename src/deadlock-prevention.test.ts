@@ -13,17 +13,11 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
-import {
-  getRootClient,
-  clearDB,
-  beginTestTransaction,
-  rollbackTestTransaction,
-  createTenant,
-  createCustomer,
-} from './test-utils';
+import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer, skipIfDbDown } from './test-utils';
 
 let client: Client;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
   try {

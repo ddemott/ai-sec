@@ -14,8 +14,9 @@
  * Each section has happy + sad paths with 5W diagnostic context.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
+import { skipIfDbDown } from './test-utils';
 
 const DB_URL = 'postgres://postgres:postgres@localhost:5433/test_db';
 
@@ -117,6 +118,7 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
   let testResourceId: string;
   let testEmployeeId: string;
   let dbAvailable = false;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
   beforeAll(async () => {
     try {

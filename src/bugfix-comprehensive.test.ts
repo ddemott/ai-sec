@@ -23,17 +23,13 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { Client } from "pg";
 import { z } from "zod";
-import {
-  getRootClient, clearDB, setupBasicTenant,
-  beginTestTransaction, rollbackTestTransaction,
-  createTenant, createCustomer, createEmployee, createResource, createService,
-  createAppointment,
-} from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer, createEmployee, createResource, createService, createAppointment, skipIfDbDown } from "./test-utils";
 
 let client: Client;
 let tenantA: string;
 let tenantB: string;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
   try {

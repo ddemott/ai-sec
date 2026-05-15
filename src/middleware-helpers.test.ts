@@ -2,16 +2,13 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { Client } from "pg";
 import type { FastifyReply } from "fastify";
 import type { AppRequest } from "./middleware";
-import {
-    getRootClient, clearDB, setupBasicTenant,
-    beginTestTransaction, rollbackTestTransaction,
-    createCustomerFull
-} from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createCustomerFull, skipIfDbDown } from "./test-utils";
 
 let root: Client;
 let tenantId: string;
 let resourceId: string;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
     try {

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, getApiClient, clearDB, createTenant, createResource, createCustomerFull } from "./test-utils";
+import { getRootClient, getApiClient, clearDB, createTenant, createResource, createCustomerFull, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("Security: Row Level Security (RLS) Isolation (Final Refactor)", () => {
     let root: Client;
     let api: Client;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

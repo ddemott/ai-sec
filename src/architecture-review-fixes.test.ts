@@ -16,12 +16,14 @@
  * Why fix-numbered, not feature-named: keeps the architecture-review
  * regression set together. Feature-area work should still grep here.
  */
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Pool, PoolClient } from 'pg';
+import { skipIfDbDown } from './test-utils';
 
 const TEST_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 let pool: Pool;
 let dbAvailable = true;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
   pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/postgres' });

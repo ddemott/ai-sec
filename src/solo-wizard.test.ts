@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
@@ -7,6 +7,7 @@ describe("Solo Wizard: team_size on tenants + is_personal on resources", () => {
     let tenantId: string;
     let resourceId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

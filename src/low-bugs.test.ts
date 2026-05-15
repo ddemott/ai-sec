@@ -12,7 +12,7 @@
  * stay closed. Feature-area work should still grep here.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { getRootClient, clearDB, setupBasicTenant, createService, beginTestTransaction, rollbackTestTransaction } from './test-utils';
+import { getRootClient, clearDB, setupBasicTenant, createService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 import { Client } from 'pg';
 import { detectTimezone } from '../dashboard/lib/constants';
 
@@ -22,6 +22,7 @@ describe('Low Bug Fixes', () => {
     let resourceId: string;
     let customerId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

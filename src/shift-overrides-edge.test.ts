@@ -6,16 +6,14 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
-import {
-  getRootClient, clearDB, createTenant, createEmployee, createResource,
-  beginTestTransaction, rollbackTestTransaction,
-} from './test-utils';
+import { getRootClient, clearDB, createTenant, createEmployee, createResource, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 
 describe('Fix #16 + #17: Edge function employee_schedule support', () => {
   let client: Client;
   let tenantId: string;
   let employeeId: string;
   let dbAvailable = false;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
   beforeAll(async () => {
     try {

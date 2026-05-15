@@ -21,18 +21,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
 import type { PoolClient } from 'pg';
-import {
-  getRootClient,
-  clearDB,
-  beginTestTransaction,
-  rollbackTestTransaction,
-  createTenant,
-  createEmployee,
-} from './test-utils';
+import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, createTenant, createEmployee, skipIfDbDown } from './test-utils';
 import { expandWeeklyToSchedule } from './services/expandWeeklyToSchedule';
 
 let client: Client;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
   try {

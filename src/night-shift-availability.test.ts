@@ -4,12 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
-import {
-  getRootClient, clearDB, createTenant, createEmployee,
-  createScheduleEntry,
-  createResource, createService, createCustomer, createAppointment,
-  beginTestTransaction, rollbackTestTransaction,
-} from './test-utils';
+import { getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource, createService, createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 
 describe('Fix #30: Night shifts (cross-midnight)', () => {
   let client: Client;
@@ -17,6 +12,7 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
   let resourceId: string;
   let employeeId: string;
   let dbAvailable = false;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
   beforeAll(async () => {
     try {

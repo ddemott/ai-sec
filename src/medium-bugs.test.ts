@@ -15,7 +15,7 @@
  * bugs stay closed. Feature-area work should still grep here.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction } from './test-utils';
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 import { Client } from 'pg';
 // Day-of-week conversion utilities (inlined from deleted core/models.ts)
 const DAY_STRING_TO_NUM: Record<string, number> = {
@@ -59,6 +59,7 @@ describe('Medium Bug Fixes', () => {
     let resourceId: string;
     let customerId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

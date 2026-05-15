@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("Vocabulary Wiring: End-to-End", () => {
     let client: Client;
     let tenantId: string;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

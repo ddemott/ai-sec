@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction } from "./test-utils";
+import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 
 describe("Tenant reorder (drag-and-drop)", () => {
   let client: Client;
   let dbAvailable = true;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
   beforeAll(async () => {
     try {

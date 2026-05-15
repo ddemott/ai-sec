@@ -4,6 +4,31 @@ import bcrypt from "bcrypt";
 // Always use test_db for tests — never the main database.
 // DATABASE_URL from .env points to the production DB and must not be used here.
 export const ROOT_DB_URL = "postgres://postgres:postgres@localhost:5433/test_db";
+
+// ── Honest-skip helper ────────────────────────────────────────────────
+// Used in `beforeEach` to mark a test as SKIPPED (not silently PASSED)
+// when the local DB is unavailable. Origin: 2026-05-15 — the prior
+// pattern `if (!dbAvailable) return;` inside every `it` body let tests
+// count as passed without running any assertions, hiding the fact that
+// the suite never exercised the real DB. ctx.skip() makes Vitest report
+// the test as skipped; REQUIRE_DB_TESTS=1 turns the same condition into
+// a hard failure (CI must fail rather than tolerate a missing DB).
+//
+// Usage: beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
+export function skipIfDbDown(
+    ctx: { skip: () => void },
+    isDbAvailable: () => boolean
+): void {
+    if (isDbAvailable()) return;
+    if (process.env.REQUIRE_DB_TESTS === '1') {
+        throw new Error(
+            'REQUIRE_DB_TESTS=1 set but local DB unreachable — start `docker compose up -d db` and run `npm run db:migrate` against test_db before retrying.'
+        );
+    }
+    ctx.skip();
+}
+
+
 // Derived API URL: extract host/port/dbname from ROOT_DB_URL but use api_user
 const apiHostPortDb = ROOT_DB_URL.split('@')[1] || "localhost:5433/test_db";
 export const API_DB_URL = `postgres://api_user:api_password@${apiHostPortDb}`;

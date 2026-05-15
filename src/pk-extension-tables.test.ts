@@ -1,13 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { Client } from "pg";
-import {
-    getRootClient,
-    clearDB,
-    createTenant,
-    createResource,
-    createCustomerFull,
-    createAppointment,
-} from "./test-utils";
+import { getRootClient, clearDB, createTenant, createResource, createCustomerFull, createAppointment, skipIfDbDown } from "./test-utils";
 
 // PK naming convention carve-out — 1:1 extension tables.
 //
@@ -37,6 +30,7 @@ import {
 describe("1:1 extension table PK convention — schema shape", () => {
     let root: Client;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

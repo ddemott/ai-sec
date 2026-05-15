@@ -16,7 +16,7 @@
  * stay closed together. Feature-area work should still grep here.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword } from "./test-utils";
+import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword, skipIfDbDown } from "./test-utils";
 import { Client } from "pg";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
@@ -30,6 +30,7 @@ describe("High Bug Fixes (BUG-007, BUG-008, BUG-009, BUG-010, BUG-011, BUG-012, 
     let root: Client;
     let api: Client;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {

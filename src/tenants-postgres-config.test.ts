@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { Client, Pool } from "pg";
 import { PostgresTenantConfigService } from "./services/tenants/index.js";
-import { getRootClient, createTenant, ROOT_DB_URL } from "./test-utils.js";
+import { getRootClient, createTenant, ROOT_DB_URL, skipIfDbDown } from "./test-utils.js";
 
 /**
  * Real-DB integration coverage for `PostgresTenantConfigService`.
@@ -31,6 +31,7 @@ describe("PostgresTenantConfigService against real schema", () => {
     let pool: Pool;
     let service: PostgresTenantConfigService;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
     const tenantsToClean: string[] = [];
 
     beforeAll(async () => {

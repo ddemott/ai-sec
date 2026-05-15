@@ -22,7 +22,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction } from './test-utils';
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 import { decideRetry, MAX_RETRIES } from './services/reminders/retryPolicy';
 
 describe('reminder retry worker — real-DB integration', () => {
@@ -31,6 +31,7 @@ describe('reminder retry worker — real-DB integration', () => {
   let customerId: string;
   let appointmentId: string;
   let dbAvailable = true;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
   beforeAll(async () => {
     try {
@@ -40,9 +41,17 @@ describe('reminder retry worker — real-DB integration', () => {
       tenantId = setup.tenantId;
       customerId = setup.customerId;
       // Reminder rows FK to appointments — seed one we can attach to.
+      // appointments_start_time_15min / appointments_end_time_15min require
+      // start_time and end_time to land on :00/:15/:30/:45 with zero seconds.
+      // date_trunc('hour', NOW()) gives a guaranteed-aligned base.
       const apptRes = await client.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, status, description)
-         VALUES ($1, $2, $3, NOW() + INTERVAL '1 day', NOW() + INTERVAL '1 day 30 min', 'scheduled', 'retry-test-appt')
+         VALUES (
+           $1, $2, $3,
+           date_trunc('hour', NOW()) + INTERVAL '1 day',
+           date_trunc('hour', NOW()) + INTERVAL '1 day 30 min',
+           'scheduled', 'retry-test-appt'
+         )
          RETURNING appointment_id`,
         [tenantId, setup.resourceId, customerId]
       );

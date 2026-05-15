@@ -28,7 +28,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import { Client, Pool } from 'pg';
-import { API_DB_URL, getRootClient, createTenant, createUser } from './test-utils';
+import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from './test-utils';
 import {
     registerJwtAuthHook,
     tenantMiddleware,
@@ -61,6 +61,7 @@ let setup: Client;
 let pool: Pool;
 let app: FastifyInstance;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 let tenantId: string;
 let ownerToken: string;
 const tenantsToClean: string[] = [];

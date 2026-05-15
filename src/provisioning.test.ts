@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { Client } from "pg";
-import {
-    getRootClient, clearDB, setupBasicTenant,
-    beginTestTransaction, rollbackTestTransaction
-} from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { TelnyxNumbersClient } from "./services/telnyxNumbers";
 
 let root: Client;
 let tenantId: string;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
     try {

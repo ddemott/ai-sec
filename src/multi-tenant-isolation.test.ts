@@ -28,21 +28,10 @@
  *           catastrophic data breach in beta; pinning the contract here
  *           catches regressions before they reach production
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { Client, Pool } from 'pg';
-import {
-  API_DB_URL,
-  getRootClient,
-  clearDB,
-  createTenant,
-  createCustomer,
-  createEmployee,
-  createService,
-  createResource,
-  createAppointment,
-  createUser,
-} from './test-utils';
+import { API_DB_URL, getRootClient, clearDB, createTenant, createCustomer, createEmployee, createService, createResource, createAppointment, createUser, skipIfDbDown } from './test-utils';
 import { registerJwtAuthHook, tenantMiddleware, generateToken } from './middleware';
 import { createWithTenantClient } from './database';
 import { registerCustomerRoutes } from './routes/customers';
@@ -77,6 +66,7 @@ let A: TenantFixture;
 let B: TenantFixture;
 let superAdminToken: string;
 let dbAvailable = false;
+beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 // Stub embedding + normalizer for knowledge routes — knowledge writes call
 // these but the probe never asserts on embeddings, so a fixed-vector stub

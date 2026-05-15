@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { Client } from "pg";
-import { getRootClient } from "./test-utils";
+import { getRootClient, skipIfDbDown } from "./test-utils";
 
 /**
  * Universal invariant: every foreign key that references `tenants(tenant_id)`
@@ -39,6 +39,7 @@ import { getRootClient } from "./test-utils";
 describe("Schema invariant: every FK to tenants(tenant_id) has ON DELETE CASCADE", () => {
     let root: Client;
     let dbAvailable = true;
+    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
     beforeAll(async () => {
         try {
