@@ -1,36 +1,76 @@
 /**
- * Tests for Fix #23: JWT failure logging
- * Verifies that invalid/expired tokens are logged and rejected.
- * Happy + sad paths with 5W diagnostic context.
+ * Tests for Fix #23: JWT failure logging.
+ *
+ * Integration coverage — exercises the JWT auth hook against an in-memory
+ * Fastify built via inject() (not network fetch). Pre-2026-05-15 this file
+ * tried `https://localhost:4001` with a try/catch swallowing connection
+ * errors and `if (!res) return` silently skipping every assertion when the
+ * server wasn't up. In CI no server runs, so every test silently passed.
+ * The inject() migration removes the silent-skip vector.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+
+// See token-refresh.test.ts for why this uses vi.hoisted instead of a
+// plain top-of-file assignment.
+vi.hoisted(() => {
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
+});
+
+import Fastify, { type FastifyInstance } from 'fastify';
+import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
+import { registerJwtAuthHook } from './middleware';
+import { skipIfDbDown } from './test-utils';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
-const API_BASE = 'https://localhost:4001';
-
-async function apiFetch(path: string, options: RequestInit = {}) {
-  try {
-    return await fetch(`${API_BASE}${path}`, options);
-  } catch {
-    return null;
-  }
-}
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 describe('Fix #23: JWT failure logging', () => {
-  it('HAPPY: valid token passes auth middleware (200 on /health)', async () => {
-    // WHO: Authenticated user with valid JWT
-    // WHAT: Request should succeed
-    // WHY: Valid tokens must not be rejected
-    const res = await apiFetch('/health');
-    if (!res) return;
-    expect(res.status).toBe(200);
+  let app: FastifyInstance;
+  let pool: Pool;
+  let dbAvailable = false;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
+
+  beforeAll(async () => {
+    try {
+      pool = new Pool({
+        connectionString:
+          process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5433/test_db',
+      });
+      await pool.query('SELECT 1');
+      dbAvailable = true;
+    } catch {
+      return;
+    }
+    app = Fastify({ logger: false });
+    registerJwtAuthHook(app, pool);
+    // /health is in PUBLIC_ROUTES inside the JWT hook, so it bypasses auth
+    // regardless of headers — pin that contract.
+    app.get('/health', async () => ({ status: 'ok' }));
+    // /shifts is a protected route — the JWT hook fires before any handler
+    // logic, so a stub here is sufficient to exercise the 401-on-bad-token
+    // branch. Real /shifts handler is exhaustively tested elsewhere.
+    app.get('/shifts', async () => ({ success: true }));
+    await app.ready();
   });
 
-  it('SAD: expired token returns 401', async () => {
+  afterAll(async () => {
+    if (app) await app.close();
+    if (pool) await pool.end();
+  });
+
+  it('HAPPY: /health is public and returns 200 with no token', async () => {
+    // WHO: Anonymous request
+    // WHAT: /health must remain reachable for liveness probes
+    // WHY: Health checks don't carry JWTs; gating /health would break Railway readiness
+    const res = await app.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('SAD: expired token returns 401 with the documented error message', async () => {
     // WHO: User with expired JWT
     // WHAT: Should return 401 with error message
+    // WHERE: JWT verification inside the onRequest hook (middleware.ts:438)
     // WHY: Expired tokens are invalid — middleware logs and rejects
     const token = jwt.sign(
       { tenant_id: 'test', user_id: 'test', email: 'test@test.com' },
@@ -38,13 +78,14 @@ describe('Fix #23: JWT failure logging', () => {
       { expiresIn: '-1s' }
     );
 
-    const res = await apiFetch('/shifts?tenant_id=test', {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/shifts?tenant_id=test',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res) return;
 
-    expect(res.status).toBe(401);
-    const data = await res.json();
+    expect(res.statusCode).toBe(401);
+    const data = res.json();
     expect(data.success).toBe(false);
     expect(data.error).toContain('Invalid or expired');
   });
@@ -59,12 +100,13 @@ describe('Fix #23: JWT failure logging', () => {
       { expiresIn: '1h' }
     );
 
-    const res = await apiFetch('/shifts?tenant_id=test', {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/shifts?tenant_id=test',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res) return;
 
-    expect(res.status).toBe(401);
+    expect(res.statusCode).toBe(401);
   });
 
   it('HAPPY: source code logs warning on JWT failure', () => {
@@ -80,17 +122,17 @@ describe('Fix #23: JWT failure logging', () => {
 });
 
 describe('Fix #13: Knowledge ingest auth header', () => {
+  // Static-file tests — no server or DB needed.
   it('HAPPY: knowledge ingest sends Authorization header with token', () => {
     // WHO: Dashboard uploading a knowledge base file
     // WHAT: Fetch call should include Bearer token in headers
     // WHY: Without auth header, server rejects the upload (401)
     const src = fs.readFileSync('dashboard/lib/api.ts', 'utf8');
 
-    // Find the ingest function and verify it sets Authorization
     const ingestSection = src.substring(src.indexOf('ingest:'));
-    expect(ingestSection).toContain("Authorization");
-    expect(ingestSection).toContain("Bearer");
-    expect(ingestSection).toContain("authToken");
+    expect(ingestSection).toContain('Authorization');
+    expect(ingestSection).toContain('Bearer');
+    expect(ingestSection).toContain('authToken');
   });
 
   it('SAD: ingest does not use Content-Type header (FormData sets it automatically)', () => {
@@ -100,8 +142,6 @@ describe('Fix #13: Knowledge ingest auth header', () => {
     const src = fs.readFileSync('dashboard/lib/api.ts', 'utf8');
 
     const ingestSection = src.substring(src.indexOf('ingest:'));
-    // The headers object for ingest should not include Content-Type
-    // (only Authorization is set manually)
-    expect(ingestSection).toContain("const headers: Record<string, string> = {}");
+    expect(ingestSection).toContain('const headers: Record<string, string> = {}');
   });
 });

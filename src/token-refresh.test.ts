@@ -1,36 +1,67 @@
 /**
- * Tests for Fix #14: Token refresh endpoint
- * Happy + sad paths with 5W diagnostic context.
+ * Tests for Fix #14: Token refresh endpoint.
+ *
+ * Integration coverage — exercises the full chain: JWT auth hook (in
+ * src/middleware.ts) → /auth/refresh route handler (in src/routes/auth.ts).
+ * Built via Fastify.inject() against an in-memory app rather than an HTTP
+ * round-trip, so the test does not depend on `npm start` having a server
+ * up. Pre-2026-05-15 this file used `fetch()` against https://localhost:4001
+ * with a try/catch swallowing connection errors and a `if (!res) return`
+ * silent-skip in every test body — every test counted as PASSED in CI
+ * without ever exercising the route. The inject() migration removes that
+ * vector entirely.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+
+// vi.hoisted moves this assignment above all imports during Vitest's
+// transform — necessary because middleware.ts captures JWT_SECRET at
+// module-load time (`const JWT_SECRET = process.env.JWT_SECRET || ...`).
+// A plain top-of-file statement runs AFTER imports under ES module
+// hoisting rules, so middleware would already have captured the
+// non-prod default by the time we assigned the env var. Tested 2026-05-15.
+vi.hoisted(() => {
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
+});
+
+import Fastify, { type FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
+import { registerJwtAuthHook, generateToken } from './middleware';
+import { registerAuthRoutes } from './routes/auth';
+import { skipIfDbDown } from './test-utils';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
-const API_BASE = 'https://localhost:4001';
-
-// Helper to make fetch ignore self-signed certs
-async function apiFetch(path: string, options: RequestInit = {}) {
-  try {
-    return await fetch(`${API_BASE}${path}`, {
-      ...options,
-      // @ts-expect-error Node 18+ supports this
-      dispatcher: undefined,
-    });
-  } catch {
-    return null; // Server not running
-  }
-}
+const JWT_SECRET = process.env.JWT_SECRET as string;
+const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
 describe('Fix #14: Token refresh endpoint', () => {
+  let app: FastifyInstance;
   let pool: Pool;
+  let dbAvailable = false;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
   beforeAll(async () => {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/postgres' });
+    try {
+      pool = new Pool({
+        connectionString:
+          process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5433/test_db',
+      });
+      // Probe the pool before declaring DB available — the JWT hook does a
+      // password_changed_at lookup on every authenticated request, so a
+      // dead pool would surface as 500 mid-test instead of a clean skip.
+      await pool.query('SELECT 1');
+      dbAvailable = true;
+    } catch {
+      return;
+    }
+    app = Fastify({ logger: false });
+    registerJwtAuthHook(app, pool);
+    registerAuthRoutes(app, pool, generateToken);
+    await app.ready();
   });
 
   afterAll(async () => {
-    await pool.end();
+    if (app) await app.close();
+    if (pool) await pool.end();
   });
 
   describe('POST /auth/refresh', () => {
@@ -40,27 +71,21 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHEN: Token is still valid (not expired)
       // WHERE: /auth/refresh endpoint
       // WHY: Users need token refresh to stay logged in past 8h
-      const payload = { tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a', user_id: 'test-user', email: 'test@test.com' };
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+      const payload = { tenant_id: TENANT_ID, user_id: '11111111-1111-1111-1111-111111111111', email: 'test@test.com', role: 'owner' as const };
+      const token = generateToken(payload);
 
-      const res = await apiFetch('/auth/refresh', {
+      const res = await app.inject({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        url: '/auth/refresh',
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res) return; // Server not running
-
-      expect(res.status).toBe(200);
-      const data = await res.json();
+      expect(res.statusCode).toBe(200);
+      const data = res.json();
       expect(data.success).toBe(true);
-      expect(data.token).toBeDefined();
       expect(typeof data.token).toBe('string');
 
-      // Verify the new token is valid and has the same payload
-      const decoded = jwt.verify(data.token, JWT_SECRET) as { tenant_id: string; user_id: string; email: string; exp: number; iat: number };
+      const decoded = jwt.verify(data.token, JWT_SECRET) as { tenant_id: string; user_id: string; email: string };
       expect(decoded.tenant_id).toBe(payload.tenant_id);
       expect(decoded.user_id).toBe(payload.user_id);
       expect(decoded.email).toBe(payload.email);
@@ -70,24 +95,20 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHO: User refreshing their token
       // WHAT: New token should have a fresh expiry
       // WHY: The whole point of refresh is to extend the session
-      const payload = { tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a', user_id: 'test-user', email: 'test@test.com' };
+      const payload = { tenant_id: TENANT_ID, user_id: '11111111-1111-1111-1111-111111111111', email: 'test@test.com', role: 'owner' as const };
+      // Sign with a short expiry so the refreshed expiry is observably later.
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30m' });
-      const originalDecoded = jwt.decode(token) as { exp: number; iat: number };
+      const originalDecoded = jwt.decode(token) as { exp: number };
 
-      const res = await apiFetch('/auth/refresh', {
+      const res = await app.inject({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        url: '/auth/refresh',
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res) return;
-
-      const data = await res.json();
-      const newDecoded = jwt.decode(data.token) as { exp: number; iat: number };
-
-      // New token should expire later than the original
+      expect(res.statusCode).toBe(200);
+      const data = res.json();
+      const newDecoded = jwt.decode(data.token) as { exp: number };
       expect(newDecoded.exp).toBeGreaterThan(originalDecoded.exp);
     });
 
@@ -95,59 +116,48 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHO: Unauthenticated request
       // WHAT: Should reject with 401
       // WHY: Cannot refresh without a valid token to prove identity
-      const res = await apiFetch('/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!res) return;
-
-      expect(res.status).toBe(401);
+      const res = await app.inject({ method: 'POST', url: '/auth/refresh' });
+      expect(res.statusCode).toBe(401);
     });
 
     it('SAD: returns 401 when token is expired', async () => {
       // WHO: User with an expired token
       // WHAT: Should reject — expired tokens cannot be refreshed
       // WHY: Security — don't allow indefinite token extension from stale tokens
-      const payload = { tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a', user_id: 'test-user', email: 'test@test.com' };
+      const payload = { tenant_id: TENANT_ID, user_id: '11111111-1111-1111-1111-111111111111', email: 'test@test.com', role: 'owner' };
       const expiredToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '-1s' });
 
-      const res = await apiFetch('/auth/refresh', {
+      const res = await app.inject({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${expiredToken}`,
-        },
+        url: '/auth/refresh',
+        headers: { Authorization: `Bearer ${expiredToken}` },
       });
 
-      if (!res) return;
-
-      // Expired token should fail verification in middleware, returning 401
-      expect(res.status).toBe(401);
+      expect(res.statusCode).toBe(401);
     });
 
     it('SAD: returns 401 when token has invalid signature', async () => {
       // WHO: Request with a tampered/forged token
       // WHAT: Should reject
       // WHY: Forged tokens must not be refreshable
-      const payload = { tenant_id: 'fake-tenant', user_id: 'fake-user', email: 'fake@test.com' };
+      const payload = { tenant_id: 'fake-tenant', user_id: 'fake-user', email: 'fake@test.com', role: 'owner' };
       const forgedToken = jwt.sign(payload, 'wrong-secret', { expiresIn: '1h' });
 
-      const res = await apiFetch('/auth/refresh', {
+      const res = await app.inject({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${forgedToken}`,
-        },
+        url: '/auth/refresh',
+        headers: { Authorization: `Bearer ${forgedToken}` },
       });
 
-      if (!res) return;
-
-      expect(res.status).toBe(401);
+      expect(res.statusCode).toBe(401);
     });
   });
 
   describe('Client-side token expiry detection', () => {
+    // These two tests don't depend on the server at all — they're pure
+    // unit tests of the same decode-without-verify pattern the dashboard
+    // API client uses. Left in this file because they share the JWT
+    // subject domain.
     it('HAPPY: decodeJwtPayload extracts exp from valid token', () => {
       // WHO: Dashboard API client
       // WHAT: Should decode JWT payload without verification
@@ -155,7 +165,6 @@ describe('Fix #14: Token refresh endpoint', () => {
       const payload = { tenant_id: 'test', user_id: 'test', email: 'test@test.com' };
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
 
-      // Simulate what the client does
       const parts = token.split('.');
       const decoded = JSON.parse(atob(parts[1]));
 
@@ -171,7 +180,7 @@ describe('Fix #14: Token refresh endpoint', () => {
       expect(() => {
         const parts = 'not.a.jwt'.split('.');
         JSON.parse(atob(parts[1]));
-      }).toThrow(); // atob('a') or parse will throw — client catches this
+      }).toThrow();
     });
   });
 });

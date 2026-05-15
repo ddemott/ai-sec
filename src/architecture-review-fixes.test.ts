@@ -54,17 +54,15 @@ afterAll(async () => {
 });
 
 async function withClient(fn: (client: PoolClient) => Promise<void>) {
-  if (!dbAvailable) return;
+  // skipIfDbDown in beforeEach already short-circuits the test if dbAvailable
+  // is false, so by the time we get here the pool is connectable. A missing
+  // table is a real regression (schema drift) — previously we caught
+  // "does not exist" / "relation" errors and silently returned, which let
+  // a removed table count as PASSED. Removed 2026-05-15 — let the error
+  // propagate so CI and local runs both fail loudly.
   const client = await pool.connect();
   try {
     await fn(client);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('does not exist') || msg.includes('relation')) {
-      console.warn('[architecture-review-fixes.test] Table missing, skipping:', msg);
-      return;
-    }
-    throw err;
   } finally {
     client.release();
   }
