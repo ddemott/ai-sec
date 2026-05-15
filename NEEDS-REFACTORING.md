@@ -233,7 +233,7 @@ Pure check functions are exported and tested in `scripts/verify-claude-md.test.t
 **Status: done 2026-04-30.** Three files originally listed:
 - `SUMMARY-2026-04-24-0030.md` — already moved to `docs/sessions/2026-04-24-summary.md` in earlier commit `bea6129`.
 - `TICKET_SUPPORT.md` — moved to `docs/TICKET_SUPPORT.md` (under `docs/` rather than `docs/sessions/` because the Telnyx ticket is still open, actively referenced from 7 other docs, and the bare-filename references inside `docs/*` files keep working as siblings without edits). The two root-level references in README.md and CLAUDE.md updated to the new path.
-- `ux-review-notes.md` — current root-level file is an untracked working scratchpad (a different file from the previously-archived `docs/sessions/2026-04-20-ux-review.md`); left in place since it isn't a committed root-level doc.
+- `ux-review-notes.md` — moved to `docs/sessions/2026-04-30-ux-review.md` to match convention (was tracked in git despite the original note claiming otherwise). Near-duplicate of the 2026-04-20 audit with minor rephrasings + new entries for ConflictModal / TeamAccessView / SettingsView / StepReview.
 
 ---
 
