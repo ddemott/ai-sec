@@ -13,9 +13,13 @@ jobs:
     timeout-minutes: 15
     services:
       # Provision Postgres so DB-level integration tests run for real
-      # instead of silently skipping. Without this service, ~80 tests
-      # under src/*.test.ts that gate on `dbAvailable` from getRootClient()
-      # would always pass with zero assertions executed.
+      # instead of silently skipping. Without this service, ~524 tests
+      # across 50 files under src/*.test.ts that gate on `dbAvailable`
+      # from getRootClient() would always pass with zero assertions
+      # executed. Belt-and-suspenders: the "Run backend tests" step sets
+      # REQUIRE_DB_TESTS=1, which makes `skipIfDbDown` throw from beforeEach
+      # instead of skipping, so even a container-up-but-unreachable
+      # scenario fails CI loudly instead of producing a green run.
       postgres:
         # ankane/pgvector ships pgvector preinstalled. The first migration
         # (20260228000000_initial_schema.sql) does CREATE EXTENSION IF NOT
@@ -77,6 +81,13 @@ jobs:
 
       - name: Run backend tests
         run: npm test
+        env:
+          # Refuses to silent-skip DB-dependent tests. If the postgres
+          # service above is unreachable for any reason, skipIfDbDown
+          # throws from beforeEach instead of skipping, so CI fails the
+          # build instead of reporting a green run that exercised half
+          # the suite. Helper lives in src/test-utils.ts.
+          REQUIRE_DB_TESTS: '1'
 
   dashboard:
     name: Dashboard (typecheck + tests)
