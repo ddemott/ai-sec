@@ -46,7 +46,7 @@ export function Step2Resources({
                 <button onClick={() => onEdit(res)} className="p-1.5 text-gray-400 transition-colors" onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-soft)' }} onMouseLeave={e => { e.currentTarget.style.color = '' }} title="Edit">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => onDelete(res.resource_id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                <button onClick={() => onDelete(res.resource_id)} className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors" title="Delete">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

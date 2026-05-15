@@ -230,7 +230,7 @@ export default function TeamAccessView() {
             </div>
           </div>
           {inviteError && (
-            <p role="alert" className="text-sm text-red-500">{inviteError}</p>
+            <p role="alert" className="text-sm" style={{ color: 'var(--danger)' }}>{inviteError}</p>
           )}
           <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
             They&rsquo;ll receive an email with a link to set their password and sign in. The link expires in 3 days.

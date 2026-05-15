@@ -216,16 +216,16 @@ export default function SkillRelationshipMap() {
             <div className="w-6 h-0.5 mr-2 rounded" style={{ backgroundColor: 'var(--accent-soft)' }} /> Connected
           </div>
           <div className="flex items-center">
-            <div className="w-6 h-0.5 bg-amber-400 mr-2 rounded border-dashed" style={{ borderTop: '2px dashed #f59e0b', height: 0, background: 'none' }} /> Broken chain
+            <div className="w-6 mr-2" style={{ borderTop: '2px dashed var(--warning)', height: 0 }} /> Broken chain
           </div>
           <div className="flex items-center">
-            <div className="w-6 h-0.5 bg-red-400 mr-2 rounded" /> Hover to disconnect
+            <div className="w-6 h-0.5 mr-2 rounded" style={{ backgroundColor: 'var(--danger)' }} /> Hover to disconnect
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-green-500 font-bold">{fullCount} full</span>
-          <span className="text-amber-500 font-bold">{partialCount} partial</span>
-          <span className="text-red-500 font-bold">{uncoveredCount} uncovered</span>
+          <span className="font-bold" style={{ color: 'var(--success)' }}>{fullCount} full</span>
+          <span className="font-bold" style={{ color: 'var(--warning)' }}>{partialCount} partial</span>
+          <span className="font-bold" style={{ color: 'var(--danger)' }}>{uncoveredCount} uncovered</span>
         </div>
       </footer>
     </div>

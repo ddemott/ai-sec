@@ -41,7 +41,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
         }}
       />
       {error && (
-        <p className="text-xs text-red-500 mt-1" role="alert">{error}</p>
+        <p className="text-xs mt-1" role="alert" style={{ color: 'var(--danger)' }}>{error}</p>
       )}
     </div>
   )

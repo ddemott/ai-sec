@@ -326,7 +326,8 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
               <button
                 onClick={handleSaveOrder}
                 disabled={savingOrder}
-                className="text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1 rounded transition-colors disabled:opacity-50"
+                className="text-xs font-bold px-3 py-1 rounded transition-colors disabled:opacity-50 hover:brightness-110"
+                style={{ color: '#ffffff', backgroundColor: 'var(--warning)' }}
               >
                 {savingOrder ? 'Saving...' : 'Save Order'}
               </button>
@@ -400,7 +401,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
             <div className="text-sm text-red-700 dark:text-red-300">
               <p className="font-bold mb-1">This action is permanent and cannot be undone.</p>
               <p>Deleting <strong>{selectedTenant?.name}</strong> will permanently remove all associated data including customers, appointments, employees, resources, call history, and knowledge base documents.</p>

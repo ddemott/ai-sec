@@ -44,7 +44,7 @@ export const Select: React.FC<SelectProps> = ({
         ))}
       </select>
       {error && (
-        <p id={id ? `${id}-error` : undefined} role="alert" className="mt-1 text-xs text-red-500">{error}</p>
+        <p id={id ? `${id}-error` : undefined} role="alert" className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>{error}</p>
       )}
     </div>
   );

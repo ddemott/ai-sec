@@ -62,7 +62,7 @@ export function Step1Services({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDelete(svc.service_id) }}
-                  className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                  className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
                   title="Delete"
                 >
                   <Trash2 className="w-3.5 h-3.5 pointer-events-none" />

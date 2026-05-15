@@ -304,7 +304,7 @@ export default function BusinessSettingsView() {
             </div>
 
             {serviceError && (
-              <div className="mb-4 text-sm text-red-500">{serviceError}</div>
+              <div className="mb-4 text-sm" style={{ color: 'var(--danger)' }}>{serviceError}</div>
             )}
 
             {/* Add service form */}

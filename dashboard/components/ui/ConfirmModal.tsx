@@ -38,7 +38,7 @@ export function ConfirmModal({
       }
     >
       <div className="flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+        <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{message}</p>
       </div>
     </Modal>

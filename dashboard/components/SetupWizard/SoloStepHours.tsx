@@ -128,7 +128,7 @@ export function SoloStepHours({ shifts, loading, saving, error, onToggleDay, onU
                       <button
                         onClick={() => onToggleDay(dow)}
                         disabled={saving}
-                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                        className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
                         title="Remove this day"
                       >
                         <X className="w-3.5 h-3.5" />

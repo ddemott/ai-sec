@@ -194,7 +194,7 @@ export function TenantEditPanel({
                       {selectedTenant.phone_status === 'active' && selectedTenant.inbound_phone ? (
                           <div className="flex items-center gap-3">
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Active
+                                  <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--success)' }} /> Active
                               </span>
                               <span className="font-mono font-bold" style={{ color: 'var(--accent-soft)' }}>{formatPhone(selectedTenant.inbound_phone)}</span>
                               <button
@@ -214,7 +214,8 @@ export function TenantEditPanel({
                                           },
                                       });
                                   }}
-                                  className="text-xs text-red-500 hover:text-red-700 underline"
+                                  className="text-xs underline hover:brightness-90"
+                                  style={{ color: 'var(--danger)' }}
                               >Deactivate</button>
                           </div>
                       ) : selectedTenant.phone_status === 'provisioning' ? (
@@ -264,7 +265,7 @@ export function TenantEditPanel({
                                   <Phone className="w-3.5 h-3.5" /> Activate Phone
                               </button>
                               {selectedTenant.phone_status === 'failed' && (
-                                  <span className="text-xs text-red-500">Last attempt failed — try again</span>
+                                  <span className="text-xs" style={{ color: 'var(--danger)' }}>Last attempt failed — try again</span>
                               )}
                           </div>
                       )}
@@ -276,7 +277,7 @@ export function TenantEditPanel({
         {/* AI Config */}
         <section className="space-y-6">
           <div className="flex items-center space-x-2 border-b pb-2" style={{ color: 'var(--text-primary)', borderColor: 'var(--border-soft)' }}>
-              <ShieldAlert className="w-5 h-5 text-amber-500" />
+              <ShieldAlert className="w-5 h-5" style={{ color: 'var(--warning)' }} />
               <h2 className="text-lg font-bold tracking-tight">Secretary HQ Core Attributes</h2>
           </div>
 

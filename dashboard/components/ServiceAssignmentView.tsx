@@ -250,7 +250,7 @@ export default function ServiceAssignmentView() {
                 <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.service_id).length} assigned</span>
               </div>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
-                <Users className="w-3 h-3 mr-2 text-green-500" />
+                <Users className="w-3 h-3 mr-2" style={{ color: 'var(--success)' }} />
                 <span className="text-gray-400">{vocab.employee_plural}: </span>
                 <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{empMappings.filter(m => m.service_id === service.service_id).length} authorized</span>
               </div>
@@ -343,8 +343,10 @@ export default function ServiceAssignmentView() {
                       <button 
                         key={emp.employee_id}
                         onClick={() => selectedService && toggleEmployeeMapping(selectedService.service_id, emp.employee_id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${isMapped ? 'bg-green-600 text-white border-green-600' : ''}`}
-                        style={isMapped ? {} : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
+                        style={isMapped
+                          ? { backgroundColor: 'var(--success)', borderColor: 'var(--success)', color: '#ffffff' }
+                          : { backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}
                       >
                         {emp.name}
                       </button>

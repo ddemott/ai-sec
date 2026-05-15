@@ -54,16 +54,34 @@ function getChangeTypeIcon(type: ChangeType) {
   return icons[type] || <Clock className="w-3 h-3" />
 }
 
-function getChangeTypeColor(type: ChangeType): string {
-  const colors: Record<ChangeType, string> = {
-    create: 'text-green-600 bg-green-50',
-    update: 'text-[var(--accent-soft)] bg-[var(--accent-muted)]',
-    delete: 'text-red-600 bg-red-50',
-    restore: 'text-purple-600 bg-purple-50',
-    sync: 'text-orange-600 bg-orange-50',
-    merge: 'text-cyan-600 bg-cyan-50',
+type ChangeTypeStyle = { backgroundColor: string; color: string }
+
+/**
+ * Theme-token-driven change-type badge colors. Each ChangeType maps to
+ * a semantic CSS var defined per-theme in globals.css so the badge
+ * reads correctly on every theme. Mapping rationale:
+ * - create → success (new thing added)
+ * - update → accent  (informational, neutral)
+ * - delete → danger  (destructive)
+ * - restore → success (undo of destructive — "back to good state")
+ * - sync   → warning (procedural, system-initiated)
+ * - merge  → accent  (informational)
+ */
+function getChangeTypeStyle(type: ChangeType): ChangeTypeStyle {
+  switch (type) {
+    case 'create':
+    case 'restore':
+      return { backgroundColor: 'var(--success-bg)', color: 'var(--success)' }
+    case 'update':
+    case 'merge':
+      return { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }
+    case 'delete':
+      return { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }
+    case 'sync':
+      return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' }
+    default:
+      return { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }
   }
-  return colors[type] || 'text-gray-600 bg-gray-50'
 }
 
 function formatDate(dateStr: string): string {
@@ -246,15 +264,15 @@ export function RecordHistoryModal({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--accent)' }} />
             </div>
           ) : error ? (
-            <div className="text-red-600 text-center py-8">{error}</div>
+            <div className="text-center py-8" style={{ color: 'var(--danger)' }}>{error}</div>
           ) : mode === 'history' && history ? (
             <div className="space-y-4">
               {/* Deleted banner */}
               {history.is_deleted && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="rounded-lg p-4 flex items-center justify-between" style={{ backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger)' }}>
                   <div>
-                    <p className="font-medium text-red-800">This record is deleted</p>
-                    <p className="text-sm text-red-600">
+                    <p className="font-medium" style={{ color: 'var(--danger)' }}>This record is deleted</p>
+                    <p className="text-sm" style={{ color: 'var(--danger)' }}>
                       Deleted {history.deleted_at ? formatDate(history.deleted_at) : 'unknown'} by {history.deleted_by || 'unknown'}
                     </p>
                   </div>
@@ -268,7 +286,8 @@ export function RecordHistoryModal({
                         setError((err as Error).message)
                       }
                     }}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                    className="px-4 py-2 rounded-lg flex items-center gap-2 hover:brightness-110"
+                    style={{ backgroundColor: 'var(--danger)', color: '#ffffff' }}
                   >
                     <RotateCcw className="w-4 h-4" />
                     Restore Record
@@ -303,7 +322,7 @@ export function RecordHistoryModal({
 
                     <div className="flex gap-4">
                       {/* Icon */}
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${getChangeTypeColor(version.change_type)}`}>
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={getChangeTypeStyle(version.change_type)}>
                         {getChangeTypeIcon(version.change_type)}
                       </div>
 
@@ -319,7 +338,7 @@ export function RecordHistoryModal({
                                 {formatChangeSource(version.change_source)}
                               </span>
                               {idx === 0 && (
-                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded">Current</span>
+                                <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)' }}>Current</span>
                               )}
                             </div>
                             <p className="text-sm text-gray-500 mt-1">
@@ -367,7 +386,7 @@ export function RecordHistoryModal({
                                   {Object.entries(version.previous_values).map(([key, value]) => (
                                     <div key={key} className="flex">
                                       <span className="w-32 text-gray-500 flex-shrink-0">{key}:</span>
-                                      <span className="text-red-600 line-through">{formatValue(value)}</span>
+                                      <span className="line-through" style={{ color: 'var(--danger)' }}>{formatValue(value)}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -422,7 +441,7 @@ export function RecordHistoryModal({
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">v{v.version_number}</span>
-                              {idx === 0 && <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Current</span>}
+                              {idx === 0 && <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)' }}>Current</span>}
                               <span className="text-xs text-gray-500">{formatChangeSource(v.change_source)}</span>
                             </div>
                             <div className="text-sm text-gray-600 dark:text-gray-400">{formatValue(v.value)}</div>

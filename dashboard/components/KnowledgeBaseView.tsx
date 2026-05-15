@@ -88,9 +88,9 @@ function PolicyQuestionField({
           }}
         />
         <div className="absolute top-2 right-2">
-          {status === 'saving' && <Loader2 className="w-4 h-4 animate-spin text-orange-500" />}
-          {status === 'saved' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-          {status === 'error' && <span className="flex items-center gap-1 text-[10px] font-bold text-red-500"><AlertCircle className="w-3.5 h-3.5" />Save failed</span>}
+          {status === 'saving' && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--warning)' }} />}
+          {status === 'saved' && <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--success)' }} />}
+          {status === 'error' && <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: 'var(--danger)' }}><AlertCircle className="w-3.5 h-3.5" />Save failed</span>}
           {status === 'idle' && savedId && <Save className="w-3.5 h-3.5 text-gray-400 opacity-40" />}
         </div>
       </div>
@@ -374,12 +374,12 @@ export default function KnowledgeBaseView() {
                 >
                   {uploading ? (
                     <>
-                      <Loader2 className="w-10 h-10 animate-spin text-orange-500 mb-4" />
+                      <Loader2 className="w-10 h-10 animate-spin mb-4" style={{ color: 'var(--warning)' }} />
                       <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Processing document...</p>
                     </>
                   ) : (
                     <>
-                      <Upload className="w-10 h-10 text-orange-500 mb-4" />
+                      <Upload className="w-10 h-10 mb-4" style={{ color: 'var(--warning)' }} />
                       <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Drop a file here or click to upload</p>
                       <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                         Supports PDF, TXT, DOC, DOCX, and Markdown files
@@ -413,7 +413,7 @@ export default function KnowledgeBaseView() {
                         <div className="p-5 flex-1 flex flex-col">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <div className="text-[10px] font-bold text-orange-500 uppercase tracking-widest flex items-center gap-1">
+                              <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1" style={{ color: 'var(--warning)' }}>
                                 <FileText className="w-3 h-3" />
                                 {doc.source === 'policy-questionnaire' ? 'Policy Q&A' : doc.source || 'Manual'}
                               </div>
@@ -423,7 +423,7 @@ export default function KnowledgeBaseView() {
                             </div>
                             <button
                               onClick={() => handleDelete(doc.tenant_doc_id)}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 transition-all hover:[color:var(--danger)]"
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />

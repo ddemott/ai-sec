@@ -224,7 +224,7 @@ export default function SkillMatrixView() {
       <footer className="mt-6 flex items-center justify-between text-xs text-gray-400 font-medium shrink-0 px-2">
         <div className="flex items-center gap-4">
           <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-green-500 mr-2" /> {vocab.employee_label}
+            <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: 'var(--success)' }} /> {vocab.employee_label}
           </div>
           <div className="flex items-center">
             <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: 'var(--accent)' }} /> {vocab.resource_label}

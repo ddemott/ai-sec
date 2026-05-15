@@ -100,7 +100,7 @@ export default function SkillMapNode({
         </button>
       )}
       {isBroken && (
-        <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" data-testid={`broken-dot-${node.id}`} />
+        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--warning)' }} data-testid={`broken-dot-${node.id}`} />
       )}
     </div>
   )

@@ -52,18 +52,39 @@ function getOutcomeLabel(outcome: string | null): string {
   return outcome ? labels[outcome] || outcome : 'Unknown'
 }
 
-function getOutcomeColor(outcome: string | null): string {
-  const colors: Record<string, string> = {
-    appointment_booked: 'bg-green-100 text-green-800',
-    appointment_rescheduled: 'bg-sky-100 text-sky-800',
-    appointment_cancelled: 'bg-red-100 text-red-800',
-    info_provided: 'bg-gray-100 text-gray-800',
-    transferred: 'bg-yellow-100 text-yellow-800',
-    voicemail: 'bg-purple-100 text-purple-800',
-    abandoned: 'bg-red-100 text-red-800',
-    other: 'bg-gray-100 text-gray-800',
+type OutcomeStyle = { backgroundColor: string; color: string }
+
+/**
+ * Theme-token-driven outcome badge colors. Maps each outcome to the
+ * semantic CSS vars defined per-theme in globals.css. Replaces the
+ * earlier hardcoded `bg-green-100 text-green-800` Tailwind utilities
+ * which only rendered correctly on light themes — every dark theme
+ * (midnight/nord/forest/sunset/...) had unreadable badges before this.
+ *
+ * Mapping rationale:
+ * - booked / rescheduled    → success  (positive outcome)
+ * - cancelled / abandoned   → danger   (negative outcome)
+ * - transferred / voicemail → warning  (procedural, needs follow-up)
+ * - info_provided / other   → neutral  (uses --bg-raised + --text-secondary)
+ *
+ * Voicemail folds into warning instead of getting its own --info token
+ * since the project doesn't define --info yet and adding it would
+ * require an 8-theme override pass for a single outcome variant.
+ */
+function getOutcomeStyle(outcome: string | null): OutcomeStyle {
+  switch (outcome) {
+    case 'appointment_booked':
+    case 'appointment_rescheduled':
+      return { backgroundColor: 'var(--success-bg)', color: 'var(--success)' }
+    case 'appointment_cancelled':
+    case 'abandoned':
+      return { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }
+    case 'transferred':
+    case 'voicemail':
+      return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' }
+    default:
+      return { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }
   }
-  return outcome ? colors[outcome] || 'bg-gray-100 text-gray-800' : 'bg-gray-100 text-gray-800'
 }
 
 export default function VoiceCallsView() {
@@ -180,7 +201,7 @@ export default function VoiceCallsView() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--success)' }} />
                       <span className="font-medium text-[var(--text-primary)]">
                         {call.customer_name || formatPhone(call.caller_phone)}
                       </span>
@@ -190,7 +211,7 @@ export default function VoiceCallsView() {
                     </span>
                   </div>
                   {call.is_known_customer && (
-                    <span className="text-xs text-green-600 ml-4">Returning customer</span>
+                    <span className="text-xs ml-4" style={{ color: 'var(--success)' }}>Returning customer</span>
                   )}
                 </div>
               ))}
@@ -252,7 +273,7 @@ export default function VoiceCallsView() {
                     {call.outcome && (
                       <>
                         <span>·</span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs ${getOutcomeColor(call.outcome)}`}>
+                        <span className="px-1.5 py-0.5 rounded text-xs" style={getOutcomeStyle(call.outcome)}>
                           {getOutcomeLabel(call.outcome)}
                         </span>
                       </>
@@ -300,17 +321,17 @@ export default function VoiceCallsView() {
                 </div>
                 <div className="flex items-center gap-2">
                   {selectedCall.status === 'active' ? (
-                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm flex items-center gap-1">
+                    <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)' }}>
                       <Phone className="w-4 h-4 animate-pulse" />
                       Active
                     </span>
                   ) : selectedCall.status === 'completed' ? (
-                    <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm flex items-center gap-1">
+                    <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>
                       <CheckCircle className="w-4 h-4" />
                       Completed
                     </span>
                   ) : (
-                    <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm flex items-center gap-1">
+                    <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }}>
                       <XCircle className="w-4 h-4" />
                       {selectedCall.status}
                     </span>
@@ -330,7 +351,7 @@ export default function VoiceCallsView() {
                 <div>
                   <span className="text-gray-500">Outcome</span>
                   <p className="font-medium">
-                    <span className={`px-2 py-1 rounded ${getOutcomeColor(selectedCall.outcome)}`}>
+                    <span className="px-2 py-1 rounded" style={getOutcomeStyle(selectedCall.outcome)}>
                       {getOutcomeLabel(selectedCall.outcome)}
                     </span>
                   </p>
@@ -376,11 +397,11 @@ export default function VoiceCallsView() {
                           <p className="text-gray-500 text-xs">Total</p>
                         </div>
                         <div className="rounded p-3 text-center">
-                          <p className="text-2xl font-bold text-green-700">{customerContext.appointment_history.completed}</p>
+                          <p className="text-2xl font-bold" style={{ color: 'var(--success)' }}>{customerContext.appointment_history.completed}</p>
                           <p className="text-gray-500 text-xs">Completed</p>
                         </div>
-                        <div className="bg-red-50 rounded p-3 text-center">
-                          <p className="text-2xl font-bold text-red-700">{customerContext.appointment_history.cancelled}</p>
+                        <div className="rounded p-3 text-center" style={{ backgroundColor: 'var(--danger-bg)' }}>
+                          <p className="text-2xl font-bold" style={{ color: 'var(--danger)' }}>{customerContext.appointment_history.cancelled}</p>
                           <p className="text-gray-500 text-xs">Cancelled</p>
                         </div>
                       </div>
@@ -413,7 +434,7 @@ export default function VoiceCallsView() {
                         </h4>
                         <div className="space-y-2">
                           {customerContext.notes.slice(-5).map(note => (
-                            <div key={note.id} className="bg-yellow-50 rounded p-2 text-sm">
+                            <div key={note.id} className="rounded p-2 text-sm" style={{ backgroundColor: 'var(--warning-bg)' }}>
                               <p>{note.text}</p>
                               <p className="text-xs text-gray-500 mt-1">
                                 {new Date(note.created_at).toLocaleDateString()} · {note.type}

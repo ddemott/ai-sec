@@ -117,7 +117,7 @@ export default function SkillManagementView() {
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <Tag className="w-3 h-3 text-purple-500" />
+                  <Tag className="w-3 h-3 text-purple-600 dark:text-purple-400" />
                   <span className="font-mono text-sm font-black text-purple-600 dark:text-purple-400 uppercase">{skill.name}</span>
                 </div>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
@@ -126,7 +126,7 @@ export default function SkillManagementView() {
               </div>
               <button 
                 onClick={() => handleDeleteSkill(skill.tenant_skill_id)}
-                className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all"
+                className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:[color:var(--danger)] transition-all"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

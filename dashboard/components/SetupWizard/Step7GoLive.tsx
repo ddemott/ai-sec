@@ -108,7 +108,7 @@ export function Step7GoLive({ phoneStatus: initialStatus, inboundPhone: initialP
 
           {phoneStatus === 'failed' && error && (
             <div className="p-4 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
               <div>
                 <div className="font-bold text-red-700 dark:text-red-300 text-sm">Activation failed</div>
                 <div className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</div>

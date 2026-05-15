@@ -222,7 +222,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
     <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-[#1a1a1a] shadow-2xl border-l border-gray-200 dark:border-gray-800 z-30 flex flex-col animate-in slide-in-from-right duration-200" data-testid="quick-book-panel">
       <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-500" />
+          <Zap className="w-4 h-4" style={{ color: 'var(--warning)' }} />
           <h3 className="font-bold text-gray-900 dark:text-gray-100">Quick Book</h3>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close quick book">

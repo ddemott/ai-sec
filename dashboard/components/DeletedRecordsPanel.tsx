@@ -143,7 +143,7 @@ export function DeletedRecordsPanel({
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Trash2 className="w-5 h-5 text-red-500" />
+            <Trash2 className="w-5 h-5" style={{ color: 'var(--danger)' }} />
             <h3 className="font-semibold text-gray-900 dark:text-white">
               Deleted Records
             </h3>
@@ -173,7 +173,7 @@ export function DeletedRecordsPanel({
             <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--accent)' }} />
           </div>
         ) : error ? (
-          <div className="text-red-600 text-center py-8">{error}</div>
+          <div className="text-center py-8" style={{ color: 'var(--danger)' }}>{error}</div>
         ) : filteredRecords.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Trash2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -235,7 +235,8 @@ export function DeletedRecordsPanel({
                     <button
                       onClick={() => handleRestore(record.record_id)}
                       disabled={restoring === record.record_id}
-                      className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                      className="px-3 py-1.5 rounded-lg disabled:opacity-50 flex items-center gap-2 hover:brightness-110"
+                      style={{ backgroundColor: 'var(--success)', color: '#ffffff' }}
                     >
                       {restoring === record.record_id ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />

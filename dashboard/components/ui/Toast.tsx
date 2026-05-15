@@ -32,11 +32,23 @@ const ICONS: Record<ToastType, React.ElementType> = {
   info: Info,
 }
 
-const COLORS: Record<ToastType, string> = {
-  success: 'bg-green-600 text-white',
-  error: 'bg-red-600 text-white',
-  warning: 'bg-yellow-500 text-white',
-  info: 'text-white',
+// Theme-token-driven toast colors. Maps each ToastType to a semantic
+// CSS var defined per-theme in globals.css so toasts render correctly
+// on every theme (was `bg-green-600 text-white` etc. — solid Tailwind
+// classes that didn't respond to theme, just happened to be visible on
+// most themes because the bg-{600} hue was strong enough).
+function getToastStyle(type: ToastType): React.CSSProperties {
+  switch (type) {
+    case 'success':
+      return { backgroundColor: 'var(--success)', color: '#ffffff' }
+    case 'error':
+      return { backgroundColor: 'var(--danger)', color: '#ffffff' }
+    case 'warning':
+      return { backgroundColor: 'var(--warning)', color: '#ffffff' }
+    case 'info':
+    default:
+      return { backgroundColor: 'var(--accent)', color: '#ffffff' }
+  }
 }
 
 export function ToastContainer() {
@@ -72,8 +84,8 @@ export function ToastContainer() {
           <div
             key={toast.id}
             role={toast.type === 'error' ? 'alert' : 'status'}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-in slide-in-from-bottom-2 fade-in ${COLORS[toast.type]}`}
-            style={toast.type === 'info' ? { backgroundColor: 'var(--accent)' } : undefined}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-in slide-in-from-bottom-2 fade-in"
+            style={getToastStyle(toast.type)}
           >
             <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="flex-1">{toast.message}</span>
