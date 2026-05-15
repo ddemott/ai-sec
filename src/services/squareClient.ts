@@ -191,7 +191,7 @@ export async function apiRequest<T = any>(
   method: string,
   path: string,
   accessToken: string,
-  body?: Record<string, any>
+  body?: Record<string, unknown>
 ): Promise<T> {
   let res: Response;
   try {

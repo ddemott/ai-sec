@@ -73,7 +73,7 @@ export async function getIntegrationTokens(
   bufferMs: number = TOKEN_BUFFER_MS.STANDARD,
   logger?: SyncLogger,
   extraColumns?: string,
-): Promise<{ accessToken: string; refreshToken: string; settings: Record<string, any> | null } | null> {
+): Promise<{ accessToken: string; refreshToken: string; settings: Record<string, unknown> | null } | null> {
   const log = logger || defaultSyncLogger;
   const prefix = syncCtx(provider, tenantId);
   const client = await pool.connect();

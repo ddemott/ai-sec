@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as servicetitanClient from '../services/servicetitanClient';
 import * as servicetitanSync from '../services/servicetitanSync';
@@ -8,7 +9,7 @@ import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerServiceTitanRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
@@ -70,11 +71,14 @@ export function registerServiceTitanRoutes(
   }, 'Failed to disconnect ServiceTitan'));
 
   // --- ServiceTitan webhook receiver ---
-  app.post('/servicetitan/webhook', async (req: any, reply: any) => {
+  app.post('/servicetitan/webhook', async (req: FastifyRequest, reply: FastifyReply) => {
     // Verify shared webhook secret (set in ServiceTitan webhook config and SERVICETITAN_WEBHOOK_SECRET env var)
     const webhookSecret = process.env.SERVICETITAN_WEBHOOK_SECRET;
     if (webhookSecret) {
-      const providedSecret = req.headers['x-servicetitan-webhook-secret'] || req.headers['authorization'];
+      const headerSecret = req.headers['x-servicetitan-webhook-secret'] ?? req.headers['authorization'];
+      // Fastify headers normalize to string | string[] | undefined — collapse arrays
+      // to their first value (HTTP duplicates would indicate a malformed request anyway).
+      const providedSecret = Array.isArray(headerSecret) ? headerSecret[0] : headerSecret;
       if (!providedSecret || providedSecret.replace('Bearer ', '') !== webhookSecret) {
         app.log.warn({ event: 'servicetitan_webhook_auth_failed' }, 'ServiceTitan webhook authentication failed');
         return reply.status(401).send({ success: false, error: 'Unauthorized' });

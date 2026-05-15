@@ -163,24 +163,35 @@ export async function syncAppointmentToCalendar(
   }
 }
 
-function buildCalendarEvent(appt: Record<string, any>): gcal.CalendarEventInput {
-  const customerName = appt.customer_name || 'Customer';
-  const summary = appt.description
-    ? `${appt.description} - ${customerName}`
+function buildCalendarEvent(appt: Record<string, unknown>): gcal.CalendarEventInput {
+  // Narrow the DB-row bag into the fields this builder reads.
+  const a = appt as {
+    customer_name?: string;
+    customer_phone?: string;
+    resource_name?: string;
+    service_name?: string;
+    description?: string;
+    start_time: string;
+    end_time: string;
+    location?: string;
+  };
+  const customerName = a.customer_name || 'Customer';
+  const summary = a.description
+    ? `${a.description} - ${customerName}`
     : `Appointment - ${customerName}`;
 
   const parts: string[] = [];
-  if (appt.customer_name) parts.push(`Customer: ${appt.customer_name}`);
-  if (appt.customer_phone) parts.push(`Phone: ${appt.customer_phone}`);
-  if (appt.resource_name) parts.push(`Resource: ${appt.resource_name}`);
-  if (appt.service_name) parts.push(`Service: ${appt.service_name}`);
+  if (a.customer_name) parts.push(`Customer: ${a.customer_name}`);
+  if (a.customer_phone) parts.push(`Phone: ${a.customer_phone}`);
+  if (a.resource_name) parts.push(`Resource: ${a.resource_name}`);
+  if (a.service_name) parts.push(`Service: ${a.service_name}`);
   parts.push('Booked via Secretary HQ');
 
   return {
     summary,
     description: parts.join('\n'),
-    start: appt.start_time,
-    end: appt.end_time,
-    location: appt.location || undefined,
+    start: a.start_time,
+    end: a.end_time,
+    location: a.location || undefined,
   };
 }

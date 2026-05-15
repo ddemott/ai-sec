@@ -8,7 +8,8 @@
  * - Facade: request context (req.tenantId, req.log) hides extraction complexity
  */
 
-import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from './types/fastify';
 import { errorsTotal } from './services/metrics';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -218,7 +219,7 @@ function isTenantExempt(url: string): boolean {
  *   handlers can reject via requireAuth(); the gate only fires once a
  *   JWT is present.
  */
-export function tenantMiddleware(app: FastifyInstance) {
+export function tenantMiddleware(app: AppFastifyInstance) {
   app.addHook('preHandler', async (request: AppRequest, reply) => {
     if (request.method === 'OPTIONS') return;
     if (isTenantExempt(request.url)) return;
@@ -434,7 +435,7 @@ const PUBLIC_ROUTES = [
  *
  * The pool parameter is needed for the password_changed_at lookup.
  */
-export function registerJwtAuthHook(app: FastifyInstance, pool: Pool) {
+export function registerJwtAuthHook(app: AppFastifyInstance, pool: Pool) {
   app.addHook('onRequest', async (request, reply) => {
     if (request.method === 'OPTIONS') return;
     const urlPath = request.url.split('?')[0];

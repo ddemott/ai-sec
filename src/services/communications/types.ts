@@ -4,14 +4,14 @@ export interface EmailMessage {
   text?: string;
   html?: string;
   template?: string;
-  templateData?: Record<string, any>;
+  templateData?: Record<string, unknown>;
 }
 
 export interface SMSMessage {
   to: string;
   body?: string;
   template?: string;
-  templateData?: Record<string, any>;
+  templateData?: Record<string, unknown>;
 }
 
 export interface CommunicationResult {

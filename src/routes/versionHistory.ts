@@ -9,7 +9,7 @@
  * - Viewing recent changes across all tables
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -165,7 +165,7 @@ function validateBody<T>(
 }
 
 export function registerVersionHistoryRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
@@ -698,7 +698,7 @@ export function registerVersionHistoryRoutes(
       );
 
       // Build field options
-      const fields: Record<string, any> = {};
+      const fields: Record<string, unknown> = {};
       const excludeFields = ['id', 'tenant_id', 'created_at', 'updated_at', 'is_deleted', 'deleted_at', 'deleted_by'];
 
       // Get all unique fields from current and historical data

@@ -1,5 +1,5 @@
 
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -42,7 +42,7 @@ const ExpandWeeklySchema = z.object({
 });
 
 export function registerShiftRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

@@ -77,7 +77,7 @@ export async function syncCustomerToJobber(
     }
 
     const nameParts = splitName(cust.name);
-    const clientInput: Record<string, any> = {
+    const clientInput: Record<string, unknown> = {
       firstName: nameParts.firstName,
       lastName: nameParts.lastName,
       phones: cust.phone ? [{ number: cust.phone, primary: true }] : [],

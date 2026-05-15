@@ -29,11 +29,13 @@ export interface TelephonyProvider {
   sendSMS(request: TelephonySMSRequest): Promise<{ messageSid: string }>;
 
   /**
-   * Create a provider-specific instruction tag (e.g., <Say>)
+   * Create a provider-specific instruction tag (e.g., <Say>).
+   * The `options` shape is action-dependent (e.g. `{ text, voice, language }` for
+   * 'say', `{ phoneNumber }` for 'dial'); each adapter narrows internally.
    */
   createInstruction(
     action: 'say' | 'gather' | 'record' | 'hangup' | 'dial' | 'redirect',
-    options: any,
+    options: Record<string, unknown>,
   ): string;
 
   /**
@@ -44,5 +46,5 @@ export interface TelephonyProvider {
   /**
    * Legacy method for generating a single instruction response
    */
-  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: any): string;
+  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: Record<string, unknown>): string;
 }

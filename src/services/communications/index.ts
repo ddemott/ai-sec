@@ -137,7 +137,7 @@ export class CommunicationService {
    */
   applyTemplate(
     template: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
   ): Promise<{
     subject?: string;
     text?: string;

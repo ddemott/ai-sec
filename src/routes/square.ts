@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as squareClient from '../services/squareClient';
 import * as squareSync from '../services/squareSync';
@@ -8,7 +9,7 @@ import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerSquareRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
@@ -69,7 +70,7 @@ export function registerSquareRoutes(
   }, 'Failed to disconnect Square'));
 
   // --- Square webhook receiver ---
-  app.post('/square/webhook', async (req: any, reply: any) => {
+  app.post('/square/webhook', async (req: FastifyRequest, reply: FastifyReply) => {
     const signature = req.headers['x-square-hmacsha256-signature'] as string;
     // HMAC verification requires the EXACT bytes Square signed. See hubspot.ts
     // for the rationale — same fix.
@@ -104,7 +105,7 @@ export function registerSquareRoutes(
     reply.status(200).send({ success: true, message: 'Webhook received' });
 
     // Process event async
-    const event = req.body;
+    const event = req.body as { type?: string; merchant_id?: string; data?: { id?: string } } | undefined;
     const eventType = event?.type;
     const merchantId = event?.merchant_id;
 

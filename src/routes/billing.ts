@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import Stripe from 'stripe';
 import { withHandler, logEvent, logError, requireTenantId, type AppRequest } from '../middleware';
 
@@ -22,15 +23,7 @@ function getStripe(): Stripe | null {
   });
 }
 
-// `FastifyInstance<any, any, any>` is a framework-boundary case: the app
-// is constructed in `src/index.ts` with http2 (`http2: true`), which
-// pins the generic params to http2 server types — incompatible with
-// the default-typed `FastifyInstance` here. Every route module accepts
-// the loosened generics for the same reason. Genuine fix is to thread
-// http2-typed `FastifyInstance` through every module; the wide signature
-// here is the conventional Fastify pattern when the server isn't
-// known by the consumer.
-export function registerBillingRoutes(app: FastifyInstance<any, any, any>, pool: Pool) {
+export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
   // POST /billing/checkout — create a Stripe Checkout session
   app.post('/billing/checkout', withHandler(async (req: AppRequest, reply) => {
     const stripe = getStripe();

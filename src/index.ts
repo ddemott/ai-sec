@@ -86,6 +86,7 @@ const useHttps = process.env.NODE_ENV !== 'production';
 const certDir = path.resolve(__dirname, '..', '..', 'certs');
 const logger = buildLogger({ service: 'ai-sec-backend' });
 const app = Fastify(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify options are a discriminated union (FastifyHttpsOptions | FastifyServerOptions); the ternary widens past it
   (useHttps
     ? {
         loggerInstance: logger,
@@ -160,8 +161,8 @@ const pool = getPool();
 const withTenantClient = createWithTenantClient(pool);
 
 // --- Auth + Tenant Middleware ---
-registerJwtAuthHook(app as any, pool);
-tenantMiddleware(app as any);
+registerJwtAuthHook(app, pool);
+tenantMiddleware(app);
 
 // --- Subscription Gate (after auth, before routes) ---
 app.addHook('onRequest', subscriptionGate(pool));

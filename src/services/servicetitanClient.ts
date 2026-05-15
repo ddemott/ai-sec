@@ -185,7 +185,7 @@ export async function apiRequest<T = any>(
   path: string,
   accessToken: string,
   appKey: string,
-  body?: Record<string, any>
+  body?: Record<string, unknown>
 ): Promise<T> {
   let res: Response;
   try {

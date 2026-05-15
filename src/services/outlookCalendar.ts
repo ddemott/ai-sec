@@ -171,7 +171,7 @@ export async function revokeToken(_accessToken: string): Promise<void> {
   // Intentional no-op — see JSDoc above.
 }
 
-async function graphRequest(method: string, path: string, accessToken: string, body?: Record<string, unknown>): Promise<any> {
+async function graphRequest(method: string, path: string, accessToken: string, body?: Record<string, unknown>): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(`${GRAPH_BASE}${path}`, {
@@ -220,7 +220,7 @@ export async function createEvent(
     ? '/me/events'
     : `/me/calendars/${calendarId}/events`;
 
-  const data = await graphRequest('POST', path, accessToken, buildGraphEvent(event));
+  const data = (await graphRequest('POST', path, accessToken, buildGraphEvent(event))) as { id?: string } | null;
 
   if (!data?.id) throw new Error('Outlook Calendar did not return an event ID');
   return data.id;

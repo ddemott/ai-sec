@@ -184,7 +184,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
 export async function graphql<T = any>(
   accessToken: string,
   query: string,
-  variables?: Record<string, any>
+  variables?: Record<string, unknown>
 ): Promise<GraphQLResponse<T>> {
   let res: Response;
   try {

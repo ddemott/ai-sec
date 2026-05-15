@@ -23,8 +23,15 @@ export class ReminderService {
   }
 
   /**
-   * Schedule reminders for a new appointment
+   * Schedule reminders for a new appointment.
+   *
+   * Back-compat shim: accepts either camelCase (AppointmentForReminder) or
+   * snake_case (legacy DB-row) shapes — the `any` is a permissive boundary
+   * for older tests that predate the typed signature in reminderScheduler.ts.
+   * Real (production) callers use ReminderScheduler.scheduleAppointmentReminders;
+   * remove this method once those tests migrate.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- back-compat shim, see jsdoc
   async scheduleAppointmentReminders(appointment: any): Promise<void> {
     // Normalize appointment fields to camelCase. IDs are UUID strings
     // (matches the appointments.appointment_id + tenants.tenant_id schema),
@@ -261,6 +268,7 @@ export class ReminderService {
 
   // Backward compatibility methods for tests
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- back-compat shim, mirrors scheduleAppointmentReminders
   async checkCommunicationConsent(reminder: any, appointment: any): Promise<boolean> {
     // Normalize appointment fields to handle both camelCase and snake_case
     const normalizedAppointment = {
@@ -303,6 +311,7 @@ export class ReminderService {
     return false;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- back-compat shim, mirrors scheduleAppointmentReminders
   async sendReminder(reminder: any, appointment: any): Promise<boolean> {
     // Normalize appointment fields to handle both camelCase and snake_case
     const normalizedAppointment = {

@@ -1,5 +1,5 @@
 
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
@@ -60,7 +60,7 @@ const AppointmentUpdateSchema = z.object({
 });
 
 export function registerAppointmentRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

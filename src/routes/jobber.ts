@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as jobberClient from '../services/jobberClient';
 import * as jobberSync from '../services/jobberSync';
@@ -8,7 +9,7 @@ import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerJobberRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
@@ -69,8 +70,8 @@ export function registerJobberRoutes(
   }, 'Failed to disconnect Jobber'));
 
   // --- Jobber webhook receiver ---
-  app.post('/jobber/webhook/:tenantId', async (req: any, reply: any) => {
-    const tenantId = req.params.tenantId as string;
+  app.post('/jobber/webhook/:tenantId', async (req: FastifyRequest<{ Params: { tenantId: string } }>, reply: FastifyReply) => {
+    const tenantId = req.params.tenantId;
     const signature = req.headers['x-jobber-hmac-sha256'] as string;
     // HMAC verification requires the EXACT bytes Jobber signed. See hubspot.ts
     // for the rationale — same fix.

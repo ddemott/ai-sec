@@ -1,5 +1,5 @@
 
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import pdfParse from 'pdf-parse';
 import { z } from 'zod';
@@ -14,7 +14,7 @@ const knowledgeEntrySchema = z.object({
 });
 
 export function registerKnowledgeRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   _pool: Pool,
   getEmbedding: (text: string) => Promise<number[]>,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,

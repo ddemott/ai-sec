@@ -9,7 +9,7 @@
  * - Adding notes to customers from calls
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -50,11 +50,17 @@ const AddNoteSchema = z.object({
   call_id: z.string().optional(),
 });
 
+// Minimal subset of the Socket.IO server surface this module actually calls —
+// avoids pulling socket.io as a build-time dep just for the type.
+interface SocketIoLike {
+  to(room: string): { emit(event: string, payload: unknown): void };
+}
+
 export function registerVoiceRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
-  io?: any // Socket.IO server instance
+  io?: SocketIoLike
 ) {
   /**
    * POST /voice/session/start

@@ -48,43 +48,45 @@ export class TwilioAdapter implements TelephonyProvider {
 
   createInstruction(
     action: 'say' | 'gather' | 'record' | 'hangup' | 'dial' | 'redirect',
-    options: any,
+    options: Record<string, unknown>,
   ): string {
     const response = new twilio.twiml.VoiceResponse();
 
+    // Twilio's *Attributes types (SayAttributes, GatherAttributes, RecordAttributes)
+    // are structural literal unions (e.g. SayVoice has 800+ values). At this adapter
+    // boundary we trust the caller passes the right keys for the action; the SDK
+    // surfaces runtime errors if not. Cast the full options bag per branch.
+    type SayAttrs = Parameters<typeof response.say>[0];
+    type GatherAttrs = Parameters<typeof response.gather>[0];
+    type RecordAttrs = Parameters<typeof response.record>[0];
     switch (action) {
       case 'say':
         response.say(
-          {
-            voice: options.voice || 'Polly.Joanna',
-            language: options.language || 'en-US',
-          },
-          options.text,
+          { voice: 'Polly.Joanna', language: 'en-US', ...options } as SayAttrs,
+          options.text as string,
         );
         break;
-      case 'gather':
-        const gather = response.gather(options);
+      case 'gather': {
+        const gather = response.gather(options as GatherAttrs);
         if (options.say) {
           gather.say(
-            {
-              voice: options.voice || 'Polly.Joanna',
-              language: options.language || 'en-US',
-            },
-            options.say,
+            { voice: 'Polly.Joanna', language: 'en-US', ...options } as SayAttrs,
+            options.say as string,
           );
         }
         break;
+      }
       case 'record':
-        response.record(options);
+        response.record(options as RecordAttrs);
         break;
       case 'hangup':
         response.hangup();
         break;
       case 'dial':
-        response.dial(options.phoneNumber);
+        response.dial(options.phoneNumber as string);
         break;
       case 'redirect':
-        response.redirect(options.url);
+        response.redirect(options.url as string);
         break;
     }
 
@@ -99,7 +101,7 @@ export class TwilioAdapter implements TelephonyProvider {
     return `<?xml version="1.0" encoding="UTF-8"?><Response>${instructions}</Response>`;
   }
 
-  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: any): string {
+  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: Record<string, unknown>): string {
     const instruction = this.createInstruction(action, options);
     return this.wrapResponse(instruction);
   }

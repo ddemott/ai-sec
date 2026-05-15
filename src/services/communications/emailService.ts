@@ -15,9 +15,11 @@ export class EmailService {
     // Initialize email transporter - skip in test environment
     if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       // Create a mock transporter for testing
+      // Test-mode stub satisfying just the `sendMail` slot we exercise;
+      // the rest of nodemailer.Transporter isn't reachable in tests.
       this.transporter = {
         sendMail: async () => ({ messageId: 'test-message-id' }),
-      } as any;
+      } as unknown as nodemailer.Transporter;
     } else {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -105,29 +107,44 @@ export class EmailService {
    */
   public async applyTemplate(
     template: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
   ): Promise<{
     subject?: string;
     text?: string;
     html?: string;
   }> {
-    // Get tenant configuration for business branding
-    const businessName = await this.configService.getBusinessName(data.tenantId);
-    const notificationPrefs = await this.configService.getNotificationPreferences(data.tenantId);
+    // Templates accept a permissive bag (callers vary); narrow at the boundary
+    // into a typed shape so downstream code reads concrete fields, not unknown.
+    const d = data as {
+      tenantId: string;
+      customerName?: string;
+      serviceName?: string;
+      staffName?: string;
+      dateTime?: string;
+      duration?: number;
+      notes?: string;
+      reason?: string;
+      hoursUntil?: number;
+      subject?: string;
+      message?: string;
+    };
+
+    const businessName = await this.configService.getBusinessName(d.tenantId);
+    const notificationPrefs = await this.configService.getNotificationPreferences(d.tenantId);
 
     const templateData: EmailTemplateData = {
-      customerName: data.customerName || 'Valued Customer',
-      serviceName: data.serviceName || 'Service',
-      staffName: data.staffName || 'Our Team',
-      dateTime: data.dateTime || 'TBD',
-      duration: data.duration || 60,
+      customerName: d.customerName || 'Valued Customer',
+      serviceName: d.serviceName || 'Service',
+      staffName: d.staffName || 'Our Team',
+      dateTime: d.dateTime || 'TBD',
+      duration: d.duration || 60,
       businessName: businessName,
       businessPhone: notificationPrefs.contactInfo?.phone,
       businessEmail: undefined, // No tenant-level email column today
       businessAddress: undefined, // Not currently stored
-      notes: data.notes,
-      reason: data.reason,
-      hoursUntil: data.hoursUntil,
+      notes: d.notes,
+      reason: d.reason,
+      hoursUntil: d.hoursUntil,
       logoUrl: undefined, // Not currently stored
       primaryColor: undefined, // Not currently stored
       secondaryColor: undefined, // Not currently stored
@@ -140,7 +157,7 @@ export class EmailService {
       case 'appointment-reminder':
         return this.templateService.generateAppointmentReminder({
           ...templateData,
-          hoursUntil: data.hoursUntil || 24,
+          hoursUntil: d.hoursUntil || 24,
         });
 
       case 'appointment-cancellation':
@@ -155,11 +172,10 @@ export class EmailService {
         });
 
       default:
-        // Fallback to basic template for unknown templates
         return {
-          subject: data.subject || 'Message from AI Secretary',
-          text: data.message || 'You have a message from AI Secretary',
-          html: `<p>${data.message || 'You have a message from AI Secretary'}</p>`,
+          subject: d.subject || 'Message from AI Secretary',
+          text: d.message || 'You have a message from AI Secretary',
+          html: `<p>${d.message || 'You have a message from AI Secretary'}</p>`,
         };
     }
   }

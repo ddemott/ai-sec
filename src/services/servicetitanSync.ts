@@ -45,7 +45,7 @@ export async function getTokensWithRefresh(
   );
   if (!result) return null;
 
-  const tenantSid = result.settings?.tenant_sid;
+  const tenantSid = (result.settings as { tenant_sid?: string } | null | undefined)?.tenant_sid;
   if (!tenantSid) {
     log.warn(`[servicetitan-sync] tenant=${tenantId} — skipped: tenant_sid not found in settings`);
     return null;

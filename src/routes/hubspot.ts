@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as hubspotClient from '../services/hubspotClient';
 import * as hubspotSync from '../services/hubspotSync';
@@ -8,7 +9,7 @@ import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration } from '../services/crmDisconnect';
 
 export function registerHubSpotRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
@@ -69,7 +70,7 @@ export function registerHubSpotRoutes(
   }, 'Failed to disconnect HubSpot'));
 
   // --- HubSpot webhook receiver ---
-  app.post('/hubspot/webhook', async (req: any, reply: any) => {
+  app.post('/hubspot/webhook', async (req: FastifyRequest, reply: FastifyReply) => {
     const signature = req.headers['x-hubspot-signature-v3'] as string;
     const timestamp = req.headers['x-hubspot-request-timestamp'] as string;
     // HMAC verification requires the EXACT bytes HubSpot signed. Re-serializing

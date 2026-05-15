@@ -166,7 +166,7 @@ export class SMSService {
     tenantId: string,
     to: string,
     template: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
   ): Promise<CommunicationResult> {
     const templateResult = this.applySMSTemplate(template, data);
     return this.sendSMS(tenantId, {
@@ -178,19 +178,28 @@ export class SMSService {
   /**
    * Apply SMS template (optimized for SMS length limits)
    */
-  private applySMSTemplate(template: string, data: Record<string, any>): string {
+  private applySMSTemplate(template: string, data: Record<string, unknown>): string {
+    // Narrow the permissive input bag into the fields SMS templates actually read.
+    const d = data as {
+      serviceName?: string;
+      staffName?: string;
+      dateTime?: string;
+      hoursUntil?: number;
+      availableTime?: string;
+      message?: string;
+    };
     switch (template) {
       case 'appointment-confirmation':
-        return `✅ Confirmed: ${data.serviceName} with ${data.staffName} on ${data.dateTime}. Reply STOP to opt out.`;
+        return `✅ Confirmed: ${d.serviceName} with ${d.staffName} on ${d.dateTime}. Reply STOP to opt out.`;
 
       case 'appointment-reminder':
-        return `🔔 Reminder: ${data.serviceName} with ${data.staffName} in ${data.hoursUntil}h at ${data.dateTime}. Reply STOP to opt out.`;
+        return `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}. Reply STOP to opt out.`;
 
       case 'appointment-cancellation':
-        return `❌ Cancelled: ${data.serviceName} on ${data.dateTime} has been cancelled. Reply STOP to opt out.`;
+        return `❌ Cancelled: ${d.serviceName} on ${d.dateTime} has been cancelled. Reply STOP to opt out.`;
 
       case 'waitlist-available':
-        return `🎉 Great news! A spot opened up for ${data.serviceName}. Can you make ${data.availableTime}? Reply YES or call us.`;
+        return `🎉 Great news! A spot opened up for ${d.serviceName}. Can you make ${d.availableTime}? Reply YES or call us.`;
 
       case 'opt-out-confirmation':
         return `You've been unsubscribed from SMS messages. Reply START to resubscribe.`;
@@ -199,7 +208,7 @@ export class SMSService {
         return `Hi! We'd like to send you appointment reminders via SMS. Reply YES to opt in, or STOP to opt out.`;
 
       default:
-        return data.message || 'Message from AI Secretary';
+        return d.message || 'Message from AI Secretary';
     }
   }
 }

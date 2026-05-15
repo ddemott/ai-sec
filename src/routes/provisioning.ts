@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
 import { TelnyxNumbersClient } from '../services/telnyxNumbers';
@@ -15,7 +15,7 @@ export interface TelnyxProvisioningConfig {
 }
 
 export function registerProvisioningRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   telnyx: TelnyxProvisioningConfig | null
 ) {

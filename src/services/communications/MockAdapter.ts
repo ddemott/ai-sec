@@ -21,7 +21,7 @@ export class MockAdapter implements TelephonyProvider {
     return { messageSid: `mock_sms_${Date.now()}` };
   }
 
-  createInstruction(action: string, options: any): string {
+  createInstruction(action: string, options: Record<string, unknown>): string {
     const attrString = Object.entries(options)
       .filter(([key]) => !['text', 'say'].includes(key))
       .map(([key, value]) => `${key}="${value}"`)
@@ -40,7 +40,7 @@ export class MockAdapter implements TelephonyProvider {
     return `<?xml version="1.0" encoding="UTF-8"?><Response>${instructions}</Response>`;
   }
 
-  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: any): string {
+  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: Record<string, unknown>): string {
     return this.wrapResponse(this.createInstruction(action, options));
   }
 }

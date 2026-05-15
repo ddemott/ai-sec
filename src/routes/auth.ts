@@ -1,6 +1,6 @@
 
 import { createHash, randomBytes } from 'crypto';
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { withHandler, withPoolClient, type AppRequest, type UserRole } from '../middleware';
@@ -34,7 +34,7 @@ function hashToken(token: string): string {
 }
 
 export function registerAuthRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   generateToken: (payload: { tenant_id: string; user_id: string; email: string; role: UserRole }) => string
 ) {

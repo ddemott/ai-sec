@@ -9,7 +9,7 @@
  *   GET  /reminders/status    - Get scheduler status
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
@@ -36,7 +36,7 @@ const ReminderQuerySchema = z.object({
 // ── Route Registration ───────────────────────────────────────────────
 
 export function registerReminderRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {

@@ -12,7 +12,8 @@
  * the LLM can relay the error conversationally rather than having the HTTP
  * client bubble an exception.
  */
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyReply } from 'fastify';
+import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
@@ -195,7 +196,7 @@ function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply
  * via `ok()` / `fail()`).
  */
 function toolRoute<T>(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   path: string,
   schema: z.ZodType<T>,
   handler: (args: T, reply: FastifyReply) => Promise<unknown>,
@@ -224,7 +225,7 @@ function toolRoute<T>(
 // ── Route registration ────────────────────────────────────────────────
 
 export function registerAgentToolRoutes(
-  app: FastifyInstance<any, any, any>,
+  app: AppFastifyInstance,
   _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
   getEmbedding: (text: string) => Promise<number[]>,
