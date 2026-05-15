@@ -26,7 +26,12 @@ let dbAvailable = true;
 beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
 beforeAll(async () => {
-  pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/postgres' });
+  // Fallback aligns with src/index.test.ts and test-utils.ROOT_DB_URL —
+  // the rest of the suite uses test_db, not the default `postgres` database.
+  // CI's Postgres service container only creates test_db, so a `postgres`
+  // fallback hard-fails REQUIRE_DB_TESTS=1 in CI. Local `.env` typically
+  // sets DATABASE_URL explicitly so the fallback only matters in CI.
+  pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5433/test_db' });
   try {
     const client = await pool.connect();
     // Check if required tables exist (schema may not match after renames)
