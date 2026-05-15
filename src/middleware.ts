@@ -11,6 +11,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from './types/fastify';
 import { errorsTotal } from './services/metrics';
+import { captureException } from './services/sentry';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -363,6 +364,17 @@ export function logError(
   // Counter sibling so dashboards can alert on rate(errors_total[5m])
   // by event name — much higher signal than scraping log lines.
   errorsTotal.inc({ event });
+  // Sentry capture — no-op when SENTRY_DSN is unset. Pino is the
+  // source of truth for log content; Sentry handles error grouping,
+  // stack-trace dedup, and alert-on-spike.
+  captureException(error, {
+    event,
+    route: req.url,
+    method: req.method,
+    tenant_id: req.tenantId,
+    user_id: req.auth?.user_id,
+    ...data,
+  });
 }
 
 // ── JWT Auth Hook ────────────────────────────────────────────────────

@@ -26,6 +26,7 @@
     "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.3.0",
     "@logtail/pino": "^0.5.8",
+    "@sentry/node": "^10.53.1",
     "@supabase/supabase-js": "^2.100.1",
     "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",

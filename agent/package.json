@@ -22,6 +22,7 @@
     "@livekit/agents-plugin-openai": "^1.2.8",
     "@livekit/agents-plugin-silero": "^1.2.8",
     "@logtail/pino": "^0.5.8",
+    "@sentry/node": "^10.53.1",
     "dotenv": "^17.3.1",
     "livekit-server-sdk": "^2.15.1",
     "pino": "^10.3.1",

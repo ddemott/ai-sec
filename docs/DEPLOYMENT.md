@@ -176,6 +176,9 @@ The backend boots without these but specific features fail or warn loudly.
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | (none) | Used only when `TELEPHONY_PROVIDER=twilio` |
 | `BETTER_STACK_TOKEN` | (none) | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below. |
 | `LOG_LEVEL` | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy. |
+| `SENTRY_DSN` | (none) | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |
+| `SENTRY_ENVIRONMENT` | `$NODE_ENV` | Override the Sentry environment tag (`production` / `staging` / `development`). Defaults to `NODE_ENV` when unset. |
+| `SENTRY_RELEASE` | (none) | Optional release tag (e.g. git SHA) so Sentry can group events by build. Set to `$RAILWAY_GIT_COMMIT_SHA` on Railway. |
 
 #### Backend — CRM + Calendar OAuth (set per integration you use)
 
@@ -208,6 +211,7 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 | `BACKEND_URL` | No | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`. |
 | `BETTER_STACK_TOKEN` | No | Same value as the backend's `BETTER_STACK_TOKEN`. When set, agent forwards Pino logs to Better Stack alongside stdout; unset = stdout only. Per-call child logger adds `tenant_id` + `call_id` to every line so support can pull a specific call's full timeline with one filter. See "Observability" below. |
 | `LOG_LEVEL` | No | `trace` \| `debug` \| `info` (default) \| `warn` \| `error` |
+| `SENTRY_DSN` | No | Same DSN as the backend (one Sentry project hosts both services; the `service` tag separates them). When set, agent forwards unhandled exceptions + fallback-triggered events to Sentry. Unset = no Sentry calls. See "Observability" below. |
 
 #### Dashboard (Next.js)
 
@@ -373,9 +377,38 @@ If the token is unset, both services keep running with stdout-only logging — t
 This is the first observability slice; metrics, error monitoring, and expanded live QA are tracked separately in `docs/TODO.md`. Specifically out of scope for this slice:
 
 - Dashboard logs (Next.js). Backend + agent are the priority because they handle the call path; dashboard logs are nice-to-have for support.
-- Sentry / error-rate alerting. Better Stack supports basic alerts; full Sentry-style error grouping is a follow-up.
 - Metrics (call success rate, booking success rate, tool-call latency). Daily-summary cron is a planned follow-up.
 - Logging inside `runFallback()` itself. The callsites in `agent/src/index.ts` log when fallback is triggered; the dead-air-guard internals don't yet. Adding it would touch the 13 fallback unit tests; deferred.
+
+---
+
+## Observability — Sentry error monitoring
+
+Sentry sits on top of Better Stack to provide error grouping, stack-trace deduplication, and alert-on-spike — things log aggregation alone can't do well. Both services use the same DSN; the `service` tag (`ai-sec-backend` vs `ai-sec-agent`) separates them in the Sentry UI.
+
+### One-time setup
+
+1. Sign up at [sentry.io](https://sentry.io). Free tier is 5k events / month — enough for pre-beta and the first few weeks of customer traffic.
+2. Create a Node.js project. Copy the DSN.
+3. Set `SENTRY_DSN=<dsn>` on the backend Railway service (`ai-sec-production`) AND the agent Railway service (`ai-sec-agent`). Same value on both.
+4. Optional but recommended: set `SENTRY_RELEASE=$RAILWAY_GIT_COMMIT_SHA` on both services so Sentry can group events by build (helps spot "regressions started in commit X").
+5. Restart both services. New errors start appearing in the Sentry UI within seconds.
+
+If `SENTRY_DSN` is unset, both services keep running with logging-only error observability — the SDK is a no-op so local dev / tests don't make network calls.
+
+### What gets captured
+
+- **Backend.** Everything routed through `logError()` in `src/middleware.ts` (route handler errors via `withHandler`, post-call summary failures, booking RPC errors, CRM sync errors) plus Fastify's `setErrorHandler` for unhandled throws inside plugins. Auto-tagged with `tenant_id` + `route` + `event`.
+- **Agent.** Fallback-triggered events (`dispatch_metadata_invalid`, `session_context_lost`) plus Sentry's default Node integrations (uncaughtException, unhandledRejection). Auto-tagged with `tenant_id` + `call_id`.
+
+### Performance + cost knobs
+
+- `tracesSampleRate: 0` and `profilesSampleRate: 0` — errors only, no performance/profiling overhead. The `src/services/metrics.ts` Prometheus endpoint already covers latency/throughput.
+- The SDK uses a background queue, so a Sentry-side outage never blocks the main thread.
+
+### What's NOT yet wired
+
+- Dashboard (Next.js) Sentry integration. Backend + agent first; dashboard is a separate effort because `@sentry/nextjs` adds Webpack/Vite plugins for source maps and instrumentation.ts wiring.
 
 ---
 

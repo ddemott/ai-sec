@@ -14,6 +14,11 @@
  * every tool handler. Same for `call_id`. The only things the LLM
  * provides are conversation-level values (phone, service name, times).
  */
+// Initialize Sentry BEFORE other imports so an early bootstrap error
+// still gets captured. No-op when SENTRY_DSN is unset.
+import { initSentry, captureException as captureSentry } from './sentry.js';
+initSentry();
+
 import {
   type JobContext,
   WorkerOptions,
@@ -64,6 +69,11 @@ export default defineAgent({
         { event: 'fallback_triggered', reason: 'dispatch_metadata_invalid', room: ctx.room.name },
         'no tenant_id in dispatch/room metadata — running fallback'
       );
+      captureSentry(new Error('dispatch_metadata_invalid'), {
+        event: 'fallback_triggered',
+        reason: 'dispatch_metadata_invalid',
+        room: ctx.room.name,
+      });
       await runFallback(ctx, "I'm sorry, we're having a system issue. Please try calling back in a moment.", config);
       return;
     }
@@ -101,6 +111,12 @@ export default defineAgent({
         },
         'session context unexpectedly null after participant join — running fallback'
       );
+      captureSentry(new Error('session_context_lost'), {
+        event: 'fallback_triggered',
+        reason: 'session_context_lost',
+        tenant_id: preliminaryCtx.tenantId,
+        room: ctx.room.name,
+      });
       await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
       return;
     }

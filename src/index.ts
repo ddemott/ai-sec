@@ -1,4 +1,9 @@
 import 'dotenv/config';
+// Initialize Sentry BEFORE other imports so an early bootstrap error
+// (a module-load throw, a malformed env var) still gets captured.
+// No-op when SENTRY_DSN is unset — local dev / tests don't phone home.
+import { initSentry, captureException as captureSentry } from './services/sentry';
+initSentry({ service: 'ai-sec-backend' });
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -206,6 +211,11 @@ app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }
     timestamp: new Date().toISOString(),
   }, `unhandled_error: ${error.message}`);
   errorsTotal.inc({ event: 'unhandled_error' });
+  // Forward unhandled errors to Sentry. logError() in middleware.ts
+  // already captures errors routed through withHandler; the
+  // setErrorHandler path catches everything else (Fastify-internal
+  // errors, plugin throws, etc.). No-op when SENTRY_DSN unset.
+  captureSentry(error, { event: 'unhandled_error', statusCode });
   return reply.status(statusCode).send({ success: false, error: error.message || 'Internal server error' });
 });
 
