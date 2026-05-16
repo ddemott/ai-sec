@@ -15,9 +15,10 @@ import {
 } from 'lucide-react'
 import { Api } from '../lib/api'
 import { CRMIntegrationCard } from './CRMIntegrationCard'
+import BusinessTypeSection from './BusinessTypeSection'
 import { useStaticData } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext'
-import { useVocabulary } from '@/lib/VocabularyContext'
+import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -30,6 +31,7 @@ export default function BusinessSettingsView() {
   const tenantId = useActiveTenantId()
   const { resources, services, employees, loading: staticLoading, error: resourcesError, refresh: refreshResources } = useStaticData(tenantId)
   const vocab = useVocabulary()
+  const refreshVocabulary = useVocabularyRefresh()
 
   const [teamSize, setTeamSize] = useState<number | null>(null)
   const [newResource, setNewResource] = useState({ name: '', description: '' })
@@ -282,6 +284,12 @@ export default function BusinessSettingsView() {
       </header>
 
       <div className="max-w-3xl space-y-8">
+
+        {/* ─── BUSINESS TYPE ─── Set once during the wizard; rarely revisited.
+            Lives here (not on AI Persona) so prompt-tuning doesn't have to
+            scroll past 24 industry cards on every visit, and an accidental
+            click can't nuke a custom persona — applying is now guarded. */}
+        <BusinessTypeSection tenantId={tenantId} onChanged={refreshVocabulary} />
 
         {/* ─── MY SERVICES (solo mode) ─── */}
         {isSolo && (

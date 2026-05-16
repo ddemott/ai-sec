@@ -18,15 +18,20 @@ import { WizardStepContent } from './WizardStepContent'
 import { useWizardCrud } from './useWizardCrud'
 import type { WizardStep, WizardService, WizardResource, WizardEmployee, SetupWizardProps } from './types'
 
-function getStepLabels(vocab: { resource_plural: string; employee_plural: string }): Record<WizardStep, string> {
+// Step labels are verbs/outcomes ("What you offer", "Who works here") so the
+// chip strip teaches a new owner what each step does without having to enter
+// it first. Vocab personalization (Bays / Chairs / Mechanics / Stylists)
+// still drives the headings and inputs inside each step's body — moving it
+// out of the chip label keeps the strip glanceable and uniformly short.
+function getStepLabels(_vocab: { resource_plural: string; employee_plural: string }): Record<WizardStep, string> {
   return {
-    1: 'Services',
-    2: vocab.resource_plural,
-    3: vocab.employee_plural,
-    4: 'Shifts',
-    5: 'Assignments',
-    6: 'Review',
-    7: 'Go Live',
+    1: 'What you offer',
+    2: 'Where it happens',
+    3: 'Who works here',
+    4: 'When they work',
+    5: 'Who does what',
+    6: 'Look it over',
+    7: "You're live",
   }
 }
 
@@ -169,7 +174,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
 
         {/* Progress bar */}
         <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
             {([1, 2, 3, 4, 5, 6, 7] as WizardStep[]).map(s => (
               <button
                 key={s}

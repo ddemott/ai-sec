@@ -20,6 +20,7 @@ const GROK_TTS_SAMPLE_RATE = 24_000;
 const GROK_TTS_CHANNELS = 1;
 
 export type GrokVoice = 'eve' | 'ara' | 'rex' | 'sal' | 'leo' | (string & {});
+// Any string works for custom cloned voices from xAI console (voice_id)
 
 export interface GrokTTSOptions {
   apiKey: string;

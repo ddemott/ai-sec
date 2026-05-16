@@ -31,7 +31,11 @@ export default function MyTeamView() {
 
   const SUB_TABS: { id: SubTab; label: string }[] = [
     { id: 'employees', label: vocab.employee_plural },
-    { id: 'shifts', label: 'Shifts' },
+    // "Working Days" reads plainer than "Shifts" — most service-business
+    // owners think in days-and-hours, not industrial shifts. The Solo
+    // wizard already uses "When you work" / "Your Hours" for the same
+    // concept; this aligns the live nav with that language.
+    { id: 'shifts', label: 'Working Days' },
     { id: 'skills', label: 'Service Assignments' },
     { id: 'skill-map', label: 'Skill Map' },
     { id: 'logins', label: 'Logins' },

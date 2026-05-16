@@ -43,7 +43,7 @@ Full dashboard UI/UX audit conducted via code review. 35 issues identified acros
 - Skills row height capped
 - Wizard auto-seed logging
 - Card/FolderTabs focus rings
-- "Staff & Shifts" clickable link
+- "My Team" clickable link
 
 ### April 3-4, 2026 Architecture Review Fixes (BUG-065 through BUG-072)
 - BUG-065: Booking RPC shift_override is_off bypass — FIXED (migration 20260403000001)

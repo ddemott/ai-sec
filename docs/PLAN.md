@@ -1,6 +1,6 @@
 # SecretaryHQ — Project Roadmap
 
-> **Scope of this file:** historical phases 1–12 (shipped) + post-launch backlog (future features, not currently in flight). Active Phase 13 work and short-term task tracking live in [`docs/TODO.md`](TODO.md). Current-state snapshots live in [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md).
+> **Scope of this file:** historical phases 1–12 (shipped) + post-launch backlog (future features, not currently in flight). Active Phase 13 work and short-term task tracking live in [`docs/TODO.md`](TODO.md). Detailed historical status snapshots are archived in [`docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`](CURRENT_STATUS_ARCHIVED_2026-05-15.md).
 
 ## Completed Phases
 
@@ -62,7 +62,7 @@
 
 ## Phase 13: Production Readiness (Current)
 
-In flight. The full checklist used to live here but it tracked Vapi-era state and conflicted with the canonical task list. Phase 13 work is now tracked exclusively in [`docs/TODO.md`](TODO.md). Verified status snapshots live in [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md).
+In flight. The full checklist used to live here but it tracked Vapi-era state and conflicted with the canonical task list. Phase 13 work is now tracked exclusively in [`docs/TODO.md`](TODO.md). Detailed historical status snapshots are archived in [`docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`](CURRENT_STATUS_ARCHIVED_2026-05-15.md).
 
 ---
 

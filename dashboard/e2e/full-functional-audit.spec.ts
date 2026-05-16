@@ -205,9 +205,9 @@ test.describe.serial('Full Functional Audit', () => {
 
   // ─── BACK OFFICE: SERVICES & RESOURCES ───────────────────────
 
-  test('6. Services & Resources', async ({ page }) => {
+  test('6. My Business', async ({ page }) => {
     await page.goto('/dashboard');
-    await navigateToTab(page, 'Services & Resources');
+    await navigateToTab(page, 'My Business');
 
     await page.waitForTimeout(1000);
 
@@ -232,9 +232,9 @@ test.describe.serial('Full Functional Audit', () => {
 
   // ─── BACK OFFICE: STAFF & SHIFTS ─────────────────────────────
 
-  test('7. Staff & Shifts', async ({ page }) => {
+  test('7. My Team', async ({ page }) => {
     await page.goto('/dashboard');
-    await navigateToTab(page, 'Staff & Shifts');
+    await navigateToTab(page, 'My Team');
 
     await page.waitForTimeout(1000);
 
@@ -258,8 +258,8 @@ test.describe.serial('Full Functional Audit', () => {
       }
     }
 
-    // Go to Shifts tab and verify shift management
-    const shiftsTab = teamTabs.getByRole('tab', { name: /Shifts/i }).first();
+    // Go to the Working Days tab and verify shift management.
+    const shiftsTab = teamTabs.getByRole('tab', { name: /Working Days/i }).first();
     if (await shiftsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await shiftsTab.click();
       await page.waitForTimeout(500);
@@ -274,16 +274,16 @@ test.describe.serial('Full Functional Audit', () => {
 
   // ─── BACK OFFICE: AI & KNOWLEDGE ─────────────────────────────
 
-  test('8. AI & Knowledge', async ({ page }) => {
+  test('8. Phone Assistant', async ({ page }) => {
     await page.goto('/dashboard');
-    await navigateToTab(page, 'AI & Knowledge');
+    await navigateToTab(page, 'Phone Assistant');
 
     await page.waitForTimeout(1000);
 
     // Should show knowledge base or AI tab
     const heading = page.locator('text=/Knowledge|AI|Persona/i').first();
     if (!await heading.isVisible({ timeout: 10000 }).catch(() => false)) {
-      logIssue('AI', 'AI & Knowledge view did not load');
+      logIssue('AI', 'Phone Assistant view did not load');
     }
   });
 

@@ -60,7 +60,7 @@ sub-tabs for the things you set once and rarely touch:
 |---|---|
 | **My Business** | Hours, time zone, voice settings, billing. |
 | **My Team** | Employees, shifts, services, resources, skill assignments, and login invites for staff. |
-| **AI & Knowledge** | What the AI knows (policy Q&A, uploaded documents), and how it behaves (first message, system prompt overrides). |
+| **Phone Assistant** | What the AI knows (policy Q&A, uploaded documents), and how it behaves (first message, system prompt overrides). |
 
 ---
 
@@ -119,13 +119,13 @@ in order:
 | Test | What the AI should do |
 |---|---|
 | **Book an appointment** | Ask for your name, service, preferred day/time. It looks for an available `(employee, resource)` pair, proposes a time, you confirm. Open the dashboard's Schedule tab — the booking should appear within ~5 seconds. |
-| **Ask a policy question** | Try "What's your cancellation policy?" — if you haven't filled in any policy answers yet, the AI responds with "Let me have someone get back to you" and creates an entry in **AI & Knowledge → Unanswered Questions** for you to backfill. |
+| **Ask a policy question** | Try "What's your cancellation policy?" — if you haven't filled in any policy answers yet, the AI responds with "Let me have someone get back to you" and creates an entry in **Phone Assistant → Unanswered Questions** for you to backfill. |
 | **Try an unavailable time** | Ask for 3am on a weekday. The AI should refuse and offer the next available slot. |
 | **Try a service you don't offer** | Ask for "an MRI" or whatever's far outside your business. The AI declines and stays in scope. |
 
 If anything in the call feels off, open **Calls → [your test call] →
 Transcript** and review what the AI heard vs what it said. The system
-prompt and tone are tunable from **Back Office → AI & Knowledge**.
+prompt and tone are tunable from **Back Office → Phone Assistant**.
 
 ---
 
@@ -135,7 +135,7 @@ This is the highest-leverage thing you can do for caller experience.
 Every policy you fill in here is one less call that needs you
 personally.
 
-Go to **AI & Knowledge → Policy Q&A**. You'll see 9 categories with
+Go to **Phone Assistant → Policy Q&A**. You'll see 9 categories with
 suggested questions. Fill in the ones your customers actually ask:
 
 | Category | Questions to fill first |
@@ -151,7 +151,7 @@ suggested questions. Fill in the ones your customers actually ask:
 | **Emergencies / After-hours** | Do you have an emergency line? What qualifies? |
 
 You can also upload existing policy documents (PDFs, Word docs, text
-files) under **AI & Knowledge → Documents**. The AI extracts the text,
+files) under **Phone Assistant → Documents**. The AI extracts the text,
 indexes it, and references it when callers ask.
 
 ---

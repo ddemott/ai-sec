@@ -78,7 +78,7 @@ describe("Unanswered Questions — Happy Paths", () => {
   it("LIST-UNRESOLVED: Dashboard shows only unresolved questions, newest first", async () => {
     // WHO: Business owner checking their KB gaps in the dashboard
     // WHAT: Two unresolved + one resolved question — list returns only the 2 unresolved
-    // WHEN: Owner clicks the badge on "AI & Knowledge" tab
+    // WHEN: Owner clicks the badge on "Phone Assistant" tab
     // WHERE: GET /knowledge/unanswered → SELECT WHERE resolved = false
     // WHY: Resolved questions are noise — the owner already handled them.
     //       Showing only unresolved keeps the list actionable.

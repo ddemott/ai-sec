@@ -15,10 +15,10 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
 | **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
 | **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status |
-| **Tests** | 2,486 passing (1,781 backend + 620 dashboard + 85 agent) + 0 skips, zero TypeScript errors |
+| **Tests** | 2,632 passing (1,910 backend + 631 dashboard + 91 agent) + 0 skips, zero TypeScript errors |
 | **E2e** | 71 Playwright tests + 29 live QA tool calls (88 assertions) |
 
-See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS.md` for detailed session history.
+See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` for detailed historical session notes.
 
 ---
 
@@ -58,10 +58,10 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 
 | Layer | Tech |
 |-------|------|
-| **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara`; OpenAI TTS retained as `runFallback()` dead-air guard) |
+| **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara` — warm & friendly secretary tone; any custom cloned voice_id also supported; OpenAI TTS retained as `runFallback()` dead-air guard) |
 | **Backend** | Fastify 4.x, 26 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`) |
 | **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 116 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
+| **Database** | PostgreSQL + pgvector, 122 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
 | **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes) |
 | **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
 | **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
@@ -145,8 +145,8 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (1,781 tests)
-cd dashboard && npx vitest run        # Dashboard (620 tests)
+npm test                              # Backend (1,910 tests)
+cd dashboard && npx vitest run        # Dashboard (631 tests)
 cd dashboard && npx playwright test   # E2e (71 Playwright tests, 7 intentional skips)
 python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)
 ```
@@ -232,7 +232,7 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | `docs/ARCHITECTURE.md` | Full technical architecture deep-dive |
 | `docs/DIAGRAMS.md` | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.) |
 | `docs/DEPLOYMENT.md` | Step-by-step deployment guide |
-| `docs/CURRENT_STATUS.md` | Current-state snapshot — what's working, what's broken |
+| `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` | Archived detailed historical session notes |
 | `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions (frozen — March 24 session) |
 | `docs/UI_UX_DESIGN.md` | Living design brief — interaction design + UX principles |
 | `docs/PLAN.md` | Historical phases (1-12) + post-launch backlog |

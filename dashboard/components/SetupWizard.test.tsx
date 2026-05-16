@@ -73,13 +73,17 @@ describe('SetupWizard: Shell', () => {
 
   test('displays all 7 step labels in progress bar', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
-    expect(screen.getByText('Services')).toBeInTheDocument()
-    expect(screen.getByText('Resources')).toBeInTheDocument()
-    expect(screen.getByText('Employees')).toBeInTheDocument()
-    expect(screen.getByText('Shifts')).toBeInTheDocument()
-    expect(screen.getByText('Assignments')).toBeInTheDocument()
-    expect(screen.getByText('Review')).toBeInTheDocument()
-    expect(screen.getAllByText('Go Live').length).toBeGreaterThan(0)
+    // Verb-form chip labels (see SetupWizard/index.tsx getStepLabels()).
+    // The footer button still reads "Go Live" (imperative), which is what
+    // the getAllByText assertion below covers — it appears at least once
+    // (footer) plus the step-7 chip "You're live" is distinct.
+    expect(screen.getByText('What you offer')).toBeInTheDocument()
+    expect(screen.getByText('Where it happens')).toBeInTheDocument()
+    expect(screen.getByText('Who works here')).toBeInTheDocument()
+    expect(screen.getByText('When they work')).toBeInTheDocument()
+    expect(screen.getByText('Who does what')).toBeInTheDocument()
+    expect(screen.getByText('Look it over')).toBeInTheDocument()
+    expect(screen.getByText("You're live")).toBeInTheDocument()
   })
 
   test('calls onClose when X button is clicked', () => {
@@ -119,13 +123,14 @@ describe('SetupWizard: Navigation', () => {
       fireEvent.click(screen.getByText('Next'))
     }
     expect(screen.getByText('Step 6 of 7')).toBeInTheDocument()
-    // "Go Live" appears in both progress bar label and footer button
-    const goLiveButtons = screen.getAllByText('Go Live')
-    expect(goLiveButtons.length).toBeGreaterThanOrEqual(2)
-    // Click the footer button (last one)
-    fireEvent.click(goLiveButtons[goLiveButtons.length - 1])
+    // Footer button is the imperative "Go Live" (action). The step-7 chip
+    // uses the outcome label "You're live" — distinct strings now, so a
+    // simple getByText for "Go Live" matches only the footer button.
+    fireEvent.click(screen.getByText('Go Live'))
     expect(screen.getByText('Done')).toBeInTheDocument()
     expect(screen.queryByText('Next')).toBeNull()
+    // Step-7 chip is the verb-form "You're live" label.
+    expect(screen.getByText("You're live")).toBeInTheDocument()
   })
 
   test('Done button calls onClose', () => {
@@ -147,8 +152,8 @@ describe('SetupWizard: Navigation', () => {
     fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByText('Next'))
     expect(screen.getByText('Step 3 of 7')).toBeInTheDocument()
-    // Click step 1 in progress bar
-    fireEvent.click(screen.getByText('Services'))
+    // Click step 1 chip in progress bar (verb-form label)
+    fireEvent.click(screen.getByText('What you offer'))
     expect(screen.getByText('Step 1 of 7')).toBeInTheDocument()
   })
 })

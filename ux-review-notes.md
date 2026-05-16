@@ -235,3 +235,10 @@
 
 ### ConflictModal (dashboard/components/scheduler/ConflictModal.tsx)
 - **[medium]** The conflict modal already uses solid primitives and clearer content than a toast, but it still relies on the operator inferring the next-best action from static appointment details alone → Add a slightly stronger next-step cue, for example emphasizing whether to view the existing booking or choose another time, so the modal feels more decisional in a high-friction moment.
+
+## Review — 2026-05-16
+
+### BusinessTypeSection (dashboard/components/BusinessTypeSection.tsx)
+- **[high]** Previewing a template opens a second modal without closing the picker modal underneath, which risks stacked focus traps, confusing Escape/backdrop behavior, and an awkward keyboard path back to the grid → Collapse this into a single modal flow or close the picker before opening preview so only one dialog owns focus at a time.
+- **[medium]** Template-load failures are swallowed and the main card falls back to a disabled “Change business type…” button with no explanation, so an owner can be left guessing whether there are no templates or the screen failed to load → Add an explicit error/empty state with retry guidance when templates or tenant config fail to load.
+- **[medium]** The template grid uses raw `<button>` cards while the rest of the surface leans on shared primitives, which increases the odds of drift in focus styling, disabled treatment, and theme consistency on a high-trust settings flow → Rebuild the selectable template tiles on top of the shared Card/Button patterns or extract a small reusable tile primitive that inherits the dashboard’s standard interaction states.

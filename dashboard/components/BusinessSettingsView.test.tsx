@@ -22,6 +22,9 @@ vi.mock('@/lib/VocabularyContext', () => ({
     resource_plural: 'Stations',
     booking_label: 'Appointment',
   }),
+  // Picked up by the new BusinessTypeSection so that applying a template
+  // re-fetches vocabulary (the new business_type usually changes labels).
+  useVocabularyRefresh: () => () => {},
 }))
 
 // Mock static data hook
@@ -59,6 +62,13 @@ vi.mock('../lib/api', () => ({
   Api: {
     tenants: {
       getConfig: (...args: unknown[]) => mockGetConfig(...args),
+      updateConfig: vi.fn().mockResolvedValue({ success: true }),
+    },
+    // BusinessTypeSection (mounted at the top of BusinessSettingsView) calls
+    // this on mount. Returning [] keeps the Card rendered but with no
+    // template grid — the existing tests don't exercise template-switching.
+    templates: {
+      listFull: vi.fn().mockResolvedValue([]),
     },
     calendar: {
       getSettings: (...args: unknown[]) => mockGetCalendarSettings(...args),

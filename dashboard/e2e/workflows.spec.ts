@@ -553,9 +553,9 @@ test('front-desk role: cannot see Advanced tabs; stale URL redirects to Home', a
     await expect(page.getByRole('tab', { name: /^Calls$/ }).first()).toBeVisible();
 
     // Advanced tabs hidden
-    await expect(page.getByRole('tab', { name: /Services & Resources/ })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /Staff & Shifts/ })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /AI & Knowledge/ })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /My Business/ })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /My Team/ })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /Phone Assistant/ })).toHaveCount(0);
 
     // Stale URL → snapped back to Home (the dashboard tab)
     await page.goto('/dashboard?tab=my-business');

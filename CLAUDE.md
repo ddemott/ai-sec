@@ -1,16 +1,15 @@
 # SecretaryHQ — Multi-Tenant Voice AI Reception SaaS
 
 ## Project Overview
-Multi-tenant AI receptionist for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). Inbound calls → voice AI books appointments, answers policy questions via RAG, syncs with external calendars. **HIPAA verticals (medical, dental, chiropractic, optometry, veterinary) are permanently excluded** — they never appear in templates, adapters, UI, or copy.
+Multi-tenant AI receptionist for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage).
 
-History of completed phases, retired migrations, and resolved bug sweeps lives in `RESOLVED.md`. Naming conventions (DB columns, PKs, FKs, test fixtures) and the migration recipe live in `CODING_STANDARDS.md` — that file is the source of truth for those rules; CLAUDE.md may quote them inline for quick lookup.
+**HIPAA verticals are permanently excluded** (medical, dental, chiropractic, optometry, veterinary).
 
-## What's in flight
-See `docs/CURRENT_STATUS.md` → "What's in flight" for the full list. Two persistent items today:
+History of completed phases lives in `RESOLVED.md`. Current tasks are tracked in `docs/TODO.md`. Detailed historical session notes are archived in `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`.
+
+Two persistent in-flight items today (full list in `docs/TODO.md`):
 - **Telnyx PSTN ticket** (external) — blocking voice validation
 - **`DASHBOARD_URL` env var** unset on Railway (user) — blocking Stripe/OAuth redirects
-
-`docs/TODO.md` and `NEEDS-REFACTORING.md` use a marker convention: `IN FLIGHT (external | user | prod-apply | decision pending | validation pending)`. No marker = pickable today.
 
 ## Framework Migrations
 See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
@@ -97,7 +96,7 @@ Durable rules-of-engagement that override "build for the future":
 ## Code Conventions
 
 **Dashboard**
-- Single primary nav bar: Primary tabs (Home, Schedule, Customers, Calls) always visible; Advanced tabs (Services & Resources, Staff & Shifts, AI & Knowledge) shown for owners/admins only. Front-desk-only users see Primary tabs only and are snapped back to Home if they hit a restricted tab via a stale URL.
+- Single primary nav bar: Primary tabs (Home, Schedule, Customers, Calls) always visible; Advanced tabs (My Business, My Team, Phone Assistant) shown for owners/admins only. Front-desk-only users see Primary tabs only and are snapped back to Home if they hit a restricted tab via a stale URL.
 - Components: List+Detail pane pattern (sidebar list, detail right). Large views split into sub-components.
 - UI primitives in `dashboard/components/ui/` — Button (`isLoading`), Card, Input, Select, Modal (Escape/backdrop close), Badge, Toast (5s err/warn, 3s success/info, max 5), `ConfirmModal` + `useConfirm()` for destructive actions.
 - API client: `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`, fully typed returns. Shared `forceLogout()` + `checkAuthFailure()`.

@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-05-12 (26 route modules, 116 migrations, 10 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
+**Last verified:** 2026-05-15 (26 route modules, 122 migrations, 10 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
 
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
 
@@ -40,7 +40,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
 - **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (26 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 116 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
+- **DB**: Postgres + pgvector on Supabase, 122 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
@@ -523,7 +523,7 @@ Date-based only — no weekly patterns, no overrides. The `employee_shifts` week
 
 ### 11.2 Effective shifts
 
-`get_effective_shifts(tenant_id, date)` and `get_effective_shifts_bulk(tenant_id, start, end)` return rows from `employee_schedule` verbatim. Both the Working Hours editor (under Staff & Shifts) and the Schedule tab read from these RPCs.
+`get_effective_shifts(tenant_id, date)` and `get_effective_shifts_bulk(tenant_id, start, end)` return rows from `employee_schedule` verbatim. Both the Working Days editor (under My Team) and the Schedule tab read from these RPCs.
 
 ### 11.3 Booking (7-layer check)
 
@@ -729,9 +729,9 @@ Next.js 14 App Router:
 
 ```
 Primary (always visible)           Advanced (owners + admins only)
-├─ Home                            ├─ Services & Resources
-├─ Schedule                        ├─ Staff & Shifts
-├─ Customers                       └─ AI & Knowledge
+├─ Home                            ├─ My Business
+├─ Schedule                        ├─ My Team
+├─ Customers                       └─ Phone Assistant
 └─ Calls
 ```
 

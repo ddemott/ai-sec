@@ -4,7 +4,7 @@ import React from 'react'
  * Folder-tab navigation — mimics physical file folder tabs with depth cues.
  * Three sizes map to the app's navigation hierarchy:
  *   lg  = primary navigation tabs
- *   md  = section tabs (Services & Resources, Staff & Shifts, …)
+ *   md  = section tabs (My Business, My Team, Phone Assistant, …)
  *   sm  = sub-section tabs (Services, Chairs, Knowledge Base, …)
  */
 

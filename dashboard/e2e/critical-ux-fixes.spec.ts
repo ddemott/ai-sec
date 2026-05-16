@@ -28,10 +28,11 @@ test.describe('Fix #3: Toast dismissal and behavior', () => {
   test('toast appears on error and can be dismissed via X button', async ({ page }) => {
     await page.goto('/dashboard');
     await dismissOverlays(page);
-    await navigateToTab(page, 'Staff & Shifts');
+    await navigateToTab(page, 'My Team');
 
-    // Wait for the Working Hours sub-tab to be visible and click it
-    const whTab = page.locator('text=Shifts').first();
+    // Wait for the Working Days sub-tab to be visible and click it
+    // (renamed from "Shifts" 2026-05-16, B2).
+    const whTab = page.locator('text=Working Days').first();
     await expect(whTab).toBeVisible({ timeout: 10000 });
     await whTab.click();
     await page.waitForTimeout(500);
@@ -78,10 +79,10 @@ test.describe('Fix #7: Shift end time must be after start time', () => {
   test('rejects end time before start time with toast error', async ({ page }) => {
     await page.goto('/dashboard');
     await dismissOverlays(page);
-    await navigateToTab(page, 'Staff & Shifts');
+    await navigateToTab(page, 'My Team');
 
-    // Click Working Hours sub-tab
-    const whTab = page.locator('text=Shifts').first();
+    // Click Working Days sub-tab (renamed from "Shifts" 2026-05-16, B2).
+    const whTab = page.locator('text=Working Days').first();
     await expect(whTab).toBeVisible({ timeout: 10000 });
     await whTab.click();
     await page.waitForTimeout(500);
@@ -161,7 +162,7 @@ test.describe('Fix #1: Wizard step guards', () => {
       const step1 = page.locator('text=Step 1 of 7');
       if (await step1.isVisible({ timeout: 5000 }).catch(() => false)) {
         // Try clicking step 4 in progress bar (should be blocked if no services)
-        const step4Btn = page.locator('button:has-text("Shifts")');
+        const step4Btn = page.locator('button:has-text("When they work")');
         if (await step4Btn.isVisible({ timeout: 2000 }).catch(() => false)) {
           await step4Btn.click();
 

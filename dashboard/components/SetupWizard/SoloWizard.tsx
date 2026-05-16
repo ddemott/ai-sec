@@ -16,7 +16,8 @@ import { EMPTY_SERVICE } from './types'
 
 type SoloStep = 1 | 2 | 3
 
-const STEP_LABELS: Record<SoloStep, string> = { 1: 'Services', 2: 'Your Hours', 3: 'Review' }
+// Verb/outcome labels — see SetupWizard/index.tsx getStepLabels() for the rationale.
+const STEP_LABELS: Record<SoloStep, string> = { 1: 'What you offer', 2: 'When you work', 3: 'Look it over' }
 
 export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   const tenantId = useActiveTenantId()

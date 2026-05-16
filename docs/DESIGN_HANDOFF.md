@@ -42,7 +42,7 @@ The working artifact from this session is `secretaryhq-demo.html` — an interac
 
 ## 3. Navigation Structure — Single Primary Bar
 
-**Decision (superseded 2026-05-06):** The earlier Front Desk / Back Office two-tab layout was retired in favor of a single primary tab bar. Daily-use destinations (Home, Schedule, Customers, Calls) are always visible; configuration destinations (Services & Resources, Staff & Shifts, AI & Knowledge) are appended for owners and super-admins only. Front-desk-only logins see the Primary group only. The dark sidebar visual language from the demo still applies — only the structural split was removed.
+**Decision (superseded 2026-05-06):** The earlier Front Desk / Back Office two-tab layout was retired in favor of a single primary tab bar. Daily-use destinations (Home, Schedule, Customers, Calls) are always visible; configuration destinations (My Business, My Team, Phone Assistant) are appended for owners and super-admins only. Front-desk-only logins see the Primary group only. The dark sidebar visual language from the demo still applies — only the structural split was removed.
 
 **Reasoning:** External review flagged the two-mode toggle as cognitively expensive for non-technical users — staff had to learn a meta-concept ("which mode am I in?") before they could find the action they wanted. Flattening to a single bar makes the most-used destinations one click away and lets role-based gating (rather than mode-switching) hide the configuration surface from front-desk staff.
 
@@ -114,7 +114,7 @@ This is NOT achievable with CSS `position: sticky` alone because the scroll happ
 
 **Decision:** Clicking a staff member's name row opens a compact read-only profile card.
 
-**Reasoning:** Manager is mid-scheduling and needs to quickly answer "can this person do this service?" or "when do they leave today?" Without leaving the scheduler. The card is purely informational — no editing. Editing belongs in Staff & Shifts.
+**Reasoning:** Manager is mid-scheduling and needs to quickly answer "can this person do this service?" or "when do they leave today?" Without leaving the scheduler. The card is purely informational — no editing. Editing belongs in My Team.
 
 **Card contents (exact layout agreed upon):**
 ```
@@ -257,12 +257,12 @@ This came up repeatedly throughout the session. Our job is to show information c
 - Simple, impressive, shows "wow" moments
 - Live call transcript, swimlane scheduler, customer profiles
 - Enough to make a prospect pick up the phone or hit Start Trial
-- No deep config views — they don't need to see Staff & Shifts to be sold
+- No deep config views — they don't need to see My Team to be sold
 - This is `secretaryhq-demo.html`
 
 **Version 2 — Customer App** (the real dashboard)
 - Complete — all views, all functionality
-- Skill Relationship Map, Staff & Shifts, Services & Resources, AI & Knowledge, Settings, SuperAdmin
+- Skill Relationship Map, My Team, My Business, Phone Assistant, Settings, SuperAdmin
 - Fully themed with all decisions in this document applied
 - This is what paying customers use
 

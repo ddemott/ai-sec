@@ -609,9 +609,9 @@ flowchart TB
   Schedule --> DayFocus["EmployeeDayFocusPanel"]
   Schedule --> Profile["StaffProfileCard"]
 
-  Advanced --> MyBiz["Services & Resources<br/>services / resources / hours"]
-  Advanced --> MyTeam["Staff & Shifts<br/>employees / skills / schedules"]
-  Advanced --> AIInsights["AI & Knowledge<br/>analytics / KB Q+A / vocabulary"]
+  Advanced --> MyBiz["My Business<br/>services / resources / hours"]
+  Advanced --> MyTeam["My Team<br/>employees / skills / schedules"]
+  Advanced --> AIInsights["Phone Assistant<br/>analytics / KB Q+A / vocabulary"]
 
   subgraph UI["components/ui/ — 16 primitives"]
     direction LR

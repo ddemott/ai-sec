@@ -8,7 +8,7 @@ import { showToast } from './Toast'
 import { Button } from './Button'
 
 interface FeedbackButtonProps {
-  page: string       // e.g., "Back Office > Services & Resources > Staffing Map"
+  page: string       // e.g., "My Business > Skill Map"
   context?: string   // optional extra context about what they're looking at
 }
 

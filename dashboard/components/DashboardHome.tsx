@@ -358,13 +358,13 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         />
         <QuickAction
           icon={Users}
-          label={employees.length <= 1 ? 'My Business' : 'Manage Team'}
-          description={employees.length <= 1 ? 'Services and availability' : `${vocab.employee_plural}, shifts, and skills`}
+          label={employees.length <= 1 ? 'My Business' : 'My Team'}
+          description={employees.length <= 1 ? 'Services and availability' : `${vocab.employee_plural}, working days, and skills`}
           onClick={() => onNavigate?.(employees.length <= 1 ? 'my-business' : 'my-team')}
         />
         <QuickAction
           icon={Wrench}
-          label="Services & Resources"
+          label="My Business"
           description={`Services, ${vocab.resource_plural.toLowerCase()}, assignments`}
           onClick={() => onNavigate?.('my-business')}
         />

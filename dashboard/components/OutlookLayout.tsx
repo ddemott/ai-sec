@@ -44,10 +44,15 @@ const PRIMARY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'calls', label: 'Calls', icon: Phone },
 ]
 
+// Top-level labels say what the section is FOR, not what's inside the
+// database. Compound noun-pairs ("Services & Resources") describe the
+// schema; possessive plain-English ("My Business") describes the user's
+// job-to-be-done. Also: shorter labels survive the mobile bottom-nav's
+// 64px-wide tap targets without truncation.
 const ADVANCED_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'my-business', label: 'Services & Resources', icon: Wrench },
-  { id: 'my-team', label: 'Staff & Shifts', icon: UserCog },
-  { id: 'ai-insights', label: 'AI & Knowledge', icon: Bot },
+  { id: 'my-business', label: 'My Business', icon: Wrench },
+  { id: 'my-team', label: 'My Team', icon: UserCog },
+  { id: 'ai-insights', label: 'Phone Assistant', icon: Bot },
 ]
 
 const ACCOUNT_TABS: Record<'profile' | 'business-settings' | 'all-businesses', string> = {

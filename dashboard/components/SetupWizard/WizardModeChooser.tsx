@@ -22,7 +22,12 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
             <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <h2 className="text-lg font-bold">How is your business set up?</h2>
           </div>
-          <button onClick={onClose} className="p-1 transition" style={{ color: 'var(--text-secondary)' }}>
+          <button
+            onClick={onClose}
+            aria-label="Close wizard"
+            className="p-1 transition"
+            style={{ color: 'var(--text-secondary)' }}
+          >
             <X className="w-5 h-5" />
           </button>
         </div>

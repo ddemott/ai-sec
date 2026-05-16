@@ -84,7 +84,7 @@ Book disabled-state, wizard step-guard, scheduler crash-on-empty, scheduler
 stale-empty-state, unsaved-changes Save/Discard banner.
 
 `full-functional-audit.spec.ts` — walks Home, Scheduler, CRM, Calls, Services
-& Resources, Staff & Shifts, AI & Knowledge, theme switcher, URL-tab
+& Resources, My Team, Phone Assistant, theme switcher, URL-tab
 restoration. Uses `logIssue()` not `expect()` — sections can be broken and
 the test still passes.
 

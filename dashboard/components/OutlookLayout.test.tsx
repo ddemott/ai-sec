@@ -63,8 +63,8 @@ describe('OutlookLayout role gating', () => {
     )
     expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /schedule/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /services & resources/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /staff & shifts/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /my business/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /my team/i })).toBeInTheDocument()
   })
 
   test('SAD: front_desk user does NOT see management tabs', () => {
@@ -79,8 +79,8 @@ describe('OutlookLayout role gating', () => {
       </OutlookLayout>
     )
     expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /services & resources/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /staff & shifts/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /my business/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /my team/i })).not.toBeInTheDocument()
     // Mobile nav has plain <button>s rather than role="tab"; assert by name.
     expect(screen.queryByRole('button', { name: /^businesses$/i })).not.toBeInTheDocument()
   })
@@ -122,6 +122,6 @@ describe('OutlookLayout role gating', () => {
         <div>content</div>
       </OutlookLayout>
     )
-    expect(await screen.findByRole('tab', { name: /services & resources/i })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: /my business/i })).toBeInTheDocument()
   })
 })
