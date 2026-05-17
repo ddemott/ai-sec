@@ -63,7 +63,6 @@ Open:
 - [ ] **B1** Merge Service Assignments + Skill Map into one tab with Grid/Map toggle
 - [ ] **B4** Reconsider sub-tab URL persistence (verify usage first)
 - [ ] **C1 + C2** Schedule: 4 sub-views → 2 (Day/Month), unify the 3 separate headers
-- [ ] **D3** Auto-create default resource for 1-location team wizards (skip a step)
 - [ ] **E1** Threaded demo-mode (sample data via session flag, obsoletes static `/demo`)
 - [ ] **E2** Consistent empty-state pattern across views
 - [ ] **E3** Badge pattern on more nav tabs (Calls "new transcripts", etc.)

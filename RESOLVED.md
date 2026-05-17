@@ -4,13 +4,14 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
-## 2026-05-17 — UX backlog: B3 + C3 + D1 + D4 (Phone Assistant KB, Home New Booking, wizard welcome, persistent setup-progress pill)
+## 2026-05-17 — UX backlog: B3 + C3 + D1 + D3 + D4 (Phone Assistant KB, Home New Booking, wizard welcome, default-resource auto-seed, persistent setup-progress pill)
 
-Closes four items from the 2026-05-16 `/ux-expert` audit:
+Closes five items from the 2026-05-16 `/ux-expert` audit:
 
 - **B3** — Knowledge Base sub-tab moved from My Business → Phone Assistant. Sub-tab order under Phone Assistant is now Persona → Knowledge Base → Analytics (setup → setup → outcome). `'knowledge'` removed from `MyBusinessView`'s `VALID_SUB_TABS` — stale `?subtab=knowledge` bookmarks land on Services.
 - **C3** — Primary "New Booking" button on Home. QuickBookPanel state hoisted into `DashboardHome`; `Api.customers.list` added to the `Promise.allSettled` batch; button is `disabled` when tenant needs setup so empty pickers can't look like a bug. Front-desk decision count for "book a call-in": 8+ (audit) → 3 (Quick Book hoisted) → 1.
 - **D1** — Welcome screen ahead of `WizardModeChooser`. New `WizardWelcome` component sets scope ("~10 minutes from going live") and offers an explicit "I'll set up later, just show me around" exit before the binary solo/team fork. Wired into both auto-open (DashboardHome, new-tenant landing) and explicit-open (MyBusinessView Setup Assistant button) paths. Re-entry via the post-dismiss "Open Setup Assistant" banner skips welcome — the user has already chosen.
+- **D3** — Auto-create default resource for 1-location team wizards. Extended the team wizard's existing `seedFromTemplate` effect to also create one resource when `resources.length === 0` on open. Vocab-driven name matches the SoloWizard finalize formula: `"Main Location"` for generic templates, `"<resource_label> 1"` otherwise (e.g. `"Bay 1"`, `"Chair 1"`, `"Truck 1"`). The "No resources yet" empty state in StepResources never shows for fresh tenants now — owners can rename, add more, or delete-and-replace, but the manual-create friction is gone for the common single-location case.
 - **D4** — Persistent "Setup: N of 6 done" pill in OutlookLayout's top utility row (next to theme picker). New `useSetupProgress` hook counts six wizard-step proxies (services / resources / active employees / shifts in `employee_schedule` next 30d / `service_employee` mappings / auto-credited "Look it over" when steps 1-5 done). Auto-dismisses at 6/6. Click pushes `?tab=dashboard&wizard=open` and dispatches popstate; `DashboardHome` consumes the param on mount and force-opens the wizard past the welcome (pill clicks are second-touch — user already saw welcome on auto-open). Refetch via `notifySetupProgressChanged` window event, dispatched from both wizard-close handlers so the pill vanishes the same tick setup completes.
 
 Verified: backend 1910/1910, dashboard 655/655 (+21 from D1+D4: 5 WizardWelcome + 4 DashboardHome staging + 7 useSetupProgress + 5 SetupProgressPill), agent 91/91, E2E 99 passed / 7 skipped (+6 cases on wizard-welcome-auto-open.spec.ts: 4 D1 auto-open + 1 D4 pill flow). Zero TS errors across all three projects.

@@ -271,10 +271,46 @@ describe('SetupWizard: Step 2 Resources', () => {
     expect(screen.getByText('Where does work happen?')).toBeInTheDocument()
   })
 
-  test('shows empty state when no resources exist', async () => {
+  test('D3: auto-seeds a default resource on wizard open (no manual add for single-location teams)', async () => {
+    // WHO: owner of a single-location shop (one bay, one chair, one room)
+    // WHAT: opening the wizard against a tenant with zero resources must
+    //       POST /resources/create once with the vocab-driven default name.
+    //       The generic-vocab branch lands on "Main Location"; templated
+    //       vocab (resource_label !== "Resource") uses "<label> 1".
+    // WHERE: dashboard/components/SetupWizard/index.tsx seedFromTemplate effect.
+    // WHY: removing the empty-state friction is the whole point of D3
+    //      ("skip a step" for 1-location teams). Without this assertion,
+    //      a regression that drops the resource-seed branch from
+    //      seedFromTemplate would only surface when a beta customer
+    //      complained about needing to manually create their first bay.
+    const calls: { url: string; body: unknown }[] = []
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string, init?: { method?: string; body?: string }) => {
+        if (init?.method === 'POST' && init?.body) {
+          try {
+            calls.push({ url, body: JSON.parse(init.body) })
+          } catch { /* non-JSON body — ignore */ }
+        }
+        const path = typeof url === 'string' ? url : ''
+        let data: unknown = []
+        if (path.includes('/services')) data = MOCK_SERVICES
+        else if (path.includes('/employees')) data = MOCK_EMPLOYEES
+        else if (path.includes('/tenants/') && path.includes('/config')) data = { business_type: 'automotive' }
+        else if (path.includes('/templates')) data = []
+        return Promise.resolve({ ok: true, json: async () => data })
+      },
+    )
+
     goToStep2()
+
+    // The resource seed call must land — vocab.resource_label === 'Resource'
+    // (the test mock returns the generic vocab), so the default is "Main Location".
     await waitFor(() => {
-      expect(screen.getByText(/No resources yet/i)).toBeInTheDocument()
+      const seed = calls.find((c) =>
+        c.url.includes('/resources/create')
+        && (c.body as { name?: string })?.name === 'Main Location',
+      )
+      expect(seed).toBeDefined()
     })
   })
 

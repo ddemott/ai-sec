@@ -66,9 +66,21 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
-  // Auto-seed example services from the business template when no services exist
+  // Auto-seed example services + one default resource from the
+  // business template when none exist.
+  //
+  // Services seed: pulls template.example_services so the owner lands
+  // on step 1 with a starter catalog they can edit.
+  //
+  // Resource seed (D3, 2026-05-17): single-location teams should not
+  // have to manually add their first "Bay 1" / "Chair 1" / "Truck 1"
+  // before they can advance. Step 2 now lands pre-filled with one
+  // default named by the vocabulary ("Main Location" for generic
+  // templates, "<vocab.resource_label> 1" otherwise). Owners with
+  // multi-station shops keep using "Add a <resource>" as before.
   useEffect(() => {
-    if (!isOpen || !tenantId || loading || seedingRef.current || services.length > 0) return
+    if (!isOpen || !tenantId || loading || seedingRef.current) return
+    if (services.length > 0 && resources.length > 0) return
     seedingRef.current = true
     seedFromTemplate()
     async function seedFromTemplate() {
@@ -78,18 +90,31 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
           Api.templates.listFull(),
         ])
         const tpl = (templates || []).find(t => t.business_type === config?.business_type)
-        if (!tpl?.example_services?.length) return
-        for (const name of tpl.example_services) {
-          await Api.services.create(tenantId!, { name, duration_minutes: 30 })
+
+        if (services.length === 0 && tpl?.example_services?.length) {
+          for (const name of tpl.example_services) {
+            await Api.services.create(tenantId!, { name, duration_minutes: 30 })
+          }
         }
+
+        if (resources.length === 0) {
+          const defaultName = vocab.resource_label === 'Resource'
+            ? 'Main Location'
+            : `${vocab.resource_label} 1`
+          await Api.resources.create(tenantId!, {
+            name: defaultName,
+            description: 'Auto-created — rename or add more in this step',
+          })
+        }
+
         await refresh()
       } catch (err) {
-        // Non-critical — user can still add services manually
+        // Non-critical — user can still add services and resources manually
         console.warn('Auto-seed from template failed:', err)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tenantId, loading, services.length])
+  }, [isOpen, tenantId, loading, services.length, resources.length])
 
   const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ service_id: s.service_id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
   const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ resource_id: r.resource_id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
