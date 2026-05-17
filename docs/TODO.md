@@ -58,7 +58,6 @@ Everything else is either complete or tracked below.
 Closed items moved to `RESOLVED.md` (see entries under 2026-05-16 and 2026-05-17).
 
 Open:
-- [ ] **B1** Merge Service Assignments + Skill Map into one tab with Grid/Map toggle
 - [ ] **B4** Reconsider sub-tab URL persistence (verify usage first)
 - [ ] **C1 + C2** Schedule: 4 sub-views → 2 (Day/Month), unify the 3 separate headers
 - [ ] **E1** Threaded demo-mode (sample data via session flag, obsoletes static `/demo`)
