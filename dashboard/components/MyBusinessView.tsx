@@ -15,6 +15,7 @@ import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
 import { useActiveTenantId } from '@/lib/SessionContext'
 import { Api } from '../lib/api'
+import { notifySetupProgressChanged } from '../lib/useSetupProgress'
 
 type SubTab = 'services' | 'resources'
 type WizardMode = 'solo' | 'team' | null
@@ -59,6 +60,7 @@ export default function MyBusinessView() {
     setWelcomePassed(false)
     setWizardMode(null)
     setBusinessTypeReady(false)
+    notifySetupProgressChanged()
   }
 
   async function handleBusinessTypeSelected(businessType: string) {

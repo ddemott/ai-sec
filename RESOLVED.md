@@ -4,15 +4,18 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
-## 2026-05-17 — UX backlog: B3 + C3 + D1 (Phone Assistant KB, Home New Booking, wizard welcome)
+## 2026-05-17 — UX backlog: B3 + C3 + D1 + D4 (Phone Assistant KB, Home New Booking, wizard welcome, persistent setup-progress pill)
 
-Closes three items from the 2026-05-16 `/ux-expert` audit:
+Closes four items from the 2026-05-16 `/ux-expert` audit:
 
 - **B3** — Knowledge Base sub-tab moved from My Business → Phone Assistant. Sub-tab order under Phone Assistant is now Persona → Knowledge Base → Analytics (setup → setup → outcome). `'knowledge'` removed from `MyBusinessView`'s `VALID_SUB_TABS` — stale `?subtab=knowledge` bookmarks land on Services.
 - **C3** — Primary "New Booking" button on Home. QuickBookPanel state hoisted into `DashboardHome`; `Api.customers.list` added to the `Promise.allSettled` batch; button is `disabled` when tenant needs setup so empty pickers can't look like a bug. Front-desk decision count for "book a call-in": 8+ (audit) → 3 (Quick Book hoisted) → 1.
 - **D1** — Welcome screen ahead of `WizardModeChooser`. New `WizardWelcome` component sets scope ("~10 minutes from going live") and offers an explicit "I'll set up later, just show me around" exit before the binary solo/team fork. Wired into both auto-open (DashboardHome, new-tenant landing) and explicit-open (MyBusinessView Setup Assistant button) paths. Re-entry via the post-dismiss "Open Setup Assistant" banner skips welcome — the user has already chosen.
+- **D4** — Persistent "Setup: N of 6 done" pill in OutlookLayout's top utility row (next to theme picker). New `useSetupProgress` hook counts six wizard-step proxies (services / resources / active employees / shifts in `employee_schedule` next 30d / `service_employee` mappings / auto-credited "Look it over" when steps 1-5 done). Auto-dismisses at 6/6. Click pushes `?tab=dashboard&wizard=open` and dispatches popstate; `DashboardHome` consumes the param on mount and force-opens the wizard past the welcome (pill clicks are second-touch — user already saw welcome on auto-open). Refetch via `notifySetupProgressChanged` window event, dispatched from both wizard-close handlers so the pill vanishes the same tick setup completes.
 
-Verified: backend 1910/1910, dashboard 643/643 (+9 from D1: 5 WizardWelcome unit + 4 DashboardHome staging), agent 91/91, E2E 10/10 on ui-rename-verification.spec.ts (+2 D1 cases). Zero TS errors across all three projects.
+Verified: backend 1910/1910, dashboard 655/655 (+21 from D1+D4: 5 WizardWelcome + 4 DashboardHome staging + 7 useSetupProgress + 5 SetupProgressPill), agent 91/91, E2E 99 passed / 7 skipped (+6 cases on wizard-welcome-auto-open.spec.ts: 4 D1 auto-open + 1 D4 pill flow). Zero TS errors across all three projects.
+
+Bug caught during D4 E2E: first pass pushed `tab=home` from the pill but the internal tab id is `dashboard` (the FolderTab label says "Home" but `VALID_TABS` lists `'dashboard'`). The popstate listener silently ignored the unknown tab, leaving the URL updated and the user stranded on Schedule. Spotted from the test-failure screenshot showing the pill rendering correctly but no tab change.
 
 ---
 

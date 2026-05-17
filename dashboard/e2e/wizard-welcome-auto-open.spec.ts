@@ -166,6 +166,66 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
     }
   });
 
+  test('D4: setup-progress pill renders "Setup: 0 of 6 done" for a fresh tenant and opens the wizard on click', async ({ page, request }) => {
+    // WHO: fresh tenant whose owner is exploring the dashboard chrome
+    //      (not Home — any tab) and notices the persistent pill.
+    // WHAT: the pill is mounted in OutlookLayout's top utility row and
+    //       reads "Setup: 0 of 6 done" because nothing's been configured
+    //       yet. Clicking the pill jumps to Home with the wizard already
+    //       opened past the welcome (welcome was the user's first auto-
+    //       open framing — pill clicks are second-touch and skip it).
+    // WHERE: dashboard/components/SetupProgressPill.tsx +
+    //       dashboard/components/DashboardHome.tsx (the ?wizard=open
+    //       URL-param consumer).
+    // WHY: the pill is the only ambient setup affordance once the auto-
+    //      open welcome has been dismissed. If the click handler dropped
+    //      the wizard=open param OR forgot to mark welcomePassed=true,
+    //      the user would either land on Home with no wizard, or see
+    //      the welcome screen again on every pill click.
+    let tenant: RegisteredTenant | null = null;
+    try {
+      tenant = await registerFreshTenant(request);
+      await switchToFreshTenant(page, tenant.tenantId, `D4 Pill ${tenant.tenantId.slice(0, 6)}`);
+
+      // Dismiss the auto-opened welcome so the pill is the only path
+      // back to setup — this is the exact scenario the pill exists for.
+      await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible({ timeout: 8000 });
+      await page.getByRole('button', { name: /set up later/i }).click();
+      await page.waitForTimeout(400);
+      await expect(page.getByRole('dialog', { name: /welcome/i })).toHaveCount(0);
+
+      // Pill is now mounted in the utility row. Five fetches have to
+      // settle before it renders (no zero-flash), so allow a small wait.
+      const pill = page.getByRole('button', { name: /Setup 0 of 6 done/i });
+      await expect(pill).toBeVisible({ timeout: 5000 });
+
+      // Navigate away from Home so the click has to bring us back via
+      // the URL push — this tests the navigation behavior, not just the
+      // wizard state. Schedule is a safe primary tab to land on first.
+      await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+      await page.waitForTimeout(400);
+
+      // Pill still visible from the Schedule tab — it's chrome-level.
+      await expect(pill).toBeVisible();
+
+      await pill.click();
+      await page.waitForTimeout(800);
+
+      // Mode chooser appears DIRECTLY (welcome was already dismissed
+      // and pill click sets welcomePassed=true so it doesn't reappear).
+      await expect(page.getByText('How is your business set up?')).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('dialog', { name: /welcome/i })).toHaveCount(0);
+
+      // URL has the wizard=open param stripped by DashboardHome on mount.
+      const url = new URL(page.url());
+      expect(url.searchParams.get('wizard')).toBeNull();
+
+      await page.getByRole('button', { name: /Close wizard/i }).first().click();
+    } finally {
+      if (tenant) await cleanTenantData(pool, tenant.tenantId);
+    }
+  });
+
   test('D1: clicking "Open Setup Assistant" banner skips welcome and goes straight to the mode chooser', async ({ page, request }) => {
     // WHO: owner who dismissed welcome earlier and now decides to set up
     // WHAT: the banner click jumps directly to the mode chooser WITHOUT

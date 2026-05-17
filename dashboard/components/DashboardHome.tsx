@@ -10,6 +10,7 @@ import { Button } from './ui/Button'
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
 import { WizardWelcome } from './SetupWizard/WizardWelcome'
 import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
+import { notifySetupProgressChanged } from '../lib/useSetupProgress'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import { QuickBookPanel } from './scheduler/QuickBookPanel'
@@ -36,12 +37,30 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const [businessTypeReady, setBusinessTypeReady] = useState(false)
   const [wizardDismissed, setWizardDismissed] = useState(false)
 
-  // Clean ?trial=true from landing page CTA on mount
+  // Clean ?trial=true from landing page CTA on mount AND respond to
+  // ?wizard=open which the SetupProgressPill (D4) uses to force the
+  // wizard open past the welcome screen. Pill-clicks ARE explicit
+  // "yes, set me up" signals, so we set welcomePassed=true here to
+  // skip the scope-framing welcome (the user already saw it on auto-
+  // open and chose to come back via the pill).
   useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
+      let changed = false
       if (params.get('trial') === 'true') {
-        window.history.replaceState({}, '', window.location.pathname)
+        params.delete('trial')
+        changed = true
+      }
+      if (params.get('wizard') === 'open') {
+        setWelcomePassed(true)
+        setWizardDismissed(false)
+        params.delete('wizard')
+        changed = true
+      }
+      if (changed) {
+        const qs = params.toString()
+        const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+        window.history.replaceState({}, '', next)
       }
     }
   })
@@ -132,6 +151,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     setBusinessTypeReady(false)
     setWizardDismissed(true)
     loadData() // refresh counts after wizard completes
+    // Signal the persistent setup-progress pill to refetch — if the
+    // user actually finished the wizard, the pill should vanish on
+    // the same tick instead of waiting for a navigation/reload.
+    notifySetupProgressChanged()
   }
 
   async function handleBusinessTypeSelected(businessType: string) {

@@ -21,6 +21,7 @@ import { FolderTab, FolderTabBar } from './ui/FolderTabs'
 import { useTheme, THEMES } from '@/lib/ThemeContext'
 import { useSessionContext, type UserRole } from '@/lib/SessionContext'
 import { FeedbackButton } from './ui/FeedbackButton'
+import { SetupProgressPill } from './SetupProgressPill'
 
 type Tab = 'dashboard' | 'schedule' | 'customers' | 'calls' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses' | 'profile' | 'business-settings';
 
@@ -173,6 +174,7 @@ export function OutlookLayout({
                 <Globe className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
+            <SetupProgressPill />
             <select
               value={theme}
               onChange={e => setTheme(e.target.value as typeof theme)}
