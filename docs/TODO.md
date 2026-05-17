@@ -32,7 +32,6 @@ Everything else is either complete or tracked below.
   - `20260513000000*` (service_employee + notifications)
   - `20260514000000*` (reminder retry)
 - [ ] **IN FLIGHT (validation pending)** Browser-verify role gating + invite flow (see detailed checklist in previous version)
-- [ ] **First-run guided tour** for new tenants after setup wizard
 
 ---
 
@@ -47,7 +46,6 @@ Everything else is either complete or tracked below.
 
 ## Non-blocking / Polish
 
-- [ ] First-run guided tour for new tenants (interactive post-setup tour)
 - [ ] Decide on `pw.txt` (gitignored file in root)
 - [ ] Pricing tiers (Pro/Enterprise) positioning
 - [ ] Dashboard Sentry integration (`@sentry/nextjs`)

@@ -13,6 +13,7 @@ import { SoloStepReview } from './SoloStepReview'
 import type { ServiceForm, WizardShift, WizardService, SetupWizardProps } from './types'
 import type { CoverageItem } from '../../lib/types'
 import { EMPTY_SERVICE } from './types'
+import { markFirstRunTourPending } from '../FirstRunTour'
 
 type SoloStep = 1 | 2 | 3
 
@@ -377,7 +378,13 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
               Next <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           ) : finalized ? (
-            <Button onClick={onClose}>Done</Button>
+            <Button
+              onClick={() => {
+                // Arm the first-run tour — same trigger as the team wizard.
+                markFirstRunTourPending(tenantId)
+                onClose()
+              }}
+            >Done</Button>
           ) : null}
         </div>
       </div>

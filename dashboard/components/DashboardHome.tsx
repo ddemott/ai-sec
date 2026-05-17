@@ -11,6 +11,7 @@ import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
 import { WizardWelcome } from './SetupWizard/WizardWelcome'
 import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
 import { notifySetupProgressChanged } from '../lib/useSetupProgress'
+import { FirstRunTour } from './FirstRunTour'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import { QuickBookPanel } from './scheduler/QuickBookPanel'
@@ -454,6 +455,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         services={services}
         onBooked={loadData}
       />
+
+      {/* First-run tour — self-gates on the localStorage flag the wizard's
+          Done button sets. No-op when the tenant has already seen it. */}
+      <FirstRunTour onNavigate={onNavigate} />
     </div>
   )
 }

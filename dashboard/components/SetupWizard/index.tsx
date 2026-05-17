@@ -16,6 +16,7 @@ import { Button } from '../ui/Button'
 import { showToast } from '../ui/Toast'
 import { WizardStepContent } from './WizardStepContent'
 import { useWizardCrud } from './useWizardCrud'
+import { markFirstRunTourPending } from '../FirstRunTour'
 import type { WizardStep, WizardService, WizardResource, WizardEmployee, SetupWizardProps } from './types'
 
 // Step labels are verbs/outcomes ("What you offer", "Who works here") so the
@@ -297,7 +298,18 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button variant="success" size="sm" onClick={onClose}>
+              <Button
+                variant="success"
+                size="sm"
+                onClick={() => {
+                  // Arm the first-run tour for this tenant. DashboardHome
+                  // picks up the flag on its next mount and shows the
+                  // overview modal. Only fires on the step-7 Done path —
+                  // dismissing the wizard mid-flow does not arm the tour.
+                  markFirstRunTourPending(tenantId)
+                  onClose()
+                }}
+              >
                 <Check className="w-4 h-4 mr-1" />
                 Done
               </Button>
