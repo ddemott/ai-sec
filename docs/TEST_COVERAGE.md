@@ -12,12 +12,12 @@
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,903 / 1,903 | ✅ | ~120s |
-| Dashboard (`cd dashboard && npm test`) | 631 / 631 | ✅ | ~10s |
-| Agent (`cd agent && npm test`) | 85 / 85 | ✅ | ~3s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 85 passed, 7 skipped | ✅ | ~140s |
+| Backend (`npm test`) | 1,910 / 1,910 | ✅ | ~106s |
+| Dashboard (`cd dashboard && npm test`) | 643 / 643 | ✅ | ~5s |
+| Agent (`cd agent && npm test`) | 91 / 91 | ✅ | ~1s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 98 passed, 7 skipped | ✅ | ~165s |
 
-Total unit tests: 2,504 passing (backend + dashboard) + 85 agent.
+Total unit tests: 2,553 passing (backend + dashboard) + 91 agent.
 
 > **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
 > require the backend to start with `SYNC_TEST_RECORDER=1`. Without the

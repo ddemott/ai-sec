@@ -1,17 +1,20 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Calendar, Users, Clock, Wrench, ChevronRight, Wand2, ArrowRight, AlertCircle } from 'lucide-react'
+import { Calendar, Users, Clock, Wrench, ChevronRight, Wand2, ArrowRight, AlertCircle, Plus } from 'lucide-react'
 import { Api } from '../lib/api'
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext'
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
+import { WizardWelcome } from './SetupWizard/WizardWelcome'
 import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
+import { QuickBookPanel } from './scheduler/QuickBookPanel'
 import type { Tab } from '../app/dashboard/page'
+import type { Customer } from '../lib/types'
 
 interface DashboardHomeProps {
   onNavigate?: (tab: Tab) => void
@@ -23,8 +26,12 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const vocab = useVocabulary()
   const refreshVocabulary = useVocabularyRefresh()
 
-  // Wizard state: null → mode chooser, 'solo'/'team' → business picker, then wizard
+  // Wizard state: welcome → mode chooser → business picker → wizard.
+  // `welcomePassed` gates the first screen so a brand-new tenant sees a
+  // friendlier "you can stop and come back" framing before the binary
+  // solo/team choice, instead of being dropped into the picker cold.
   type WizardMode = 'solo' | 'team' | null
+  const [welcomePassed, setWelcomePassed] = useState(false)
   const [wizardMode, setWizardMode] = useState<WizardMode>(null)
   const [businessTypeReady, setBusinessTypeReady] = useState(false)
   const [wizardDismissed, setWizardDismissed] = useState(false)
@@ -53,6 +60,12 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const [employees, setEmployees] = useState<DashboardEmployee[]>([])
   const [services, setServices] = useState<DashboardService[]>([])
   const [resources, setResources] = useState<DashboardResource[]>([])
+  // QuickBookPanel needs the customer list so the operator can pick an
+  // existing caller or create one inline. Pulled here (separate from the
+  // four counts the cards already need) so the panel can open without a
+  // second round-trip when the user clicks "+ New Booking".
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [quickBookOpen, setQuickBookOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   // Surface load failures so an empty dashboard can never be confused with
   // "new tenant with no data yet." The older silent `.catch(() => [])`
@@ -81,9 +94,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       Api.employees.list(tenantId),
       Api.services.list(tenantId),
       Api.resources.list(tenantId),
+      Api.customers.list(tenantId),
     ])
 
-    const [apptsR, empsR, svcsR, resR] = results
+    const [apptsR, empsR, svcsR, resR, custR] = results
 
     setAppointments(apptsR.status === 'fulfilled' && Array.isArray(apptsR.value) ? apptsR.value : [])
     setEmployees(
@@ -93,6 +107,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     )
     setServices(svcsR.status === 'fulfilled' && Array.isArray(svcsR.value) ? svcsR.value : [])
     setResources(resR.status === 'fulfilled' && Array.isArray(resR.value) ? resR.value : [])
+    setCustomers(custR.status === 'fulfilled' && Array.isArray(custR.value) ? custR.value : [])
 
     const anyFailed = results.some((r) => r.status === 'rejected')
     if (anyFailed) {
@@ -112,6 +127,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const needsSetup = services.length === 0 || employees.length === 0 || resources.length === 0
 
   function handleCloseWizard() {
+    setWelcomePassed(false)
     setWizardMode(null)
     setBusinessTypeReady(false)
     setWizardDismissed(true)
@@ -139,9 +155,12 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     }
   }
 
-  // Auto-show wizard chooser for new tenants that need setup
-  // trialParam only triggers the wizard if the tenant actually needs setup
-  const showWizardChooser = needsSetup && !wizardDismissed && !wizardMode && !loading
+  // Auto-show wizard for new tenants that need setup. The flow gate is
+  // staged: welcome first, then mode chooser (only after "Let's go"), then
+  // business picker, then the wizard itself.
+  const wizardActive = needsSetup && !wizardDismissed && !wizardMode && !loading
+  const showWelcome = wizardActive && !welcomePassed
+  const showWizardChooser = wizardActive && welcomePassed
 
   if (loading) {
     return (
@@ -153,14 +172,33 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl mx-auto">
-      {/* GREETING */}
-      <div>
-        <h1 className="text-2xl font-display">
-          {greeting}, {userName || 'there'}
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-        </p>
+      {/* GREETING + primary New Booking action.
+          New Booking is the single most-frequent front-desk task — the
+          2026-05-07 audit measured 8+ decisions to book a call-in on the
+          default Schedule→Calendar landing, dropped to ~3 once Quick Book
+          was hoisted across all Schedule sub-tabs, and now reaches 1 tap
+          from the Home landing. Button is disabled until setup data is
+          loaded so an empty-state user can't open the panel and stare at
+          empty pickers. */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-display">
+            {greeting}, {userName || 'there'}
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setQuickBookOpen(true)}
+          disabled={loading || needsSetup}
+          aria-label="Create a new booking"
+        >
+          <Plus className="w-4 h-4 mr-1.5" aria-hidden="true" />
+          New Booking
+        </Button>
       </div>
 
       {/* LOAD ERROR — shown when any of the four parallel fetches failed.
@@ -209,7 +247,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                 variant="primary"
                 size="sm"
                 className="mt-3"
-                onClick={() => setWizardDismissed(false)}
+                onClick={() => { setWelcomePassed(true); setWizardDismissed(false) }}
               >
                 <Wand2 className="w-4 h-4 mr-1.5" />
                 Open Setup Assistant
@@ -219,7 +257,13 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* WIZARD — auto-opens for new tenants: mode chooser → business type → wizard */}
+      {/* WIZARD — auto-opens for new tenants: welcome → mode chooser → business type → wizard */}
+      {showWelcome && (
+        <WizardWelcome
+          onContinue={() => setWelcomePassed(true)}
+          onDismiss={() => setWizardDismissed(true)}
+        />
+      )}
       {showWizardChooser && (
         <WizardModeChooser
           onChoose={(mode) => setWizardMode(mode)}
@@ -369,6 +413,24 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
           onClick={() => onNavigate?.('my-business')}
         />
       </div>
+
+      {/* Quick Book panel — mounted here (not in SchedulerView) so the
+          New Booking button at the top of Home opens it directly. Same
+          component instance the Schedule tab uses; data shape matches.
+          Pre-fill is empty so the operator picks customer + service +
+          time fresh; on success we refresh Home's appointment data so
+          today's schedule card reflects the new booking immediately. */}
+      <QuickBookPanel
+        isOpen={quickBookOpen}
+        onClose={() => setQuickBookOpen(false)}
+        tenantId={tenantId}
+        prefill={{}}
+        customers={customers}
+        employees={employees}
+        resources={resources}
+        services={services}
+        onBooked={loadData}
+      />
     </div>
   )
 }

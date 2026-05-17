@@ -2,6 +2,7 @@
  * Verification-only spec for the 2026-05-16 UI rename pass:
  *   A1 — Advanced tabs renamed: My Business / My Team / Phone Assistant
  *   B2 — Sub-tab "Shifts" renamed to "Working Days" under My Team
+ *   B3 — Knowledge Base sub-tab moved from My Business → Phone Assistant
  *   D2 — Wizard chip "Shifts" renamed to "When they work" (chip labels are
  *        pinned by 86 unit-test assertions in SetupWizard.test.tsx — this
  *        spec verifies the launcher path only, since stepping into the
@@ -19,14 +20,19 @@ import type { Page } from '@playwright/test';
 const DYNATIRE_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
 async function landOnDynatireDashboard(page: Page) {
-  await page.goto('/dashboard');
-  // Super-admin admin@secretaryhq.com lands on the All-Businesses tile
-  // grid — pick DynaTire so the owner-flavoured nav renders.
+  // Super-admin auth state can be left scoped to whichever tenant the
+  // previous spec file ended on, so a bare goto('/dashboard') may land
+  // on the wrong tenant. Force the All-Businesses grid via the URL,
+  // pick DynaTire by its tenant-card testid (sets activeTenantId), then
+  // click Home so the main view leaves the tile grid and renders the
+  // tenant-scoped dashboard.
+  await page.goto('/dashboard?tab=all-businesses');
   const tenantBtn = page.getByTestId(`tenant-card-${DYNATIRE_TENANT_ID}`);
-  if (await tenantBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await tenantBtn.click();
-    await page.waitForTimeout(800);
-  }
+  await tenantBtn.waitFor({ state: 'visible', timeout: 5000 });
+  await tenantBtn.click();
+  await page.waitForTimeout(400);
+  await page.getByRole('tab', { name: /^Home$/ }).first().click();
+  await page.waitForTimeout(800);
 }
 
 test.describe('UI rename — A1 + B2', () => {
@@ -55,10 +61,42 @@ test.describe('UI rename — A1 + B2', () => {
     // contains "Shifts" anywhere.
     await expect(page.getByRole('tab', { name: /^Shifts$/ })).toHaveCount(0);
   });
+
+  test('B3: Knowledge Base lives under Phone Assistant, not My Business', async ({ page }) => {
+    await landOnDynatireDashboard(page);
+
+    // Under Phone Assistant: Knowledge Base sub-tab is present.
+    await page.getByRole('tab', { name: /^Phone Assistant$/ }).first().click();
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('tab', { name: /Knowledge Base/ }).first()).toBeVisible();
+
+    // Under My Business: Knowledge Base sub-tab is absent. Only Services
+    // and the vocab-driven resources sub-tab remain.
+    await page.getByRole('tab', { name: /^My Business$/ }).first().click();
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('tab', { name: /Knowledge Base/ })).toHaveCount(0);
+  });
+
+  test('C3: "New Booking" button on Home opens the Quick Book panel', async ({ page }) => {
+    await landOnDynatireDashboard(page);
+    // Home is the default landing after tenant select — no explicit nav.
+    const newBookingBtn = page.getByRole('button', { name: /Create a new booking/i });
+    await expect(newBookingBtn).toBeVisible();
+    await expect(newBookingBtn).toBeEnabled();
+
+    await newBookingBtn.click();
+    await expect(page.getByTestId('quick-book-panel')).toBeVisible();
+
+    // Close without booking — the test must not write to the tenant.
+    // QuickBookPanel uses Escape to close. Falling back to the X button
+    // via aria-label if Escape doesn't dismiss.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  });
 });
 
 test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
-  test('Setup Assistant button opens the wizard mode chooser with welcome copy', async ({ page }) => {
+  test('Setup Assistant opens welcome → "Let\'s go" advances to mode chooser', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
     await page.getByRole('tab', { name: /^My Business$/ }).first().click();
@@ -68,7 +106,19 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
     await page.getByRole('button', { name: /Setup Assistant/i }).click();
     await page.waitForTimeout(500);
 
-    // WizardModeChooser welcome copy + two mode cards
+    // D1 (2026-05-17): the wizard now opens with a scope-setting welcome
+    // screen ahead of the mode chooser, not the mode chooser directly.
+    await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible();
+    await expect(page.getByText(/10 minutes from going live/i)).toBeVisible();
+    // Mode chooser is gated until the user clicks "Let's go" — assert
+    // it is NOT yet visible so a regression that double-stacks the
+    // modals (or removes the welcome) would fail loudly.
+    await expect(page.getByText('How is your business set up?')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Let's go/i }).click();
+    await page.waitForTimeout(300);
+
+    // WizardModeChooser welcome copy + two mode cards now visible.
     await expect(page.getByText('How is your business set up?')).toBeVisible();
     await expect(page.getByText('Just me')).toBeVisible();
     await expect(page.getByText('I have a team')).toBeVisible();
@@ -76,6 +126,28 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
     // Close without picking a mode — stepping further opens
     // BusinessTypePicker which writes tenant config on select.
     await page.getByRole('button', { name: /Close wizard/i }).first().click();
+  });
+
+  test('Setup Assistant → welcome "show me around" exits cleanly (no chooser appears)', async ({ page }) => {
+    // WHY (D1): the explicit "I'll set up later, just show me around" exit
+    // must close the entire wizard — it cannot silently advance to the
+    // mode chooser or trap the user in another modal. DynaTire is already
+    // fully configured so this is non-destructive (no writes possible).
+    await landOnDynatireDashboard(page);
+
+    await page.getByRole('tab', { name: /^My Business$/ }).first().click();
+    await page.waitForTimeout(500);
+
+    await page.getByRole('button', { name: /Setup Assistant/i }).click();
+    await page.waitForTimeout(500);
+
+    await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /set up later/i }).click();
+    await page.waitForTimeout(300);
+
+    await expect(page.getByRole('dialog', { name: /welcome/i })).toHaveCount(0);
+    await expect(page.getByText('How is your business set up?')).toHaveCount(0);
   });
 });
 
@@ -120,12 +192,11 @@ test.describe('Business Type move — Settings hosts it, AI Persona doesn\'t', (
     await page.getByRole('button', { name: /Change business type/i }).click();
     await page.waitForTimeout(500);
 
-    // Picker modal: pick the first non-current template card. Excluding
-    // DynaTire's current template ('automotive_v1' → "Automotive") avoids
-    // the disabled "Already applied" path.
-    const candidateCard = page
-      .locator('button:has-text("Salon"), button:has-text("Mobile Tire"), button:has-text("Auto Bays")')
-      .first();
+    // Picker modal: pick a template guaranteed-different from DynaTire's
+    // current one ("Mobile Tire Shop"). Salon is beauty/personal-care,
+    // unambiguously not the active template, so the preview's Apply
+    // button is enabled (not "Already applied").
+    const candidateCard = page.getByRole('dialog').getByRole('button', { name: /Salon/i }).first();
     await candidateCard.click();
     await page.waitForTimeout(500);
 

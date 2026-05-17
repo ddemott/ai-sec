@@ -36,9 +36,15 @@ const { mockApi } = vi.hoisted(() => ({
     employees: { list: vi.fn() },
     services: { list: vi.fn() },
     resources: { list: vi.fn() },
+    // QuickBookPanel (mounted by DashboardHome after C3) needs the customer
+    // list; fetched as part of loadData()'s Promise.allSettled batch.
+    customers: { list: vi.fn() },
     templates: { listFull: vi.fn() },
     tenants: { updateConfig: vi.fn() },
     shifts: { schedule: { forDate: vi.fn() } },
+    // QuickBookPanel suggests employees skilled for the picked service,
+    // and resources required for the picked service.
+    mappings: { listServiceEmployee: vi.fn(), listServiceResource: vi.fn() },
   },
 }))
 
@@ -60,8 +66,11 @@ beforeEach(() => {
     .mockResolvedValue([{ employee_id: 'e1', name: 'Alice', type: 'employee', is_active: true }])
   mockApi.services.list.mockReset().mockResolvedValue([{ service_id: 's1', name: 'Oil Change' }])
   mockApi.resources.list.mockReset().mockResolvedValue([{ resource_id: 'r1', name: 'Bay 1' }])
+  mockApi.customers.list.mockReset().mockResolvedValue([])
   mockApi.shifts.schedule.forDate.mockReset().mockResolvedValue([])
   mockApi.templates.listFull.mockReset().mockResolvedValue([])
+  mockApi.mappings.listServiceEmployee.mockReset().mockResolvedValue([])
+  mockApi.mappings.listServiceResource.mockReset().mockResolvedValue([])
 })
 
 describe('DashboardHome — load error visibility', () => {
@@ -178,5 +187,133 @@ describe('DashboardHome — Today\'s Schedule empty state', () => {
     await screen.findByText(/nothing booked for today yet/i)
     expect(screen.getByRole('button', { name: /view this week/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /see staff shifts/i })).toBeInTheDocument()
+  })
+})
+
+describe('DashboardHome — New Booking button (C3, 2026-05-16)', () => {
+  // WHY: New Booking is the most-frequent front-desk task. The 2026-05-07
+  // audit measured 8+ decisions on the default Schedule landing; Quick
+  // Book hoisted to all Schedule sub-tabs dropped that to ~3; C3 puts a
+  // primary button on Home itself so the call-in path is one tap from
+  // the dashboard landing.
+
+  test('HAPPY: button is visible on a configured tenant and opens the panel', async () => {
+    // WHO: Front-desk operator on a normal tenant with employees+services+resources
+    // WHAT: The "New Booking" primary button is enabled; clicking it
+    //       opens the QuickBookPanel (rendered as a fixed-position dialog).
+    // WHERE: Top of Home, right side of the greeting block.
+    render(<DashboardHome />)
+
+    const button = await screen.findByRole('button', { name: /create a new booking/i })
+    expect(button).toBeEnabled()
+
+    button.click()
+
+    // QuickBookPanel mounts a dialog with a data-testid hook the
+    // SchedulerView e2e already relies on.
+    expect(await screen.findByTestId('quick-book-panel')).toBeInTheDocument()
+  })
+
+  test('SAD: button is disabled when the tenant still needs setup', async () => {
+    // WHO: Brand-new tenant whose loadData() returned no services yet
+    // WHAT: needsSetup === true → button disabled so the operator can't
+    //       open a panel where the service/employee/resource pickers
+    //       would all be empty (worse than a clear "set up first" cue).
+    // WHY: Empty pickers look like a bug; the wizard banner at the top
+    //       of Home is the correct affordance for new tenants.
+    mockApi.services.list.mockResolvedValueOnce([])
+    render(<DashboardHome />)
+
+    const button = await screen.findByRole('button', { name: /create a new booking/i })
+    expect(button).toBeDisabled()
+  })
+})
+
+describe('DashboardHome — wizard welcome → mode chooser staging (D1, 2026-05-17)', () => {
+  // WHY: A brand-new tenant landing on Home with nothing configured used
+  // to be dropped straight into the WizardModeChooser ("Just me" / "I have
+  // a team"). The 2026-05-16 UX audit found users hesitated because they
+  // didn't know how long setup takes or whether they could pause. D1 adds
+  // a Welcome screen ahead of the mode chooser to set scope ("~10 minutes,
+  // stop any time") and give an explicit exit.
+
+  // The "needs setup" branch fires when ANY of services/employees/resources
+  // is empty. Force all three empty in this block so the wizard auto-opens.
+  function withFreshTenant() {
+    mockApi.services.list.mockResolvedValue([])
+    mockApi.employees.list.mockResolvedValue([])
+    mockApi.resources.list.mockResolvedValue([])
+  }
+
+  test('HAPPY: fresh tenant auto-opens the welcome screen, NOT the mode chooser directly', async () => {
+    // WHO: First-time tenant on the dashboard
+    // WHAT: After load completes, the WizardWelcome dialog is visible and
+    //       the WizardModeChooser is NOT — the welcome must gate the
+    //       chooser, not appear alongside it.
+    // WHY: A double-modal would look broken and the mode chooser shouldn't
+    //      be reachable until the user has acknowledged scope.
+    withFreshTenant()
+    render(<DashboardHome />)
+
+    await screen.findByRole('dialog', { name: /welcome/i })
+    expect(screen.getByText(/10 minutes from going live/i)).toBeInTheDocument()
+    expect(screen.queryByText(/how is your business set up/i)).not.toBeInTheDocument()
+  })
+
+  test('HAPPY: clicking "Let\'s go" advances welcome → mode chooser', async () => {
+    // WHO: Fresh tenant who wants to proceed
+    // WHAT: After clicking "Let's go", the welcome disappears and the
+    //       mode chooser appears in its place.
+    // WHY: The staged flow is welcome → chooser → business type → wizard.
+    //      Skipping the chooser or showing both at once would be a regression.
+    withFreshTenant()
+    render(<DashboardHome />)
+
+    await screen.findByRole('dialog', { name: /welcome/i })
+    fireEvent.click(screen.getByRole('button', { name: /let's go/i }))
+
+    await screen.findByText(/how is your business set up/i)
+    expect(screen.queryByRole('dialog', { name: /welcome/i })).not.toBeInTheDocument()
+  })
+
+  test('SAD: "I\'ll set up later" dismisses the entire flow — no mode chooser appears', async () => {
+    // WHO: Fresh tenant who wants to explore first
+    // WHAT: Click "I'll set up later, just show me around" → both the
+    //       welcome AND the mode chooser are absent. The post-dismiss
+    //       banner replaces them so the user can come back.
+    // WHY: Forcing setup before exploration violates Heuristic H3 (user
+    //      control). The dismissal must be a real exit, not a "next step."
+    withFreshTenant()
+    render(<DashboardHome />)
+
+    await screen.findByRole('dialog', { name: /welcome/i })
+    fireEvent.click(screen.getByRole('button', { name: /set up later/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /welcome/i })).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText(/how is your business set up/i)).not.toBeInTheDocument()
+    // Banner offering a re-entry — the user is not abandoned.
+    expect(screen.getByRole('button', { name: /open setup assistant/i })).toBeInTheDocument()
+  })
+
+  test('HAPPY: re-opening via "Open Setup Assistant" skips welcome and goes straight to the mode chooser', async () => {
+    // WHO: Tenant who dismissed welcome earlier and now explicitly wants to set up
+    // WHAT: Clicking the banner's "Open Setup Assistant" jumps directly to
+    //       the mode chooser — no welcome screen on the re-entry path.
+    // WHY: The banner click IS the user saying "yes, set me up" — showing
+    //      welcome again would be redundant friction. The auto-open path
+    //      is the only one that needs the scope-setting framing.
+    withFreshTenant()
+    render(<DashboardHome />)
+
+    await screen.findByRole('dialog', { name: /welcome/i })
+    fireEvent.click(screen.getByRole('button', { name: /set up later/i }))
+
+    const reopenBtn = await screen.findByRole('button', { name: /open setup assistant/i })
+    fireEvent.click(reopenBtn)
+
+    await screen.findByText(/how is your business set up/i)
+    expect(screen.queryByRole('dialog', { name: /welcome/i })).not.toBeInTheDocument()
   })
 })

@@ -7,19 +7,19 @@ import { Button } from './ui/Button'
 import { FolderTab, FolderTabBar } from './ui/FolderTabs'
 import ServiceAssignmentView from './ServiceAssignmentView'
 import ResourceManagerView from './ResourceManagerView'
-import KnowledgeBaseView from './KnowledgeBaseView'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser'
+import { WizardWelcome } from './SetupWizard/WizardWelcome'
 import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker'
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
 import { useActiveTenantId } from '@/lib/SessionContext'
 import { Api } from '../lib/api'
 
-type SubTab = 'services' | 'resources' | 'knowledge'
+type SubTab = 'services' | 'resources'
 type WizardMode = 'solo' | 'team' | null
 
-const VALID_SUB_TABS: SubTab[] = ['services', 'resources', 'knowledge']
+const VALID_SUB_TABS: SubTab[] = ['services', 'resources']
 
 export default function MyBusinessView() {
   const searchParams = useSearchParams()
@@ -41,20 +41,22 @@ export default function MyBusinessView() {
   const SUB_TABS: { id: SubTab; label: string }[] = [
     { id: 'services', label: 'Services' },
     { id: 'resources', label: vocab.resource_plural },
-    { id: 'knowledge', label: 'Knowledge Base' },
   ]
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [welcomePassed, setWelcomePassed] = useState(false)
   const [wizardMode, setWizardMode] = useState<WizardMode>(null)
   const [businessTypeReady, setBusinessTypeReady] = useState(false)
 
   function handleOpenWizard() {
     setWizardOpen(true)
+    setWelcomePassed(false)
     setWizardMode(null)
     setBusinessTypeReady(false)
   }
 
   function handleCloseWizard() {
     setWizardOpen(false)
+    setWelcomePassed(false)
     setWizardMode(null)
     setBusinessTypeReady(false)
   }
@@ -97,11 +99,18 @@ export default function MyBusinessView() {
       <div className="flex-1 overflow-hidden">
         {activeSubTab === 'services' && <ServiceAssignmentView />}
         {activeSubTab === 'resources' && <ResourceManagerView />}
-        {activeSubTab === 'knowledge' && <KnowledgeBaseView />}
       </div>
 
-      {/* Wizard flow: mode chooser → business type → wizard */}
-      {wizardOpen && !wizardMode && (
+      {/* Wizard flow: welcome → mode chooser → business type → wizard.
+          Welcome sets scope expectations ("~10 minutes, stop any time")
+          before the binary solo/team fork. */}
+      {wizardOpen && !welcomePassed && (
+        <WizardWelcome
+          onContinue={() => setWelcomePassed(true)}
+          onDismiss={handleCloseWizard}
+        />
+      )}
+      {wizardOpen && welcomePassed && !wizardMode && (
         <WizardModeChooser
           onChoose={setWizardMode}
           onClose={handleCloseWizard}

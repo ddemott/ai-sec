@@ -55,6 +55,20 @@ Everything else is either complete or tracked below.
 - [ ] Continue `src/index.ts` extraction / cleanup
 - [ ] Finish broader CRM sync structure extraction (NEEDS-REFACTORING #10)
 
+## UX backlog (from 2026-05-16 `/ux-expert` audit)
+
+Closed items moved to `RESOLVED.md` (see entries under 2026-05-16 and 2026-05-17).
+
+Open:
+- [ ] **D4** Persistent "Setup: N of 6 done" pill in top utility row
+- [ ] **B1** Merge Service Assignments + Skill Map into one tab with Grid/Map toggle
+- [ ] **B4** Reconsider sub-tab URL persistence (verify usage first)
+- [ ] **C1 + C2** Schedule: 4 sub-views → 2 (Day/Month), unify the 3 separate headers
+- [ ] **D3** Auto-create default resource for 1-location team wizards (skip a step)
+- [ ] **E1** Threaded demo-mode (sample data via session flag, obsoletes static `/demo`)
+- [ ] **E2** Consistent empty-state pattern across views
+- [ ] **E3** Badge pattern on more nav tabs (Calls "new transcripts", etc.)
+
 ## Documentation
 
 - [ ] Review and trim `CLAUDE.md`
