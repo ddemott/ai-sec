@@ -8,6 +8,7 @@ import { useActiveTenantId } from '../../lib/SessionContext';
 import { useSchedulerData } from './useSchedulerData';
 import { SchedulerDateNav } from './SchedulerDateNav';
 import { StaffProfileCard } from './StaffProfileCard';
+import { EmptyState } from '../ui/EmptyState';
 import { AppointmentPopover } from './AppointmentPopover';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { showToast } from '../ui/Toast';
@@ -764,10 +765,13 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
       {/* Empty state when no employees */}
       {!loading && employees.length === 0 && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3" style={{ background: 'var(--bg-base, #111)', color: 'var(--text-muted)' }} data-testid="scheduler-empty">
-          <Users className="w-10 h-10 opacity-30" />
-          <p className="text-sm font-medium">No staff to display</p>
-          <p className="text-xs opacity-60">Add employees in Staff &amp; Shifts to see the schedule.</p>
+        <div className="flex-1 flex" style={{ background: 'var(--bg-base, #111)' }}>
+          <EmptyState
+            icon={Users}
+            title="No staff to display"
+            description="Add employees in My Team to see the schedule."
+            data-testid="scheduler-empty"
+          />
         </div>
       )}
 

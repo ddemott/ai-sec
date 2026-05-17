@@ -13,6 +13,7 @@ import {
 import { Api } from '../lib/api'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { formatHour } from '../lib/utils'
+import { EmptyState } from './ui/EmptyState'
 
 /**
  * Analytics — Rebuilt March 2026
@@ -130,12 +131,12 @@ export default function AnalyticsView() {
 
   if (!summary || summary.total === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-base)' }}>
-        <div className="text-center">
-          <CalendarCheck className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No booking data yet</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Analytics will appear once appointments are booked.</p>
-        </div>
+      <div className="flex-1 flex" style={{ backgroundColor: 'var(--bg-base)' }}>
+        <EmptyState
+          icon={CalendarCheck}
+          title="No booking data yet"
+          description="Analytics will appear once appointments are booked."
+        />
       </div>
     )
   }

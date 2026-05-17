@@ -62,7 +62,6 @@ Open:
 - [ ] **B4** Reconsider sub-tab URL persistence (verify usage first)
 - [ ] **C1 + C2** Schedule: 4 sub-views → 2 (Day/Month), unify the 3 separate headers
 - [ ] **E1** Threaded demo-mode (sample data via session flag, obsoletes static `/demo`)
-- [ ] **E2** Consistent empty-state pattern across views
 
 ## Documentation
 

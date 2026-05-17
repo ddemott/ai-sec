@@ -14,6 +14,7 @@ import { detectTimezone } from '../lib/constants'
 import { formatPhone } from '../lib/phone'
 import { splitFullName } from '../lib/utils'
 import { useFormState } from '../lib/hooks'
+import { EmptyState } from './ui/EmptyState'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { Button } from './ui/Button'
 import { CustomerDetailPanel } from './CustomerDetailPanel'
@@ -335,10 +336,12 @@ export default function CRMView() {
         </header>
         <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {filteredCustomers.length === 0 && !loading && (
-            <div className="p-8 text-center" style={{ color: 'var(--text-muted)' }}>
-              <p className="text-sm font-medium">{searchQuery ? `No customers match "${searchQuery}"` : 'No customers yet'}</p>
-              {!searchQuery && <p className="text-xs mt-1 opacity-60">Add your first customer to get started.</p>}
-            </div>
+            <EmptyState
+              icon={UserPlus}
+              title={searchQuery ? `No customers match "${searchQuery}"` : 'No customers yet'}
+              description={searchQuery ? undefined : 'Add your first customer to get started.'}
+              variant="compact"
+            />
           )}
           {filteredCustomers.map((c) => (
             <div

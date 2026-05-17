@@ -9,6 +9,7 @@ import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Modal } from './ui/Modal'
 import { showToast } from './ui/Toast'
+import { EmptyState } from './ui/EmptyState'
 
 type Role = 'owner' | 'front_desk'
 
@@ -109,9 +110,13 @@ export default function TeamAccessView() {
         )}
 
         {!loading && users.length === 0 && (
-          <div className="text-sm py-8 text-center border rounded-xl" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
-            No team logins yet. Invite your first teammate to get started.
-          </div>
+          <EmptyState
+            icon={UserCircle2}
+            title="No team logins yet"
+            description="Invite your first teammate to get started."
+            variant="compact"
+            className="border rounded-xl"
+          />
         )}
 
         {!loading && users.length > 0 && (
