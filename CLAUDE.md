@@ -5,17 +5,7 @@ Multi-tenant AI receptionist for service businesses (tire shops, salons, auto sh
 
 **HIPAA verticals are permanently excluded** (medical, dental, chiropractic, optometry, veterinary).
 
-History of completed phases lives in `RESOLVED.md`. Current tasks are tracked in `docs/TODO.md`. Detailed historical session notes are archived in `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`.
-
-Two persistent in-flight items today (full list in `docs/TODO.md`):
-- **Telnyx PSTN ticket** (external) — blocking voice validation
-- **`DASHBOARD_URL` env var** unset on Railway (user) — blocking Stripe/OAuth redirects
-
-## Framework Migrations
-See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
-1. **Voice orchestrator: Vapi → LiveKit Agents** — Done 2026-04-27 (`661d21d`). Telnyx `+1-630-937-9478` → SIP Connection `livekit-outbound` (ID `2945038451784812111`) → dispatch rule `SDR_if97ky4Zf7e6` → Railway service `ai-sec-agent` (worker `AW_vPmGExrgTeGn`). **IN FLIGHT (external)** — awaiting first live call to confirm carrier propagation (`docs/TICKET_SUPPORT.md`).
-2. **Tool runtime: Supabase Edge Functions → Fastify** — Done. 10 tools in `src/routes/agentTools.ts`; booking gated on `isValidPhone`. Edge functions deleted in `661d21d`.
-3. **TTS provider: OpenAI → xAI Grok** — Code-complete 2026-05-01 (`f6cc1d4`); fallback wired through 2026-05-03 (`6488dc4`). `agent/src/grokTTS.ts` is primary; `runFallback()` uses OpenAI TTS so a Grok outage / missing `XAI_API_KEY` never produces dead-air. **IN FLIGHT (validation pending)** — blocked on Telnyx unblock above.
+Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framework-migration history (Vapi → LiveKit, Edge Functions → Fastify, OpenAI TTS → xAI Grok) in `docs/FRAMEWORK_MIGRATIONS.md`. Historical session notes archived in `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`.
 
 ## Architecture
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) → Fastify `/agent-tools/*`
@@ -35,26 +25,20 @@ See `docs/FRAMEWORK_MIGRATIONS.md`. Status:
 - **Testing**: Vitest (backend + dashboard), Playwright (e2e), `scripts/qa-live-test.py` (29 tool calls, 88 assertions)
 
 ## Key Directories
+Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
+
 - `/src` — Fastify backend (slim `index.ts` + 26 route modules)
-- `/src/routes` — auth, tenants, appointments, customers, employees, users, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, jobber, hubspot, square, servicetitan, voice, communications, reminders, versionHistory, agentTools
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
-- `/src/services` — Flat files: telnyxNumbers, telnyxSms, googleCalendar, outlookCalendar, calendarSync, syncOrchestrator, nameUtils, oauthCallbackFactory, oauthStateJwt, tokenManagement, plus the four CRM client/sync pairs (jobber, hubspot, square, servicetitan). Subdirs below.
 - `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry + Twilio/Mock adapters. Consent-gated.
 - `/src/services/reminders/` — ReminderService schedules; reminderProcessor delivers via CommunicationService; reminderRepository handles DB.
-- `/src/services/tenants/` — `DatabaseTenantConfigService` (dormant; agent worker now reads `/agent-tools/tenant-config` per call instead).
 - `/src/database/index.ts` — Canonical pool (lazy singleton w/ deadlock-prevention timeouts: `statement_timeout=30000`, `lock_timeout=10000`, `idle_in_transaction_session_timeout=60000`, `max=10`). `createWithTenantClient(pool)` returns the per-request RLS-scoped helper injected into routes.
 - `/src/workers/reminderScheduler.ts` — 60s tick, batches up to 100. Runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`.
 - `/src/templates/` — 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). No HIPAA verticals.
-- `/src/types/` — Shared TS interfaces: ConsentRecord, OptOutRecord, ReminderSchedule/Data/AppointmentForReminder, RecordVersion/VersionComparison, VoiceSession/CallSummary/CustomerContext.
-- `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation: any user-supplied `tenant_id` (query or body) that doesn't match the JWT's `tenant_id` is rejected with 403 unless the caller is super-admin (added 2026-05-06 after the multi-tenant-isolation probe found cross-tenant data leak via `?tenant_id=` override). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
+- `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation: any user-supplied `tenant_id` (query or body) that doesn't match the JWT's is rejected 403 unless super-admin (added 2026-05-06 after the multi-tenant-isolation probe found cross-tenant data leak via `?tenant_id=` override). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
 - `/supabase/migrations` — 122 SQL migrations.
-- `/shared` — Cross-runtime: `getEmbedding.ts`, `scheduling.ts`
-- `/supabase/seed.sql` — Platform admin + DynaTire tenant
 - `/scripts` — `qa-live-test.py`, `verify-claude-md.ts` drift detector
-- `/docs` — Architecture, setup, plans, references
-- `/certs` — Self-signed HTTPS certs for local dev
 
 ## Development
 - Bootstrap: `npm run bootstrap` (deps + DB + migrations + seed + tests)
@@ -125,30 +109,17 @@ Durable rules-of-engagement that override "build for the future":
 - All tests cover happy + sad paths with 5W diagnostic comments (WHO/WHAT/WHEN/WHERE/WHY).
 - Mock helpers in `src/services/test-utils-mock.ts`.
 
-## Migrated, Not Yet Wired
-Service layers that exist but lack production callers. **Each is on borrowed time** — under Build Principles, anything that can't be tested against a real surface and isn't requested by a real customer resolves to *delete*.
-
-- **`src/services/tenants/`** — `DatabaseTenantConfigService` has no caller. Per-call `/agent-tools/tenant-config` lookup serves the underlying need. Delete by default unless that lookup shows up as a hot spot worth caching.
-- **`src/types/`** — `ConsentRecord` + `OptOutRecord` types and tables exist; no consent management UI yet.
-
 ## Known Issues
 - OpenAI API quota needs monitoring (GPT-4o-mini for LLM + embeddings).
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
-**Phase 13 (Production Readiness) in progress.** 1,910 backend + 680 dashboard = 2,590 tests passing (verified 2026-05-17 against real DB; 0 skips, 0 failures). 91 agent tests, 99 Playwright e2e passing (7 skipped, intentional), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Detailed coverage breakdown — including V8 percentages and e2e workflow inventory — lives in `docs/TEST_COVERAGE.md`; refresh it whenever a commit measurably moves test counts or coverage. Production security posture lives in `docs/SECURITY.md` (refreshed 2026-05-09 after pass 2 of the security review).
+**Phase 13 (Production Readiness) in progress.** 1,910 backend + 680 dashboard = 2,590 tests passing (verified 2026-05-17 against real DB; 0 skips, 0 failures). 91 agent tests, 99 Playwright e2e passing (7 skipped, intentional), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + Sentry + Better Stack setup in `docs/DEPLOYMENT.md`.
 
-**Test-skip honesty (2026-05-15, commit `f89e55a`):** Backend tests that depend on Postgres now use the `skipIfDbDown(ctx, () => dbAvailable)` helper from `src/test-utils.ts`. When the local DB is unreachable, Vitest reports those tests as SKIPPED (not silently PASSED — the prior pattern hid 524 tests across 50 files). Setting `REQUIRE_DB_TESTS=1` turns DB-down into a hard `beforeEach` failure; the env var is opt-in (not set by default) and intended for CI to refuse green runs that didn't exercise the DB-dependent suite.
+Remaining blockers: Telnyx PSTN unblock, `DASHBOARD_URL` + `SENTRY_DSN` on Railway, 4 prod migrations apply. Full task list in `docs/TODO.md`.
 
-**Sentry error monitoring (2026-05-15):** Backend (`src/services/sentry.ts`) and agent (`agent/src/sentry.ts`) both initialize `@sentry/node` at process start, gated by `SENTRY_DSN`. Backend hooks into `logError()` so every error routed through `withHandler` flows to both Pino logs and Sentry; the Fastify `setErrorHandler` captures unhandled throws. Agent captures fallback-triggered events at the two `runFallback()` callsites. Same gating shape as `BETTER_STACK_TOKEN` — unset = no-op, no network calls. `tracesSampleRate: 0` (errors only; metrics module covers performance). Dashboard Sentry deferred. See `docs/DEPLOYMENT.md` "Observability — Sentry error monitoring" for setup.
-
-Remaining blockers: deploy dashboard, set `DASHBOARD_URL`, beta test with DynaTire. Full task list and post-launch backlog in `docs/TODO.md`. Phases 1–12 history in `RESOLVED.md`.
-
-## Railway Deployment
-- Backend: `https://ai-sec-production.up.railway.app/` (`/health` endpoint, landing at root)
-- `railway.json` + `nixpacks.toml` configured (Node 20, Nixpacks)
-- Single DB pool via `DATABASE_URL` (Supabase session-mode pooler)
-- All env vars set: DB, JWT, OpenAI, Telnyx (API key + SIP connection ID `2945038451784812111`), Stripe (keys + webhook secret), AGENT_SECRET, LIVEKIT_*, DEEPGRAM_API_KEY
-- Stripe webhook: `https://ai-sec-production.up.railway.app/billing/webhook` (3 events)
-- Phone: `+1-630-937-9478` (Telnyx). Provisioning automated via `POST /provisioning/activate` (search → purchase → assign to SIP Connection `livekit-outbound`). SuperAdmin dashboard has "Activate Phone" button.
-- **Open**: `DASHBOARD_URL` env var on backend Railway service; first live call to confirm carrier propagation (`docs/TICKET_SUPPORT.md`).
+## Production
+- Backend: `https://ai-sec-production.up.railway.app/` (`/health` endpoint)
+- Phone: `+1-630-937-9478` (Telnyx). Provisioning via `POST /provisioning/activate` (search → purchase → assign to SIP Connection `livekit-outbound`).
+- Stripe webhook: `https://ai-sec-production.up.railway.app/billing/webhook` (3 events).
+- Full Railway env-var list, deploy commands, and observability setup in `docs/DEPLOYMENT.md`.

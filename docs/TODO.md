@@ -64,7 +64,6 @@ Open:
 
 ## Documentation
 
-- [ ] Review and trim `CLAUDE.md`
 - [ ] Review and trim `CODING_STANDARDS.md`
 
 ---
