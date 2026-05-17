@@ -94,6 +94,11 @@ export function OutlookLayout({
 
   const { tenantsVersion } = useSessionContext()
   const [unansweredCount, setUnansweredCount] = useState(0)
+  // E3 (2026-05-17): count of currently-active voice calls, used as a
+  // badge on the Calls tab so front-desk can see live activity at a
+  // glance even when looking at another tab. Mirrors the unanswered-KB
+  // pattern — refresh on activeTab change rather than poll on a timer.
+  const [activeCallCount, setActiveCallCount] = useState(0)
 
   const visibleTabs = isFrontDeskOnly ? PRIMARY_TABS : [...PRIMARY_TABS, ...ADVANCED_TABS]
 
@@ -112,6 +117,17 @@ export function OutlookLayout({
     if (!effectiveTenantId) return
     Api.knowledge.unanswered(effectiveTenantId)
       .then(res => setUnansweredCount(res?.questions?.length || 0))
+      .catch(() => {}) // non-fatal
+  }, [effectiveTenantId, activeTab])
+
+  // E3: fetch active-call count for the Calls tab badge. Refetches on
+  // every tab change so the count is fresh whenever the user is moving
+  // around. Errors silently — a missing badge is better than a noisy
+  // error toast on every tab switch.
+  useEffect(() => {
+    if (!effectiveTenantId) return
+    Api.voice.getActiveCalls(effectiveTenantId)
+      .then(res => setActiveCallCount(typeof res?.total === 'number' ? res.total : (res?.calls?.length || 0)))
       .catch(() => {}) // non-fatal
   }, [effectiveTenantId, activeTab])
 
@@ -234,6 +250,16 @@ export function OutlookLayout({
                 {unansweredCount > 99 ? '99+' : unansweredCount}
               </span>
             )}
+            {tab.id === 'calls' && activeCallCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none animate-pulse"
+                style={{ backgroundColor: 'var(--danger, #dc2626)', color: 'var(--primary-text)' }}
+                title={`${activeCallCount} call${activeCallCount > 1 ? 's' : ''} in progress`}
+                aria-label={`${activeCallCount} active call${activeCallCount > 1 ? 's' : ''}`}
+              >
+                {activeCallCount > 99 ? '99+' : activeCallCount}
+              </span>
+            )}
           </span>
         ))}
       </FolderTabBar>
@@ -273,6 +299,15 @@ export function OutlookLayout({
                     style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
                   >
                     {unansweredCount > 99 ? '99+' : unansweredCount}
+                  </span>
+                )}
+                {tab.id === 'calls' && activeCallCount > 0 && (
+                  <span
+                    className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full text-[8px] font-bold leading-none animate-pulse"
+                    style={{ backgroundColor: 'var(--danger, #dc2626)', color: 'var(--primary-text)' }}
+                    aria-label={`${activeCallCount} active call${activeCallCount > 1 ? 's' : ''}`}
+                  >
+                    {activeCallCount > 99 ? '99+' : activeCallCount}
                   </span>
                 )}
               </button>

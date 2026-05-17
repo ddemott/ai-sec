@@ -15,15 +15,28 @@ import '@testing-library/jest-dom'
 import React from 'react'
 import { OutlookLayout } from './OutlookLayout'
 
-// Stub the API the layout uses on mount (knowledge badge + tenants list).
-// Without this, the layout fires a real fetch on render and littles the
-// console with rejected promises.
-vi.mock('../lib/api', () => ({
-  Api: {
-    knowledge: { unanswered: vi.fn().mockResolvedValue({ questions: [] }) },
-    tenants: { list: vi.fn().mockResolvedValue([]) },
+// Stub the APIs the layout uses on mount. Without these, the layout
+// fires real fetches on render and litters the console with rejected
+// promises. Coverage:
+//   - knowledge.unanswered → AI Insights badge
+//   - voice.getActiveCalls → Calls badge (E3)
+//   - tenants.list         → admin tenant-switcher dropdown
+//   - services/resources/employees/shifts/mappings → SetupProgressPill
+//     (D4 — mounted in OutlookLayout's utility row, hits all five
+//     surfaces on mount via useSetupProgress)
+const { mockApi } = vi.hoisted(() => ({
+  mockApi: {
+    knowledge: { unanswered: vi.fn() },
+    voice: { getActiveCalls: vi.fn() },
+    tenants: { list: vi.fn() },
+    services: { list: vi.fn() },
+    resources: { list: vi.fn() },
+    employees: { list: vi.fn() },
+    shifts: { schedule: { bulkForDate: vi.fn() } },
+    mappings: { listServiceEmployee: vi.fn() },
   },
 }))
+vi.mock('../lib/api', () => ({ Api: mockApi }))
 
 vi.mock('@/lib/ThemeContext', () => ({
   useTheme: () => ({
@@ -34,19 +47,32 @@ vi.mock('@/lib/ThemeContext', () => ({
   THEMES: [{ id: 'dark', name: 'Dark' }],
 }))
 
-vi.mock('@/lib/SessionContext', async () => {
-  // OutlookLayout pulls tenantsVersion off useSessionContext; the
-  // FeedbackButton (rendered inside the layout) pulls useActiveTenantId.
-  // We don't need a real provider — just enough exports to satisfy the
-  // imports.
-  return {
-    useSessionContext: () => ({ tenantsVersion: 0 }),
-    useActiveTenantId: () => null,
-  }
-})
+// OutlookLayout pulls tenantsVersion off useSessionContext; the
+// FeedbackButton (rendered inside the layout) pulls useActiveTenantId.
+// Badge effects only run when managedTenantId is set, so the badge tests
+// override this via globalSessionMock below.
+let sessionMock: { tenantsVersion: number; managedTenantId: string | null } = {
+  tenantsVersion: 0,
+  managedTenantId: null,
+}
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => sessionMock,
+  useActiveTenantId: () => sessionMock.managedTenantId,
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  sessionMock = { tenantsVersion: 0, managedTenantId: null }
+  mockApi.knowledge.unanswered.mockResolvedValue({ questions: [] })
+  mockApi.voice.getActiveCalls.mockResolvedValue({ calls: [], total: 0 })
+  mockApi.tenants.list.mockResolvedValue([])
+  // SetupProgressPill defaults — empty everything so the pill is hidden
+  // by default. Tests that need the pill visible can override per-test.
+  mockApi.services.list.mockResolvedValue([])
+  mockApi.resources.list.mockResolvedValue([])
+  mockApi.employees.list.mockResolvedValue([])
+  mockApi.shifts.schedule.bulkForDate.mockResolvedValue([])
+  mockApi.mappings.listServiceEmployee.mockResolvedValue([])
 })
 
 describe('OutlookLayout role gating', () => {
@@ -102,6 +128,68 @@ describe('OutlookLayout role gating', () => {
     await waitFor(() => {
       expect(setActiveTab).toHaveBeenCalledWith('dashboard')
     })
+  })
+
+  test('HAPPY: Calls tab shows an active-call badge when getActiveCalls returns > 0 (E3, 2026-05-17)', async () => {
+    // WHO: front-desk operator looking at a non-Calls tab while a live
+    //      call lands at the agent
+    // WHAT: the Calls tab's <span data-tab-id="calls"> contains a small
+    //       numeric badge reporting the active-call count. Without the
+    //       badge, the operator would need to switch to the Calls tab
+    //       just to know whether anything's happening.
+    // WHERE: dashboard/components/OutlookLayout.tsx — the badge-renderer
+    //        sibling to the AI Insights / Knowledge unanswered badge.
+    // WHY: pins the new E3 surface against regressions. If a future
+    //      refactor drops voice.getActiveCalls() from the mount-effect
+    //      list or breaks the count-extraction path, this test fails
+    //      immediately rather than producing a silently-empty badge.
+    mockApi.voice.getActiveCalls.mockResolvedValue({
+      calls: [{ id: 'c1' }, { id: 'c2' }],
+      total: 2,
+    })
+
+    render(
+      <OutlookLayout
+        activeTab="dashboard"
+        setActiveTab={vi.fn()}
+        role="owner"
+        managedTenantId="tenant-active"
+      >
+        <div>content</div>
+      </OutlookLayout>
+    )
+
+    // The badge's aria-label is the authoritative test handle — title-
+    // attribute matching is brittle to copy edits. Desktop + mobile
+    // nav both render the badge, so we expect at least one match.
+    await waitFor(() => {
+      expect(screen.getAllByLabelText(/2 active calls/i).length).toBeGreaterThan(0)
+    })
+  })
+
+  test('SAD: Calls tab badge stays hidden when active-call count is 0', async () => {
+    // WHO: operator on a quiet line — no calls in progress
+    // WHAT: getActiveCalls returns total: 0 → the badge must NOT render.
+    //       A 0-badge would be visual noise and would erode trust in the
+    //       badge's actionability.
+    mockApi.voice.getActiveCalls.mockResolvedValue({ calls: [], total: 0 })
+
+    render(
+      <OutlookLayout
+        activeTab="dashboard"
+        setActiveTab={vi.fn()}
+        role="owner"
+        managedTenantId="tenant-quiet"
+      >
+        <div>content</div>
+      </OutlookLayout>
+    )
+
+    // Wait for the effect to fire then assert nothing rendered.
+    await waitFor(() => {
+      expect(mockApi.voice.getActiveCalls).toHaveBeenCalled()
+    })
+    expect(screen.queryByLabelText(/active call/i)).not.toBeInTheDocument()
   })
 
   test('HAPPY: super-admin with role=front_desk still sees management tabs', async () => {
