@@ -952,10 +952,21 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
             </div>
           </div>
 
-          {/* Scrollable grid area */}
+          {/* Scrollable grid area.
+              `touch-action: pan-x pan-y pinch-zoom` (2026-05-18, UX
+              audit Devices 4.3 row 2): 1-finger touches still fire
+              as mouse events for the AppointmentBlock drag handler
+              (browser emulation), but 2-finger gestures bypass the
+              app entirely and reach the browser — so pinch-zoom
+              works AND a 2-finger swipe scrolls the grid even
+              while the user's touch starts on a draggable block.
+              Without this, the block's mousedown-emulated-from-
+              touchstart captured every 2-finger gesture and the
+              scheduler felt frozen on iPad. */}
           <div
             ref={gridContainerRef}
             className="flex-1 overflow-auto relative"
+            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
             data-testid="scheduler-grid"
           >
             {loading && (
