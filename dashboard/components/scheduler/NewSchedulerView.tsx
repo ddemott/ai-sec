@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Minus, Plus, RefreshCw, Save, X, Users, Zap } from 'lucide-react';
+import { Minus, Plus, RefreshCw, Save, X, Users, Zap, GripVertical } from 'lucide-react';
 import { useStaticData } from '../../lib/hooks';
 import { Api } from '../../lib/api';
 import { formatHour, shiftTimeToHour, formatShiftTime, formatTime24to12 } from '../../lib/utils';
@@ -1375,6 +1375,13 @@ function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, o
   // Cancel is available, so narrow-block users aren't locked out.
   const isNarrowBlock = width < 40;
   const showTrash = onDelete && !isCanceled && !isDragging && !isNarrowBlock;
+  // Drag-to-move discoverability — see AppointmentBlock.tsx for the
+  // rationale. Without a visible handle, the cursor:move cue is
+  // invisible on touch and on quick scans (UX audit #6, 2026-05-18).
+  const showDragHandle = !!onMove && !isCanceled && !isDragging && !isNarrowBlock;
+  const moveHintTitle = onMove && !isCanceled
+    ? `${customerName} — ${serviceName}\nDrag to move · click for details`
+    : `${customerName} — ${serviceName}`;
 
   return (
     <div
@@ -1391,14 +1398,23 @@ function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, o
         fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
         ...dragStyle,
       }}
-      title={`${customerName} — ${serviceName}`}
+      title={moveHintTitle}
       onMouseDown={handleMouseDown}
       onClick={(e) => onClick?.(appointment, e)}
       data-testid={`appt-block-${appointment.appointment_id}`}
     >
-      <span className="block truncate leading-tight">{customerName}</span>
+      {showDragHandle && (
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none"
+          aria-hidden="true"
+          data-testid={`appt-block-drag-handle-${appointment.appointment_id}`}
+        >
+          <GripVertical className="w-3 h-3" style={{ color: statusColors.text }} />
+        </span>
+      )}
+      <span className={`block truncate leading-tight${showDragHandle ? ' pl-3' : ''}`}>{customerName}</span>
       {width > 60 && (
-        <span className="block truncate leading-tight text-[10px] opacity-80">{serviceName}</span>
+        <span className={`block truncate leading-tight text-[10px] opacity-80${showDragHandle ? ' pl-3' : ''}`}>{serviceName}</span>
       )}
       {showTrash && (
         <button

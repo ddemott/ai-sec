@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, GripVertical } from 'lucide-react';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { SCHEDULER_START_HOUR, SCHEDULER_END_HOUR } from './TimeGrid';
 
@@ -188,6 +188,14 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
   // dot-renderer used in place of the customer name.
   const isNarrowBlock = width < 0.04;
   const showTrash = onDelete && !isCanceled && !isDragging && !isNarrowBlock;
+  // Drag handle is the discoverability cue for drag-to-move. The drag
+  // gesture itself lives on the block body (so the whole block remains
+  // draggable, not just the handle), but without a visible affordance
+  // users never learn the capability exists — cursor:move alone is
+  // invisible on touch and on a brief skim (UX audit #6, 2026-05-18).
+  // Hidden on narrow blocks where it would compete with the dot-renderer.
+  const showDragHandle = !!onMove && !isCanceled && !isDragging && !isNarrowBlock;
+  const moveHintTitle = onMove && !isCanceled ? `${customerName} — ${appointment.description ?? ''}\nDrag to move · click for details` : `${customerName} — ${appointment.description ?? ''}`;
 
   return (
     <div
@@ -201,9 +209,19 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
-      title={`${customerName} — ${appointment.description}`}
+      title={moveHintTitle}
       data-testid={`appointment-block-${appointment.appointment_id}`}
     >
+      {showDragHandle && (
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none"
+          aria-hidden="true"
+          data-testid={`appointment-block-drag-handle-${appointment.appointment_id}`}
+        >
+          <GripVertical className="w-3 h-3" style={{ color: sc.text }} />
+        </span>
+      )}
+      <span className={showDragHandle ? 'pl-3' : ''}>
       {width < 0.04 ? (
         <span
           className="inline-block w-2 h-2 rounded-full mt-0.5"
@@ -213,6 +231,7 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
       ) : (
         customerName
       )}
+      </span>
       {showTrash && (
         <button
           type="button"
