@@ -98,12 +98,31 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 SQL
 echo "[rebuild-db] Schema cleared."
 
-# Apply migrations (delegates to setup-db.sh — single source of truth
-# for the apply logic and schema_migrations bookkeeping). This will
-# reapply every file in order; nothing should be SKIP'd because we
-# just dropped schema_migrations along with the rest of public.
-echo "[rebuild-db] Applying migrations..."
-bash "$ROOT_DIR/scripts/setup-db.sh" "$DB_URL"
+# Prefer the single-file baseline when present (UX audit session,
+# 2026-05-18: schema squash). One ~5k-line file is faster to apply
+# (~3s vs ~30s for 122 cumulative migrations), and far easier to
+# debug — a syntax error has one obvious location instead of
+# "patch 47 of 122". Fall back to the migration chain if baseline
+# is missing (covers PRs that touch migrations/ but not baseline).
+BASELINE="$ROOT_DIR/supabase/baseline.sql"
+if [ -f "$BASELINE" ]; then
+  echo "[rebuild-db] Applying baseline.sql (single-file schema)..."
+  psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$BASELINE" > /dev/null
+  echo "[rebuild-db] Baseline applied."
+
+  # Populate schema_migrations with every historical migration filename
+  # so the system knows those are already covered by the baseline.
+  # Without this step, the next `setup-db.sh` invocation would try to
+  # re-run all 122 historical migrations on top of the baseline schema
+  # and fail on "table already exists." `--baseline` makes setup-db
+  # mark them applied without re-running.
+  echo "[rebuild-db] Marking historical migrations as applied (baseline mode)..."
+  bash "$ROOT_DIR/scripts/setup-db.sh" --baseline "$DB_URL" > /dev/null
+  echo "[rebuild-db] schema_migrations populated."
+else
+  echo "[rebuild-db] baseline.sql not found — falling back to cumulative migrations..."
+  bash "$ROOT_DIR/scripts/setup-db.sh" "$DB_URL"
+fi
 
 # Seed (delegates to seed-db.sh, which runs supabase/seed.sql).
 if [ "$NO_SEED" -eq 0 ]; then
