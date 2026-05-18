@@ -146,6 +146,19 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   const needsSetup = services.length === 0 || employees.length === 0 || resources.length === 0
 
+  // Keyboard-shortcut entry-point: `N` (registered at the dashboard
+  // page level) dispatches `ai-sec:new-booking` so any mounted Home
+  // can open the panel without page-level plumbing. Guarded by the
+  // same disabled conditions as the visible button.
+  useEffect(() => {
+    function onShortcut() {
+      if (loading || needsSetup) return
+      setQuickBookOpen(true)
+    }
+    window.addEventListener('ai-sec:new-booking', onShortcut)
+    return () => window.removeEventListener('ai-sec:new-booking', onShortcut)
+  }, [loading, needsSetup])
+
   function handleCloseWizard() {
     setWelcomePassed(false)
     setWizardMode(null)

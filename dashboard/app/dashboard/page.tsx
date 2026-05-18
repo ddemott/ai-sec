@@ -1,10 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import LoginView from '@/components/LoginView'
 import { OutlookLayout } from '@/components/OutlookLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ShortcutsHelpModal } from '@/components/ui/ShortcutsHelpModal'
+import { useKeyboardShortcuts, type Shortcut } from '@/lib/useKeyboardShortcuts'
 import { useSessionContext } from '@/lib/SessionContext'
 
 // Lazy load tab content — only loads the JS for the active tab
@@ -66,6 +68,35 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Keyboard shortcuts (UX audit #10). Help modal is gated by `?`.
+  // Chord nav `g h/s/c/k` maps to the four primary tabs; `n` is wired
+  // to a global "open new booking" custom event that Home listens for.
+  // Custom event keeps the shortcut layer at the page level without
+  // having to plumb a setQuickBookOpen handler through OutlookLayout.
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false)
+  const shortcuts: Shortcut[] = useMemo(() => [
+    { key: 'g h', label: 'Go to Home', category: 'navigation', run: () => handleSetActiveTab('dashboard') },
+    { key: 'g s', label: 'Go to Schedule', category: 'navigation', run: () => handleSetActiveTab('schedule') },
+    { key: 'g c', label: 'Go to Customers', category: 'navigation', run: () => handleSetActiveTab('customers') },
+    { key: 'g k', label: 'Go to Calls', category: 'navigation', run: () => handleSetActiveTab('calls') },
+    {
+      key: 'n',
+      label: 'New booking',
+      category: 'actions',
+      run: () => {
+        // If not on Home, route there first so the QuickBook panel
+        // mounts and can receive the event.
+        if (activeTab !== 'dashboard') handleSetActiveTab('dashboard')
+        // Defer to the next tick so Home's listener is mounted.
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('ai-sec:new-booking'))
+        }, 50)
+      },
+    },
+    { key: '?', label: 'Show this shortcuts cheat-sheet', category: 'help', run: () => setShortcutsHelpOpen(true) },
+  ], [activeTab, handleSetActiveTab])
+  useKeyboardShortcuts(shortcuts, !!tenantId)
+
   const handleLoginSuccess = (data: { tenant_id: string; user_name: string; role?: string }) => {
     login(data)
     if (data.tenant_id === '00000000-0000-0000-0000-000000000000') {
@@ -116,6 +147,11 @@ export default function DashboardPage() {
         {activeTab === 'profile' && <ProfileView />}
         {activeTab === 'business-settings' && <BusinessSettingsView />}
       </ErrorBoundary>
+      <ShortcutsHelpModal
+        isOpen={shortcutsHelpOpen}
+        onClose={() => setShortcutsHelpOpen(false)}
+        shortcuts={shortcuts}
+      />
     </OutlookLayout>
   )
 }
