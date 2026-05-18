@@ -233,7 +233,14 @@ app.get('/demo', async (_req, reply) => {
   const html = fs.readFileSync(htmlPath, 'utf-8');
   reply.type('text/html').send(html);
 });
-app.get('/health', async () => ({ status: 'ok' }));
+// Process-startup timestamp, captured once at module load. Exposed via
+// /health so E2E globalSetup can detect a backend that's older than
+// the most-recently-modified source file — the "stale binary" trap
+// that produced 24h of false-red E2E runs on 2026-05-18. See the
+// "Backend code changes require BOTH a rebuild AND a restart" Build
+// Principle in CLAUDE.md.
+const PROCESS_STARTED_AT = new Date().toISOString();
+app.get('/health', async () => ({ status: 'ok', started_at: PROCESS_STARTED_AT }));
 
 // --- Prometheus-format metrics scrape endpoint ---
 // Strict opt-in: refuses ALL requests when METRICS_TOKEN is unset, so a
