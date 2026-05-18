@@ -22,11 +22,17 @@ interface ToastMessage {
 }
 
 const MAX_TOASTS = 5
-const DURATIONS: Record<ToastType, number> = {
+// `null` means "do not auto-dismiss." Error toasts stick around
+// until the user explicitly dismisses them (UX audit Heuristics
+// 4.2.10, 2026-05-18) — when multiple errors stack, the oldest
+// used to silently disappear after 5s, taking real diagnostic
+// info with it. Success/warning/info still auto-dismiss because
+// their stake in the user's attention is much lower.
+const DURATIONS: Record<ToastType, number | null> = {
   success: 3000,
   info: 3000,
   warning: 5000,
-  error: 5000,
+  error: null,
 }
 
 // Action-bearing toasts (Undo etc.) live longer so the user actually
@@ -87,9 +93,16 @@ export function ToastContainer() {
       const next = [...prev, { id, message, type, action }]
       return next.length > MAX_TOASTS ? next.slice(-MAX_TOASTS) : next
     })
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-    }, action ? ACTION_TOAST_DURATION : DURATIONS[type])
+    // Compute auto-dismiss ms. Action toasts use ACTION_TOAST_DURATION
+    // regardless of type (the user needs time to read + click).
+    // Otherwise look up the per-type duration — `null` means
+    // "stay until the user dismisses" (errors).
+    const dismissAfter = action ? ACTION_TOAST_DURATION : DURATIONS[type]
+    if (dismissAfter !== null) {
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id))
+      }, dismissAfter)
+    }
   }, [])
 
   useEffect(() => {
