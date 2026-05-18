@@ -255,7 +255,7 @@ export default function ShiftManagementView() {
   const activeEmployees = useMemo(() => employees.filter(e => e.type === 'employee'), [employees])
 
   if (empsLoading && activeEmployees.length === 0) {
-    return <div className="p-8 text-gray-500 italic">Loading {vocab.employee_label.toLowerCase()} schedule...</div>
+    return <div className="p-8 italic" style={{ color: 'var(--text-muted)' }}>Loading {vocab.employee_label.toLowerCase()} schedule...</div>
   }
 
   return (
@@ -275,7 +275,7 @@ export default function ShiftManagementView() {
 
         {/* Employee selector */}
         <div className="mb-4" data-testid="shift-employee-selector">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Select {vocab.employee_label}</label>
+          <label className="text-[10px] font-bold uppercase tracking-widest mb-2 block" style={{ color: 'var(--text-muted)' }}>Select {vocab.employee_label}</label>
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {activeEmployees.map(emp => (
               <button
@@ -288,7 +288,7 @@ export default function ShiftManagementView() {
                 {emp.name}
               </button>
             ))}
-            {activeEmployees.length === 0 && <p className="text-sm text-gray-400 italic">No {vocab.employee_plural.toLowerCase()} found. Add them in {vocab.employee_label} Management first.</p>}
+            {activeEmployees.length === 0 && <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>No {vocab.employee_plural.toLowerCase()} found. Add them in {vocab.employee_label} Management first.</p>}
           </div>
         </div>
 
@@ -320,8 +320,8 @@ export default function ShiftManagementView() {
       <div className="flex-1 overflow-hidden">
         {!selectedEmployeeId ? (
           <div className="h-full flex flex-col items-center justify-center rounded-3xl border-2 border-dashed" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
-            <Users className="w-12 h-12 text-gray-200 dark:text-gray-800 mb-4" />
-            <p className="text-gray-500 font-medium">Select an {vocab.employee_label.toLowerCase()} to manage their schedule</p>
+            <Users className="w-12 h-12 mb-4" style={{ color: 'var(--text-muted)' }} />
+            <p className="font-medium" style={{ color: 'var(--text-secondary)' }}>Select an {vocab.employee_label.toLowerCase()} to manage their schedule</p>
           </div>
         ) : (
           <div className="h-full flex flex-col rounded-2xl border overflow-hidden relative" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>

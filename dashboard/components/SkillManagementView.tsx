@@ -68,7 +68,7 @@ export default function SkillManagementView() {
   }
 
   if (loading && skills.length === 0) {
-    return <div className="p-8 text-gray-500 italic">Loading skills...</div>
+    return <div className="p-8 italic" style={{ color: 'var(--text-muted)' }}>Loading skills...</div>
   }
 
   return (
@@ -87,7 +87,7 @@ export default function SkillManagementView() {
         <form onSubmit={handleCreateSkill} className="max-w-2xl p-6 rounded-3xl border flex flex-col md:flex-row gap-4 items-end" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
           <div className="flex-1 w-full space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Skill Name (Slug)</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest ml-1" style={{ color: 'var(--text-muted)' }}>Skill Name (Slug)</label>
               <Input 
                 placeholder="e.g. oil-change"
                 value={newSkill.name}
@@ -96,7 +96,7 @@ export default function SkillManagementView() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Description</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest ml-1" style={{ color: 'var(--text-muted)' }}>Description</label>
               <Input 
                 placeholder="Briefly describe this expertise..."
                 value={newSkill.description}
@@ -138,7 +138,8 @@ export default function SkillManagementView() {
               </div>
               <button 
                 onClick={() => handleDeleteSkill(skill.tenant_skill_id)}
-                className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:[color:var(--danger)] transition-all"
+                className="opacity-0 group-hover:opacity-100 p-2 hover:[color:var(--danger)] transition-all"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 <Trash2 className="w-4 h-4" />
               </button>

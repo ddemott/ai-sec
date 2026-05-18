@@ -150,7 +150,7 @@ export default function EmployeeManagementView() {
   }
 
   if (loading && employees.length === 0) {
-    return <div className="p-8 text-gray-500 italic">Loading staff data...</div>
+    return <div className="p-8 italic" style={{ color: 'var(--text-muted)' }}>Loading staff data...</div>
   }
 
   return (
@@ -217,7 +217,7 @@ export default function EmployeeManagementView() {
           >
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 rounded-2xl shadow-sm border" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
-                <Users className="w-6 h-6 text-gray-400 group-hover:opacity-80 transition-colors" />
+                <Users className="w-6 h-6 group-hover:opacity-80 transition-colors" style={{ color: 'var(--text-muted)' }} />
               </div>
               <Badge variant={emp.is_active ? 'success' : 'secondary'}>
                 {emp.is_active ? 'Active' : 'On Leave'}
@@ -239,7 +239,7 @@ export default function EmployeeManagementView() {
                   return s ? <Badge key={s.service_id} variant="primary">{s.name}</Badge> : null
                 })
               ) : (
-                <span className="text-xs text-gray-400 italic">No services provided</span>
+                <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>No services provided</span>
               )}
             </div>
           </Card>
@@ -263,7 +263,7 @@ export default function EmployeeManagementView() {
           <div className="space-y-8 max-h-[70vh] overflow-y-auto pr-2">
             {/* IDENTIFICATION EDIT */}
             <section className="space-y-4">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+              <h4 className="text-xs font-bold uppercase tracking-widest flex items-center" style={{ color: 'var(--text-muted)' }}>
                 <Users className="w-3 h-3 mr-2" /> Basic Info
               </h4>
               <div className="grid grid-cols-2 gap-4">
@@ -299,8 +299,8 @@ export default function EmployeeManagementView() {
                   role="switch"
                   aria-checked={editForm.is_active}
                   onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? '' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  style={editForm.is_active ? { backgroundColor: 'var(--accent)' } : undefined}
+                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                  style={editForm.is_active ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)' }}
                 >
                   <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
@@ -309,7 +309,7 @@ export default function EmployeeManagementView() {
 
             {/* Service Toggle Section */}
             <section>
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
+              <h4 className="text-xs font-bold uppercase tracking-widest mb-4 flex items-center" style={{ color: 'var(--text-muted)' }}>
                 <Tag className="w-3 h-3 mr-2" /> Authorized Services
               </h4>
               <div className="grid grid-cols-1 gap-2">

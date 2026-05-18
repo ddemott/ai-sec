@@ -183,7 +183,7 @@ export default function ServiceAssignmentView() {
   }
 
   if (loading && services.length === 0) {
-    return <div className="p-8 flex items-center justify-center text-gray-500 italic">Loading catalog...</div>
+    return <div className="p-8 flex items-center justify-center italic" style={{ color: 'var(--text-muted)' }}>Loading catalog...</div>
   }
 
   if (!loading && services.length === 0) {
@@ -263,12 +263,12 @@ export default function ServiceAssignmentView() {
             <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Wrench className="w-3 h-3 mr-2" style={{ color: 'var(--accent-soft)' }} />
-                <span className="text-gray-400">{vocab.resource_plural}: </span>
+                <span style={{ color: 'var(--text-muted)' }}>{vocab.resource_plural}: </span>
                 <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{resMappings.filter(m => m.service_id === service.service_id).length} assigned</span>
               </div>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
                 <Users className="w-3 h-3 mr-2" style={{ color: 'var(--success)' }} />
-                <span className="text-gray-400">{vocab.employee_plural}: </span>
+                <span style={{ color: 'var(--text-muted)' }}>{vocab.employee_plural}: </span>
                 <span className="ml-1" style={{ color: 'var(--text-secondary)' }}>{empMappings.filter(m => m.service_id === service.service_id).length} authorized</span>
               </div>
             </div>
@@ -292,7 +292,7 @@ export default function ServiceAssignmentView() {
         <div className="space-y-8 max-h-[70vh] overflow-y-auto pr-2">
           {/* BASIC INFO */}
           <section className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+            <h4 className="text-xs font-bold uppercase tracking-widest flex items-center" style={{ color: 'var(--text-muted)' }}>
               <Tag className="w-3 h-3 mr-2" /> Service Details
             </h4>
             <div className="grid grid-cols-1 gap-4">
@@ -302,7 +302,7 @@ export default function ServiceAssignmentView() {
                 onChange={e => setEditForm({ ...editForm, name: e.target.value })}
               />
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1 tracking-widest">Description</label>
+                <label className="block text-[10px] font-bold uppercase mb-1 ml-1 tracking-widest" style={{ color: 'var(--text-muted)' }}>Description</label>
                 <textarea 
                   className="w-full p-3 border rounded-xl text-sm h-20 outline-none focus:ring-2"
                   style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
@@ -329,12 +329,12 @@ export default function ServiceAssignmentView() {
 
           {/* MAPPINGS WITHIN EDIT */}
           <section className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+            <h4 className="text-xs font-bold uppercase tracking-widest flex items-center" style={{ color: 'var(--text-muted)' }}>
               <Wrench className="w-3 h-3 mr-2" /> {vocab.resource_plural} & {vocab.employee_plural}
             </h4>
             <div className="space-y-6">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Authorized {vocab.resource_plural}</p>
+                <p className="text-[10px] font-bold uppercase mb-3 ml-1" style={{ color: 'var(--text-muted)' }}>Authorized {vocab.resource_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {resources.map(res => {
                     const isMapped = resMappings.some(m => m.service_id === selectedService?.service_id && m.resource_id === res.resource_id)
@@ -352,7 +352,7 @@ export default function ServiceAssignmentView() {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">Qualified {vocab.employee_plural}</p>
+                <p className="text-[10px] font-bold uppercase mb-3 ml-1" style={{ color: 'var(--text-muted)' }}>Qualified {vocab.employee_plural}</p>
                 <div className="flex flex-wrap gap-2">
                   {employees.filter(e => e.type !== 'user').map(emp => {
                     const isMapped = empMappings.some(m => m.service_id === selectedService?.service_id && m.employee_id === emp.employee_id)
@@ -465,11 +465,11 @@ export default function ServiceAssignmentView() {
                   <Card 
                     key={res.resource_id}
                     onClick={() => setSelectedResourceIds(prev => prev.includes(res.resource_id) ? prev.filter(id => id !== res.resource_id) : [...prev, res.resource_id])}
-                    className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.resource_id) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.resource_id) ? '' : 'border-transparent hover:brightness-110'}`}
                     style={selectedResourceIds.includes(res.resource_id) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
                   >
                     <div className="font-bold">{res.name}</div>
-                    <div className="text-xs text-gray-500 line-clamp-1">{res.description || 'No description'}</div>
+                    <div className="text-xs line-clamp-1" style={{ color: 'var(--text-muted)' }}>{res.description || 'No description'}</div>
                   </Card>
                 ))}
               </div>
@@ -493,11 +493,11 @@ export default function ServiceAssignmentView() {
                   <Card 
                     key={emp.employee_id}
                     onClick={() => setSelectedEmployeeIds(prev => prev.includes(emp.employee_id.toString()) ? prev.filter(id => id !== emp.employee_id.toString()) : [...prev, emp.employee_id.toString()])}
-                    className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.employee_id.toString()) ? '' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.employee_id.toString()) ? '' : 'border-transparent hover:brightness-110'}`}
                     style={selectedEmployeeIds.includes(emp.employee_id.toString()) ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' } : undefined}
                   >
                     <div className="font-bold">{emp.name}</div>
-                    <div className="text-xs text-gray-500 line-clamp-1">Qualified for mapped services</div>
+                    <div className="text-xs line-clamp-1" style={{ color: 'var(--text-muted)' }}>Qualified for mapped services</div>
                   </Card>
                 ))}
               </div>

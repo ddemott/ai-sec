@@ -92,7 +92,7 @@ function PolicyQuestionField({
           {status === 'saving' && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--warning)' }} />}
           {status === 'saved' && <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--success)' }} />}
           {status === 'error' && <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: 'var(--danger)' }}><AlertCircle className="w-3.5 h-3.5" />Save failed</span>}
-          {status === 'idle' && savedId && <Save className="w-3.5 h-3.5 text-gray-400 opacity-40" />}
+          {status === 'idle' && savedId && <Save className="w-3.5 h-3.5 opacity-40" style={{ color: 'var(--text-muted)' }} />}
         </div>
       </div>
     </div>
@@ -333,7 +333,7 @@ export default function KnowledgeBaseView() {
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400 italic">
+          <div className="flex flex-col items-center justify-center h-64 italic" style={{ color: 'var(--text-muted)' }}>
             <Loader2 className="w-8 h-8 animate-spin mb-4 opacity-20" />
             <p>Loading knowledge base...</p>
           </div>
@@ -399,7 +399,7 @@ export default function KnowledgeBaseView() {
             {tab === 'entries' && (
               <>
                 <div className="mb-4 relative max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                   <Input
                     data-shortcut-target="search"
                     placeholder="Search knowledge base..."
@@ -425,7 +425,8 @@ export default function KnowledgeBaseView() {
                             </div>
                             <button
                               onClick={() => handleDelete(doc.tenant_doc_id)}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 transition-all hover:[color:var(--danger)]"
+                              className="opacity-0 group-hover:opacity-100 p-1 transition-all hover:[color:var(--danger)]"
+                              style={{ color: 'var(--text-muted)' }}
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -438,7 +439,7 @@ export default function KnowledgeBaseView() {
                             {doc.content}
                           </p>
                           <div className="mt-auto pt-4">
-                            <span className="text-[10px] text-gray-400">{new Date(doc.created_at).toLocaleDateString()}</span>
+                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{new Date(doc.created_at).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </Card>
@@ -446,7 +447,7 @@ export default function KnowledgeBaseView() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 rounded-2xl border-2 border-dashed" style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}>
-                    <BookOpen className="w-10 h-10 text-gray-300 dark:text-gray-700 mb-3" />
+                    <BookOpen className="w-10 h-10 mb-3" style={{ color: 'var(--text-muted)' }} />
                     <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                       {searchTerm ? 'No matching entries found.' : 'No knowledge entries yet. Start with the questionnaire or upload a document.'}
                     </p>

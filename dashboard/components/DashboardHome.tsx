@@ -164,7 +164,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-pulse text-gray-400">Loading dashboard...</div>
+        <div className="animate-pulse" style={{ color: 'var(--text-muted)' }}>Loading dashboard...</div>
       </div>
     )
   }
@@ -642,7 +642,7 @@ function QuickAction({ icon: Icon, label, description, onClick }: {
         <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{label}</div>
         <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</div>
       </div>
-      <ArrowRight className="w-4 h-4 text-gray-400 ml-auto" />
+      <ArrowRight className="w-4 h-4 ml-auto" style={{ color: 'var(--text-muted)' }} />
     </button>
   )
 }

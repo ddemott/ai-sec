@@ -251,7 +251,7 @@ export default function ResourceManagerView() {
                   ) : null;
                 })
               ) : (
-                <span className="text-xs text-gray-400 italic">No services supported</span>
+                <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>No services supported</span>
               )}
             </div>
           </Card>
@@ -273,7 +273,7 @@ export default function ResourceManagerView() {
         <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">
           {/* IDENTIFICATION EDIT */}
           <section className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+            <h4 className="text-xs font-bold uppercase tracking-widest flex items-center" style={{ color: 'var(--text-muted)' }}>
               <Wrench className="w-3 h-3 mr-2" /> Basic Info
             </h4>
             <div className="space-y-3">
@@ -294,8 +294,8 @@ export default function ResourceManagerView() {
                   role="switch"
                   aria-checked={editForm.is_active}
                   onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.is_active ? '' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  style={editForm.is_active ? { backgroundColor: 'var(--accent)' } : undefined}
+                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                  style={editForm.is_active ? { backgroundColor: 'var(--accent)' } : { backgroundColor: 'var(--bg-raised)' }}
                 >
                   <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
@@ -305,7 +305,7 @@ export default function ResourceManagerView() {
 
           {/* Service Toggle Section */}
           <section>
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-4 flex items-center" style={{ color: 'var(--text-muted)' }}>
               <Tag className="w-3 h-3 mr-2" /> Supported Services
             </h4>
             <div className="grid grid-cols-1 gap-2">
