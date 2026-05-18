@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { Api } from '../lib/api';
 import { useStaticData, useTenantTimezone } from '../lib/hooks'
@@ -20,6 +20,21 @@ import { useConfirm } from '../lib/useConfirm';
 import AppointmentView from './AppointmentView';
 
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
+
+const VALID_VIEW_TABS: SchedulerViewTab[] = ['staff', 'resources', 'list', 'calendar'];
+
+/**
+ * Resolve the initial scheduler view-tab from `?subtab=…` on the URL,
+ * falling back to 'staff' (the default landing — see comment below).
+ * Lives outside the component so it can be called from a `useState`
+ * initializer without re-running on every render.
+ */
+function resolveInitialView(): SchedulerViewTab {
+  if (typeof window === 'undefined') return 'staff';
+  const raw = new URLSearchParams(window.location.search).get('subtab');
+  if (raw && (VALID_VIEW_TABS as string[]).includes(raw)) return raw as SchedulerViewTab;
+  return 'staff';
+}
 
 export default function SchedulerView() {
   const tenantId = useActiveTenantId();
@@ -44,8 +59,28 @@ export default function SchedulerView() {
   // rows = staff, hours across, today highlighted, empty cells now click
   // through to Quick Book (P1 #4). Calendar stays available for month/week
   // overview and drag-and-drop, just no longer the landing.
-  const [activeView, setActiveView] = useState<SchedulerViewTab>('staff');
+  //
+  // URL sync (UX audit 4.2 row 9, 2026-05-18): the active view is now
+  // also reflected in `?subtab=…` so deep-links + browser back/forward
+  // survive. `resolveInitialView` reads the URL on first mount; the
+  // effect below writes the default back on first render so a bare
+  // /dashboard?tab=schedule lands with the URL telling the truth.
+  const [activeView, setActiveView] = useState<SchedulerViewTab>(resolveInitialView);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Write the active view to ?subtab=… whenever it changes (including
+  // the initial render, so a bare URL gets stamped with the resolved
+  // default). Use replaceState rather than pushState — the dashboard
+  // page already handles the parent tab via pushState, and we don't
+  // want every sub-tab switch to clutter the back-button history.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('subtab') !== activeView) {
+      params.set('subtab', activeView);
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    }
+  }, [activeView]);
 
   // Zoom: column width in px per hour
   const ZOOM_LEVELS = [40, 60, 90, 120, 180];
