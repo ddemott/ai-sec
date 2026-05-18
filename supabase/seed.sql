@@ -63,51 +63,44 @@ VALUES
     ('a7c3e912-4b1f-4d8e-9f2a-1c3d5e7f9a0b', 'f234e471-0e60-4163-86c9-93cfd9338e3a', 'Truck 2', 'Ford Transit — backup unit, rotation and flat repair only')
 ON CONFLICT (resource_id) DO NOTHING;
 
--- 3. Create sample customers (Chicago suburbs)
-INSERT INTO customers (customer_id, tenant_id, phone, name, first_name, last_name, email, address, metadata)
-VALUES
-    ('207b25bb-ef55-4df8-ac89-252f9dcd80b9', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550101', 'James Kowalski', 'James', 'Kowalski', 'jkowalski@email.com', '1842 Washington St, Naperville, IL 60540', '{"vehicle": "2020 Chevy Silverado", "notes": "Asks about fleet pricing for his construction company"}'),
-    ('97704486-04d4-40ba-85f8-7a82e47e1611', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550102', 'Sarah Chen', 'Sarah', 'Chen', 'sarah.chen@email.com', '305 Fox Run Dr, Wheaton, IL 60187', '{"vehicle": "2019 Honda CRV", "notes": "Prefers Mike Rivera, wants Michelin tires"}'),
-    ('c3d4e5f6-7890-1234-5678-9abcdef01234', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550103', 'Tom Bradley', 'Tom', 'Bradley', 'tombradley@email.com', '4710 Bauer Rd, Downers Grove, IL 60515', '{"vehicle": "2022 Ford F-150", "notes": "Call only, no texts. Prefers Michelin Defenders."}'),
-    ('d4e5f6a7-8901-2345-6789-0abcdef12345', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550104', 'Linda Park', 'Linda', 'Park', 'lpark@email.com', '892 Ogden Ave, Aurora, IL 60504', '{"vehicle": "2021 Toyota Camry", "notes": "Regular rotation every 6 months. Prefers Carlos Vega."}'),
-    ('e5f6a7b8-9012-3456-7890-1abcdef23456', 'f234e471-0e60-4163-86c9-93cfd9338e3a', '+16305550105', 'Robert Diaz', 'Robert', 'Diaz', 'rdiaz@email.com', '2200 75th St, Woodridge, IL 60517', '{"vehicle": "2023 Toyota Tacoma", "notes": "New customer, referred by James Kowalski"}')
-ON CONFLICT (customer_id) DO NOTHING;
+-- 3. (intentionally empty) Customers are NOT seeded.
+-- 4. (intentionally empty) Appointments are NOT seeded.
+--
+-- Principle (locked 2026-05-18): seed data starts bare-bones. Transactional
+-- data (customers, appointments) must be created by each test that needs
+-- it and removed by the same test on completion. Demo data baked into the
+-- seed accumulated 17 stray appointments + 12 customers across recent
+-- rebuilds because the seed re-inserts on every run (no real PK conflict
+-- for date-derived rows), so tests ran against a polluted DB that grew
+-- silently. Bare-bones seed = predictable starting state for every test.
+--
+-- Business *configuration* (resources, services, employees, shifts) still
+-- lives in the seed for DynaTire so the existing E2E booking specs have
+-- working business shape. That layer is scheduled for the same treatment
+-- in a follow-up — see `seed-strip-stage-b` in the UX audit TODO file.
 
--- 4. Create appointments (today and tomorrow, Chicago time)
-INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
-VALUES
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', '18288e57-a958-41e4-be5f-e95a8539a06b', '207b25bb-ef55-4df8-ac89-252f9dcd80b9',
-        (CURRENT_DATE + TIME '09:00:00'), (CURRENT_DATE + TIME '10:00:00'), 'Flat Repair', 'scheduled'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', '18288e57-a958-41e4-be5f-e95a8539a06b', '97704486-04d4-40ba-85f8-7a82e47e1611',
-        (CURRENT_DATE + TIME '10:30:00'), (CURRENT_DATE + TIME '12:00:00'), 'Seasonal Tire Swap', 'scheduled'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', '18288e57-a958-41e4-be5f-e95a8539a06b', 'c3d4e5f6-7890-1234-5678-9abcdef01234',
-        (CURRENT_DATE + TIME '13:00:00'), (CURRENT_DATE + TIME '15:00:00'), 'New Tire Install (x4)', 'scheduled'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'a7c3e912-4b1f-4d8e-9f2a-1c3d5e7f9a0b', 'd4e5f6a7-8901-2345-6789-0abcdef12345',
-        (CURRENT_DATE + TIME '09:00:00'), (CURRENT_DATE + TIME '09:30:00'), 'Tire Rotation', 'scheduled'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'a7c3e912-4b1f-4d8e-9f2a-1c3d5e7f9a0b', 'e5f6a7b8-9012-3456-7890-1abcdef23456',
-        (CURRENT_DATE + TIME '10:00:00'), (CURRENT_DATE + TIME '11:30:00'), 'Seasonal Tire Swap', 'scheduled'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', '18288e57-a958-41e4-be5f-e95a8539a06b', 'd4e5f6a7-8901-2345-6789-0abcdef12345',
-        (CURRENT_DATE + INTERVAL '1 day' + TIME '09:00:00'), (CURRENT_DATE + INTERVAL '1 day' + TIME '09:30:00'), 'Tire Rotation', 'scheduled'),
-    ('f234e471-0e60-4163-86c9-93cfd9338e3a', '18288e57-a958-41e4-be5f-e95a8539a06b', '207b25bb-ef55-4df8-ac89-252f9dcd80b9',
-        (CURRENT_DATE + INTERVAL '1 day' + TIME '11:00:00'), (CURRENT_DATE + INTERVAL '1 day' + TIME '12:30:00'), 'Seasonal Tire Swap', 'scheduled')
-ON CONFLICT DO NOTHING;
+-- 5. Bella's Hair Studio — salon-vertical demo tenant. Uses a FIXED
+--    tenant_id so repeated `db:rebuild` runs are idempotent. The
+--    earlier pattern used gen_random_uuid() with ON CONFLICT DO
+--    NOTHING, which never conflicted (new UUID every run) and so
+--    spawned a fresh duplicate Bella's on every rebuild — by
+--    2026-05-18 the local DB had 2 of them.
+INSERT INTO tenants (tenant_id, name, business_type, timezone)
+VALUES (
+    'b3e1aaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    'Bella''s Hair Studio',
+    'salon',
+    'America/Chicago'
+) ON CONFLICT (tenant_id) DO NOTHING;
 
--- 5. Create a Second Tenant (salon in Lincoln Park)
-DO $$
-DECLARE
-    v_new_tenant_id UUID;
-BEGIN
-    INSERT INTO tenants (name, business_type, timezone)
-    VALUES ('Bella''s Hair Studio', 'salon', 'America/Chicago')
-    ON CONFLICT DO NOTHING
-    RETURNING tenant_id INTO v_new_tenant_id;
-
-    IF v_new_tenant_id IS NOT NULL THEN
-        INSERT INTO users (tenant_id, email, password_hash, full_name)
-        VALUES (v_new_tenant_id, 'bella@bellashair.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Bella Rossi')
-        ON CONFLICT (tenant_id, email) DO NOTHING;
-    END IF;
-END $$;
+INSERT INTO users (tenant_id, email, password_hash, full_name, role)
+VALUES (
+    'b3e1aaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    'bella@bellashair.com',
+    '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK',
+    'Bella Rossi',
+    'owner'
+) ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash, full_name = EXCLUDED.full_name;
 
 -- 6. Seed Services for DynaTire
 INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, price, required_skills, required_resources)
