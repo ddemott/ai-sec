@@ -15,6 +15,7 @@ import { FirstRunTour } from './FirstRunTour'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import { QuickBookPanel } from './scheduler/QuickBookPanel'
+import { useOnboardingState } from '../lib/useOnboardingState'
 import type { Tab } from '../app/dashboard/page'
 import type { Customer } from '../lib/types'
 
@@ -27,44 +28,6 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const { userName } = useSessionContext()
   const vocab = useVocabulary()
   const refreshVocabulary = useVocabularyRefresh()
-
-  // Wizard state: welcome → mode chooser → business picker → wizard.
-  // `welcomePassed` gates the first screen so a brand-new tenant sees a
-  // friendlier "you can stop and come back" framing before the binary
-  // solo/team choice, instead of being dropped into the picker cold.
-  type WizardMode = 'solo' | 'team' | null
-  const [welcomePassed, setWelcomePassed] = useState(false)
-  const [wizardMode, setWizardMode] = useState<WizardMode>(null)
-  const [businessTypeReady, setBusinessTypeReady] = useState(false)
-  const [wizardDismissed, setWizardDismissed] = useState(false)
-
-  // Clean ?trial=true from landing page CTA on mount AND respond to
-  // ?wizard=open which the SetupProgressPill (D4) uses to force the
-  // wizard open past the welcome screen. Pill-clicks ARE explicit
-  // "yes, set me up" signals, so we set welcomePassed=true here to
-  // skip the scope-framing welcome (the user already saw it on auto-
-  // open and chose to come back via the pill).
-  useState(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      let changed = false
-      if (params.get('trial') === 'true') {
-        params.delete('trial')
-        changed = true
-      }
-      if (params.get('wizard') === 'open') {
-        setWelcomePassed(true)
-        setWizardDismissed(false)
-        params.delete('wizard')
-        changed = true
-      }
-      if (changed) {
-        const qs = params.toString()
-        const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
-        window.history.replaceState({}, '', next)
-      }
-    }
-  })
 
   interface DashboardAppointment {
     appointment_id: string; start_time: string; end_time?: string; status: string; description?: string; customer_name?: string;
@@ -146,6 +109,13 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   const needsSetup = services.length === 0 || employees.length === 0 || resources.length === 0
 
+  // Single source of truth for the setup-wizard overlay state
+  // (UX audit #7). Replaces the welcomePassed/wizardMode/
+  // businessTypeReady/wizardDismissed 4-flag matrix. Stage transitions
+  // are exhaustive in the reducer so only one overlay renders at a
+  // time — see useOnboardingState.ts.
+  const { stage, mode, transitions } = useOnboardingState({ needsSetup, loading, autoOpen: true })
+
   // Keyboard-shortcut entry-point: `N` (registered at the dashboard
   // page level) dispatches `ai-sec:new-booking` so any mounted Home
   // can open the panel without page-level plumbing. Guarded by the
@@ -160,10 +130,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   }, [loading, needsSetup])
 
   function handleCloseWizard() {
-    setWelcomePassed(false)
-    setWizardMode(null)
-    setBusinessTypeReady(false)
-    setWizardDismissed(true)
+    transitions.closeToIdle()
     loadData() // refresh counts after wizard completes
     // Signal the persistent setup-progress pill to refetch — if the
     // user actually finished the wizard, the pill should vanish on
@@ -172,7 +139,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   }
 
   async function handleBusinessTypeSelected(businessType: string) {
-    if (!tenantId) return
+    if (!tenantId) {
+      transitions.enterWizard()
+      return
+    }
     try {
       // Fetch the full template to apply its settings
       const templates = await Api.templates.listFull()
@@ -185,19 +155,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         first_message: tpl?.first_message || undefined,
       })
       refreshVocabulary()
-      setBusinessTypeReady(true)
     } catch {
       // Still proceed — worst case they get default vocabulary
-      setBusinessTypeReady(true)
     }
+    transitions.enterWizard()
   }
-
-  // Auto-show wizard for new tenants that need setup. The flow gate is
-  // staged: welcome first, then mode chooser (only after "Let's go"), then
-  // business picker, then the wizard itself.
-  const wizardActive = needsSetup && !wizardDismissed && !wizardMode && !loading
-  const showWelcome = wizardActive && !welcomePassed
-  const showWizardChooser = wizardActive && welcomePassed
 
   if (loading) {
     return (
@@ -266,8 +228,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* SETUP PROMPT — shown if wizard was dismissed but setup still incomplete */}
-      {needsSetup && wizardDismissed && (
+      {/* SETUP PROMPT — shown only when the wizard was dismissed and
+          setup is still incomplete. Driven by the single 'dismissed'
+          stage from useOnboardingState, so it cannot co-render with
+          any modal stage (welcome/chooser/picker/wizard). */}
+      {needsSetup && stage === 'dismissed' && (
         <div className="rounded-xl border-2 p-5" style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--accent-muted)' }}>
           <div className="flex items-start gap-4">
             <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
@@ -284,7 +249,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                 variant="primary"
                 size="sm"
                 className="mt-3"
-                onClick={() => { setWelcomePassed(true); setWizardDismissed(false) }}
+                onClick={transitions.openToChooser}
               >
                 <Wand2 className="w-4 h-4 mr-1.5" />
                 Open Setup Assistant
@@ -294,30 +259,31 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* WIZARD — auto-opens for new tenants: welcome → mode chooser → business type → wizard */}
-      {showWelcome && (
+      {/* WIZARD overlay — exactly one of these renders at a time,
+          enforced by the reducer. */}
+      {stage === 'welcome' && (
         <WizardWelcome
-          onContinue={() => setWelcomePassed(true)}
-          onDismiss={() => setWizardDismissed(true)}
+          onContinue={transitions.advanceWelcome}
+          onDismiss={transitions.dismiss}
         />
       )}
-      {showWizardChooser && (
+      {stage === 'chooser' && (
         <WizardModeChooser
-          onChoose={(mode) => setWizardMode(mode)}
-          onClose={() => setWizardDismissed(true)}
+          onChoose={transitions.chooseMode}
+          onClose={transitions.dismiss}
         />
       )}
-      {wizardMode && !businessTypeReady && (
+      {stage === 'picker' && (
         <BusinessTypePicker
           onSelect={handleBusinessTypeSelected}
-          onBack={() => setWizardMode(null)}
+          onBack={transitions.backToChooser}
           onClose={handleCloseWizard}
         />
       )}
-      {wizardMode === 'solo' && businessTypeReady && (
+      {stage === 'wizard' && mode === 'solo' && (
         <SoloWizard isOpen={true} onClose={handleCloseWizard} />
       )}
-      {wizardMode === 'team' && businessTypeReady && (
+      {stage === 'wizard' && mode === 'team' && (
         <SetupWizard isOpen={true} onClose={handleCloseWizard} />
       )}
 
