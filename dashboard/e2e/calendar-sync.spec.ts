@@ -199,8 +199,12 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
   let scheduleSeeded = false;
   let customerId: string | null = null;
 
+  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
+  // can pass mikeId into the composite-key DELETE.
+  let mikeId: string | null = null;
+
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
+    mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
 
     const cIns = await pool.query(
@@ -256,7 +260,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     }
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -272,8 +276,12 @@ test('appointment-update dispatches all 5 providers with action=update', async (
   let scheduleSeeded = false;
   let customerId: string | null = null;
 
+  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
+  // can pass mikeId into the composite-key DELETE.
+  let mikeId: string | null = null;
+
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
+    mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
@@ -333,7 +341,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     );
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -350,8 +358,12 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
   let customerId: string | null = null;
   const tag = uniqueTag();
 
+  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
+  // can pass mikeId into the composite-key DELETE.
+  let mikeId: string | null = null;
+
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
+    mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
@@ -406,7 +418,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     apptId = null; // already deleted
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -538,8 +550,12 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
   let scheduleSeeded = false;
   let customerId: string | null = null;
 
+  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
+  // can pass mikeId into the composite-key DELETE.
+  let mikeId: string | null = null;
+
   try {
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
+    mikeId = await findEmployeeIdByName('Mike Rivera');
     const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
@@ -591,7 +607,7 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     expect(events.filter((e) => e.entity === 'appointment').length).toBeGreaterThanOrEqual(5);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });

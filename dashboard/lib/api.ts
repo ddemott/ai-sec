@@ -585,11 +585,16 @@ export const Api = {
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
 
-    add: (tenantId: string | null, data: { question: string; answer: string; category?: string }) =>
+    // `source` defaults to 'policy-questionnaire' (the preset-question
+    // catalog path). Caller passes 'custom-question' for owner-authored
+    // Q&A added via the new Custom Questions section. The discriminator
+    // lets the questionnaire UI filter its own preset answers without
+    // mixing in custom entries.
+    add: (tenantId: string | null, data: { question: string; answer: string; category?: string; source?: string }) =>
       apiMutate<{ success: boolean; tenant_doc_id: string }>(`/knowledge/add`, 'POST', {
         tenant_id: tenantId,
         ...data,
-        source: 'policy-questionnaire',
+        source: data.source ?? 'policy-questionnaire',
       }),
 
     update: (id: string, tenantId: string | null, data: { question: string; answer: string; category?: string }) =>

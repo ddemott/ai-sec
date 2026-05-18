@@ -32,7 +32,12 @@ export default function AIInsightsView() {
           <FolderTab key={tab.id} label={tab.label} size="sm" isActive={activeSubTab === tab.id} onClick={() => setActiveSubTab(tab.id)} />
         ))}
       </FolderTabBar>
-      <div className="flex-1 overflow-hidden">
+      {/* overflow-y-auto (not overflow-hidden) so the Knowledge Base
+          questionnaire can scroll when expanded sections push content
+          below the fold (2026-05-18 user feedback). The flex-1 +
+          h-full siblings above keep the FolderTabBar pinned while
+          the body scrolls underneath. */}
+      <div className="flex-1 overflow-y-auto">
         {activeSubTab === 'persona' && <AIConfigView />}
         {activeSubTab === 'knowledge' && <KnowledgeBaseView />}
         {activeSubTab === 'analytics' && <AnalyticsView />}
