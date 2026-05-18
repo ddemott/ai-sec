@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Customer } from '@/lib/types'
 import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from '@/lib/mockData'
 import {
@@ -31,6 +31,11 @@ export default function CRMView() {
   const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
   const [customerAppointments, setCustomerAppointments] = useState<{ appointment_id: string; start_time: string; end_time: string; status: string; description: string; resource_name?: string; employee_name?: string; location?: string }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  // Keyboard-nav focus index into the filtered customer list
+  // (UX audit Flows 4.1 row 5, 2026-05-18). -1 means nothing
+  // focused; ArrowDown from the search input sets it to 0.
+  const [focusedIdx, setFocusedIdx] = useState(-1)
+  const listRef = useRef<HTMLDivElement>(null)
   const { state: confirmState, confirm, close: closeConfirm } = useConfirm()
 
   // States
@@ -331,10 +336,62 @@ export default function CRMView() {
           </div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }} />
-            <input data-shortcut-target="search" type="text" placeholder="Search customers..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }} />
+            <input
+              data-shortcut-target="search"
+              type="text"
+              placeholder="Search customers..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setFocusedIdx(-1) }}
+              onKeyDown={(e) => {
+                // ArrowDown from the search input → focus first row.
+                // Enter (with a search term but no focused row yet) →
+                // auto-select the first match.
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  if (filteredCustomers.length > 0) setFocusedIdx(0)
+                } else if (e.key === 'Enter' && filteredCustomers.length > 0) {
+                  e.preventDefault()
+                  const first = filteredCustomers[0]
+                  setSelectedCustomer(first); setIsCreating(false); setShowDetailOnMobile(true)
+                }
+              }}
+              role="combobox"
+              aria-expanded={filteredCustomers.length > 0}
+              aria-controls="crm-customer-list"
+              aria-activedescendant={focusedIdx >= 0 ? `crm-customer-row-${filteredCustomers[focusedIdx]?.customer_id}` : undefined}
+              className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none"
+              style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }}
+            />
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <div
+          ref={listRef}
+          id="crm-customer-list"
+          role="listbox"
+          aria-label="Customers"
+          className="flex-1 overflow-y-auto pb-20 md:pb-0"
+          onKeyDown={(e) => {
+            // Keyboard nav through the filtered list. ArrowUp/Down
+            // moves focus, Enter selects, Escape returns focus to
+            // the search input.
+            if (filteredCustomers.length === 0) return
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setFocusedIdx(i => Math.min(i + 1, filteredCustomers.length - 1))
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setFocusedIdx(i => Math.max(i - 1, 0))
+            } else if (e.key === 'Enter' && focusedIdx >= 0) {
+              e.preventDefault()
+              const c = filteredCustomers[focusedIdx]
+              if (c) { setSelectedCustomer(c); setIsCreating(false); setShowDetailOnMobile(true) }
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setFocusedIdx(-1)
+              ;(document.querySelector<HTMLInputElement>('[data-shortcut-target="search"]'))?.focus()
+            }
+          }}
+        >
           {filteredCustomers.length === 0 && !loading && (
             <EmptyState
               icon={UserPlus}
@@ -343,26 +400,40 @@ export default function CRMView() {
               variant="compact"
             />
           )}
-          {filteredCustomers.map((c) => (
-            <div
-              key={c.customer_id}
-              onClick={() => { setSelectedCustomer(c); setIsCreating(false); setShowDetailOnMobile(true); }}
-              className={`p-4 cursor-pointer transition flex justify-between items-center
-                ${selectedCustomer?.customer_id === c.customer_id ? 'border-l-4' : ''}`}
-              style={{
-                borderBottom: '1px solid var(--border-soft)',
-                ...(selectedCustomer?.customer_id === c.customer_id
-                  ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
-                  : {})
-              }}
-            >
-              <div>
-                <p className="text-sm font-semibold" style={{ color: selectedCustomer?.customer_id === c.customer_id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{c.name || 'Unknown'}</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{formatPhone(c.phone)}</p>
+          {filteredCustomers.map((c, idx) => {
+            const isSelected = selectedCustomer?.customer_id === c.customer_id
+            const isFocused = focusedIdx === idx
+            return (
+              <div
+                key={c.customer_id}
+                id={`crm-customer-row-${c.customer_id}`}
+                role="option"
+                tabIndex={isFocused ? 0 : -1}
+                aria-selected={isSelected}
+                ref={(el) => {
+                  // Focus the row when it becomes the keyboard cursor target.
+                  if (el && isFocused && document.activeElement !== el) el.focus()
+                }}
+                onMouseEnter={() => setFocusedIdx(-1)}
+                onClick={() => { setSelectedCustomer(c); setIsCreating(false); setShowDetailOnMobile(true); }}
+                className={`p-4 cursor-pointer transition flex justify-between items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${isSelected ? 'border-l-4' : ''}`}
+                style={{
+                  borderBottom: '1px solid var(--border-soft)',
+                  ...(isSelected
+                    ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
+                    : isFocused
+                      ? { backgroundColor: 'var(--accent-muted)' }
+                      : {})
+                }}
+              >
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: isSelected ? 'var(--accent-soft)' : 'var(--text-primary)' }}>{c.name || 'Unknown'}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{formatPhone(c.phone)}</p>
+                </div>
+                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
               </div>
-              <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
