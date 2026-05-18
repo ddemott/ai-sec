@@ -7,11 +7,16 @@ interface AppointmentBlockProps {
   appointment: SchedulerAppointment;
   onClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
   /**
-   * Hover-revealed trash icon → soft-cancel. Parent owns the confirm
+   * Always-visible trash icon → soft-cancel. Parent owns the confirm
    * prompt + API call; child only fires the intent. Hidden for already-
    * canceled appointments (the row stays but the operator can't cancel
-   * twice). When omitted, no trash icon renders — the block behaves
-   * exactly as it did pre-2026-05-13.
+   * twice) and during drag. When omitted, no trash icon renders — the
+   * block behaves exactly as it did pre-2026-05-13.
+   *
+   * Visibility note (UX audit #2, 2026-05-18): icon was previously
+   * `opacity-0 group-hover:opacity-100`, which made it invisible on
+   * touch + keyboard. Now renders at 70% opacity at rest, 100% on
+   * hover/focus. Tap area widened to 24px for iOS-class touch targets.
    */
   onDelete?: (appointmentId: string) => void;
   /**
@@ -175,11 +180,14 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
     : {};
   const isDragging = drag !== null && Math.abs(drag.deltaPx) >= CLICK_DRAG_THRESHOLD_PX;
 
-  // Trash icon visibility: revealed by `group-hover` so we don't need
-  // local hover state. The icon is suppressed during drag (no point
-  // letting the user click delete on a ghost block) and on canceled
-  // rows (already non-actionable).
-  const showTrash = onDelete && !isCanceled && !isDragging;
+  // Trash icon is always visible (dimmed at rest, full on hover/focus)
+  // so touch + keyboard users can reach it. The icon is suppressed
+  // during drag (no point letting the user click delete on a ghost
+  // block), on canceled rows (already non-actionable), and on very
+  // narrow blocks (width < 4% of the row) where it would cover the
+  // dot-renderer used in place of the customer name.
+  const isNarrowBlock = width < 0.04;
+  const showTrash = onDelete && !isCanceled && !isDragging && !isNarrowBlock;
 
   return (
     <div
@@ -210,7 +218,7 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
           type="button"
           onMouseDown={(e) => e.stopPropagation()} // don't start a drag from the trash
           onClick={handleTrashClick}
-          className="absolute top-0.5 right-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/30 transition-opacity"
+          className="absolute top-0 right-0 p-1.5 rounded opacity-70 hover:opacity-100 focus-visible:opacity-100 hover:bg-black/30 focus-visible:bg-black/30 focus-visible:outline-none transition-opacity"
           title="Cancel this appointment"
           aria-label="Cancel appointment"
           data-testid={`appointment-block-delete-${appointment.appointment_id}`}

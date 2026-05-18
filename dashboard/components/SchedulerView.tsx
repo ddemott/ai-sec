@@ -113,6 +113,28 @@ export default function SchedulerView() {
   // DELETE would. Refreshes both the scheduler data and the static data
   // (employees / resources / services / customers) so any view shows
   // the canceled status immediately.
+  // Undo wraps the existing reactivate route (added 2026-05-10) for the
+  // 5-second Undo window on the cancel-success toast. TIMESLOT_OCCUPIED
+  // means another booking landed in the freed slot before the user hit
+  // Undo — surface that as a hard error, not silent failure.
+  const undoCancel = useCallback(async (appointmentId: string) => {
+    if (!tenantId) return;
+    try {
+      const res = await Api.appointments.reactivate(appointmentId, tenantId);
+      if (res.success) {
+        showToast('Appointment restored', 'success');
+        refreshScheduler();
+        refreshStaticData();
+      } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
+        showToast('That time slot is no longer available. Book a new appointment instead.', 'error');
+      } else {
+        showToast(res.error || 'Could not restore appointment', 'error');
+      }
+    } catch {
+      showToast('Connection error — could not restore appointment', 'error');
+    }
+  }, [tenantId, refreshScheduler, refreshStaticData]);
+
   const handlePopoverCancel = useCallback((appointmentId: string) => {
     if (!tenantId) return;
     confirmAction({
@@ -125,7 +147,10 @@ export default function SchedulerView() {
         try {
           const res = await Api.appointments.cancel(appointmentId, tenantId);
           if (res.success) {
-            showToast('Appointment canceled', 'success');
+            showToast('Appointment canceled', 'success', {
+              label: 'Undo',
+              onClick: () => { void undoCancel(appointmentId); },
+            });
             setApptPopover(null);
             refreshScheduler();
             refreshStaticData();
@@ -137,7 +162,7 @@ export default function SchedulerView() {
         }
       },
     });
-  }, [tenantId, refreshScheduler, refreshStaticData, confirmAction, closeConfirm]);
+  }, [tenantId, refreshScheduler, refreshStaticData, confirmAction, closeConfirm, undoCancel]);
 
   const handleQuickBooked = useCallback(() => {
     refreshScheduler();
@@ -161,7 +186,10 @@ export default function SchedulerView() {
         try {
           const res = await Api.appointments.cancel(appointmentId, tenantId);
           if (res.success) {
-            showToast('Appointment canceled', 'success');
+            showToast('Appointment canceled', 'success', {
+              label: 'Undo',
+              onClick: () => { void undoCancel(appointmentId); },
+            });
             refreshScheduler();
           } else {
             showToast(res.error || 'Failed to cancel appointment', 'error');
@@ -171,7 +199,7 @@ export default function SchedulerView() {
         }
       },
     });
-  }, [tenantId, refreshScheduler, confirmAction, closeConfirm]);
+  }, [tenantId, refreshScheduler, confirmAction, closeConfirm, undoCancel]);
 
   // Outlook-style drag-to-move. The block already snapped the delta
   // to a 15-min grid (matches the booking-form gridding); we compute

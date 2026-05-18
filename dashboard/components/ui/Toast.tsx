@@ -3,10 +3,22 @@ import { Check, X, AlertTriangle, Info } from 'lucide-react'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 
+/**
+ * Optional action button on a toast. Used for short-window reversible
+ * operations — e.g. an Undo on a soft-cancel. Click runs `onClick`
+ * and dismisses the toast immediately. The toast still auto-dismisses
+ * after the type's normal duration if the user never clicks.
+ */
+export interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 interface ToastMessage {
   id: number
   message: string
   type: ToastType
+  action?: ToastAction
 }
 
 const MAX_TOASTS = 5
@@ -17,12 +29,23 @@ const DURATIONS: Record<ToastType, number> = {
   error: 5000,
 }
 
-let toastId = 0
-let addToastFn: ((message: string, type: ToastType) => void) | null = null
+// Action-bearing toasts (Undo etc.) live longer so the user actually
+// has a chance to read + react. Matches the standard 5-second Undo
+// window seen in Gmail / Slack / Linear.
+const ACTION_TOAST_DURATION = 5000
 
-/** Call from anywhere to show a toast */
-export function showToast(message: string, type: ToastType = 'success') {
-  if (addToastFn) addToastFn(message, type)
+let toastId = 0
+let addToastFn: ((message: string, type: ToastType, action?: ToastAction) => void) | null = null
+
+/**
+ * Call from anywhere to show a toast.
+ *
+ * @param action Optional action button (e.g. Undo). Visible until the
+ *   toast auto-dismisses or the user dismisses it. Click runs `onClick`
+ *   and removes the toast immediately.
+ */
+export function showToast(message: string, type: ToastType = 'success', action?: ToastAction) {
+  if (addToastFn) addToastFn(message, type, action)
 }
 
 const ICONS: Record<ToastType, React.ElementType> = {
@@ -58,15 +81,15 @@ export function ToastContainer() {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  const addToast = useCallback((message: string, type: ToastType) => {
+  const addToast = useCallback((message: string, type: ToastType, action?: ToastAction) => {
     const id = ++toastId
     setToasts(prev => {
-      const next = [...prev, { id, message, type }]
+      const next = [...prev, { id, message, type, action }]
       return next.length > MAX_TOASTS ? next.slice(-MAX_TOASTS) : next
     })
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
-    }, DURATIONS[type])
+    }, action ? ACTION_TOAST_DURATION : DURATIONS[type])
   }, [])
 
   useEffect(() => {
@@ -89,9 +112,20 @@ export function ToastContainer() {
           >
             <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="flex-1">{toast.message}</span>
+            {toast.action && (
+              <button
+                onClick={() => {
+                  toast.action!.onClick()
+                  removeToast(toast.id)
+                }}
+                className="ml-1 px-2.5 py-1 rounded font-bold text-xs uppercase tracking-wider bg-white/15 hover:bg-white/30 transition-colors shrink-0"
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button
               onClick={() => removeToast(toast.id)}
-              className="ml-2 p-0.5 rounded hover:bg-white/20 transition-colors shrink-0"
+              className="ml-1 p-0.5 rounded hover:bg-white/20 transition-colors shrink-0"
               aria-label="Dismiss notification"
             >
               <X className="w-3.5 h-3.5" />

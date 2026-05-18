@@ -411,6 +411,26 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           if (res.success) {
               setSelectedAppointment(null)
               fetchAppointments()
+              showToast('Appointment canceled', 'success', {
+                label: 'Undo',
+                onClick: () => {
+                  void (async () => {
+                    try {
+                      const r = await Api.appointments.reactivate(appointmentId, tenantId)
+                      if (r.success) {
+                        showToast('Appointment restored', 'success')
+                        fetchAppointments()
+                      } else if (r.error_code === 'TIMESLOT_OCCUPIED') {
+                        showToast('That time slot is no longer available. Book a new appointment instead.', 'error')
+                      } else {
+                        showToast(r.error || 'Could not restore appointment', 'error')
+                      }
+                    } catch {
+                      showToast('Connection error — could not restore appointment', 'error')
+                    }
+                  })()
+                },
+              })
           } else {
               setError(res.error || 'Failed to cancel appointment')
           }

@@ -407,6 +407,26 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // would refresh the parent's data set, not this view's. 2026-05-13:
   // added after the user reported "no delete button" — the popover
   // was rendered without onCancel so its action buttons never showed.
+  // Undo for cancel-appointment — reactivates the row via the dedicated
+  // backend route. TIMESLOT_OCCUPIED means another booking landed in the
+  // freed slot before the user clicked Undo; surface that explicitly.
+  const undoApptCancel = useCallback(async (appointmentId: string) => {
+    if (!tenantId) return;
+    try {
+      const res = await Api.appointments.reactivate(appointmentId, tenantId);
+      if (res.success) {
+        showToast('Appointment restored', 'success');
+        refreshScheduler();
+      } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
+        showToast('That time slot is no longer available. Book a new appointment instead.', 'error');
+      } else {
+        showToast(res.error || 'Could not restore appointment', 'error');
+      }
+    } catch {
+      showToast('Connection error — could not restore appointment', 'error');
+    }
+  }, [tenantId, refreshScheduler]);
+
   const handleApptCancel = useCallback((appointmentId: string) => {
     if (!tenantId) return;
     openConfirm({
@@ -420,7 +440,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
           try {
             const res = await Api.appointments.cancel(appointmentId, tenantId);
             if (res.success) {
-              showToast('Appointment canceled', 'success');
+              showToast('Appointment canceled', 'success', {
+                label: 'Undo',
+                onClick: () => { void undoApptCancel(appointmentId); },
+              });
               setApptPopover(null);
               refreshScheduler();
             } else {
@@ -432,7 +455,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
         })();
       },
     });
-  }, [tenantId, refreshScheduler, openConfirm, closeConfirm]);
+  }, [tenantId, refreshScheduler, openConfirm, closeConfirm, undoApptCancel]);
 
   // Drag-to-move from a Staff-lane block. Block already snapped delta
   // to 15 min and called us with the resolved minute count. We compute
@@ -1262,7 +1285,14 @@ interface AppointmentBlockNewProps {
   colW: number;
   services: Service[];
   onClick?: (appointment: SchedulerAppointment, e: React.MouseEvent) => void;
-  /** Hover-trash → soft-cancel. Hidden for already-canceled rows. */
+  /**
+   * Always-visible trash → soft-cancel. Parent owns confirm + API.
+   * Hidden for already-canceled rows, during drag, and on very narrow
+   * blocks (where the icon would cover the customer-name span).
+   * Visibility was previously `opacity-0 group-hover:opacity-100`,
+   * making the affordance invisible on touch + keyboard (UX audit #2,
+   * 2026-05-18).
+   */
   onDelete?: (appointmentId: string) => void;
   /**
    * Outlook-style drag-to-move (Staff sub-tab). Parent receives the
@@ -1340,7 +1370,11 @@ function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, o
   const dragStyle = drag
     ? { transform: `translateX(${drag.deltaPx}px)`, opacity: 0.7, zIndex: 20 as const }
     : {};
-  const showTrash = onDelete && !isCanceled && !isDragging;
+  // Hide the trash on very narrow blocks — at <40px the icon eats the
+  // customer-name span. Block click still opens the popover where
+  // Cancel is available, so narrow-block users aren't locked out.
+  const isNarrowBlock = width < 40;
+  const showTrash = onDelete && !isCanceled && !isDragging && !isNarrowBlock;
 
   return (
     <div
@@ -1371,7 +1405,7 @@ function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, o
           type="button"
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleTrashClick}
-          className="absolute top-0.5 right-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/30 transition-opacity"
+          className="absolute top-0 right-0 p-1.5 rounded opacity-70 hover:opacity-100 focus-visible:opacity-100 hover:bg-black/30 focus-visible:bg-black/30 focus-visible:outline-none transition-opacity"
           title="Cancel this appointment"
           aria-label="Cancel appointment"
           data-testid={`appt-block-delete-${appointment.appointment_id}`}
