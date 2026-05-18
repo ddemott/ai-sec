@@ -56,25 +56,40 @@ export async function scheduleRemindersForAppointment(
         return;
       }
 
-      for (const r of REMINDER_BUNDLE) {
+      // Build one multi-row INSERT for the 4 reminder rows. Sequential
+      // single-row INSERTs each acquire `audit_log` row locks one at
+      // a time, creating a window where the test's cleanup cascade
+      // (DELETE FROM tenants → cascade to reminder_schedules → audit
+      // trigger) deadlocks against this in-flight bundle. Single
+      // INSERT acquires the locks once and releases them once.
+      // Origin: 2026-05-18 — same shape as the expand-weekly fix in
+      // src/services/expandWeeklyToSchedule.ts.
+      const valuesSql: string[] = [];
+      const params: (string | null)[] = [];
+      REMINDER_BUNDLE.forEach((r, i) => {
         const scheduledFor =
           r.type === 'confirmation'
             ? now
             : new Date(appointmentDateTime.getTime() - r.hoursBefore * 60 * 60 * 1000);
-        await client.query(
-          `INSERT INTO reminder_schedules
-             (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
-           VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')`,
-          [
-            appointmentId,
-            tenantId,
-            row.customer_email,
-            row.customer_phone,
-            r.type,
-            scheduledFor.toISOString(),
-          ],
+        const base = i * 6;
+        valuesSql.push(
+          `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, 'scheduled')`,
         );
-      }
+        params.push(
+          appointmentId,
+          tenantId,
+          row.customer_email,
+          row.customer_phone,
+          r.type,
+          scheduledFor.toISOString(),
+        );
+      });
+      await client.query(
+        `INSERT INTO reminder_schedules
+           (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
+         VALUES ${valuesSql.join(', ')}`,
+        params,
+      );
     });
   } catch (err) {
     logger?.error(

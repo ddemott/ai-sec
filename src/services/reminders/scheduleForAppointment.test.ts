@@ -67,6 +67,39 @@ function buildWithTenantClient(client: PoolClient): WithTenantClient {
   return async (_tenantId, fn) => fn(client);
 }
 
+/**
+ * The helper writes one multi-row INSERT (4 reminder_schedules rows in
+ * one statement, 6 params per row → 24 params total). This unpacks the
+ * single query's flat params back into row-shaped objects so the test
+ * bodies can keep using "find the 24h row, check its scheduled_for"
+ * patterns without caring about whether the underlying SQL is 1 or 4
+ * INSERTs. If the row shape ever changes (added a column, removed
+ * one), this is the only place that needs to update.
+ */
+interface ReminderInsertRow {
+  appointmentId: string;
+  tenantId: string;
+  email: string | null;
+  phone: string | null;
+  type: string;
+  scheduledFor: string;
+}
+function unpackReminderInserts(q: LoggedQuery): ReminderInsertRow[] {
+  const COLS_PER_ROW = 6;
+  const rows: ReminderInsertRow[] = [];
+  for (let i = 0; i < q.params.length; i += COLS_PER_ROW) {
+    rows.push({
+      appointmentId: q.params[i] as string,
+      tenantId: q.params[i + 1] as string,
+      email: q.params[i + 2] as string | null,
+      phone: q.params[i + 3] as string | null,
+      type: q.params[i + 4] as string,
+      scheduledFor: q.params[i + 5] as string,
+    });
+  }
+  return rows;
+}
+
 describe('scheduleRemindersForAppointment', () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -100,28 +133,27 @@ describe('scheduleRemindersForAppointment', () => {
     );
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
-    expect(inserts).toHaveLength(4);
+    expect(inserts).toHaveLength(1);
+    const rows = unpackReminderInserts(inserts[0]);
+    expect(rows).toHaveLength(4);
 
-    const byType = new Map<string, LoggedQuery>();
-    for (const ins of inserts) {
-      byType.set(ins.params[4] as string, ins);
-    }
-    expect(byType.get('confirmation')?.params[5]).toBe(now.toISOString());
-    expect(byType.get('72h')?.params[5]).toBe(
+    const byType = new Map(rows.map((r) => [r.type, r]));
+    expect(byType.get('confirmation')?.scheduledFor).toBe(now.toISOString());
+    expect(byType.get('72h')?.scheduledFor).toBe(
       new Date(startTime.getTime() - 72 * 60 * 60 * 1000).toISOString(),
     );
-    expect(byType.get('24h')?.params[5]).toBe(
+    expect(byType.get('24h')?.scheduledFor).toBe(
       new Date(startTime.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     );
-    expect(byType.get('2h')?.params[5]).toBe(
+    expect(byType.get('2h')?.scheduledFor).toBe(
       new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString(),
     );
 
-    for (const ins of inserts) {
-      expect(ins.params[0]).toBe(APPOINTMENT_ID);
-      expect(ins.params[1]).toBe(TENANT_ID);
-      expect(ins.params[2]).toBe('cust@example.com');
-      expect(ins.params[3]).toBe('+15551234567');
+    for (const row of rows) {
+      expect(row.appointmentId).toBe(APPOINTMENT_ID);
+      expect(row.tenantId).toBe(TENANT_ID);
+      expect(row.email).toBe('cust@example.com');
+      expect(row.phone).toBe('+15551234567');
     }
   });
 
@@ -150,10 +182,12 @@ describe('scheduleRemindersForAppointment', () => {
     );
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
-    expect(inserts).toHaveLength(4);
-    for (const ins of inserts) {
-      expect(ins.params[2]).toBeNull();
-      expect(ins.params[3]).toBe('+15551234567');
+    expect(inserts).toHaveLength(1);
+    const rows = unpackReminderInserts(inserts[0]);
+    expect(rows).toHaveLength(4);
+    for (const row of rows) {
+      expect(row.email).toBeNull();
+      expect(row.phone).toBe('+15551234567');
     }
   });
 
@@ -337,7 +371,8 @@ describe('rescheduleRemindersForAppointment', () => {
     expect(cancels[0].params).toEqual([APPOINTMENT_ID, TENANT_ID]);
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
-    expect(inserts).toHaveLength(4);
+    expect(inserts).toHaveLength(1);
+    expect(unpackReminderInserts(inserts[0])).toHaveLength(4);
   });
 
   it('SAD: UPDATE failure during cancel is logged but does NOT block the seed step', async () => {
@@ -403,7 +438,10 @@ describe('rescheduleRemindersForAppointment', () => {
     );
 
     expect(updateCalled).toBe(true);
-    expect(insertCount).toBe(4); // seed proceeded despite cancel failure
+    // One multi-row INSERT covers all 4 reminder rows (see helper). The
+    // assertion stays "seed proceeded despite cancel failure" — counting
+    // statements not rows.
+    expect(insertCount).toBe(1);
     expect(logger.error).toHaveBeenCalled();
     // The log must surface tenantId + appointmentId so support can find the row
     expect(logger.error.mock.calls[0][0]).toMatchObject({
