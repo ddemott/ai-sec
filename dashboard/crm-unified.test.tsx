@@ -177,6 +177,130 @@ describe('CRM Unified View - Search', () => {
   })
 })
 
+describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => {
+  // The keyboard-nav layer (committed in a8fea43) gives front-desk
+  // power-users a way to find + open a customer without leaving the
+  // keyboard. Tests pin the contract for each transition so a future
+  // refactor of the focus state machine surfaces here.
+
+  test('HAPPY: ArrowDown from the search input arms the first row via aria-activedescendant', async () => {
+    // WHO: a front-desk operator who pressed `/` to focus search, then
+    //      ArrowDown to move into the list
+    // WHAT: the search input's aria-activedescendant points at the
+    //       first filtered row's id so screen readers track the
+    //       keyboard cursor
+    // WHEN: customers loaded, search input focused, ArrowDown pressed
+    // WHERE: dashboard/components/CRMView.tsx — search-input onKeyDown
+    // WHY: without aria-activedescendant, a screen reader would
+    //      announce the search input but the visual focus would
+    //      sit on a list row with no audible signal. Pins the
+    //      combobox+listbox a11y contract.
+    setupFetchMock()
+    render(<CRMView />)
+    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+
+    const searchInput = screen.getByPlaceholderText('Search customers...')
+    expect(searchInput.getAttribute('aria-activedescendant')).toBeFalsy()
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+
+    const activeId = searchInput.getAttribute('aria-activedescendant')
+    expect(activeId).toBeTruthy()
+    expect(activeId).toMatch(/^crm-customer-row-/)
+  })
+
+  test('HAPPY: Enter on search with results auto-selects the first match', async () => {
+    // WHO: operator who typed a partial name and hit Enter — they
+    //      expect the obvious match to open, not to have to ArrowDown
+    //      first
+    // WHAT: Enter pressed in the search input with results visible
+    //       selects the first filtered customer (the detail pane
+    //       header reflects the selection)
+    // WHEN: customers loaded, search filtered to "Alice", Enter
+    // WHERE: dashboard/components/CRMView.tsx — search onKeyDown Enter
+    // WHY: matches Gmail/Slack quick-finder semantics — without the
+    //      auto-select, the operator pays an extra ArrowDown for an
+    //      unambiguous match.
+    setupFetchMock()
+    render(<CRMView />)
+    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+
+    const searchInput = screen.getByPlaceholderText('Search customers...')
+    fireEvent.change(searchInput, { target: { value: 'Alice' } })
+
+    // The detail pane initially shows Bob (auto-selected on mount).
+    // Pin pre-state: an Alice h1 is NOT yet in the document; only
+    // her list row is. After Enter, an h1 with her name should
+    // appear in the detail pane.
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 1, name: /^Alice Johnson$/ })).toBeNull()
+    })
+
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 1, name: /^Alice Johnson$/ })).toBeTruthy()
+    })
+  })
+
+  test('HAPPY: Escape from the customer list returns focus to the search input', async () => {
+    // WHO: operator who pressed `/` to search, ArrowDown'd into the
+    //      list, then changed their mind and wants to refine the
+    //      search query
+    // WHAT: Escape pressed on the listbox restores focus to the
+    //       search input
+    // WHEN: list focused (ArrowDown landed there), Escape pressed
+    // WHERE: dashboard/components/CRMView.tsx — list onKeyDown Escape
+    // WHY: without an explicit Escape return-path, the operator has
+    //      to mouse-click back to search — defeating the point of
+    //      the `/`-then-Arrow workflow.
+    setupFetchMock()
+    render(<CRMView />)
+    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+
+    const searchInput = screen.getByPlaceholderText('Search customers...') as HTMLInputElement
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+
+    const list = document.getElementById('crm-customer-list')
+    expect(list).toBeTruthy()
+    fireEvent.keyDown(list!, { key: 'Escape' })
+
+    // Focus should be back on the search input. jsdom doesn't always
+    // fire focus listeners synchronously, but document.activeElement
+    // reflects the focus call this code path makes.
+    expect(document.activeElement).toBe(searchInput)
+  })
+
+  test('SAD: ArrowDown with no filtered results is a no-op', async () => {
+    // WHO: operator who typed a query that matches no customers and
+    //      reflexively pressed ArrowDown
+    // WHAT: the search input's aria-activedescendant stays empty —
+    //      no row is armed because there are no rows
+    // WHEN: filtered list is empty, ArrowDown pressed
+    // WHERE: dashboard/components/CRMView.tsx — onKeyDown guard
+    //        `if (filteredCustomers.length === 0) return`
+    // WHY: a UI that arms a phantom row on ArrowDown would either
+    //      crash on Enter or trap focus on an invisible target —
+    //      both are worse than doing nothing.
+    setupFetchMock()
+    render(<CRMView />)
+    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+
+    const searchInput = screen.getByPlaceholderText('Search customers...')
+    fireEvent.change(searchInput, { target: { value: 'zzzzz-no-match' } })
+    // The list (id="crm-customer-list") should empty out, even if
+    // the detail-pane h1 still shows Bob (auto-selected on mount).
+    await waitFor(() => {
+      const list = document.getElementById('crm-customer-list')
+      expect(list?.querySelectorAll('[role="option"]').length || 0).toBe(0)
+    })
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+
+    expect(searchInput.getAttribute('aria-activedescendant')).toBeFalsy()
+  })
+})
+
 describe('CRM Unified View - Upcoming Appointments', () => {
   test('should display upcoming appointments section when customer is selected', async () => {
     setupFetchMock()
