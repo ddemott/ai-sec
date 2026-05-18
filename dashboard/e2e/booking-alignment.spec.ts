@@ -102,8 +102,28 @@ async function findResourceIdByName(name: string): Promise<string | null> {
   return r.rows[0]?.resource_id ?? null;
 }
 
-test.beforeAll(() => { pool = new Pool({ connectionString: PG_URL }); });
-test.afterAll(async () => { await pool.end(); });
+// Per-spec fixture customer — same rationale as workflows.spec.ts.
+// 2026-05-18 seed strip removed seeded customers; this spec's three
+// failing tests all need *a* customer via `SELECT customer_id ...
+// LIMIT 1`. Create one, delete on teardown. Combined into a single
+// beforeAll/afterAll pair so we don't depend on Playwright's
+// hook-ordering semantics.
+let fixtureCustomerId: string | null = null;
+test.beforeAll(async () => {
+  pool = new Pool({ connectionString: PG_URL });
+  const insert = await pool.query(
+    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
+     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
+    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture'],
+  );
+  fixtureCustomerId = insert.rows[0].customer_id;
+});
+test.afterAll(async () => {
+  if (fixtureCustomerId) {
+    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+  }
+  await pool.end();
+});
 
 // ────────────────────────────────────────────────────────────────────────────
 // 1. UI alignment filter — picking a service narrows the Tech dropdown

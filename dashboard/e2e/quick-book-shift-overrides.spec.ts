@@ -1,5 +1,32 @@
 import { test, expect } from './helpers/test';
 import { Page } from '@playwright/test';
+import { Pool } from 'pg';
+
+const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
+
+// Per-spec fixture customer — same rationale as workflows.spec.ts.
+// 2026-05-18 seed strip removed seeded customers; the three failing
+// tests here open Quick Book which renders an empty customer dropdown
+// without one. Pool + customer create + delete combined into a single
+// before/after pair so we don't depend on hook-ordering semantics.
+let pool: Pool;
+let fixtureCustomerId: string | null = null;
+test.beforeAll(async () => {
+  pool = new Pool({ connectionString: PG_URL });
+  const insert = await pool.query(
+    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
+     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
+    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture'],
+  );
+  fixtureCustomerId = insert.rows[0].customer_id;
+});
+test.afterAll(async () => {
+  if (fixtureCustomerId) {
+    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+  }
+  await pool.end();
+});
 /**
  * E2E test: Quick Book should succeed when employees have employee_schedule for the day.
  *

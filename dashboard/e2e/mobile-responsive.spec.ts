@@ -30,7 +30,12 @@
  */
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
+import { Pool } from 'pg';
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
+let pool: Pool;
+test.beforeAll(() => { pool = new Pool({ connectionString: PG_URL }); });
+test.afterAll(async () => { await pool.end(); });
 
 // Mobile viewports for the audit. Sizes lifted from the Playwright
 // `devices['iPhone 14']` and `devices['Pixel 7']` descriptors. We set
@@ -156,10 +161,10 @@ test.describe('iPhone 14 viewport', () => {
     await assertNoHorizontalOverflow(page, 'iPhone 14 — quick book panel open');
   });
 
-  test('customer lookup: list renders and a seeded customer is visible without overflow', async ({ page }) => {
+  test('customer lookup: list renders and a customer is visible without overflow', async ({ page }) => {
     // WHO: front-desk operator looking up a customer who just walked in
     // WHAT: tap Customers in the mobile nav → list renders with at
-    //        least one seeded customer name visible
+    //        least one customer name visible
     // WHEN: customer-lookup is the second-most-common flow (after
     //        viewing today's schedule)
     // WHERE: CRMView customer list
@@ -168,20 +173,37 @@ test.describe('iPhone 14 viewport', () => {
     //        the layout and make the list unreadable; or a regression
     //        where the list scroll is broken would prevent finding
     //        customers past the fold. Smoke-asserts the list shape +
-    //        reads at least one seeded name (`James Kowalski` is
-    //        stable in the DynaTire seed) so we know data is reaching
-    //        the rendered DOM.
-    await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
+    //        reads a test-owned customer so the data path is exercised
+    //        on mobile. Pre-2026-05-18 this test depended on a seeded
+    //        "James Kowalski" — the seed was stripped of customers
+    //        (transactional data must be created+destroyed per test);
+    //        this spec now owns its own data lifecycle.
+    const customerName = `MR-Test ${Date.now()}`
+    let createdId: string | null = null
+    try {
+      const insert = await pool.query(
+        `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
+         VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
+        [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, customerName, 'MR-Test', String(Date.now())]
+      )
+      createdId = insert.rows[0].customer_id
 
-    const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
-    await mobileNav.getByRole('button', { name: /Customers/i }).click();
-    await page.waitForTimeout(1500);
+      await page.goto('/dashboard');
+      await switchToDynaTireTenant(page);
 
-    // Stable seeded customer renders in the list (data path works on mobile too)
-    await expect(page.getByText('James Kowalski').first()).toBeVisible({ timeout: 10_000 });
+      const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
+      await mobileNav.getByRole('button', { name: /Customers/i }).click();
+      await page.waitForTimeout(1500);
 
-    await assertNoHorizontalOverflow(page, 'iPhone 14 — customer list');
+      // Test-owned customer renders in the list (data path works on mobile too)
+      await expect(page.getByText(customerName).first()).toBeVisible({ timeout: 10_000 });
+
+      await assertNoHorizontalOverflow(page, 'iPhone 14 — customer list');
+    } finally {
+      if (createdId) {
+        await pool.query('DELETE FROM customers WHERE customer_id = $1', [createdId])
+      }
+    }
   });
 });
 

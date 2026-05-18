@@ -19,8 +19,40 @@ const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localho
 const SEED_PASSWORD_HASH = '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK';
 
 let pool: Pool;
-test.beforeAll(() => { pool = new Pool({ connectionString: PG_URL }); });
-test.afterAll(async () => { await pool.end(); });
+
+// Per-spec fixture customer.
+//
+// Why this exists (UX audit session, 2026-05-18): the seed used to
+// include 5 hard-coded DynaTire customers so any test that opened
+// QuickBook could pick one via `selectOption({ index: 1 })`. The
+// 2026-05-18 seed strip removed all customers (transactional data
+// must be created+destroyed by the tests that need it — `feedback_
+// test_isolation.md`). Three tests in this spec all need *a*
+// customer to exercise booking; they don't care which. Create one
+// once for the whole spec and clean up after — owns its own data
+// lifecycle, no cross-spec contamination since each spec runs in
+// its own worker.
+//
+// Customer create + pool init combined into one beforeAll, and the
+// delete + pool.end combined into one afterAll, to avoid relying on
+// Playwright's hook-ordering semantics (which differ from Mocha's
+// LIFO afterEach/afterAll behavior).
+let fixtureCustomerId: string | null = null;
+test.beforeAll(async () => {
+  pool = new Pool({ connectionString: PG_URL });
+  const insert = await pool.query(
+    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
+     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
+    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture'],
+  );
+  fixtureCustomerId = insert.rows[0].customer_id;
+});
+test.afterAll(async () => {
+  if (fixtureCustomerId) {
+    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+  }
+  await pool.end();
+});
 
 function uniqueTag(): string {
   return `e2e-${Date.now()}-${Math.floor(Math.random() * 10000)}`;

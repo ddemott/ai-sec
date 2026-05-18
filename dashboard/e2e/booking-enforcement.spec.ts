@@ -120,10 +120,23 @@ function uniqueTag(): string {
   return `e2e-enforce-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
-test.beforeAll(() => {
+// Per-spec fixture customer — same rationale as workflows.spec.ts.
+// 2026-05-18 seed strip removed seeded customers; this spec's two
+// failing tests reach for one via `SELECT customer_id ... LIMIT 1`.
+let fixtureCustomerId: string | null = null;
+test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
+  const insert = await pool.query(
+    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
+     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
+    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture'],
+  );
+  fixtureCustomerId = insert.rows[0].customer_id;
 });
 test.afterAll(async () => {
+  if (fixtureCustomerId) {
+    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+  }
   await pool.end();
 });
 
