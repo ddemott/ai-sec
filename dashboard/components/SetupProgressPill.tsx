@@ -24,11 +24,22 @@ import { useSetupProgress } from '../lib/useSetupProgress'
  */
 export function SetupProgressPill() {
   const tenantId = useActiveTenantId()
-  const { done, total, complete, loading } = useSetupProgress(tenantId)
+  const { done, total, complete, items, loading } = useSetupProgress(tenantId)
 
   if (!tenantId) return null
   if (loading) return null
   if (complete) return null
+
+  // Build a "what's left" string for the native tooltip. The pill
+  // used to show "Setup: N of 6 done" with no hint about which steps
+  // remained, so a user staring at "3 of 6" had no idea what 3
+  // remained meant (UX audit Natural 4.5.3, 2026-05-18). Native
+  // `title` renders `\n` as line breaks across all major browsers,
+  // so a multi-line list works without introducing a custom tooltip.
+  const remaining = items.filter(i => !i.done).map(i => i.label)
+  const tooltipBody = remaining.length > 0
+    ? `Setup: ${done} of ${total} done — click to continue\nRemaining:\n• ${remaining.join('\n• ')}`
+    : `Setup: ${done} of ${total} done — click to continue`
 
   function handleClick() {
     const params = new URLSearchParams(window.location.search)
@@ -56,8 +67,12 @@ export function SetupProgressPill() {
     <button
       type="button"
       onClick={handleClick}
-      aria-label={`Setup ${done} of ${total} done. Click to open the setup assistant.`}
-      title={`Setup: ${done} of ${total} done — click to continue`}
+      aria-label={
+        remaining.length > 0
+          ? `Setup ${done} of ${total} done. Remaining: ${remaining.join(', ')}. Click to open the setup assistant.`
+          : `Setup ${done} of ${total} done. Click to open the setup assistant.`
+      }
+      title={tooltipBody}
       className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium"
       style={{
         backgroundColor: 'var(--accent-muted)',

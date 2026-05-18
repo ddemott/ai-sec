@@ -52,6 +52,19 @@ export default function MyTeamView() {
       window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     }
   }, [])
+
+  // Sub-tab popstate handler (UX audit Flows 4.1.8, 2026-05-18). The
+  // parent dashboard page handles ?tab= on back/forward; ?subtab=
+  // needs its own listener here so the active sub-tab snaps back to
+  // whatever the restored URL says (not the default).
+  useEffect(() => {
+    function onPopState() {
+      const next = resolveInitialTab(new URLSearchParams(window.location.search))
+      setActiveSubTab(prev => (prev === next ? prev : next))
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
   const vocab = useVocabulary()
 
   const SUB_TABS: { id: SubTab; label: string }[] = [

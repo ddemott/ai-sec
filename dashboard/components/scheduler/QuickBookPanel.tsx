@@ -349,7 +349,24 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
       />
 
 
-      <footer className="p-4 border-t border-gray-200 dark:border-gray-800">
+      {/* Footer Book Now CTA.
+          UX audit Devices 4.3.3 (2026-05-18): at iPhone SE landscape
+          (~375 px tall) the footer used to fall below the fold when
+          the iOS keyboard inflated. `position: sticky; bottom: 0`
+          glues it to the viewport bottom inside the scrolling
+          container. `padding-bottom: env(safe-area-inset-bottom)`
+          adds the home-indicator gap on devices that need it
+          (iPhone X+), and ensures the tap target clears the bottom
+          of the screen rather than sitting flush with the home bar. */}
+      <footer
+        className="border-t shrink-0 sticky bottom-0"
+        style={{
+          backgroundColor: 'var(--bg-surface, #1a1a1a)',
+          borderColor: 'var(--border-soft)',
+          padding: '1rem',
+          paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         <Button
           className="w-full py-3"
           onClick={handleBook}

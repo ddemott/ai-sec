@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Wand2 } from 'lucide-react'
 import { Button } from './ui/Button'
@@ -34,6 +34,20 @@ export default function MyBusinessView() {
     const params = new URLSearchParams(window.location.search)
     params.set('subtab', tab)
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
+  }, [])
+
+  // Sub-tab popstate handler (UX audit Flows 4.1.8). Parent dashboard
+  // page handles ?tab= on back/forward; ?subtab= needs its own
+  // listener so the active sub-tab snaps back to whatever the
+  // restored URL says (not the default 'services').
+  useEffect(() => {
+    function onPopState() {
+      const raw = new URLSearchParams(window.location.search).get('subtab') as SubTab | null
+      const next = (raw && VALID_SUB_TABS.includes(raw)) ? raw : 'services'
+      setActiveSubTab(prev => (prev === next ? prev : next))
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
   }, [])
   const tenantId = useActiveTenantId()
   const vocab = useVocabulary()

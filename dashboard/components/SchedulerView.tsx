@@ -82,6 +82,22 @@ export default function SchedulerView() {
     }
   }, [activeView]);
 
+  // Sub-tab popstate handler (UX audit Flows 4.1.8, 2026-05-18). The
+  // parent dashboard page already updates the top-level `?tab=`
+  // state on popstate, but the scheduler's own ?subtab=… needs its
+  // own listener — without it, browser back/forward inside the
+  // schedule tab snapped to the default 'staff' view even when the
+  // URL said otherwise (felt especially broken on iOS Safari where
+  // back-button is a primary navigation pattern).
+  useEffect(() => {
+    function onPopState() {
+      const next = resolveInitialView();
+      setActiveView(prev => (prev === next ? prev : next));
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   // Zoom: column width in px per hour
   const ZOOM_LEVELS = [40, 60, 90, 120, 180];
   const [zoomIndex, setZoomIndex] = useState(1); // default 60px

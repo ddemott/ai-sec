@@ -5,11 +5,36 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
+/**
+ * Scroll the focused input into view on iOS so the on-screen keyboard
+ * doesn't cover it (UX audit Devices 4.3.4, 2026-05-18). iOS Safari
+ * tries to do this automatically, but with the dashboard's sticky/
+ * fixed shell + the scheduler's nested scroll containers it often
+ * gets confused and leaves the input under the keyboard.
+ *
+ * Delay matches iOS's typical keyboard inflation window — firing
+ * scrollIntoView too early lands on stale viewport metrics.
+ * `block: 'center'` keeps the input vertically centered, leaving
+ * room above and below for nearby labels/errors. The browser de-
+ * dupes overlapping scroll calls, so chaining this on top of iOS's
+ * own attempt is safe.
+ */
+function handleFocusScrollIntoView(e: React.FocusEvent<HTMLInputElement>) {
+  const el = e.currentTarget;
+  // Reads can lie at focus time on iOS; defer to let the visual
+  // viewport settle. 250ms covers most iOS Safari keyboard
+  // animations.
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 250);
+}
+
 export const Input: React.FC<InputProps> = ({
   label,
   error,
   className = '',
   id: externalId,
+  onFocus,
   ...props
 }) => {
   const autoId = useId();
@@ -26,6 +51,10 @@ export const Input: React.FC<InputProps> = ({
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={error && id ? `${id}-error` : undefined}
+        onFocus={(e) => {
+          handleFocusScrollIntoView(e);
+          onFocus?.(e);
+        }}
         className={`w-full p-2.5 border rounded-lg outline-none text-sm font-bold transition focus:ring-2 ${error ? 'border-red-500 focus:ring-red-500/20 focus:border-red-500' : 'focus:ring-[var(--accent-glow)] focus:border-[var(--accent)]'} ${className}`}
         style={{
           backgroundColor: 'var(--input-bg)',

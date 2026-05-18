@@ -217,12 +217,19 @@ export function OutlookLayout({
               <ChevronRight className="w-3 h-3 transition-transform rotate-90" />
             </button>
           </div>
+          {/* UX audit Natural 4.5.4 (2026-05-18): the previous label
+              "Configure Businesses" sounded like a destination, not
+              an exit. Renamed to make the return-to-super-admin
+              path explicit; the action is the same (jump to the
+              all-businesses grid, which IS the super-admin landing). */}
           <button
             onClick={() => setActiveTab('all-businesses')}
-            className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full transition-all"
+            className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full transition-all inline-flex items-center gap-1.5"
             style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
+            aria-label="Exit admin mode — return to the businesses grid"
           >
-            Configure Businesses
+            <ChevronRight className="w-3 h-3 rotate-180" aria-hidden="true" />
+            Exit admin mode
           </button>
         </header>
       )}
@@ -238,10 +245,20 @@ export function OutlookLayout({
                 aria-label="All businesses"
                 title="All businesses"
                 onClick={() => setActiveTab('all-businesses')}
-                className={`inline-flex items-center justify-center min-w-[40px] min-h-[40px] p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-                style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
+                className={`inline-flex items-center justify-center gap-1.5 min-h-[40px] px-2.5 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'hover:brightness-110'}`}
+                style={
+                  activeTab === 'all-businesses'
+                    ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }
+                    : { color: 'var(--text-muted)' }
+                }
               >
                 <Globe className="w-4 h-4" aria-hidden="true" />
+                {/* UX audit Natural 4.5.2 (2026-05-18): icon-only had
+                    only a title attribute, which is silent on touch
+                    and on quick scans. Showing the word as a sibling
+                    span gives sighted users the same cue screen
+                    readers have always had via aria-label. */}
+                <span className="text-xs font-bold uppercase tracking-wider">All businesses</span>
               </button>
             )}
             <SetupProgressPill />
