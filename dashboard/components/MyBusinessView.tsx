@@ -16,9 +16,9 @@ import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext'
 import { useActiveTenantId } from '@/lib/SessionContext'
 import { Api } from '../lib/api'
 import { notifySetupProgressChanged } from '../lib/useSetupProgress'
+import { useOnboardingState } from '../lib/useOnboardingState'
 
 type SubTab = 'services' | 'resources'
-type WizardMode = 'solo' | 'team' | null
 
 const VALID_SUB_TABS: SubTab[] = ['services', 'resources']
 
@@ -43,28 +43,33 @@ export default function MyBusinessView() {
     { id: 'services', label: 'Services' },
     { id: 'resources', label: vocab.resource_plural },
   ]
-  const [wizardOpen, setWizardOpen] = useState(false)
-  const [welcomePassed, setWelcomePassed] = useState(false)
-  const [wizardMode, setWizardMode] = useState<WizardMode>(null)
-  const [businessTypeReady, setBusinessTypeReady] = useState(false)
 
-  function handleOpenWizard() {
-    setWizardOpen(true)
-    setWelcomePassed(false)
-    setWizardMode(null)
-    setBusinessTypeReady(false)
-  }
+  // Setup wizard overlay state — driven by the same reducer
+  // DashboardHome uses (UX audit #7 → #7-followup). MyBusinessView
+  // never auto-opens; the wizard surface only appears when the user
+  // clicks "Setup Assistant", so autoOpen=false. Stages: idle |
+  // welcome | chooser | picker | wizard | dismissed.
+  const { stage, mode, transitions } = useOnboardingState({
+    needsSetup: false, // MyBusinessView doesn't gate on data state
+    loading: false,
+    autoOpen: false,
+  })
 
-  function handleCloseWizard() {
-    setWizardOpen(false)
-    setWelcomePassed(false)
-    setWizardMode(null)
-    setBusinessTypeReady(false)
+  // Clicking "Setup Assistant" from this page IS the "yes, set me up"
+  // signal — no scope-framing welcome needed. Jump straight to the
+  // mode chooser, matching the ?wizard=open URL-param shortcut.
+  const handleOpenWizard = transitions.openToChooser
+
+  const handleCloseWizard = useCallback(() => {
+    transitions.closeToIdle()
     notifySetupProgressChanged()
-  }
+  }, [transitions])
 
-  async function handleBusinessTypeSelected(businessType: string) {
-    if (!tenantId) return
+  const handleBusinessTypeSelected = useCallback(async (businessType: string) => {
+    if (!tenantId) {
+      transitions.enterWizard()
+      return
+    }
     try {
       const templates = await Api.templates.listFull()
       const tpl = (templates || []).find(t => t.business_type === businessType)
@@ -75,11 +80,11 @@ export default function MyBusinessView() {
         first_message: tpl?.first_message || undefined,
       })
       refreshVocabulary()
-      setBusinessTypeReady(true)
     } catch {
-      setBusinessTypeReady(true)
+      // Still proceed — worst case default vocabulary
     }
-  }
+    transitions.enterWizard()
+  }, [tenantId, refreshVocabulary, transitions])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -103,32 +108,33 @@ export default function MyBusinessView() {
         {activeSubTab === 'resources' && <ResourceManagerView />}
       </div>
 
-      {/* Wizard flow: welcome → mode chooser → business type → wizard.
-          Welcome sets scope expectations ("~10 minutes, stop any time")
-          before the binary solo/team fork. */}
-      {wizardOpen && !welcomePassed && (
+      {/* Wizard overlays — exactly one renders at a time, enforced
+          by useOnboardingState. Note we skip the 'welcome' stage
+          entirely on this page: clicking "Setup Assistant" IS the
+          explicit opt-in, no scope-framing needed. */}
+      {stage === 'welcome' && (
         <WizardWelcome
-          onContinue={() => setWelcomePassed(true)}
+          onContinue={transitions.advanceWelcome}
           onDismiss={handleCloseWizard}
         />
       )}
-      {wizardOpen && welcomePassed && !wizardMode && (
+      {stage === 'chooser' && (
         <WizardModeChooser
-          onChoose={setWizardMode}
+          onChoose={transitions.chooseMode}
           onClose={handleCloseWizard}
         />
       )}
-      {wizardMode && !businessTypeReady && (
+      {stage === 'picker' && (
         <BusinessTypePicker
           onSelect={handleBusinessTypeSelected}
-          onBack={() => setWizardMode(null)}
+          onBack={transitions.backToChooser}
           onClose={handleCloseWizard}
         />
       )}
-      {wizardMode === 'solo' && businessTypeReady && (
+      {stage === 'wizard' && mode === 'solo' && (
         <SoloWizard isOpen={true} onClose={handleCloseWizard} />
       )}
-      {wizardMode === 'team' && businessTypeReady && (
+      {stage === 'wizard' && mode === 'team' && (
         <SetupWizard isOpen={true} onClose={handleCloseWizard} />
       )}
     </div>
