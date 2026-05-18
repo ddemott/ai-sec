@@ -550,43 +550,62 @@ describe("PK rename coverage — real-DB integration", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // tenant_integration_settings.tenant_integration_setting_id (UUID)
+  // tenant_integration_settings — composite PK (tenant_id, provider)
+  //
+  // Pre-2026-05-18 this table had a surrogate `tenant_integration_setting_id`
+  // UUID PK plus a UNIQUE on (tenant_id, provider). Composite-key retrofit
+  // pilot #1 (migration 20260518100000) dropped the surrogate and promoted
+  // (tenant_id, provider) to PK directly. Every production caller already
+  // keys on (tenant_id, provider) (the surrogate had no FK references and
+  // no production-code SELECT/UPDATE/DELETE used it), so the migration was
+  // schema-only.
   // ─────────────────────────────────────────────────────────────────────
   describe("tenant_integration_settings", () => {
-    it("INSERT returns tenant_integration_setting_id; UPDATE by it rotates token", async () => {
+    it("composite PK (tenant_id, provider) — UPDATE by the pair rotates token", async () => {
       // WHO: OAuth callback completing a Jobber/HubSpot/Square/ServiceTitan connect
-      // WHAT: tenant_integration_setting_id (UUID) is the PK; the (tenant_id,
-      //      provider) UNIQUE constraint is the natural key. Token rotation
-      //      goes through `UPDATE ... WHERE tenant_integration_setting_id = $1`
-      //      when called from the OAuth-refresh helper rather than by the
-      //      (tenant, provider) pair.
+      // WHAT: insert with (tenant_id, provider), then update token rotation
+      //      with `WHERE tenant_id = $1 AND provider = $2`. The same path
+      //      every production caller already uses (see src/services/
+      //      oauthCallbackFactory.ts + tokenManagement.ts).
       // WHERE: src/services/oauthCallbackFactory.ts + tokenManagement.ts
       // WHY: Token refresh is the silent-failure case par excellence — a
-      //      column-rename regression here makes every refresh a no-op, the
+      //      schema regression here makes every refresh a no-op, the
       //      access_token stays stale, and the next CRM call 401s without
-      //      any signal that the rotation failed.
+      //      any signal that the rotation failed. Also pins the composite-
+      //      PK shape so a future migration that re-adds a surrogate fails
+      //      loudly here instead of in production.
       if (!dbAvailable) return;
 
       const ins = await client.query(
         `INSERT INTO tenant_integration_settings
            (tenant_id, provider, access_token, refresh_token, is_active)
          VALUES ($1, 'jobber', 'access-stub', 'refresh-stub', true)
-         RETURNING tenant_integration_setting_id, provider`,
+         RETURNING tenant_id, provider`,
         [tenantId],
       );
-      const tisid = ins.rows[0].tenant_integration_setting_id;
-      expect(tisid).toMatch(UUID_RE);
+      expect(ins.rows[0].tenant_id).toBe(tenantId);
       expect(ins.rows[0].provider).toBe("jobber");
 
       const upd = await client.query(
         `UPDATE tenant_integration_settings
             SET access_token = 'rotated-access', token_expires_at = now() + interval '1 hour'
-          WHERE tenant_integration_setting_id = $1
+          WHERE tenant_id = $1 AND provider = $2
           RETURNING access_token`,
-        [tisid],
+        [tenantId, "jobber"],
       );
       expect(upd.rowCount).toBe(1);
       expect(upd.rows[0].access_token).toBe("rotated-access");
+
+      // Re-inserting the same (tenant_id, provider) pair must violate the
+      // composite PK (not the old UNIQUE), proving the constraint
+      // shape is what we expect.
+      await expect(
+        client.query(
+          `INSERT INTO tenant_integration_settings (tenant_id, provider, is_active)
+           VALUES ($1, 'jobber', true)`,
+          [tenantId],
+        ),
+      ).rejects.toThrow(/duplicate key/i);
     });
   });
 

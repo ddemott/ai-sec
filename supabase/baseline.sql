@@ -2845,7 +2845,6 @@ ALTER TABLE ONLY public.tenant_docs FORCE ROW LEVEL SECURITY;
 --
 
 CREATE TABLE public.tenant_integration_settings (
-    tenant_integration_setting_id uuid DEFAULT gen_random_uuid() NOT NULL,
     tenant_id uuid NOT NULL,
     provider text NOT NULL,
     access_token text,
@@ -3321,15 +3320,7 @@ ALTER TABLE ONLY public.tenant_docs
 --
 
 ALTER TABLE ONLY public.tenant_integration_settings
-    ADD CONSTRAINT tenant_integration_settings_pkey PRIMARY KEY (tenant_integration_setting_id);
-
-
---
--- Name: tenant_integration_settings tenant_integration_settings_tenant_id_provider_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tenant_integration_settings
-    ADD CONSTRAINT tenant_integration_settings_tenant_id_provider_key UNIQUE (tenant_id, provider);
+    ADD CONSTRAINT tenant_integration_settings_pkey PRIMARY KEY (tenant_id, provider);
 
 
 --
