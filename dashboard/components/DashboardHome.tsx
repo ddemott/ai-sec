@@ -215,7 +215,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         </div>
         <Button
           variant="primary"
-          size="md"
+          size="lg"
           onClick={() => setQuickBookOpen(true)}
           disabled={loading || needsSetup}
           aria-label="Create a new booking"

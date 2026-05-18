@@ -184,7 +184,7 @@ export function OutlookLayout({
                 aria-label="All businesses"
                 title="All businesses"
                 onClick={() => setActiveTab('all-businesses')}
-                className={`p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                className={`inline-flex items-center justify-center min-w-[40px] min-h-[40px] p-2 rounded-md transition-all ${activeTab === 'all-businesses' ? '' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                 style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' } : undefined}
               >
                 <Globe className="w-4 h-4" aria-hidden="true" />
@@ -196,7 +196,7 @@ export function OutlookLayout({
               onChange={e => setTheme(e.target.value as typeof theme)}
               aria-label={`Theme (currently ${themeInfo.name})`}
               title={`Theme: ${themeInfo.name}`}
-              className="text-xs rounded-md px-2 py-1.5 cursor-pointer outline-none transition-all"
+              className="text-xs rounded-md px-2 py-1.5 min-h-[40px] cursor-pointer outline-none transition-all"
               style={{
                 backgroundColor: 'var(--bg-raised)',
                 borderColor: 'var(--border-soft)',
@@ -216,7 +216,7 @@ export function OutlookLayout({
               aria-haspopup="menu"
               title={`Account: ${userName || 'Profile'}`}
               onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-              className={`p-2 rounded-md transition-all ${
+              className={`inline-flex items-center justify-center min-w-[40px] min-h-[40px] p-2 rounded-md transition-all ${
                 profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
                   ? ''
                   : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'

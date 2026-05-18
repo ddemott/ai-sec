@@ -37,10 +37,16 @@ export const Button: React.FC<ButtonProps> = ({
     ghost: { color: 'var(--text-secondary)' },
   };
 
+  // Touch-target minimums (UX audit, 2026-05-18):
+  //   sm → 40px (one step below iOS/Material 44px; reasonable for dense
+  //         toolbars like the scheduler date-nav and Card-header actions
+  //         where 44px would force vertical layout)
+  //   md → 44px (matches iOS Human Interface Guidelines)
+  //   lg → 48px (matches Material Design)
   const sizes = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base',
+    sm: 'px-3 py-1.5 text-xs min-h-[40px]',
+    md: 'px-4 py-2 text-sm min-h-[44px]',
+    lg: 'px-6 py-3 text-base min-h-[48px]',
   };
 
   return (
