@@ -2,6 +2,12 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  // Reset the local DB to its bare-bones seed state before any spec
+  // runs (UX audit session, 2026-05-18). The earlier pattern relied
+  // on per-test try/finally cleanup which silently leaked rows when
+  // an assertion fired before the cleanup line; now every run starts
+  // from identical state. ~1-2s overhead before the suite begins.
+  globalSetup: './e2e/globalSetup.ts',
   timeout: 30000,
   expect: { timeout: 10000 },
   fullyParallel: false,
