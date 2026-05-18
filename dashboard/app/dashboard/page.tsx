@@ -93,6 +93,26 @@ export default function DashboardPage() {
         }, 50)
       },
     },
+    {
+      // Focus the active tab's search input. Search-bearing views opt
+      // in by adding `data-shortcut-target="search"` to their input.
+      // We walk the DOM at fire-time so we don't have to wire a
+      // per-tab event listener like New Booking does. The first match
+      // wins — if a page renders multiple search inputs, order them
+      // so the one most useful for a `/` press is first in the tree.
+      key: '/',
+      label: 'Focus search',
+      category: 'actions',
+      run: () => {
+        const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>('[data-shortcut-target="search"]')
+        if (el) {
+          el.focus()
+          // Select existing text so the user can replace it without
+          // having to clear first — mirrors browser address-bar behavior.
+          if ('select' in el && typeof el.select === 'function') el.select()
+        }
+      },
+    },
     { key: '?', label: 'Show this shortcuts cheat-sheet', category: 'help', run: () => setShortcutsHelpOpen(true) },
   ], [activeTab, handleSetActiveTab])
   useKeyboardShortcuts(shortcuts, !!tenantId)

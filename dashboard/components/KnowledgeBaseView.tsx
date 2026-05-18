@@ -401,6 +401,7 @@ export default function KnowledgeBaseView() {
                 <div className="mb-4 relative max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
+                    data-shortcut-target="search"
                     placeholder="Search knowledge base..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
