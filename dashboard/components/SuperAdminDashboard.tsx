@@ -14,6 +14,7 @@ import { formatPhone, normalizePhone } from '../lib/phone'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Modal } from './ui/Modal'
+import { LoadingState } from './ui/LoadingState'
 import { TenantCard } from './TenantCard'
 import { TenantCreateForm } from './TenantCreateForm'
 import { TenantEditPanel } from './TenantEditPanel'
@@ -259,7 +260,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
     }
   }
 
-  if (loading) return <div className="p-8 text-gray-500 italic flex items-center"><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Loading all businesses...</div>
+  if (loading) return <LoadingState message="Loading all businesses…" />
 
   return (
     <div className="flex flex-1 overflow-hidden relative transition-colors duration-200" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-base)' }}>

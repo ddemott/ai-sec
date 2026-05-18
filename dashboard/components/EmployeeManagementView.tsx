@@ -21,6 +21,7 @@ import { PhoneInput } from './ui/PhoneInput'
 import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
 import { ConfirmModal } from './ui/ConfirmModal'
+import { LoadingState } from './ui/LoadingState'
 import { useConfirm } from '../lib/useConfirm'
 import { showToast } from './ui/Toast'
 
@@ -150,7 +151,7 @@ export default function EmployeeManagementView() {
   }
 
   if (loading && employees.length === 0) {
-    return <div className="p-8 italic" style={{ color: 'var(--text-muted)' }}>Loading staff data...</div>
+    return <LoadingState message="Loading staff data…" />
   }
 
   return (

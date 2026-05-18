@@ -15,6 +15,7 @@ import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { ConfirmModal } from './ui/ConfirmModal'
+import { LoadingState } from './ui/LoadingState'
 import { useConfirm } from '../lib/useConfirm'
 import { showToast } from './ui/Toast'
 
@@ -68,7 +69,7 @@ export default function SkillManagementView() {
   }
 
   if (loading && skills.length === 0) {
-    return <div className="p-8 italic" style={{ color: 'var(--text-muted)' }}>Loading skills...</div>
+    return <LoadingState message="Loading skills…" />
   }
 
   return (

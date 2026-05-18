@@ -25,6 +25,7 @@ import { Badge } from './ui/Badge'
 import { ConfirmModal } from './ui/ConfirmModal'
 import { useConfirm } from '../lib/useConfirm'
 import { showToast } from './ui/Toast'
+import { LoadingState } from './ui/LoadingState'
 
 type Service = {
   service_id: string
@@ -183,7 +184,7 @@ export default function ServiceAssignmentView() {
   }
 
   if (loading && services.length === 0) {
-    return <div className="p-8 flex items-center justify-center italic" style={{ color: 'var(--text-muted)' }}>Loading catalog...</div>
+    return <LoadingState message="Loading catalog…" />
   }
 
   if (!loading && services.length === 0) {

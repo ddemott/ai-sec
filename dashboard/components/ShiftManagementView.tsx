@@ -23,6 +23,7 @@ import { TimeInput } from './ui/TimeInput'
 import { showToast } from './ui/Toast'
 import { ConfirmModal } from './ui/ConfirmModal'
 import { useConfirm } from '../lib/useConfirm'
+import { LoadingState } from './ui/LoadingState'
 
 // Timeline constants
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -255,7 +256,7 @@ export default function ShiftManagementView() {
   const activeEmployees = useMemo(() => employees.filter(e => e.type === 'employee'), [employees])
 
   if (empsLoading && activeEmployees.length === 0) {
-    return <div className="p-8 italic" style={{ color: 'var(--text-muted)' }}>Loading {vocab.employee_label.toLowerCase()} schedule...</div>
+    return <LoadingState message={`Loading ${vocab.employee_label.toLowerCase()} schedule…`} />
   }
 
   return (

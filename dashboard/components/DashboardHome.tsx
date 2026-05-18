@@ -15,6 +15,7 @@ import { FirstRunTour } from './FirstRunTour'
 import SetupWizard from './SetupWizard'
 import SoloWizard from './SetupWizard/SoloWizard'
 import { QuickBookPanel } from './scheduler/QuickBookPanel'
+import { LoadingState } from './ui/LoadingState'
 import { useOnboardingState } from '../lib/useOnboardingState'
 import type { Tab } from '../app/dashboard/page'
 import type { Customer } from '../lib/types'
@@ -164,7 +165,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-pulse" style={{ color: 'var(--text-muted)' }}>Loading dashboard...</div>
+        <LoadingState message="Loading dashboard…" />
       </div>
     )
   }
