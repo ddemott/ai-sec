@@ -1,6 +1,7 @@
 import { test, expect } from './helpers/test';
 import { Page } from '@playwright/test';
 import { Pool } from 'pg';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -14,6 +15,10 @@ let pool: Pool;
 let fixtureCustomerId: string | null = null;
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
+  // 2026-05-18 seed-strip-stage-b: DynaTire's business config moved
+  // out of supabase/seed.sql. Bootstrap it so the seeded shift window
+  // (which this spec's tests assert against) exists.
+  await seedDynaTireBusinessConfig(pool);
   const insert = await pool.query(
     `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
      VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
@@ -25,6 +30,7 @@ test.afterAll(async () => {
   if (fixtureCustomerId) {
     await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
   }
+  await clearDynaTireBusinessConfig(pool);
   await pool.end();
 });
 /**

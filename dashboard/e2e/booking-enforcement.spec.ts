@@ -45,6 +45,8 @@ import {
   bookAppointmentAs,
   updateAppointmentAs,
   isoDateDaysFromNow,
+  seedDynaTireBusinessConfig,
+  clearDynaTireBusinessConfig,
   type RegisteredTenant,
 } from './helpers/fixtures';
 
@@ -126,6 +128,10 @@ function uniqueTag(): string {
 let fixtureCustomerId: string | null = null;
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
+  // 2026-05-18 seed-strip-stage-b: business config also moved out of
+  // the seed. The 2 UI tests in this spec still drive the dashboard
+  // and need DynaTire's services/employees/resources to be bookable.
+  await seedDynaTireBusinessConfig(pool);
   const insert = await pool.query(
     `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
      VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
@@ -137,6 +143,7 @@ test.afterAll(async () => {
   if (fixtureCustomerId) {
     await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
   }
+  await clearDynaTireBusinessConfig(pool);
   await pool.end();
 });
 

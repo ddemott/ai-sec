@@ -16,8 +16,26 @@
  */
 import { test, expect } from './helpers/test';
 import type { Page } from '@playwright/test';
+import { Pool } from 'pg';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
 
 const DYNATIRE_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
+
+// Most tests in this spec assume DynaTire is "fully configured" — the
+// inline comment at line ~136 explicitly notes the expectation. Since
+// 2026-05-18 seed-strip-stage-b moved business config out of seed.sql,
+// bootstrap it here so the My Team / Working Days / template-picker
+// surfaces have something to render against.
+let pool: Pool;
+test.beforeAll(async () => {
+  pool = new Pool({ connectionString: PG_URL });
+  await seedDynaTireBusinessConfig(pool);
+});
+test.afterAll(async () => {
+  await clearDynaTireBusinessConfig(pool);
+  await pool.end();
+});
 
 async function landOnDynatireDashboard(page: Page) {
   // Super-admin auth state can be left scoped to whichever tenant the

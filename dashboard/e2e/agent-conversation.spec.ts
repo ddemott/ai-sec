@@ -31,6 +31,7 @@ import { APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -92,10 +93,15 @@ async function findResourceIdByName(name: string): Promise<string> {
   return r.rows[0].resource_id;
 }
 
-test.beforeAll(() => {
+test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
+  // 2026-05-18 seed-strip-stage-b: DynaTire's business config moved
+  // out of supabase/seed.sql. findEmployeeIdByName / findResourceIdByName
+  // helpers below depend on the seeded rows; bootstrap them here.
+  await seedDynaTireBusinessConfig(pool);
 });
 test.afterAll(async () => {
+  await clearDynaTireBusinessConfig(pool);
   await pool.end();
 });
 
