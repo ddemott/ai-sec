@@ -38,6 +38,57 @@
  * always use this wrapper unless they have a clear reason not to.
  */
 import { test as base, expect } from '@playwright/test';
+import { Pool } from 'pg';
+
+// ── DB quiescence ────────────────────────────────────────────────────
+//
+// One-connection pool used exclusively to poll pg_stat_activity for
+// backend quiescence between tests. NOT shared with spec-level pools
+// (those have their own lifecycle) — keeping it isolated means a spec
+// that forgets to close its own pool can't accidentally exhaust this
+// one. Single connection cap because we only ever issue one short
+// SELECT against it.
+const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
+const quiescencePool = new Pool({ connectionString: PG_URL, max: 1 });
+
+/**
+ * Wait until the backend has no in-flight DB queries (other than our
+ * own quiescence-check connection). Bounded to 5s — if something
+ * really is wedged we surface a warning rather than blocking forever.
+ *
+ * Why this exists (2026-05-18): the multi-row INSERT in
+ * expandWeeklyToSchedule eliminated one specific deadlock window,
+ * but the broader principle — "each test completes before the next
+ * one starts" — needs structural enforcement, not whack-a-mole.
+ * Playwright's `workers: 1` keeps the TEST side serial, but the
+ * shared backend can leave async writes (audit triggers, version
+ * triggers, calendar-sync pushes) in flight after the API call has
+ * already returned. Without this wait, those tails leak into the
+ * next test's window and create exactly the kind of "false
+ * deadlock" you don't want to debug.
+ */
+async function waitForDbQuiescence(timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastActive = -1;
+  while (Date.now() < deadline) {
+    const result = await quiescencePool.query<{ active: string }>(
+      `SELECT COUNT(*)::text AS active
+       FROM pg_stat_activity
+       WHERE state = 'active'
+         AND pid <> pg_backend_pid()
+         AND datname = current_database()
+         AND query NOT LIKE 'SELECT COUNT(*)%pg_backend_pid%'`,
+    );
+    const active = Number(result.rows[0]?.active ?? 0);
+    if (active === 0) return;
+    lastActive = active;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  // Don't fail the test — just emit a hint. Most cases that hit this
+  // are a sign of something else broken (deadlock, runaway query),
+  // and we'd rather see the downstream failure than mask it here.
+  console.warn(`[quiesce] timeout waiting for DB quiescence; ${lastActive} other connections still active`);
+}
 
 export const test = base.extend({
   page: async ({ page }, use, testInfo) => {
@@ -76,7 +127,19 @@ export const test = base.extend({
       boundaryVisible,
       'Page rendered the generic error boundary — a child component threw silently',
     ).toBe(false);
+
+    // Drain backend before letting Playwright start the next test.
+    // See waitForDbQuiescence() above for the why.
+    await waitForDbQuiescence();
   },
+});
+
+// Close the pool at suite end so the process can exit cleanly.
+// Playwright's `globalTeardown` is the canonical place for this, but
+// using `process.on('exit')` keeps the wrapper self-contained — every
+// spec that imports `test` from here gets the cleanup for free.
+process.on('exit', () => {
+  void quiescencePool.end();
 });
 
 export { expect };
