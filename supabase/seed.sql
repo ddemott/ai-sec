@@ -34,6 +34,28 @@ INSERT INTO users (tenant_id, email, password_hash, full_name)
 VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'admin@dynatire.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Dale Demott')
 ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
+-- 1c. DeMott LLC tenant + Dale's personal owner account.
+--     Separates Dale's super-admin platform rights (admin@secretaryhq.com)
+--     from his real-business owner identity (daledemott@gmail.com on
+--     DeMott LLC). Added 2026-05-18 after the UX walkthrough surfaced
+--     that mixing both roles on one identity confused the user listing.
+INSERT INTO tenants (tenant_id, name, business_type, timezone)
+VALUES (
+    'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0',
+    'DeMott LLC',
+    'answering-service',
+    'America/Chicago'
+) ON CONFLICT (tenant_id) DO NOTHING;
+
+INSERT INTO users (tenant_id, email, password_hash, full_name, role)
+VALUES (
+    'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0',
+    'daledemott@gmail.com',
+    '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK',
+    'Dale DeMott',
+    'owner'
+) ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash, full_name = EXCLUDED.full_name;
+
 -- 2. Create bookable resources (service trucks)
 INSERT INTO resources (resource_id, tenant_id, name, description)
 VALUES

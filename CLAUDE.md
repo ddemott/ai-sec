@@ -47,9 +47,10 @@ Items below capture hidden context — things you can't grep for. Everything els
 - Rebuild from scratch: `npm run db:rebuild [-- --yes]` (DROP SCHEMA public + apply all migrations + seed). End-to-end validation of the migration chain. Refuses non-localhost URLs unless `--force`; refuses without confirmation unless `--yes`. Use before a branch cut, after a migration-heavy PR, or whenever the local DB has gotten weird.
 - Start: `npm start` (Dashboard https://localhost:4000, Backend https://localhost:4001)
 - Test: `npm test` (backend), `cd dashboard && npm test`, `cd dashboard && npx playwright test` (e2e)
-- Login: `daledemott@gmail.com` / `password`
-- Super-admin tenant: `00000000-0000-0000-0000-000000000000`
-- DynaTire (PoC) tenant: `f234e471-0e60-4163-86c9-93cfd9338e3a`
+- Logins (all `/ password`):
+  - `admin@secretaryhq.com` — platform super-admin on tenant `00000000-0000-0000-0000-000000000000`
+  - `daledemott@gmail.com` — DeMott LLC owner on tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0` (Dale's real business; intentionally separate from his super-admin identity so platform rights don't bleed into business workspace)
+  - `admin@dynatire.com` — DynaTire (PoC) owner on tenant `f234e471-0e60-4163-86c9-93cfd9338e3a`
 - Docker DB on port 5433
 
 ## Database Key Details
