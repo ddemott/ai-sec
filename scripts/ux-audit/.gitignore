@@ -1,1 +1,2 @@
-reports/
+# Per-run reports under reports/<timestamp>/ are tracked.
+# Add patterns here if local-only build artifacts ever land in this folder.

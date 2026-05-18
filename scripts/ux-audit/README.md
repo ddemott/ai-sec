@@ -20,7 +20,12 @@ Optional focus argument:
 /ux-audit accessibility — WCAG 2.1 AA only
 ```
 
-The report lands at `scripts/ux-audit/reports/<timestamp>/ux-audit.html`. Claude prints the `file://` URL at the end — click it to open.
+The report lands at `scripts/ux-audit/reports/<timestamp>/`. Each run produces two files in that folder:
+
+- `ux-audit.html` — the self-contained report. Claude prints the `file://` URL at the end — click it to open.
+- `TODO-<timestamp>.md` — every finding as a checkbox row, grouped by the report's Week 1 → Backlog roadmap. Tick items off as you work them; the audit history stays readable.
+
+Both files are tracked in git so reports are durable across machines and reviewable in PRs.
 
 ## How it works
 
@@ -34,7 +39,7 @@ Edit `.claude/commands/ux-audit.md`. Changes take effect the next time you run `
 
 - **Static analysis only.** Visual issues that need real rendering (cramped spacing, alignment off by a pixel, real responsive behavior on iPhone) are inferred from code, not observed.
 - **No analytics.** The audit can't tell you what's slow or confusing in practice, only what *looks* problematic in the code.
-- **Reports are gitignored** by the local `.gitignore`. Move a report up a level if you want to commit it.
+- **Reports are committed.** Each timestamped run is a durable artifact. If you regenerate often and want to prune, delete old folders by date.
 
 ## Why not a Managed Agent?
 
