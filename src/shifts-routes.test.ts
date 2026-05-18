@@ -37,9 +37,16 @@ function buildApp() {
     query: vi.fn(async (text: string, params?: unknown[]) => {
       queries.push({ text, params: params ?? [] });
       const next = queryResponses.shift();
-      // INSERTs default to rowCount: 1 so we can count actual writes.
+      // INSERTs default to a rowCount that reflects the number of
+      // rows actually being inserted. The expand-weekly path uses a
+      // single multi-row INSERT (5 placeholders per row), so derive
+      // the count from the params length. Falls back to 1 for
+      // INSERTs with no params (e.g. parameter-less DEFAULT inserts).
       if (text.startsWith('INSERT')) {
-        return next ?? { rows: [], rowCount: 1 };
+        if (next) return next;
+        const p = params ?? [];
+        const rowCount = p.length > 0 ? Math.max(1, Math.floor(p.length / 5)) : 1;
+        return { rows: [], rowCount };
       }
       return next ?? { rows: [], rowCount: 0 };
     }),

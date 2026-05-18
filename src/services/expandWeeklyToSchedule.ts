@@ -101,20 +101,37 @@ export async function expandWeeklyToSchedule(
     patternByDow.set(row.day_of_week, row);
   }
 
-  // Insert one row per (date, matching weekly pattern). ON CONFLICT
-  // DO NOTHING preserves any existing date-specific edits.
-  let inserted = 0;
+  // Build a single multi-row INSERT for all (date, matching pattern)
+  // tuples. Single statement = single lock-acquisition window —
+  // eliminates the deadlock that the per-row loop hit when another
+  // transaction was cascade-DELETEing employee_schedule on a different
+  // tenant mid-batch (UX audit session, 2026-05-18: surfaced under
+  // full E2E load when a previous spec's `DELETE FROM tenants`
+  // cascade was still committing as this batch started). ON CONFLICT
+  // DO NOTHING still preserves any existing date-specific edits.
+  const tuples: { iso: string; pattern: WeeklyShiftRow }[] = [];
   for (const { iso, dow } of dates) {
     const pattern = patternByDow.get(dow);
-    if (!pattern) continue;
-
+    if (pattern) tuples.push({ iso, pattern });
+  }
+  let inserted = 0;
+  if (tuples.length > 0) {
+    // Build the VALUES list as ($1,$2,$3,$4,$5,false), ($6,$7,$8,$9,$10,false), …
+    // Five placeholders per tuple: tenant_id, employee_id, iso, start, end.
+    const valuesSql: string[] = [];
+    const flatParams: (string)[] = [];
+    tuples.forEach((t, i) => {
+      const base = i * 5;
+      valuesSql.push(`($${base + 1}, $${base + 2}, $${base + 3}::DATE, $${base + 4}::TIME, $${base + 5}::TIME, false)`);
+      flatParams.push(params.tenantId, params.employeeId, t.iso, t.pattern.start_time, t.pattern.end_time);
+    });
     const res = await client.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, false)
+       VALUES ${valuesSql.join(', ')}
        ON CONFLICT (tenant_id, employee_id, shift_date) DO NOTHING`,
-      [params.tenantId, params.employeeId, iso, pattern.start_time, pattern.end_time]
+      flatParams
     );
-    inserted += res.rowCount ?? 0;
+    inserted = res.rowCount ?? 0;
   }
 
   return {
