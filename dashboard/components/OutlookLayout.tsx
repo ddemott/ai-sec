@@ -22,6 +22,7 @@ import { useTheme, THEMES } from '@/lib/ThemeContext'
 import { useSessionContext, type UserRole } from '@/lib/SessionContext'
 import { FeedbackButton } from './ui/FeedbackButton'
 import { SetupProgressPill } from './SetupProgressPill'
+import { useAnchorRect } from '../lib/useAnchorRect'
 
 type Tab = 'dashboard' | 'schedule' | 'customers' | 'calls' | 'my-team' | 'my-business' | 'ai-insights' | 'settings' | 'all-businesses' | 'profile' | 'business-settings';
 
@@ -93,6 +94,10 @@ export function OutlookLayout({
   const profileBtnRef = useRef<HTMLButtonElement>(null)
 
   const { tenantsVersion } = useSessionContext()
+  // Anchor rects for the floating dropdowns. Track scroll/resize so
+  // the menus stay glued to their triggers (UX audit 4.2 row 7).
+  const tenantBtnRect = useAnchorRect(tenantBtnRef, tenantDropdownOpen)
+  const profileBtnRect = useAnchorRect(profileBtnRef, profileMenuOpen)
   const [unansweredCount, setUnansweredCount] = useState(0)
   // E3 (2026-05-17): count of currently-active voice calls, used as a
   // badge on the Calls tab so front-desk can see live activity at a
@@ -376,8 +381,8 @@ export function OutlookLayout({
           data-testid="tenant-switcher-panel"
           className="fixed z-[100] w-64 rounded-xl shadow-2xl border overflow-hidden"
           style={{
-            top: tenantBtnRef.current ? tenantBtnRef.current.getBoundingClientRect().bottom + 4 : 0,
-            left: tenantBtnRef.current ? tenantBtnRef.current.getBoundingClientRect().left : 0,
+            top: tenantBtnRect ? tenantBtnRect.bottom + 4 : 0,
+            left: tenantBtnRect ? tenantBtnRect.left : 0,
             backgroundColor: 'var(--bg-raised)',
             color: 'var(--text-primary)',
             borderColor: 'var(--border-soft)',
@@ -439,7 +444,7 @@ export function OutlookLayout({
           style={{
             backgroundColor: 'var(--bg-raised)',
             borderColor: 'var(--border-soft)',
-            top: profileBtnRef.current ? profileBtnRef.current.getBoundingClientRect().bottom + 4 : 0,
+            top: profileBtnRect ? profileBtnRect.bottom + 4 : 0,
             right: 16,
           }}
         >
