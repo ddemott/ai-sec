@@ -2246,7 +2246,8 @@ CREATE TABLE public.business_templates (
     booking_label text DEFAULT 'Appointment'::text NOT NULL,
     example_services text[] DEFAULT '{}'::text[],
     category text DEFAULT 'Other'::text NOT NULL,
-    sort_order integer DEFAULT 0 NOT NULL
+    sort_order integer DEFAULT 0 NOT NULL,
+    example_resources text[] DEFAULT '{}'::text[]
 );
 
 ALTER TABLE ONLY public.business_templates FORCE ROW LEVEL SECURITY;
@@ -4799,3 +4800,13 @@ INSERT INTO public.business_templates VALUES ('insurance', 'Insurance Agency', '
 INSERT INTO public.business_templates VALUES ('bakery', 'Bakery', 'You are a friendly receptionist for a bakery called {{business_name}}. Help customers place custom cake orders, schedule catering, and ask about daily specials. Collect their name and order details.', 'Hi! Are you calling to place an order or ask about today''s specials?', '21m00Tcm4llvDq8ikWAM', 'Counter 1', 'Main service counter', NULL, NULL, 'Counter', 'Counters', 'Baker', 'Bakers', 'Order', '{"Custom Cake Order","Cupcake Platter","Wedding Cake Consult","Daily Bread Order"}', 'Food & Beverage', 6);
 INSERT INTO public.business_templates VALUES ('catering', 'Catering Service', 'You are a professional receptionist for a catering company called {{business_name}}. Help customers plan events, get quotes, and schedule tastings. Collect their name, event date, guest count, and preferences.', 'Thanks for calling! Are you planning an event?', '21m00Tcm4llvDq8ikWAM', 'Kitchen 1', 'Main prep kitchen', NULL, NULL, 'Kitchen', 'Kitchens', 'Chef', 'Chefs', 'Event', '{"Event Catering Quote","Tasting Session","Corporate Lunch","Wedding Reception","Party Platter"}', 'Food & Beverage', 6);
 INSERT INTO public.business_templates VALUES ('answering-service', 'Answering & Scheduling Service', 'You are a friendly and professional virtual receptionist for {{business_name}}. Your role is to answer calls, schedule meetings, take messages, and help callers connect with the right person. You do not quote prices — all services are included. Be warm, efficient, and helpful. If the caller needs to schedule a meeting or appointment, check availability and book it. If the person they need is unavailable, offer to take a message.', 'Hi, thank you for calling {{business_name}}! How can I help you today?', 'clara', 'Main Office', 'Primary scheduling line', NULL, NULL, 'Line', 'Lines', 'Staff', 'Staff', 'Meeting', '{"Phone Consultation","In-Person Meeting","Video Call","Follow-Up Call","Message Taking"}', 'Professional Services', 0);
+
+--
+-- Populate example_resources from each row's resource_label. The
+-- pg_dump captures the column but not the post-INSERT UPDATE, so
+-- we append it here. See migration 20260518120000 for context.
+--
+
+UPDATE public.business_templates
+SET example_resources = ARRAY[resource_label || ' 1', resource_label || ' 2', resource_label || ' 3']
+WHERE example_resources IS NULL OR example_resources = '{}';

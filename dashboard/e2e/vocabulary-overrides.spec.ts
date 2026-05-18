@@ -201,13 +201,20 @@ test('per-tenant override wins over the business-template default', async ({ req
         });
         expect(res.status()).toBe(200);
         const body = await res.json();
-        expect(body).toEqual({
+        // Override fields must shadow the template defaults.
+        expect(body).toMatchObject({
             resource_label: 'Lounge Chair',
             resource_plural: 'Lounge Chairs',
             employee_label: 'Aesthetic Specialist',
             employee_plural: 'Aesthetic Specialists',
             booking_label: 'Session',
         });
+        // example_services / example_resources come from the template (no
+        // per-tenant override exists yet); the salon template seeds 5 services.
+        // Assert presence and arrayness without pinning the exact list — a
+        // template content update shouldn't break this spec.
+        expect(Array.isArray(body.example_services)).toBe(true);
+        expect(Array.isArray(body.example_resources)).toBe(true);
         // Sanity: the template default was 'Stylist'; the override must shadow it.
         expect(body.employee_label).not.toBe('Stylist');
     } finally {

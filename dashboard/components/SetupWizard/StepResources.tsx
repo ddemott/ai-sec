@@ -69,7 +69,11 @@ export function Step2Resources({
             label={`${vocab.resource_label} Name`}
             value={editingResource.name}
             onChange={e => onChange({ ...editingResource, name: e.target.value })}
-            placeholder="e.g. Bay 1, Chair A, Room 3"
+            placeholder={
+              vocab.example_resources && vocab.example_resources.length > 0
+                ? `e.g. ${vocab.example_resources.slice(0, 3).join(', ')}`
+                : `e.g. ${vocab.resource_label} 1`
+            }
           />
           <Input
             label="Description (optional)"

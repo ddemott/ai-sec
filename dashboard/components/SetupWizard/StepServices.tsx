@@ -9,12 +9,27 @@ import {
 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { useVocabulary } from '../../lib/VocabularyContext'
 import type { Step1Props, WizardService } from './types'
+
+/**
+ * Build the "e.g. …" placeholder string from per-industry examples.
+ * Falls back to a single generic phrase when the vocab system hasn't
+ * loaded the array yet, when a unit test stubs a partial Vocabulary,
+ * or for the rare path where the tenant skipped BusinessTypePicker
+ * entirely — anything is better than the cross-industry "Oil Change,
+ * Haircut, Tire Rotation" we had before.
+ */
+function servicePlaceholder(examples: readonly string[] | undefined): string {
+  if (!examples || examples.length === 0) return 'e.g. 30-minute consultation'
+  return `e.g. ${examples.slice(0, 3).join(', ')}`
+}
 
 export function Step1Services({
   services, loading, editingService, editingServiceId, saving, error,
   onAdd, onEdit, onDelete, onSave, onCancel, onChange,
 }: Step1Props) {
+  const vocab = useVocabulary()
   return (
     <div>
       <div className="mb-4">
@@ -93,7 +108,7 @@ export function Step1Services({
             label="Service Name"
             value={editingService.name}
             onChange={e => onChange({ ...editingService, name: e.target.value })}
-            placeholder="e.g. Oil Change, Haircut, Tire Rotation"
+            placeholder={servicePlaceholder(vocab.example_services)}
           />
           <Input
             label="Description (optional)"

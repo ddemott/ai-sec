@@ -10,6 +10,12 @@ export interface Vocabulary {
   employee_label: string
   employee_plural: string
   booking_label: string
+  /** 3+ industry-specific service-name examples used as wizard placeholders.
+   *  Empty array when the tenant has no business_type set yet — callers
+   *  must fall back to a generic phrase, not the cross-industry list. */
+  example_services: string[]
+  /** Mirror of example_services for resource names. */
+  example_resources: string[]
 }
 
 const DEFAULTS: Vocabulary = {
@@ -18,6 +24,8 @@ const DEFAULTS: Vocabulary = {
   employee_label: 'Employee',
   employee_plural: 'Employees',
   booking_label: 'Appointment',
+  example_services: [],
+  example_resources: [],
 }
 
 interface VocabularyContextValue {
@@ -50,6 +58,8 @@ export function VocabularyProvider({ children }: { children: ReactNode }) {
           employee_label: data.employee_label || DEFAULTS.employee_label,
           employee_plural: data.employee_plural || DEFAULTS.employee_plural,
           booking_label: data.booking_label || DEFAULTS.booking_label,
+          example_services: Array.isArray(data.example_services) ? data.example_services : DEFAULTS.example_services,
+          example_resources: Array.isArray(data.example_resources) ? data.example_resources : DEFAULTS.example_resources,
         })
       }
     }).catch(() => {

@@ -180,7 +180,7 @@ describe('SetupWizard: Step 1 Services', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
     expect(screen.getByText('New Service')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation')).toBeInTheDocument()
+    expect(screen.getByLabelText('Service Name')).toBeInTheDocument()
     expect(screen.getByText('Duration (minutes)')).toBeInTheDocument()
   })
 
@@ -204,7 +204,7 @@ describe('SetupWizard: Step 1 Services', () => {
   test('shows validation error for zero duration', async () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
-    const nameInput = screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation')
+    const nameInput = screen.getByLabelText('Service Name')
     const durationInput = screen.getByDisplayValue('30')
     fireEvent.change(nameInput, { target: { value: 'Test Service' } })
     fireEvent.change(durationInput, { target: { value: '0' } })
@@ -323,7 +323,7 @@ describe('SetupWizard: Step 2 Resources', () => {
     goToStep2()
     fireEvent.click(screen.getByText('Add a resource'))
     expect(screen.getByText('New Resource')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3')).toBeInTheDocument()
+    expect(screen.getByLabelText('Resource Name')).toBeInTheDocument()
   })
 
   test('form Cancel button hides the form', () => {
@@ -1020,7 +1020,7 @@ describe('SetupWizard: Sad Paths — Service Creation Failure', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
 
-    const nameInput = screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation')
+    const nameInput = screen.getByLabelText('Service Name')
     fireEvent.change(nameInput, { target: { value: 'Brake Pad Replacement' } })
     fireEvent.click(screen.getByText('Add Service'))
 
@@ -1040,7 +1040,7 @@ describe('SetupWizard: Sad Paths — Service Creation Failure', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
 
-    const nameInput = screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation')
+    const nameInput = screen.getByLabelText('Service Name')
     fireEvent.change(nameInput, { target: { value: 'Oil Change' } })
     fireEvent.click(screen.getByText('Add Service'))
 
@@ -1063,7 +1063,7 @@ describe('SetupWizard: Sad Paths — Service Creation Failure', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: 'Test' } })
+    fireEvent.change(screen.getByLabelText('Service Name'), { target: { value: 'Test' } })
     fireEvent.click(screen.getByText('Add Service'))
 
     await waitFor(() => {
@@ -1088,7 +1088,7 @@ describe('SetupWizard: Sad Paths — Resource Creation Failure', () => {
     fireEvent.click(screen.getByText('Next')) // Go to Step 2
     fireEvent.click(screen.getByText('Add a resource'))
 
-    const nameInput = screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3')
+    const nameInput = screen.getByLabelText('Resource Name')
     fireEvent.change(nameInput, { target: { value: 'Bay 3' } })
     fireEvent.click(screen.getByText('Add Resource'))
 
@@ -1109,7 +1109,7 @@ describe('SetupWizard: Sad Paths — Resource Creation Failure', () => {
     fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByText('Add a resource'))
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3'), { target: { value: 'Bay 3' } })
+    fireEvent.change(screen.getByLabelText('Resource Name'), { target: { value: 'Bay 3' } })
     fireEvent.click(screen.getByText('Add Resource'))
 
     await waitFor(() => {
@@ -1188,7 +1188,7 @@ describe('SetupWizard: Sad Paths — Validation (Empty Form Submissions)', () =>
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: '   ' } })
+    fireEvent.change(screen.getByLabelText('Service Name'), { target: { value: '   ' } })
     fireEvent.click(screen.getByText('Add Service'))
 
     await waitFor(() => {
@@ -1200,7 +1200,7 @@ describe('SetupWizard: Sad Paths — Validation (Empty Form Submissions)', () =>
     render(<SetupWizard isOpen={true} onClose={() => {}} />)
     fireEvent.click(screen.getByText('Add a service'))
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: 'Haircut' } })
+    fireEvent.change(screen.getByLabelText('Service Name'), { target: { value: 'Haircut' } })
     fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '-5' } })
     fireEvent.click(screen.getByText('Add Service'))
 
@@ -1227,7 +1227,7 @@ describe('SetupWizard: Sad Paths — Validation (Empty Form Submissions)', () =>
     fireEvent.click(screen.getByText('Next'))
     fireEvent.click(screen.getByText('Add a resource'))
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Bay 1, Chair A, Room 3'), { target: { value: '   ' } })
+    fireEvent.change(screen.getByLabelText('Resource Name'), { target: { value: '   ' } })
     fireEvent.click(screen.getByText('Add Resource'))
 
     await waitFor(() => {
@@ -1483,7 +1483,7 @@ describe('SetupWizard: Sad Paths — Navigation After Error', () => {
 
     // Trigger an error
     fireEvent.click(screen.getByText('Add a service'))
-    fireEvent.change(screen.getByPlaceholderText('e.g. Oil Change, Haircut, Tire Rotation'), { target: { value: 'Test' } })
+    fireEvent.change(screen.getByLabelText('Service Name'), { target: { value: 'Test' } })
     fireEvent.click(screen.getByText('Add Service'))
 
     await waitFor(() => {

@@ -244,6 +244,11 @@ export interface Vocabulary {
   employee_label: string;
   employee_plural: string;
   booking_label: string;
+  /** Industry-specific service-name examples from the matched
+   *  business_template; empty when no template is matched. */
+  example_services: string[];
+  /** Mirror of example_services for resource names. */
+  example_resources: string[];
 }
 
 export interface CoverageItem {
