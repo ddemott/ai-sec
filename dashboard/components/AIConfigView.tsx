@@ -15,6 +15,7 @@ import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { showToast } from './ui/Toast'
+import { LoadingState } from './ui/LoadingState'
 
 // Business-type / template browsing lives in BusinessSettingsView now
 // (BusinessTypeSection.tsx). Owners pick the template once during the
@@ -76,7 +77,7 @@ export default function AIConfigView() {
     setSaving(false)
   }
 
-  if (loading) return <div className="p-8 text-gray-500 italic">Loading AI configuration...</div>
+  if (loading) return <LoadingState message="Loading AI configuration…" />
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto transition-colors duration-200" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
@@ -186,12 +187,12 @@ export default function AIConfigView() {
 
         {/* Test Section */}
         <section className="pt-8 border-t" style={{ borderColor: 'var(--border-soft)' }}>
-          <Card className="p-6 bg-gray-900 dark:bg-[#1a1a1a] text-white flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
+          <Card className="p-6 flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0" style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
             <div>
               <h3 className="text-lg font-bold">Ready to test?</h3>
-              <p className="text-gray-400 text-sm">Save your changes and call your business number to hear the new persona.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Save your changes and call your business number to hear the new persona.</p>
             </div>
-            <Button variant="secondary" className="bg-white text-gray-900 hover:bg-gray-100">
+            <Button variant="secondary">
               Call My AI Now
             </Button>
           </Card>

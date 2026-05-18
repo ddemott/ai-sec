@@ -290,7 +290,7 @@ export function OutlookLayout({
               className={`inline-flex items-center justify-center min-w-[40px] min-h-[40px] p-2 rounded-md transition-all ${
                 profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
                   ? ''
-                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  : 'hover:brightness-110'
               }`}
               style={
                 profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
@@ -358,8 +358,8 @@ export function OutlookLayout({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === tab.id ? '' : 'text-gray-500'}`}
-                style={activeTab === tab.id ? { color: 'var(--accent-soft)' } : undefined}
+                className="relative flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0"
+                style={activeTab === tab.id ? { color: 'var(--accent-soft)' } : { color: 'var(--text-muted)' }}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-[11px] mt-0.5 font-medium">{tab.label}</span>
