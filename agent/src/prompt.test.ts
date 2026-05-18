@@ -264,6 +264,92 @@ describe('buildSystemPrompt', () => {
     // Don't-promise-a-specific-callback rule — preserves trust.
     expect(prompt).toMatch(/don't promise|do not promise/i);
   });
+
+  // ───────────────────────────────────────────────────────────────────
+  // Custom system prompt (2026-05-18): tenants.system_prompt overrides
+  // the hardcoded "You are Clara..." identity line. Placeholders get
+  // substituted from PromptContext fields. Everything else (tools, OTP,
+  // booking discipline) stays platform-controlled.
+  // ───────────────────────────────────────────────────────────────────
+
+  it('CUSTOM PROMPT: when set, replaces the hardcoded Clara line as the identity section', () => {
+    // WHO: tenant whose AI Persona page in the dashboard says "You are
+    //      a friendly virtual receptionist for {{business_name}}..."
+    // WHAT: that text appears at the top of the prompt verbatim (minus
+    //      the substituted placeholder); the default Clara line does NOT.
+    // WHERE: agent/src/prompt.ts buildSystemPrompt identity branch.
+    // WHY: pre-2026-05-18 the dashboard customization was dead weight —
+    //      the agent built its own prompt and ignored the DB column.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: 'You are a friendly virtual receptionist for {{business_name}}.',
+    });
+    expect(prompt).toContain('You are a friendly virtual receptionist for DynaTire.');
+    expect(prompt).not.toContain('You are Clara, the AI receptionist');
+  });
+
+  it('CUSTOM PROMPT: platform-level sections (tools, OTP, booking) still appear below the custom identity', () => {
+    // WHY: customization is for the persona only. Booking discipline +
+    //      tool listings are load-bearing for correctness and must NOT
+    //      be replaceable by a tenant who edits their persona.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: 'Custom persona text.',
+    });
+    expect(prompt).toContain('# Conversation style');
+    expect(prompt).toContain('# Available tools');
+    expect(prompt).toContain('# Phone Verification');
+    expect(prompt).toContain('get_company_policy_answer');
+    expect(prompt).toContain('TIMESLOT_OCCUPIED');
+  });
+
+  it('CUSTOM PROMPT: substitutes {{business_name}}, {{current_date}}, {{caller_phone}}', () => {
+    // WHAT: all three Handlebars placeholders supported at prompt build time.
+    // WHY: the DB-stored templates use these exact tokens (see
+    //      supabase/baseline.sql seeded answering-service template).
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: 'Hello {{business_name}} — caller {{caller_phone}} on {{current_date}}.',
+    });
+    expect(prompt).toContain('Hello DynaTire — caller +15551234567 on Friday, April 24, 2026.');
+  });
+
+  it('CUSTOM PROMPT: anonymous-caller substitution yields "unknown" (not blank or "null")', () => {
+    // WHY: a blank substitution produces "caller  on Friday..." which
+    //      is mid-sentence ungrammatical; "null" leaks an internal type
+    //      to the LLM. "unknown" reads naturally on both written and
+    //      spoken paths.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      callerPhone: null,
+      customPrompt: 'Caller {{caller_phone}}.',
+    });
+    expect(prompt).toContain('Caller unknown.');
+    expect(prompt).not.toContain('Caller null.');
+    expect(prompt).not.toContain('Caller .');
+  });
+
+  it('CUSTOM PROMPT: unknown placeholders pass through unchanged', () => {
+    // WHY: a typo like {{busniess_name}} should be visible to the
+    //      operator (so they fix the template), not silently blanked
+    //      out so the caller hears "Hello  thanks for calling".
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: 'Hello {{busniess_name}} from {{business_name}}.',
+    });
+    expect(prompt).toContain('Hello {{busniess_name}} from DynaTire.');
+  });
+
+  it('CUSTOM PROMPT: null / undefined / empty / whitespace falls back to the hardcoded Clara identity', () => {
+    // WHY: tenants that haven't customized their persona must continue
+    //      to get the working default. Whitespace-only counts as empty
+    //      (catches the edge case of an owner who clears the textarea
+    //      but leaves a trailing space).
+    for (const customPrompt of [null, undefined, '', '   \n\t  ']) {
+      const prompt = buildSystemPrompt({ ...BASE_CTX, customPrompt });
+      expect(prompt).toContain('You are Clara, the AI receptionist for DynaTire.');
+    }
+  });
 });
 
 describe('formatDateForPrompt', () => {

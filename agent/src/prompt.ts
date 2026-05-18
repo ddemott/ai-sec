@@ -23,6 +23,41 @@ export interface PromptContext {
   currentDate: string;
   /** Tenant timezone display name, e.g., "America/Chicago". */
   timezone: string;
+  /**
+   * Owner-authored identity / role prompt with optional Handlebars-style
+   * placeholders. When set, replaces the default "You are Clara..." opening
+   * line; the rest of the prompt (conversation style, tools, OTP flow,
+   * booking discipline) stays platform-controlled and appears below.
+   *
+   * Supported placeholders, all substituted before the prompt is sent:
+   *   - {{business_name}}  → ctx.tenantName
+   *   - {{current_date}}   → ctx.currentDate (Friday, May 22, 2026)
+   *   - {{caller_phone}}   → ctx.callerPhone (or "unknown" when null)
+   *
+   * Null / undefined / empty-after-trim means "use the hardcoded
+   * Clara identity below" — preserves prior behavior for tenants that
+   * haven't customized their persona.
+   *
+   * Origin (2026-05-18): the prompt template lived in
+   * `business_templates.system_prompt_template` and the per-tenant
+   * `tenants.system_prompt` override field, but the agent had been
+   * ignoring both — the LLM always saw the hardcoded Clara prompt
+   * regardless of what the dashboard's AI Persona page said.
+   */
+  customPrompt?: string | null;
+}
+
+/**
+ * Replace `{{placeholder}}` tokens with runtime values. Unknown
+ * placeholders pass through unchanged (rather than blanking) so a typo
+ * in the template is visible to the operator instead of silently
+ * removing words from the caller's greeting.
+ */
+function substitutePlaceholders(template: string, ctx: PromptContext): string {
+  return template
+    .replace(/\{\{business_name\}\}/g, ctx.tenantName)
+    .replace(/\{\{current_date\}\}/g, ctx.currentDate)
+    .replace(/\{\{caller_phone\}\}/g, ctx.callerPhone ?? 'unknown');
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
@@ -30,7 +65,12 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     ? `The caller's number is ${ctx.callerPhone} (verified by caller ID).`
     : `The caller's number is NOT available (blocked or withheld caller ID). You MUST collect and verify a phone number before booking any appointment — see the "Phone Verification" section below.`;
 
-  return `You are Clara, the AI receptionist for ${ctx.tenantName}.
+  const trimmedCustom = ctx.customPrompt?.trim();
+  const identitySection = trimmedCustom
+    ? substitutePlaceholders(trimmedCustom, ctx)
+    : `You are Clara, the AI receptionist for ${ctx.tenantName}.`;
+
+  return `${identitySection}
 
 # Conversation style
 - This is a PHONE CALL. Speak naturally — no markdown, no bullet points, no formatting, no "as an AI" disclaimers.

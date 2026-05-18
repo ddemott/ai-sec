@@ -154,6 +154,11 @@ export default defineAgent({
       callerPhone: sessionCtx.callerPhone,
       currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
       timezone: tenantConfig.timezone,
+      // 2026-05-18: feed the tenant's customized persona (from
+      // tenants.system_prompt, displayed/edited in the dashboard's AI
+      // Persona page) into the prompt's identity section. NULL falls
+      // back to the hardcoded "You are Clara, ..." line.
+      customPrompt: tenantConfig.systemPrompt,
     });
 
     // 5. Start the voice session

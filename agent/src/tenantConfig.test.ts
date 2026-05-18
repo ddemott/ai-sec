@@ -40,10 +40,33 @@ describe('fetchTenantConfig', () => {
     //       name or "today" reasoned about in the wrong zone.
     const client = clientWith({
       status: 200,
-      body: { success: true, result: { name: 'DynaTire', timezone: 'America/Chicago' } },
+      body: { success: true, result: { name: 'DynaTire', timezone: 'America/Chicago', system_prompt: null } },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
-    expect(cfg).toEqual({ name: 'DynaTire', timezone: 'America/Chicago' });
+    expect(cfg).toEqual({ name: 'DynaTire', timezone: 'America/Chicago', systemPrompt: null });
+  });
+
+  it('HAPPY: surfaces tenants.system_prompt when set so the agent can use it as the role/identity section', async () => {
+    // WHO: A tenant who customized their AI Persona page in the dashboard.
+    // WHAT: system_prompt comes through as systemPrompt (snake → camel at
+    //       the boundary). buildSystemPrompt then substitutes placeholders
+    //       and uses the text as the identity section.
+    // WHEN: Every call for any tenant that has set a non-null persona.
+    // WHERE: agent/src/tenantConfig.ts → agent/src/prompt.ts.
+    // WHY: pre-2026-05-18 this column was stored but never reached the LLM.
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'DynaTire',
+          timezone: 'America/Chicago',
+          system_prompt: 'You are a friendly receptionist for {{business_name}}.',
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.systemPrompt).toBe('You are a friendly receptionist for {{business_name}}.');
   });
 
   it('SAD: backend success:false → fallback', async () => {

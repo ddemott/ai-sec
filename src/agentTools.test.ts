@@ -286,16 +286,33 @@ describe('agentTools /tenant-config', () => {
     //       this route existed and was actually called by the agent
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ name: 'DynaTire', timezone: 'America/Chicago' }] },
+        { rows: [{ name: 'DynaTire', timezone: 'America/Chicago', system_prompt: null }] },
       ],
     });
     const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(body.result).toEqual({ name: 'DynaTire', timezone: 'America/Chicago' });
+    expect(body.result).toEqual({ name: 'DynaTire', timezone: 'America/Chicago', system_prompt: null });
     expect(queries[0].text).toContain('FROM tenants');
+    expect(queries[0].text).toContain('system_prompt');
     expect(queries[0].params).toEqual([TENANT_ID]);
+  });
+
+  it('HAPPY: surfaces tenants.system_prompt when the owner has customized it', async () => {
+    // WHO: A tenant who edited their AI Persona prompt in the dashboard.
+    // WHAT: Route returns system_prompt verbatim alongside name + timezone.
+    //       Substitution happens in the agent (buildSystemPrompt), not here.
+    // WHERE: src/routes/agentTools.ts /tenant-config SELECT clause.
+    // WHY: Before 2026-05-18 the column was stored but the agent never
+    //      received it — the LLM saw the hardcoded "You are Clara..." line
+    //      regardless of what the owner typed into the dashboard.
+    const customText = 'You are a friendly receptionist for {{business_name}}.';
+    const { app } = buildApp({
+      queryResponses: [{ rows: [{ name: 'DynaTire', timezone: 'America/Chicago', system_prompt: customText }] }],
+    });
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
+    expect(res.json().result.system_prompt).toBe(customText);
   });
 
   it('HAPPY: null timezone falls back to America/Chicago', async () => {
@@ -311,10 +328,10 @@ describe('agentTools /tenant-config', () => {
     //       into runFallback. Coalescing here is cheaper than fixing
     //       every legacy row.
     const { app } = buildApp({
-      queryResponses: [{ rows: [{ name: 'Legacy Co', timezone: null }] }],
+      queryResponses: [{ rows: [{ name: 'Legacy Co', timezone: null, system_prompt: null }] }],
     });
     const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
-    expect(res.json().result).toEqual({ name: 'Legacy Co', timezone: 'America/Chicago' });
+    expect(res.json().result).toEqual({ name: 'Legacy Co', timezone: 'America/Chicago', system_prompt: null });
   });
 
   it('SAD: unknown tenant returns success:false with explanatory error', async () => {

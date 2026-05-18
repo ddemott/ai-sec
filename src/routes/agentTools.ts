@@ -279,8 +279,8 @@ export function registerAgentToolRoutes(
   // business name and reasons about "today" in the tenant's local zone.
   toolRoute(app, '/agent-tools/tenant-config', GetTenantConfigSchema, async (args, reply) => {
     const row = await withTenantClient(args.tenant_id, async (client) => {
-      const res = await client.query<{ name: string; timezone: string | null }>(
-        `SELECT name, timezone FROM tenants WHERE tenant_id = $1`,
+      const res = await client.query<{ name: string; timezone: string | null; system_prompt: string | null }>(
+        `SELECT name, timezone, system_prompt FROM tenants WHERE tenant_id = $1`,
         [args.tenant_id]
       );
       return res.rows[0] ?? null;
@@ -291,6 +291,11 @@ export function registerAgentToolRoutes(
     return ok(reply, {
       name: row.name,
       timezone: row.timezone || 'America/Chicago',
+      // 2026-05-18: surface the tenant's custom prompt template so the agent
+      // worker can substitute placeholders and use it as the role/identity
+      // section. NULL means "use the agent's hardcoded fallback" — preserves
+      // backwards compatibility with tenants that haven't customized.
+      system_prompt: row.system_prompt,
     });
   }, 'Failed to fetch tenant config');
 
