@@ -318,19 +318,18 @@ export function OutlookLayout({
         {children}
       </div>
 
-      {/* MOBILE NAVIGATION — mirrors the primary tabs */}
+      {/* MOBILE NAVIGATION — mirrors the primary tabs.
+          UX audit #4 (2026-05-18): the admin Globe was previously
+          rendered in this row too, which combined with 4 primary + 3
+          advanced tabs forced a horizontal scroll on iPhone SE (375px).
+          Globe lives in the top utility row (and the FolderTabBar's
+          `right` slot is visible at every viewport), so dropping it
+          from the bottom-row mobile nav doesn't lose admin access.
+          Label font bumped from text-[9px] (sub-WCAG body-text size)
+          to text-[11px] — fits 4 primary tabs at 375px without
+          overflow and reads cleanly. */}
       <nav aria-label="Mobile navigation" className="md:hidden flex flex-col border-t transition-colors duration-200 safe-area-pb" style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}>
         <div className="flex h-14 overflow-x-auto no-scrollbar border-b" style={{ borderColor: 'var(--border)' }}>
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab('all-businesses')}
-              className={`relative flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0 ${activeTab === 'all-businesses' ? '' : 'text-gray-500'}`}
-              style={activeTab === 'all-businesses' ? { color: 'var(--accent-soft)' } : undefined}
-            >
-              <Globe className="w-5 h-5" />
-              <span className="text-[9px] mt-0.5 font-medium">Businesses</span>
-            </button>
-          )}
           {visibleTabs.map(tab => {
             const Icon = tab.icon
             return (
@@ -341,7 +340,7 @@ export function OutlookLayout({
                 style={activeTab === tab.id ? { color: 'var(--accent-soft)' } : undefined}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[9px] mt-0.5 font-medium">{tab.label}</span>
+                <span className="text-[11px] mt-0.5 font-medium">{tab.label}</span>
                 {tab.id === 'ai-insights' && unansweredCount > 0 && (
                   <span
                     className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full text-[8px] font-bold leading-none"
