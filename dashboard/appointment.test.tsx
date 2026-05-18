@@ -428,15 +428,15 @@ describe('AppointmentView sad paths', () => {
     // WHO: same logged-out / fetch-failure viewer who tries to cancel a
     //      sample appointment
     // WHAT: AppointmentView's `if (usingMockData) { setError(...); return; }`
-    //       guard inside handleDelete prevents the POST
-    //       /appointments/:id/cancel from ever being issued
+    //       guard inside handleDelete short-circuits before the confirm
+    //       modal opens, so no POST /appointments/:id/cancel is issued
     // WHEN: GET /appointments rejected → mock-mode active → user clicks
-    //       Cancel Appointment on Bob Smith's mock row, then confirms in
-    //       the native browser confirm dialog
+    //       Cancel Appointment on Bob Smith's mock row
     // WHERE: dashboard/components/AppointmentView.tsx → handleDelete
-    //        usingMockData guard. The dialog comes from window.confirm
-    //        (native), stubbed to return true so the guard is the only
-    //        thing that can block the API call.
+    //        usingMockData guard. The destructive UI is now the themed
+    //        ConfirmModal (ui/ConfirmModal.tsx); the guard runs before
+    //        the modal is opened, so the modal never appears in mock-
+    //        mode and the cancel API is never called.
     // WHY: handleDelete switched from hard-DELETE to soft-cancel via
     //      POST /appointments/:id/cancel (2026-05-07). Mock-mode
     //      appointments don't exist server-side, so issuing the cancel
@@ -475,10 +475,6 @@ describe('AppointmentView sad paths', () => {
       } as Response)
     })
 
-    // Stub window.confirm to return true so the only thing that can block
-    // the cancel API call is the usingMockData guard.
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
-
     render(<AppointmentView />)
 
     await screen.findByText(/Showing sample data/i)
@@ -490,15 +486,15 @@ describe('AppointmentView sad paths', () => {
     const cancelButtons = await screen.findAllByRole('button', { name: /Cancel Appointment/i })
     fireEvent.click(cancelButtons[0])
 
-    await waitFor(() => {
-      expect(confirmSpy).toHaveBeenCalled()
-    })
+    // Confirm the mock-mode error message surfaces. This pins the guard
+    // ran (the older test pinned that window.confirm fired first; the
+    // refactor to ConfirmModal flipped the order so the guard runs
+    // before the modal opens — the user-visible contract is unchanged).
+    await screen.findByText(/Sample appointments cannot be canceled/i)
 
     expect(cancelFetchHappened).not.toHaveBeenCalled()
     // Belt-and-braces: also confirm the legacy DELETE path is not used.
     expect(deleteFetchHappened).not.toHaveBeenCalled()
-
-    confirmSpy.mockRestore()
   })
 
   test('mock-mode handleCreate is a no-op (no POST /appointments/create when sample data is showing)', async () => {

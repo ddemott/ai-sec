@@ -14,6 +14,7 @@ import { useStaticData } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
 import { Input } from './ui/Input'
+import { showToast } from './ui/Toast'
 
 export default function SkillMatrixView() {
   const tenantId = useActiveTenantId()
@@ -104,7 +105,7 @@ export default function SkillMatrixView() {
         }
       }
     } catch {
-      alert("Mapping failed")
+      showToast('Mapping failed', 'error')
     } finally {
       setSaving(false)
       pendingToggle.current = null

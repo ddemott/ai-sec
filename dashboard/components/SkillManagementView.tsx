@@ -14,6 +14,9 @@ import { useActiveTenantId } from '../lib/SessionContext'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
+import { showToast } from './ui/Toast'
 
 export default function SkillManagementView() {
   const tenantId = useActiveTenantId()
@@ -22,6 +25,7 @@ export default function SkillManagementView() {
   const [newSkill, setNewSkill] = useState({ name: '', description: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   async function handleCreateSkill(e: React.FormEvent) {
     e.preventDefault()
@@ -44,15 +48,23 @@ export default function SkillManagementView() {
     }
   }
 
-  async function handleDeleteSkill(id: string) {
-    if (!confirm("Are you sure? This will NOT remove the skill from employees who already have it, but it will be removed from the master list.")) return
-    
-    try {
-      await Api.skills.delete(id, tenantId)
-      refresh()
-    } catch {
-      alert("Delete failed")
-    }
+  function handleDeleteSkill(id: string) {
+    confirmAction({
+      title: 'Remove skill from master list?',
+      message: 'Employees who already have this skill keep it, but it won\'t be assignable to anyone new.',
+      confirmLabel: 'Remove skill',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm()
+        try {
+          await Api.skills.delete(id, tenantId)
+          refresh()
+          showToast('Skill removed', 'success')
+        } catch {
+          showToast('Delete failed', 'error')
+        }
+      },
+    })
   }
 
   if (loading && skills.length === 0) {
@@ -157,6 +169,8 @@ export default function SkillManagementView() {
           </div>
         </div>
       </Card>
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   )
 }

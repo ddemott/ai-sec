@@ -20,6 +20,9 @@ import { Input } from './ui/Input'
 import { PhoneInput } from './ui/PhoneInput'
 import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
+import { showToast } from './ui/Toast'
 
 type Employee = {
   employee_id: string
@@ -46,6 +49,8 @@ export default function EmployeeManagementView() {
 
   // Add Employee State
   const [newEmployee, setNewEmployee] = useState({ first_name: '', last_name: '' })
+
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   useEffect(() => {
     if (tenantId) fetchMappings()
@@ -105,19 +110,28 @@ export default function EmployeeManagementView() {
     }
   }
 
-  async function handleDeleteEmployee(id: string) {
-    if (!confirm(`Are you sure? This will remove the ${vocab.employee_label.toLowerCase()} permanently.`)) return
-    try {
-      const res = await Api.employees.delete(id, tenantId)
-      if (res.success) {
-        refresh()
-        setIsEditModalOpen(false)
-      } else {
-        alert(res.error || "Delete failed")
-      }
-    } catch {
-      alert(`${vocab.employee_label} is still connected to appointments or services.`)
-    }
+  function handleDeleteEmployee(id: string) {
+    confirmAction({
+      title: `Remove ${vocab.employee_label.toLowerCase()}?`,
+      message: `This will remove the ${vocab.employee_label.toLowerCase()} permanently. Appointments and service assignments stay attached to the record.`,
+      confirmLabel: 'Remove',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm()
+        try {
+          const res = await Api.employees.delete(id, tenantId)
+          if (res.success) {
+            refresh()
+            setIsEditModalOpen(false)
+            showToast(`${vocab.employee_label} removed`, 'success')
+          } else {
+            showToast(res.error || 'Delete failed', 'error')
+          }
+        } catch {
+          showToast(`${vocab.employee_label} is still connected to appointments or services.`, 'error')
+        }
+      },
+    })
   }
 
   async function toggleService(serviceId: string, employeeId: string) {
@@ -131,7 +145,7 @@ export default function EmployeeManagementView() {
         setMappings([...mappings, { service_id: serviceId, employee_id: employeeId }])
       }
     } catch {
-      alert("Failed to update services")
+      showToast('Failed to update services', 'error')
     }
   }
 
@@ -335,6 +349,8 @@ export default function EmployeeManagementView() {
           </div>
         )}
       </Modal>
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   )
 }

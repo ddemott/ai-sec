@@ -407,22 +407,32 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // would refresh the parent's data set, not this view's. 2026-05-13:
   // added after the user reported "no delete button" — the popover
   // was rendered without onCancel so its action buttons never showed.
-  const handleApptCancel = useCallback(async (appointmentId: string) => {
+  const handleApptCancel = useCallback((appointmentId: string) => {
     if (!tenantId) return;
-    if (!confirm('Cancel this appointment? The slot will free up but the record stays for history.')) return;
-    try {
-      const res = await Api.appointments.cancel(appointmentId, tenantId);
-      if (res.success) {
-        showToast('Appointment canceled', 'success');
-        setApptPopover(null);
-        refreshScheduler();
-      } else {
-        showToast(res.error || 'Failed to cancel appointment', 'error');
-      }
-    } catch {
-      showToast('Connection error — could not cancel appointment', 'error');
-    }
-  }, [tenantId, refreshScheduler]);
+    openConfirm({
+      title: 'Cancel appointment?',
+      message: 'The slot will free up, but the record stays for history. You can restore it later from Customers.',
+      confirmLabel: 'Cancel appointment',
+      confirmVariant: 'danger',
+      onConfirm: () => {
+        void (async () => {
+          closeConfirm();
+          try {
+            const res = await Api.appointments.cancel(appointmentId, tenantId);
+            if (res.success) {
+              showToast('Appointment canceled', 'success');
+              setApptPopover(null);
+              refreshScheduler();
+            } else {
+              showToast(res.error || 'Failed to cancel appointment', 'error');
+            }
+          } catch {
+            showToast('Connection error — could not cancel appointment', 'error');
+          }
+        })();
+      },
+    });
+  }, [tenantId, refreshScheduler, openConfirm, closeConfirm]);
 
   // Drag-to-move from a Staff-lane block. Block already snapped delta
   // to 15 min and called us with the resolved minute count. We compute

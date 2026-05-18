@@ -19,6 +19,9 @@ import { Input } from './ui/Input';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
+import { ConfirmModal } from './ui/ConfirmModal';
+import { useConfirm } from '../lib/useConfirm';
+import { showToast } from './ui/Toast';
 
 type Resource = {
   resource_id: string;
@@ -47,6 +50,7 @@ export default function ResourceManagerView() {
   const [editForm, setEditForm] = useState({ name: '', description: '', is_active: true });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
 
   useEffect(() => {
     if (tenantId) {
@@ -110,19 +114,31 @@ export default function ResourceManagerView() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Are you sure you want to delete this resource?')) return;
-    setError(null);
-    try {
-      const res = await Api.resources.delete(id, tenantId);
-      if (res.success) {
-        refresh();
-      } else {
-        setError(res.error || 'Failed to delete resource');
-      }
-    } catch {
-      setError('Failed to delete resource');
-    }
+  function handleDelete(id: string) {
+    confirmAction({
+      title: `Delete ${vocab.resource_label.toLowerCase()}?`,
+      message: `This ${vocab.resource_label.toLowerCase()} will be removed. Existing appointments stay, but new bookings won\'t be able to use it.`,
+      confirmLabel: 'Delete',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        setError(null);
+        try {
+          const res = await Api.resources.delete(id, tenantId);
+          if (res.success) {
+            refresh();
+            setIsEditModalOpen(false);
+            showToast(`${vocab.resource_label} deleted`, 'success');
+          } else {
+            setError(res.error || 'Failed to delete resource');
+            showToast(res.error || 'Failed to delete resource', 'error');
+          }
+        } catch {
+          setError('Failed to delete resource');
+          showToast('Failed to delete resource', 'error');
+        }
+      },
+    });
   }
 
   async function toggleServiceMapping(serviceId: string, resourceId: string) {
@@ -337,6 +353,8 @@ export default function ResourceManagerView() {
           </section>
         </div>
       </Modal>
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

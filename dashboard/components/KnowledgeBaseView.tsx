@@ -13,6 +13,7 @@ import { Badge } from './ui/Badge'
 import { POLICY_CATEGORIES, POLICY_QUESTIONS } from '../lib/policyQuestions'
 import { ConfirmModal } from './ui/ConfirmModal'
 import { useConfirm } from '../lib/useConfirm'
+import { showToast } from './ui/Toast'
 import type { KnowledgeEntry } from '../lib/types'
 
 type Tab = 'questionnaire' | 'documents' | 'entries'
@@ -257,7 +258,7 @@ export default function KnowledgeBaseView() {
         return next
       })
     } catch {
-      alert('Failed to delete')
+      showToast('Failed to delete', 'error')
     }
   }
 

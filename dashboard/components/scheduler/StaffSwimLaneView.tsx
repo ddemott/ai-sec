@@ -17,6 +17,7 @@ interface StaffSwimLaneViewProps {
   /** Drag-to-move on an appointment block. deltaMinutes is snapped to 15. */
   onAppointmentMove?: (appointmentId: string, deltaMinutes: number) => void;
   onShiftDrag?: (employeeId: string, startHour: number, endHour: number) => void;
+  /** Parent owns the confirm prompt + API call; child only fires the intent. */
   onShiftDelete?: (shiftId: string) => void;
   onShiftResize?: (shiftId: string, startHour: number, endHour: number) => void;
   onEmployeeClick?: (employee: SwimLaneEmployee) => void;
@@ -334,9 +335,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      if (confirm(`Delete shift ${formatHour(cs)} – ${formatHour(ce)}?`)) {
-                        onShiftDelete(shift.id);
-                      }
+                      onShiftDelete(shift.id);
                     }}
                   >
                     ✕ Delete

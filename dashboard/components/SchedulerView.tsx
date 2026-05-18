@@ -15,6 +15,8 @@ import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
 import NewSchedulerView from './scheduler/NewSchedulerView';
 import { AppointmentPopover } from './scheduler/AppointmentPopover';
 import { Button } from './ui/Button';
+import { ConfirmModal } from './ui/ConfirmModal';
+import { useConfirm } from '../lib/useConfirm';
 import AppointmentView from './AppointmentView';
 
 export type SchedulerViewTab = 'staff' | 'resources' | 'list' | 'calendar';
@@ -79,6 +81,8 @@ export default function SchedulerView() {
 
   const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
 
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
+
   // When the popover's Edit button fires from a non-Calendar sub-tab, we
   // switch to Calendar AND ask AppointmentView to pre-select + edit this
   // appointment on its next render. Simpler than hoisting the
@@ -109,23 +113,31 @@ export default function SchedulerView() {
   // DELETE would. Refreshes both the scheduler data and the static data
   // (employees / resources / services / customers) so any view shows
   // the canceled status immediately.
-  const handlePopoverCancel = useCallback(async (appointmentId: string) => {
+  const handlePopoverCancel = useCallback((appointmentId: string) => {
     if (!tenantId) return;
-    if (!confirm('Cancel this appointment? The slot will free up but the record stays for history.')) return;
-    try {
-      const res = await Api.appointments.cancel(appointmentId, tenantId);
-      if (res.success) {
-        showToast('Appointment canceled', 'success');
-        setApptPopover(null);
-        refreshScheduler();
-        refreshStaticData();
-      } else {
-        showToast(res.error || 'Failed to cancel appointment', 'error');
-      }
-    } catch {
-      showToast('Connection error — could not cancel appointment', 'error');
-    }
-  }, [tenantId, refreshScheduler, refreshStaticData]);
+    confirmAction({
+      title: 'Cancel appointment?',
+      message: 'The slot will free up, but the record stays for history. You can restore it later from Customers.',
+      confirmLabel: 'Cancel appointment',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await Api.appointments.cancel(appointmentId, tenantId);
+          if (res.success) {
+            showToast('Appointment canceled', 'success');
+            setApptPopover(null);
+            refreshScheduler();
+            refreshStaticData();
+          } else {
+            showToast(res.error || 'Failed to cancel appointment', 'error');
+          }
+        } catch {
+          showToast('Connection error — could not cancel appointment', 'error');
+        }
+      },
+    });
+  }, [tenantId, refreshScheduler, refreshStaticData, confirmAction, closeConfirm]);
 
   const handleQuickBooked = useCallback(() => {
     refreshScheduler();
@@ -137,21 +149,29 @@ export default function SchedulerView() {
   // a one-click delete on a scheduled appointment is too punishing for
   // a misclick. Origin: 2026-05-13 — user reported "no delete button"
   // for appointments; the hover-trash gives a direct affordance.
-  const handleAppointmentDelete = useCallback(async (appointmentId: string) => {
+  const handleAppointmentDelete = useCallback((appointmentId: string) => {
     if (!tenantId) return;
-    if (!confirm('Cancel this appointment? The slot will free up but the record stays for history.')) return;
-    try {
-      const res = await Api.appointments.cancel(appointmentId, tenantId);
-      if (res.success) {
-        showToast('Appointment canceled', 'success');
-        refreshScheduler();
-      } else {
-        showToast(res.error || 'Failed to cancel appointment', 'error');
-      }
-    } catch {
-      showToast('Connection error — could not cancel appointment', 'error');
-    }
-  }, [tenantId, refreshScheduler]);
+    confirmAction({
+      title: 'Cancel appointment?',
+      message: 'The slot will free up, but the record stays for history. You can restore it later from Customers.',
+      confirmLabel: 'Cancel appointment',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await Api.appointments.cancel(appointmentId, tenantId);
+          if (res.success) {
+            showToast('Appointment canceled', 'success');
+            refreshScheduler();
+          } else {
+            showToast(res.error || 'Failed to cancel appointment', 'error');
+          }
+        } catch {
+          showToast('Connection error — could not cancel appointment', 'error');
+        }
+      },
+    });
+  }, [tenantId, refreshScheduler, confirmAction, closeConfirm]);
 
   // Outlook-style drag-to-move. The block already snapped the delta
   // to a 15-min grid (matches the booking-form gridding); we compute
@@ -380,6 +400,8 @@ export default function SchedulerView() {
           onCancel={handlePopoverCancel}
         />
       )}
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

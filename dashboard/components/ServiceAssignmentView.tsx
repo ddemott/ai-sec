@@ -22,6 +22,9 @@ import { Card } from './ui/Card'
 import { Input } from './ui/Input'
 import { Modal } from './ui/Modal'
 import { Badge } from './ui/Badge'
+import { ConfirmModal } from './ui/ConfirmModal'
+import { useConfirm } from '../lib/useConfirm'
+import { showToast } from './ui/Toast'
 
 type Service = {
   service_id: string
@@ -56,6 +59,8 @@ export default function ServiceAssignmentView() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Service>>({})
   const [saving, setSaving] = useState(false)
+
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   useEffect(() => {
     if (tenantId) fetchMappings()
@@ -123,20 +128,32 @@ export default function ServiceAssignmentView() {
     }
   }
 
-  async function handleDeleteService(id: string) {
-    if (!confirm("Are you sure? This will remove the service definition permanently.")) return
-    setActionError(null)
-    try {
-      const res = await Api.services.delete(id, tenantId)
-      if (res.success) {
-        refresh()
-        setIsEditModalOpen(false)
-      } else {
-        setActionError(res.error || "Delete failed")
-      }
-    } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : String(err))
-    }
+  function handleDeleteService(id: string) {
+    confirmAction({
+      title: 'Remove service?',
+      message: 'This will remove the service definition permanently. Existing appointments keep their record but the service won\'t be bookable.',
+      confirmLabel: 'Remove service',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm()
+        setActionError(null)
+        try {
+          const res = await Api.services.delete(id, tenantId)
+          if (res.success) {
+            refresh()
+            setIsEditModalOpen(false)
+            showToast('Service removed', 'success')
+          } else {
+            setActionError(res.error || 'Delete failed')
+            showToast(res.error || 'Delete failed', 'error')
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setActionError(msg)
+          showToast(msg, 'error')
+        }
+      },
+    })
   }
 
   async function toggleResourceMapping(serviceId: string, resourceId: string) {
@@ -149,7 +166,7 @@ export default function ServiceAssignmentView() {
         await Api.mappings.assignServiceResource(serviceId, resourceId, tenantId)
         setResMappings([...resMappings, { service_id: serviceId, resource_id: resourceId }])
       }
-    } catch { alert("Mapping update failed") }
+    } catch { showToast('Mapping update failed', 'error') }
   }
 
   async function toggleEmployeeMapping(serviceId: string, employeeId: string) {
@@ -162,7 +179,7 @@ export default function ServiceAssignmentView() {
         await Api.mappings.assignServiceEmployee(serviceId, employeeId, tenantId)
         setEmpMappings([...empMappings, { service_id: serviceId, employee_id: employeeId }])
       }
-    } catch { alert("Mapping update failed") }
+    } catch { showToast('Mapping update failed', 'error') }
   }
 
   if (loading && services.length === 0) {
@@ -497,6 +514,8 @@ export default function ServiceAssignmentView() {
           )}
         </div>
       </Modal>
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   )
 }

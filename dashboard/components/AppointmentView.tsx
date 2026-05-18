@@ -23,6 +23,8 @@ import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
 import { AppointmentDetailProvider, useAppointmentDetail } from '../lib/AppointmentDetailContext';
 import { ConflictModal, type BookingConflict, type AvailableAlternative } from './scheduler/ConflictModal';
+import { ConfirmModal } from './ui/ConfirmModal';
+import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
 import { isSlotOnFifteenMinuteGrid } from '../lib/calendarSlot';
 
@@ -98,6 +100,8 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
     form, setForm,
     setShowConfirmModal,
   } = useAppointmentDetail();
+
+  const { state: cancelConfirmState, confirm: confirmCancel, close: closeCancelConfirm } = useConfirm();
 
   // Appointments state
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -377,9 +381,8 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
     }
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!selectedAppointment) return
-    if (!confirm('Cancel this appointment? It will be marked canceled and the slot will free up, but the record stays for history.')) return
     if (usingMockData) {
       setError('Sample appointments cannot be canceled. Create a real appointment after logging in.')
       return
@@ -388,26 +391,35 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
       setError('Please log in to cancel appointments.')
       return
     }
-
-    try {
-      // Soft-cancel rather than hard-delete: the appointment row stays
-      // in the DB with status='canceled' so re-clicks from a stale
-      // list don't return 404, the audit trail is preserved, and the
-      // row can still be referenced by reports / call summaries. The
-      // backend soft-cancel route also drops the slot from synced
-      // calendars + CRMs, matching what an operator expects from
-      // "cancel."
-      const res = await Api.appointments.cancel(selectedAppointment.appointment_id, tenantId)
-      if (res.success) {
-          setSelectedAppointment(null)
-          fetchAppointments()
-      } else {
-          setError(res.error || 'Failed to cancel appointment')
-      }
-    } catch (e) {
-        console.error(e)
-        setError('Connection error — could not cancel appointment')
-    }
+    const appointmentId = selectedAppointment.appointment_id
+    confirmCancel({
+      title: 'Cancel appointment?',
+      message: 'It will be marked canceled and the slot will free up, but the record stays for history.',
+      confirmLabel: 'Cancel appointment',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeCancelConfirm()
+        try {
+          // Soft-cancel rather than hard-delete: the appointment row stays
+          // in the DB with status='canceled' so re-clicks from a stale
+          // list don't return 404, the audit trail is preserved, and the
+          // row can still be referenced by reports / call summaries. The
+          // backend soft-cancel route also drops the slot from synced
+          // calendars + CRMs, matching what an operator expects from
+          // "cancel."
+          const res = await Api.appointments.cancel(appointmentId, tenantId)
+          if (res.success) {
+              setSelectedAppointment(null)
+              fetchAppointments()
+          } else {
+              setError(res.error || 'Failed to cancel appointment')
+          }
+        } catch (e) {
+            console.error(e)
+            setError('Connection error — could not cancel appointment')
+        }
+      },
+    })
   }
 
   const startNewAppointment = () => {
@@ -677,6 +689,8 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           setNextAvailable([]);
         }}
       />
+
+      <ConfirmModal {...cancelConfirmState} onClose={closeCancelConfirm} />
     </div>
   )
 }
