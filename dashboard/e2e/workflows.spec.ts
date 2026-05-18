@@ -395,7 +395,10 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
   const tag = uniqueTag();
   const description = `${tag}-edit`;
   let apptId: string | null = null;
-  let shiftId: string | null = null;
+  // Composite key (employee_id, shift_date) — see pilot #3 (2026-05-18).
+  // The afterEach cleanup uses both to delete the row.
+  let shiftEmployeeId: string | null = null;
+  let shiftDateForCleanup: string | null = null;
 
   try {
     // Pre-create via direct INSERT (no booking-RPC noise) — pick a future
@@ -433,15 +436,15 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
 
     // Insert (or upsert) Mike's shift covering the test slot. ON CONFLICT
     // guard against parallel-test residue or seed already having a row.
-    const shiftRes = await pool.query(
+    await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '08:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
-         SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-       RETURNING employee_schedule_id`,
+         SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false`,
       [DYNATIRE_ID, employee.rows[0].employee_id, shiftDate],
     );
-    shiftId = shiftRes.rows[0].employee_schedule_id;
+    shiftEmployeeId = employee.rows[0].employee_id;
+    shiftDateForCleanup = shiftDate;
 
     const insert = await pool.query(
       `INSERT INTO appointments (tenant_id, customer_id, resource_id, employee_id, start_time, end_time, description, status)
@@ -498,8 +501,11 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     if (apptId) {
       await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
     }
-    if (shiftId) {
-      await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [shiftId]);
+    if (shiftEmployeeId && shiftDateForCleanup) {
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, shiftEmployeeId, shiftDateForCleanup],
+      );
     }
   }
 });

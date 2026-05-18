@@ -442,10 +442,14 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
   //        is for the API contract tests above.
   const tag = uniqueTag();
   const apptIdsToCleanup: string[] = [];
-  let scheduleIdToCleanup: string | null = null;
+  // Pilot #3 (2026-05-18): composite key (tenant_id, employee_id, shift_date).
+  // mikeId is hoisted out of `try` so the `finally` cleanup can reference
+  // it for the composite-PK DELETE.
+  let scheduleSeeded = false;
+  let mikeId: string | null = null;
 
   try {
-    const mikeId = await findDynaTireEmployeeId('Mike Rivera');
+    mikeId = await findDynaTireEmployeeId('Mike Rivera');
     // Use Truck 2 + a far-future date completely outside seed and any
     // other E2E's range. UI test uses '2026-06-22' (Monday, no seed conflicts).
     const truckId = await findDynaTireResourceId('Truck 2');
@@ -454,14 +458,13 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     expect(truckId, 'Truck 2 must exist in DynaTire seed').toBeTruthy();
 
     const UI_TEST_DATE = '2026-06-22';
-    const shiftIns = await pool.query(
+    await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id`,
+       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
       [DYNATIRE_ID, mikeId, UI_TEST_DATE]
     );
-    scheduleIdToCleanup = shiftIns.rows[0].employee_schedule_id;
+    scheduleSeeded = true;
 
     // Pre-clean any residue at this exact slot from a previously-failed run.
     await pool.query(
@@ -542,8 +545,11 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     for (const id of apptIdsToCleanup) {
       await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     }
-    if (scheduleIdToCleanup) {
-      await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleIdToCleanup]);
+    if (scheduleSeeded && mikeId) {
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, mikeId, '2026-06-22'],
+      );
     }
   }
 });

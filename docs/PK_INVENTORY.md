@@ -10,8 +10,8 @@ When none of those apply, the natural key wins.
 
 | | Count |
 |---|---|
-| **Composite / natural PK** | 8 tables |
-| **Surrogate UUID (justified)** | 22 tables |
+| **Composite / natural PK** | 9 tables |
+| **Surrogate UUID (justified)** | 21 tables |
 | **Total** | 30 tables |
 
 ## ✅ Already on composite / natural PK (8)
@@ -25,6 +25,7 @@ When none of those apply, the natural key wins.
 | `appointment_sync_map` | `(appointment_id)` | 1:1 extension of `appointments`; PK-as-FK. |
 | `tenant_integration_settings` | `(tenant_id, provider)` | **Pilot #1, 2026-05-18** (migration `20260518100000`). |
 | `tenant_skills` | `(tenant_id, name)` | **Pilot #2, 2026-05-18** (migration `20260518110000`). |
+| `employee_schedule` | `(tenant_id, employee_id, shift_date)` | **Pilot #3, 2026-05-18** (migration `20260518130000`) — borderline 3-column case, all parts stable per row; the URL routes (`POST /shifts/overrides/:employeeId/:shiftDate/update`, `DELETE /shifts/overrides/:employeeId/:shiftDate`) take the composite as path segments. RPC `get_effective_shifts` lost its `override_id` return column in the same migration. |
 | `schema_migrations` | `(version)` | Text filename PK (set up by `setup-db.sh`). |
 
 ## 🔒 Surrogate UUID PK — intentionally retained (22)
@@ -55,9 +56,10 @@ Each table fails at least one CLAUDE.md criterion. The "**Blocker**" column name
 | Table | Surrogate | Would-be natural key |
 |---|---|---|
 | `appointments` | `appointment_id` | start_time + end_time + resource_id + customer_id (also mutable) |
-| `employee_schedule` | `employee_schedule_id` | (tenant_id, employee_id, shift_date) — already enforced as UNIQUE |
 | `entity_sync_map` | `entity_sync_map_id` | (tenant_id, entity_type, local_id, provider) |
 | `reminder_schedules` | `reminder_schedule_id` | (tenant_id, appointment_id, reminder_type, scheduled_for) |
+
+(Pilot #3 moved `employee_schedule` — also 3 columns but all immutable and zero FK references to the surrogate — to a composite PK; see "Already on composite / natural PK" above.)
 
 ### Append-only ledger — surrogate IS the natural identity
 

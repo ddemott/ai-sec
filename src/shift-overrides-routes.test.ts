@@ -31,7 +31,10 @@ import {
 // (4xxx) and variant (8/9/a/b) nibbles.
 const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const EMPLOYEE_ID = 'a1b2c3d4-e5f6-4789-ab12-cdef34567890';
-const OVERRIDE_ID = 'b2c3d4e5-f6a7-489b-9cde-f1234567890a';
+// Composite-key date used in the update + delete URLs (pilot #3,
+// 2026-05-18: routes take (employee_id, shift_date) instead of the
+// dropped surrogate).
+const SHIFT_DATE = '2026-05-15';
 
 let app: FastifyInstance;
 let mockClient: MockClient;
@@ -91,7 +94,6 @@ describe('POST /shifts/overrides/create — happy paths', () => {
     //      here surfaces as missed shift bars in the scheduler view + voice
     //      AI booking failures (no eligible employees on that date)
     const insertedRow = {
-      id: OVERRIDE_ID,
       tenant_id: TENANT_ID,
       employee_id: EMPLOYEE_ID,
       shift_date: '2026-05-15',
@@ -130,7 +132,6 @@ describe('POST /shifts/overrides/create — happy paths', () => {
     // WHY: voice AI's get_effective_shifts must see the is_off=true row to
     //      keep the agent from offering bookings against an off employee
     const insertedRow = {
-      id: OVERRIDE_ID,
       tenant_id: TENANT_ID,
       employee_id: EMPLOYEE_ID,
       shift_date: '2026-05-20',
@@ -204,20 +205,22 @@ describe('POST /shifts/overrides/create — sad paths', () => {
 // POST /shifts/overrides/:id/update
 // ════════════════════════════════════════════════════════════════════
 
-describe('POST /shifts/overrides/:id/update — happy paths', () => {
+describe('POST /shifts/overrides/:employeeId/:shiftDate/update — happy paths', () => {
   it('HAPPY: updates only the fields provided (partial update via COALESCE)', async () => {
     // WHO: owner changing an existing override's end_time only
     // WHAT: route uses COALESCE($1, start_time), COALESCE($2, end_time),
     //       COALESCE($3, is_off) so missing fields preserve the current
     //       column value rather than blanking it
     // WHEN: owner edits one field in the override modal and saves
-    // WHERE: src/routes/shifts.ts → /shifts/overrides/:id/update
+    // WHERE: src/routes/shifts.ts → /shifts/overrides/:employeeId/:shiftDate/update
+    //        (pilot #3, 2026-05-18: surrogate :id replaced by composite path).
     // WHY: the COALESCE shape lets the dashboard's edit form omit fields
     //      it didn't change. A regression to "all fields required" would
     //      break the partial-update UX silently
     const updatedRow = {
-      id: OVERRIDE_ID,
       tenant_id: TENANT_ID,
+      employee_id: EMPLOYEE_ID,
+      shift_date: SHIFT_DATE,
       start_time: '09:00',
       end_time: '15:00', // changed from 17:00
       is_off: false,
@@ -226,7 +229,7 @@ describe('POST /shifts/overrides/:id/update — happy paths', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: `/shifts/overrides/${OVERRIDE_ID}/update`,
+      url: `/shifts/overrides/${EMPLOYEE_ID}/${SHIFT_DATE}/update?tenant_id=${TENANT_ID}`,
       payload: {
         tenant_id: TENANT_ID,
         end_time: '15:00',
@@ -236,12 +239,12 @@ describe('POST /shifts/overrides/:id/update — happy paths', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, override: updatedRow });
     // null/undefined for unchanged fields → COALESCE keeps the existing column value
-    expect(queries[0].params).toEqual([undefined, '15:00', undefined, OVERRIDE_ID, TENANT_ID]);
+    expect(queries[0].params).toEqual([undefined, '15:00', undefined, TENANT_ID, EMPLOYEE_ID, SHIFT_DATE]);
   });
 });
 
-describe('POST /shifts/overrides/:id/update — sad paths', () => {
-  it('SAD: returns 404 when no row matches the id + tenant_id', async () => {
+describe('POST /shifts/overrides/:employeeId/:shiftDate/update — sad paths', () => {
+  it('SAD: returns 404 when no row matches the composite key', async () => {
     // WHO: a stale UI request to update an override that's already been
     //      deleted, or a wrong-tenant guess
     // WHAT: route checks res.rows.length === 0 → 404 envelope
@@ -253,7 +256,7 @@ describe('POST /shifts/overrides/:id/update — sad paths', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: `/shifts/overrides/${OVERRIDE_ID}/update`,
+      url: `/shifts/overrides/${EMPLOYEE_ID}/${SHIFT_DATE}/update?tenant_id=${TENANT_ID}`,
       payload: { tenant_id: TENANT_ID, is_off: true },
     });
 
@@ -261,14 +264,14 @@ describe('POST /shifts/overrides/:id/update — sad paths', () => {
     expect(res.json()).toMatchObject({ success: false, error: 'Override not found' });
   });
 
-  it('SAD: rejects update payload missing tenant_id with 400', async () => {
-    // WHO: misconfigured client posting only the body, no tenant scope
-    // WHAT: Zod schema rejects → 400, no DB query
+  it('SAD: rejects update payload missing tenant context with 400', async () => {
+    // WHO: misconfigured client posting without tenant context in JWT or query
+    // WHAT: requireTenantId returns 400 → no DB query
     // WHY: same scoping argument as create — tenant_id is required to
-    //      prevent cross-tenant updates via guessed UUID
+    //      prevent cross-tenant updates via guessed composite keys
     const res = await app.inject({
       method: 'POST',
-      url: `/shifts/overrides/${OVERRIDE_ID}/update`,
+      url: `/shifts/overrides/${EMPLOYEE_ID}/${SHIFT_DATE}/update`,
       payload: { is_off: true },
     });
 
@@ -278,33 +281,33 @@ describe('POST /shifts/overrides/:id/update — sad paths', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// DELETE /shifts/overrides/:id
+// DELETE /shifts/overrides/:employeeId/:shiftDate
 // ════════════════════════════════════════════════════════════════════
 
-describe('DELETE /shifts/overrides/:id — happy paths', () => {
+describe('DELETE /shifts/overrides/:employeeId/:shiftDate — happy paths', () => {
   it('HAPPY: deletes the override when the row exists', async () => {
     // WHO: owner removing a previously-set override (revert to default)
-    // WHAT: route runs DELETE FROM employee_schedule scoped to tenant_id;
-    //       returns success when rowCount=1
+    // WHAT: route runs DELETE FROM employee_schedule WHERE the composite
+    //       key matches; returns success when rowCount=1
     // WHEN: owner clicks "Remove Override" in the override modal
-    // WHERE: src/routes/shifts.ts → app.delete('/shifts/overrides/:id', ...)
+    // WHERE: src/routes/shifts.ts → DELETE /shifts/overrides/:employeeId/:shiftDate
     // WHY: removing an override should restore the employee's default
     //      schedule for that date — the absence of the row is the signal
-    queryResponses.push({ rows: [{ employee_schedule_id: OVERRIDE_ID }], rowCount: 1 });
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID }], rowCount: 1 });
 
     const res = await app.inject({
       method: 'DELETE',
-      url: `/shifts/overrides/${OVERRIDE_ID}?tenant_id=${TENANT_ID}`,
+      url: `/shifts/overrides/${EMPLOYEE_ID}/${SHIFT_DATE}?tenant_id=${TENANT_ID}`,
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true });
     expect(queries[0].text).toContain('DELETE FROM employee_schedule');
-    expect(queries[0].params).toEqual([OVERRIDE_ID, TENANT_ID]);
+    expect(queries[0].params).toEqual([TENANT_ID, EMPLOYEE_ID, SHIFT_DATE]);
   });
 });
 
-describe('DELETE /shifts/overrides/:id — sad paths', () => {
+describe('DELETE /shifts/overrides/:employeeId/:shiftDate — sad paths', () => {
   it('SAD: returns 404 when no row was affected', async () => {
     // WHO: a stale UI deleting an already-deleted override
     // WHAT: rowCount=0 → handler returns 404 + error envelope
@@ -315,7 +318,7 @@ describe('DELETE /shifts/overrides/:id — sad paths', () => {
 
     const res = await app.inject({
       method: 'DELETE',
-      url: `/shifts/overrides/${OVERRIDE_ID}?tenant_id=${TENANT_ID}`,
+      url: `/shifts/overrides/${EMPLOYEE_ID}/${SHIFT_DATE}?tenant_id=${TENANT_ID}`,
     });
 
     expect(res.statusCode).toBe(404);

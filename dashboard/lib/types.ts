@@ -113,7 +113,9 @@ export interface Service {
 }
 
 export interface ScheduleEntry {
-  employee_schedule_id: string;
+  // Composite PK: (tenant_id, employee_id, shift_date). The surrogate
+  // employee_schedule_id was dropped 2026-05-18 — see migration
+  // 20260518130000.
   tenant_id: string;
   employee_id: string;
   shift_date: string;  // YYYY-MM-DD
@@ -129,7 +131,6 @@ export interface EffectiveShift {
   end_time: string | null;
   is_override: boolean;
   is_off: boolean;
-  override_id: string | null;
 }
 
 export interface BulkEffectiveShift extends EffectiveShift {

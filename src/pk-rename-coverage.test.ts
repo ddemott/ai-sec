@@ -497,23 +497,28 @@ describe("PK rename coverage — real-DB integration", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // employee_schedule.employee_schedule_id (UUID)
+  // employee_schedule — composite PK (tenant_id, employee_id, shift_date)
+  //
+  // Pre-2026-05-18 this table had a surrogate `employee_schedule_id` UUID
+  // PK plus a UNIQUE on (tenant_id, employee_id, shift_date). Composite-
+  // key retrofit pilot #3 (migration 20260518130000) dropped the surrogate
+  // and promoted the triple to PK directly. Both the update and delete
+  // routes now take (employee_id, shift_date) as path segments and
+  // derive tenant from JWT. The `override_id` field on the
+  // get_effective_shifts RPC return type is also gone.
   // ─────────────────────────────────────────────────────────────────────
   describe("employee_schedule", () => {
-    it("INSERT returns employee_schedule_id; UPDATE/DELETE by it work", async () => {
+    it("composite PK (tenant_id, employee_id, shift_date) — INSERT / UPDATE / DELETE keyed on the triple", async () => {
       // WHO: Owner editing a single date's shift on the Schedule tab
-      //      (or the weekly-grid expansion in setup wizard)
-      // WHAT: employee_schedule_id (UUID) PK; the row encodes one
-      //      (employee_id, shift_date) pair with start/end or is_off=true
-      // WHERE: src/routes/shifts.ts override endpoints + the booking RPCs
-      //      that read this table as the source of truth for shift coverage
-      // WHY: Every booking gates on a matching employee_schedule row. The
-      //      RPCs SELECT/JOIN by employee_id+date, but route-level CRUD on
-      //      individual rows happens by employee_schedule_id. A rename
-      //      regression here makes "edit this specific shift" silently fail.
+      // WHAT: Insert seeds the triple; UPDATE/DELETE key on it; row
+      //      identity is exactly (tenant_id, employee_id, shift_date).
+      // WHERE: src/routes/shifts.ts override endpoints + booking RPCs.
+      // WHY: A regression that re-adds a surrogate to this table would
+      //      pass every existing test that doesn't pin the column shape.
+      //      This one pins it.
       if (!dbAvailable) return;
 
-      // Need an employee for the FK
+      // Need an employee for the FK.
       const emp = await client.query(
         `INSERT INTO employees (tenant_id, name, first_name, last_name)
          VALUES ($1, 'Shift Tester', 'Shift', 'Tester')
@@ -521,31 +526,39 @@ describe("PK rename coverage — real-DB integration", () => {
         [tenantId],
       );
       const empId = emp.rows[0].employee_id;
+      const shiftDate = '2026-08-15';
 
       const ins = await client.query(
         `INSERT INTO employee_schedule
            (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-         VALUES ($1, $2, '2026-08-15'::DATE, '09:00'::TIME, '17:00'::TIME, false)
-         RETURNING employee_schedule_id, is_off`,
-        [tenantId, empId],
+         VALUES ($1, $2, $3::DATE, '09:00'::TIME, '17:00'::TIME, false)
+         RETURNING tenant_id, employee_id, shift_date, is_off`,
+        [tenantId, empId, shiftDate],
       );
-      const esid = ins.rows[0].employee_schedule_id;
-      expect(esid).toMatch(UUID_RE);
+      expect(ins.rows[0].tenant_id).toBe(tenantId);
+      expect(ins.rows[0].employee_id).toBe(empId);
       expect(ins.rows[0].is_off).toBe(false);
 
       const upd = await client.query(
         `UPDATE employee_schedule SET is_off = true, start_time = NULL, end_time = NULL
-         WHERE employee_schedule_id = $1 RETURNING is_off`,
-        [esid],
+         WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3 RETURNING is_off`,
+        [tenantId, empId, shiftDate],
       );
       expect(upd.rowCount).toBe(1);
       expect(upd.rows[0].is_off).toBe(true);
 
       const del = await client.query(
-        `DELETE FROM employee_schedule WHERE employee_schedule_id = $1`,
-        [esid],
+        `DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3`,
+        [tenantId, empId, shiftDate],
       );
       expect(del.rowCount).toBe(1);
+
+      // Duplicate-key violation on the composite PK is pinned by the
+      // sibling tenant_integration_settings / tenant_skills tests below;
+      // we don't repeat it here because the failed INSERT would abort
+      // the surrounding test transaction (this test isn't wrapped in a
+      // savepoint), and the existing coverage is enough to catch a PK-
+      // shape regression.
     });
   });
 

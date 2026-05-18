@@ -459,8 +459,10 @@ export const Api = {
       save: (tenantId: string | null, data: Partial<ScheduleEntry>) =>
         apiMutate<{ override: ScheduleEntry }>(`/shifts/overrides/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-      remove: (id: string, tenantId: string | null) =>
-        apiMutate(`/shifts/overrides/${id}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
+      // 2026-05-18 pilot #3: composite-key path (employee_id, shift_date).
+      // Tenant comes from JWT — no query param needed.
+      remove: (employeeId: string, shiftDate: string, tenantId: string | null) =>
+        apiMutate(`/shifts/overrides/${encodeURIComponent(employeeId)}/${encodeURIComponent(shiftDate)}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
     },
 
     copyWeek: (tenantId: string | null, employeeId: string, sourceStart: string, targetStart: string) =>

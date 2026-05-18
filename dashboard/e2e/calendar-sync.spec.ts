@@ -196,7 +196,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
   //        double-book themselves with another vendor.
   const tag = uniqueTag();
   const apptIdsToCleanup: string[] = [];
-  let scheduleId: string | null = null;
+  let scheduleSeeded = false;
   let customerId: string | null = null;
 
   try {
@@ -209,14 +209,13 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     );
     customerId = cIns.rows[0].customer_id;
 
-    const sIns = await pool.query(
+    await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id`,
+       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].employee_schedule_id;
+    scheduleSeeded = true;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request); // login won't dispatch sync but be defensive
@@ -257,7 +256,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     }
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
+    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -270,7 +269,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
   //        the OLD time and the customer arrives at the wrong slot.
   const tag = uniqueTag();
   let apptId: string | null = null;
-  let scheduleId: string | null = null;
+  let scheduleSeeded = false;
   let customerId: string | null = null;
 
   try {
@@ -282,14 +281,13 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     );
     customerId = cIns.rows[0].customer_id;
 
-    const sIns = await pool.query(
+    await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id`,
+       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].employee_schedule_id;
+    scheduleSeeded = true;
 
     // Pre-insert directly so creation doesn't dispatch 5 sync events
     // and pollute the assertion below.
@@ -335,7 +333,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     );
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
+    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -348,7 +346,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
   // WHY: a stale "scheduled" event in Google Calendar after a cancel
   //        leads to no-shows showing up at a closed bay or worse
   let apptId: string | null = null;
-  let scheduleId: string | null = null;
+  let scheduleSeeded = false;
   let customerId: string | null = null;
   const tag = uniqueTag();
 
@@ -361,14 +359,13 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     );
     customerId = cIns.rows[0].customer_id;
 
-    const sIns = await pool.query(
+    await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id`,
+       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].employee_schedule_id;
+    scheduleSeeded = true;
 
     const aIns = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
@@ -409,7 +406,7 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     apptId = null; // already deleted
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
+    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -538,7 +535,7 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
   //        unacceptable for a phone-call use case.
   const tag = uniqueTag();
   const apptIdsToCleanup: string[] = [];
-  let scheduleId: string | null = null;
+  let scheduleSeeded = false;
   let customerId: string | null = null;
 
   try {
@@ -549,14 +546,13 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
       [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].customer_id;
-    const sIns = await pool.query(
+    await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
-       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
-       RETURNING employee_schedule_id`,
+       ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
       [DYNATIRE_ID, mikeId, FUTURE_DATE]
     );
-    scheduleId = sIns.rows[0].employee_schedule_id;
+    scheduleSeeded = true;
 
     const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
@@ -595,7 +591,7 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     expect(events.filter((e) => e.entity === 'appointment').length).toBeGreaterThanOrEqual(5);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleId) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [scheduleId]);
+    if (scheduleSeeded) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });

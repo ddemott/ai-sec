@@ -159,18 +159,20 @@ export async function createScheduleEntry(
     startTime: string,
     endTime: string,
     isOff: boolean = false
-): Promise<string> {
-    const res = await client.query(
+): Promise<void> {
+    // 2026-05-18 composite-key retrofit pilot #3 dropped employee_schedule_id.
+    // The composite PK (tenant_id, employee_id, shift_date) IS the row identity;
+    // callers that need to reference the row use those three columns directly
+    // rather than chaining off a returned UUID.
+    await client.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
          VALUES ($1, $2, $3::DATE, $4::TIME, $5::TIME, $6)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET
            start_time = EXCLUDED.start_time,
            end_time = EXCLUDED.end_time,
-           is_off = EXCLUDED.is_off
-         RETURNING employee_schedule_id`,
+           is_off = EXCLUDED.is_off`,
         [tenantId, employeeId, shiftDate, isOff ? null : startTime, isOff ? null : endTime, isOff]
     );
-    return res.rows[0].employee_schedule_id;
 }
 
 export async function createService(client: Client, tenantId: string, name: string, durationMinutes: number, price?: number): Promise<string> {

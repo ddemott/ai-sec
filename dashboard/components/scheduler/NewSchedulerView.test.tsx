@@ -158,7 +158,9 @@ beforeEach(() => {
     { service_id: 'svc-2', employee_id: 'emp-2' }, // Carlos → Tire Rotation
     { service_id: 'svc-1', employee_id: 'emp-2' }, // Carlos → Oil Change
   ]);
-  mockApi.shifts.schedule.save.mockResolvedValue({ override: { employee_schedule_id: 'new-1' } });
+  // Composite-PK shape after pilot #3 (2026-05-18) — the response row
+  // returns (tenant_id, employee_id, shift_date) instead of a surrogate.
+  mockApi.shifts.schedule.save.mockResolvedValue({ override: { tenant_id: 't1', employee_id: 'emp-1', shift_date: '2026-05-22' } });
 });
 
 describe('NewSchedulerView', () => {

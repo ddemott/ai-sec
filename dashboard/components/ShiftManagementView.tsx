@@ -80,7 +80,12 @@ export default function ShiftManagementView() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingDate, setEditingDate] = useState<string | null>(null)
-  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  // After pilot #3 (composite-key retrofit, 2026-05-18) the shift is
+  // identified by (employee_id, shift_date) instead of a surrogate UUID.
+  // editingDate already holds the date; we just remember whether the
+  // shift currently exists in employee_schedule (vs being purely a
+  // weekly-pattern projection that's never been overridden).
+  const [editingExistsAsOverride, setEditingExistsAsOverride] = useState<boolean>(false)
   const [modalForm, setModalForm] = useState({ start_time: '08:00', end_time: '17:00', is_off: false })
 
   // Timeline state
@@ -160,7 +165,12 @@ export default function ShiftManagementView() {
   function openEditor(dateStr: string) {
     const existing = shiftForDate(dateStr)
     setEditingDate(dateStr)
-    setEditingShiftId(existing?.override_id || null)
+    // is_override === true means the row exists in employee_schedule
+    // (was either created via /shifts/overrides/create or by the wizard's
+    // expand-weekly fan-out). false means we're seeing a weekly-pattern
+    // projection that has never been overridden — delete is a no-op for
+    // those because there's no row to remove.
+    setEditingExistsAsOverride(!!existing?.is_override)
     if (existing && !existing.is_off && existing.start_time && existing.end_time) {
       setModalForm({ start_time: existing.start_time.substring(0, 5), end_time: existing.end_time.substring(0, 5), is_off: false })
     } else {
@@ -196,10 +206,10 @@ export default function ShiftManagementView() {
     }
   }
 
-  async function handleDelete(shiftId: string) {
-    if (!tenantId) return
+  async function handleDelete(dateStr: string) {
+    if (!tenantId || !selectedEmployeeId) return
     try {
-      await Api.shifts.schedule.remove(shiftId, tenantId)
+      await Api.shifts.schedule.remove(selectedEmployeeId, dateStr, tenantId)
       fetchShifts()
     } catch {
       showToast('Failed to remove schedule', 'error')
@@ -372,7 +382,7 @@ export default function ShiftManagementView() {
                               </span>
                             )}
                             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); if (shift.override_id) { handleDelete(shift.override_id) } else { handleClearDay(day.dateStr) } } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); if (shift.is_override) { handleDelete(day.dateStr) } else { handleClearDay(day.dateStr) } } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
                             </div>
                           </div>
                         )}
@@ -408,11 +418,11 @@ export default function ShiftManagementView() {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDate ? `Schedule for ${editingDate}` : 'Schedule'} disableBackdropClose
         footer={<div className="flex gap-2">
           {editingDate && shiftForDate(editingDate) && !shiftForDate(editingDate)?.is_off && (
-            <Button variant="ghost" onClick={() => { if (editingShiftId) { handleDelete(editingShiftId) } else { handleClearDay(editingDate) } setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
+            <Button variant="ghost" onClick={() => { if (editingExistsAsOverride && editingDate) { handleDelete(editingDate) } else if (editingDate) { handleClearDay(editingDate) } setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
           )}
           <div className="flex-1" />
           <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave}>{editingShiftId ? 'Update' : 'Save'}</Button>
+          <Button variant="primary" onClick={handleSave}>{editingExistsAsOverride ? 'Update' : 'Save'}</Button>
         </div>}>
         <div className="space-y-4">
           <label className="flex items-center gap-2 cursor-pointer">

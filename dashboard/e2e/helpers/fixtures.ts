@@ -176,18 +176,21 @@ export async function seedShift(
   employeeId: string,
   date: string,
   hours: { start: string; end: string }
-): Promise<string> {
-  const res = await pool.query(
+): Promise<void> {
+  // 2026-05-18 pilot #3 dropped employee_schedule.employee_schedule_id;
+  // the composite (tenant_id, employee_id, shift_date) IS the identity.
+  // Callers that need to reference the row (delete in afterAll, etc.)
+  // use those three columns directly — they passed them to us, so they
+  // already have them.
+  await pool.query(
     `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, $4, $5, false)
        ON CONFLICT (tenant_id, employee_id, shift_date)
          DO UPDATE SET start_time = EXCLUDED.start_time,
                        end_time   = EXCLUDED.end_time,
-                       is_off     = false
-       RETURNING employee_schedule_id`,
+                       is_off     = false`,
     [tenantId, employeeId, date, hours.start, hours.end]
   );
-  return res.rows[0].employee_schedule_id as string;
 }
 
 /**

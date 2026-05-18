@@ -108,49 +108,63 @@ export function registerShiftRoutes(
       );
     });
 
-    logEvent(req, 'shift_override_created', { overrideId: res.rows[0].employee_schedule_id, employeeId: body.employee_id, date: body.shift_date });
+    logEvent(req, 'shift_override_created', { tenantId: body.tenant_id, employeeId: body.employee_id, date: body.shift_date });
     return reply.send({ success: true, override: res.rows[0] });
   }, 'Failed to create shift override'));
 
-  app.post('/shifts/overrides/:id/update', withHandler(async (req: AppRequest, reply) => {
-    const { id } = req.params as { id: string };
+  // 2026-05-18 composite-key retrofit pilot #3: the surrogate
+  // `employee_schedule_id` was dropped. Both the update and delete
+  // routes now take (employee_id, shift_date) as path segments and
+  // derive tenant_id from JWT context via requireTenantId, matching
+  // the natural-key shape of the row. Tenant_id in the body is no
+  // longer consulted (was already redundant with JWT).
+  app.post('/shifts/overrides/:employeeId/:shiftDate/update', withHandler(async (req: AppRequest, reply) => {
+    const { employeeId, shiftDate } = req.params as { employeeId: string; shiftDate: string };
+    const tenantId = requireTenantId(req, reply);
+    if (!tenantId) return;
+
     const parsed = UpdateOverrideSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
     }
     const body = parsed.data;
 
-    const res = await withTenantClient(body.tenant_id, async (client) => {
+    const res = await withTenantClient(tenantId, async (client) => {
       return client.query(
         `UPDATE employee_schedule SET
           start_time = COALESCE($1, start_time), end_time = COALESCE($2, end_time),
           is_off = COALESCE($3, is_off), updated_at = now()
-        WHERE employee_schedule_id = $4 AND tenant_id = $5 RETURNING *`,
-        [body.start_time, body.end_time, body.is_off, id, body.tenant_id]
+        WHERE tenant_id = $4 AND employee_id = $5 AND shift_date = $6 RETURNING *`,
+        [body.start_time, body.end_time, body.is_off, tenantId, employeeId, shiftDate]
       );
     });
     if (res.rows.length === 0) {
       return reply.status(404).send({ success: false, error: 'Override not found' });
     }
 
-    logEvent(req, 'shift_override_updated', { overrideId: id });
+    logEvent(req, 'shift_override_updated', { tenantId, employeeId, date: shiftDate });
     return reply.send({ success: true, override: res.rows[0] });
   }, 'Failed to update shift override'));
 
-  app.delete('/shifts/overrides/:id', withHandler(async (req: AppRequest, reply) => {
-    const { id } = req.params as { id: string };
+  app.delete('/shifts/overrides/:employeeId/:shiftDate', withHandler(async (req: AppRequest, reply) => {
+    const { employeeId, shiftDate } = req.params as { employeeId: string; shiftDate: string };
     const tenantId = requireTenantId(req, reply);
     if (!tenantId) return;
 
     const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1 AND tenant_id = $2 RETURNING employee_schedule_id', [id, tenantId]);
+      return client.query(
+        `DELETE FROM employee_schedule
+          WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3
+          RETURNING tenant_id`,
+        [tenantId, employeeId, shiftDate]
+      );
     });
 
     if (res.rows.length === 0) {
       return reply.status(404).send({ success: false, error: 'Override not found' });
     }
 
-    logEvent(req, 'shift_override_deleted', { overrideId: id });
+    logEvent(req, 'shift_override_deleted', { tenantId, employeeId, date: shiftDate });
     return reply.send({ success: true });
   }, 'Failed to delete shift override'));
 

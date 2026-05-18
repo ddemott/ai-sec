@@ -191,7 +191,9 @@ test('conversation: tire-rotation request books successfully via book_with_sched
   const tag = uniqueTag();
   const phone = `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`;
   const apptIdsToCleanup: string[] = [];
-  const shiftIdsToCleanup: string[] = [];
+  // Composite key (employee_id, shift_date) — pilot #3 (2026-05-18)
+  // dropped the surrogate; cleanup uses the natural key now.
+  const shiftsToCleanup: Array<{ employeeId: string; shiftDate: string }> = [];
 
   try {
     // Set up shifts on a far-future date so the booking has somewhere
@@ -200,15 +202,14 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     const carlosId = await findEmployeeIdByName('Carlos Vega');
     const danaId = await findEmployeeIdByName('Dana Okafor');
     for (const empId of [carlosId, danaId]) {
-      const s = await pool.query(
+      await pool.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
-           SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-         RETURNING employee_schedule_id`,
+           SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false`,
         [DYNATIRE_ID, empId, FUTURE]
       );
-      shiftIdsToCleanup.push(s.rows[0].employee_schedule_id);
+      shiftsToCleanup.push({ employeeId: empId, shiftDate: FUTURE });
     }
 
     const res = await callAgentTool(request, '/agent-tools/book-with-scheduling', {
@@ -249,7 +250,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     expect(cust.rows[0].name).toBe(`${tag}-AgentBookCustomer`);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [id]);
+    for (const s of shiftsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, s.employeeId, s.shiftDate]);
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
 });
@@ -275,7 +276,9 @@ test('conversation: full-busy slot returns next_available alternatives the agent
   const tag = uniqueTag();
   const phone = `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`;
   const apptIdsToCleanup: string[] = [];
-  const shiftIdsToCleanup: string[] = [];
+  // Composite key (employee_id, shift_date) — pilot #3 (2026-05-18)
+  // dropped the surrogate; cleanup uses the natural key now.
+  const shiftsToCleanup: Array<{ employeeId: string; shiftDate: string }> = [];
 
   try {
     const FUTURE = '2026-07-14'; // Tuesday
@@ -288,15 +291,14 @@ test('conversation: full-busy slot returns next_available alternatives the agent
 
     // Shifts for everyone.
     for (const empId of [carlosId, danaId, mikeId]) {
-      const s = await pool.query(
+      await pool.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
-           SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false
-         RETURNING employee_schedule_id`,
+           SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false`,
         [DYNATIRE_ID, empId, FUTURE]
       );
-      shiftIdsToCleanup.push(s.rows[0].employee_schedule_id);
+      shiftsToCleanup.push({ employeeId: empId, shiftDate: FUTURE });
     }
 
     // Pre-book every tire-rotation-qualified tech (Carlos, Dana, Mike all
@@ -377,7 +379,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     await pool.query('DELETE FROM customers WHERE customer_id = $1', [blockerCust]);
   } finally {
     for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    for (const id of shiftIdsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE employee_schedule_id = $1', [id]);
+    for (const s of shiftsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, s.employeeId, s.shiftDate]);
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
 });

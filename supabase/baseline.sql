@@ -1253,7 +1253,7 @@ $$;
 -- Name: get_effective_shifts(uuid, uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_effective_shifts(p_tenant_id uuid, p_employee_id uuid, p_start_date date, p_end_date date) RETURNS TABLE(shift_date date, day_of_week integer, start_time time without time zone, end_time time without time zone, is_override boolean, is_off boolean, override_id uuid)
+CREATE FUNCTION public.get_effective_shifts(p_tenant_id uuid, p_employee_id uuid, p_start_date date, p_end_date date) RETURNS TABLE(shift_date date, day_of_week integer, start_time time without time zone, end_time time without time zone, is_override boolean, is_off boolean)
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -1264,8 +1264,7 @@ BEGIN
         es.start_time,
         es.end_time,
         true AS is_override,
-        es.is_off,
-        es.employee_schedule_id AS override_id
+        es.is_off
     FROM employee_schedule es
     WHERE es.tenant_id = p_tenant_id
       AND es.employee_id = p_employee_id
@@ -1279,7 +1278,7 @@ $$;
 -- Name: get_effective_shifts_bulk(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_effective_shifts_bulk(p_tenant_id uuid, p_start_date date, p_end_date date) RETURNS TABLE(employee_id uuid, shift_date date, day_of_week integer, start_time time without time zone, end_time time without time zone, is_override boolean, is_off boolean, override_id uuid)
+CREATE FUNCTION public.get_effective_shifts_bulk(p_tenant_id uuid, p_start_date date, p_end_date date) RETURNS TABLE(employee_id uuid, shift_date date, day_of_week integer, start_time time without time zone, end_time time without time zone, is_override boolean, is_off boolean)
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -1291,8 +1290,7 @@ BEGIN
         es.start_time,
         es.end_time,
         true AS is_override,
-        es.is_off,
-        es.employee_schedule_id AS override_id
+        es.is_off
     FROM employee_schedule es
     WHERE es.tenant_id = p_tenant_id
       AND es.shift_date BETWEEN p_start_date AND p_end_date
@@ -2452,7 +2450,6 @@ CREATE VIEW public.deleted_customers AS
 --
 
 CREATE TABLE public.employee_schedule (
-    employee_schedule_id uuid DEFAULT gen_random_uuid() NOT NULL,
     tenant_id uuid NOT NULL,
     employee_id uuid NOT NULL,
     shift_date date NOT NULL,
@@ -3156,14 +3153,6 @@ ALTER TABLE ONLY public.customers
 
 
 --
--- Name: employee_schedule employee_schedule_tenant_id_employee_id_shift_date_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.employee_schedule
-    ADD CONSTRAINT employee_schedule_tenant_id_employee_id_shift_date_key UNIQUE (tenant_id, employee_id, shift_date);
-
-
---
 -- Name: employees employees_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3284,11 +3273,11 @@ ALTER TABLE ONLY public.services
 
 
 --
--- Name: employee_schedule shift_overrides_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: employee_schedule employee_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.employee_schedule
-    ADD CONSTRAINT shift_overrides_pkey PRIMARY KEY (employee_schedule_id);
+    ADD CONSTRAINT employee_schedule_pkey PRIMARY KEY (tenant_id, employee_id, shift_date);
 
 
 --
