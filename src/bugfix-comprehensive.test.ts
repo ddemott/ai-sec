@@ -233,18 +233,19 @@ describe("DELETE routes return 404 for missing entities", () => {
   // Phase 2; the BUG-034 shift cases are obsolete. Skill cases remain.
 
   // --- Sad path: skill not found ---
-  it("DELETE non-existent skill returns 0 rows (WHO: tenantA, WHAT: delete skill, WHERE: tenant_skills, WHEN: ID not found, HOW: RETURNING id yields empty result)", async () => {
+  it("DELETE non-existent skill returns 0 rows (WHO: tenantA, WHAT: delete skill, WHERE: tenant_skills, WHEN: name not found, HOW: RETURNING yields empty result)", async () => {
     // WHO: tenant owner attempting to delete a non-existent skill
-    // WHAT: DELETE with a fake UUID that doesn't match any skill
+    // WHAT: DELETE with a slug name that doesn't match any skill
     // WHEN: stale UI state or race condition on skill deletion
-    // WHERE: tenant_skills table, DELETE RETURNING query
+    // WHERE: tenant_skills table, DELETE RETURNING query (composite PK
+    //        (tenant_id, name) after pilot #2 retrofit 2026-05-18)
     // WHY: BUG-035 — route must return 404 (not 200) when skill not found, requires checking rowCount
     if (!dbAvailable) return;
-    const fakeId = "00000000-0000-0000-0000-000000000099";
+    const missingName = "does-not-exist-skill";
 
     const res = await client.query(
-      "DELETE FROM tenant_skills WHERE tenant_skill_id = $1 AND tenant_id = $2 RETURNING tenant_skill_id",
-      [fakeId, tenantA]
+      "DELETE FROM tenant_skills WHERE tenant_id = $1 AND name = $2 RETURNING name",
+      [tenantA, missingName]
     );
     expect(res.rows).toHaveLength(0);
   });

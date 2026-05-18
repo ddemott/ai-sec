@@ -49,7 +49,7 @@ export default function SkillManagementView() {
     }
   }
 
-  function handleDeleteSkill(id: string) {
+  function handleDeleteSkill(name: string) {
     confirmAction({
       title: 'Remove skill from master list?',
       message: 'Employees who already have this skill keep it, but it won\'t be assignable to anyone new.',
@@ -58,7 +58,7 @@ export default function SkillManagementView() {
       onConfirm: async () => {
         closeConfirm()
         try {
-          await Api.skills.delete(id, tenantId)
+          await Api.skills.delete(name, tenantId)
           refresh()
           showToast('Skill removed', 'success')
         } catch {
@@ -126,7 +126,7 @@ export default function SkillManagementView() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {skills.map(skill => (
-          <Card key={skill.tenant_skill_id} className="group hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
+          <Card key={skill.name} className="group hover:border-purple-200 dark:hover:border-purple-900/50 transition-all">
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -138,7 +138,7 @@ export default function SkillManagementView() {
                 </p>
               </div>
               <button 
-                onClick={() => handleDeleteSkill(skill.tenant_skill_id)}
+                onClick={() => handleDeleteSkill(skill.name)}
                 className="opacity-0 group-hover:opacity-100 p-2 hover:[color:var(--danger)] transition-all"
                 style={{ color: 'var(--text-secondary)' }}
               >

@@ -55,7 +55,7 @@ interface TenantFixture {
   serviceId: string;
   resourceId: string;
   appointmentId: string;
-  skillId: string;
+  skillName: string;
   knowledgeDocId: string;
 }
 
@@ -98,11 +98,14 @@ async function seedTenant(client: Client, label: string, businessType: string): 
     `${label}-Appointment`, 'scheduled', employeeId
   );
 
-  const skillRes = await client.query(
-    `INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, $2) RETURNING tenant_skill_id`,
-    [tenantId, `${label}-special-skill`]
+  // Composite-PK retrofit pilot #2 (2026-05-18) dropped the surrogate
+  // tenant_skill_id. Identity is now (tenant_id, name); the name itself
+  // is the URL identifier the cross-tenant DELETE probe targets.
+  const skillName = `${label}-special-skill`;
+  await client.query(
+    `INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, $2)`,
+    [tenantId, skillName]
   );
-  const skillId = skillRes.rows[0].tenant_skill_id;
 
   // Knowledge doc — search_tenant_docs RPC uses pgvector cosine similarity.
   // We seed with a zero-vector embedding stub so the RPC has something to
@@ -128,7 +131,7 @@ async function seedTenant(client: Client, label: string, businessType: string): 
     serviceId,
     resourceId,
     appointmentId,
-    skillId,
+    skillName,
     knowledgeDocId,
   };
 }
@@ -410,11 +413,16 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
     if (!dbAvailable) return;
     const res = await app.inject({
       method: 'DELETE',
-      url: `/skills/${B.skillId}`,
+      url: `/skills/${encodeURIComponent(B.skillName)}`,
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT name FROM tenant_skills WHERE tenant_skill_id = $1', [B.skillId]);
+    // Confirm B's row still exists post-probe (the 404 must not have
+    // silently nuked it under JWT-tenant context spoofing).
+    const check = await setup.query(
+      'SELECT name FROM tenant_skills WHERE tenant_id = $1 AND name = $2',
+      [B.id, B.skillName]
+    );
     expect(check.rows[0]?.name).toBe('B-special-skill');
   });
 

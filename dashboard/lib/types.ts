@@ -137,7 +137,10 @@ export interface BulkEffectiveShift extends EffectiveShift {
 }
 
 export interface Skill {
-  tenant_skill_id: string;
+  // Composite PK: (tenant_id, name). The surrogate tenant_skill_id was
+  // dropped 2026-05-18 — see migration 20260518110000. `name` is the
+  // identifier used in URLs (lowercase + dash slug) and in
+  // services.required_skills / employees.skills text[] columns.
   tenant_id: string;
   name: string;
   description?: string | null;

@@ -848,61 +848,73 @@ describe("PK rename coverage — real-DB integration", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // tenant_skills.tenant_skill_id (UUID)
+  // tenant_skills — composite PK (tenant_id, name)
+  //
+  // Pre-2026-05-18 this table had a surrogate `tenant_skill_id` UUID PK
+  // plus a UNIQUE on (tenant_id, name). Composite-key retrofit pilot #2
+  // (migration 20260518110000) dropped the surrogate and promoted
+  // (tenant_id, name) to PK directly. The slug-name is now the URL
+  // identifier for DELETE /skills/:name; INSERT in src/routes/skills.ts
+  // normalizes the input (lowercase + dashes) so the stored name is
+  // URL-safe by construction.
   // ─────────────────────────────────────────────────────────────────────
   describe("tenant_skills", () => {
-    it("INSERT returns tenant_skill_id, SELECT by tenant_skill_id finds it", async () => {
+    it("INSERT returns (tenant_id, name); SELECT by the pair finds it", async () => {
       // WHO: Setup wizard / skills admin creating a tenant-defined skill row
-      // WHAT: New row's PK column is tenant_skill_id (UUID), not id
-      // WHEN: Every skill add via the wizard's StepAssignments + admin UI
-      // WHERE: src/routes/employees.ts skills sub-routes → tenant_skills INSERT
-      // WHY: A regression to `RETURNING id` would silently return undefined,
-      //      so the immediate service↔skill mapping the wizard chains on top
-      //      would key against a NULL skill — wizard appears to succeed but
-      //      the booking RPC's skill-match never finds the skill at call time.
+      // WHAT: composite PK shape — the pair (tenant_id, name) IS the row identity
+      // WHEN: Every skill add via wizard StepAssignments + admin UI
+      // WHERE: src/routes/skills.ts /skills/create → tenant_skills INSERT
+      // WHY: A regression that re-adds a surrogate would silently work for
+      //      a release before the URL-identity assumption broke; pinning
+      //      the composite-PK shape here catches it on the next CI run.
       if (!dbAvailable) return;
 
       const ins = await client.query(
         `INSERT INTO tenant_skills (tenant_id, name, description)
-         VALUES ($1, 'TPMS reset', 'Tire pressure monitor reset')
-         RETURNING tenant_skill_id, name`,
+         VALUES ($1, 'tpms-reset', 'Tire pressure monitor reset')
+         RETURNING tenant_id, name`,
         [tenantId],
       );
       expect(ins.rows).toHaveLength(1);
-      const tsid = ins.rows[0].tenant_skill_id;
-      expect(tsid).toMatch(UUID_RE);
-      expect(ins.rows[0].name).toBe("TPMS reset");
+      expect(ins.rows[0].tenant_id).toBe(tenantId);
+      expect(ins.rows[0].name).toBe("tpms-reset");
 
       const sel = await client.query(
-        `SELECT tenant_skill_id, description FROM tenant_skills WHERE tenant_skill_id = $1`,
-        [tsid],
+        `SELECT description FROM tenant_skills WHERE tenant_id = $1 AND name = $2`,
+        [tenantId, "tpms-reset"],
       );
-      expect(sel.rows[0].tenant_skill_id).toBe(tsid);
       expect(sel.rows[0].description).toContain("Tire pressure");
     });
 
-    it("UPDATE by tenant_skill_id changes the description", async () => {
-      // WHY: Skill rename / description edit keys on tenant_skill_id. If the
-      //      column were missing the UPDATE would affect 0 rows and the
-      //      dashboard's skill-edit form would silently no-op — owner sees
-      //      the new description in the form but never persisted.
+    it("UPDATE keyed on (tenant_id, name) changes the description", async () => {
+      // WHY: description edit keys on the composite PK now. If the PK
+      //      ever regressed back to a surrogate without a UNIQUE on
+      //      (tenant_id, name), this UPDATE would 1-of-N silently match
+      //      the wrong row.
       if (!dbAvailable) return;
 
-      const ins = await client.query(
+      await client.query(
         `INSERT INTO tenant_skills (tenant_id, name, description)
-         VALUES ($1, 'Alignment', 'Two-wheel alignment')
-         RETURNING tenant_skill_id`,
+         VALUES ($1, 'alignment-pilot2', 'Two-wheel alignment')`,
         [tenantId],
       );
-      const tsid = ins.rows[0].tenant_skill_id;
 
       const upd = await client.query(
         `UPDATE tenant_skills SET description = 'Four-wheel alignment'
-         WHERE tenant_skill_id = $1 RETURNING description`,
-        [tsid],
+         WHERE tenant_id = $1 AND name = $2 RETURNING description`,
+        [tenantId, "alignment-pilot2"],
       );
       expect(upd.rowCount).toBe(1);
       expect(upd.rows[0].description).toBe("Four-wheel alignment");
+
+      // Re-inserting the same (tenant_id, name) pair must violate the
+      // composite PK — proves the constraint shape is correct.
+      await expect(
+        client.query(
+          `INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'alignment-pilot2')`,
+          [tenantId],
+        ),
+      ).rejects.toThrow(/duplicate key/i);
     });
   });
 });

@@ -602,22 +602,23 @@ describe("CRUD Routes - Database Level", () => {
         });
 
         it("should delete skill", async () => {
+            // Pilot #2 (2026-05-18) dropped the surrogate UUID; identity is
+            // now (tenant_id, name). The DELETE keys on the composite.
             if (!dbAvailable) return;
 
-            const insertRes = await client.query(
-                "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'to-delete') RETURNING tenant_skill_id",
+            await client.query(
+                "INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, 'to-delete')",
                 [tenantId]
             );
-            const skillId = insertRes.rows[0].tenant_skill_id;
 
             await client.query(
-                "DELETE FROM tenant_skills WHERE tenant_skill_id = $1 AND tenant_id = $2",
-                [skillId, tenantId]
+                "DELETE FROM tenant_skills WHERE tenant_id = $1 AND name = $2",
+                [tenantId, 'to-delete']
             );
 
             const check = await client.query(
-                "SELECT * FROM tenant_skills WHERE tenant_skill_id = $1",
-                [skillId]
+                "SELECT * FROM tenant_skills WHERE tenant_id = $1 AND name = $2",
+                [tenantId, 'to-delete']
             );
             expect(check.rows).toHaveLength(0);
         });
@@ -671,35 +672,43 @@ describe("CRUD Routes - Database Level", () => {
     // ── UUID Shifts: REMOVED 2026-04-30 ──────────────────────────────
     // Same reason as the "Shifts" describe block above — table dropped.
 
-    // ── UUID Skills (moved from coverage-gaps.test.ts) ────────────────
-
-    describe("UUID Skills", () => {
-        it("should create a skill with a valid UUID id", async () => {
+    // ── Composite-PK Skills (pilot #2, 2026-05-18) ────────────────────
+    //
+    // The describe-block was previously "UUID Skills" pinning the
+    // surrogate UUID shape. Pilot #2 dropped the surrogate; identity is
+    // (tenant_id, name) now. Same two scenarios, rewritten against the
+    // composite-PK shape so any future regression that re-adds a
+    // surrogate (or renames the columns) fails fast here.
+    describe("Composite-PK Skills", () => {
+        it("should create a skill keyed by (tenant_id, name)", async () => {
             if (!dbAvailable) return;
             const res = await client.query(
                 `INSERT INTO tenant_skills (tenant_id, name, description)
-                 VALUES ($1, 'Tire Balancing', 'Balance and align tires')
-                 RETURNING tenant_skill_id`,
+                 VALUES ($1, 'tire-balancing', 'Balance and align tires')
+                 RETURNING tenant_id, name`,
                 [tenantId]
             );
-            const skillId = res.rows[0].tenant_skill_id;
-            expect(skillId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-            expect(skillId.length).toBe(36);
+            expect(res.rows[0].tenant_id).toBe(tenantId);
+            expect(res.rows[0].name).toBe('tire-balancing');
         });
 
-        it("should delete a skill by UUID id", async () => {
+        it("should delete a skill by (tenant_id, name)", async () => {
             if (!dbAvailable) return;
-            const ins = await client.query(
+            await client.query(
                 `INSERT INTO tenant_skills (tenant_id, name, description)
-                 VALUES ($1, 'Oil Change UUID', 'Standard oil change')
-                 RETURNING tenant_skill_id`,
+                 VALUES ($1, 'oil-change-composite', 'Standard oil change')`,
                 [tenantId]
             );
-            const skillId = ins.rows[0].tenant_skill_id;
 
-            await client.query("DELETE FROM tenant_skills WHERE tenant_skill_id = $1", [skillId]);
+            await client.query(
+                "DELETE FROM tenant_skills WHERE tenant_id = $1 AND name = $2",
+                [tenantId, 'oil-change-composite']
+            );
 
-            const res = await client.query("SELECT * FROM tenant_skills WHERE tenant_skill_id = $1", [skillId]);
+            const res = await client.query(
+                "SELECT * FROM tenant_skills WHERE tenant_id = $1 AND name = $2",
+                [tenantId, 'oil-change-composite']
+            );
             expect(res.rows.length).toBe(0);
         });
     });

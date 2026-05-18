@@ -2870,8 +2870,7 @@ CREATE TABLE public.tenant_skills (
     tenant_id uuid NOT NULL,
     name text NOT NULL,
     description text,
-    created_at timestamp with time zone DEFAULT now(),
-    tenant_skill_id uuid DEFAULT gen_random_uuid() NOT NULL
+    created_at timestamp with time zone DEFAULT now()
 );
 
 ALTER TABLE ONLY public.tenant_skills FORCE ROW LEVEL SECURITY;
@@ -3328,15 +3327,7 @@ ALTER TABLE ONLY public.tenant_integration_settings
 --
 
 ALTER TABLE ONLY public.tenant_skills
-    ADD CONSTRAINT tenant_skills_pkey PRIMARY KEY (tenant_skill_id);
-
-
---
--- Name: tenant_skills tenant_skills_tenant_id_name_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tenant_skills
-    ADD CONSTRAINT tenant_skills_tenant_id_name_key UNIQUE (tenant_id, name);
+    ADD CONSTRAINT tenant_skills_pkey PRIMARY KEY (tenant_id, name);
 
 
 --

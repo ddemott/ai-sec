@@ -523,8 +523,11 @@ export const Api = {
     create: (tenantId: string | null, data: Partial<Skill>) =>
       apiMutate<{ skill: Skill }>(`/skills/create`, 'POST', { tenant_id: tenantId, ...data }),
 
-    delete: (id: string, tenantId: string | null) =>
-      apiMutate(`/skills/${id}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
+    // 2026-05-18 composite-key retrofit pilot #2: the surrogate
+    // tenant_skill_id was dropped; the route now keys on the slug name.
+    // Argument renamed so a wrong-type caller fails at type-check time.
+    delete: (name: string, tenantId: string | null) =>
+      apiMutate(`/skills/${encodeURIComponent(name)}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- TENANTS & TEMPLATES ---
