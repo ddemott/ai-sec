@@ -26,11 +26,7 @@ Everything else is either complete or tracked below.
 - [ ] **IN FLIGHT (external)** Telnyx PSTN ticket for `+1-630-937-9478` (see `TICKET_SUPPORT.md`)
 - [ ] **IN FLIGHT (user)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec` service
 - [ ] **IN FLIGHT (user)** Set `SENTRY_DSN` on Railway backend + agent
-- [ ] **IN FLIGHT (prod-apply)** Apply pending migrations to production Supabase:
-  - `20260501000000*` (atomic booking GiST constraints)
-  - `20260511000000` (tenant FK cascade)
-  - `20260513000000*` (service_employee + notifications)
-  - `20260514000000*` (reminder retry)
+- [x] Applied 36 pending migrations to production Supabase — done 2026-05-17. Brought prod from version `20260508000001` to `20260514000000`. The TODO had listed only 4 dated groups (~9 files); audit found 27 additional pending including the 26-file May-12 PK rename sweep. All 36 applied via `scripts/setup-db.sh`, zero failures. Post-apply spot-checks all green; prod `/health` 200.
 - [ ] **IN FLIGHT (validation pending)** Browser-verify role gating + invite flow (see detailed checklist in previous version)
 
 ---

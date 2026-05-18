@@ -4,6 +4,44 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-17 — Production migration apply: prod brought from 86 → 122 migrations
+
+Closes the long-standing **IN FLIGHT (prod-apply)** TODO item. Pre-apply, the production Supabase DB was 9 days behind `main` (latest applied was `20260508000001`, latest in repo was `20260514000000`). The TODO listed 4 dated groups (~9 files) but a `schema_migrations` diff against the filesystem showed **36 pending**, not 9 — the gap included the 26-file May-12 PK rename sweep and 3 May-9 RLS/error fixes that had never been called out separately.
+
+**What got applied (36 migrations, version order):**
+
+- **3 × May-9 fixes** — `password_resets_rls` (missing RLS on the table — direct security gap), `force_rls_voice_sessions_record_versions` (defense-in-depth FORCE RLS), `restore_granular_booking_errors` (re-adds specific error codes that an earlier RPC recreate had clobbered).
+- **26 × May-12 PK rename sweep** — `ALTER TABLE … RENAME COLUMN id TO <table_singular>_id` across every domain entity table (record_versions, tenant_skills, reminder_schedules, consent_records, opt_out_records, voice_sessions, tenant_docs, users, services, resources, employees, employee_schedule, appointments, customers, tenants, user_feedback, soft_reservations, audit_log, unanswered_questions, phone_verifications, password_resets, call_transcripts, call_summaries, entity_sync_map) + 2 auto-version-trigger PK-aware recreates. Implements the PK column-name convention captured in CLAUDE.md (every single-column PK named `<table_singular>_id`, not bare `id`).
+- **1 × May-11** — `employees_services_tenant_fk_cascade` (adds the missing `ON DELETE CASCADE` to `employees.tenant_id` + `services.tenant_id` — tenant delete previously left orphan rows; 85 orphans on local pre-fix).
+- **5 × May-13** — `service_employee_tenant_fk_cascade` (same cascade fix; `ADD COLUMN IF NOT EXISTS` had silently no-op'd the original cascade clause in March), `tenants_notification_preferences` (adds `sms_enabled` + `email_enabled` columns — `PostgresTenantConfigService` was already mapping these column names but the schema lacked them, latent crash), `opt_out_records_fk_rename` (PK-rename follow-up: `original_consent_id` → `original_consent_record_id`), `deleted_customers_view_recreate` (rebinds the view's public columns after the customers PK rename), `soft_delete_restore_pk_aware` (`soft_delete_record()` / `restore_deleted_record()` now look up the PK column name from `information_schema` instead of hardcoding `id` — self-healing across future renames).
+- **2 × May-01 → already on prod**, skipped (atomic booking GiST exclusion constraints + RPC exception wrapper — these had been applied earlier).
+- **1 × May-14** — `reminder_retry_columns` (`retry_count INT DEFAULT 0` + `next_retry_at TIMESTAMPTZ NULL` on `reminder_schedules`, plus partial index — unlocks the retry-on-transient-failure worker logic that shipped May 14 in `src/workers/reminderScheduler.ts`).
+
+**How the apply ran:**
+
+- `./scripts/preflight-cloud.sh "$DATABASE_URL"` against `.env.production` first: 8 passed, 0 failed, 2 warnings (`pg_net` extension not enabled — irrelevant for these migrations; 31 existing tables — expected, not a fresh DB). Direct connection on port 5432 (not pooler 6543) confirmed.
+- `./scripts/setup-db.sh "$DATABASE_URL"` — script reads `schema_migrations` once, then applies each pending file inside its own `--single-transaction` with `ON_ERROR_STOP=1`. Already-applied files SKIP cleanly. Stop-on-first-failure (script default; pass `--continue-on-error` to override, not used here).
+- Output streamed: 86 SKIPs + 36 APPLYs + `APPLIED=36 SKIPPED=86 FAILED=0`. Total wall-clock under 30 seconds against the us-west-2 Supabase pooler endpoint.
+
+**Post-apply verification (six invariants, all green):**
+
+| Invariant | Expected | Actual |
+|---|---|---|
+| `schema_migrations` row count | 122 | 122 |
+| GiST exclusion constraints on `appointments` | 2 (`_no_resource_overlap`, `_no_employee_overlap`) | both present |
+| `reminder_schedules.retry_count` + `next_retry_at` | both | both |
+| `tenants.sms_enabled` + `email_enabled` | both | both |
+| PK renames took (sampled customers, appointments, tenants) | `<table>_id`, not `id` | all three renamed |
+| FK cascade type on `employees` / `services` / `service_employee` `tenant_id_fkey` | `'c'` | all three `'c'` |
+
+Backend smoke: `curl https://ai-sec-production.up.railway.app/health` → `HTTP 200` in 301ms post-apply. Backend code was already deployed assuming the renamed columns (local tests pass against them), so this apply brings prod-DB column shape into line with prod-code expectations — prior to this, any code path PKing renamed tables by name would have errored on prod.
+
+**Discovery-vs-spec gap that bears calling out:** the TODO underspecified scope by 4x (9 files listed, 36 actually pending). The 27-file delta wasn't dropped on purpose — it was the cumulative result of two work weeks of merges where new migrations were added to the filesystem without the TODO being amended. Going forward, the safer pattern is to make `setup-db.sh` itself the source of truth (its `APPLIED_VERSIONS` query + filesystem diff) rather than a hand-maintained list in TODO.md.
+
+**Still IN FLIGHT for Phase 13 launch (unchanged):** Telnyx PSTN unblock, `DASHBOARD_URL` + `SENTRY_DSN` env vars on Railway, browser-verify role gating + invite flow.
+
+---
+
 ## 2026-05-17 — UX backlog: B3 + C3 + D1 + D3 + D4 + E3 (Phone Assistant KB, Home New Booking, wizard welcome, default-resource auto-seed, persistent setup-progress pill, active-call badge)
 
 Closes six items from the 2026-05-16 `/ux-expert` audit plus the Phase 13 first-run guided tour:
