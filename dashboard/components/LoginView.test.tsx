@@ -81,16 +81,21 @@ describe('LoginView copy', () => {
 })
 
 describe('LoginView affordances', () => {
-  test('HAPPY: create-account link points new users to the trial flow', () => {
+  test('HAPPY: contact link gives credential-less prospects a real exit', () => {
     // WHO: Prospect who bookmarked /dashboard directly or followed a
     //       stale link without ever seeing the landing page
-    // WHAT: A visible "Start your free trial" link prevents a dead end
-    // WHY: Without this, someone without credentials has no exit from
-    //        the login wall — conversion / onboarding killer
+    // WHAT: A visible contact CTA prevents a dead end
+    // WHY: The previous "Start your free trial" link pointed at
+    //       /?trial=true with no signup flow behind it — the user
+    //       would land back on marketing copy. UX audit #8
+    //       (2026-05-18): rephrased to a mailto until self-serve
+    //       signup lands. Test pins both the new text AND the new
+    //       href so a regression that re-introduces the dead route
+    //       fails loudly here.
     render(<LoginView onLoginSuccess={vi.fn()} />)
-    const link = screen.getByRole('link', { name: /start your free trial/i })
+    const link = screen.getByRole('link', { name: /contact us for a demo/i })
     expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute('href', '/?trial=true')
+    expect(link.getAttribute('href')).toMatch(/^mailto:/)
   })
 
   test('HAPPY: forgot-password link is preserved', () => {

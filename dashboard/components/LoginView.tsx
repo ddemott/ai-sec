@@ -139,11 +139,21 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             </div>
           </form>
 
+          {/* Sales contact CTA. The previous "Start your free trial"
+              link pointed at /?trial=true, which the dashboard cleans
+              from the URL on mount but has no signup flow behind. UX
+              audit #8 (2026-05-18): don't ship the affordance until
+              the destination works — rephrased to a real mailto until
+              self-serve signup lands. */}
           <div className="mt-8 pt-6 border-t text-center" style={{ borderColor: 'var(--border-soft)' }}>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Don&apos;t have an account?{' '}
-              <a href="/?trial=true" className="font-semibold hover:underline" style={{ color: 'var(--accent-soft)' }}>
-                Start your free trial
+              <a
+                href="mailto:hello@secretaryhq.com?subject=Demo%20request"
+                className="font-semibold hover:underline"
+                style={{ color: 'var(--accent-soft)' }}
+              >
+                Contact us for a demo
               </a>
             </p>
           </div>
