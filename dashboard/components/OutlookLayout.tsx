@@ -111,25 +111,51 @@ export function OutlookLayout({
     if (restrictedTabs.has(activeTab)) setActiveTab('dashboard')
   }, [isFrontDeskOnly, activeTab, setActiveTab])
 
-  // Fetch unanswered question count for KB badge
+  // Live-badge polling (UX audit #3, 2026-05-18).
+  //
+  // Before: both effects ran with `[effectiveTenantId, activeTab]` as the
+  // sole dependencies, so the "active call" red pulse only refreshed when
+  // the user changed tabs — front-desk staff staring at Home for ten
+  // minutes never saw an incoming call indicator. After: each count
+  // polls every 5s while the tenant is active. Polling stops when the
+  // tenant context goes null (logout, super-admin with no managed tenant).
+  //
+  // 5s matches the cadence used by Slack/Linear/Gmail for "soft live"
+  // counters. SSE would be tighter but introduces a server contract
+  // (single connection per tab, reconnect logic, auth-on-stream) that's
+  // out of scope here. The polled counter feels live enough.
   const effectiveTenantId = managedTenantId || null
-  useEffect(() => {
-    if (!effectiveTenantId) return
-    Api.knowledge.unanswered(effectiveTenantId)
-      .then(res => setUnansweredCount(res?.questions?.length || 0))
-      .catch(() => {}) // non-fatal
-  }, [effectiveTenantId, activeTab])
 
-  // E3: fetch active-call count for the Calls tab badge. Refetches on
-  // every tab change so the count is fresh whenever the user is moving
-  // around. Errors silently — a missing badge is better than a noisy
-  // error toast on every tab switch.
   useEffect(() => {
     if (!effectiveTenantId) return
-    Api.voice.getActiveCalls(effectiveTenantId)
-      .then(res => setActiveCallCount(typeof res?.total === 'number' ? res.total : (res?.calls?.length || 0)))
-      .catch(() => {}) // non-fatal
-  }, [effectiveTenantId, activeTab])
+    let cancelled = false
+    const fetchUnanswered = () => {
+      if (cancelled) return
+      Api.knowledge.unanswered(effectiveTenantId)
+        .then(res => { if (!cancelled) setUnansweredCount(res?.questions?.length || 0) })
+        .catch(() => {}) // non-fatal — silent: a missing badge beats a toast on every tick
+    }
+    fetchUnanswered()
+    const id = setInterval(fetchUnanswered, 30_000) // KB unanswered drifts slowly, 30s is plenty
+    return () => { cancelled = true; clearInterval(id) }
+  }, [effectiveTenantId])
+
+  useEffect(() => {
+    if (!effectiveTenantId) return
+    let cancelled = false
+    const fetchActiveCalls = () => {
+      if (cancelled) return
+      Api.voice.getActiveCalls(effectiveTenantId)
+        .then(res => {
+          if (cancelled) return
+          setActiveCallCount(typeof res?.total === 'number' ? res.total : (res?.calls?.length || 0))
+        })
+        .catch(() => {})
+    }
+    fetchActiveCalls()
+    const id = setInterval(fetchActiveCalls, 5_000) // active calls demand a tighter cadence
+    return () => { cancelled = true; clearInterval(id) }
+  }, [effectiveTenantId])
 
   useEffect(() => {
     if (isAdmin) {
@@ -139,9 +165,32 @@ export function OutlookLayout({
     }
   }, [isAdmin, tenantsVersion])
 
+  // Screen-reader announcement region for the live badges. The visual
+  // pulse is sighted-user candy; screen-reader users need an explicit
+  // text update. Renders off-screen via the standard sr-only pattern;
+  // aria-live=polite keeps announcements quiet unless something changes.
+  const liveAnnouncement = (() => {
+    const parts: string[] = []
+    if (activeCallCount > 0) parts.push(`${activeCallCount} active call${activeCallCount > 1 ? 's' : ''}`)
+    if (unansweredCount > 0) parts.push(`${unansweredCount} unanswered question${unansweredCount > 1 ? 's' : ''}`)
+    return parts.join('. ')
+  })()
+
   return (
     <>
     <div className="flex flex-col h-screen overflow-hidden transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>
+
+      {/* SR-only live region. Off-screen via clip; aria-live="polite" so
+          screen readers announce when the live-call count flips. Mirrors
+          the visual red-pulse + KB-badge UI. */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}
+      >
+        {liveAnnouncement}
+      </div>
 
       {/* ADMIN HEADER (super-admin only) */}
       {isAdmin && managedTenantName && (
