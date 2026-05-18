@@ -311,20 +311,42 @@ export default function SchedulerView() {
           <div className="flex items-center gap-3">
             <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} tenantTimezone={tenantTimezone} />
             {activeView === 'resources' && (
-              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div
+                className="flex items-center gap-1 border rounded-lg overflow-hidden"
+                style={{ borderColor: 'var(--border-soft)' }}
+                role="group"
+                aria-label={`Scheduler zoom · level ${zoomIndex + 1} of ${ZOOM_LEVELS.length} · ${hourWidth} pixels per hour`}
+              >
                 <button
                   onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
                   disabled={zoomIndex <= 0}
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  className="p-1.5 hover:brightness-110 disabled:opacity-30 transition-colors"
                   title="Zoom out"
+                  aria-label="Zoom out"
+                  style={{ color: 'var(--text-secondary)' }}
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
+                {/* Zoom-level indicator. UX audit 4.2 row 8 (2026-05-18):
+                    the previous icon-only +/- pair gave no hint about
+                    where on the zoom scale the user currently sat.
+                    Compact label fits between the buttons; aria-label
+                    on the wrapping `role="group"` carries the full
+                    context for screen readers. */}
+                <span
+                  className="text-[10px] font-bold tabular-nums px-1 select-none whitespace-nowrap"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-hidden="true"
+                >
+                  {zoomIndex + 1}/{ZOOM_LEVELS.length}
+                </span>
                 <button
                   onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
                   disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+                  className="p-1.5 hover:brightness-110 disabled:opacity-30 transition-colors"
                   title="Zoom in"
+                  aria-label="Zoom in"
+                  style={{ color: 'var(--text-secondary)' }}
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
