@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { Api } from '../lib/api'
+import { roundUpTo15 } from '../lib/duration'
 import { useStaticData } from '../lib/hooks'
 import { useActiveTenantId } from '../lib/SessionContext'
 import { useVocabulary } from '@/lib/VocabularyContext'
@@ -87,7 +88,12 @@ export default function ServiceAssignmentView() {
   async function handleCreateService() {
     setActionError(null)
     try {
-      const res = await Api.services.create(tenantId, { ...wizardData })
+      // 15-min snap — see lib/duration.ts. Same rationale as the wizard's
+      // saveService: align stored duration with what the grid allocates.
+      const res = await Api.services.create(tenantId, {
+        ...wizardData,
+        duration_minutes: roundUpTo15(wizardData.duration_minutes),
+      })
       if (!res.success) throw new Error(res.error || "Failed to save service")
       
       const serviceId = res.service.service_id
@@ -115,7 +121,10 @@ export default function ServiceAssignmentView() {
     setSaving(true)
     setActionError(null)
     try {
-      const res = await Api.services.update(selectedService.service_id, tenantId, editForm)
+      const res = await Api.services.update(selectedService.service_id, tenantId, {
+        ...editForm,
+        duration_minutes: roundUpTo15(editForm.duration_minutes),
+      })
       if (res.success) {
         refresh()
         setIsEditModalOpen(false)
@@ -312,19 +321,24 @@ export default function ServiceAssignmentView() {
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input 
+                <Input
                   label="Duration (Min)"
                   type="number"
+                  step={15}
+                  min={15}
                   value={editForm.duration_minutes}
                   onChange={e => setEditForm({ ...editForm, duration_minutes: parseInt(e.target.value) })}
                 />
-                <Input 
+                <Input
                   label="Price ($)"
                   type="number"
                   value={editForm.price ?? ''}
                   onChange={e => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
                 />
               </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Scheduled in 15-minute slots — non-multiples are rounded up on save.
+              </p>
             </div>
           </section>
 
@@ -445,12 +459,17 @@ export default function ServiceAssignmentView() {
                     onChange={e => setWizardData({...wizardData, description: e.target.value})}
                   />
                 </div>
-                <Input 
+                <Input
                   label="Base Duration (Minutes)"
                   type="number"
+                  step={15}
+                  min={15}
                   value={wizardData.duration_minutes}
                   onChange={e => setWizardData({...wizardData, duration_minutes: parseInt(e.target.value)})}
                 />
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Scheduled in 15-minute slots — non-multiples are rounded up on save.
+                </p>
               </div>
             </div>
           )}

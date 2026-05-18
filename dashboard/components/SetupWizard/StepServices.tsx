@@ -104,9 +104,14 @@ export function Step1Services({
           <Input
             label="Duration (minutes)"
             type="number"
+            step={15}
+            min={15}
             value={String(editingService.duration_minutes)}
             onChange={e => onChange({ ...editingService, duration_minutes: parseInt(e.target.value) || 0 })}
           />
+          <p className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>
+            Scheduled in 15-minute slots — non-multiples are rounded up on save.
+          </p>
           {error && (
             <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
           )}

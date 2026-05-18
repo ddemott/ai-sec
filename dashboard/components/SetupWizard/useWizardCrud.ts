@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Api } from '../../lib/api'
+import { roundUpTo15 } from '../../lib/duration'
 import type {
   WizardStep,
   ServiceForm,
@@ -108,10 +109,14 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep, refresh
     if (editingService.duration_minutes < 1) { setError('Duration must be at least 1 minute'); return }
     setSaving(true); setError(null)
     try {
+      // 15-minute snap (matches the booking grid). A 22-minute service
+      // occupies the same 14:00–14:30 slot anyway; rounding up at save
+      // keeps the stored value honest about what the schedule allocates.
+      const duration = roundUpTo15(editingService.duration_minutes)
       if (editingServiceId) {
-        await Api.services.update(editingServiceId, tenantId, { name: editingService.name.trim(), description: editingService.description.trim(), duration_minutes: editingService.duration_minutes })
+        await Api.services.update(editingServiceId, tenantId, { name: editingService.name.trim(), description: editingService.description.trim(), duration_minutes: duration })
       } else {
-        await Api.services.create(tenantId, { name: editingService.name.trim(), description: editingService.description.trim(), duration_minutes: editingService.duration_minutes })
+        await Api.services.create(tenantId, { name: editingService.name.trim(), description: editingService.description.trim(), duration_minutes: duration })
       }
       await refresh(); setEditingService(null); setEditingServiceId(null)
     } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err) || 'Failed to save service') }

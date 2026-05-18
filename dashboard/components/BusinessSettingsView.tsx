@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Api } from '../lib/api'
+import { roundUpTo15 } from '../lib/duration'
 import { CRMIntegrationCard } from './CRMIntegrationCard'
 import BusinessTypeSection from './BusinessTypeSection'
 import { useStaticData } from '../lib/hooks'
@@ -190,7 +191,7 @@ export default function BusinessSettingsView() {
       const res = await Api.services.create(tenantId, {
         name: newService.name.trim(),
         description: newService.description.trim() || undefined,
-        duration_minutes: newService.duration_minutes,
+        duration_minutes: roundUpTo15(newService.duration_minutes),
       })
       if (res.success) {
         setNewService({ name: '', description: '', duration_minutes: 30 })
@@ -218,7 +219,7 @@ export default function BusinessSettingsView() {
       const res = await Api.services.update(editingService.service_id, tenantId, {
         name: editingService.name.trim(),
         description: editingService.description?.trim() || undefined,
-        duration_minutes: editingService.duration_minutes,
+        duration_minutes: roundUpTo15(editingService.duration_minutes),
       })
       if (res.success) {
         setEditingService(null)
@@ -328,10 +329,15 @@ export default function BusinessSettingsView() {
                   <Input
                     type="number"
                     placeholder="Minutes"
+                    step={15}
+                    min={15}
                     value={String(newService.duration_minutes)}
                     onChange={e => setNewService(s => ({ ...s, duration_minutes: parseInt(e.target.value) || 0 }))}
                   />
                 </div>
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Scheduled in 15-minute slots — non-multiples are rounded up on save.
+                </p>
                 <Input
                   placeholder="Description (optional)"
                   value={newService.description}
@@ -358,10 +364,15 @@ export default function BusinessSettingsView() {
                   <Input
                     type="number"
                     placeholder="Minutes"
+                    step={15}
+                    min={15}
                     value={String(editingService.duration_minutes)}
                     onChange={e => setEditingService(s => s ? ({ ...s, duration_minutes: parseInt(e.target.value) || 0 }) : s)}
                   />
                 </div>
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Scheduled in 15-minute slots — non-multiples are rounded up on save.
+                </p>
                 <Input
                   placeholder="Description (optional)"
                   value={editingService.description || ''}
