@@ -64,7 +64,24 @@ Open:
 
 ## Documentation
 
-- [ ] Review and trim `CODING_STANDARDS.md`
+(empty)
+
+## Tooling cleanup (follow-up to 2026-05-17 ESLint adoption)
+
+The ESLint configs landed with rules at `warn`, not `error`, so the existing surface is visible without blocking CI. Promote each family to `error` once its count hits zero:
+
+- [ ] `@typescript-eslint/consistent-type-imports` (~61 sites, auto-fixable via `eslint --fix`)
+- [ ] `@typescript-eslint/no-unused-vars` (~62 sites — mix of real cleanup + `_` prefix opt-outs)
+- [ ] `@typescript-eslint/no-floating-promises` (~27 sites — bug class)
+- [ ] `@typescript-eslint/require-await` (~15 sites — mostly stylistic)
+- [ ] `@typescript-eslint/restrict-template-expressions` (~10 sites)
+- [ ] `@typescript-eslint/no-unnecessary-type-assertion` (~5 sites)
+- [ ] `@typescript-eslint/no-base-to-string` (~1 site)
+- [ ] `@typescript-eslint/await-thenable`
+- [ ] `@typescript-eslint/no-misused-promises`
+- [ ] `@typescript-eslint/unbound-method` (heavy in tests — may stay warn forever)
+- [ ] `@typescript-eslint/no-explicit-any` + `no-unsafe-*` family (existing batch-N cleanup, already tracked)
+- [ ] Run `npm run format` across all three projects (Prettier — separate commit, pure cosmetic diff)
 
 ---
 

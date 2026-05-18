@@ -1,0 +1,29 @@
+# Build artifacts
+dist/
+.next/
+coverage/
+playwright-report/
+test-results/
+
+# Dependencies
+node_modules/
+
+# Generated files
+package-lock.json
+*.lock
+
+# Vendored / static assets
+public/
+
+# DB migrations — hand-written SQL, don't reformat
+supabase/migrations/
+
+# Docs that have intentional formatting
+RESOLVED.md
+docs/CURRENT_STATUS_ARCHIVED_*.md
+
+# Auth state for E2E (JSON snapshots)
+dashboard/e2e/.auth/
+
+# Self-signed certs
+certs/

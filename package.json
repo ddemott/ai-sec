@@ -18,7 +18,10 @@
     "db:rebuild": "bash scripts/rebuild-db.sh",
     "start": "bash scripts/start-all.sh",
     "restart": "bash scripts/restart-all.sh",
-    "build": "tsc -p ."
+    "build": "tsc -p .",
+    "lint": "eslint . --max-warnings 999",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"scripts/**/*.{ts,tsx,js,jsx,json}\" \"shared/**/*.{ts,tsx,js,jsx,json}\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"scripts/**/*.{ts,tsx,js,jsx,json}\" \"shared/**/*.{ts,tsx,js,jsx,json}\" \"*.{json,md}\""
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
@@ -55,6 +58,10 @@
     "pg": "^8.19.0",
     "supabase": "^2.83.0",
     "ts-node-dev": "^2.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }

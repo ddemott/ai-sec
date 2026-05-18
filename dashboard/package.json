@@ -7,7 +7,9 @@
     "test": "vitest run",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format": "prettier --write \"app/**/*.{ts,tsx,js,jsx,json,md}\" \"components/**/*.{ts,tsx,js,jsx,json,md}\" \"lib/**/*.{ts,tsx,js,jsx,json}\" \"e2e/**/*.{ts,tsx,js,jsx,json}\" \"*.{json,md}\" --config ../.prettierrc.json --ignore-path ../.prettierignore",
+    "format:check": "prettier --check \"app/**/*.{ts,tsx,js,jsx,json,md}\" \"components/**/*.{ts,tsx,js,jsx,json,md}\" \"lib/**/*.{ts,tsx,js,jsx,json}\" \"e2e/**/*.{ts,tsx,js,jsx,json}\" \"*.{json,md}\" --config ../.prettierrc.json --ignore-path ../.prettierignore"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
@@ -36,6 +38,7 @@
     "jsdom": "^28.1.0",
     "pg": "^8.19.0",
     "postcss": "^8",
+    "prettier": "^3.3.3",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "^4.0.18"
