@@ -317,6 +317,22 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
               Nothing booked for today yet.
             </p>
             <div className="flex gap-2 justify-center flex-wrap">
+              {/* New Booking is the primary affordance even in the
+                  empty state — the top-of-page button is the canonical
+                  entry-point, but on a fresh tenant the user is already
+                  looking at this card and we shouldn't force them to
+                  scroll up. Secondary actions follow. UX audit Flows
+                  4.1 row 6 (2026-05-18). */}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setQuickBookOpen(true)}
+                disabled={loading || needsSetup}
+                aria-label="Book the first appointment for today"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
+                New Booking
+              </Button>
               <Button variant="secondary" size="sm" onClick={() => onNavigate?.('schedule')}>
                 <Calendar className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
                 View this week
