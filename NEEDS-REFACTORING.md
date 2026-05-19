@@ -219,8 +219,8 @@ Pure check functions are exported and tested in `scripts/verify-claude-md.test.t
 
 ## P3 — Housekeeping
 
-### 14. Investigate and resolve `pw.txt` — IN FLIGHT (decision pending)
-**Status: IN FLIGHT (decision pending) — needs user judgment.** File is already gitignored (`pw.txt` is in `.gitignore`'s sensitive-files block) and was never committed to the repo. Cleanup pass on 2026-04-30 deliberately did NOT delete it: contents could be a real password or a deliberate local note, and that's the user's call. Single-line, 17 bytes, on disk only.
+### ~~14. Investigate and resolve `pw.txt`~~
+**Status: done 2026-05-19.** Deleted from disk per user direction. File was already gitignored and never tracked, so no repo-state cleanup needed. `.gitignore` entry retained as defense-in-depth against future accidental commits.
 
 ---
 

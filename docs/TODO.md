@@ -6,7 +6,7 @@
 - **Env vars**: `DASHBOARD_URL` and `SENTRY_DSN` still need to be set on Railway (user action).
 - **Migrations**: 122 total. Several critical ones still need production Supabase apply (atomic booking GiST, tenant cascades, reminders).
 - **Browser validation**: Role gating + invite flow for front-desk users needs real-browser testing.
-- **Open non-blocking**: First-run guided tour, `pw.txt` decision, expanded live QA.
+- **Open non-blocking**: First-run guided tour, expanded live QA.
 
 Everything else is either complete or tracked below.
 
@@ -42,7 +42,6 @@ Everything else is either complete or tracked below.
 
 ## Non-blocking / Polish
 
-- [ ] Decide on `pw.txt` (gitignored file in root)
 - [ ] Pricing tiers (Pro/Enterprise) positioning
 - [ ] Dashboard Sentry integration (`@sentry/nextjs`)
 - [x] Create `docs/README.md` (documentation index) — done 2026-05-15
