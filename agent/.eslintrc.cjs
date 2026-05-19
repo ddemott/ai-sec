@@ -45,7 +45,7 @@ module.exports = {
     '@typescript-eslint/await-thenable': 'warn',
     '@typescript-eslint/require-await': 'warn',
     '@typescript-eslint/restrict-template-expressions': 'warn',
-    '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
+    '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     '@typescript-eslint/no-base-to-string': 'warn',
     '@typescript-eslint/no-unused-vars': ['warn', {
       argsIgnorePattern: '^_',

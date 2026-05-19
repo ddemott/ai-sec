@@ -113,8 +113,8 @@ describe('TeamAccessView — self-edit guard', () => {
     await waitFor(() => {
       expect(screen.getByText('Owner Boss')).toBeInTheDocument()
     })
-    const ownSelect = screen.getByLabelText('Role for owner@biz.com') as HTMLSelectElement
-    const otherSelect = screen.getByLabelText('Role for desk@biz.com') as HTMLSelectElement
+    const ownSelect = screen.getByLabelText<HTMLSelectElement>('Role for owner@biz.com')
+    const otherSelect = screen.getByLabelText<HTMLSelectElement>('Role for desk@biz.com')
     expect(ownSelect).toBeDisabled()
     expect(otherSelect).not.toBeDisabled()
   })
@@ -137,7 +137,7 @@ describe('TeamAccessView — invite flow', () => {
     expect(screen.getByLabelText(/full name/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
     // Default role is front_desk → that radio is checked
-    const frontDeskRadio = screen.getByRole('radio', { name: /front desk/i }) as HTMLInputElement
+    const frontDeskRadio = screen.getByRole<HTMLInputElement>('radio', { name: /front desk/i })
     expect(frontDeskRadio.checked).toBe(true)
   })
 

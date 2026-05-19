@@ -417,7 +417,7 @@ export function OutlookLayout({
           </div>
           <div className="max-h-60 overflow-y-auto" role="listbox" aria-label="Select active business" onKeyDown={(e) => {
             const items = e.currentTarget.querySelectorAll('[role="option"]')
-            const focused = e.currentTarget.querySelector(':focus') as HTMLElement | null
+            const focused = e.currentTarget.querySelector<HTMLElement>(':focus')
             const idx = focused ? Array.from(items).indexOf(focused) : -1
             if (e.key === 'ArrowDown') {
               e.preventDefault()

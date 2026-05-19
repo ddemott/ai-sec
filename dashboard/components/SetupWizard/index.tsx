@@ -87,14 +87,14 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     async function seedFromTemplate() {
       try {
         const [config, templates] = await Promise.all([
-          Api.tenants.getConfig(tenantId!),
+          Api.tenants.getConfig(tenantId),
           Api.templates.listFull(),
         ])
         const tpl = (templates || []).find(t => t.business_type === config?.business_type)
 
         if (services.length === 0 && tpl?.example_services?.length) {
           for (const name of tpl.example_services) {
-            await Api.services.create(tenantId!, { name, duration_minutes: 30 })
+            await Api.services.create(tenantId, { name, duration_minutes: 30 })
           }
         }
 
@@ -102,7 +102,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
           const defaultName = vocab.resource_label === 'Resource'
             ? 'Main Location'
             : `${vocab.resource_label} 1`
-          await Api.resources.create(tenantId!, {
+          await Api.resources.create(tenantId, {
             name: defaultName,
             description: 'Auto-created — rename or add more in this step',
           })

@@ -71,13 +71,13 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
     async function seedFromTemplate() {
       try {
         const [config, templates] = await Promise.all([
-          Api.tenants.getConfig(tenantId!),
+          Api.tenants.getConfig(tenantId),
           Api.templates.listFull(),
         ])
         const tpl = (templates || []).find(t => t.business_type === config?.business_type)
         if (!tpl?.example_services?.length) return
         for (const name of tpl.example_services) {
-          await Api.services.create(tenantId!, { name, duration_minutes: 30 })
+          await Api.services.create(tenantId, { name, duration_minutes: 30 })
         }
         await refresh()
       } catch {
@@ -249,8 +249,8 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         .filter(s => s.start_time && s.end_time)
         .map(s => ({
           day_of_week: s.day_of_week,
-          start_time: s.start_time!.slice(0, 5),
-          end_time: s.end_time!.slice(0, 5),
+          start_time: s.start_time.slice(0, 5),
+          end_time: s.end_time.slice(0, 5),
         }))
       await Api.shifts.expandWeekly(tenantId, ownerEmployeeId, pattern)
 

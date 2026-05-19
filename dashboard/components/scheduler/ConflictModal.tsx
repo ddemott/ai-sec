@@ -188,7 +188,7 @@ export function ConflictModal({
                       color: 'var(--text-primary)',
                     }}
                     onClick={() => {
-                      onPickAlternative!(slot);
+                      onPickAlternative(slot);
                       onClose();
                     }}
                     data-testid={`conflict-modal-alt-${slot.start_time}`}

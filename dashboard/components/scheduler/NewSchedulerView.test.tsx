@@ -606,7 +606,7 @@ describe('NewSchedulerView', () => {
     test('staff names use font-body CSS variable', () => {
       render(<NewSchedulerView />);
       const nameCell = screen.getByTestId('staff-name-emp-1');
-      const span = nameCell.querySelector('span:last-child') as HTMLElement | null;
+      const span = nameCell.querySelector<HTMLElement>('span:last-child');
       expect(span?.style.fontFamily).toContain('var(--font-body');
     });
   });

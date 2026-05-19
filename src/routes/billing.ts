@@ -123,7 +123,7 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
     try {
       switch (event.type) {
         case 'checkout.session.completed': {
-          const session = event.data.object as Stripe.Checkout.Session;
+          const session = event.data.object;
           const tenantId = session.metadata?.tenant_id;
           const plan = session.metadata?.plan;
           if (tenantId && session.subscription) {
@@ -139,7 +139,7 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
         }
 
         case 'invoice.payment_failed': {
-          const invoice = event.data.object as Stripe.Invoice;
+          const invoice = event.data.object;
           const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
           if (customerId) {
             await pool.query(
@@ -152,7 +152,7 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
         }
 
         case 'customer.subscription.deleted': {
-          const subscription = event.data.object as Stripe.Subscription;
+          const subscription = event.data.object;
           const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
           if (customerId) {
             await pool.query(

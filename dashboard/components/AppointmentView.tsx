@@ -201,7 +201,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
       const derivedFirst = customer.first_name || first || ''
       const derivedLast = customer.last_name || last || ''
 
-      const baseTimes = getServiceBaseTimes(selectedAppointment as Appointment)
+      const baseTimes = getServiceBaseTimes(selectedAppointment)
 
       setForm({
         customer_id: selectedAppointment.customer_id,
@@ -488,7 +488,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
       setAppointments(prev =>
         prev.map(a => (a.appointment_id === originalAppointment.appointment_id ? originalAppointment : a))
       )
-      setSelectedAppointment(originalAppointment as Appointment)
+      setSelectedAppointment(originalAppointment)
     }
     setError("")
     setIsEditing(false)
@@ -569,9 +569,9 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
               onEventDrop={({ event, start, end }: DnDEventArgs) => {
                 const apt = appointments.find(a => a.appointment_id === event.id)
                 if (!apt) return
-                setOriginalAppointment(apt as Appointment)
-                const startIso = (start as Date).toISOString()
-                const endIso = (end as Date).toISOString()
+                setOriginalAppointment(apt)
+                const startIso = (start).toISOString()
+                const endIso = (end).toISOString()
 
                 setAppointments(prev => prev.map(a => a.appointment_id === apt.appointment_id ? { ...a, start_time: startIso, end_time: endIso } : a))
                 setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)
@@ -588,9 +588,9 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
               onEventResize={({ event, start, end }: DnDEventArgs) => {
                 const apt = appointments.find(a => a.appointment_id === event.id)
                 if (!apt) return
-                setOriginalAppointment(apt as Appointment)
-                const startIso = (start as Date).toISOString()
-                const endIso = (end as Date).toISOString()
+                setOriginalAppointment(apt)
+                const startIso = (start).toISOString()
+                const endIso = (end).toISOString()
 
                 setAppointments(prev => prev.map(a => a.appointment_id === apt.appointment_id ? { ...a, start_time: startIso, end_time: endIso } : a))
                 setSelectedAppointment({ ...apt, start_time: startIso, end_time: endIso } as Appointment)

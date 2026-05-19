@@ -71,7 +71,7 @@ export function useStaticData(tenantIdOverride?: string | null) {
 
     const failures = [cRes, rRes, eRes, sRes, skRes].filter(r => r.status === 'rejected');
     if (failures.length > 0) {
-      const firstError = (failures[0] as PromiseRejectedResult).reason;
+      const firstError = (failures[0]).reason;
       console.error('Some data fetches failed', failures);
       setError(firstError?.message || 'Some data failed to load');
     }

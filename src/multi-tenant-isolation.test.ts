@@ -228,7 +228,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     // UNACCEPTABLE: 200 with B-Secret-Customer in the response.
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
-      const body = res.json() as Array<{ name: string; tenant_id: string }>;
+      const body = res.json();
       const leaked = body.filter(r => r.tenant_id === B.id || r.name === 'B-Secret-Customer');
       expect(leaked).toEqual([]);
     } else {
@@ -245,7 +245,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     });
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
-      const body = res.json() as Array<{ name: string }>;
+      const body = res.json();
       const leaked = body.filter(r => r.name === 'B-Tech');
       expect(leaked).toEqual([]);
     } else {
@@ -262,7 +262,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     });
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
-      const body = res.json() as Array<{ name: string }>;
+      const body = res.json();
       expect(body.filter(r => r.name === 'B-Service')).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
@@ -278,7 +278,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     });
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
-      const body = res.json() as Array<{ name: string }>;
+      const body = res.json();
       expect(body.filter(r => r.name === 'B-Bay-1')).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
@@ -311,7 +311,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     });
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
-      const body = res.json() as Array<{ name: string }>;
+      const body = res.json();
       expect(body.filter(r => r.name === 'B-special-skill')).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
@@ -579,7 +579,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Array<{ name: string }>;
+    const body = res.json();
     expect(body.find(r => r.name === 'A-Secret-Customer')).toBeTruthy();
   });
 
@@ -591,7 +591,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Array<{ name: string }>;
+    const body = res.json();
     expect(body.find(r => r.name === 'A-Secret-Customer')).toBeTruthy();
     expect(body.find(r => r.name === 'B-Secret-Customer')).toBeUndefined();
   });
@@ -611,7 +611,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
       headers: { authorization: `Bearer ${superAdminToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Array<{ name: string }>;
+    const body = res.json();
     expect(body.find(r => r.name === 'A-Secret-Customer')).toBeTruthy();
   });
 
@@ -623,7 +623,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
       headers: { authorization: `Bearer ${superAdminToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Array<{ name: string }>;
+    const body = res.json();
     expect(body.find(r => r.name === 'B-Secret-Customer')).toBeTruthy();
   });
 });
@@ -692,7 +692,7 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
       headers: { authorization: `Bearer ${superAdminToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Array<{ tenant_id: string }>;
+    const body = res.json();
     expect(body.find(r => r.tenant_id === A.id)).toBeTruthy();
     expect(body.find(r => r.tenant_id === B.id)).toBeTruthy();
   });
@@ -854,7 +854,7 @@ describe('Probe 7: malformed tenant_id sanitization', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(400);
-    const body = res.json() as { error: string };
+    const body = res.json();
     expect(body.error).toMatch(/tenant_id must be a valid UUID/);
     expect(body.error).toContain('"undefined"');
   });
@@ -870,7 +870,7 @@ describe('Probe 7: malformed tenant_id sanitization', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: string }).error).toMatch(/tenant_id must be a valid UUID/);
+    expect((res.json()).error).toMatch(/tenant_id must be a valid UUID/);
   });
 
   it('SAD: ?tenant_id=not-a-uuid returns 400', async () => {
@@ -900,7 +900,7 @@ describe('Probe 7: malformed tenant_id sanitization', () => {
       payload: { tenant_id: 'undefined', name: 'X', phone: '+15550000000' },
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: string }).error).toMatch(/tenant_id must be a valid UUID/);
+    expect((res.json()).error).toMatch(/tenant_id must be a valid UUID/);
   });
 
   it('HAPPY: ?tenant_id=<valid-uuid> still works after the gate', async () => {

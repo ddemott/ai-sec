@@ -250,7 +250,7 @@ export default function ShiftManagementView() {
         closeConfirm()
         setCopying(true)
         try {
-          const result = await Api.shifts.copyWeek(tenantId!, selectedEmployeeId!, toDateStr(weekStart), toDateStr(nextWeekStart))
+          const result = await Api.shifts.copyWeek(tenantId, selectedEmployeeId, toDateStr(weekStart), toDateStr(nextWeekStart))
           showToast(`Copied ${result.copied} shift${result.copied === 1 ? '' : 's'} to next week`, 'success')
         } catch {
           showToast('Failed to copy shifts', 'error')

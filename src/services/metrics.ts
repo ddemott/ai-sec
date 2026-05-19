@@ -196,7 +196,7 @@ class MetricsRegistry {
       if (existing.type !== 'counter') {
         throw new Error(`Metric ${name} already registered as ${existing.type}`);
       }
-      return existing as Counter;
+      return existing;
     }
     const c = new Counter(name, help);
     this.metrics.set(name, c);
@@ -209,7 +209,7 @@ class MetricsRegistry {
       if (existing.type !== 'histogram') {
         throw new Error(`Metric ${name} already registered as ${existing.type}`);
       }
-      return existing as Histogram;
+      return existing;
     }
     const h = new Histogram(name, help, buckets);
     this.metrics.set(name, h);

@@ -75,11 +75,11 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
   test('Tech and Bay dropdowns show every option BEFORE a service is picked', async () => {
     renderPanel();
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
-    const techSelect = screen.getByTestId('quick-book-employee') as HTMLSelectElement;
+    const techSelect = screen.getByTestId<HTMLSelectElement>('quick-book-employee');
     const bayLabels = Array.from(techSelect.options).map((o) => o.text);
     expect(bayLabels).toContain('Mike');
     expect(bayLabels).toContain('Dana');
-    const resSelect = screen.getByTestId('quick-book-resource') as HTMLSelectElement;
+    const resSelect = screen.getByTestId<HTMLSelectElement>('quick-book-resource');
     const resLabels = Array.from(resSelect.options).map((o) => o.text);
     expect(resLabels).toContain('Bay 1');
     expect(resLabels).toContain('Bay 3');
@@ -91,11 +91,11 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: 'svc-tire' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId('quick-book-employee') as HTMLSelectElement).options).map((o) => o.text);
+      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
       expect(tech).toContain('Mike');
       expect(tech).not.toContain('Dana');
     });
-    const res = Array.from((screen.getByTestId('quick-book-resource') as HTMLSelectElement).options).map((o) => o.text);
+    const res = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-resource')).options).map((o) => o.text);
     expect(res).toEqual(['Bay 1']);
     // WHO: front-desk operator picking Tire Mount | WHAT: Dana drops from Tech dropdown (no skill); Bay 3 drops from Bay dropdown (no resource permission) | WHEN: service chosen, before booking | WHERE: QuickBookPanel filter on serviceId change | WHY: this is the headline UX win — pre-fix, the operator could pick Dana + Bay 3 + Tire Mount, hit Book Now, and only then learn Dana doesn't know how. Filtering up front matches the system's design contract: book only when employee+skill+resource align
   });
@@ -105,7 +105,7 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: 'svc-open' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId('quick-book-employee') as HTMLSelectElement).options).map((o) => o.text);
+      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
       expect(tech).toContain('Mike');
       expect(tech).toContain('Dana');
     });
@@ -138,14 +138,14 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     // Pick mapped service first.
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: 'svc-tire' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId('quick-book-employee') as HTMLSelectElement).options).map((o) => o.text);
+      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
       expect(tech).not.toContain('Dana');
     });
 
     // Back to walk-in (no service).
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: '' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId('quick-book-employee') as HTMLSelectElement).options).map((o) => o.text);
+      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
       expect(tech).toContain('Dana');
     });
     expect(screen.queryByTestId('quick-book-alignment-blocked')).not.toBeInTheDocument();

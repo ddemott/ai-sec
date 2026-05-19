@@ -256,7 +256,7 @@ describe('ConsentService', () => {
         customer_phone: '+15551234567',
         opt_out_type: 'sms',
         opt_out_method: 'stop',
-      } as unknown as Parameters<typeof service.recordOptOut>[0]);
+      } as unknown);
 
       expect(mockDb.createOptOutRecord).toHaveBeenCalled();
     });

@@ -119,7 +119,7 @@ describe('createTenantWithOwner — happy paths', () => {
     expect(queries[1].text).toBe('SELECT tenant_id FROM tenants WHERE LOWER(name) = LOWER($1)');
     expect(queries[1].params).toEqual(['Sharp Salon']);
     // user INSERT params: tenantId, email, hash, full, first, last
-    const userInsertParams = queries[3].params as unknown[];
+    const userInsertParams = queries[3].params;
     expect(userInsertParams[0]).toBe(TENANT_ID);
     expect(userInsertParams[1]).toBe('owner@sharp.com');
     expect(userInsertParams[3]).toBe('Jane Doe');
@@ -148,7 +148,7 @@ describe('createTenantWithOwner — happy paths', () => {
       duplicateCheck: 'email',
     });
 
-    const userInsertParams = queries[3].params as unknown[];
+    const userInsertParams = queries[3].params;
     expect(userInsertParams[4]).toBeNull();
     expect(userInsertParams[5]).toBeNull();
   });
@@ -174,7 +174,7 @@ describe('createTenantWithOwner — happy paths', () => {
       duplicateCheck: 'email',
     });
 
-    const userInsertParams = queries[3].params as unknown[];
+    const userInsertParams = queries[3].params;
     const hash = userInsertParams[2] as string;
     expect(hash).not.toBe('plaintext-secret');
     expect(hash).toMatch(/^\$2[ab]\$\d{1,2}\$/);

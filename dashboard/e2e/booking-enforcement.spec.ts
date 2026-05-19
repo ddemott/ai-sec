@@ -512,11 +512,11 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
 
     const resourceSelect = page.getByTestId('quick-book-resource');
     await expect(resourceSelect.locator(`option[value="${truckId}"]`)).toHaveCount(1, { timeout: 10000 });
-    await resourceSelect.selectOption(truckId!);
+    await resourceSelect.selectOption(truckId);
 
     const employeeSelect = page.getByTestId('quick-book-employee');
     await expect(employeeSelect.locator(`option[value="${mikeId}"]`)).toHaveCount(1, { timeout: 10000 });
-    await employeeSelect.selectOption(mikeId!);
+    await employeeSelect.selectOption(mikeId);
 
     const localDateTime = (d: Date) => {
       const offset = d.getTimezoneOffset() * 60000;

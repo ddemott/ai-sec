@@ -108,7 +108,7 @@ describe('Sad Paths', () => {
     fireEvent.click(editBtn)
 
     // Change Internal Notes
-    const notesInput = screen.getByPlaceholderText(/Add private notes/i) as HTMLTextAreaElement
+    const notesInput = screen.getByPlaceholderText(/Add private notes/i)
     fireEvent.change(notesInput, { target: { value: 'Important note that must not be lost' } })
 
     // Mock save to fail

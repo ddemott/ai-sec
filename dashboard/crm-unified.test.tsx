@@ -258,7 +258,7 @@ describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => 
     render(<CRMView />)
     await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
 
-    const searchInput = screen.getByPlaceholderText('Search customers...') as HTMLInputElement
+    const searchInput = screen.getByPlaceholderText('Search customers...')
     fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
 
     const list = document.getElementById('crm-customer-list')

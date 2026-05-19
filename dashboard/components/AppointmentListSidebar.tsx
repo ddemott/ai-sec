@@ -78,7 +78,7 @@ export function AppointmentListSidebar({
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {(() => {
-                  const { start } = getServiceBaseTimes(apt as Appointment)
+                  const { start } = getServiceBaseTimes(apt)
                   return `${format(start, 'MMM d')} at ${format(start, 'p')}`
                 })()}
               </p>

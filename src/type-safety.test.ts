@@ -284,7 +284,7 @@ describe('Provisioning error handling', () => {
     // WHY: String(null) = "null" is better than crashing with "Cannot read property 'message' of null"
     const errNull: unknown = null;
     const errUndef: unknown = undefined;
-    expect(errNull instanceof Error ? (errNull as Error).message : String(errNull)).toBe('null');
-    expect(errUndef instanceof Error ? (errUndef as Error).message : String(errUndef)).toBe('undefined');
+    expect(errNull instanceof Error ? (errNull).message : String(errNull)).toBe('null');
+    expect(errUndef instanceof Error ? (errUndef).message : String(errUndef)).toBe('undefined');
   });
 });

@@ -357,7 +357,7 @@ export function AppointmentDetailPanel({
                                               <StickyNote className="w-3 h-3 mr-1" /> Customer Notes
                                           </p>
                                           <p className="text-sm italic leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                                              {String(selectedAppointment!.customers?.metadata?.notes || '')}
+                                              {String(selectedAppointment.customers?.metadata?.notes || '')}
                                           </p>
                                       </div>
                                   )}

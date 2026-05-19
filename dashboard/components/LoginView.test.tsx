@@ -114,7 +114,7 @@ describe('LoginView affordances', () => {
     // WHY: A common friction point — without this, password typos become
     //        "your password is wrong" mysteries
     render(<LoginView onLoginSuccess={vi.fn()} />)
-    const password = screen.getByLabelText(/^password$/i) as HTMLInputElement
+    const password = screen.getByLabelText<HTMLInputElement>(/^password$/i)
     expect(password.type).toBe('password')
 
     const toggle = screen.getByRole('button', { name: /show password/i })

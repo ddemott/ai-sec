@@ -14,35 +14,35 @@ describe('PhoneInput', () => {
 
   test('displays empty string when value is empty', () => {
     render(<PhoneInput label="Phone" value="" onChange={vi.fn()} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox')
     expect(input.value).toBe('')
     // WHO: any user | WHAT: sees blank phone field | WHEN: no phone number stored | WHERE: PhoneInput | WHY: empty state must not show stale or malformed data
   })
 
   test('formats stored +15555551234 as +1 (555) 555-1234', () => {
     render(<PhoneInput label="Phone" value="+15555551234" onChange={vi.fn()} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox')
     expect(input.value).toBe('+1 (555) 555-1234')
     // WHO: any user | WHAT: views a stored full phone number | WHEN: record loaded from DB | WHERE: PhoneInput | WHY: E.164 must display as human-readable formatted number
   })
 
   test('formats partial number with area code only', () => {
     render(<PhoneInput label="Phone" value="+1555" onChange={vi.fn()} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox')
     expect(input.value).toBe('+1 (555')
     // WHO: any user | WHAT: views partial phone during entry | WHEN: only area code entered so far | WHERE: PhoneInput | WHY: progressive formatting must not break mid-input
   })
 
   test('formats partial number with area code + prefix', () => {
     render(<PhoneInput label="Phone" value="+1555555" onChange={vi.fn()} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox')
     expect(input.value).toBe('+1 (555) 555')
     // WHO: any user | WHAT: views partial phone with 6 digits | WHEN: mid-entry with area code + prefix | WHERE: PhoneInput | WHY: formatting must stay consistent as digits are added
   })
 
   test('formats partial number with just 2 digits', () => {
     render(<PhoneInput label="Phone" value="+155" onChange={vi.fn()} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox')
     expect(input.value).toBe('+1 (55')
     // WHO: any user | WHAT: views very short partial phone | WHEN: only 2 digits entered | WHERE: PhoneInput | WHY: early formatting must not produce garbage output
   })

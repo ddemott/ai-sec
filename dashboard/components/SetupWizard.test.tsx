@@ -829,7 +829,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
 
   test('area code input only accepts digits and max 3 chars', () => {
     goToStep7()
-    const input = screen.getByPlaceholderText('e.g. 312') as HTMLInputElement
+    const input = screen.getByPlaceholderText<HTMLInputElement>('e.g. 312')
     fireEvent.change(input, { target: { value: 'abc123xyz' } })
     expect(input.value).toBe('123')
     fireEvent.change(input, { target: { value: '12345' } })
@@ -970,7 +970,7 @@ describe('SetupWizard: Step 7 Go Live', () => {
     goToStep7()
     await waitFor(() => expect(screen.getByText('Activate AI Phone Line')).toBeInTheDocument())
 
-    const input = screen.getByPlaceholderText('e.g. 312') as HTMLInputElement
+    const input = screen.getByPlaceholderText<HTMLInputElement>('e.g. 312')
     fireEvent.change(input, { target: { value: '630' } })
 
     fireEvent.click(screen.getByText('Activate AI Phone Line'))
