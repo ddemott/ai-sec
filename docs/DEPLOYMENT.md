@@ -406,9 +406,24 @@ If `SENTRY_DSN` is unset, both services keep running with logging-only error obs
 - `tracesSampleRate: 0` and `profilesSampleRate: 0` — errors only, no performance/profiling overhead. The `src/services/metrics.ts` Prometheus endpoint already covers latency/throughput.
 - The SDK uses a background queue, so a Sentry-side outage never blocks the main thread.
 
-### What's NOT yet wired
+### Dashboard wiring
 
-- Dashboard (Next.js) Sentry integration. Backend + agent first; dashboard is a separate effort because `@sentry/nextjs` adds Webpack/Vite plugins for source maps and instrumentation.ts wiring.
+Same opt-in pattern via `@sentry/nextjs`. Three files own it:
+
+- `dashboard/instrumentation.ts` — server-side init (Node + Edge runtimes). Next.js calls `register()` once at process start. Also exports `onRequestError = Sentry.captureRequestError` so server-render errors surface in Sentry instead of being silently absorbed by Next's error boundary. Tagged `service: ai-sec-dashboard`.
+- `dashboard/sentry.client.config.ts` — browser-side init. Reads `NEXT_PUBLIC_SENTRY_DSN` because client-side env vars need the `NEXT_PUBLIC_` prefix. Same `service: ai-sec-dashboard` tag, with `runtime: browser` so the UI can split client vs server events.
+- `dashboard/next.config.mjs` — wrapped with `withSentryConfig`. Source-map upload is gated on `SENTRY_AUTH_TOKEN` so CI/CD uploads symbol maps while local builds stay silent. `tunnelRoute: '/monitoring'` proxies Sentry events through the dashboard origin so ad blockers don't drop them.
+
+Env vars on the dashboard Railway service (`dashboard-production-cee3`):
+
+| Var | Purpose |
+|---|---|
+| `SENTRY_DSN` | Same DSN as backend + agent. Server-side init reads this. |
+| `NEXT_PUBLIC_SENTRY_DSN` | Same value — exposed to the browser bundle for client-side init. |
+| `SENTRY_AUTH_TOKEN` | (CI/CD only) source-map upload token. Get from Sentry → Settings → Auth Tokens. Unset = no symbol-map upload, stack traces stay minified. |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Required when `SENTRY_AUTH_TOKEN` is set. |
+
+If `NEXT_PUBLIC_SENTRY_DSN` is unset, client-side init no-ops; `instrumentation.ts` checks `SENTRY_DSN` for the same opt-in on the server side. Same as the other two services: local dev / tests make zero Sentry calls.
 
 ---
 

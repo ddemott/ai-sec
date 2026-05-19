@@ -43,7 +43,6 @@ Everything else is either complete or tracked below.
 ## Non-blocking / Polish
 
 - [ ] Pricing tiers (Pro/Enterprise) positioning
-- [ ] Dashboard Sentry integration (`@sentry/nextjs`)
 - [x] Create `docs/README.md` (documentation index) — done 2026-05-15
 - [ ] Continue `src/index.ts` extraction / cleanup
 - [ ] Finish broader CRM sync structure extraction (NEEDS-REFACTORING #10)

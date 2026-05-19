@@ -12,6 +12,7 @@
     "format:check": "prettier --check \"app/**/*.{ts,tsx,js,jsx,json,md}\" \"components/**/*.{ts,tsx,js,jsx,json,md}\" \"lib/**/*.{ts,tsx,js,jsx,json}\" \"e2e/**/*.{ts,tsx,js,jsx,json}\" \"*.{json,md}\" --config ../.prettierrc.json --ignore-path ../.prettierignore"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.53.1",
     "@supabase/supabase-js": "^2.98.0",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.575.0",
