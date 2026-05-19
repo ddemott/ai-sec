@@ -70,7 +70,7 @@ module.exports = {
       checksVoidReturn: false,
     }],
     '@typescript-eslint/await-thenable': 'warn',
-    '@typescript-eslint/require-await': 'warn',
+    '@typescript-eslint/require-await': 'error',
     '@typescript-eslint/restrict-template-expressions': 'warn',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     '@typescript-eslint/no-base-to-string': 'error',
@@ -108,6 +108,12 @@ module.exports = {
         // Tests use `expect(value).toBe(...)` patterns that
         // typescript-eslint sometimes flags as await-thenable false-positives.
         '@typescript-eslint/await-thenable': 'off',
+        // Mock fetch / nodemailer / repository shapes routinely declare
+        // `async () => data` because the interface they satisfy returns
+        // Promise<T>. Rewriting hundreds of test mocks to `() =>
+        // Promise.resolve(data)` adds noise without catching bugs (these
+        // are intentional Promise-returning stubs, not forgotten awaits).
+        '@typescript-eslint/require-await': 'off',
       },
     },
   ],

@@ -88,25 +88,25 @@ export class InMemoryTenantConfigService implements TenantConfigService {
     }
   }
 
-  async getTenantConfig(tenantId: string | number): Promise<TenantConfig | null> {
-    return this.configs.get(String(tenantId)) || null;
+  getTenantConfig(tenantId: string | number): Promise<TenantConfig | null> {
+    return Promise.resolve(this.configs.get(String(tenantId)) || null);
   }
 
-  async getTenantConfigs(): Promise<TenantConfig[]> {
-    return Array.from(this.configs.values());
+  getTenantConfigs(): Promise<TenantConfig[]> {
+    return Promise.resolve(Array.from(this.configs.values()));
   }
 
-  async updateTenantConfig(
+  updateTenantConfig(
     tenantId: string | number,
     updates: Partial<TenantConfig>
   ): Promise<TenantConfig | null> {
     const existing = this.configs.get(String(tenantId));
     if (!existing) {
-      return null;
+      return Promise.resolve(null);
     }
     const updated = { ...existing, ...updates };
     this.configs.set(String(tenantId), updated);
-    return updated;
+    return Promise.resolve(updated);
   }
 
   /**

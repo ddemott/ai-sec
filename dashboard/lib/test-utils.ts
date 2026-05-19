@@ -27,6 +27,6 @@ export function mockJsonResponse<T>(
   return {
     ok: init?.ok ?? true,
     status: init?.status ?? 200,
-    json: async () => body as unknown,
+    json: () => Promise.resolve(body as unknown),
   } as Response;
 }

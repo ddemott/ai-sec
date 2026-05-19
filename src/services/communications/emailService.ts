@@ -18,7 +18,7 @@ export class EmailService {
       // Test-mode stub satisfying just the `sendMail` slot we exercise;
       // the rest of nodemailer.Transporter isn't reachable in tests.
       this.transporter = {
-        sendMail: async () => ({ messageId: 'test-message-id' }),
+        sendMail: () => Promise.resolve({ messageId: 'test-message-id' }),
       } as unknown as nodemailer.Transporter;
     } else {
       this.transporter = nodemailer.createTransport({

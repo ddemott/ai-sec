@@ -9,16 +9,16 @@ export class MockAdapter implements TelephonyProvider {
     return 'mock';
   }
 
-  async makeCall(request: TelephonyCallRequest): Promise<{ callSid: string }> {
+  makeCall(request: TelephonyCallRequest): Promise<{ callSid: string }> {
     console.log(`[Mock Telephony] Making call to ${request.to} for tenant ${request.tenantId}`);
-    return { callSid: `mock_call_${Date.now()}` };
+    return Promise.resolve({ callSid: `mock_call_${Date.now()}` });
   }
 
-  async sendSMS(request: TelephonySMSRequest): Promise<{ messageSid: string }> {
+  sendSMS(request: TelephonySMSRequest): Promise<{ messageSid: string }> {
     console.log(
       `[Mock Telephony] Sending SMS to ${request.to} for tenant ${request.tenantId}: ${request.body}`,
     );
-    return { messageSid: `mock_sms_${Date.now()}` };
+    return Promise.resolve({ messageSid: `mock_sms_${Date.now()}` });
   }
 
   createInstruction(action: string, options: Record<string, unknown>): string {

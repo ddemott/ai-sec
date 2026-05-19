@@ -5,7 +5,7 @@ let transporter: Transporter | null = null;
 function getTransporter(): Transporter {
   if (transporter) return transporter;
   if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    transporter = { sendMail: async () => ({ messageId: 'test-message-id' }) } as unknown as Transporter;
+    transporter = { sendMail: () => Promise.resolve({ messageId: 'test-message-id' }) } as unknown as Transporter;
     return transporter;
   }
   transporter = nodemailer.createTransport({

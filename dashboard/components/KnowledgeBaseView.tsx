@@ -416,7 +416,7 @@ export default function KnowledgeBaseView() {
       title: 'Delete Knowledge Entry',
       message: 'Delete this entry? The AI will no longer have access to this information.',
       confirmLabel: 'Delete',
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm()
         void doDelete(id)
       },

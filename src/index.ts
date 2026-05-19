@@ -143,7 +143,7 @@ app.addContentTypeParser(
   'application/json',
   { parseAs: 'buffer' },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify content parser types require raw request access
-  async (req: any, rawBody: Buffer) => {
+  (req: any, rawBody: Buffer) => {
     // Store raw body for webhook signature verification
     req.rawBody = rawBody;
     // Parse JSON normally
@@ -196,7 +196,7 @@ app.addHook('onResponse', async (req, reply) => {
 });
 
 // --- Global Error Handler ---
-app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }, _request: unknown, reply: { status: (code: number) => { send: (body: Record<string, unknown>) => void } }) => {
+app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _request: unknown, reply: { status: (code: number) => { send: (body: Record<string, unknown>) => void } }) => {
   const statusCode = error.statusCode || 500;
   const code = error.code;
   if (code === 'TENANT_NOT_FOUND') {
@@ -240,7 +240,7 @@ app.get('/demo', async (_req, reply) => {
 // "Backend code changes require BOTH a rebuild AND a restart" Build
 // Principle in CLAUDE.md.
 const PROCESS_STARTED_AT = new Date().toISOString();
-app.get('/health', async () => ({ status: 'ok', started_at: PROCESS_STARTED_AT }));
+app.get('/health', () => ({ status: 'ok', started_at: PROCESS_STARTED_AT }));
 
 // --- Prometheus-format metrics scrape endpoint ---
 // Strict opt-in: refuses ALL requests when METRICS_TOKEN is unset, so a
