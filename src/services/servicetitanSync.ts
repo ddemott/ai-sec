@@ -158,7 +158,7 @@ export async function syncAppointmentToServiceTitan(
         try {
           await servicetitan.cancelJob(tokens.accessToken, tokens.appKey, tokens.tenantSid, syncEntry.external_id);
         } catch (err) {
-          log.warn(`${prefix} — failed to cancel job in ServiceTitan (jobId=${syncEntry.external_id} | ERROR: ${err})`);
+          log.warn(`${prefix} — failed to cancel job in ServiceTitan (jobId=${syncEntry.external_id} | ERROR: ${String(err)})`);
         }
         await syncMapMarkDeleted(client, tenantId, 'servicetitan', 'appointment', appointmentId, 'canceled');
       }

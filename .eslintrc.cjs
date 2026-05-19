@@ -71,7 +71,7 @@ module.exports = {
     }],
     '@typescript-eslint/await-thenable': 'warn',
     '@typescript-eslint/require-await': 'error',
-    '@typescript-eslint/restrict-template-expressions': 'warn',
+    '@typescript-eslint/restrict-template-expressions': 'error',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     '@typescript-eslint/no-base-to-string': 'error',
     '@typescript-eslint/no-unused-vars': ['warn', {

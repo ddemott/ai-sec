@@ -149,7 +149,7 @@ export async function syncAppointmentToCalendar(
         await provider.deleteEvent(accessToken, refreshToken, calendarId, externalEventId);
       } catch (err) {
         // Event may already be deleted — that's fine
-        log.warn(`${prefix} — ${providerName} deleteEvent failed (WHY: event may already be deleted in ${providerName} Calendar | eventId=${externalEventId} | ERROR: ${err})`);
+        log.warn(`${prefix} — ${providerName} deleteEvent failed (WHY: event may already be deleted in ${providerName} Calendar | eventId=${externalEventId} | ERROR: ${String(err)})`);
       }
 
       await client.query(

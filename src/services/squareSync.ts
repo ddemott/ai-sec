@@ -133,7 +133,7 @@ export async function syncAppointmentToSquare(
         try {
           await square.cancelBooking(tokens.accessToken, syncEntry.external_id);
         } catch (err) {
-          log.warn(`${prefix} — failed to cancel Square booking (squareId=${syncEntry.external_id} | ERROR: ${err})`);
+          log.warn(`${prefix} — failed to cancel Square booking (squareId=${syncEntry.external_id} | ERROR: ${String(err)})`);
         }
 
         await syncMapMarkDeleted(client, tenantId, 'square', 'appointment', appointmentId, 'deleted');

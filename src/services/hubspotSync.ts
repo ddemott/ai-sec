@@ -174,7 +174,7 @@ export async function syncAppointmentToHubSpot(
         try {
           await hubspot.associateMeetingToContact(tokens.accessToken, meeting.id, hubspotContactId);
         } catch (err) {
-          log.warn(`${prefix} — meeting created but association failed (meetingId=${meeting.id} contactId=${hubspotContactId} | ERROR: ${err})`);
+          log.warn(`${prefix} — meeting created but association failed (meetingId=${meeting.id} contactId=${hubspotContactId} | ERROR: ${String(err)})`);
         }
       }
 

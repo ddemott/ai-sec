@@ -64,7 +64,7 @@ export async function paginateSync<TItem, TCursor>(
     try {
       page = await fetchPage(cursor);
     } catch (err) {
-      logger.error(`${contextLabel} — ${entityType} pagination failed: ${err}`);
+      logger.error(`${contextLabel} — ${entityType} pagination failed: ${String(err)}`);
       break;
     }
 
@@ -74,7 +74,7 @@ export async function paginateSync<TItem, TCursor>(
         count++;
       } catch (err) {
         errors++;
-        logger.error(`${contextLabel} — failed to pull ${entityType} ${itemContext(item)}: ${err}`);
+        logger.error(`${contextLabel} — failed to pull ${entityType} ${itemContext(item)}: ${String(err)}`);
       }
     }
 

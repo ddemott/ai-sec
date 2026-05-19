@@ -123,7 +123,7 @@ export async function getIntegrationTokens(
            WHERE tenant_id = $1 AND provider = $2`,
           [tenantId, provider]
         );
-        log.error(`${prefix} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${provider} OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${err})`);
+        log.error(`${prefix} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${provider} OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${String(err)})`);
         return null;
       }
     }
@@ -314,7 +314,7 @@ export async function getCalendarTokens(
           `UPDATE tenant_calendar_settings SET is_active = false, updated_at = NOW() WHERE tenant_id = $1`,
           [tenantId]
         );
-        log.error(`${prefix} — ${providerName} token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked | HOW: is_active set to false | ERROR: ${err})`);
+        log.error(`${prefix} — ${providerName} token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked | HOW: is_active set to false | ERROR: ${String(err)})`);
         return null;
       }
     }

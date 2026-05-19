@@ -24,7 +24,7 @@ export class MockAdapter implements TelephonyProvider {
   createInstruction(action: string, options: Record<string, unknown>): string {
     const attrString = Object.entries(options)
       .filter(([key]) => !['text', 'say'].includes(key))
-      .map(([key, value]) => `${key}="${value}"`)
+      .map(([key, value]) => `${key}="${String(value)}"`)
       .join(' ');
 
     const openingTag = attrString ? `${action} ${attrString}` : action;
