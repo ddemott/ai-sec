@@ -1,19 +1,21 @@
-'use client'
+'use client';
 
-import React from 'react'
-import { useVocabulary } from '@/lib/VocabularyContext'
-import { CoverageStatusBadge } from '../ui/CoverageStatusBadge'
-import { isAllCovered, statusToBadge } from '@/lib/coverage'
-import type { Step6Props, CoverageItem } from './types'
+import React from 'react';
+import { useVocabulary } from '@/lib/VocabularyContext';
+import { CoverageStatusBadge } from '../ui/CoverageStatusBadge';
+import { isAllCovered, statusToBadge } from '@/lib/coverage';
+import type { Step6Props, CoverageItem } from './types';
 
 export function Step6Review({ services, resources, employees, coverageData, loading }: Step6Props) {
-  const vocab = useVocabulary()
-  const allCovered = isAllCovered(coverageData)
+  const vocab = useVocabulary();
+  const allCovered = isAllCovered(coverageData);
 
   return (
     <div>
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Review your setup</h3>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Review your setup
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Here&apos;s a summary of your business configuration and coverage status.
         </p>
@@ -46,7 +48,9 @@ export function Step6Review({ services, resources, employees, coverageData, load
               key={item.service_id}
               className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
             >
-              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.service_name}</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {item.service_name}
+              </span>
               <CoverageStatusBadge status={statusToBadge(item.status)} />
             </div>
           ))}
@@ -59,16 +63,20 @@ export function Step6Review({ services, resources, employees, coverageData, load
 
       {/* Status message */}
       {coverageData.length > 0 && (
-        <div className={`rounded-xl p-4 mt-4 ${
-          allCovered
-            ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800'
-            : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800'
-        }`}>
-          <p className={`text-sm font-medium ${
+        <div
+          className={`rounded-xl p-4 mt-4 ${
             allCovered
-              ? 'text-green-700 dark:text-green-400'
-              : 'text-amber-700 dark:text-amber-400'
-          }`}>
+              ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800'
+              : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800'
+          }`}
+        >
+          <p
+            className={`text-sm font-medium ${
+              allCovered
+                ? 'text-green-700 dark:text-green-400'
+                : 'text-amber-700 dark:text-amber-400'
+            }`}
+          >
             {allCovered
               ? "You're ready to go! All services are fully covered."
               : "Some services aren't fully staffed yet. Go back to fix assignments, shifts, or staffing."}
@@ -76,5 +84,5 @@ export function Step6Review({ services, resources, employees, coverageData, load
         </div>
       )}
     </div>
-  )
+  );
 }

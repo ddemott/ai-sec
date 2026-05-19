@@ -1,6 +1,12 @@
 import type { Pool } from 'pg';
 import * as jobber from './jobberClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, withSyncContext } from './tokenManagement';
+import {
+  type SyncLogger,
+  syncCtx,
+  getIntegrationTokens,
+  TOKEN_BUFFER_MS,
+  withSyncContext,
+} from './tokenManagement';
 import { splitName, joinName } from './nameUtils';
 import {
   syncMapUpsertOnCreate,
@@ -31,7 +37,14 @@ export async function getTokensWithRefresh(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
-  return getIntegrationTokens(pool, tenantId, 'jobber', jobber.refreshAccessToken, TOKEN_BUFFER_MS.STANDARD, logger);
+  return getIntegrationTokens(
+    pool,
+    tenantId,
+    'jobber',
+    jobber.refreshAccessToken,
+    TOKEN_BUFFER_MS.STANDARD,
+    logger
+  );
 }
 
 // -----------------------------------------------------------------------
@@ -48,7 +61,11 @@ export async function syncCustomerToJobber(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'customer', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -63,7 +80,13 @@ export async function syncCustomerToJobber(
     }
 
     // Check sync map for existing mapping (read sync_map BEFORE customers — lock order)
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'jobber', 'customer', customerId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'jobber',
+      'customer',
+      customerId
+    );
 
     // Fetch local customer
     const custRes = await client.query(
@@ -89,19 +112,31 @@ export async function syncCustomerToJobber(
 
     if (!syncEntry || action === 'create') {
       // Create in Jobber
-      const result = await jobber.graphql(tokens.accessToken, jobber.QUERIES.createClient, { input: clientInput });
+      const result = await jobber.graphql(tokens.accessToken, jobber.QUERIES.createClient, {
+        input: clientInput,
+      });
       const jobberClient = result.data?.clientCreate?.client;
       if (!jobberClient?.id) {
         const errors = result.data?.clientCreate?.userErrors;
-        log.error(`${prefix} — Jobber clientCreate failed (WHO: tenant=${tenantId} customer=${customerId} | WHAT: GraphQL mutation returned errors | WHY: ${JSON.stringify(errors)} | HOW: check field validation)`);
+        log.error(
+          `${prefix} — Jobber clientCreate failed (WHO: tenant=${tenantId} customer=${customerId} | WHAT: GraphQL mutation returned errors | WHY: ${JSON.stringify(errors)} | HOW: check field validation)`
+        );
         return;
       }
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'jobber', 'customer', customerId, jobberClient.id,
-        cust.updated_at, jobberClient.updatedAt || new Date().toISOString()
+        client,
+        tenantId,
+        'jobber',
+        'customer',
+        customerId,
+        jobberClient.id,
+        cust.updated_at,
+        jobberClient.updatedAt || new Date().toISOString()
       );
-      log.info(`${prefix} — customer pushed to Jobber (jobberId=${jobberClient.id} name=${cust.name})`);
+      log.info(
+        `${prefix} — customer pushed to Jobber (jobberId=${jobberClient.id} name=${cust.name})`
+      );
     } else {
       // Update in Jobber
       const externalId = syncEntry.external_id;
@@ -111,11 +146,20 @@ export async function syncCustomerToJobber(
       });
       const errors = result.data?.clientUpdate?.userErrors;
       if (errors && errors.length > 0) {
-        log.error(`${prefix} — Jobber clientUpdate failed (jobberId=${externalId} | errors=${JSON.stringify(errors)})`);
+        log.error(
+          `${prefix} — Jobber clientUpdate failed (jobberId=${externalId} | errors=${JSON.stringify(errors)})`
+        );
         return;
       }
 
-      await syncMapUpdateAfterPush(client, tenantId, 'jobber', 'customer', customerId, cust.updated_at);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'jobber',
+        'customer',
+        customerId,
+        cust.updated_at
+      );
       log.info(`${prefix} — customer updated in Jobber (jobberId=${externalId} name=${cust.name})`);
     }
   } finally {
@@ -133,7 +177,11 @@ export async function syncAppointmentToJobber(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -148,7 +196,13 @@ export async function syncAppointmentToJobber(
     }
 
     // Check if already synced (read sync_map BEFORE appointments — lock order)
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'jobber', 'appointment', appointmentId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'jobber',
+      'appointment',
+      appointmentId
+    );
 
     // Fetch appointment with customer details
     const apptRes = await client.query(
@@ -168,7 +222,14 @@ export async function syncAppointmentToJobber(
 
     // Ensure Jobber client exists for customer
     const jobberClientId = await ensureRemoteCustomer(
-      client, pool, tenantId, 'jobber', appt.customer_id, syncCustomerToJobber, logger, prefix
+      client,
+      pool,
+      tenantId,
+      'jobber',
+      appt.customer_id,
+      syncCustomerToJobber,
+      logger,
+      prefix
     );
     if (!jobberClientId) return;
 
@@ -181,31 +242,44 @@ export async function syncAppointmentToJobber(
           title,
           startAt: appt.start_time,
           endAt: appt.end_time,
-          visits: [{
-            title,
-            startAt: appt.start_time,
-            endAt: appt.end_time,
-          }],
+          visits: [
+            {
+              title,
+              startAt: appt.start_time,
+              endAt: appt.end_time,
+            },
+          ],
         },
       });
 
       const job = result.data?.jobCreate?.job;
       if (!job?.id) {
         const errors = result.data?.jobCreate?.userErrors;
-        log.error(`${prefix} — Jobber jobCreate failed (WHO: tenant=${tenantId} | WHAT: GraphQL mutation returned errors | WHY: ${JSON.stringify(errors)})`);
+        log.error(
+          `${prefix} — Jobber jobCreate failed (WHO: tenant=${tenantId} | WHAT: GraphQL mutation returned errors | WHY: ${JSON.stringify(errors)})`
+        );
         return;
       }
 
       // Use the visit ID as the external ID (visits are what have schedule)
       const visitId = job.visits?.nodes?.[0]?.id || job.id;
       await syncMapUpsertOnCreate(
-        client, tenantId, 'jobber', 'appointment', appointmentId, visitId,
+        client,
+        tenantId,
+        'jobber',
+        'appointment',
+        appointmentId,
+        visitId,
         appt.updated_at || new Date().toISOString()
       );
-      log.info(`${prefix} — appointment pushed to Jobber as job (jobId=${job.id} visitId=${visitId} customer=${appt.customer_name})`);
+      log.info(
+        `${prefix} — appointment pushed to Jobber as job (jobId=${job.id} visitId=${visitId} customer=${appt.customer_name})`
+      );
     } else {
       // Update not supported via simple visit update yet — log it
-      log.info(`${prefix} — appointment update sync not yet implemented for Jobber (jobberId=${syncEntry.external_id})`);
+      log.info(
+        `${prefix} — appointment update sync not yet implemented for Jobber (jobberId=${syncEntry.external_id})`
+      );
     }
   } finally {
     client.release();
@@ -227,10 +301,22 @@ export async function pullJobberClient(
 ): Promise<void> {
   const prefix = ctx(tenantId, 'customer', 'pull');
   const name = joinName(jobberClientData.firstName, jobberClientData.lastName);
-  const phone = jobberClientData.phones?.find(p => p.primary)?.number || jobberClientData.phones?.[0]?.number || '';
-  const email = jobberClientData.emails?.find(e => e.primary)?.address || jobberClientData.emails?.[0]?.address || null;
+  const phone =
+    jobberClientData.phones?.find((p) => p.primary)?.number ||
+    jobberClientData.phones?.[0]?.number ||
+    '';
+  const email =
+    jobberClientData.emails?.find((e) => e.primary)?.address ||
+    jobberClientData.emails?.[0]?.address ||
+    null;
   const address = jobberClientData.billingAddress
-    ? [jobberClientData.billingAddress.street1, jobberClientData.billingAddress.city, jobberClientData.billingAddress.province].filter(Boolean).join(', ')
+    ? [
+        jobberClientData.billingAddress.street1,
+        jobberClientData.billingAddress.city,
+        jobberClientData.billingAddress.province,
+      ]
+        .filter(Boolean)
+        .join(', ')
     : null;
 
   await pullRemoteCustomer({
@@ -241,7 +327,8 @@ export async function pullJobberClient(
     externalId: jobberClientData.id,
     remoteUpdatedAt: jobberClientData.updatedAt,
     fields: { name, phone, email, address },
-    updateSetClause: 'name = COALESCE($1, name), email = COALESCE($2, email), address = COALESCE($3, address)',
+    updateSetClause:
+      'name = COALESCE($1, name), email = COALESCE($2, email), address = COALESCE($3, address)',
     updateValues: [name, email, address],
     logger,
     prefix,
@@ -257,7 +344,11 @@ export async function pullJobberVisit(
   visitData: jobber.JobberVisit,
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', 'pull');
 
   const client = await pool.connect();
@@ -273,9 +364,17 @@ export async function pullJobberVisit(
         return;
       }
 
-      const custSync = await syncMapFindByExternalId(client, tenantId, 'jobber', 'customer', jobberClientId);
+      const custSync = await syncMapFindByExternalId(
+        client,
+        tenantId,
+        'jobber',
+        'customer',
+        jobberClientId
+      );
       if (!custSync) {
-        log.warn(`${prefix} — skipped: Jobber client ${jobberClientId} not yet synced locally (pull the client first)`);
+        log.warn(
+          `${prefix} — skipped: Jobber client ${jobberClientId} not yet synced locally (pull the client first)`
+        );
         return;
       }
       const localCustomerId = custSync.local_id;
@@ -286,13 +385,21 @@ export async function pullJobberVisit(
         [tenantId]
       );
       if (resourceRes.rows.length === 0) {
-        log.warn(`${prefix} — skipped: tenant ${tenantId} has no active resources (needed to create appointment)`);
+        log.warn(
+          `${prefix} — skipped: tenant ${tenantId} has no active resources (needed to create appointment)`
+        );
         return;
       }
       const resourceId = resourceRes.rows[0].resource_id;
 
       // Check sync map
-      const syncEntry = await syncMapFindByExternalId(client, tenantId, 'jobber', 'appointment', jobberId);
+      const syncEntry = await syncMapFindByExternalId(
+        client,
+        tenantId,
+        'jobber',
+        'appointment',
+        jobberId
+      );
       const description = visitData.title || visitData.job?.title || 'Jobber Visit';
 
       if (!syncEntry) {
@@ -305,8 +412,18 @@ export async function pullJobberVisit(
         );
         const localId = insertRes.rows[0].appointment_id;
 
-        await syncMapUpsertOnPull(client, tenantId, 'jobber', 'appointment', localId, jobberId, remoteUpdatedAt);
-        log.info(`${prefix} — created local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} description=${description})`);
+        await syncMapUpsertOnPull(
+          client,
+          tenantId,
+          'jobber',
+          'appointment',
+          localId,
+          jobberId,
+          remoteUpdatedAt
+        );
+        log.info(
+          `${prefix} — created local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} description=${description})`
+        );
       } else {
         // Existing — timestamp merge
         const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
@@ -328,12 +445,23 @@ export async function pullJobberVisit(
              WHERE appointment_id = $4 AND tenant_id = $5`,
             [visitData.startAt, visitData.endAt, description, localId, tenantId]
           );
-          log.info(`${prefix} — updated local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} — remote was newer)`);
+          log.info(
+            `${prefix} — updated local appointment from Jobber visit (jobberId=${jobberId} localId=${localId} — remote was newer)`
+          );
         } else {
-          log.info(`${prefix} — kept local values (jobberId=${jobberId} localId=${localId} — local was newer)`);
+          log.info(
+            `${prefix} — kept local values (jobberId=${jobberId} localId=${localId} — local was newer)`
+          );
         }
 
-        await syncMapUpdateAfterPull(client, tenantId, 'jobber', 'appointment', jobberId, remoteUpdatedAt);
+        await syncMapUpdateAfterPull(
+          client,
+          tenantId,
+          'jobber',
+          'appointment',
+          jobberId,
+          remoteUpdatedAt
+        );
       }
     });
   } finally {
@@ -351,7 +479,11 @@ export async function fullSync(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ clientsSynced: number; visitsSynced: number; errors: number }> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { clientsSynced: 0, visitsSynced: 0, errors: 0 };
 
@@ -360,11 +492,12 @@ export async function fullSync(
   const clientResult = await paginateSync<jobber.JobberClient, string | null>({
     initialCursor: null,
     fetchPage: async (cursor) => {
-      const result = await jobber.graphql<{ clients: { nodes: jobber.JobberClient[]; pageInfo: { hasNextPage: boolean; endCursor: string } } }>(
-        tokens.accessToken,
-        jobber.QUERIES.listClients,
-        { first: 100, after: cursor }
-      );
+      const result = await jobber.graphql<{
+        clients: {
+          nodes: jobber.JobberClient[];
+          pageInfo: { hasNextPage: boolean; endCursor: string };
+        };
+      }>(tokens.accessToken, jobber.QUERIES.listClients, { first: 100, after: cursor });
       const clients = result.data?.clients;
       if (!clients) return { items: [], nextCursor: null };
       return {
@@ -382,11 +515,12 @@ export async function fullSync(
   const visitResult = await paginateSync<jobber.JobberVisit, string | null>({
     initialCursor: null,
     fetchPage: async (cursor) => {
-      const result = await jobber.graphql<{ visits: { nodes: jobber.JobberVisit[]; pageInfo: { hasNextPage: boolean; endCursor: string } } }>(
-        tokens.accessToken,
-        jobber.QUERIES.listVisits,
-        { first: 100, after: cursor }
-      );
+      const result = await jobber.graphql<{
+        visits: {
+          nodes: jobber.JobberVisit[];
+          pageInfo: { hasNextPage: boolean; endCursor: string };
+        };
+      }>(tokens.accessToken, jobber.QUERIES.listVisits, { first: 100, after: cursor });
       const visits = result.data?.visits;
       if (!visits) return { items: [], nextCursor: null };
       return {
@@ -406,11 +540,12 @@ export async function fullSync(
   const errors = clientResult.errors + visitResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'jobber');
-  log.info(`${contextLabel} — full sync complete (clients=${clientsSynced} visits=${visitsSynced} errors=${errors})`);
+  log.info(
+    `${contextLabel} — full sync complete (clients=${clientsSynced} visits=${visitsSynced} errors=${errors})`
+  );
   return { clientsSynced, visitsSynced, errors };
 }
 
 // -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
-

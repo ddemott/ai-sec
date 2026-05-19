@@ -1,1 +1,1 @@
-export { default } from './SetupWizard/index'
+export { default } from './SetupWizard/index';

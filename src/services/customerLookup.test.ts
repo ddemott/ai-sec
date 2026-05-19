@@ -61,12 +61,7 @@ describe('getOrCreateCustomerByPhone', () => {
       { rows: [{ customer_id: 'existing-id' }] },
     ]);
 
-    const id = await getOrCreateCustomerByPhone(
-      withTenantClient,
-      TENANT_ID,
-      PHONE,
-      'Bob'
-    );
+    const id = await getOrCreateCustomerByPhone(withTenantClient, TENANT_ID, PHONE, 'Bob');
 
     expect(id).toBe('existing-id');
     expect(queries).toHaveLength(1);
@@ -85,12 +80,7 @@ describe('getOrCreateCustomerByPhone', () => {
       { rows: [{ customer_id: 'new-id' }] },
     ]);
 
-    const id = await getOrCreateCustomerByPhone(
-      withTenantClient,
-      TENANT_ID,
-      PHONE,
-      'Alice'
-    );
+    const id = await getOrCreateCustomerByPhone(withTenantClient, TENANT_ID, PHONE, 'Alice');
 
     expect(id).toBe('new-id');
     expect(queries).toHaveLength(2);
@@ -111,12 +101,7 @@ describe('getOrCreateCustomerByPhone', () => {
       { rows: [{ customer_id: 'fresh-id' }] },
     ]);
 
-    const id = await getOrCreateCustomerByPhone(
-      withTenantClient,
-      TENANT_ID,
-      PHONE,
-      'Caller'
-    );
+    const id = await getOrCreateCustomerByPhone(withTenantClient, TENANT_ID, PHONE, 'Caller');
 
     expect(id).toBe('fresh-id');
     // Belt-and-suspenders: pin the predicate text so a future refactor

@@ -46,8 +46,14 @@ setup('login as admin', async ({ page }) => {
     tenantId: localStorage.getItem('tenantId'),
     userName: localStorage.getItem('userName'),
   }));
-  expect(state.authToken, 'authToken must be present in localStorage before storageState save').toBeTruthy();
-  expect(state.tenantId, 'tenantId must be present in localStorage before storageState save').toBeTruthy();
+  expect(
+    state.authToken,
+    'authToken must be present in localStorage before storageState save'
+  ).toBeTruthy();
+  expect(
+    state.tenantId,
+    'tenantId must be present in localStorage before storageState save'
+  ).toBeTruthy();
 
   await page.context().storageState({ path: 'e2e/.auth/user.json' });
 });

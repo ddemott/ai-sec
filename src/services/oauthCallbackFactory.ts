@@ -47,7 +47,12 @@ export interface OAuthProviderConfig {
  */
 export function createOAuthCallbackHandler(
   pool: Pool,
-  app: { log: { info: (obj: Record<string, unknown>, msg: string) => void; error: (obj: Record<string, unknown>, msg: string) => void } },
+  app: {
+    log: {
+      info: (obj: Record<string, unknown>, msg: string) => void;
+      error: (obj: Record<string, unknown>, msg: string) => void;
+    };
+  },
   config: OAuthProviderConfig
 ) {
   const { provider, verifyState, exchangeCodeForTokens, buildExtraSettings } = config;
@@ -60,7 +65,9 @@ export function createOAuthCallbackHandler(
     const { code, state, error: oauthError } = query;
 
     if (oauthError) {
-      return reply.redirect(`${DASHBOARD_URL}/dashboard?${errorParam}=${encodeURIComponent(oauthError)}`);
+      return reply.redirect(
+        `${DASHBOARD_URL}/dashboard?${errorParam}=${encodeURIComponent(oauthError)}`
+      );
     }
 
     if (!code || !state) {
@@ -86,8 +93,14 @@ export function createOAuthCallbackHandler(
              ON CONFLICT (tenant_id, provider) DO UPDATE SET
                access_token = $3, refresh_token = $4, token_expires_at = $5,
                is_active = true, settings = COALESCE($6, tenant_integration_settings.settings), updated_at = NOW()`,
-            [tenantId, provider, tokens.access_token, tokens.refresh_token,
-             new Date(tokens.expiry_date).toISOString(), JSON.stringify(extraSettings)]
+            [
+              tenantId,
+              provider,
+              tokens.access_token,
+              tokens.refresh_token,
+              new Date(tokens.expiry_date).toISOString(),
+              JSON.stringify(extraSettings),
+            ]
           );
         } else {
           await client.query(
@@ -97,8 +110,13 @@ export function createOAuthCallbackHandler(
              ON CONFLICT (tenant_id, provider) DO UPDATE SET
                access_token = $3, refresh_token = $4, token_expires_at = $5,
                is_active = true, updated_at = NOW()`,
-            [tenantId, provider, tokens.access_token, tokens.refresh_token,
-             new Date(tokens.expiry_date).toISOString()]
+            [
+              tenantId,
+              provider,
+              tokens.access_token,
+              tokens.refresh_token,
+              new Date(tokens.expiry_date).toISOString(),
+            ]
           );
         }
       } finally {

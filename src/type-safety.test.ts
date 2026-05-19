@@ -186,7 +186,11 @@ describe('OAuth callback factory type compatibility', () => {
 
     await handler(
       { query: {} }, // missing code and state
-      { redirect: (url: string) => { redirectedTo.push(url); } }
+      {
+        redirect: (url: string) => {
+          redirectedTo.push(url);
+        },
+      }
     );
 
     expect(redirectedTo.length).toBe(1);
@@ -213,7 +217,11 @@ describe('OAuth callback factory type compatibility', () => {
 
     await handler(
       { query: { error: 'access_denied' } },
-      { redirect: (url: string) => { redirectedTo.push(url); } }
+      {
+        redirect: (url: string) => {
+          redirectedTo.push(url);
+        },
+      }
     );
 
     expect(redirectedTo.length).toBe(1);
@@ -240,7 +248,11 @@ describe('OAuth callback factory type compatibility', () => {
 
     await handler(
       { query: { code: 'auth-code-123', state: 'forged-state-token' } },
-      { redirect: (url: string) => { redirectedTo.push(url); } }
+      {
+        redirect: (url: string) => {
+          redirectedTo.push(url);
+        },
+      }
     );
 
     expect(redirectedTo.length).toBe(1);
@@ -284,7 +296,7 @@ describe('Provisioning error handling', () => {
     // WHY: String(null) = "null" is better than crashing with "Cannot read property 'message' of null"
     const errNull: unknown = null;
     const errUndef: unknown = undefined;
-    expect(errNull instanceof Error ? (errNull).message : String(errNull)).toBe('null');
-    expect(errUndef instanceof Error ? (errUndef).message : String(errUndef)).toBe('undefined');
+    expect(errNull instanceof Error ? errNull.message : String(errNull)).toBe('null');
+    expect(errUndef instanceof Error ? errUndef.message : String(errUndef)).toBe('undefined');
   });
 });

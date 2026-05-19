@@ -55,7 +55,10 @@ class Counter implements MetricBase {
   private series = new Map<string, { labels: LabelMap; value: number }>();
   private overflowed = false;
 
-  constructor(public name: string, public help: string) {}
+  constructor(
+    public name: string,
+    public help: string
+  ) {}
 
   inc(labels?: LabelMap, by = 1): void {
     const key = labelKey(labels);
@@ -66,7 +69,10 @@ class Counter implements MetricBase {
     }
     if (this.series.size >= MAX_LABEL_CARDINALITY) {
       this.overflowed = true;
-      const overflow = this.series.get('__overflow__') ?? { labels: { overflow: 'true' }, value: 0 };
+      const overflow = this.series.get('__overflow__') ?? {
+        labels: { overflow: 'true' },
+        value: 0,
+      };
       overflow.value += by;
       this.series.set('__overflow__', overflow);
       return;
@@ -82,14 +88,19 @@ class Counter implements MetricBase {
       lines.push(`${this.name}${renderLabels(labels)} ${value}`);
     }
     if (this.overflowed) {
-      lines.push(`# NOTE ${this.name} hit MAX_LABEL_CARDINALITY=${MAX_LABEL_CARDINALITY}; further series collapsed into overflow="true"`);
+      lines.push(
+        `# NOTE ${this.name} hit MAX_LABEL_CARDINALITY=${MAX_LABEL_CARDINALITY}; further series collapsed into overflow="true"`
+      );
     }
     return lines.join('\n');
   }
 
   // Test-only: snapshot of the current series. Don't use in prod code.
   snapshot(): Array<{ labels: LabelMap; value: number }> {
-    return Array.from(this.series.values()).map((s) => ({ labels: { ...s.labels }, value: s.value }));
+    return Array.from(this.series.values()).map((s) => ({
+      labels: { ...s.labels },
+      value: s.value,
+    }));
   }
 
   reset(): void {
@@ -106,7 +117,11 @@ class Histogram implements MetricBase {
   >();
   private overflowed = false;
 
-  constructor(public name: string, public help: string, public buckets: number[]) {
+  constructor(
+    public name: string,
+    public help: string,
+    public buckets: number[]
+  ) {
     // Validate buckets are sorted ascending.
     for (let i = 1; i < buckets.length; i++) {
       if (buckets[i] <= buckets[i - 1]) {

@@ -216,7 +216,7 @@ describe('buildSystemPrompt', () => {
     expect(slice).toMatch(/that time just got taken|just got taken/i);
   });
 
-  it('CONVERSATION-SHAPE (c): prompt requires 15-minute grid times in the agent\'s spoken proposals', () => {
+  it("CONVERSATION-SHAPE (c): prompt requires 15-minute grid times in the agent's spoken proposals", () => {
     // WHO: agent reading back times to a caller after an availability tool
     //        returned slots
     // WHAT: prompt explicitly tells the agent every spoken time must land
@@ -357,9 +357,7 @@ describe('formatDateForPrompt', () => {
     // WHO: Scheduler said "book me Tuesday" — the LLM needs to know
     //        today to compute Tuesday's date
     const date = new Date('2026-04-24T17:30:00Z'); // 12:30 PM CDT
-    expect(formatDateForPrompt(date, 'America/Chicago')).toBe(
-      'Friday, April 24, 2026'
-    );
+    expect(formatDateForPrompt(date, 'America/Chicago')).toBe('Friday, April 24, 2026');
   });
 
   it('HAPPY: different timezone across a date boundary yields different dates', () => {

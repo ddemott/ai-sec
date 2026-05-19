@@ -20,7 +20,7 @@ import { describe, it, expect } from 'vitest';
 
 function normalizePhone(phone: string | undefined | null): string | null {
   if (!phone) return null;
-  const digits = phone.replace(/\D/g, "");
+  const digits = phone.replace(/\D/g, '');
 
   // Reject if too short (less than 10 digits)
   if (digits.length < 10) return null;
@@ -29,10 +29,10 @@ function normalizePhone(phone: string | undefined | null): string | null {
   if (digits.length === 10) return `+1${digits}`;
 
   // 11 digits starting with 1 → prepend +
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
 
   // Already has + and enough digits → use as-is
-  if (digits.length >= 10) return phone.startsWith("+") ? phone : `+${digits}`;
+  if (digits.length >= 10) return phone.startsWith('+') ? phone : `+${digits}`;
 
   return null;
 }
@@ -216,7 +216,7 @@ describe('Voice AI Fixes', () => {
       // WHY: should return NO_SKILLED_EMPLOYEE error code, not generic failure
       const employeeSkills = ['tire-rotation', 'balancing'];
       const requiredSkills = ['transmission-rebuild'];
-      const hasRequiredSkill = requiredSkills.every(rs => employeeSkills.includes(rs));
+      const hasRequiredSkill = requiredSkills.every((rs) => employeeSkills.includes(rs));
       expect(hasRequiredSkill).toBe(false);
     });
 

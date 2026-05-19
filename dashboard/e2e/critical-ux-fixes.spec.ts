@@ -109,7 +109,9 @@ test.describe('Fix #7: Shift end time must be after start time', () => {
       await page.locator('button:has-text("Save")').click();
 
       // Should see error toast
-      await expect(page.locator('text=End time must be after start time')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('text=End time must be after start time')).toBeVisible({
+        timeout: 5000,
+      });
     }
   });
 });
@@ -169,8 +171,9 @@ test.describe('Fix #1: Wizard step guards', () => {
           // Should still be on step 1 OR see a warning toast
           const toast = page.locator('text=Complete earlier steps first');
           const stillStep1 = page.locator('text=Step 1 of 7');
-          const blocked = await toast.isVisible({ timeout: 3000 }).catch(() => false) ||
-                          await stillStep1.isVisible({ timeout: 1000 }).catch(() => false);
+          const blocked =
+            (await toast.isVisible({ timeout: 3000 }).catch(() => false)) ||
+            (await stillStep1.isVisible({ timeout: 1000 }).catch(() => false));
           expect(blocked).toBeTruthy();
         }
       }

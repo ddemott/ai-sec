@@ -1,4 +1,4 @@
-import React from 'react'
+import React from 'react';
 
 /**
  * Folder-tab navigation — mimics physical file folder tabs with depth cues.
@@ -8,58 +8,64 @@ import React from 'react'
  *   sm  = sub-section tabs (Services, Chairs, Knowledge Base, …)
  */
 
-type FolderTabSize = 'lg' | 'md' | 'sm'
+type FolderTabSize = 'lg' | 'md' | 'sm';
 
-const SIZE_CONFIG: Record<FolderTabSize, {
-  activePadding: string
-  inactivePadding: string
-  radius: string
-  fontSize: string
-  fontWeight: string
-  iconSize: string
-  shadowActive: string
-  shadowInactive: string
-}> = {
+const SIZE_CONFIG: Record<
+  FolderTabSize,
+  {
+    activePadding: string;
+    inactivePadding: string;
+    radius: string;
+    fontSize: string;
+    fontWeight: string;
+    iconSize: string;
+    shadowActive: string;
+    shadowInactive: string;
+  }
+> = {
   lg: {
     activePadding: '10px 24px 12px',
     inactivePadding: '8px 24px 10px',
     radius: '6px 6px 0 0',
-    fontSize: '0.875rem',    // text-sm
-    fontWeight: '700',       // font-bold
+    fontSize: '0.875rem', // text-sm
+    fontWeight: '700', // font-bold
     iconSize: 'w-4 h-4',
-    shadowActive: '0 -3px 10px rgba(0,0,0,0.35), -3px 0 8px rgba(0,0,0,0.2), 3px 0 8px rgba(0,0,0,0.2)',
+    shadowActive:
+      '0 -3px 10px rgba(0,0,0,0.35), -3px 0 8px rgba(0,0,0,0.2), 3px 0 8px rgba(0,0,0,0.2)',
     shadowInactive: 'inset 0 -1px 3px rgba(0,0,0,0.3)',
   },
   md: {
     activePadding: '8px 16px 10px',
     inactivePadding: '6px 16px 8px',
     radius: '5px 5px 0 0',
-    fontSize: '0.75rem',     // text-xs
-    fontWeight: '500',       // font-medium
+    fontSize: '0.75rem', // text-xs
+    fontWeight: '500', // font-medium
     iconSize: 'w-3.5 h-3.5',
-    shadowActive: '0 -2px 6px rgba(0,0,0,0.25), -2px 0 4px rgba(0,0,0,0.15), 2px 0 4px rgba(0,0,0,0.15)',
+    shadowActive:
+      '0 -2px 6px rgba(0,0,0,0.25), -2px 0 4px rgba(0,0,0,0.15), 2px 0 4px rgba(0,0,0,0.15)',
     shadowInactive: 'inset 0 -1px 3px rgba(0,0,0,0.3)',
   },
   sm: {
     activePadding: '7px 14px 9px',
     inactivePadding: '5px 14px 7px',
     radius: '4px 4px 0 0',
-    fontSize: '0.75rem',     // text-xs
-    fontWeight: '500',       // font-medium
+    fontSize: '0.75rem', // text-xs
+    fontWeight: '500', // font-medium
     iconSize: 'w-3.5 h-3.5',
-    shadowActive: '0 -2px 5px rgba(0,0,0,0.2), -2px 0 4px rgba(0,0,0,0.12), 2px 0 4px rgba(0,0,0,0.12)',
+    shadowActive:
+      '0 -2px 5px rgba(0,0,0,0.2), -2px 0 4px rgba(0,0,0,0.12), 2px 0 4px rgba(0,0,0,0.12)',
     shadowInactive: 'inset 0 -1px 3px rgba(0,0,0,0.3)',
   },
-}
+};
 
 // --- FolderTab ---
 
 interface FolderTabProps {
-  label: string
-  isActive: boolean
-  onClick: () => void
-  icon?: React.ElementType
-  size?: FolderTabSize
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+  icon?: React.ElementType;
+  size?: FolderTabSize;
 }
 
 export const FolderTab: React.FC<FolderTabProps> = ({
@@ -69,7 +75,7 @@ export const FolderTab: React.FC<FolderTabProps> = ({
   icon: Icon,
   size = 'md',
 }) => {
-  const cfg = SIZE_CONFIG[size]
+  const cfg = SIZE_CONFIG[size];
 
   return (
     <button
@@ -92,20 +98,22 @@ export const FolderTab: React.FC<FolderTabProps> = ({
         fontWeight: cfg.fontWeight,
       }}
     >
-      {Icon && <Icon className={cfg.iconSize} aria-hidden="true" style={{ opacity: isActive ? 1 : 0.5 }} />}
+      {Icon && (
+        <Icon className={cfg.iconSize} aria-hidden="true" style={{ opacity: isActive ? 1 : 0.5 }} />
+      )}
       {label}
     </button>
-  )
-}
+  );
+};
 
 // --- FolderTabBar ---
 
 interface FolderTabBarProps {
-  children: React.ReactNode
+  children: React.ReactNode;
   /** Extra content aligned to the right (e.g. utility buttons) */
-  right?: React.ReactNode
-  ariaLabel?: string
-  size?: FolderTabSize
+  right?: React.ReactNode;
+  ariaLabel?: string;
+  size?: FolderTabSize;
 }
 
 export const FolderTabBar: React.FC<FolderTabBarProps> = ({
@@ -114,7 +122,7 @@ export const FolderTabBar: React.FC<FolderTabBarProps> = ({
   ariaLabel = 'Navigation',
   size = 'md',
 }) => {
-  const bg = size === 'lg' ? 'var(--bg-surface)' : 'var(--bg-surface)'
+  const bg = size === 'lg' ? 'var(--bg-surface)' : 'var(--bg-surface)';
 
   return (
     <div
@@ -136,5 +144,5 @@ export const FolderTabBar: React.FC<FolderTabBarProps> = ({
         {right && <div className="flex items-center gap-1">{right}</div>}
       </div>
     </div>
-  )
-}
+  );
+};

@@ -4,7 +4,8 @@ import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
 const AUTHORIZE_URL = 'https://app.hubspot.com/oauth/authorize';
 const TOKEN_URL = 'https://api.hubapi.com/oauth/v1/token';
 const API_BASE = 'https://api.hubapi.com';
-const SCOPES = 'crm.objects.contacts.read crm.objects.contacts.write crm.objects.meetings.read crm.objects.meetings.write';
+const SCOPES =
+  'crm.objects.contacts.read crm.objects.contacts.write crm.objects.meetings.read crm.objects.meetings.write';
 const FETCH_TIMEOUT_MS = 15_000;
 
 export interface TokenSet {
@@ -96,7 +97,10 @@ export function verifyState(state: string): string | null {
 /** Exchange authorization code for tokens */
 export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
   const config = getConfig();
-  if (!config) throw new Error('HubSpot not configured — missing env vars (check HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET, HUBSPOT_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'HubSpot not configured — missing env vars (check HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET, HUBSPOT_CALLBACK_URL)'
+    );
 
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -116,17 +120,23 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
     });
   } catch (networkErr: unknown) {
     const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-    throw new Error(`HubSpot OAuth code exchange failed: network error reaching HubSpot token endpoint — ${msg}`);
+    throw new Error(
+      `HubSpot OAuth code exchange failed: network error reaching HubSpot token endpoint — ${msg}`
+    );
   }
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`HubSpot OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`);
+    throw new Error(
+      `HubSpot OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token || !data.refresh_token) {
-    throw new Error('HubSpot OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).');
+    throw new Error(
+      'HubSpot OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).'
+    );
   }
 
   return {
@@ -137,9 +147,14 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
 }
 
 /** Refresh an expired access token */
-export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date: number }> {
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; expiry_date: number }> {
   const config = getConfig();
-  if (!config) throw new Error('HubSpot not configured — missing env vars (check HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET, HUBSPOT_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'HubSpot not configured — missing env vars (check HUBSPOT_CLIENT_ID, HUBSPOT_CLIENT_SECRET, HUBSPOT_CALLBACK_URL)'
+    );
 
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -163,12 +178,16 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`HubSpot token refresh failed (${res.status}): ${errorBody}. The user should reconnect HubSpot from the dashboard.`);
+    throw new Error(
+      `HubSpot token refresh failed (${res.status}): ${errorBody}. The user should reconnect HubSpot from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token) {
-    throw new Error('HubSpot token refresh returned no access_token. The user should reconnect HubSpot from the dashboard.');
+    throw new Error(
+      'HubSpot token refresh returned no access_token. The user should reconnect HubSpot from the dashboard.'
+    );
   }
 
   return {
@@ -240,42 +259,74 @@ export function verifyWebhookSignature(
 // -----------------------------------------------------------------------
 
 const CONTACT_PROPS = 'firstname,lastname,email,phone,company,createdate,lastmodifieddate';
-const MEETING_PROPS = 'hs_meeting_title,hs_meeting_body,hs_meeting_start_time,hs_meeting_end_time,hs_meeting_outcome,hs_meeting_location,hs_timestamp,createdate,lastmodifieddate';
+const MEETING_PROPS =
+  'hs_meeting_title,hs_meeting_body,hs_meeting_start_time,hs_meeting_end_time,hs_meeting_outcome,hs_meeting_location,hs_timestamp,createdate,lastmodifieddate';
 
-export async function listContacts(accessToken: string, after?: string): Promise<HubSpotListResponse<HubSpotContact>> {
+export async function listContacts(
+  accessToken: string,
+  after?: string
+): Promise<HubSpotListResponse<HubSpotContact>> {
   const params = new URLSearchParams({ limit: '100', properties: CONTACT_PROPS });
   if (after) params.set('after', after);
   return apiRequest('GET', `/crm/v3/objects/contacts?${params.toString()}`, accessToken);
 }
 
 export async function getContact(accessToken: string, contactId: string): Promise<HubSpotContact> {
-  return apiRequest('GET', `/crm/v3/objects/contacts/${contactId}?properties=${CONTACT_PROPS}`, accessToken);
+  return apiRequest(
+    'GET',
+    `/crm/v3/objects/contacts/${contactId}?properties=${CONTACT_PROPS}`,
+    accessToken
+  );
 }
 
-export async function createContact(accessToken: string, properties: Record<string, string>): Promise<HubSpotContact> {
+export async function createContact(
+  accessToken: string,
+  properties: Record<string, string>
+): Promise<HubSpotContact> {
   return apiRequest('POST', '/crm/v3/objects/contacts', accessToken, { properties });
 }
 
-export async function updateContact(accessToken: string, contactId: string, properties: Record<string, string>): Promise<HubSpotContact> {
+export async function updateContact(
+  accessToken: string,
+  contactId: string,
+  properties: Record<string, string>
+): Promise<HubSpotContact> {
   return apiRequest('PATCH', `/crm/v3/objects/contacts/${contactId}`, accessToken, { properties });
 }
 
-export async function listMeetings(accessToken: string, after?: string): Promise<HubSpotListResponse<HubSpotMeeting>> {
+export async function listMeetings(
+  accessToken: string,
+  after?: string
+): Promise<HubSpotListResponse<HubSpotMeeting>> {
   const params = new URLSearchParams({ limit: '100', properties: MEETING_PROPS });
   if (after) params.set('after', after);
   return apiRequest('GET', `/crm/v3/objects/meetings?${params.toString()}`, accessToken);
 }
 
-export async function createMeeting(accessToken: string, properties: Record<string, string>): Promise<HubSpotMeeting> {
+export async function createMeeting(
+  accessToken: string,
+  properties: Record<string, string>
+): Promise<HubSpotMeeting> {
   return apiRequest('POST', '/crm/v3/objects/meetings', accessToken, { properties });
 }
 
-export async function updateMeeting(accessToken: string, meetingId: string, properties: Record<string, string>): Promise<HubSpotMeeting> {
+export async function updateMeeting(
+  accessToken: string,
+  meetingId: string,
+  properties: Record<string, string>
+): Promise<HubSpotMeeting> {
   return apiRequest('PATCH', `/crm/v3/objects/meetings/${meetingId}`, accessToken, { properties });
 }
 
-export async function associateMeetingToContact(accessToken: string, meetingId: string, contactId: string): Promise<void> {
-  await apiRequest('PUT', `/crm/v4/objects/meetings/${meetingId}/associations/contacts/${contactId}`, accessToken, [
-    { associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 200 },
-  ]);
+export async function associateMeetingToContact(
+  accessToken: string,
+  meetingId: string,
+  contactId: string
+): Promise<void> {
+  await apiRequest(
+    'PUT',
+    `/crm/v4/objects/meetings/${meetingId}/associations/contacts/${contactId}`,
+    accessToken,
+    [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 200 }]
+  );
 }

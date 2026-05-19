@@ -1,13 +1,20 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { type Client } from "pg";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import {
+  getRootClient,
+  clearDB,
+  setupBasicTenant,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
+import { type Client } from 'pg';
 
 /**
  * Tests for the knowledge ingestion normalization pipeline.
  * Verifies that normalized_text is stored correctly when ingesting documents,
  * and that the embedding is generated from the normalized text (not the original).
  */
-describe("Knowledge ingestion normalization pipeline", () => {
+describe('Knowledge ingestion normalization pipeline', () => {
   let client: Client;
   let tenantId: string;
   let dbAvailable = true;
@@ -21,7 +28,7 @@ describe("Knowledge ingestion normalization pipeline", () => {
       tenantId = setup.tenantId;
     } catch (err) {
       dbAvailable = false;
-      console.warn("[knowledge-normalization.test] Skipping DB tests - connection failed", err);
+      console.warn('[knowledge-normalization.test] Skipping DB tests - connection failed', err);
     }
   });
 
@@ -41,11 +48,12 @@ describe("Knowledge ingestion normalization pipeline", () => {
     await rollbackTestTransaction(client);
   });
 
-  it("stores both content and normalized_text when normalizer transforms text", async () => {
+  it('stores both content and normalized_text when normalizer transforms text', async () => {
     if (!dbAvailable) return;
 
-    const original = "Yeah so like Bobby is really awesome at doing those oil change things, ya know?";
-    const normalized = "Bobby is skilled at oil changes.";
+    const original =
+      'Yeah so like Bobby is really awesome at doing those oil change things, ya know?';
+    const normalized = 'Bobby is skilled at oil changes.';
     const dummyEmbedding = JSON.stringify(new Array(1536).fill(0.1));
 
     // Simulate what knowledge.ts does: insert with both content and normalized_text
@@ -66,10 +74,10 @@ describe("Knowledge ingestion normalization pipeline", () => {
     expect(res.rows[0].content).not.toBe(res.rows[0].normalized_text);
   });
 
-  it("stores content = normalized_text when normalizer is absent (backward compat)", async () => {
+  it('stores content = normalized_text when normalizer is absent (backward compat)', async () => {
     if (!dbAvailable) return;
 
-    const text = "We are open Monday through Friday 9am to 5pm.";
+    const text = 'We are open Monday through Friday 9am to 5pm.';
     const dummyEmbedding = JSON.stringify(new Array(1536).fill(0.1));
 
     // Without normalizer, knowledge.ts falls back to: normalizedText = trimmedChunk
@@ -88,7 +96,7 @@ describe("Knowledge ingestion normalization pipeline", () => {
     expect(res.rows[0].normalized_text).toBe(text);
   });
 
-  it("search_tenant_docs still works with normalized data (original function unchanged)", async () => {
+  it('search_tenant_docs still works with normalized data (original function unchanged)', async () => {
     if (!dbAvailable) return;
 
     // Insert a doc with embedding that has a known pattern
@@ -108,11 +116,11 @@ describe("Knowledge ingestion normalization pipeline", () => {
       [tenantId, dummyEmbedding]
     );
     expect(res.rows.length).toBe(1);
-    expect(res.rows[0].content).toContain("refund policy");
+    expect(res.rows[0].content).toContain('refund policy');
     expect(Number(res.rows[0].similarity)).toBeGreaterThan(0.9);
   });
 
-  it("search_tenant_docs_normalized returns normalized_text field", async () => {
+  it('search_tenant_docs_normalized returns normalized_text field', async () => {
     if (!dbAvailable) return;
 
     const embedding = new Array(1536).fill(0);
@@ -130,17 +138,17 @@ describe("Knowledge ingestion normalization pipeline", () => {
       [tenantId, dummyEmbedding]
     );
     expect(res.rows.length).toBe(1);
-    expect(res.rows[0].content).toBe("Yeah we close at 5 usually I think");
-    expect(res.rows[0].normalized_text).toBe("Business closes at 5pm.");
+    expect(res.rows[0].content).toBe('Yeah we close at 5 usually I think');
+    expect(res.rows[0].normalized_text).toBe('Business closes at 5pm.');
   });
 
-  it("embedding is generated from normalized text, not original (behavior contract)", async () => {
+  it('embedding is generated from normalized text, not original (behavior contract)', async () => {
     if (!dbAvailable) return;
 
     // This test documents the expected behavior: the embedding should represent
     // the normalized text. We verify by inserting two docs with different content
     // but the same normalized form — their embeddings should be identical.
-    const normalizedForm = "Oil change service available.";
+    const normalizedForm = 'Oil change service available.';
     const embedding = new Array(1536).fill(0);
     embedding[5] = 1.0;
     const dummyEmbedding = JSON.stringify(embedding);

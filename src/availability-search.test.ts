@@ -21,7 +21,19 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import {
+  getRootClient,
+  clearDB,
+  createTenant,
+  createResource,
+  createEmployee,
+  createScheduleEntry,
+  createCustomerFull,
+  createAppointment,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
 
 import { findNextAvailableSlots } from './services/availabilitySearch';
 
@@ -67,8 +79,18 @@ describe('findNextAvailableSlots', () => {
 
     const tenantId = await createTenant(root, 'TireCo', 'mobile_tire', 'America/Chicago');
     const _truck1 = await createResource(root, tenantId, 'Truck 1');
-    const carlos = await createEmployee(root, tenantId, 'Carlos', ['flat-repair', 'tire-swap', 'tire-rotation']);
-    const mike = await createEmployee(root, tenantId, 'Mike', ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing']);
+    const carlos = await createEmployee(root, tenantId, 'Carlos', [
+      'flat-repair',
+      'tire-swap',
+      'tire-rotation',
+    ]);
+    const mike = await createEmployee(root, tenantId, 'Mike', [
+      'flat-repair',
+      'tire-swap',
+      'tire-rotation',
+      'tire-install',
+      'balancing',
+    ]);
 
     // Future weekday with shift coverage 9-17 for both.
     const date = '2026-06-15'; // Monday
@@ -76,13 +98,16 @@ describe('findNextAvailableSlots', () => {
     await createScheduleEntry(root, tenantId, mike, date, '09:00', '17:00');
 
     const fromTime = `${date}T15:00:00.000Z`; // 10:00 CDT, in shift
-    const slots = await findNextAvailableSlots(root as unknown as Parameters<typeof findNextAvailableSlots>[0], {
-      tenantId,
-      fromTime,
-      durationMinutes: 30,
-      requiredSkills: ['tire-rotation'],
-      count: 3,
-    });
+    const slots = await findNextAvailableSlots(
+      root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+      {
+        tenantId,
+        fromTime,
+        durationMinutes: 30,
+        requiredSkills: ['tire-rotation'],
+        count: 3,
+      }
+    );
 
     expect(slots.length).toBeGreaterThan(0);
     const first = slots[0];
@@ -106,7 +131,13 @@ describe('findNextAvailableSlots', () => {
     const truck1 = await createResource(root, tenantId, 'Truck 1');
     const truck2 = await createResource(root, tenantId, 'Truck 2');
     const carlos = await createEmployee(root, tenantId, 'Carlos', ['tire-rotation']);
-    const mike = await createEmployee(root, tenantId, 'Mike', ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing']);
+    const mike = await createEmployee(root, tenantId, 'Mike', [
+      'flat-repair',
+      'tire-swap',
+      'tire-rotation',
+      'tire-install',
+      'balancing',
+    ]);
 
     const date = '2026-06-15';
     await createScheduleEntry(root, tenantId, carlos, date, '09:00', '17:00');
@@ -116,18 +147,27 @@ describe('findNextAvailableSlots', () => {
     // requested time. Mike is free.
     const cust = await createCustomerFull(root, tenantId, '+15551112222', 'Existing Customer');
     await createAppointment(
-      root, tenantId, truck1, cust,
-      `${date}T15:00:00.000Z`, `${date}T15:30:00.000Z`,
-      'pre-book carlos', 'scheduled', carlos
+      root,
+      tenantId,
+      truck1,
+      cust,
+      `${date}T15:00:00.000Z`,
+      `${date}T15:30:00.000Z`,
+      'pre-book carlos',
+      'scheduled',
+      carlos
     );
 
-    const slots = await findNextAvailableSlots(root as unknown as Parameters<typeof findNextAvailableSlots>[0], {
-      tenantId,
-      fromTime: `${date}T15:00:00.000Z`,
-      durationMinutes: 30,
-      requiredSkills: ['tire-rotation'],
-      count: 3,
-    });
+    const slots = await findNextAvailableSlots(
+      root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+      {
+        tenantId,
+        fromTime: `${date}T15:00:00.000Z`,
+        durationMinutes: 30,
+        requiredSkills: ['tire-rotation'],
+        count: 3,
+      }
+    );
 
     expect(slots.length).toBeGreaterThan(0);
     const first = slots[0];
@@ -154,7 +194,12 @@ describe('findNextAvailableSlots', () => {
     const truck1 = await createResource(root, tenantId, 'Truck 1');
     const truck2 = await createResource(root, tenantId, 'Truck 2');
     const carlos = await createEmployee(root, tenantId, 'Carlos', ['tire-rotation', 'flat-repair']);
-    const mike = await createEmployee(root, tenantId, 'Mike', ['tire-rotation', 'flat-repair', 'tire-install', 'balancing']);
+    const mike = await createEmployee(root, tenantId, 'Mike', [
+      'tire-rotation',
+      'flat-repair',
+      'tire-install',
+      'balancing',
+    ]);
 
     const date = '2026-06-15';
     await createScheduleEntry(root, tenantId, carlos, date, '09:00', '17:00');
@@ -164,23 +209,38 @@ describe('findNextAvailableSlots', () => {
     // at 16:00. Helper should return 15:30 first.
     const cust = await createCustomerFull(root, tenantId, '+15551112222', 'Existing Customer');
     await createAppointment(
-      root, tenantId, truck1, cust,
-      `${date}T15:00:00.000Z`, `${date}T15:30:00.000Z`,
-      'carlos busy', 'scheduled', carlos
+      root,
+      tenantId,
+      truck1,
+      cust,
+      `${date}T15:00:00.000Z`,
+      `${date}T15:30:00.000Z`,
+      'carlos busy',
+      'scheduled',
+      carlos
     );
     await createAppointment(
-      root, tenantId, truck2, cust,
-      `${date}T15:00:00.000Z`, `${date}T16:00:00.000Z`,
-      'mike busy', 'scheduled', mike
+      root,
+      tenantId,
+      truck2,
+      cust,
+      `${date}T15:00:00.000Z`,
+      `${date}T16:00:00.000Z`,
+      'mike busy',
+      'scheduled',
+      mike
     );
 
-    const slots = await findNextAvailableSlots(root as unknown as Parameters<typeof findNextAvailableSlots>[0], {
-      tenantId,
-      fromTime: `${date}T15:00:00.000Z`,
-      durationMinutes: 30,
-      requiredSkills: ['tire-rotation'],
-      count: 3,
-    });
+    const slots = await findNextAvailableSlots(
+      root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+      {
+        tenantId,
+        fromTime: `${date}T15:00:00.000Z`,
+        durationMinutes: 30,
+        requiredSkills: ['tire-rotation'],
+        count: 3,
+      }
+    );
 
     expect(slots.length).toBeGreaterThan(0);
     const first = slots[0];
@@ -206,13 +266,16 @@ describe('findNextAvailableSlots', () => {
     await createEmployee(root, tenantId, 'Carlos', ['tire-rotation']);
     // No shift entries — Carlos isn't on any day's schedule.
 
-    const slots = await findNextAvailableSlots(root as unknown as Parameters<typeof findNextAvailableSlots>[0], {
-      tenantId,
-      fromTime: '2026-06-15T15:00:00.000Z',
-      durationMinutes: 30,
-      requiredSkills: ['tire-rotation'],
-      count: 3,
-    });
+    const slots = await findNextAvailableSlots(
+      root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+      {
+        tenantId,
+        fromTime: '2026-06-15T15:00:00.000Z',
+        durationMinutes: 30,
+        requiredSkills: ['tire-rotation'],
+        count: 3,
+      }
+    );
 
     expect(slots).toEqual([]);
   });
@@ -233,13 +296,16 @@ describe('findNextAvailableSlots', () => {
     const date = '2026-06-15';
     await createScheduleEntry(root, tenantId, carlos, date, '09:00', '17:00');
 
-    const slots = await findNextAvailableSlots(root as unknown as Parameters<typeof findNextAvailableSlots>[0], {
-      tenantId,
-      fromTime: `${date}T15:00:00.000Z`,
-      durationMinutes: 30,
-      requiredSkills: [],
-      count: 1,
-    });
+    const slots = await findNextAvailableSlots(
+      root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+      {
+        tenantId,
+        fromTime: `${date}T15:00:00.000Z`,
+        durationMinutes: 30,
+        requiredSkills: [],
+        count: 1,
+      }
+    );
 
     expect(slots.length).toBe(1);
     expect(slots[0].employee_id).toBe(carlos);

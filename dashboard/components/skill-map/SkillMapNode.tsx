@@ -1,19 +1,19 @@
-import React from 'react'
-import { Users, BookOpen, Cog, Link } from 'lucide-react'
-import { CoverageStatusBadge } from '../ui/CoverageStatusBadge'
-import type { SkillMapNode as NodeData, CoverageLevel } from './useSkillMapData'
+import React from 'react';
+import { Users, BookOpen, Cog, Link } from 'lucide-react';
+import { CoverageStatusBadge } from '../ui/CoverageStatusBadge';
+import type { SkillMapNode as NodeData, CoverageLevel } from './useSkillMapData';
 
 interface SkillMapNodeProps {
-  node: NodeData
-  isHighlighted: boolean
-  isSelected: boolean
-  isBroken: boolean
-  isLinkSource?: boolean
-  isLinkTarget?: boolean
-  isLinking?: boolean
-  onClick: () => void
-  onFixClick?: () => void
-  onLinkStart?: () => void
+  node: NodeData;
+  isHighlighted: boolean;
+  isSelected: boolean;
+  isBroken: boolean;
+  isLinkSource?: boolean;
+  isLinkTarget?: boolean;
+  isLinking?: boolean;
+  onClick: () => void;
+  onFixClick?: () => void;
+  onLinkStart?: () => void;
 }
 
 const typeConfig = {
@@ -32,29 +32,42 @@ const typeConfig = {
     bgColor: '',
     textColor: '',
   },
-}
+};
 
 function coverageToBadgeStatus(coverage: CoverageLevel): 'full' | 'partial' | 'uncovered' {
-  return coverage
+  return coverage;
 }
 
 export default function SkillMapNode({
-  node, isHighlighted, isSelected, isBroken,
-  isLinkSource, isLinkTarget, isLinking,
-  onClick, onFixClick, onLinkStart,
+  node,
+  isHighlighted,
+  isSelected,
+  isBroken,
+  isLinkSource,
+  isLinkTarget,
+  isLinking,
+  onClick,
+  onFixClick,
+  onLinkStart,
 }: SkillMapNodeProps) {
-  const config = typeConfig[node.type]
-  const Icon = config.icon
+  const config = typeConfig[node.type];
+  const Icon = config.icon;
 
   const dimmed = isLinking
-    ? (!isLinkSource && !isLinkTarget ? 'opacity-30' : '')
-    : (!isHighlighted && !isSelected ? 'opacity-40' : '')
-  const selectedRing = isSelected ? 'ring-2' : ''
-  const linkSourceRing = isLinkSource ? 'ring-2 ring-emerald-500 dark:ring-emerald-400' : ''
+    ? !isLinkSource && !isLinkTarget
+      ? 'opacity-30'
+      : ''
+    : !isHighlighted && !isSelected
+      ? 'opacity-40'
+      : '';
+  const selectedRing = isSelected ? 'ring-2' : '';
+  const linkSourceRing = isLinkSource ? 'ring-2 ring-emerald-500 dark:ring-emerald-400' : '';
   const linkTargetStyle = isLinkTarget
     ? 'ring-2 ring-dashed ring-emerald-400 dark:ring-emerald-500 animate-pulse cursor-crosshair'
-    : ''
-  const brokenBorder = isBroken ? 'border-amber-400 dark:border-amber-500' : 'border-gray-200 dark:border-gray-800'
+    : '';
+  const brokenBorder = isBroken
+    ? 'border-amber-400 dark:border-amber-500'
+    : 'border-gray-200 dark:border-gray-800';
 
   return (
     <div
@@ -63,17 +76,31 @@ export default function SkillMapNode({
       role="button"
       tabIndex={0}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200
         bg-white dark:bg-[#1a1a1a] hover:shadow-md
         ${brokenBorder} ${selectedRing} ${linkSourceRing} ${linkTargetStyle} ${dimmed}`}
       style={isSelected ? { ['--tw-ring-color' as string]: 'var(--accent-soft)' } : undefined}
     >
-      <div className={`p-1.5 rounded-lg shrink-0 ${config.bgColor} ${config.textColor}`} style={node.type === 'resource' ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}>
+      <div
+        className={`p-1.5 rounded-lg shrink-0 ${config.bgColor} ${config.textColor}`}
+        style={
+          node.type === 'resource'
+            ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }
+            : undefined
+        }
+      >
         <Icon className="w-3.5 h-3.5" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{node.name}</div>
+        <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+          {node.name}
+        </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {node.type === 'skill' && node.coverage && (
             <CoverageStatusBadge status={coverageToBadgeStatus(node.coverage)} />
@@ -82,7 +109,10 @@ export default function SkillMapNode({
       </div>
       {!isLinking && onLinkStart && (
         <button
-          onClick={e => { e.stopPropagation(); onLinkStart() }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onLinkStart();
+          }}
           title="Connect to another node"
           className="text-gray-400 hover:text-emerald-500 transition-colors shrink-0 p-0.5"
         >
@@ -92,7 +122,10 @@ export default function SkillMapNode({
       {isBroken && node.type === 'skill' && onFixClick && (
         <button
           data-testid={`fix-${node.id}`}
-          onClick={e => { e.stopPropagation(); onFixClick() }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFixClick();
+          }}
           className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20
             border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors shrink-0"
         >
@@ -100,8 +133,12 @@ export default function SkillMapNode({
         </button>
       )}
       {isBroken && (
-        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--warning)' }} data-testid={`broken-dot-${node.id}`} />
+        <div
+          className="w-2 h-2 rounded-full shrink-0"
+          style={{ backgroundColor: 'var(--warning)' }}
+          data-testid={`broken-dot-${node.id}`}
+        />
       )}
     </div>
-  )
+  );
 }

@@ -126,11 +126,7 @@ describe('scheduleRemindersForAppointment', () => {
       },
     });
 
-    await scheduleRemindersForAppointment(
-      buildWithTenantClient(client),
-      TENANT_ID,
-      APPOINTMENT_ID,
-    );
+    await scheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID);
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
     expect(inserts).toHaveLength(1);
@@ -140,13 +136,13 @@ describe('scheduleRemindersForAppointment', () => {
     const byType = new Map(rows.map((r) => [r.type, r]));
     expect(byType.get('confirmation')?.scheduledFor).toBe(now.toISOString());
     expect(byType.get('72h')?.scheduledFor).toBe(
-      new Date(startTime.getTime() - 72 * 60 * 60 * 1000).toISOString(),
+      new Date(startTime.getTime() - 72 * 60 * 60 * 1000).toISOString()
     );
     expect(byType.get('24h')?.scheduledFor).toBe(
-      new Date(startTime.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      new Date(startTime.getTime() - 24 * 60 * 60 * 1000).toISOString()
     );
     expect(byType.get('2h')?.scheduledFor).toBe(
-      new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString()
     );
 
     for (const row of rows) {
@@ -175,11 +171,7 @@ describe('scheduleRemindersForAppointment', () => {
       },
     });
 
-    await scheduleRemindersForAppointment(
-      buildWithTenantClient(client),
-      TENANT_ID,
-      APPOINTMENT_ID,
-    );
+    await scheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID);
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
     expect(inserts).toHaveLength(1);
@@ -211,11 +203,7 @@ describe('scheduleRemindersForAppointment', () => {
       },
     });
 
-    await scheduleRemindersForAppointment(
-      buildWithTenantClient(client),
-      TENANT_ID,
-      APPOINTMENT_ID,
-    );
+    await scheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID);
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
     expect(inserts).toHaveLength(0);
@@ -231,11 +219,7 @@ describe('scheduleRemindersForAppointment', () => {
     //      would otherwise dereference undefined.
     const { client, queries } = buildMockClient({ appointmentRow: null });
 
-    await scheduleRemindersForAppointment(
-      buildWithTenantClient(client),
-      TENANT_ID,
-      APPOINTMENT_ID,
-    );
+    await scheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID);
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
     expect(inserts).toHaveLength(0);
@@ -256,11 +240,7 @@ describe('scheduleRemindersForAppointment', () => {
       },
     });
 
-    await scheduleRemindersForAppointment(
-      buildWithTenantClient(client),
-      TENANT_ID,
-      APPOINTMENT_ID,
-    );
+    await scheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID);
 
     const inserts = queries.filter((q) => q.text.includes('INSERT INTO reminder_schedules'));
     expect(inserts).toHaveLength(0);
@@ -304,8 +284,8 @@ describe('scheduleRemindersForAppointment', () => {
         buildWithTenantClient(client),
         TENANT_ID,
         APPOINTMENT_ID,
-        logger as unknown as FastifyBaseLogger,
-      ),
+        logger as unknown as FastifyBaseLogger
+      )
     ).resolves.toBeUndefined();
 
     expect(logger.error).toHaveBeenCalledTimes(1);
@@ -361,11 +341,11 @@ describe('rescheduleRemindersForAppointment', () => {
     await rescheduleRemindersForAppointment(
       buildWithTenantClient(client),
       TENANT_ID,
-      APPOINTMENT_ID,
+      APPOINTMENT_ID
     );
 
-    const cancels = queries.filter((q) =>
-      q.text.includes('UPDATE reminder_schedules') && q.text.includes("status = 'cancelled'"),
+    const cancels = queries.filter(
+      (q) => q.text.includes('UPDATE reminder_schedules') && q.text.includes("status = 'cancelled'")
     );
     expect(cancels).toHaveLength(1);
     expect(cancels[0].params).toEqual([APPOINTMENT_ID, TENANT_ID]);
@@ -400,11 +380,13 @@ describe('rescheduleRemindersForAppointment', () => {
         }
         if (text.includes('FROM appointments a')) {
           return {
-            rows: [{
-              start_time: '2026-05-12T10:00:00Z',
-              customer_email: 'cust@example.com',
-              customer_phone: '+15551234567',
-            }],
+            rows: [
+              {
+                start_time: '2026-05-12T10:00:00Z',
+                customer_email: 'cust@example.com',
+                customer_phone: '+15551234567',
+              },
+            ],
           };
         }
         if (text.includes('INSERT INTO reminder_schedules')) {
@@ -434,7 +416,7 @@ describe('rescheduleRemindersForAppointment', () => {
       buildWithTenantClient(client),
       TENANT_ID,
       APPOINTMENT_ID,
-      logger as unknown as FastifyBaseLogger,
+      logger as unknown as FastifyBaseLogger
     );
 
     expect(updateCalled).toBe(true);
@@ -471,11 +453,7 @@ describe('rescheduleRemindersForAppointment', () => {
     } as unknown as PoolClient;
 
     await expect(
-      rescheduleRemindersForAppointment(
-        buildWithTenantClient(client),
-        TENANT_ID,
-        APPOINTMENT_ID,
-      ),
+      rescheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID)
     ).resolves.toBeUndefined();
   });
 });

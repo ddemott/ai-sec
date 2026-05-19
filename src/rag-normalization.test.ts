@@ -1,8 +1,15 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { type Client } from "pg";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import {
+  getRootClient,
+  clearDB,
+  setupBasicTenant,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
+import { type Client } from 'pg';
 
-describe("RAG Normalization Layer", () => {
+describe('RAG Normalization Layer', () => {
   let client: Client;
   let tenantId: string;
   let dbAvailable = true;
@@ -16,7 +23,7 @@ describe("RAG Normalization Layer", () => {
       tenantId = setup.tenantId;
     } catch (err) {
       dbAvailable = false;
-      console.warn("[rag-normalization.test] Skipping DB tests - connection failed", err);
+      console.warn('[rag-normalization.test] Skipping DB tests - connection failed', err);
     }
   });
 
@@ -36,7 +43,7 @@ describe("RAG Normalization Layer", () => {
     await rollbackTestTransaction(client);
   });
 
-  it("tenant_docs table has normalized_text column", async () => {
+  it('tenant_docs table has normalized_text column', async () => {
     if (!dbAvailable) return;
 
     const res = await client.query(
@@ -47,7 +54,7 @@ describe("RAG Normalization Layer", () => {
     expect(res.rows[0].data_type).toBe('text');
   });
 
-  it("call_summaries table has normalized_text column", async () => {
+  it('call_summaries table has normalized_text column', async () => {
     if (!dbAvailable) return;
 
     const res = await client.query(
@@ -58,11 +65,11 @@ describe("RAG Normalization Layer", () => {
     expect(res.rows[0].data_type).toBe('text');
   });
 
-  it("can insert tenant_docs with normalized_text", async () => {
+  it('can insert tenant_docs with normalized_text', async () => {
     if (!dbAvailable) return;
 
-    const original = "Yeah so I really think Bobby does a great job with oil changes you know";
-    const normalized = "Bobby performs oil changes well. Customer satisfied with Bobby.";
+    const original = 'Yeah so I really think Bobby does a great job with oil changes you know';
+    const normalized = 'Bobby performs oil changes well. Customer satisfied with Bobby.';
 
     await client.query(
       `INSERT INTO tenant_docs (tenant_id, content, normalized_text, source)
@@ -79,7 +86,7 @@ describe("RAG Normalization Layer", () => {
     expect(res.rows[0].normalized_text).toBe(normalized);
   });
 
-  it("can insert call_summaries with normalized_text", async () => {
+  it('can insert call_summaries with normalized_text', async () => {
     if (!dbAvailable) return;
 
     // Create a customer first
@@ -90,8 +97,9 @@ describe("RAG Normalization Layer", () => {
     );
     const customerId = custRes.rows[0].customer_id;
 
-    const original = "Customer called about getting their brakes done, mentioned they like working with Mike";
-    const normalized = "Customer inquired about brake service. Prefers technician Mike.";
+    const original =
+      'Customer called about getting their brakes done, mentioned they like working with Mike';
+    const normalized = 'Customer inquired about brake service. Prefers technician Mike.';
 
     await client.query(
       `INSERT INTO call_summaries (tenant_id, customer_id, summary, normalized_text, call_id)
@@ -108,7 +116,7 @@ describe("RAG Normalization Layer", () => {
     expect(res.rows[0].normalized_text).toBe(normalized);
   });
 
-  it("search_tenant_docs_normalized function exists and returns normalized_text", async () => {
+  it('search_tenant_docs_normalized function exists and returns normalized_text', async () => {
     if (!dbAvailable) return;
 
     // Verify the function exists
@@ -119,7 +127,7 @@ describe("RAG Normalization Layer", () => {
     expect(funcRes.rows.length).toBe(1);
   });
 
-  it("normalized_text column is nullable (backwards compatible)", async () => {
+  it('normalized_text column is nullable (backwards compatible)', async () => {
     if (!dbAvailable) return;
 
     // Insert without normalized_text — should work

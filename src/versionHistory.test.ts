@@ -42,7 +42,10 @@ function buildApp() {
   registerVersionHistoryRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+    mockWithTenantClient as unknown as <T>(
+      tenantId: string,
+      fn: (client: PoolClient) => Promise<T>
+    ) => Promise<T>
   );
 
   return fastify;
@@ -123,21 +126,23 @@ describe('Version History Routes — Happy Paths', () => {
 
   it('2. GET /records/:table/:recordId/version/:num returns specific version', async () => {
     queryResponses.push({
-      rows: [{
-        record_version_id: VERSION_ID,
-        tenant_id: TENANT_ID,
-        table_name: 'customers',
-        record_id: RECORD_ID,
-        version_number: 1,
-        data: { name: 'John Doe' },
-        changed_fields: [],
-        previous_values: {},
-        change_type: 'create',
-        change_source: 'local',
-        changed_by: 'user',
-        change_summary: 'Created',
-        changed_at: '2026-04-08T10:00:00Z',
-      }],
+      rows: [
+        {
+          record_version_id: VERSION_ID,
+          tenant_id: TENANT_ID,
+          table_name: 'customers',
+          record_id: RECORD_ID,
+          version_number: 1,
+          data: { name: 'John Doe' },
+          changed_fields: [],
+          previous_values: {},
+          change_type: 'create',
+          change_source: 'local',
+          changed_by: 'user',
+          change_summary: 'Created',
+          changed_at: '2026-04-08T10:00:00Z',
+        },
+      ],
     });
 
     const res = await app.inject({
@@ -331,8 +336,18 @@ describe('Version History Routes — Happy Paths', () => {
     // Versions
     queryResponses.push({
       rows: [
-        { version_number: 2, data: { name: 'John Doe', phone: '555-1234', email: 'john@new.com' }, changed_at: '2026-04-09T10:00:00Z', change_source: 'local' },
-        { version_number: 1, data: { name: 'John Doe', phone: '555-0000', email: 'john@old.com' }, changed_at: '2026-04-08T10:00:00Z', change_source: 'hubspot' },
+        {
+          version_number: 2,
+          data: { name: 'John Doe', phone: '555-1234', email: 'john@new.com' },
+          changed_at: '2026-04-09T10:00:00Z',
+          change_source: 'local',
+        },
+        {
+          version_number: 1,
+          data: { name: 'John Doe', phone: '555-0000', email: 'john@old.com' },
+          changed_at: '2026-04-08T10:00:00Z',
+          change_source: 'hubspot',
+        },
       ],
     });
 
@@ -436,9 +451,7 @@ describe('Version History Routes — Sad Paths (5 Ws Coverage)', () => {
 
     expect(body.code).toBe('VALIDATION_FAILED');
     expect(body.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'too_small' })
-      ])
+      expect.arrayContaining([expect.objectContaining({ code: 'too_small' })])
     );
   });
 
@@ -498,9 +511,7 @@ describe('Version History Routes — Sad Paths (5 Ws Coverage)', () => {
     expect(body.context.where).toContain('/copy-fields');
     // Zod returns format: 'uuid' in validation errors
     expect(body.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ format: 'uuid' })
-      ])
+      expect.arrayContaining([expect.objectContaining({ format: 'uuid' })])
     );
   });
 
@@ -685,7 +696,14 @@ describe('Version History Routes — Edge Cases', () => {
   });
 
   it('29. All versioned tables are accepted', async () => {
-    const tables = ['customers', 'appointments', 'voice_sessions', 'employees', 'services', 'resources'];
+    const tables = [
+      'customers',
+      'appointments',
+      'voice_sessions',
+      'employees',
+      'services',
+      'resources',
+    ];
 
     for (const table of tables) {
       queryResponses.push({ rows: [{ is_deleted: false }] });
@@ -760,7 +778,7 @@ describe('Version History Routes — Edge Cases', () => {
     const selectQuery = mockClient.query.mock.calls[1];
     const params = selectQuery[1] as unknown[];
     expect(params).toContain(50); // Default limit
-    expect(params).toContain(0);  // Default offset
+    expect(params).toContain(0); // Default offset
   });
 });
 
@@ -775,7 +793,18 @@ describe('Version History Routes — Additional Happy Paths', () => {
     });
     queryResponses.push({
       rows: [
-        { version_id: 'v1', version_number: 1, data: { name: 'Test' }, changed_fields: [], previous_values: {}, change_type: 'create', change_source: 'local', changed_by: 'user', change_summary: null, changed_at: '2026-04-08T10:00:00Z' },
+        {
+          version_id: 'v1',
+          version_number: 1,
+          data: { name: 'Test' },
+          changed_fields: [],
+          previous_values: {},
+          change_type: 'create',
+          change_source: 'local',
+          changed_by: 'user',
+          change_summary: null,
+          changed_at: '2026-04-08T10:00:00Z',
+        },
       ],
     });
 
@@ -794,7 +823,9 @@ describe('Version History Routes — Additional Happy Paths', () => {
   it('35. POST restore-fields with multiple fields', async () => {
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
-    queryResponses.push({ rows: [{ data: { name: 'Restored', phone: '555-0000', email: 'old@test.com' } }] });
+    queryResponses.push({
+      rows: [{ data: { name: 'Restored', phone: '555-0000', email: 'old@test.com' } }],
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -849,7 +880,20 @@ describe('Version History Routes — Additional Happy Paths', () => {
     queryResponses.push({ rows: [{ count: '15' }] });
     queryResponses.push({
       rows: [
-        { id: 'v1', tenant_id: TENANT_ID, table_name: 'customers', record_id: RECORD_ID, version_number: 1, change_type: 'create', change_source: 'local', changed_by: 'user', change_summary: 'Created', changed_at: '2026-04-09T10:00:00Z', record_name: 'Test', record_phone: '555-1234' },
+        {
+          id: 'v1',
+          tenant_id: TENANT_ID,
+          table_name: 'customers',
+          record_id: RECORD_ID,
+          version_number: 1,
+          change_type: 'create',
+          change_source: 'local',
+          changed_by: 'user',
+          change_summary: 'Created',
+          changed_at: '2026-04-09T10:00:00Z',
+          record_name: 'Test',
+          record_phone: '555-1234',
+        },
       ],
     });
 

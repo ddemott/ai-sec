@@ -10,7 +10,7 @@ export class ReminderProcessor {
   constructor(
     private repository: ReminderRepository,
     private communicationService: CommunicationService,
-    private consentService: ConsentService,
+    private consentService: ConsentService
   ) {}
 
   /**
@@ -31,7 +31,7 @@ export class ReminderProcessor {
     try {
       const appointment = await this.repository.getAppointmentDetails(
         reminder.appointment_id.toString(),
-        reminder.tenant_id.toString(),
+        reminder.tenant_id.toString()
       );
       if (!appointment) {
         remindersSkippedTotal.inc({ reason: 'appointment_not_found' });
@@ -48,7 +48,7 @@ export class ReminderProcessor {
         await this.repository.updateReminderStatus(
           reminderId,
           'cancelled',
-          'Appointment cancelled or time passed',
+          'Appointment cancelled or time passed'
         );
         return;
       }
@@ -60,7 +60,7 @@ export class ReminderProcessor {
         await this.repository.updateReminderStatus(
           reminderId,
           'cancelled',
-          'No communication consent',
+          'No communication consent'
         );
         return;
       }
@@ -75,7 +75,11 @@ export class ReminderProcessor {
     } catch (error) {
       console.error(`Error processing reminder ${reminderId}:`, error);
       remindersSkippedTotal.inc({ reason: 'processing_error' });
-      await this.repository.updateReminderStatus(reminderId, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      await this.repository.updateReminderStatus(
+        reminderId,
+        'failed',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
     }
   }
 
@@ -104,7 +108,7 @@ export class ReminderProcessor {
    */
   public async checkCommunicationConsent(
     reminder: ReminderSchedule,
-    appointment: Appointment,
+    appointment: Appointment
   ): Promise<boolean> {
     try {
       // Check email consent if email is provided
@@ -113,7 +117,7 @@ export class ReminderProcessor {
           reminder.tenant_id.toString(),
           appointment.customer_email,
           undefined,
-          'email',
+          'email'
         );
         if (!emailConsent) return false;
       }
@@ -124,7 +128,7 @@ export class ReminderProcessor {
           reminder.tenant_id.toString(),
           undefined,
           appointment.customer_phone,
-          'sms',
+          'sms'
         );
         if (!smsConsent) return false;
       }
@@ -142,7 +146,7 @@ export class ReminderProcessor {
    */
   public async sendReminder(
     reminder: ReminderSchedule,
-    appointment: Appointment,
+    appointment: Appointment
   ): Promise<boolean> {
     try {
       const hoursUntil =
@@ -163,7 +167,7 @@ export class ReminderProcessor {
           reminder.tenant_id.toString(),
           reminder.customer_email,
           undefined,
-          'email',
+          'email'
         );
         if (emailConsent) {
           const appointmentData = {
@@ -180,7 +184,7 @@ export class ReminderProcessor {
               reminder.tenant_id.toString(),
               reminder.customer_email,
               appointment.customer_phone,
-              appointmentData,
+              appointmentData
             );
             emailSent = result.email?.success || false;
           } else {
@@ -189,7 +193,7 @@ export class ReminderProcessor {
               reminder.customer_email,
               appointment.customer_phone,
               appointmentData,
-              hoursUntil,
+              hoursUntil
             );
             emailSent = result.email?.success || false;
           }
@@ -206,7 +210,7 @@ export class ReminderProcessor {
           reminder.tenant_id.toString(),
           undefined,
           reminder.customer_phone,
-          'sms',
+          'sms'
         );
         if (smsConsent) {
           const smsData = {

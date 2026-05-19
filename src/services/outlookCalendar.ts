@@ -9,8 +9,8 @@ const FETCH_TIMEOUT_MS = 15_000;
 export interface CalendarEventInput {
   summary: string;
   description?: string;
-  start: string;   // ISO datetime
-  end: string;     // ISO datetime
+  start: string; // ISO datetime
+  end: string; // ISO datetime
   location?: string;
   timeZone?: string;
 }
@@ -73,7 +73,10 @@ export function verifyState(state: string): string | null {
 /** Exchange authorization code for tokens */
 export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
   const config = getConfig();
-  if (!config) throw new Error('Outlook Calendar not configured — missing env vars (check OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'Outlook Calendar not configured — missing env vars (check OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_CALLBACK_URL)'
+    );
 
   const body = new URLSearchParams({
     client_id: config.clientId,
@@ -94,17 +97,23 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
     });
   } catch (networkErr: unknown) {
     const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-    throw new Error(`Outlook OAuth code exchange failed: network error reaching Microsoft token endpoint — ${msg}`);
+    throw new Error(
+      `Outlook OAuth code exchange failed: network error reaching Microsoft token endpoint — ${msg}`
+    );
   }
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`Outlook OAuth code exchange failed (${res.status}): ${errorBody}. This happens during initial OAuth authorization — the user may need to re-authorize from the dashboard.`);
+    throw new Error(
+      `Outlook OAuth code exchange failed (${res.status}): ${errorBody}. This happens during initial OAuth authorization — the user may need to re-authorize from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token || !data.refresh_token) {
-    throw new Error('Outlook OAuth code exchange returned incomplete tokens (missing access_token or refresh_token). The user may need to re-authorize from the dashboard.');
+    throw new Error(
+      'Outlook OAuth code exchange returned incomplete tokens (missing access_token or refresh_token). The user may need to re-authorize from the dashboard.'
+    );
   }
 
   return {
@@ -115,9 +124,14 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
 }
 
 /** Refresh an expired access token */
-export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date: number }> {
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; expiry_date: number }> {
   const config = getConfig();
-  if (!config) throw new Error('Outlook Calendar not configured — missing env vars (check OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'Outlook Calendar not configured — missing env vars (check OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_CALLBACK_URL)'
+    );
 
   const body = new URLSearchParams({
     client_id: config.clientId,
@@ -137,17 +151,23 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
     });
   } catch (networkErr: unknown) {
     const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-    throw new Error(`Outlook token refresh failed: network error reaching Microsoft token endpoint — ${msg}`);
+    throw new Error(
+      `Outlook token refresh failed: network error reaching Microsoft token endpoint — ${msg}`
+    );
   }
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`Outlook token refresh failed (${res.status}): ${errorBody}. The refresh token may be expired or revoked — the user should reconnect Outlook Calendar from the dashboard.`);
+    throw new Error(
+      `Outlook token refresh failed (${res.status}): ${errorBody}. The refresh token may be expired or revoked — the user should reconnect Outlook Calendar from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token) {
-    throw new Error('Outlook token refresh returned no access_token. The user should reconnect Outlook Calendar from the dashboard.');
+    throw new Error(
+      'Outlook token refresh returned no access_token. The user should reconnect Outlook Calendar from the dashboard.'
+    );
   }
 
   return {
@@ -171,7 +191,12 @@ export async function revokeToken(_accessToken: string): Promise<void> {
   // Intentional no-op — see JSDoc above.
 }
 
-async function graphRequest(method: string, path: string, accessToken: string, body?: Record<string, unknown>): Promise<unknown> {
+async function graphRequest(
+  method: string,
+  path: string,
+  accessToken: string,
+  body?: Record<string, unknown>
+): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(`${GRAPH_BASE}${path}`, {
@@ -216,11 +241,11 @@ export async function createEvent(
   calendarId: string,
   event: CalendarEventInput
 ): Promise<string> {
-  const path = calendarId === 'primary'
-    ? '/me/events'
-    : `/me/calendars/${calendarId}/events`;
+  const path = calendarId === 'primary' ? '/me/events' : `/me/calendars/${calendarId}/events`;
 
-  const data = (await graphRequest('POST', path, accessToken, buildGraphEvent(event))) as { id?: string } | null;
+  const data = (await graphRequest('POST', path, accessToken, buildGraphEvent(event))) as {
+    id?: string;
+  } | null;
 
   if (!data?.id) throw new Error('Outlook Calendar did not return an event ID');
   return data.id;

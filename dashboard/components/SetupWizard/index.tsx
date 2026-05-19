@@ -1,30 +1,33 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect, useRef } from 'react'
-import {
-  ChevronRight,
-  ChevronLeft,
-  Check,
-  X,
-  Wand2,
-} from 'lucide-react'
-import { Api } from '../../lib/api'
-import { useStaticData } from '../../lib/hooks'
-import { useActiveTenantId } from '../../lib/SessionContext'
-import { useVocabulary } from '@/lib/VocabularyContext'
-import { Button } from '../ui/Button'
-import { showToast } from '../ui/Toast'
-import { WizardStepContent } from './WizardStepContent'
-import { useWizardCrud } from './useWizardCrud'
-import { markFirstRunTourPending } from '../FirstRunTour'
-import type { WizardStep, WizardService, WizardResource, WizardEmployee, SetupWizardProps } from './types'
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronRight, ChevronLeft, Check, X, Wand2 } from 'lucide-react';
+import { Api } from '../../lib/api';
+import { useStaticData } from '../../lib/hooks';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { useVocabulary } from '@/lib/VocabularyContext';
+import { Button } from '../ui/Button';
+import { showToast } from '../ui/Toast';
+import { WizardStepContent } from './WizardStepContent';
+import { useWizardCrud } from './useWizardCrud';
+import { markFirstRunTourPending } from '../FirstRunTour';
+import type {
+  WizardStep,
+  WizardService,
+  WizardResource,
+  WizardEmployee,
+  SetupWizardProps,
+} from './types';
 
 // Step labels are verbs/outcomes ("What you offer", "Who works here") so the
 // chip strip teaches a new owner what each step does without having to enter
 // it first. Vocab personalization (Bays / Chairs / Mechanics / Stylists)
 // still drives the headings and inputs inside each step's body — moving it
 // out of the chip label keeps the strip glanceable and uniformly short.
-function getStepLabels(_vocab: { resource_plural: string; employee_plural: string }): Record<WizardStep, string> {
+function getStepLabels(_vocab: {
+  resource_plural: string;
+  employee_plural: string;
+}): Record<WizardStep, string> {
   return {
     1: 'What you offer',
     2: 'Where it happens',
@@ -33,39 +36,41 @@ function getStepLabels(_vocab: { resource_plural: string; employee_plural: strin
     5: 'Who does what',
     6: 'Look it over',
     7: "You're live",
-  }
+  };
 }
 
 export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
-  const tenantId = useActiveTenantId()
-  const { services, resources, employees, loading, refresh } = useStaticData(tenantId)
-  const vocab = useVocabulary()
-  const STEP_LABELS = getStepLabels(vocab)
-  const [step, setStep] = useState<WizardStep>(1)
+  const tenantId = useActiveTenantId();
+  const { services, resources, employees, loading, refresh } = useStaticData(tenantId);
+  const vocab = useVocabulary();
+  const STEP_LABELS = getStepLabels(vocab);
+  const [step, setStep] = useState<WizardStep>(1);
 
-  const crud = useWizardCrud(tenantId, step, refresh)
+  const crud = useWizardCrud(tenantId, step, refresh);
 
   // Lock body scroll when open
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'unset'
+      document.body.style.overflow = 'unset';
     }
-    return () => { document.body.style.overflow = 'unset' }
-  }, [isOpen])
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
-  const seedingRef = useRef(false)
+  const seedingRef = useRef(false);
 
   // Reset on open
   useEffect(() => {
     if (isOpen) {
-      setStep(1)
-      crud.resetAll()
-      seedingRef.current = false
+      setStep(1);
+      crud.resetAll();
+      seedingRef.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
+  }, [isOpen]);
 
   // Auto-seed example services + one default resource from the
   // business template when none exist.
@@ -80,61 +85,86 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   // templates, "<vocab.resource_label> 1" otherwise). Owners with
   // multi-station shops keep using "Add a <resource>" as before.
   useEffect(() => {
-    if (!isOpen || !tenantId || loading || seedingRef.current) return
-    if (services.length > 0 && resources.length > 0) return
-    seedingRef.current = true
-    void seedFromTemplate()
+    if (!isOpen || !tenantId || loading || seedingRef.current) return;
+    if (services.length > 0 && resources.length > 0) return;
+    seedingRef.current = true;
+    void seedFromTemplate();
     async function seedFromTemplate() {
       try {
         const [config, templates] = await Promise.all([
           Api.tenants.getConfig(tenantId),
           Api.templates.listFull(),
-        ])
-        const tpl = (templates || []).find(t => t.business_type === config?.business_type)
+        ]);
+        const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
 
         if (services.length === 0 && tpl?.example_services?.length) {
           for (const name of tpl.example_services) {
-            await Api.services.create(tenantId, { name, duration_minutes: 30 })
+            await Api.services.create(tenantId, { name, duration_minutes: 30 });
           }
         }
 
         if (resources.length === 0) {
-          const defaultName = vocab.resource_label === 'Resource'
-            ? 'Main Location'
-            : `${vocab.resource_label} 1`
+          const defaultName =
+            vocab.resource_label === 'Resource' ? 'Main Location' : `${vocab.resource_label} 1`;
           await Api.resources.create(tenantId, {
             name: defaultName,
             description: 'Auto-created — rename or add more in this step',
-          })
+          });
         }
 
-        await refresh()
+        await refresh();
       } catch (err) {
         // Non-critical — user can still add services and resources manually
-        console.warn('Auto-seed from template failed:', err)
+        console.warn('Auto-seed from template failed:', err);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tenantId, loading, services.length, resources.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, tenantId, loading, services.length, resources.length]);
 
-  const activeServices: WizardService[] = services.filter(s => !(s as { is_deleted?: boolean }).is_deleted).map(s => ({ service_id: s.service_id, name: s.name, description: s.description, duration_minutes: s.duration_minutes, price: s.price }))
-  const activeResources: WizardResource[] = resources.filter(r => r.is_active !== false).map(r => ({ resource_id: r.resource_id, name: r.name, description: r.description ?? undefined, is_active: r.is_active }))
-  const activeEmployees: WizardEmployee[] = employees.filter(e => !e.is_deleted && e.is_active !== false).map(e => ({ employee_id: e.employee_id, name: e.name, first_name: e.first_name ?? undefined, last_name: e.last_name ?? undefined, email: e.email ?? undefined, phone: e.phone ?? undefined, type: e.type, is_active: e.is_active }))
+  const activeServices: WizardService[] = services
+    .filter((s) => !(s as { is_deleted?: boolean }).is_deleted)
+    .map((s) => ({
+      service_id: s.service_id,
+      name: s.name,
+      description: s.description,
+      duration_minutes: s.duration_minutes,
+      price: s.price,
+    }));
+  const activeResources: WizardResource[] = resources
+    .filter((r) => r.is_active !== false)
+    .map((r) => ({
+      resource_id: r.resource_id,
+      name: r.name,
+      description: r.description ?? undefined,
+      is_active: r.is_active,
+    }));
+  const activeEmployees: WizardEmployee[] = employees
+    .filter((e) => !e.is_deleted && e.is_active !== false)
+    .map((e) => ({
+      employee_id: e.employee_id,
+      name: e.name,
+      first_name: e.first_name ?? undefined,
+      last_name: e.last_name ?? undefined,
+      email: e.email ?? undefined,
+      phone: e.phone ?? undefined,
+      type: e.type,
+      is_active: e.is_active,
+    }));
 
   const canAdvanceTo = (target: WizardStep): boolean => {
-    if (target <= step) return true // backward always allowed
-    if (loading) return true // don't block while data is loading
-    if (target >= 2 && activeServices.length === 0) return false
-    if (target >= 4 && activeEmployees.length === 0) return false
-    if (target >= 5 && (activeEmployees.length === 0 || activeServices.length === 0)) return false
-    return true
-  }
+    if (target <= step) return true; // backward always allowed
+    if (loading) return true; // don't block while data is loading
+    if (target >= 2 && activeServices.length === 0) return false;
+    if (target >= 4 && activeEmployees.length === 0) return false;
+    if (target >= 5 && (activeEmployees.length === 0 || activeServices.length === 0)) return false;
+    return true;
+  };
 
   const goNext = async () => {
-    const next = Math.min(step + 1, 7) as WizardStep
+    const next = Math.min(step + 1, 7) as WizardStep;
     if (!canAdvanceTo(next)) {
-      showToast('Complete this step before continuing', 'warning')
-      return
+      showToast('Complete this step before continuing', 'warning');
+      return;
     }
     // On the way into step 7 (Go Live), fan each employee's weekly
     // availability into 4 weeks of date-specific employee_schedule
@@ -147,28 +177,30 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
       // employee's pattern is fanned independently.
       for (const emp of activeEmployees) {
         const empPattern = crud.shifts
-          .filter(s => String(s.employee_id) === String(emp.employee_id) && s.start_time && s.end_time)
-          .map(s => ({
+          .filter(
+            (s) => String(s.employee_id) === String(emp.employee_id) && s.start_time && s.end_time
+          )
+          .map((s) => ({
             day_of_week: s.day_of_week,
             start_time: s.start_time.slice(0, 5),
             end_time: s.end_time.slice(0, 5),
-          }))
+          }));
         try {
-          await Api.shifts.expandWeekly(tenantId, String(emp.employee_id), empPattern)
+          await Api.shifts.expandWeekly(tenantId, String(emp.employee_id), empPattern);
         } catch (err) {
-          console.warn(`Failed to expand weekly schedule for employee ${emp.employee_id}:`, err)
+          console.warn(`Failed to expand weekly schedule for employee ${emp.employee_id}:`, err);
         }
       }
     }
-    setStep(next)
-  }
-  const goBack = () => setStep(s => Math.max(s - 1, 1) as WizardStep)
+    setStep(next);
+  };
+  const goBack = () => setStep((s) => Math.max(s - 1, 1) as WizardStep);
   const goToStep = (s: WizardStep) => {
-    if (canAdvanceTo(s)) setStep(s)
-    else showToast('Complete earlier steps first', 'warning')
-  }
+    if (canAdvanceTo(s)) setStep(s);
+    else showToast('Complete earlier steps first', 'warning');
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div
@@ -179,7 +211,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     >
       <div
         className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <header className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
@@ -201,7 +233,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
         {/* Progress bar */}
         <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
-            {([1, 2, 3, 4, 5, 6, 7] as WizardStep[]).map(s => (
+            {([1, 2, 3, 4, 5, 6, 7] as WizardStep[]).map((s) => (
               <button
                 key={s}
                 onClick={() => goToStep(s)}
@@ -210,12 +242,16 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
                   s === step
                     ? ''
                     : s < step
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-pointer'
-                    : !canAdvanceTo(s)
-                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-pointer'
+                      : !canAdvanceTo(s)
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
                 }`}
-                style={s === step ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' } : undefined}
+                style={
+                  s === step
+                    ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }
+                    : undefined
+                }
               >
                 {s < step ? (
                   <Check className="w-3 h-3" />
@@ -282,9 +318,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
 
         {/* Footer */}
         <footer className="px-6 py-4 bg-gray-50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
-          <div className="text-xs text-gray-400">
-            Step {step} of 7
-          </div>
+          <div className="text-xs text-gray-400">Step {step} of 7</div>
           <div className="flex gap-2">
             {step > 1 && (
               <Button variant="ghost" size="sm" onClick={goBack}>
@@ -306,8 +340,8 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
                   // picks up the flag on its next mount and shows the
                   // overview modal. Only fires on the step-7 Done path —
                   // dismissing the wizard mid-flow does not arm the tour.
-                  markFirstRunTourPending(tenantId)
-                  onClose()
+                  markFirstRunTourPending(tenantId);
+                  onClose();
                 }}
               >
                 <Check className="w-4 h-4 mr-1" />
@@ -318,5 +352,5 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
         </footer>
       </div>
     </div>
-  )
+  );
 }

@@ -114,7 +114,9 @@ async function listDeletedCustomersAs(
 // ────────────────────────────────────────────────────────────────────────────
 // 1. HAPPY: full soft-delete → restore round-trip
 // ────────────────────────────────────────────────────────────────────────────
-test('restore-happy: soft-deleted customer disappears from the list and comes back exactly when restored', async ({ request }) => {
+test('restore-happy: soft-deleted customer disappears from the list and comes back exactly when restored', async ({
+  request,
+}) => {
   // WHO: operator who accidentally deleted a customer and clicks Restore
   //       from the deleted-records panel five minutes later (or the
   //       customer themselves asks "why am I gone from your system").
@@ -152,8 +154,14 @@ test('restore-happy: soft-deleted customer disappears from the list and comes ba
     // Pre-delete: customer in the active list, deleted list empty
     let active = await listCustomersAs(request, tenant.token, tenant.tenantId);
     let deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.customer_id === customerId), 'customer should be in active list before delete').toBeTruthy();
-    expect(deleted.records.find((c) => c.record_id === customerId), 'customer should NOT be in deleted list before delete').toBeFalsy();
+    expect(
+      active.find((c) => c.customer_id === customerId),
+      'customer should be in active list before delete'
+    ).toBeTruthy();
+    expect(
+      deleted.records.find((c) => c.record_id === customerId),
+      'customer should NOT be in deleted list before delete'
+    ).toBeFalsy();
 
     // Soft-delete
     const del = await softDeleteAs(request, tenant.token, 'customers', customerId);
@@ -163,20 +171,34 @@ test('restore-happy: soft-deleted customer disappears from the list and comes ba
     // Post-delete: filtered out of active, present in deleted
     active = await listCustomersAs(request, tenant.token, tenant.tenantId);
     deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.customer_id === customerId), 'customer should be filtered from active list after delete').toBeFalsy();
-    expect(deleted.records.find((c) => c.record_id === customerId), 'customer should appear in deleted list after delete').toBeTruthy();
+    expect(
+      active.find((c) => c.customer_id === customerId),
+      'customer should be filtered from active list after delete'
+    ).toBeFalsy();
+    expect(
+      deleted.records.find((c) => c.record_id === customerId),
+      'customer should appear in deleted list after delete'
+    ).toBeTruthy();
     expect(deleted.total, 'deleted total should be at least 1').toBeGreaterThanOrEqual(1);
 
     // Restore
     const restored = await restoreAs(request, tenant.token, 'customers', customerId);
-    expect(restored.status, `restore must succeed; body=${JSON.stringify(restored.body)}`).toBe(200);
+    expect(restored.status, `restore must succeed; body=${JSON.stringify(restored.body)}`).toBe(
+      200
+    );
     expect(restored.body.success).toBe(true);
 
     // Post-restore: back in active, gone from deleted
     active = await listCustomersAs(request, tenant.token, tenant.tenantId);
     deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(active.find((c) => c.customer_id === customerId), 'customer should be back in active list after restore').toBeTruthy();
-    expect(deleted.records.find((c) => c.record_id === customerId), 'customer should be gone from deleted list after restore').toBeFalsy();
+    expect(
+      active.find((c) => c.customer_id === customerId),
+      'customer should be back in active list after restore'
+    ).toBeTruthy();
+    expect(
+      deleted.records.find((c) => c.record_id === customerId),
+      'customer should be gone from deleted list after restore'
+    ).toBeFalsy();
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
@@ -185,7 +207,9 @@ test('restore-happy: soft-deleted customer disappears from the list and comes ba
 // ────────────────────────────────────────────────────────────────────────────
 // 2. SAD: restore on a never-deleted record returns 404 RECORD_NOT_DELETED
 // ────────────────────────────────────────────────────────────────────────────
-test('restore-not-deleted: POST /restore on a record that was never deleted returns 404 + RECORD_NOT_DELETED', async ({ request }) => {
+test('restore-not-deleted: POST /restore on a record that was never deleted returns 404 + RECORD_NOT_DELETED', async ({
+  request,
+}) => {
   // WHO: stale UI clicks Restore on a record another session just
   //       restored (or never deleted in the first place) — and the
   //       deleted-records list got out of sync between fetch and click.
@@ -224,9 +248,15 @@ test('restore-not-deleted: POST /restore on a record that was never deleted retu
     // Post-condition: customer state unchanged — still in active list,
     // still not in deleted list. The 404 fires without flipping any bit.
     const stillActive = await listCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(stillActive.find((c) => c.customer_id === customerId), 'customer must remain active after rejected restore').toBeTruthy();
+    expect(
+      stillActive.find((c) => c.customer_id === customerId),
+      'customer must remain active after rejected restore'
+    ).toBeTruthy();
     const deleted = await listDeletedCustomersAs(request, tenant.token, tenant.tenantId);
-    expect(deleted.records.find((c) => c.record_id === customerId), 'customer must NOT be in deleted list').toBeFalsy();
+    expect(
+      deleted.records.find((c) => c.record_id === customerId),
+      'customer must NOT be in deleted list'
+    ).toBeFalsy();
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
@@ -235,7 +265,9 @@ test('restore-not-deleted: POST /restore on a record that was never deleted retu
 // ────────────────────────────────────────────────────────────────────────────
 // 3. SAD: restore on an invalid table name returns 400 INVALID_TABLE
 // ────────────────────────────────────────────────────────────────────────────
-test('restore-invalid-table: POST /restore against a non-versioned table returns 400 + INVALID_TABLE before any SQL runs', async ({ request }) => {
+test('restore-invalid-table: POST /restore against a non-versioned table returns 400 + INVALID_TABLE before any SQL runs', async ({
+  request,
+}) => {
   // WHO: a malicious or buggy caller hitting the route with an
   //       arbitrary table name — `tenants`, `password_resets`, `foobar`.
   // WHAT: the validateTable Zod gate rejects with 400 + error_code
@@ -260,13 +292,10 @@ test('restore-invalid-table: POST /restore against a non-versioned table returns
     tenant = await registerFreshTenant(request);
 
     const fakeId = '00000000-0000-0000-0000-000000000000';
-    const res = await request.post(
-      `${BACKEND_URL}/records/foobar/${fakeId}/restore`,
-      {
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` },
-        data: { restored_by: 'e2e-test' },
-      }
-    );
+    const res = await request.post(`${BACKEND_URL}/records/foobar/${fakeId}/restore`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` },
+      data: { restored_by: 'e2e-test' },
+    });
     expect(res.status()).toBe(400);
     const body = await res.json();
     expect(body).toMatchObject({
@@ -275,13 +304,10 @@ test('restore-invalid-table: POST /restore against a non-versioned table returns
 
     // Also reject `tenants` — a real table name but NOT versioned, the
     // most dangerous gap if the whitelist were ever bypassed.
-    const tenantsRes = await request.post(
-      `${BACKEND_URL}/records/tenants/${fakeId}/restore`,
-      {
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` },
-        data: { restored_by: 'e2e-test' },
-      }
-    );
+    const tenantsRes = await request.post(`${BACKEND_URL}/records/tenants/${fakeId}/restore`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` },
+      data: { restored_by: 'e2e-test' },
+    });
     expect(tenantsRes.status()).toBe(400);
     const tenantsBody = await tenantsRes.json();
     expect(tenantsBody).toMatchObject({ code: 'INVALID_TABLE' });

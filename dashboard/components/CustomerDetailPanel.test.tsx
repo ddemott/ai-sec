@@ -69,9 +69,7 @@ const completedAppt = {
   employee_name: 'Carlos',
 };
 
-function renderPanel(
-  overrides: Partial<React.ComponentProps<typeof CustomerDetailPanel>> = {}
-) {
+function renderPanel(overrides: Partial<React.ComponentProps<typeof CustomerDetailPanel>> = {}) {
   const defaultProps: React.ComponentProps<typeof CustomerDetailPanel> = {
     selectedCustomer: baseCustomer,
     isCreating: false,
@@ -145,7 +143,9 @@ describe('CustomerDetailPanel — appointment history reactivate affordance', ()
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('Brake pads')).toBeInTheDocument();
     // No button data-testid for the completed row — only canceled rows get the testid
-    expect(screen.queryByTestId(`customer-history-canceled-${completedAppt.appointment_id}`)).toBeNull();
+    expect(
+      screen.queryByTestId(`customer-history-canceled-${completedAppt.appointment_id}`)
+    ).toBeNull();
     // Defensive: if a button somehow rendered with the row's id, it shouldn't
     // call onReactivate — but since it doesn't render, the click can't fire.
     expect(onReactivate).not.toHaveBeenCalled();

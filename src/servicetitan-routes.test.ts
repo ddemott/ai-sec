@@ -60,7 +60,10 @@ function buildApp() {
   registerServiceTitanRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+    mockWithTenantClient as unknown as <T>(
+      tenantId: string,
+      fn: (client: PoolClient) => Promise<T>
+    ) => Promise<T>
   );
 
   return fastify;
@@ -96,7 +99,9 @@ describe('ServiceTitan Routes — Happy Paths', () => {
     // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth handler
     // WHY: Without this, clicking "Connect ServiceTitan" would fail silently — user cannot link their ST account for customer/job sync
     vi.mocked(servicetitanClient.isServiceTitanEnabled).mockReturnValue(true);
-    vi.mocked(servicetitanClient.getAuthUrl).mockReturnValue('https://auth.servicetitan.io/connect/authorize?client_id=test');
+    vi.mocked(servicetitanClient.getAuthUrl).mockReturnValue(
+      'https://auth.servicetitan.io/connect/authorize?client_id=test'
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -209,7 +214,11 @@ describe('ServiceTitan Routes — Happy Paths', () => {
     // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — POST /servicetitan/webhook handler
     // WHY: Without this, new customers created in ServiceTitan would never appear in SecretaryHQ — bidirectional sync breaks and the voice AI has stale customer data
     const webhookBody = [
-      { eventType: 'customer.created', data: { id: 12345, name: 'Test', phoneNumber: '555-1234' }, tenantId: '999888777' },
+      {
+        eventType: 'customer.created',
+        data: { id: 12345, name: 'Test', phoneNumber: '555-1234' },
+        tenantId: '999888777',
+      },
     ];
 
     // Tenant lookup by tenantSid (uses pool.query)
@@ -330,7 +339,9 @@ describe('ServiceTitan Routes — Sad Paths', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${DASHBOARD_URL}/dashboard?servicetitanError=missing_params`);
+    expect(res.headers.location).toBe(
+      `${DASHBOARD_URL}/dashboard?servicetitanError=missing_params`
+    );
   });
 
   it('10. GET /servicetitan/auth/callback redirects with error on bad state', async () => {
@@ -357,7 +368,9 @@ describe('ServiceTitan Routes — Sad Paths', () => {
     // WHERE: src/routes/servicetitan.ts registerServiceTitanRoutes — GET /servicetitan/auth/callback token exchange try/catch
     // WHY: Without catching this, a ServiceTitan outage during OAuth would show a raw 500 error — user sees broken page instead of "connection failed, try again"
     vi.mocked(servicetitanClient.verifyState).mockReturnValue(TENANT_ID);
-    vi.mocked(servicetitanClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
+    vi.mocked(servicetitanClient.exchangeCodeForTokens).mockRejectedValue(
+      new Error('OAuth exchange failed')
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -365,7 +378,9 @@ describe('ServiceTitan Routes — Sad Paths', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${DASHBOARD_URL}/dashboard?servicetitanError=token_exchange_failed`);
+    expect(res.headers.location).toBe(
+      `${DASHBOARD_URL}/dashboard?servicetitanError=token_exchange_failed`
+    );
   });
 
   it('12. GET /servicetitan/settings returns null when not connected', async () => {

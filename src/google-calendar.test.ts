@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
-import jwt from "jsonwebtoken";
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import jwt from 'jsonwebtoken';
 
 // --- Mock googleapis before importing the module under test ---
 
@@ -21,7 +21,7 @@ const mockOAuth2Instance = {
   setCredentials: mockSetCredentials,
 };
 
-vi.mock("googleapis", () => {
+vi.mock('googleapis', () => {
   // Must use a real function (not arrow) so it can be called with `new`
   function OAuth2() {
     return mockOAuth2Instance;
@@ -50,10 +50,10 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
-} from "./services/googleCalendar";
+} from './services/googleCalendar';
 
-const JWT_SECRET = "test-jwt-secret";
-const TENANT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const JWT_SECRET = 'test-jwt-secret';
+const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
 const originalEnv = process.env;
 
@@ -67,17 +67,17 @@ afterAll(() => {
 });
 
 function setGoogleEnv() {
-  process.env.GOOGLE_CLIENT_ID = "test-client-id";
-  process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
-  process.env.GOOGLE_CALLBACK_URL = "http://localhost:4001/calendar/callback";
+  process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+  process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
+  process.env.GOOGLE_CALLBACK_URL = 'http://localhost:4001/calendar/callback';
   process.env.JWT_SECRET = JWT_SECRET;
 }
 
 // ---------------------------------------------------------------------------
 // isGoogleCalendarEnabled
 // ---------------------------------------------------------------------------
-describe("isGoogleCalendarEnabled", () => {
-  it("returns true when all env vars are set", () => {
+describe('isGoogleCalendarEnabled', () => {
+  it('returns true when all env vars are set', () => {
     // WHO: googleCalendar.ts isGoogleCalendarEnabled()
     // WHAT: all three Google OAuth env vars are present (CLIENT_ID, CLIENT_SECRET, CALLBACK_URL)
     // WHEN: server startup or feature flag check for Google Calendar availability
@@ -87,7 +87,7 @@ describe("isGoogleCalendarEnabled", () => {
     expect(isGoogleCalendarEnabled()).toBe(true);
   });
 
-  it("returns false when GOOGLE_CLIENT_ID is missing", () => {
+  it('returns false when GOOGLE_CLIENT_ID is missing', () => {
     // WHO: googleCalendar.ts isGoogleCalendarEnabled()
     // WHAT: GOOGLE_CLIENT_ID env var is missing while others are set
     // WHEN: server startup with incomplete Google OAuth configuration
@@ -98,7 +98,7 @@ describe("isGoogleCalendarEnabled", () => {
     expect(isGoogleCalendarEnabled()).toBe(false);
   });
 
-  it("returns false when GOOGLE_CLIENT_SECRET is missing", () => {
+  it('returns false when GOOGLE_CLIENT_SECRET is missing', () => {
     // WHO: googleCalendar.ts isGoogleCalendarEnabled()
     // WHAT: GOOGLE_CLIENT_SECRET env var is missing while others are set
     // WHEN: server startup with incomplete Google OAuth configuration
@@ -109,7 +109,7 @@ describe("isGoogleCalendarEnabled", () => {
     expect(isGoogleCalendarEnabled()).toBe(false);
   });
 
-  it("returns false when GOOGLE_CALLBACK_URL is missing", () => {
+  it('returns false when GOOGLE_CALLBACK_URL is missing', () => {
     // WHO: googleCalendar.ts isGoogleCalendarEnabled()
     // WHAT: GOOGLE_CALLBACK_URL env var is missing while others are set
     // WHEN: server startup with incomplete Google OAuth configuration
@@ -120,7 +120,7 @@ describe("isGoogleCalendarEnabled", () => {
     expect(isGoogleCalendarEnabled()).toBe(false);
   });
 
-  it("returns false when all Google env vars are missing", () => {
+  it('returns false when all Google env vars are missing', () => {
     // WHO: googleCalendar.ts isGoogleCalendarEnabled()
     // WHAT: none of the Google OAuth env vars are set (fresh deployment without calendar config)
     // WHEN: server startup on deployment without Google Calendar integration
@@ -136,42 +136,42 @@ describe("isGoogleCalendarEnabled", () => {
 // ---------------------------------------------------------------------------
 // getAuthUrl
 // ---------------------------------------------------------------------------
-describe("getAuthUrl", () => {
-  it("returns a URL string when configured", () => {
+describe('getAuthUrl', () => {
+  it('returns a URL string when configured', () => {
     // WHO: googleCalendar.ts getAuthUrl()
     // WHAT: Google OAuth is fully configured and tenant requests auth URL
     // WHEN: dashboard user clicks "Connect Google Calendar" button
     // WHERE: googleCalendar.ts getAuthUrl() -> OAuth2Client.generateAuthUrl()
     // WHY: without valid URL generation, users cannot initiate Google Calendar OAuth flow
     setGoogleEnv();
-    const fakeUrl = "https://accounts.google.com/o/oauth2/v2/auth?scope=calendar";
+    const fakeUrl = 'https://accounts.google.com/o/oauth2/v2/auth?scope=calendar';
     mockGenerateAuthUrl.mockReturnValue(fakeUrl);
 
     const url = getAuthUrl(TENANT_ID);
     expect(url).toBe(fakeUrl);
   });
 
-  it("passes correct options to generateAuthUrl", () => {
+  it('passes correct options to generateAuthUrl', () => {
     // WHO: googleCalendar.ts getAuthUrl()
     // WHAT: verify OAuth2 options (access_type=offline, prompt=consent, calendar.events scope)
     // WHEN: generating Google OAuth URL for tenant calendar connection
     // WHERE: googleCalendar.ts getAuthUrl() -> generateAuthUrl() call arguments
     // WHY: wrong access_type means no refresh_token; wrong scope means calendar events can't be created/updated
     setGoogleEnv();
-    mockGenerateAuthUrl.mockReturnValue("https://accounts.google.com/auth");
+    mockGenerateAuthUrl.mockReturnValue('https://accounts.google.com/auth');
 
     getAuthUrl(TENANT_ID);
 
     expect(mockGenerateAuthUrl).toHaveBeenCalledWith(
       expect.objectContaining({
-        access_type: "offline",
-        prompt: "consent",
-        scope: ["https://www.googleapis.com/auth/calendar.events"],
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: ['https://www.googleapis.com/auth/calendar.events'],
       })
     );
   });
 
-  it("includes a signed JWT state param with tenantId and purpose", () => {
+  it('includes a signed JWT state param with tenantId and purpose', () => {
     // WHO: googleCalendar.ts getAuthUrl() state parameter
     // WHAT: state param contains signed JWT with tenantId and purpose='google-calendar-oauth'
     // WHEN: OAuth URL generation includes CSRF-protection state parameter
@@ -182,8 +182,8 @@ describe("getAuthUrl", () => {
       // Verify the state is a valid JWT
       const decoded = jwt.verify(opts.state, JWT_SECRET) as { tenantId: string; purpose: string };
       expect(decoded.tenantId).toBe(TENANT_ID);
-      expect(decoded.purpose).toBe("google-calendar-oauth");
-      return "https://accounts.google.com/auth";
+      expect(decoded.purpose).toBe('google-calendar-oauth');
+      return 'https://accounts.google.com/auth';
     });
 
     const url = getAuthUrl(TENANT_ID);
@@ -191,7 +191,7 @@ describe("getAuthUrl", () => {
     expect(mockGenerateAuthUrl).toHaveBeenCalledTimes(1);
   });
 
-  it("returns null when Google Calendar is not configured", () => {
+  it('returns null when Google Calendar is not configured', () => {
     // WHO: googleCalendar.ts getAuthUrl() when unconfigured
     // WHAT: Google OAuth env vars are missing and tenant requests auth URL
     // WHEN: dashboard checks for calendar connect URL on unconfigured deployment
@@ -210,25 +210,23 @@ describe("getAuthUrl", () => {
 // ---------------------------------------------------------------------------
 // verifyState
 // ---------------------------------------------------------------------------
-describe("verifyState", () => {
-  it("returns tenantId for a valid state JWT", () => {
+describe('verifyState', () => {
+  it('returns tenantId for a valid state JWT', () => {
     // WHO: googleCalendar.ts verifyState()
     // WHAT: valid JWT with correct tenantId, purpose, and unexpired signature
     // WHEN: Google OAuth callback returns with state parameter
     // WHERE: googleCalendar.ts verifyState() -> jwt.verify()
     // WHY: successful verification links the OAuth callback to the correct tenant for token storage
     setGoogleEnv();
-    const state = jwt.sign(
-      { tenantId: TENANT_ID, purpose: "google-calendar-oauth" },
-      JWT_SECRET,
-      { expiresIn: "10m" }
-    );
+    const state = jwt.sign({ tenantId: TENANT_ID, purpose: 'google-calendar-oauth' }, JWT_SECRET, {
+      expiresIn: '10m',
+    });
 
     const result = verifyState(state);
     expect(result).toBe(TENANT_ID);
   });
 
-  it("returns null for an expired state JWT", () => {
+  it('returns null for an expired state JWT', () => {
     // WHO: googleCalendar.ts verifyState()
     // WHAT: JWT state token has expired (user took too long to complete OAuth consent)
     // WHEN: OAuth callback received after state JWT expiration window
@@ -236,9 +234,9 @@ describe("verifyState", () => {
     // WHY: expired state allows replay attacks; attacker could reuse a captured OAuth callback URL
     setGoogleEnv();
     const state = jwt.sign(
-      { tenantId: TENANT_ID, purpose: "google-calendar-oauth" },
+      { tenantId: TENANT_ID, purpose: 'google-calendar-oauth' },
       JWT_SECRET,
-      { expiresIn: "-1s" } // already expired
+      { expiresIn: '-1s' } // already expired
     );
 
     const result = verifyState(state);
@@ -252,28 +250,26 @@ describe("verifyState", () => {
     // WHERE: googleCalendar.ts verifyState() -> purpose comparison
     // WHY: without purpose check, an Outlook OAuth state could be replayed against Google callback, cross-linking tokens
     setGoogleEnv();
-    const state = jwt.sign(
-      { tenantId: TENANT_ID, purpose: "wrong-purpose" },
-      JWT_SECRET,
-      { expiresIn: "10m" }
-    );
+    const state = jwt.sign({ tenantId: TENANT_ID, purpose: 'wrong-purpose' }, JWT_SECRET, {
+      expiresIn: '10m',
+    });
 
     const result = verifyState(state);
     expect(result).toBeNull();
   });
 
-  it("returns null for a completely invalid token", () => {
+  it('returns null for a completely invalid token', () => {
     // WHO: googleCalendar.ts verifyState()
     // WHAT: state parameter is not a JWT at all (random string, corrupted, or tampered)
     // WHEN: OAuth callback receives garbage state parameter
     // WHERE: googleCalendar.ts verifyState() -> jwt.verify() throws JsonWebTokenError
     // WHY: without rejection, malformed state could bypass tenant identification, storing tokens under wrong tenant
     setGoogleEnv();
-    const result = verifyState("not-a-jwt");
+    const result = verifyState('not-a-jwt');
     expect(result).toBeNull();
   });
 
-  it("returns null for a token signed with a different secret", () => {
+  it('returns null for a token signed with a different secret', () => {
     // WHO: googleCalendar.ts verifyState()
     // WHAT: JWT signed with wrong secret (forged by attacker or from different environment)
     // WHEN: OAuth callback receives JWT that doesn't match server's JWT_SECRET
@@ -281,9 +277,9 @@ describe("verifyState", () => {
     // WHY: without signature verification, attacker could forge state JWTs to connect their Google account to any tenant
     setGoogleEnv();
     const state = jwt.sign(
-      { tenantId: TENANT_ID, purpose: "google-calendar-oauth" },
-      "wrong-secret",
-      { expiresIn: "10m" }
+      { tenantId: TENANT_ID, purpose: 'google-calendar-oauth' },
+      'wrong-secret',
+      { expiresIn: '10m' }
     );
 
     const result = verifyState(state);
@@ -294,8 +290,8 @@ describe("verifyState", () => {
 // ---------------------------------------------------------------------------
 // exchangeCodeForTokens
 // ---------------------------------------------------------------------------
-describe("exchangeCodeForTokens", () => {
-  it("returns token set on success", async () => {
+describe('exchangeCodeForTokens', () => {
+  it('returns token set on success', async () => {
     // WHO: googleCalendar.ts exchangeCodeForTokens()
     // WHAT: valid auth code exchanged for access_token, refresh_token, and expiry_date
     // WHEN: Google OAuth callback passes auth code to backend for token exchange
@@ -305,23 +301,23 @@ describe("exchangeCodeForTokens", () => {
     const expiryDate = Date.now() + 3600 * 1000;
     mockGetToken.mockResolvedValue({
       tokens: {
-        access_token: "access-123",
-        refresh_token: "refresh-456",
+        access_token: 'access-123',
+        refresh_token: 'refresh-456',
         expiry_date: expiryDate,
       },
     });
 
-    const tokens = await exchangeCodeForTokens("auth-code-789");
+    const tokens = await exchangeCodeForTokens('auth-code-789');
 
     expect(tokens).toEqual({
-      access_token: "access-123",
-      refresh_token: "refresh-456",
+      access_token: 'access-123',
+      refresh_token: 'refresh-456',
       expiry_date: expiryDate,
     });
-    expect(mockGetToken).toHaveBeenCalledWith("auth-code-789");
+    expect(mockGetToken).toHaveBeenCalledWith('auth-code-789');
   });
 
-  it("falls back to computed expiry_date when not provided", async () => {
+  it('falls back to computed expiry_date when not provided', async () => {
     // WHO: googleCalendar.ts exchangeCodeForTokens() expiry fallback
     // WHAT: Google returns null expiry_date (rare but documented edge case)
     // WHEN: token exchange succeeds but Google omits expiry_date from response
@@ -331,13 +327,13 @@ describe("exchangeCodeForTokens", () => {
     const before = Date.now();
     mockGetToken.mockResolvedValue({
       tokens: {
-        access_token: "access-123",
-        refresh_token: "refresh-456",
+        access_token: 'access-123',
+        refresh_token: 'refresh-456',
         expiry_date: null,
       },
     });
 
-    const tokens = await exchangeCodeForTokens("auth-code");
+    const tokens = await exchangeCodeForTokens('auth-code');
     const after = Date.now();
 
     // Should be roughly now + 1 hour
@@ -345,7 +341,7 @@ describe("exchangeCodeForTokens", () => {
     expect(tokens.expiry_date).toBeLessThanOrEqual(after + 3600 * 1000);
   });
 
-  it("throws when access_token is missing", async () => {
+  it('throws when access_token is missing', async () => {
     // WHO: googleCalendar.ts exchangeCodeForTokens() validation
     // WHAT: Google returns null access_token (invalid or expired auth code)
     // WHEN: token exchange response lacks access_token
@@ -353,15 +349,15 @@ describe("exchangeCodeForTokens", () => {
     // WHY: without validation, null access_token would be stored in DB and cause all subsequent calendar API calls to fail with 401
     setGoogleEnv();
     mockGetToken.mockResolvedValue({
-      tokens: { access_token: null, refresh_token: "refresh-456" },
+      tokens: { access_token: null, refresh_token: 'refresh-456' },
     });
 
-    await expect(exchangeCodeForTokens("auth-code")).rejects.toThrow(
-      "Failed to get tokens from Google"
+    await expect(exchangeCodeForTokens('auth-code')).rejects.toThrow(
+      'Failed to get tokens from Google'
     );
   });
 
-  it("throws when refresh_token is missing", async () => {
+  it('throws when refresh_token is missing', async () => {
     // WHO: googleCalendar.ts exchangeCodeForTokens() validation
     // WHAT: Google returns null refresh_token (user didn't grant offline access or already had a token)
     // WHEN: token exchange response lacks refresh_token
@@ -369,15 +365,15 @@ describe("exchangeCodeForTokens", () => {
     // WHY: without refresh_token, calendar sync breaks after access_token expires (1h), requiring manual re-OAuth
     setGoogleEnv();
     mockGetToken.mockResolvedValue({
-      tokens: { access_token: "access-123", refresh_token: null },
+      tokens: { access_token: 'access-123', refresh_token: null },
     });
 
-    await expect(exchangeCodeForTokens("auth-code")).rejects.toThrow(
-      "Failed to get tokens from Google"
+    await expect(exchangeCodeForTokens('auth-code')).rejects.toThrow(
+      'Failed to get tokens from Google'
     );
   });
 
-  it("throws when Google Calendar is not configured", async () => {
+  it('throws when Google Calendar is not configured', async () => {
     // WHO: googleCalendar.ts exchangeCodeForTokens() config guard
     // WHAT: Google OAuth env vars are missing during token exchange attempt
     // WHEN: OAuth callback hits backend that doesn't have Google Calendar configured
@@ -387,8 +383,8 @@ describe("exchangeCodeForTokens", () => {
     delete process.env.GOOGLE_CLIENT_SECRET;
     delete process.env.GOOGLE_CALLBACK_URL;
 
-    await expect(exchangeCodeForTokens("auth-code")).rejects.toThrow(
-      "Google Calendar not configured"
+    await expect(exchangeCodeForTokens('auth-code')).rejects.toThrow(
+      'Google Calendar not configured'
     );
   });
 });
@@ -396,8 +392,8 @@ describe("exchangeCodeForTokens", () => {
 // ---------------------------------------------------------------------------
 // refreshAccessToken
 // ---------------------------------------------------------------------------
-describe("refreshAccessToken", () => {
-  it("returns refreshed credentials on success", async () => {
+describe('refreshAccessToken', () => {
+  it('returns refreshed credentials on success', async () => {
     // WHO: googleCalendar.ts refreshAccessToken()
     // WHAT: valid refresh_token exchanged for new access_token and expiry_date
     // WHEN: calendarSync detects expired token and triggers refresh before API call
@@ -407,23 +403,23 @@ describe("refreshAccessToken", () => {
     const expiryDate = Date.now() + 3600 * 1000;
     mockRefreshAccessToken.mockResolvedValue({
       credentials: {
-        access_token: "new-access-token",
+        access_token: 'new-access-token',
         expiry_date: expiryDate,
       },
     });
 
-    const result = await refreshAccessToken("old-refresh-token");
+    const result = await refreshAccessToken('old-refresh-token');
 
     expect(result).toEqual({
-      access_token: "new-access-token",
+      access_token: 'new-access-token',
       expiry_date: expiryDate,
     });
     expect(mockSetCredentials).toHaveBeenCalledWith({
-      refresh_token: "old-refresh-token",
+      refresh_token: 'old-refresh-token',
     });
   });
 
-  it("falls back to computed expiry_date when not provided", async () => {
+  it('falls back to computed expiry_date when not provided', async () => {
     // WHO: googleCalendar.ts refreshAccessToken() expiry fallback
     // WHAT: Google refresh response returns null expiry_date
     // WHEN: token refresh succeeds but Google omits expiry_date from credentials
@@ -432,17 +428,17 @@ describe("refreshAccessToken", () => {
     setGoogleEnv();
     const before = Date.now();
     mockRefreshAccessToken.mockResolvedValue({
-      credentials: { access_token: "new-access-token", expiry_date: null },
+      credentials: { access_token: 'new-access-token', expiry_date: null },
     });
 
-    const result = await refreshAccessToken("old-refresh-token");
+    const result = await refreshAccessToken('old-refresh-token');
     const after = Date.now();
 
     expect(result.expiry_date).toBeGreaterThanOrEqual(before + 3600 * 1000);
     expect(result.expiry_date).toBeLessThanOrEqual(after + 3600 * 1000);
   });
 
-  it("throws when access_token is missing from refreshed credentials", async () => {
+  it('throws when access_token is missing from refreshed credentials', async () => {
     // WHO: googleCalendar.ts refreshAccessToken() validation
     // WHAT: Google refresh returns null access_token (refresh_token may be revoked)
     // WHEN: token refresh response lacks access_token
@@ -453,12 +449,12 @@ describe("refreshAccessToken", () => {
       credentials: { access_token: null },
     });
 
-    await expect(refreshAccessToken("old-refresh-token")).rejects.toThrow(
-      "Failed to refresh Google access token"
+    await expect(refreshAccessToken('old-refresh-token')).rejects.toThrow(
+      'Failed to refresh Google access token'
     );
   });
 
-  it("throws when Google Calendar is not configured", async () => {
+  it('throws when Google Calendar is not configured', async () => {
     // WHO: googleCalendar.ts refreshAccessToken() config guard
     // WHAT: Google OAuth env vars are missing during token refresh
     // WHEN: calendarSync attempts token refresh on unconfigured deployment
@@ -468,8 +464,8 @@ describe("refreshAccessToken", () => {
     delete process.env.GOOGLE_CLIENT_SECRET;
     delete process.env.GOOGLE_CALLBACK_URL;
 
-    await expect(refreshAccessToken("old-refresh-token")).rejects.toThrow(
-      "Google Calendar not configured"
+    await expect(refreshAccessToken('old-refresh-token')).rejects.toThrow(
+      'Google Calendar not configured'
     );
   });
 });
@@ -477,8 +473,8 @@ describe("refreshAccessToken", () => {
 // ---------------------------------------------------------------------------
 // revokeToken
 // ---------------------------------------------------------------------------
-describe("revokeToken", () => {
-  it("calls revokeToken on the OAuth client", async () => {
+describe('revokeToken', () => {
+  it('calls revokeToken on the OAuth client', async () => {
     // WHO: googleCalendar.ts revokeToken()
     // WHAT: tenant disconnects Google Calendar and their token is revoked
     // WHEN: user clicks "Disconnect Google Calendar" in dashboard settings
@@ -487,24 +483,24 @@ describe("revokeToken", () => {
     setGoogleEnv();
     mockRevokeToken.mockResolvedValue(undefined);
 
-    await revokeToken("token-to-revoke");
+    await revokeToken('token-to-revoke');
 
-    expect(mockRevokeToken).toHaveBeenCalledWith("token-to-revoke");
+    expect(mockRevokeToken).toHaveBeenCalledWith('token-to-revoke');
   });
 
-  it("does not throw when revokeToken fails (best-effort)", async () => {
+  it('does not throw when revokeToken fails (best-effort)', async () => {
     // WHO: googleCalendar.ts revokeToken() error handling
     // WHAT: Google revoke endpoint returns error (token already revoked or network failure)
     // WHEN: disconnect flow attempts to revoke an already-invalid token
     // WHERE: googleCalendar.ts revokeToken() -> try/catch swallows error
     // WHY: revocation is best-effort; failing to revoke should not block the disconnect flow or surface errors to the user
     setGoogleEnv();
-    mockRevokeToken.mockRejectedValue(new Error("revoke failed"));
+    mockRevokeToken.mockRejectedValue(new Error('revoke failed'));
 
-    await expect(revokeToken("token-to-revoke")).resolves.toBeUndefined();
+    await expect(revokeToken('token-to-revoke')).resolves.toBeUndefined();
   });
 
-  it("silently returns when Google Calendar is not configured", async () => {
+  it('silently returns when Google Calendar is not configured', async () => {
     // WHO: googleCalendar.ts revokeToken() when unconfigured
     // WHAT: Google OAuth env vars missing during token revocation attempt
     // WHEN: disconnect flow runs on deployment without Google Calendar config
@@ -514,7 +510,7 @@ describe("revokeToken", () => {
     delete process.env.GOOGLE_CLIENT_SECRET;
     delete process.env.GOOGLE_CALLBACK_URL;
 
-    await expect(revokeToken("token-to-revoke")).resolves.toBeUndefined();
+    await expect(revokeToken('token-to-revoke')).resolves.toBeUndefined();
     expect(mockRevokeToken).not.toHaveBeenCalled();
   });
 });
@@ -522,76 +518,80 @@ describe("revokeToken", () => {
 // ---------------------------------------------------------------------------
 // createEvent
 // ---------------------------------------------------------------------------
-describe("createEvent", () => {
+describe('createEvent', () => {
   const eventInput = {
-    summary: "Oil Change",
-    description: "Full synthetic",
-    start: "2026-04-01T09:00:00",
-    end: "2026-04-01T10:00:00",
-    location: "Bay 3",
-    timeZone: "America/New_York",
+    summary: 'Oil Change',
+    description: 'Full synthetic',
+    start: '2026-04-01T09:00:00',
+    end: '2026-04-01T10:00:00',
+    location: 'Bay 3',
+    timeZone: 'America/New_York',
   };
 
-  it("returns the event ID from Google Calendar", async () => {
+  it('returns the event ID from Google Calendar', async () => {
     // WHO: googleCalendar.ts createEvent()
     // WHAT: valid event input creates a Google Calendar event and returns its ID
     // WHEN: calendarSync triggers event creation after appointment is booked
     // WHERE: googleCalendar.ts createEvent() -> google.calendar.events.insert()
     // WHY: returned event ID is stored in appointment_sync_map for future updates/deletes; without it, sync_map is incomplete
     setGoogleEnv();
-    mockEventsInsert.mockResolvedValue({ data: { id: "gcal-event-123" } });
+    mockEventsInsert.mockResolvedValue({ data: { id: 'gcal-event-123' } });
 
-    const id = await createEvent("access", "refresh", "primary", eventInput);
+    const id = await createEvent('access', 'refresh', 'primary', eventInput);
 
-    expect(id).toBe("gcal-event-123");
+    expect(id).toBe('gcal-event-123');
   });
 
-  it("passes correct parameters to events.insert", async () => {
+  it('passes correct parameters to events.insert', async () => {
     // WHO: googleCalendar.ts createEvent() parameter mapping
     // WHAT: event input fields are correctly mapped to Google Calendar API format
     // WHEN: createEvent builds the events.insert() request body
     // WHERE: googleCalendar.ts createEvent() -> events.insert({ calendarId, requestBody })
     // WHY: incorrect field mapping causes events to appear with wrong times, missing location, or on the wrong calendar
     setGoogleEnv();
-    mockEventsInsert.mockResolvedValue({ data: { id: "gcal-event-123" } });
+    mockEventsInsert.mockResolvedValue({ data: { id: 'gcal-event-123' } });
 
-    await createEvent("access", "refresh", "cal-id", eventInput);
+    await createEvent('access', 'refresh', 'cal-id', eventInput);
 
     expect(mockEventsInsert).toHaveBeenCalledWith({
-      calendarId: "cal-id",
+      calendarId: 'cal-id',
       requestBody: {
-        summary: "Oil Change",
-        description: "Full synthetic",
-        location: "Bay 3",
-        start: { dateTime: "2026-04-01T09:00:00", timeZone: "America/New_York" },
-        end: { dateTime: "2026-04-01T10:00:00", timeZone: "America/New_York" },
+        summary: 'Oil Change',
+        description: 'Full synthetic',
+        location: 'Bay 3',
+        start: { dateTime: '2026-04-01T09:00:00', timeZone: 'America/New_York' },
+        end: { dateTime: '2026-04-01T10:00:00', timeZone: 'America/New_York' },
       },
     });
   });
 
-  it("defaults timeZone to America/Chicago when not specified", async () => {
+  it('defaults timeZone to America/Chicago when not specified', async () => {
     // WHO: googleCalendar.ts createEvent() timezone default
     // WHAT: event input has no timeZone field (legacy data or omitted by caller)
     // WHEN: createEvent builds event body without explicit timezone
     // WHERE: googleCalendar.ts createEvent() -> timeZone fallback to 'America/Chicago'
     // WHY: without default timezone, Google interprets times as UTC, causing events to appear at wrong local times (e.g., 9am shows as 3am CST)
     setGoogleEnv();
-    mockEventsInsert.mockResolvedValue({ data: { id: "gcal-event-456" } });
+    mockEventsInsert.mockResolvedValue({ data: { id: 'gcal-event-456' } });
 
-    const noTzEvent = { summary: "Tire Rotation", start: "2026-04-01T09:00:00", end: "2026-04-01T09:30:00" };
-    await createEvent("access", "refresh", "primary", noTzEvent);
+    const noTzEvent = {
+      summary: 'Tire Rotation',
+      start: '2026-04-01T09:00:00',
+      end: '2026-04-01T09:30:00',
+    };
+    await createEvent('access', 'refresh', 'primary', noTzEvent);
 
     expect(mockEventsInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: expect.objectContaining({
-          start: { dateTime: "2026-04-01T09:00:00", timeZone: "America/Chicago" },
-          end: { dateTime: "2026-04-01T09:30:00", timeZone: "America/Chicago" },
+          start: { dateTime: '2026-04-01T09:00:00', timeZone: 'America/Chicago' },
+          end: { dateTime: '2026-04-01T09:30:00', timeZone: 'America/Chicago' },
         }),
       })
     );
   });
 
-  it("throws when Google Calendar returns no event ID", async () => {
+  it('throws when Google Calendar returns no event ID', async () => {
     // WHO: googleCalendar.ts createEvent() response validation
     // WHAT: Google Calendar API returns success but empty data (no event ID)
     // WHEN: events.insert() succeeds but response lacks id field (API anomaly)
@@ -600,12 +600,12 @@ describe("createEvent", () => {
     setGoogleEnv();
     mockEventsInsert.mockResolvedValue({ data: {} });
 
-    await expect(
-      createEvent("access", "refresh", "primary", eventInput)
-    ).rejects.toThrow("Google Calendar did not return an event ID");
+    await expect(createEvent('access', 'refresh', 'primary', eventInput)).rejects.toThrow(
+      'Google Calendar did not return an event ID'
+    );
   });
 
-  it("throws when Google Calendar is not configured", async () => {
+  it('throws when Google Calendar is not configured', async () => {
     // WHO: googleCalendar.ts createEvent() config guard
     // WHAT: Google OAuth env vars missing during event creation
     // WHEN: calendarSync attempts to create event on unconfigured deployment
@@ -613,24 +613,24 @@ describe("createEvent", () => {
     // WHY: without guard, OAuth2 client construction throws cryptic error instead of clear "not configured" message
     delete process.env.GOOGLE_CLIENT_ID;
 
-    await expect(
-      createEvent("access", "refresh", "primary", eventInput)
-    ).rejects.toThrow("Google Calendar not configured");
+    await expect(createEvent('access', 'refresh', 'primary', eventInput)).rejects.toThrow(
+      'Google Calendar not configured'
+    );
   });
 });
 
 // ---------------------------------------------------------------------------
 // updateEvent
 // ---------------------------------------------------------------------------
-describe("updateEvent", () => {
+describe('updateEvent', () => {
   const eventInput = {
-    summary: "Updated Appointment",
-    start: "2026-04-01T11:00:00",
-    end: "2026-04-01T12:00:00",
-    timeZone: "America/Denver",
+    summary: 'Updated Appointment',
+    start: '2026-04-01T11:00:00',
+    end: '2026-04-01T12:00:00',
+    timeZone: 'America/Denver',
   };
 
-  it("calls events.update with correct parameters", async () => {
+  it('calls events.update with correct parameters', async () => {
     // WHO: googleCalendar.ts updateEvent()
     // WHAT: existing Google Calendar event updated with new summary, times, and timezone
     // WHEN: calendarSync triggers event update after appointment is rescheduled
@@ -639,22 +639,22 @@ describe("updateEvent", () => {
     setGoogleEnv();
     mockEventsUpdate.mockResolvedValue({ data: {} });
 
-    await updateEvent("access", "refresh", "cal-id", "event-id", eventInput);
+    await updateEvent('access', 'refresh', 'cal-id', 'event-id', eventInput);
 
     expect(mockEventsUpdate).toHaveBeenCalledWith({
-      calendarId: "cal-id",
-      eventId: "event-id",
+      calendarId: 'cal-id',
+      eventId: 'event-id',
       requestBody: {
-        summary: "Updated Appointment",
+        summary: 'Updated Appointment',
         description: undefined,
         location: undefined,
-        start: { dateTime: "2026-04-01T11:00:00", timeZone: "America/Denver" },
-        end: { dateTime: "2026-04-01T12:00:00", timeZone: "America/Denver" },
+        start: { dateTime: '2026-04-01T11:00:00', timeZone: 'America/Denver' },
+        end: { dateTime: '2026-04-01T12:00:00', timeZone: 'America/Denver' },
       },
     });
   });
 
-  it("throws when Google Calendar is not configured", async () => {
+  it('throws when Google Calendar is not configured', async () => {
     // WHO: googleCalendar.ts updateEvent() config guard
     // WHAT: Google OAuth env vars missing during event update
     // WHEN: calendarSync attempts to update event on unconfigured deployment
@@ -663,16 +663,16 @@ describe("updateEvent", () => {
     delete process.env.GOOGLE_CLIENT_ID;
 
     await expect(
-      updateEvent("access", "refresh", "cal-id", "event-id", eventInput)
-    ).rejects.toThrow("Google Calendar not configured");
+      updateEvent('access', 'refresh', 'cal-id', 'event-id', eventInput)
+    ).rejects.toThrow('Google Calendar not configured');
   });
 });
 
 // ---------------------------------------------------------------------------
 // deleteEvent
 // ---------------------------------------------------------------------------
-describe("deleteEvent", () => {
-  it("calls events.delete with correct parameters", async () => {
+describe('deleteEvent', () => {
+  it('calls events.delete with correct parameters', async () => {
     // WHO: googleCalendar.ts deleteEvent()
     // WHAT: Google Calendar event deleted by calendarId and eventId
     // WHEN: calendarSync triggers event deletion after appointment is cancelled
@@ -681,15 +681,15 @@ describe("deleteEvent", () => {
     setGoogleEnv();
     mockEventsDelete.mockResolvedValue({ data: {} });
 
-    await deleteEvent("access", "refresh", "cal-id", "event-id");
+    await deleteEvent('access', 'refresh', 'cal-id', 'event-id');
 
     expect(mockEventsDelete).toHaveBeenCalledWith({
-      calendarId: "cal-id",
-      eventId: "event-id",
+      calendarId: 'cal-id',
+      eventId: 'event-id',
     });
   });
 
-  it("throws when Google Calendar is not configured", async () => {
+  it('throws when Google Calendar is not configured', async () => {
     // WHO: googleCalendar.ts deleteEvent() config guard
     // WHAT: Google OAuth env vars missing during event deletion
     // WHEN: calendarSync attempts to delete event on unconfigured deployment
@@ -697,8 +697,8 @@ describe("deleteEvent", () => {
     // WHY: without guard, delete attempt on unconfigured server throws cryptic error instead of clear message
     delete process.env.GOOGLE_CLIENT_ID;
 
-    await expect(
-      deleteEvent("access", "refresh", "cal-id", "event-id")
-    ).rejects.toThrow("Google Calendar not configured");
+    await expect(deleteEvent('access', 'refresh', 'cal-id', 'event-id')).rejects.toThrow(
+      'Google Calendar not configured'
+    );
   });
 });

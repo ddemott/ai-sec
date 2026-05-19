@@ -4,7 +4,19 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource,  createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import {
+  getRootClient,
+  clearDB,
+  createTenant,
+  createEmployee,
+  createScheduleEntry,
+  createResource,
+  createCustomer,
+  createAppointment,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
 
 describe('Fix #30: Night shifts (cross-midnight)', () => {
   let client: Client;
@@ -16,7 +28,9 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
   beforeAll(async () => {
     try {
       client = await getRootClient();
-      const res = await client.query("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')");
+      const res = await client.query(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')"
+      );
       if (!res.rows[0].exists) {
         console.warn('[night-shift] employee_schedule table missing, skipping DB tests');
         return;
@@ -64,7 +78,9 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
 
     // Cleanup
     if (result.rows[0].appointment_id) {
-      await client.query("DELETE FROM appointments WHERE appointment_id = $1", [result.rows[0].appointment_id]);
+      await client.query('DELETE FROM appointments WHERE appointment_id = $1', [
+        result.rows[0].appointment_id,
+      ]);
     }
   });
 
@@ -84,7 +100,9 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
     expect(result.rows[0].success).toBe(true);
 
     if (result.rows[0].appointment_id) {
-      await client.query("DELETE FROM appointments WHERE appointment_id = $1", [result.rows[0].appointment_id]);
+      await client.query('DELETE FROM appointments WHERE appointment_id = $1', [
+        result.rows[0].appointment_id,
+      ]);
     }
   });
 
@@ -117,7 +135,9 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
   beforeAll(async () => {
     try {
       client = await getRootClient();
-      const res = await client.query("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')");
+      const res = await client.query(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')"
+      );
       if (!res.rows[0].exists) {
         console.warn('[availability] employee_schedule table missing, skipping DB tests');
         return;
@@ -167,8 +187,15 @@ describe('Fix #32: check_availability_with_tz with employee_schedule', () => {
 
     await createScheduleEntry(client, tenantId, employeeId, '2026-06-01', '08:00', '17:00');
     const custId = await createCustomer(client, tenantId, 'Existing', '+15559990001');
-    await createAppointment(client, tenantId, resourceId, custId,
-      '2026-06-01T10:00:00-05:00', '2026-06-01T11:00:00-05:00', 'Existing booking');
+    await createAppointment(
+      client,
+      tenantId,
+      resourceId,
+      custId,
+      '2026-06-01T10:00:00-05:00',
+      '2026-06-01T11:00:00-05:00',
+      'Existing booking'
+    );
 
     const result = await client.query(
       "SELECT * FROM check_availability_with_tz($1, $2, '2026-06-01T10:00:00-05:00'::TIMESTAMPTZ, '2026-06-01T10:30:00-05:00'::TIMESTAMPTZ)",

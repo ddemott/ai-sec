@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock servicetitanClient before importing servicetitanSync
 vi.mock('./services/servicetitanClient', () => ({
@@ -18,9 +18,9 @@ import {
   syncAppointmentToServiceTitan,
   pullServiceTitanCustomer,
   fullSync,
-} from "./services/servicetitanSync";
-import * as servicetitan from "./services/servicetitanClient";
-import type { ServiceTitanJob } from "./services/servicetitanClient";
+} from './services/servicetitanSync';
+import * as servicetitan from './services/servicetitanClient';
+import type { ServiceTitanJob } from './services/servicetitanClient';
 
 // ---- Mock helpers ----
 
@@ -74,7 +74,9 @@ function makeAppointmentRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeServiceTitanCustomerData(overrides: Record<string, unknown> = {}): servicetitan.ServiceTitanCustomer {
+function makeServiceTitanCustomerData(
+  overrides: Record<string, unknown> = {}
+): servicetitan.ServiceTitanCustomer {
   return {
     id: ST_CUSTOMER_ID,
     name: 'Jane Smith',
@@ -92,9 +94,9 @@ import { createMockClient as createBaseMockClient, createMockPool } from './test
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
-      (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
-    );
+    (
+      base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }
+    ).mock.calls.filter((call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'));
   return { ...base, getDataQueries };
 }
 
@@ -116,8 +118,8 @@ beforeEach(() => {
 // HAPPY PATHS — PUSH
 // =============================================
 
-describe("ServiceTitan Sync — Push Happy Paths", () => {
-  it("PUSH-CREATE: When tenant pushes new customer to ServiceTitan, system creates customer via API and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
+describe('ServiceTitan Sync — Push Happy Paths', () => {
+  it('PUSH-CREATE: When tenant pushes new customer to ServiceTitan, system creates customer via API and records mapping in sync_map so future syncs can update rather than duplicate', async () => {
     // WHO: syncCustomerToServiceTitan with action='create'
     // WHAT: Local customer exists, no entity_sync_map entry — triggers createCustomer REST API call with ST-App-Key auth
     // WHEN: Push sync after new customer created in dashboard or via voice AI booking
@@ -151,10 +153,12 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
       'valid-access-token',
       APP_KEY,
       TENANT_SID,
-      expect.objectContaining({ name: 'John Doe' }),
+      expect.objectContaining({ name: 'John Doe' })
     );
     expect(mockClient.release).toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to ServiceTitan'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to ServiceTitan')
+    );
 
     // Verify sync map INSERT was called with correct external_id
     const insertQuery = mockClient.query.mock.calls[3];
@@ -162,7 +166,7 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(String(ST_CUSTOMER_ID));
   });
 
-  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing ServiceTitan customer using stored external_id to maintain data consistency across systems", async () => {
+  it('PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing ServiceTitan customer using stored external_id to maintain data consistency across systems', async () => {
     // WHO: syncCustomerToServiceTitan with action='update'
     // WHAT: Local customer updated, entity_sync_map has existing external_id — triggers updateCustomer REST API call
     // WHEN: Push sync after customer phone/email/name edited in dashboard
@@ -197,13 +201,15 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
       APP_KEY,
       TENANT_SID,
       String(ST_CUSTOMER_ID),
-      expect.objectContaining({ name: 'John Doe' }),
+      expect.objectContaining({ name: 'John Doe' })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer updated in ServiceTitan'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer updated in ServiceTitan')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling ServiceTitan API, preserving ServiceTitan data while breaking the link", async () => {
+  it('PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling ServiceTitan API, preserving ServiceTitan data while breaking the link', async () => {
     // WHO: syncCustomerToServiceTitan with action='delete'
     // WHAT: Local customer soft-deleted, sync_map entry exists — only removes mapping, no ServiceTitan API call
     // WHEN: Push sync after customer deleted from dashboard
@@ -223,11 +229,13 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     // Should NOT call ServiceTitan API at all
     expect(servicetitan.createCustomer).not.toHaveBeenCalled();
     expect(servicetitan.updateCustomer).not.toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry removed'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry removed')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-APPOINTMENT: When tenant creates appointment, system creates ServiceTitan job linked to the customer so field service dispatch system shows scheduled work", async () => {
+  it('PUSH-APPOINTMENT: When tenant creates appointment, system creates ServiceTitan job linked to the customer so field service dispatch system shows scheduled work', async () => {
     // WHO: syncAppointmentToServiceTitan with action='create'
     // WHAT: Local appointment with synced customer — triggers createJob REST API call with customerId from sync_map
     // WHEN: Push sync after appointment booked via dashboard or voice AI
@@ -267,13 +275,15 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
       expect.objectContaining({
         summary: 'Oil Change - John Doe',
         customerId: ST_CUSTOMER_ID,
-      }),
+      })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to ServiceTitan as job'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to ServiceTitan as job')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates job, ensuring referential integrity in ServiceTitan", async () => {
+  it('PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates job, ensuring referential integrity in ServiceTitan', async () => {
     // WHO: syncAppointmentToServiceTitan calling syncCustomerToServiceTitan recursively
     // WHAT: Appointment's customer has no sync_map entry — system auto-syncs customer before creating job
     // WHEN: Push sync when voice AI books appointment for a brand-new caller (customer created moments before)
@@ -344,8 +354,12 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
     // Should have called createCustomer once and createJob once
     expect(servicetitan.createCustomer).toHaveBeenCalledOnce();
     expect(servicetitan.createJob).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to ServiceTitan'));
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to ServiceTitan as job'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to ServiceTitan')
+    );
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to ServiceTitan as job')
+    );
   });
 });
 
@@ -353,8 +367,8 @@ describe("ServiceTitan Sync — Push Happy Paths", () => {
 // HAPPY PATHS — PULL
 // =============================================
 
-describe("ServiceTitan Sync — Pull Happy Paths", () => {
-  it("PULL-CREATE: When ServiceTitan customer has no local match (by sync_map or phone), system creates new customer locally so field service leads appear in scheduling system", async () => {
+describe('ServiceTitan Sync — Pull Happy Paths', () => {
+  it('PULL-CREATE: When ServiceTitan customer has no local match (by sync_map or phone), system creates new customer locally so field service leads appear in scheduling system', async () => {
     // WHO: pullServiceTitanCustomer processing a new ServiceTitan customer
     // WHAT: No entity_sync_map match AND no customers row matching phone — triggers INSERT INTO customers + sync_map
     // WHEN: Pull sync during fullSync when ServiceTitan customer was created by dispatch team outside SecretaryHQ
@@ -377,7 +391,9 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
 
     await pullServiceTitanCustomer(pool, TENANT_ID, makeServiceTitanCustomerData(), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from servicetitan customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local customer from servicetitan customer')
+    );
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query
@@ -387,7 +403,7 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("PULL-MERGE-REMOTE-WINS: When ServiceTitan customer matches local customer by phone and ServiceTitan data is newer, system updates local record to keep most recent data from dispatch system", async () => {
+  it('PULL-MERGE-REMOTE-WINS: When ServiceTitan customer matches local customer by phone and ServiceTitan data is newer, system updates local record to keep most recent data from dispatch system', async () => {
     // WHO: pullServiceTitanCustomer merging with existing local customer
     // WHAT: Phone match found, ServiceTitan modifiedOn (2026-03-25) > local updated_at (2026-03-10) — remote wins timestamp merge
     // WHEN: Pull sync when dispatch tech updated customer address in ServiceTitan after original booking
@@ -400,7 +416,9 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }],
+    });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -412,7 +430,9 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
 
     await pullServiceTitanCustomer(pool, TENANT_ID, customerData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged servicetitan customer into existing customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('merged servicetitan customer into existing customer')
+    );
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued
@@ -420,7 +440,7 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     expect(updateCall[0]).toContain('UPDATE customers');
   });
 
-  it("PULL-MERGE-LOCAL-WINS: When ServiceTitan customer matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+  it('PULL-MERGE-LOCAL-WINS: When ServiceTitan customer matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites', async () => {
     // WHO: pullServiceTitanCustomer merging with existing local customer where local is newer
     // WHAT: Phone match found, local updated_at (2026-03-28) > ServiceTitan modifiedOn (2026-03-25) — local wins, no UPDATE issued
     // WHEN: Pull sync when receptionist updated customer info via dashboard after ServiceTitan's last modification
@@ -433,7 +453,9 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }],
+    });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -452,8 +474,8 @@ describe("ServiceTitan Sync — Pull Happy Paths", () => {
 // SAD PATHS
 // =============================================
 
-describe("ServiceTitan Sync — Sad Paths", () => {
-  it("NO-SETTINGS: When tenant has no ServiceTitan integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
+describe('ServiceTitan Sync — Sad Paths', () => {
+  it('NO-SETTINGS: When tenant has no ServiceTitan integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors', async () => {
     // WHO: getTokensWithRefresh for a tenant without ServiceTitan integration
     // WHAT: tenant_integration_settings query returns 0 rows — function returns null
     // WHEN: Push/pull sync triggered for tenant that never connected ServiceTitan OAuth
@@ -489,7 +511,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("MISSING-APP-KEY: When SERVICETITAN_APP_KEY environment variable is not configured, system returns null and logs error because API authentication requires the app key", async () => {
+  it('MISSING-APP-KEY: When SERVICETITAN_APP_KEY environment variable is not configured, system returns null and logs error because API authentication requires the app key', async () => {
     // WHO: getTokensWithRefresh when SERVICETITAN_APP_KEY env var is missing
     // WHAT: process.env.SERVICETITAN_APP_KEY is undefined — function returns null with warning log
     // WHEN: Deployment misconfiguration where env var was not set in Railway or local .env
@@ -504,11 +526,13 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     const result = await getTokensWithRefresh(pool, TENANT_ID, silentLogger);
 
     expect(result).toBeNull();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('SERVICETITAN_APP_KEY not set'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('SERVICETITAN_APP_KEY not set')
+    );
     // Note: appKey check happens before pool.connect(), so client may not be acquired
   });
 
-  it("MISSING-TENANT-SID: When integration settings lack tenant_sid (ServiceTitan tenant identifier), system returns null because API calls require the tenant context", async () => {
+  it('MISSING-TENANT-SID: When integration settings lack tenant_sid (ServiceTitan tenant identifier), system returns null because API calls require the tenant context', async () => {
     // WHO: getTokensWithRefresh when integration settings.tenant_sid is missing
     // WHAT: tenant_integration_settings.settings is empty object {} — no tenant_sid field, returns null
     // WHEN: Integration created via OAuth but tenant_sid was not captured during callback (incomplete setup)
@@ -526,7 +550,7 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked ServiceTitan authorization), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
+  it('TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked ServiceTitan authorization), system marks integration inactive in DB and returns null to prevent repeated failed API calls', async () => {
     // WHO: getTokensWithRefresh when token is expired and refresh fails
     // WHAT: token_expires_at is in the past, refreshAccessToken throws 'OAuth grant revoked' — marks is_active=false in DB
     // WHEN: Sync triggered after user revoked ServiceTitan OAuth access from their ST account settings
@@ -537,21 +561,29 @@ describe("ServiceTitan Sync — Sad Paths", () => {
 
     // Token is expired (forces refresh)
     queryResponses.push({
-      rows: [makeIntegrationSettings({
-        token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
-      })],
+      rows: [
+        makeIntegrationSettings({
+          token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
+        }),
+      ],
     });
 
     // UPDATE to mark inactive
     queryResponses.push({ rows: [] });
 
-    vi.mocked(servicetitan.refreshAccessToken).mockRejectedValueOnce(new Error('OAuth grant revoked'));
+    vi.mocked(servicetitan.refreshAccessToken).mockRejectedValueOnce(
+      new Error('OAuth grant revoked')
+    );
 
     const result = await getTokensWithRefresh(pool, TENANT_ID, silentLogger);
 
     expect(result).toBeNull();
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('token refresh FAILED'));
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('integration marked inactive'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('token refresh FAILED')
+    );
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('integration marked inactive')
+    );
 
     // Should have issued UPDATE to set is_active = false
     const updateCall = mockClient.query.mock.calls[1];
@@ -577,11 +609,13 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     await syncCustomerToServiceTitan(pool, TENANT_ID, CUSTOMER_ID, 'create', silentLogger);
 
     expect(servicetitan.createCustomer).not.toHaveBeenCalled();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('customer not found in DB'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('customer not found in DB')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("NO-PHONE-SKIP: When ServiceTitan customer has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
+  it('NO-PHONE-SKIP: When ServiceTitan customer has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows', async () => {
     // WHO: pullServiceTitanCustomer receiving a customer with empty phoneNumber
     // WHAT: ServiceTitanCustomer.phoneNumber = '' — skip pull entirely, no DB queries issued
     // WHEN: Pull sync when ServiceTitan has commercial accounts with no phone (dispatch-only contacts)
@@ -618,13 +652,15 @@ describe("ServiceTitan Sync — Sad Paths", () => {
 
     await pullServiceTitanCustomer(pool, TENANT_ID, customerData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
     // Only 1 data query: the sync map check (excludes session variable queries)
     expect(getDataQueries().length).toBe(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+  it('CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion', async () => {
     // WHO: getTokensWithRefresh when database connection fails mid-query
     // WHAT: First query throws 'DB connection lost' — function re-throws but still calls client.release()
     // WHEN: Any sync operation when Postgres is temporarily unreachable (network blip, connection timeout)
@@ -636,15 +672,15 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     // Make the first query throw
     mockClient.query.mockRejectedValueOnce(new Error('DB connection lost'));
 
-    await expect(
-      getTokensWithRefresh(pool, TENANT_ID, silentLogger)
-    ).rejects.toThrow('DB connection lost');
+    await expect(getTokensWithRefresh(pool, TENANT_ID, silentLogger)).rejects.toThrow(
+      'DB connection lost'
+    );
 
     // Even after error, release must be called
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PAGINATION-ERROR: When ServiceTitan API returns error during customer/job list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
+  it('PAGINATION-ERROR: When ServiceTitan API returns error during customer/job list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state', async () => {
     // WHO: fullSync when ServiceTitan API returns 500 during pagination
     // WHAT: listCustomers and listJobs both throw on first page — sync completes with 0 records but updates last_sync_at
     // WHEN: ServiceTitan API experiencing downtime during scheduled full sync
@@ -670,7 +706,9 @@ describe("ServiceTitan Sync — Sad Paths", () => {
     expect(result.customersSynced).toBe(0);
     expect(result.appointmentsSynced).toBe(0);
     expect(result.errors).toBe(0); // errors counter is for individual failures, not pagination
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('customer pagination failed'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('customer pagination failed')
+    );
     // Should still update last_sync_at
     expect(mockClient.release).toHaveBeenCalled();
   });
@@ -680,10 +718,13 @@ describe("ServiceTitan Sync — Sad Paths", () => {
 // PULL JOB — HAPPY + SAD PATHS
 // =============================================
 
-import { pullServiceTitanJob, syncAppointmentToServiceTitan as syncApptST } from "./services/servicetitanSync";
+import {
+  pullServiceTitanJob,
+  syncAppointmentToServiceTitan as syncApptST,
+} from './services/servicetitanSync';
 
-describe("ServiceTitan Sync — Pull Job", () => {
-  it("PULL-JOB-CREATE: When ServiceTitan job has mapped customer, system creates local appointment with summary and scheduled date", async () => {
+describe('ServiceTitan Sync — Pull Job', () => {
+  it('PULL-JOB-CREATE: When ServiceTitan job has mapped customer, system creates local appointment with summary and scheduled date', async () => {
     // WHO: pullServiceTitanJob processing a new ServiceTitan job
     // WHAT: Customer mapped in sync_map → INSERT INTO appointments with summary, start_time, end_time (default 1hr), plus sync_map entry
     // WHEN: Pull sync during fullSync or webhook when dispatch created a new job
@@ -715,7 +756,9 @@ describe("ServiceTitan Sync — Pull Job", () => {
 
     await pullServiceTitanJob(pool, TENANT_ID, jobData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local appointment from ServiceTitan job'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local appointment from ServiceTitan job')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
@@ -750,7 +793,7 @@ describe("ServiceTitan Sync — Pull Job", () => {
     expect(insertCall![1]).toContain('canceled');
   });
 
-  it("PULL-JOB-UPDATE: When already-synced ServiceTitan job has newer data, system updates local appointment description and status", async () => {
+  it('PULL-JOB-UPDATE: When already-synced ServiceTitan job has newer data, system updates local appointment description and status', async () => {
     // WHO: pullServiceTitanJob updating an existing mapped appointment
     // WHAT: sync_map entry exists with older timestamp → UPDATE appointments SET description, status
     // WHEN: Dispatcher updated job summary in ServiceTitan after initial sync
@@ -763,7 +806,9 @@ describe("ServiceTitan Sync — Pull Job", () => {
     queryResponses.push({ rows: [{ local_id: 'local-cust-1' }] });
 
     // job sync map — existing with older timestamp
-    queryResponses.push({ rows: [{ local_id: 'existing-appt', remote_updated_at: '2026-03-20T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ local_id: 'existing-appt', remote_updated_at: '2026-03-20T10:00:00Z' }],
+    });
 
     // UPDATE appointment
     queryResponses.push({ rows: [] });
@@ -781,10 +826,12 @@ describe("ServiceTitan Sync — Pull Job", () => {
 
     await pullServiceTitanJob(pool, TENANT_ID, jobData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('updated local appointment from ServiceTitan job'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('updated local appointment from ServiceTitan job')
+    );
   });
 
-  it("PULL-JOB-NO-CUSTOMER: When ServiceTitan job has no mapped local customer, system skips because appointments need a customer reference", async () => {
+  it('PULL-JOB-NO-CUSTOMER: When ServiceTitan job has no mapped local customer, system skips because appointments need a customer reference', async () => {
     // WHO: pullServiceTitanJob when customer hasn't been synced yet
     // WHAT: No sync_map entry for customerId AND no customerId on job → skip
     // WHEN: Job webhook arrives before customer sync (out-of-order delivery)
@@ -809,10 +856,12 @@ describe("ServiceTitan Sync — Pull Job", () => {
 
     await pullServiceTitanJob(pool, TENANT_ID, jobData, silentLogger);
 
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('no mapped local customer'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no mapped local customer')
+    );
   });
 
-  it("PULL-JOB-SKIP-UNCHANGED: When job modifiedOn matches sync_map, system skips to avoid redundant writes", async () => {
+  it('PULL-JOB-SKIP-UNCHANGED: When job modifiedOn matches sync_map, system skips to avoid redundant writes', async () => {
     // WHO: pullServiceTitanJob with already-synced version
     // WHAT: sync_map.remote_updated_at matches → early return
     // WHEN: fullSync re-processes unchanged jobs
@@ -834,7 +883,9 @@ describe("ServiceTitan Sync — Pull Job", () => {
 
     await pullServiceTitanJob(pool, TENANT_ID, jobData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
   });
 });
 
@@ -842,7 +893,7 @@ describe("ServiceTitan Sync — Pull Job", () => {
 // PUSH APPOINTMENT — DELETE + UPDATE
 // =============================================
 
-describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
+describe('ServiceTitan Sync — Push Appointment Delete/Update', () => {
   it("PUSH-APPOINTMENT-DELETE: When tenant deletes appointment, system cancels ServiceTitan job and updates sync_map to 'canceled'", async () => {
     // WHO: syncAppointmentToServiceTitan with action='delete'
     // WHAT: sync_map entry exists → cancelJob API call, sync_map status updated to 'canceled'
@@ -861,17 +912,25 @@ describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
     // UPDATE sync map status
     queryResponses.push({ rows: [] });
 
-    vi.mocked(servicetitan.cancelJob).mockResolvedValueOnce({ id: 0, customerId: 0 } as ServiceTitanJob);
+    vi.mocked(servicetitan.cancelJob).mockResolvedValueOnce({
+      id: 0,
+      customerId: 0,
+    } as ServiceTitanJob);
 
     await syncApptST(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
 
     expect(servicetitan.cancelJob).toHaveBeenCalledWith(
-      'valid-access-token', APP_KEY, TENANT_SID, String(ST_JOB_ID)
+      'valid-access-token',
+      APP_KEY,
+      TENANT_SID,
+      String(ST_JOB_ID)
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry updated (canceled)'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry updated (canceled)')
+    );
   });
 
-  it("PUSH-APPOINTMENT-DELETE-GRACEFUL: When cancelJob API fails, system still updates sync_map and logs warning", async () => {
+  it('PUSH-APPOINTMENT-DELETE-GRACEFUL: When cancelJob API fails, system still updates sync_map and logs warning', async () => {
     // WHO: syncAppointmentToServiceTitan delete when API call fails
     // WHAT: cancelJob throws → warning logged, sync_map still updated to 'canceled'
     // WHEN: ServiceTitan API returns 500 during cancel
@@ -889,10 +948,12 @@ describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
     await syncApptST(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
 
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('failed to cancel job'));
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry updated (canceled)'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry updated (canceled)')
+    );
   });
 
-  it("PUSH-APPOINTMENT-UPDATE: When tenant updates existing synced appointment, system updates ServiceTitan job with new schedule and status", async () => {
+  it('PUSH-APPOINTMENT-UPDATE: When tenant updates existing synced appointment, system updates ServiceTitan job with new schedule and status', async () => {
     // WHO: syncAppointmentToServiceTitan with action='update'
     // WHAT: sync_map entry exists → updateJob API call with updated summary and scheduledDate
     // WHEN: Receptionist rescheduled appointment in dashboard
@@ -915,12 +976,17 @@ describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
     // UPDATE sync map
     queryResponses.push({ rows: [] });
 
-    vi.mocked(servicetitan.updateJob).mockResolvedValueOnce({ id: 0, customerId: 0 } as ServiceTitanJob);
+    vi.mocked(servicetitan.updateJob).mockResolvedValueOnce({
+      id: 0,
+      customerId: 0,
+    } as ServiceTitanJob);
 
     await syncApptST(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
 
     expect(servicetitan.updateJob).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('job updated in ServiceTitan'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('job updated in ServiceTitan')
+    );
   });
 });
 
@@ -928,8 +994,8 @@ describe("ServiceTitan Sync — Push Appointment Delete/Update", () => {
 // FULL SYNC WITH DATA
 // =============================================
 
-describe("ServiceTitan Sync — Full Sync with Data", () => {
-  it("FULL-SYNC-WITH-DATA: When ServiceTitan API returns customers and jobs, system pulls them all and updates last_sync_at", async () => {
+describe('ServiceTitan Sync — Full Sync with Data', () => {
+  it('FULL-SYNC-WITH-DATA: When ServiceTitan API returns customers and jobs, system pulls them all and updates last_sync_at', async () => {
     // WHO: fullSync with active ServiceTitan integration
     // WHAT: Paginates customers (1 page) + jobs (1 page), pulls each, updates last_sync_at
     // WHEN: Scheduled nightly full sync
@@ -962,14 +1028,16 @@ describe("ServiceTitan Sync — Full Sync with Data", () => {
     });
 
     vi.mocked(servicetitan.listJobs).mockResolvedValueOnce({
-      data: [{
-        id: ST_JOB_ID,
-        customerId: ST_CUSTOMER_ID,
-        summary: 'AC Repair',
-        status: 'Scheduled',
-        scheduledDate: '2026-03-28T09:00:00Z',
-        modifiedOn: '2026-03-28T08:00:00Z',
-      }],
+      data: [
+        {
+          id: ST_JOB_ID,
+          customerId: ST_CUSTOMER_ID,
+          summary: 'AC Repair',
+          status: 'Scheduled',
+          scheduledDate: '2026-03-28T09:00:00Z',
+          modifiedOn: '2026-03-28T08:00:00Z',
+        },
+      ],
       hasMore: false,
     });
 
@@ -981,7 +1049,7 @@ describe("ServiceTitan Sync — Full Sync with Data", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('full sync complete'));
   });
 
-  it("FULL-SYNC-EMPTY: When no tokens available, returns zero counts without making API calls", async () => {
+  it('FULL-SYNC-EMPTY: When no tokens available, returns zero counts without making API calls', async () => {
     // WHO: fullSync for tenant without ServiceTitan
     // WHAT: getTokensWithRefresh returns null → early return
     // WHEN: fullSync cron fires for tenant that never connected ServiceTitan

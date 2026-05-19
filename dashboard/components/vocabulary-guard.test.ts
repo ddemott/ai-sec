@@ -60,17 +60,35 @@ const USER_VISIBLE_CONTEXTS: Array<{ pattern: RegExp; description: string }> = [
   { pattern: /setError\([^)]*\btenant\b/i, description: 'setError() message contains "tenant"' },
   { pattern: /showToast\([^)]*\btenant\b/i, description: 'showToast() message contains "tenant"' },
   // placeholder="... tenant ..." visible input hint
-  { pattern: /placeholder=["'][^"']*\btenant\b[^"']*["']/i, description: 'placeholder contains "tenant"' },
+  {
+    pattern: /placeholder=["'][^"']*\btenant\b[^"']*["']/i,
+    description: 'placeholder contains "tenant"',
+  },
   // aria-label="... tenant ..." (user-facing label, not a code role name)
-  { pattern: /aria-label=["'][^"']*\btenant\b[^"']*["']/i, description: 'aria-label contains user-facing "tenant"' },
+  {
+    pattern: /aria-label=["'][^"']*\btenant\b[^"']*["']/i,
+    description: 'aria-label contains user-facing "tenant"',
+  },
   // Banned developer-jargon phrases in any quoted string OR JSX text
   // node. Each was a real leak fixed in the 2026-05-05 vocabulary pass.
   // The phrase form (with the space + capitalized words) prevents false
   // positives from valid code identifiers like SkillMatrixView.
-  { pattern: /Multi-Tenant\b/, description: '"Multi-Tenant" leaking into user copy (use "Multi-Business")' },
-  { pattern: /Skill Matrix\b/, description: '"Skill Matrix" leaking into user copy (use "Service Assignments")' },
-  { pattern: /Service Assignment Matrix\b/, description: '"Service Assignment Matrix" leaking into user copy (use "Service Assignments")' },
-  { pattern: /coverage gap/i, description: '"coverage gap" leaking into user copy (use "fully staffed" / "unstaffed")' },
+  {
+    pattern: /Multi-Tenant\b/,
+    description: '"Multi-Tenant" leaking into user copy (use "Multi-Business")',
+  },
+  {
+    pattern: /Skill Matrix\b/,
+    description: '"Skill Matrix" leaking into user copy (use "Service Assignments")',
+  },
+  {
+    pattern: /Service Assignment Matrix\b/,
+    description: '"Service Assignment Matrix" leaking into user copy (use "Service Assignments")',
+  },
+  {
+    pattern: /coverage gap/i,
+    description: '"coverage gap" leaking into user copy (use "fully staffed" / "unstaffed")',
+  },
 ];
 
 describe('Vocabulary guard: user-facing copy should say "business", not "tenant"', () => {
@@ -93,7 +111,9 @@ describe('Vocabulary guard: user-facing copy should say "business", not "tenant"
         lines.forEach((line, idx) => {
           const scanLine = stripCodeFromLine(line);
           if (pattern.test(scanLine)) {
-            offenders.push(`${file.slice(file.indexOf('/components/'))}:${idx + 1} — ${line.trim()}`);
+            offenders.push(
+              `${file.slice(file.indexOf('/components/'))}:${idx + 1} — ${line.trim()}`
+            );
           }
         });
       }

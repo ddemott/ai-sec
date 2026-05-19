@@ -20,7 +20,11 @@ export const Select: React.FC<SelectProps> = ({
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={id} className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-secondary)' }}>
+        <label
+          htmlFor={id}
+          className="block text-xs font-bold uppercase mb-1"
+          style={{ color: 'var(--text-secondary)' }}
+        >
           {label}
         </label>
       )}
@@ -44,7 +48,14 @@ export const Select: React.FC<SelectProps> = ({
         ))}
       </select>
       {error && (
-        <p id={id ? `${id}-error` : undefined} role="alert" className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>{error}</p>
+        <p
+          id={id ? `${id}-error` : undefined}
+          role="alert"
+          className="mt-1 text-xs"
+          style={{ color: 'var(--danger)' }}
+        >
+          {error}
+        </p>
       )}
     </div>
   );

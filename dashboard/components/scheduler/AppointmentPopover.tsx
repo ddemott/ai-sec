@@ -85,15 +85,23 @@ export function AppointmentPopover({
   const spaceBelow = viewportHeight - anchorRect.bottom;
   const positionAbove = spaceBelow < cardEstHeight && anchorRect.top > cardEstHeight;
 
-  const top = positionAbove
-    ? anchorRect.top - cardEstHeight - 4
-    : anchorRect.bottom + 4;
+  const top = positionAbove ? anchorRect.top - cardEstHeight - 4 : anchorRect.bottom + 4;
   const left = Math.min(Math.max(8, anchorRect.left), viewportWidth - cardWidth - 8);
 
   const customerName = appointment.customers?.name || 'Unknown';
   const customerPhone = appointment.customers?.phone || null;
-  const statusLabel = appointment.status === 'canceled' ? 'Canceled' : appointment.status === 'completed' ? 'Completed' : 'Scheduled';
-  const statusColor = appointment.status === 'canceled' ? 'var(--red, #ef4444)' : appointment.status === 'completed' ? 'var(--green, #22c55e)' : 'var(--accent, #3b82f6)';
+  const statusLabel =
+    appointment.status === 'canceled'
+      ? 'Canceled'
+      : appointment.status === 'completed'
+        ? 'Completed'
+        : 'Scheduled';
+  const statusColor =
+    appointment.status === 'canceled'
+      ? 'var(--red, #ef4444)'
+      : appointment.status === 'completed'
+        ? 'var(--green, #22c55e)'
+        : 'var(--accent, #3b82f6)';
 
   return (
     <div
@@ -145,7 +153,8 @@ export function AppointmentPopover({
         <div className="flex items-center gap-2 text-xs">
           <Clock className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted, #888)' }} />
           <span style={{ color: 'var(--text-secondary, #aaa)' }}>
-            {formatDate(appointment.start_time)} &middot; {formatTime(appointment.start_time)} – {formatTime(appointment.end_time)}
+            {formatDate(appointment.start_time)} &middot; {formatTime(appointment.start_time)} –{' '}
+            {formatTime(appointment.end_time)}
           </span>
         </div>
 
@@ -169,7 +178,9 @@ export function AppointmentPopover({
         {appointment.location && (
           <div className="flex items-center gap-2 text-xs">
             <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted, #888)' }} />
-            <span className="truncate" style={{ color: 'var(--text-secondary, #aaa)' }}>{appointment.location}</span>
+            <span className="truncate" style={{ color: 'var(--text-secondary, #aaa)' }}>
+              {appointment.location}
+            </span>
           </div>
         )}
       </div>

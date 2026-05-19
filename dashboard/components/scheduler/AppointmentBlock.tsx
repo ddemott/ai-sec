@@ -33,8 +33,14 @@ interface AppointmentBlockProps {
 }
 
 const employeeColors = [
-  'bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500',
-  'bg-rose-500', 'bg-cyan-500', 'bg-fuchsia-500', 'bg-lime-500',
+  'bg-blue-500',
+  'bg-emerald-500',
+  'bg-violet-500',
+  'bg-amber-500',
+  'bg-rose-500',
+  'bg-cyan-500',
+  'bg-fuchsia-500',
+  'bg-lime-500',
 ];
 
 export function getEmployeeColor(employeeId: string | null, index?: number): string {
@@ -46,7 +52,7 @@ export function getEmployeeColor(employeeId: string | null, index?: number): str
 function hashString(s: string): number {
   let hash = 0;
   for (let i = 0; i < s.length; i++) {
-    hash = ((hash << 5) - hash) + s.charCodeAt(i);
+    hash = (hash << 5) - hash + s.charCodeAt(i);
     hash |= 0;
   }
   return hash;
@@ -59,7 +65,12 @@ export function getTimePosition(timeStr: string, startHour: number, endHour: num
   return Math.max(0, Math.min(1, (hours - startHour) / totalHours));
 }
 
-export function getTimeSpan(startStr: string, endStr: string, startHour: number, endHour: number): { left: number; width: number } {
+export function getTimeSpan(
+  startStr: string,
+  endStr: string,
+  startHour: number,
+  endHour: number
+): { left: number; width: number } {
   const left = getTimePosition(startStr, startHour, endHour);
   const right = getTimePosition(endStr, startHour, endHour);
   return { left, width: Math.max(right - left, 0.02) }; // min 2% width
@@ -195,7 +206,10 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
   // invisible on touch and on a brief skim (UX audit #6, 2026-05-18).
   // Hidden on narrow blocks where it would compete with the dot-renderer.
   const showDragHandle = !!onMove && !isCanceled && !isDragging && !isNarrowBlock;
-  const moveHintTitle = onMove && !isCanceled ? `${customerName} — ${appointment.description ?? ''}\nDrag to move · click for details` : `${customerName} — ${appointment.description ?? ''}`;
+  const moveHintTitle =
+    onMove && !isCanceled
+      ? `${customerName} — ${appointment.description ?? ''}\nDrag to move · click for details`
+      : `${customerName} — ${appointment.description ?? ''}`;
 
   return (
     <div
@@ -222,15 +236,15 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
         </span>
       )}
       <span className={showDragHandle ? 'pl-3' : ''}>
-      {width < 0.04 ? (
-        <span
-          className="inline-block w-2 h-2 rounded-full mt-0.5"
-          style={{ backgroundColor: sc.text }}
-          aria-label={`${appointment.status}: ${customerName}`}
-        />
-      ) : (
-        customerName
-      )}
+        {width < 0.04 ? (
+          <span
+            className="inline-block w-2 h-2 rounded-full mt-0.5"
+            style={{ backgroundColor: sc.text }}
+            aria-label={`${appointment.status}: ${customerName}`}
+          />
+        ) : (
+          customerName
+        )}
       </span>
       {showTrash && (
         <button

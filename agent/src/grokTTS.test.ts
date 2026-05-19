@@ -198,4 +198,3 @@ describe('GrokTTS.close', () => {
     await expect(t.close()).resolves.toBeUndefined();
   });
 });
-

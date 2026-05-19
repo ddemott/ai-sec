@@ -1,4 +1,3 @@
-
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware';
@@ -9,12 +8,15 @@ export function registerVocabularyRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   // GET /vocabulary?tenant_id=X - Resolved vocabulary labels (3-tier fallback)
-  app.get('/vocabulary', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/vocabulary',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query(`
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          `
         SELECT
           COALESCE(t.resource_label, bt.resource_label, 'Resource') AS resource_label,
           COALESCE(t.resource_plural, bt.resource_plural, 'Resources') AS resource_plural,
@@ -26,13 +28,16 @@ export function registerVocabularyRoutes(
         FROM tenants t
         LEFT JOIN business_templates bt ON bt.business_type = t.business_type
         WHERE t.tenant_id = $1
-      `, [tenantId]);
-    });
+      `,
+          [tenantId]
+        );
+      });
 
-    if (res.rows.length === 0) {
-      return reply.status(404).send({ success: false, error: 'Tenant not found' });
-    }
+      if (res.rows.length === 0) {
+        return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      }
 
-    return reply.send(res.rows[0]);
-  }, 'Failed to fetch vocabulary'));
+      return reply.send(res.rows[0]);
+    }, 'Failed to fetch vocabulary')
+  );
 }

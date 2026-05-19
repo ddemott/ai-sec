@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock jobberClient before importing jobberSync
 vi.mock('./services/jobberClient', () => ({
@@ -20,8 +20,8 @@ import {
   pullJobberClient,
   pullJobberVisit,
   fullSync,
-} from "./services/jobberSync";
-import * as jobber from "./services/jobberClient";
+} from './services/jobberSync';
+import * as jobber from './services/jobberClient';
 
 // ---- Mock helpers ----
 
@@ -114,9 +114,9 @@ import { createMockClient as createBaseMockClient, createMockPool } from './test
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
-      (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
-    );
+    (
+      base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }
+    ).mock.calls.filter((call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'));
   return { ...base, getDataQueries };
 }
 
@@ -134,8 +134,8 @@ beforeEach(() => {
 // HAPPY PATHS — PUSH
 // =============================================
 
-describe("Jobber Sync — Push Happy Paths", () => {
-  it("PUSH-CREATE: When tenant pushes new customer to Jobber, system creates client via GraphQL and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
+describe('Jobber Sync — Push Happy Paths', () => {
+  it('PUSH-CREATE: When tenant pushes new customer to Jobber, system creates client via GraphQL and records mapping in sync_map so future syncs can update rather than duplicate', async () => {
     // WHO: syncCustomerToJobber with action='create'
     // WHAT: Local customer exists, no entity_sync_map entry — triggers clientCreate GraphQL mutation
     // WHEN: Push sync after new customer created in dashboard or via voice AI booking
@@ -160,7 +160,12 @@ describe("Jobber Sync — Push Happy Paths", () => {
     vi.mocked(jobber.graphql).mockResolvedValueOnce({
       data: {
         clientCreate: {
-          client: { id: JOBBER_CLIENT_ID, firstName: 'John', lastName: 'Doe', updatedAt: '2026-03-20T10:00:00Z' },
+          client: {
+            id: JOBBER_CLIENT_ID,
+            firstName: 'John',
+            lastName: 'Doe',
+            updatedAt: '2026-03-20T10:00:00Z',
+          },
           userErrors: [],
         },
       },
@@ -170,7 +175,9 @@ describe("Jobber Sync — Push Happy Paths", () => {
 
     expect(jobber.graphql).toHaveBeenCalledOnce();
     expect(mockClient.release).toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to Jobber'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to Jobber')
+    );
 
     // Verify the sync map INSERT was called with correct external_id
     const insertQuery = mockClient.query.mock.calls[3]; // 4th query (0-indexed)
@@ -178,7 +185,7 @@ describe("Jobber Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(JOBBER_CLIENT_ID);
   });
 
-  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing Jobber client using stored external_id to maintain data consistency across systems", async () => {
+  it('PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing Jobber client using stored external_id to maintain data consistency across systems', async () => {
     // WHO: syncCustomerToJobber with action='update'
     // WHAT: Local customer updated, entity_sync_map has existing external_id — triggers clientUpdate GraphQL mutation
     // WHEN: Push sync after customer phone/email/name edited in dashboard
@@ -191,7 +198,9 @@ describe("Jobber Sync — Push Happy Paths", () => {
     queryResponses.push({ rows: [makeIntegrationSettings()] });
 
     // check sync map — existing mapping — read sync_map BEFORE customers (lock order)
-    queryResponses.push({ rows: [{ external_id: JOBBER_CLIENT_ID, remote_updated_at: '2026-03-18T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ external_id: JOBBER_CLIENT_ID, remote_updated_at: '2026-03-18T10:00:00Z' }],
+    });
 
     // fetch local customer
     queryResponses.push({ rows: [makeCustomerRow()] });
@@ -215,13 +224,15 @@ describe("Jobber Sync — Push Happy Paths", () => {
     expect(jobber.graphql).toHaveBeenCalledWith(
       'valid-access-token',
       jobber.QUERIES.updateClient,
-      expect.objectContaining({ clientId: JOBBER_CLIENT_ID }),
+      expect.objectContaining({ clientId: JOBBER_CLIENT_ID })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer updated in Jobber'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer updated in Jobber')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling Jobber API, preserving Jobber data while breaking the link", async () => {
+  it('PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling Jobber API, preserving Jobber data while breaking the link', async () => {
     // WHO: syncCustomerToJobber with action='delete'
     // WHAT: Local customer soft-deleted, sync_map entry exists — only removes mapping, no Jobber API call
     // WHEN: Push sync after customer deleted from dashboard
@@ -240,7 +251,9 @@ describe("Jobber Sync — Push Happy Paths", () => {
 
     // Should NOT call Jobber API at all
     expect(jobber.graphql).not.toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry removed'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry removed')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
@@ -275,7 +288,15 @@ describe("Jobber Sync — Push Happy Paths", () => {
             id: JOBBER_JOB_ID,
             jobNumber: '42',
             title: 'Oil Change',
-            visits: { nodes: [{ id: JOBBER_VISIT_ID, startAt: '2026-03-26T10:00:00Z', endAt: '2026-03-26T11:00:00Z' }] },
+            visits: {
+              nodes: [
+                {
+                  id: JOBBER_VISIT_ID,
+                  startAt: '2026-03-26T10:00:00Z',
+                  endAt: '2026-03-26T11:00:00Z',
+                },
+              ],
+            },
           },
           userErrors: [],
         },
@@ -290,13 +311,15 @@ describe("Jobber Sync — Push Happy Paths", () => {
       jobber.QUERIES.createJob,
       expect.objectContaining({
         input: expect.objectContaining({ clientId: JOBBER_CLIENT_ID }),
-      }),
+      })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to Jobber as job'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to Jobber as job')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates job, ensuring referential integrity in Jobber", async () => {
+  it('PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates job, ensuring referential integrity in Jobber', async () => {
     // WHO: syncAppointmentToJobber calling syncCustomerToJobber recursively
     // WHAT: Appointment's customer has no sync_map entry — system auto-syncs customer before creating job
     // WHEN: Push sync when voice AI books appointment for a brand-new caller (customer created moments before)
@@ -357,7 +380,12 @@ describe("Jobber Sync — Push Happy Paths", () => {
     vi.mocked(jobber.graphql).mockResolvedValueOnce({
       data: {
         clientCreate: {
-          client: { id: JOBBER_CLIENT_ID, firstName: 'John', lastName: 'Doe', updatedAt: '2026-03-20T10:00:00Z' },
+          client: {
+            id: JOBBER_CLIENT_ID,
+            firstName: 'John',
+            lastName: 'Doe',
+            updatedAt: '2026-03-20T10:00:00Z',
+          },
           userErrors: [],
         },
       },
@@ -381,8 +409,12 @@ describe("Jobber Sync — Push Happy Paths", () => {
 
     // Should have called graphql twice: once for customer, once for job
     expect(jobber.graphql).toHaveBeenCalledTimes(2);
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to Jobber'));
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to Jobber as job'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to Jobber')
+    );
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to Jobber as job')
+    );
   });
 });
 
@@ -390,8 +422,8 @@ describe("Jobber Sync — Push Happy Paths", () => {
 // HAPPY PATHS — PULL
 // =============================================
 
-describe("Jobber Sync — Pull Happy Paths", () => {
-  it("PULL-CREATE: When Jobber client has no local match (by sync_map or phone), system creates new customer locally so field service leads appear in scheduling system", async () => {
+describe('Jobber Sync — Pull Happy Paths', () => {
+  it('PULL-CREATE: When Jobber client has no local match (by sync_map or phone), system creates new customer locally so field service leads appear in scheduling system', async () => {
     // WHO: pullJobberClient processing a new Jobber client
     // WHAT: No entity_sync_map match AND no customers row matching phone — triggers INSERT INTO customers + sync_map
     // WHEN: Pull sync during fullSync or webhook when Jobber client was created outside SecretaryHQ
@@ -414,7 +446,9 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 
     await pullJobberClient(pool, TENANT_ID, makeJobberClientData(), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from jobber customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local customer from jobber customer')
+    );
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query
@@ -424,7 +458,7 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("PULL-MERGE-REMOTE-WINS: When Jobber client matches local customer by phone and Jobber data is newer, system updates local record to keep most recent data from authoritative source", async () => {
+  it('PULL-MERGE-REMOTE-WINS: When Jobber client matches local customer by phone and Jobber data is newer, system updates local record to keep most recent data from authoritative source', async () => {
     // WHO: pullJobberClient merging with existing local customer
     // WHAT: Phone match found, Jobber updatedAt (2026-03-25) > local updated_at (2026-03-10) — remote wins timestamp merge
     // WHEN: Pull sync when field tech updated customer address in Jobber after original booking
@@ -437,7 +471,9 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }],
+    });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -449,7 +485,9 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 
     await pullJobberClient(pool, TENANT_ID, jobberData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged jobber customer into existing customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('merged jobber customer into existing customer')
+    );
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued
@@ -457,7 +495,7 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     expect(updateCall[0]).toContain('UPDATE customers');
   });
 
-  it("PULL-MERGE-LOCAL-WINS: When Jobber client matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+  it('PULL-MERGE-LOCAL-WINS: When Jobber client matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites', async () => {
     // WHO: pullJobberClient merging with existing local customer where local is newer
     // WHAT: Phone match found, local updated_at (2026-03-28) > Jobber updatedAt (2026-03-25) — local wins, no UPDATE issued
     // WHEN: Pull sync when receptionist updated customer info via dashboard after Jobber's last sync
@@ -470,7 +508,9 @@ describe("Jobber Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }],
+    });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -479,12 +519,14 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 
     await pullJobberClient(pool, TENANT_ID, jobberData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('local was newer, kept local values'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('local was newer, kept local values')
+    );
     // Should NOT have issued UPDATE (only sync map check, phone check, sync map insert)
     expect(getDataQueries().length).toBe(3);
   });
 
-  it("PULL-UPDATE-SYNCED: When already-synced Jobber client has newer data than local record, system updates local customer to reflect latest changes from field service system", async () => {
+  it('PULL-UPDATE-SYNCED: When already-synced Jobber client has newer data than local record, system updates local customer to reflect latest changes from field service system', async () => {
     // WHO: pullJobberClient updating an already-mapped customer
     // WHAT: sync_map entry exists with older remote_updated_at, Jobber updatedAt (2026-03-25) > local updated_at (2026-03-22) — UPDATE local
     // WHEN: Pull sync when field tech updated customer details in Jobber after initial sync
@@ -511,7 +553,9 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 
     await pullJobberClient(pool, TENANT_ID, jobberData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('updated local customer from jobber'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('updated local customer from jobber')
+    );
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
   });
 
@@ -535,7 +579,9 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 
     await pullJobberClient(pool, TENANT_ID, jobberData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
     // Only 1 data query: the sync map check (excludes session variable queries)
     expect(getDataQueries().length).toBe(1);
     expect(mockClient.release).toHaveBeenCalled();
@@ -546,8 +592,8 @@ describe("Jobber Sync — Pull Happy Paths", () => {
 // SAD PATHS
 // =============================================
 
-describe("Jobber Sync — Sad Paths", () => {
-  it("NO-SETTINGS: When tenant has no Jobber integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
+describe('Jobber Sync — Sad Paths', () => {
+  it('NO-SETTINGS: When tenant has no Jobber integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors', async () => {
     // WHO: getTokensWithRefresh for a tenant without Jobber integration
     // WHAT: tenant_integration_settings query returns 0 rows — function returns null
     // WHEN: Push/pull sync triggered for tenant that never connected Jobber OAuth
@@ -592,7 +638,9 @@ describe("Jobber Sync — Sad Paths", () => {
     const { mockClient, queryResponses } = createMockClient();
     const pool = createMockPool(mockClient);
 
-    queryResponses.push({ rows: [makeIntegrationSettings({ access_token: null, refresh_token: null })] });
+    queryResponses.push({
+      rows: [makeIntegrationSettings({ access_token: null, refresh_token: null })],
+    });
 
     const result = await getTokensWithRefresh(pool, TENANT_ID, silentLogger);
 
@@ -601,7 +649,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access in Jobber), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
+  it('TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access in Jobber), system marks integration inactive in DB and returns null to prevent repeated failed API calls', async () => {
     // WHO: getTokensWithRefresh when token is expired and refresh fails
     // WHAT: token_expires_at is in the past, refreshAccessToken throws 'OAuth grant revoked' — marks is_active=false in DB
     // WHEN: Sync triggered after user revoked Jobber OAuth access from their Jobber account settings
@@ -612,9 +660,11 @@ describe("Jobber Sync — Sad Paths", () => {
 
     // Token is expired (forces refresh)
     queryResponses.push({
-      rows: [makeIntegrationSettings({
-        token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
-      })],
+      rows: [
+        makeIntegrationSettings({
+          token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
+        }),
+      ],
     });
 
     // UPDATE to mark inactive
@@ -625,8 +675,12 @@ describe("Jobber Sync — Sad Paths", () => {
     const result = await getTokensWithRefresh(pool, TENANT_ID, silentLogger);
 
     expect(result).toBeNull();
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('token refresh FAILED'));
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('integration marked inactive'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('token refresh FAILED')
+    );
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('integration marked inactive')
+    );
 
     // Should have issued UPDATE to set is_active = false
     const updateCall = mockClient.query.mock.calls[1];
@@ -655,11 +709,13 @@ describe("Jobber Sync — Sad Paths", () => {
     await syncCustomerToJobber(pool, TENANT_ID, CUSTOMER_ID, 'create', silentLogger);
 
     expect(jobber.graphql).not.toHaveBeenCalled();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('customer not found in DB'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('customer not found in DB')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("GRAPHQL-USER-ERRORS: When Jobber GraphQL mutation returns userErrors array (e.g., invalid phone format), system logs the specific error messages so admins can diagnose data quality issues", async () => {
+  it('GRAPHQL-USER-ERRORS: When Jobber GraphQL mutation returns userErrors array (e.g., invalid phone format), system logs the specific error messages so admins can diagnose data quality issues', async () => {
     // WHO: syncCustomerToJobber when Jobber rejects the mutation payload
     // WHAT: clientCreate returns userErrors array with validation failure (invalid phone) — client is null, no sync_map created
     // WHEN: Push sync when local customer has phone format Jobber doesn't accept (e.g., international format without country code)
@@ -688,12 +744,16 @@ describe("Jobber Sync — Sad Paths", () => {
 
     await syncCustomerToJobber(pool, TENANT_ID, CUSTOMER_ID, 'create', silentLogger);
 
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Jobber clientCreate failed'));
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('Phone number is invalid'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('Jobber clientCreate failed')
+    );
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('Phone number is invalid')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("NO-PHONE-SKIP: When Jobber client has no phone numbers, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
+  it('NO-PHONE-SKIP: When Jobber client has no phone numbers, pull skips it because phone is required for customer matching and appointment booking workflows', async () => {
     // WHO: pullJobberClient receiving a Jobber client with empty phones array
     // WHAT: JobberClient.phones = [] — skip pull entirely, no DB queries issued
     // WHEN: Pull sync when Jobber has commercial/company clients with no phone (email-only contacts)
@@ -710,7 +770,7 @@ describe("Jobber Sync — Sad Paths", () => {
     // No pool.connect() needed — shared helper returns early before acquiring a connection
   });
 
-  it("VISIT-NO-CLIENT: When Jobber visit has no associated client (orphan job), pull skips it because appointments require a customer for booking and communication", async () => {
+  it('VISIT-NO-CLIENT: When Jobber visit has no associated client (orphan job), pull skips it because appointments require a customer for booking and communication', async () => {
     // WHO: pullJobberVisit receiving a visit whose job has client=null
     // WHAT: JobberVisit.job.client is null — skip pull, no customer to associate appointment with
     // WHEN: Pull sync when Jobber has internal/overhead jobs not linked to any client
@@ -719,15 +779,22 @@ describe("Jobber Sync — Sad Paths", () => {
     const { mockClient } = createMockClient();
     const pool = createMockPool(mockClient);
 
-    const visitData = makeJobberVisitData({ job: { id: JOBBER_JOB_ID, title: 'Job', client: null } });
+    const visitData = makeJobberVisitData({
+      job: { id: JOBBER_JOB_ID, title: 'Job', client: null },
+    });
 
-    await pullJobberVisit(pool, TENANT_ID, visitData as unknown as jobber.JobberVisit, silentLogger);
+    await pullJobberVisit(
+      pool,
+      TENANT_ID,
+      visitData as unknown as jobber.JobberVisit,
+      silentLogger
+    );
 
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('no associated client'));
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("NO-RESOURCES: When tenant has no active resources configured, visit pull skips because appointments require a resource (technician/bay) for scheduling", async () => {
+  it('NO-RESOURCES: When tenant has no active resources configured, visit pull skips because appointments require a resource (technician/bay) for scheduling', async () => {
     // WHO: pullJobberVisit when tenant has no resources in the database
     // WHAT: Customer sync_map found but SELECT FROM resources returns 0 rows — skip visit pull
     // WHEN: Pull sync triggered before tenant completes setup wizard (resources not yet configured)
@@ -748,7 +815,7 @@ describe("Jobber Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+  it('CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion', async () => {
     // WHO: getTokensWithRefresh when database connection fails mid-query
     // WHAT: First query throws 'DB connection lost' — function re-throws but still calls client.release()
     // WHEN: Any sync operation when Postgres is temporarily unreachable (network blip, connection timeout)
@@ -760,9 +827,9 @@ describe("Jobber Sync — Sad Paths", () => {
     // Make the first query throw
     mockClient.query.mockRejectedValueOnce(new Error('DB connection lost'));
 
-    await expect(
-      getTokensWithRefresh(pool, TENANT_ID, silentLogger)
-    ).rejects.toThrow('DB connection lost');
+    await expect(getTokensWithRefresh(pool, TENANT_ID, silentLogger)).rejects.toThrow(
+      'DB connection lost'
+    );
 
     // Even after error, release must be called
     expect(mockClient.release).toHaveBeenCalled();
@@ -773,8 +840,8 @@ describe("Jobber Sync — Sad Paths", () => {
 // PULL VISIT — HAPPY + SAD PATHS
 // =============================================
 
-describe("Jobber Sync — Pull Visit", () => {
-  it("PULL-VISIT-CREATE: When Jobber visit has mapped client and tenant has resources, system creates local appointment so scheduled field work appears in booking calendar", async () => {
+describe('Jobber Sync — Pull Visit', () => {
+  it('PULL-VISIT-CREATE: When Jobber visit has mapped client and tenant has resources, system creates local appointment so scheduled field work appears in booking calendar', async () => {
     // WHO: pullJobberVisit processing a new Jobber visit
     // WHAT: Customer mapped in sync_map, tenant has resource → INSERT INTO appointments + sync_map
     // WHEN: Pull sync during fullSync or webhook when Jobber dispatched a new visit
@@ -800,11 +867,13 @@ describe("Jobber Sync — Pull Visit", () => {
 
     await pullJobberVisit(pool, TENANT_ID, makeJobberVisitData(), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local appointment from Jobber visit'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local appointment from Jobber visit')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PULL-VISIT-UPDATE-REMOTE-WINS: When already-synced Jobber visit has newer data, system updates local appointment times to reflect field schedule changes", async () => {
+  it('PULL-VISIT-UPDATE-REMOTE-WINS: When already-synced Jobber visit has newer data, system updates local appointment times to reflect field schedule changes', async () => {
     // WHO: pullJobberVisit updating an existing mapped appointment
     // WHAT: sync_map entry exists with older timestamp, Jobber updatedAt > local updated_at → UPDATE appointments SET start_time, end_time
     // WHEN: Pull sync when dispatcher rescheduled a visit in Jobber after initial sync
@@ -820,7 +889,9 @@ describe("Jobber Sync — Pull Visit", () => {
     queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] });
 
     // check visit sync map — existing with older timestamp
-    queryResponses.push({ rows: [{ local_id: 'existing-appt-id', remote_updated_at: '2026-03-20T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ local_id: 'existing-appt-id', remote_updated_at: '2026-03-20T10:00:00Z' }],
+    });
 
     // fetch local appointment updated_at
     queryResponses.push({ rows: [{ updated_at: '2026-03-22T10:00:00Z' }] });
@@ -831,13 +902,20 @@ describe("Jobber Sync — Pull Visit", () => {
     // UPDATE sync map
     queryResponses.push({ rows: [] });
 
-    await pullJobberVisit(pool, TENANT_ID, makeJobberVisitData({ updatedAt: '2026-03-25T14:00:00Z' }), silentLogger);
+    await pullJobberVisit(
+      pool,
+      TENANT_ID,
+      makeJobberVisitData({ updatedAt: '2026-03-25T14:00:00Z' }),
+      silentLogger
+    );
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('updated local appointment from Jobber visit'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('updated local appointment from Jobber visit')
+    );
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
   });
 
-  it("PULL-VISIT-LOCAL-WINS: When already-synced visit has older Jobber data than local, system keeps local values and updates sync_map timestamp only", async () => {
+  it('PULL-VISIT-LOCAL-WINS: When already-synced visit has older Jobber data than local, system keeps local values and updates sync_map timestamp only', async () => {
     // WHO: pullJobberVisit when local appointment was modified more recently
     // WHAT: sync_map entry exists, Jobber updatedAt < local updated_at → no UPDATE, only sync_map.remote_updated_at updated
     // WHEN: Receptionist rescheduled appointment in dashboard after dispatcher's last Jobber edit
@@ -853,7 +931,9 @@ describe("Jobber Sync — Pull Visit", () => {
     queryResponses.push({ rows: [{ resource_id: RESOURCE_ID }] });
 
     // visit sync map — existing with older timestamp
-    queryResponses.push({ rows: [{ local_id: 'existing-appt-id', remote_updated_at: '2026-03-20T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ local_id: 'existing-appt-id', remote_updated_at: '2026-03-20T10:00:00Z' }],
+    });
 
     // local appointment is newer
     queryResponses.push({ rows: [{ updated_at: '2026-03-28T10:00:00Z' }] });
@@ -861,12 +941,17 @@ describe("Jobber Sync — Pull Visit", () => {
     // UPDATE sync map only (no appointment update)
     queryResponses.push({ rows: [] });
 
-    await pullJobberVisit(pool, TENANT_ID, makeJobberVisitData({ updatedAt: '2026-03-25T14:00:00Z' }), silentLogger);
+    await pullJobberVisit(
+      pool,
+      TENANT_ID,
+      makeJobberVisitData({ updatedAt: '2026-03-25T14:00:00Z' }),
+      silentLogger
+    );
 
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('kept local values'));
   });
 
-  it("PULL-VISIT-SKIP-UNCHANGED: When visit updatedAt matches sync_map.remote_updated_at, system skips to avoid redundant writes", async () => {
+  it('PULL-VISIT-SKIP-UNCHANGED: When visit updatedAt matches sync_map.remote_updated_at, system skips to avoid redundant writes', async () => {
     // WHO: pullJobberVisit with already-synced version
     // WHAT: sync_map.remote_updated_at matches — early return after sync_map check
     // WHEN: fullSync re-visits already-processed records
@@ -886,7 +971,9 @@ describe("Jobber Sync — Pull Visit", () => {
 
     await pullJobberVisit(pool, TENANT_ID, makeJobberVisitData({ updatedAt: ts }), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
   });
 
   it("VISIT-CLIENT-NOT-SYNCED: When visit's client hasn't been pulled yet, system skips because we can't create an appointment without a local customer", async () => {
@@ -903,7 +990,9 @@ describe("Jobber Sync — Pull Visit", () => {
 
     await pullJobberVisit(pool, TENANT_ID, makeJobberVisitData(), silentLogger);
 
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('not yet synced locally'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('not yet synced locally')
+    );
   });
 });
 
@@ -911,8 +1000,8 @@ describe("Jobber Sync — Pull Visit", () => {
 // FULL SYNC
 // =============================================
 
-describe("Jobber Sync — Full Sync", () => {
-  it("FULL-SYNC-EMPTY: When no tokens available, returns zero counts without making API calls", async () => {
+describe('Jobber Sync — Full Sync', () => {
+  it('FULL-SYNC-EMPTY: When no tokens available, returns zero counts without making API calls', async () => {
     // WHO: fullSync for tenant without Jobber integration
     // WHAT: getTokensWithRefresh returns null → early return with zero counts
     // WHEN: fullSync cron fires for tenant that never connected Jobber
@@ -929,7 +1018,7 @@ describe("Jobber Sync — Full Sync", () => {
     expect(jobber.graphql).not.toHaveBeenCalled();
   });
 
-  it("FULL-SYNC-WITH-DATA: When Jobber API returns clients and visits, system pulls them all and updates last_sync_at", async () => {
+  it('FULL-SYNC-WITH-DATA: When Jobber API returns clients and visits, system pulls them all and updates last_sync_at', async () => {
     // WHO: fullSync with active Jobber integration
     // WHAT: Paginates clients (1 page) + visits (1 page), pulls each, updates last_sync_at
     // WHEN: Scheduled nightly full sync
@@ -987,7 +1076,7 @@ describe("Jobber Sync — Full Sync", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('full sync complete'));
   });
 
-  it("FULL-SYNC-PAGINATION-ERROR: When API pagination fails, fullSync logs error and still updates last_sync_at", async () => {
+  it('FULL-SYNC-PAGINATION-ERROR: When API pagination fails, fullSync logs error and still updates last_sync_at', async () => {
     // WHO: fullSync when Jobber API returns error during pagination
     // WHAT: graphql throws on listClients and listVisits first page → sync continues, updates last_sync_at
     // WHEN: Jobber API outage during scheduled sync
@@ -1006,7 +1095,11 @@ describe("Jobber Sync — Full Sync", () => {
 
     expect(result.clientsSynced).toBe(0);
     expect(result.visitsSynced).toBe(0);
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('client pagination failed'));
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('visit pagination failed'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('client pagination failed')
+    );
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('visit pagination failed')
+    );
   });
 });

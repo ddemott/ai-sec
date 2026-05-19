@@ -5,7 +5,9 @@ let transporter: Transporter | null = null;
 function getTransporter(): Transporter {
   if (transporter) return transporter;
   if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    transporter = { sendMail: () => Promise.resolve({ messageId: 'test-message-id' }) } as unknown as Transporter;
+    transporter = {
+      sendMail: () => Promise.resolve({ messageId: 'test-message-id' }),
+    } as unknown as Transporter;
     return transporter;
   }
   transporter = nodemailer.createTransport({
@@ -27,7 +29,7 @@ export async function sendUserInviteEmail(
   resetLink: string,
   ttlMinutes: number,
   businessName: string,
-  role: 'owner' | 'front_desk',
+  role: 'owner' | 'front_desk'
 ): Promise<void> {
   const roleLabel = role === 'front_desk' ? 'Front Desk' : 'Owner';
   const subject = `You're invited to ${businessName} on SecretaryHQ`;
@@ -56,7 +58,11 @@ If you weren't expecting this invitation, you can safely ignore this email — n
   });
 }
 
-export async function sendPasswordResetEmail(to: string, resetLink: string, ttlMinutes: number): Promise<void> {
+export async function sendPasswordResetEmail(
+  to: string,
+  resetLink: string,
+  ttlMinutes: number
+): Promise<void> {
   const subject = 'Reset your SecretaryHQ password';
   const text = `Someone requested a password reset for your SecretaryHQ account.
 

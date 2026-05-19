@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import { useCallback, useEffect, useState } from 'react'
-import { Api } from './api'
+import { useCallback, useEffect, useState } from 'react';
+import { Api } from './api';
 
 /**
  * useSetupProgress — counts a tenant's setup completion against the six
@@ -34,35 +34,37 @@ import { Api } from './api'
  * recoverable nuisance, not a destructive bug.
  */
 export interface SetupProgressItem {
-  step: 1 | 2 | 3 | 4 | 5 | 6
-  label: string
-  done: boolean
+  step: 1 | 2 | 3 | 4 | 5 | 6;
+  label: string;
+  done: boolean;
 }
 
 export interface SetupProgress {
-  done: number
-  total: number
-  complete: boolean
-  items: SetupProgressItem[]
-  loading: boolean
+  done: number;
+  total: number;
+  complete: boolean;
+  items: SetupProgressItem[];
+  loading: boolean;
   /** Manually trigger a refetch. Same effect as the window event. */
-  refresh: () => void
+  refresh: () => void;
 }
 
 export function useSetupProgress(tenantId: string | null): SetupProgress {
-  const [items, setItems] = useState<SetupProgressItem[]>(() => buildItems(false, false, false, false, false))
-  const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState<SetupProgressItem[]>(() =>
+    buildItems(false, false, false, false, false)
+  );
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!tenantId) {
-      setItems(buildItems(false, false, false, false, false))
-      setLoading(false)
-      return
+      setItems(buildItems(false, false, false, false, false));
+      setLoading(false);
+      return;
     }
-    setLoading(true)
+    setLoading(true);
 
-    const today = new Date().toISOString().split('T')[0]
-    const horizon = new Date(Date.now() + 30 * 86_400_000).toISOString().split('T')[0]
+    const today = new Date().toISOString().split('T')[0];
+    const horizon = new Date(Date.now() + 30 * 86_400_000).toISOString().split('T')[0];
 
     const [svc, res, emp, shf, map] = await Promise.allSettled([
       Api.services.list(tenantId),
@@ -70,30 +72,40 @@ export function useSetupProgress(tenantId: string | null): SetupProgress {
       Api.employees.list(tenantId),
       Api.shifts.schedule.bulkForDate(tenantId, today, horizon),
       Api.mappings.listServiceEmployee(tenantId),
-    ])
+    ]);
 
-    const hasServices = svc.status === 'fulfilled' && Array.isArray(svc.value) && svc.value.length > 0
-    const hasResources = res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0
+    const hasServices =
+      svc.status === 'fulfilled' && Array.isArray(svc.value) && svc.value.length > 0;
+    const hasResources =
+      res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0;
     // Match DashboardHome's count: active employees only, not invited-or-archived ghosts.
-    const hasEmployees = emp.status === 'fulfilled'
-      && Array.isArray(emp.value)
-      && emp.value.filter((e) => (e as { type?: string; is_active?: boolean }).type === 'employee'
-        && (e as { is_active?: boolean }).is_active).length > 0
-    const hasShifts = shf.status === 'fulfilled' && Array.isArray(shf.value) && shf.value.length > 0
-    const hasMappings = map.status === 'fulfilled' && Array.isArray(map.value) && map.value.length > 0
+    const hasEmployees =
+      emp.status === 'fulfilled' &&
+      Array.isArray(emp.value) &&
+      emp.value.filter(
+        (e) =>
+          (e as { type?: string; is_active?: boolean }).type === 'employee' &&
+          (e as { is_active?: boolean }).is_active
+      ).length > 0;
+    const hasShifts =
+      shf.status === 'fulfilled' && Array.isArray(shf.value) && shf.value.length > 0;
+    const hasMappings =
+      map.status === 'fulfilled' && Array.isArray(map.value) && map.value.length > 0;
 
-    setItems(buildItems(hasServices, hasResources, hasEmployees, hasShifts, hasMappings))
-    setLoading(false)
-  }, [tenantId])
+    setItems(buildItems(hasServices, hasResources, hasEmployees, hasShifts, hasMappings));
+    setLoading(false);
+  }, [tenantId]);
 
   useEffect(() => {
-    void load()
-    function handleChange() { void load() }
-    window.addEventListener('setup-progress-changed', handleChange)
-    return () => window.removeEventListener('setup-progress-changed', handleChange)
-  }, [load])
+    void load();
+    function handleChange() {
+      void load();
+    }
+    window.addEventListener('setup-progress-changed', handleChange);
+    return () => window.removeEventListener('setup-progress-changed', handleChange);
+  }, [load]);
 
-  const doneCount = items.filter((i) => i.done).length
+  const doneCount = items.filter((i) => i.done).length;
   return {
     done: doneCount,
     total: 6,
@@ -101,7 +113,7 @@ export function useSetupProgress(tenantId: string | null): SetupProgress {
     items,
     loading,
     refresh: load,
-  }
+  };
 }
 
 function buildItems(
@@ -109,17 +121,17 @@ function buildItems(
   hasResources: boolean,
   hasEmployees: boolean,
   hasShifts: boolean,
-  hasMappings: boolean,
+  hasMappings: boolean
 ): SetupProgressItem[] {
-  const reviewDone = hasServices && hasResources && hasEmployees && hasShifts && hasMappings
+  const reviewDone = hasServices && hasResources && hasEmployees && hasShifts && hasMappings;
   return [
-    { step: 1, label: 'What you offer',   done: hasServices  },
+    { step: 1, label: 'What you offer', done: hasServices },
     { step: 2, label: 'Where it happens', done: hasResources },
-    { step: 3, label: 'Who works here',   done: hasEmployees },
-    { step: 4, label: 'When they work',   done: hasShifts    },
-    { step: 5, label: 'Who does what',    done: hasMappings  },
-    { step: 6, label: 'Look it over',     done: reviewDone   },
-  ]
+    { step: 3, label: 'Who works here', done: hasEmployees },
+    { step: 4, label: 'When they work', done: hasShifts },
+    { step: 5, label: 'Who does what', done: hasMappings },
+    { step: 6, label: 'Look it over', done: reviewDone },
+  ];
 }
 
 /**
@@ -129,6 +141,6 @@ function buildItems(
  */
 export function notifySetupProgressChanged() {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('setup-progress-changed'))
+    window.dispatchEvent(new CustomEvent('setup-progress-changed'));
   }
 }

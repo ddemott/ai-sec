@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import React, { useCallback, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { LayoutGrid, GitBranch } from 'lucide-react'
-import SkillMatrixView from './SkillMatrixView'
-import SkillRelationshipMap from './skill-map/SkillRelationshipMap'
+import React, { useCallback, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { LayoutGrid, GitBranch } from 'lucide-react';
+import SkillMatrixView from './SkillMatrixView';
+import SkillRelationshipMap from './skill-map/SkillRelationshipMap';
 
 /**
  * SkillAssignmentsView — single sub-tab that consolidates the former
@@ -26,28 +26,29 @@ import SkillRelationshipMap from './skill-map/SkillRelationshipMap'
  * `?subtab=skill-map` bookmarks are remapped by MyTeamView to
  * `?subtab=skills&view=map`.
  */
-type ViewMode = 'grid' | 'map'
+type ViewMode = 'grid' | 'map';
 
 export default function SkillAssignmentsView() {
-  const searchParams = useSearchParams()
-  const initialView: ViewMode = searchParams.get('view') === 'map' ? 'map' : 'grid'
-  const [view, setView] = useState<ViewMode>(initialView)
+  const searchParams = useSearchParams();
+  const initialView: ViewMode = searchParams.get('view') === 'map' ? 'map' : 'grid';
+  const [view, setView] = useState<ViewMode>(initialView);
 
   const handleViewChange = useCallback((next: ViewMode) => {
-    setView(next)
-    const params = new URLSearchParams(window.location.search)
+    setView(next);
+    const params = new URLSearchParams(window.location.search);
     if (next === 'map') {
-      params.set('view', 'map')
+      params.set('view', 'map');
     } else {
       // Default is grid — strip the param to keep URLs short.
-      params.delete('view')
+      params.delete('view');
     }
-    const qs = params.toString()
-    window.history.replaceState({}, '', qs
-      ? `${window.location.pathname}?${qs}`
-      : window.location.pathname,
-    )
-  }, [])
+    const qs = params.toString();
+    window.history.replaceState(
+      {},
+      '',
+      qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+    );
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -57,7 +58,10 @@ export default function SkillAssignmentsView() {
         className="px-4 py-2 border-b flex items-center justify-end gap-1"
         style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-surface)' }}
       >
-        <span className="text-[10px] uppercase tracking-widest font-bold mr-2" style={{ color: 'var(--text-muted)' }}>
+        <span
+          className="text-[10px] uppercase tracking-widest font-bold mr-2"
+          style={{ color: 'var(--text-muted)' }}
+        >
           View
         </span>
         <ToggleButton
@@ -78,14 +82,14 @@ export default function SkillAssignmentsView() {
         {view === 'grid' ? <SkillMatrixView /> : <SkillRelationshipMap />}
       </div>
     </div>
-  )
+  );
 }
 
 interface ToggleButtonProps {
-  icon: React.ElementType
-  label: string
-  isActive: boolean
-  onClick: () => void
+  icon: React.ElementType;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
 }
 
 function ToggleButton({ icon: Icon, label, isActive, onClick }: ToggleButtonProps) {
@@ -104,5 +108,5 @@ function ToggleButton({ icon: Icon, label, isActive, onClick }: ToggleButtonProp
       <Icon className="w-3.5 h-3.5" aria-hidden="true" />
       {label}
     </button>
-  )
+  );
 }

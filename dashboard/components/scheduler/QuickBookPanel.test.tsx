@@ -47,12 +47,14 @@ const services = [
 beforeEach(() => {
   mockApi.appointments.create.mockReset().mockResolvedValue({ success: true });
   // Tire Mount → only Mike + only Bay 1 are valid.
-  mockApi.mappings.listServiceEmployee.mockReset().mockResolvedValue([
-    { service_id: 'svc-tire', employee_id: 'emp-mike', tenant_id: 'tenant-1' },
-  ]);
-  mockApi.mappings.listServiceResource.mockReset().mockResolvedValue([
-    { service_id: 'svc-tire', resource_id: 'bay-1', tenant_id: 'tenant-1' },
-  ]);
+  mockApi.mappings.listServiceEmployee
+    .mockReset()
+    .mockResolvedValue([
+      { service_id: 'svc-tire', employee_id: 'emp-mike', tenant_id: 'tenant-1' },
+    ]);
+  mockApi.mappings.listServiceResource
+    .mockReset()
+    .mockResolvedValue([{ service_id: 'svc-tire', resource_id: 'bay-1', tenant_id: 'tenant-1' }]);
 });
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof QuickBookPanel>> = {}) {
@@ -91,11 +93,15 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: 'svc-tire' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
+      const tech = Array.from(
+        screen.getByTestId<HTMLSelectElement>('quick-book-employee').options
+      ).map((o) => o.text);
       expect(tech).toContain('Mike');
       expect(tech).not.toContain('Dana');
     });
-    const res = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-resource')).options).map((o) => o.text);
+    const res = Array.from(
+      screen.getByTestId<HTMLSelectElement>('quick-book-resource').options
+    ).map((o) => o.text);
     expect(res).toEqual(['Bay 1']);
     // WHO: front-desk operator picking Tire Mount | WHAT: Dana drops from Tech dropdown (no skill); Bay 3 drops from Bay dropdown (no resource permission) | WHEN: service chosen, before booking | WHERE: QuickBookPanel filter on serviceId change | WHY: this is the headline UX win — pre-fix, the operator could pick Dana + Bay 3 + Tire Mount, hit Book Now, and only then learn Dana doesn't know how. Filtering up front matches the system's design contract: book only when employee+skill+resource align
   });
@@ -105,7 +111,9 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: 'svc-open' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
+      const tech = Array.from(
+        screen.getByTestId<HTMLSelectElement>('quick-book-employee').options
+      ).map((o) => o.text);
       expect(tech).toContain('Mike');
       expect(tech).toContain('Dana');
     });
@@ -125,7 +133,9 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('quick-book-alignment-blocked')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('quick-book-alignment-blocked').textContent).toMatch(/no tech is configured/i);
+    expect(screen.getByTestId('quick-book-alignment-blocked').textContent).toMatch(
+      /no tech is configured/i
+    );
     // Book button is disabled.
     expect(screen.getByTestId('quick-book-confirm')).toBeDisabled();
     // WHO: front-desk operator who picked a service whose only mapped staff member has been deactivated/deleted | WHAT: explicit block message + disabled Book button | WHEN: service has assignments but none of them resolve to an active employee | WHERE: QuickBookPanel alignmentBlocked branch | WHY: the RPC would reject this with NO_SKILLED_EMPLOYEE on submit — blocking up-front saves the operator from filling in the customer name only to fail; the message points them to the fix (Service Assignments) rather than leaving them stuck
@@ -138,14 +148,18 @@ describe('QuickBookPanel — alignment filter (audit P1 #4 follow-up)', () => {
     // Pick mapped service first.
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: 'svc-tire' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
+      const tech = Array.from(
+        screen.getByTestId<HTMLSelectElement>('quick-book-employee').options
+      ).map((o) => o.text);
       expect(tech).not.toContain('Dana');
     });
 
     // Back to walk-in (no service).
     fireEvent.change(screen.getByTestId('quick-book-service'), { target: { value: '' } });
     await waitFor(() => {
-      const tech = Array.from((screen.getByTestId<HTMLSelectElement>('quick-book-employee')).options).map((o) => o.text);
+      const tech = Array.from(
+        screen.getByTestId<HTMLSelectElement>('quick-book-employee').options
+      ).map((o) => o.text);
       expect(tech).toContain('Dana');
     });
     expect(screen.queryByTestId('quick-book-alignment-blocked')).not.toBeInTheDocument();
@@ -185,11 +199,15 @@ describe('QuickBookPanel — conflict modal wiring (slice 2, 2026-05-08)', () =>
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
 
     // Fill the form with a 15-min-aligned slot so client-side validator passes.
-    fireEvent.change(screen.getByTestId('quick-book-customer-search'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByTestId('quick-book-customer-search'), {
+      target: { value: 'Alice' },
+    });
     fireEvent.change(screen.getByTestId('quick-book-customer'), { target: { value: 'c-1' } });
     fireEvent.change(screen.getByTestId('quick-book-resource'), { target: { value: 'bay-1' } });
     // Find the start/end time inputs by label association via the underlying input.
-    const startInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[0];
+    const startInput = document.querySelectorAll<HTMLInputElement>(
+      'input[type="datetime-local"]'
+    )[0];
     const endInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[1];
     fireEvent.change(startInput, { target: { value: '2026-05-10T14:00' } });
     fireEvent.change(endInput, { target: { value: '2026-05-10T14:30' } });
@@ -222,10 +240,14 @@ describe('QuickBookPanel — conflict modal wiring (slice 2, 2026-05-08)', () =>
     renderPanel();
     await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
 
-    fireEvent.change(screen.getByTestId('quick-book-customer-search'), { target: { value: 'Alice' } });
+    fireEvent.change(screen.getByTestId('quick-book-customer-search'), {
+      target: { value: 'Alice' },
+    });
     fireEvent.change(screen.getByTestId('quick-book-customer'), { target: { value: 'c-1' } });
     fireEvent.change(screen.getByTestId('quick-book-resource'), { target: { value: 'bay-1' } });
-    const startInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[0];
+    const startInput = document.querySelectorAll<HTMLInputElement>(
+      'input[type="datetime-local"]'
+    )[0];
     const endInput = document.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]')[1];
     fireEvent.change(startInput, { target: { value: '2026-05-10T14:00' } });
     fireEvent.change(endInput, { target: { value: '2026-05-10T14:30' } });

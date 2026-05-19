@@ -80,7 +80,9 @@ export async function syncAppointmentToCalendar(
 
       const appt = apptRes.rows[0];
       if (!appt) {
-        log.warn(`${prefix} — skipped: appointment not found in DB (WHY: may have been deleted between mutation and sync)`);
+        log.warn(
+          `${prefix} — skipped: appointment not found in DB (WHY: may have been deleted between mutation and sync)`
+        );
         return;
       }
 
@@ -93,8 +95,9 @@ export async function syncAppointmentToCalendar(
          ON CONFLICT (appointment_id) DO UPDATE SET external_event_id = $2, provider = $3, last_synced_at = NOW()`,
         [appointmentId, eventId, providerKey]
       );
-      log.info(`${prefix} — event created in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${eventId} customer=${appt.customer_name || 'unknown'})`);
-
+      log.info(
+        `${prefix} — event created in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${eventId} customer=${appt.customer_name || 'unknown'})`
+      );
     } else if (action === 'update') {
       // Get existing sync mapping
       const syncRes = await client.query(
@@ -131,15 +134,18 @@ export async function syncAppointmentToCalendar(
         `UPDATE appointment_sync_map SET last_synced_at = NOW() WHERE appointment_id = $1`,
         [appointmentId]
       );
-      log.info(`${prefix} — event updated in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${externalEventId})`);
-
+      log.info(
+        `${prefix} — event updated in ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${externalEventId})`
+      );
     } else if (action === 'delete') {
       const syncRes = await client.query(
         `SELECT external_event_id FROM appointment_sync_map WHERE appointment_id = $1`,
         [appointmentId]
       );
       if (syncRes.rows.length === 0) {
-        log.info(`${prefix} — skipped: no sync map entry (WHY: appointment was never synced to ${providerName} Calendar)`);
+        log.info(
+          `${prefix} — skipped: no sync map entry (WHY: appointment was never synced to ${providerName} Calendar)`
+        );
         return;
       }
 
@@ -149,14 +155,17 @@ export async function syncAppointmentToCalendar(
         await provider.deleteEvent(accessToken, refreshToken, calendarId, externalEventId);
       } catch (err) {
         // Event may already be deleted — that's fine
-        log.warn(`${prefix} — ${providerName} deleteEvent failed (WHY: event may already be deleted in ${providerName} Calendar | eventId=${externalEventId} | ERROR: ${String(err)})`);
+        log.warn(
+          `${prefix} — ${providerName} deleteEvent failed (WHY: event may already be deleted in ${providerName} Calendar | eventId=${externalEventId} | ERROR: ${String(err)})`
+        );
       }
 
-      await client.query(
-        `DELETE FROM appointment_sync_map WHERE appointment_id = $1`,
-        [appointmentId]
+      await client.query(`DELETE FROM appointment_sync_map WHERE appointment_id = $1`, [
+        appointmentId,
+      ]);
+      log.info(
+        `${prefix} — event deleted from ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${externalEventId})`
       );
-      log.info(`${prefix} — event deleted from ${providerName} Calendar (WHERE: calendarId=${calendarId} eventId=${externalEventId})`);
     }
   } finally {
     client.release();

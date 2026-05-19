@@ -10,13 +10,13 @@ CLAUDE.md may reference these rules inline for quick lookup. **This file is the 
 
 Static checks before review — keep these green per commit. Each one catches a class of bug that the human-reviewer pass routinely misses.
 
-| Gate | Command | Catches |
-|---|---|---|
-| TypeScript strict | `npx tsc --noEmit` | Type mismatches, narrowing failures, missing required props |
-| ESLint type-checked | `npm run lint` (per project) | Floating promises, misused promises, unused vars, unsafe `any` propagation |
-| Unit tests | `npm test` (per project) | Behavior regressions |
-| E2E | `cd dashboard && npx playwright test` | Cross-system integration regressions |
-| Drift detector | `npx tsx scripts/verify-claude-md.ts` | CLAUDE.md claims drifting from filesystem reality |
+| Gate                | Command                               | Catches                                                                    |
+| ------------------- | ------------------------------------- | -------------------------------------------------------------------------- |
+| TypeScript strict   | `npx tsc --noEmit`                    | Type mismatches, narrowing failures, missing required props                |
+| ESLint type-checked | `npm run lint` (per project)          | Floating promises, misused promises, unused vars, unsafe `any` propagation |
+| Unit tests          | `npm test` (per project)              | Behavior regressions                                                       |
+| E2E                 | `cd dashboard && npx playwright test` | Cross-system integration regressions                                       |
+| Drift detector      | `npx tsx scripts/verify-claude-md.ts` | CLAUDE.md claims drifting from filesystem reality                          |
 
 ### ESLint configuration
 
@@ -28,30 +28,30 @@ Run `npm run lint` per project. Backend uses `eslint . --max-warnings 999`; dash
 
 Every rule lands as **`warn` initially** so the existing surface is visible without blocking CI. Each family promotes to `error` once its count hits zero. Current counts at adoption (2026-05-17):
 
-| Rule family | Initial count | Status |
-|---|---|---|
+| Rule family                              | Initial count  | Status                                                |
+| ---------------------------------------- | -------------- | ----------------------------------------------------- |
 | `no-explicit-any` + `no-unsafe-*` family | ~1100 warnings | in-progress cleanup (`chore(types): batch N` commits) |
-| `no-floating-promises` | ~27 | needs sweep |
-| `require-await` | ~15 | needs sweep |
-| `restrict-template-expressions` | ~10 | needs sweep |
-| `consistent-type-imports` | ~61 | auto-fixable via `eslint --fix` |
-| `no-unused-vars` | ~62 | mix of real cleanup + `_` prefix opt-outs |
-| `unbound-method` | varies | fires heavily in test files; expected |
-| `no-unnecessary-type-assertion` | ~5 | low priority |
-| `no-base-to-string` | ~1 | one-off |
+| `no-floating-promises`                   | ~27            | needs sweep                                           |
+| `require-await`                          | ~15            | needs sweep                                           |
+| `restrict-template-expressions`          | ~10            | needs sweep                                           |
+| `consistent-type-imports`                | ~61            | auto-fixable via `eslint --fix`                       |
+| `no-unused-vars`                         | ~62            | mix of real cleanup + `_` prefix opt-outs             |
+| `unbound-method`                         | varies         | fires heavily in test files; expected                 |
+| `no-unnecessary-type-assertion`          | ~5             | low priority                                          |
+| `no-base-to-string`                      | ~1             | one-off                                               |
 
 **Promotion rule**: when a family's count reaches zero (verified by `npx eslint . | grep <rule> | wc -l`), flip its level from `warn` to `error` in the relevant config. Add a `RESOLVED.md` entry naming the family + date.
 
 #### Catches we want as errors eventually
 
-| Rule | Bug class it catches |
-|---|---|
-| `no-floating-promises` | A promise nobody awaits silently drops errors. The reminder-retry bug surface lived here for weeks pre-2026-05-14. |
-| `no-misused-promises` | Passing an `async` function where a sync one is expected silently swallows rejections. |
-| `await-thenable` | `await` on a non-promise is a no-op — usually a sign the call signature changed. |
-| `require-await` | `async` without `await` means someone meant to await something and forgot. |
-| `no-unused-vars` | Dead variables drift into stale assumptions. `^_` prefix opts out per call site. |
-| `consistent-type-imports` | Type-only imports are stripped at runtime — explicit `import type` keeps the runtime graph honest. |
+| Rule                      | Bug class it catches                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `no-floating-promises`    | A promise nobody awaits silently drops errors. The reminder-retry bug surface lived here for weeks pre-2026-05-14. |
+| `no-misused-promises`     | Passing an `async` function where a sync one is expected silently swallows rejections.                             |
+| `await-thenable`          | `await` on a non-promise is a no-op — usually a sign the call signature changed.                                   |
+| `require-await`           | `async` without `await` means someone meant to await something and forgot.                                         |
+| `no-unused-vars`          | Dead variables drift into stale assumptions. `^_` prefix opts out per call site.                                   |
+| `consistent-type-imports` | Type-only imports are stripped at runtime — explicit `import type` keeps the runtime graph honest.                 |
 
 Test files (`*.test.ts`, `*.spec.ts`, `e2e/**`) have looser rules — fixtures often need `any`-shapes to model unhappy paths the production types don't allow. The promise-related checks still apply because forgetting to `await` in a test produces silent green runs.
 
@@ -64,10 +64,11 @@ ESLint's type-checked rules need every file under lint to be in some `tsconfig.j
 When a house rule echoes a published item, cite by name + number so the rationale is recognizable to anyone reaching for shorthand:
 
 - **`@typescript-eslint/recommended-type-checked`** — official preset; what our lint extends. See [typescript-eslint.io/users/configs](https://typescript-eslint.io/users/configs).
-- ***Effective TypeScript*** by Dan Vanderkam (83 numbered items) — de facto reference for TS idioms. Inline rules cite items by number, e.g. "Item 6: Use Your Editor to Interrogate and Explore the Type System."
+- **_Effective TypeScript_** by Dan Vanderkam (83 numbered items) — de facto reference for TS idioms. Inline rules cite items by number, e.g. "Item 6: Use Your Editor to Interrogate and Explore the Type System."
 - **TypeScript Handbook** (official) — for language-level questions (variance, overloads, conditional types). [typescriptlang.org/docs/handbook](https://www.typescriptlang.org/docs/handbook).
 
 What we deliberately **do not** adopt:
+
 - **Google `gts`** — too prescriptive for an existing codebase; would fight our snake_case JSON wire format and React conventions.
 - **Airbnb JS Style Guide** — JS-first; its TS port feels grafted. Cherry-pick via the ESLint preset above instead.
 
@@ -90,22 +91,22 @@ What we deliberately **do not** adopt:
 
 - **Every single-column PK is named `<table_singular>_id`, never bare `id`.**
 
-| Table | PK column |
-|---|---|
-| `tenants` | `tenant_id` |
-| `customers` | `customer_id` |
-| `appointments` | `appointment_id` |
-| `employees` | `employee_id` |
-| `services` | `service_id` |
-| `resources` | `resource_id` |
-| `skills` | `skill_id` |
-| `users` | `user_id` |
-| `voice_sessions` | `voice_session_id` |
-| `record_versions` | `record_version_id` |
+| Table                | PK column              |
+| -------------------- | ---------------------- |
+| `tenants`            | `tenant_id`            |
+| `customers`          | `customer_id`          |
+| `appointments`       | `appointment_id`       |
+| `employees`          | `employee_id`          |
+| `services`           | `service_id`           |
+| `resources`          | `resource_id`          |
+| `skills`             | `skill_id`             |
+| `users`              | `user_id`              |
+| `voice_sessions`     | `voice_session_id`     |
+| `record_versions`    | `record_version_id`    |
 | `reminder_schedules` | `reminder_schedule_id` |
-| `consent_records` | `consent_record_id` |
-| `opt_out_records` | `opt_out_record_id` |
-| `employee_schedule` | `employee_schedule_id` |
+| `consent_records`    | `consent_record_id`    |
+| `opt_out_records`    | `opt_out_record_id`    |
+| `employee_schedule`  | `employee_schedule_id` |
 
 **Why:** JOIN symmetry. `appointments.customer_id = customers.customer_id` lets queries use `USING (customer_id)`, and `SELECT *` across joined tables produces unambiguous column names with no aliasing. `SELECT customer_id FROM appointments JOIN customers USING (customer_id)` is unambiguous; `SELECT id FROM appointments JOIN customers ON customers.id = appointments.customer_id` requires aliasing every column.
 
@@ -149,7 +150,7 @@ For things the user reasons about, has a lifecycle, or could ever be referenced 
 For append-only logs where the row's identity is its sequence number.
 
 - `reminder_schedules`, `consent_records`, `opt_out_records`. (Likely also `audit_log`, `entity_sync_map` — yet to be enumerated.)
-- **The FK columns *inside* these tables that point at domain entities still use `UUID`.** Example: `reminder_schedules.reminder_schedule_id` is SERIAL, but `reminder_schedules.appointment_id` is UUID referencing `appointments.appointment_id`.
+- **The FK columns _inside_ these tables that point at domain entities still use `UUID`.** Example: `reminder_schedules.reminder_schedule_id` is SERIAL, but `reminder_schedules.appointment_id` is UUID referencing `appointments.appointment_id`.
 
 **Why SERIAL:** cheaper, ordered, simpler `WHERE id BETWEEN x AND y` queries by sequence. No one outside the worker cares which one.
 
@@ -190,11 +191,12 @@ const CUSTOMER_ID = 'c1';
 const EMPLOYEE_ID = 123;
 ```
 
-**Why:** UUID-shaped strings are *more representative* of production data, port cleanly when a mocked test is later upgraded to a real-DB integration test, and can't be silently swallowed by a `parseInt`/`Number()` coercion bug. The reminder bug above would have been caught earlier if mocked tests had used UUID-shaped strings — `parseInt('aaaaaaaa-...', 10)` returns `NaN` exactly like it does in production.
+**Why:** UUID-shaped strings are _more representative_ of production data, port cleanly when a mocked test is later upgraded to a real-DB integration test, and can't be silently swallowed by a `parseInt`/`Number()` coercion bug. The reminder bug above would have been caught earlier if mocked tests had used UUID-shaped strings — `parseInt('aaaaaaaa-...', 10)` returns `NaN` exactly like it does in production.
 
 ### Style for UUID-shaped strings
 
 Letter-based v4-shaped strings are easy to type and read in test output:
+
 - `'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'` — tenant A
 - `'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'` — appointment 1
 - `'cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa'` — customer 1
@@ -230,7 +232,7 @@ Established across pilots 1–6 (`record_versions`, `tenant_skills`, `reminder_s
    - For any view whose output includes the renamed column: `DROP VIEW IF EXISTS <view>` then `CREATE OR REPLACE VIEW ...`. `CREATE OR REPLACE VIEW` cannot rename output columns in-place.
 3. **TS types:** update both `src/types/*` and `dashboard/lib/types.ts` (and `agent/src/*` if applicable).
 4. **DB layer SQL:** route handlers, service files, RPC bodies — every `WHERE id =`, `RETURNING id`, `vs.id`, `r.id`, etc.
-5. **Test fixtures:** mock data structures that previously used `id` need the new field name. The targeted reminder/consent/voice tests pass after these updates; the *full* sweep catches the extras.
+5. **Test fixtures:** mock data structures that previously used `id` need the new field name. The targeted reminder/consent/voice tests pass after these updates; the _full_ sweep catches the extras.
 6. **Drift detector:** bump migration count in CLAUDE.md (`92 SQL migrations` → `93` etc.) and run `npx tsx scripts/verify-claude-md.ts` to confirm clean.
 7. **Full sweep:** `npx vitest run` (backend) + `cd dashboard && npm test` + `cd agent && npm test` + drift + (optional) E2E.
 8. **Commit + push.** CI is the canonical green gate.
@@ -308,6 +310,7 @@ The agent worker relies on this contract — both shapes return HTTP 200 so the 
 ### `withHandler` wraps every route
 
 Every route handler runs inside `withHandler(async (req, reply) => {...}, 'fallback error message')` (`src/middleware.ts`). Provides:
+
 - Unified `AppError` → status mapping
 - Structured error logging (Pino + Sentry + metrics)
 - Fallback error message for unexpected throws (never leaks stack traces)
@@ -323,9 +326,11 @@ Every route handler runs inside `withHandler(async (req, reply) => {...}, 'fallb
 Every mutation route validates its body against a Zod schema and returns 400 + the Zod issues array on failure:
 
 ```ts
-const parsed = MySchema.safeParse(req.body)
+const parsed = MySchema.safeParse(req.body);
 if (!parsed.success) {
-  return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues })
+  return reply
+    .status(400)
+    .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
 }
 ```
 
@@ -346,9 +351,9 @@ Tenant-scoped routes use `withTenantClient()` — sets `app.current_tenant_id` f
 All backend calls go through `dashboard/lib/api.ts`, namespaced as `Api.{resource}.{action}()`:
 
 ```ts
-Api.customers.list(tenantId)
-Api.appointments.create(tenantId, body)
-Api.shifts.schedule.bulkForDate(tenantId, start, end)
+Api.customers.list(tenantId);
+Api.appointments.create(tenantId, body);
+Api.shifts.schedule.bulkForDate(tenantId, start, end);
 ```
 
 Returns are fully typed. **Never `fetch()` directly from a component** — the api.ts layer handles auth-failure detection (`forceLogout()` on 401) and the per-request envelope shape.
@@ -388,12 +393,13 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ui`, `style`, `perf`
 Scopes (used in this repo): `ui`, `reminders`, `observability`, `theme`, `types`, `sms`, `e2e`, plus ad-hoc subsystem names.
 
 Examples from `git log`:
+
 - `feat(ui): D4 persistent setup-progress pill in top utility row`
 - `chore(types): clean up backend any-types — batch 4 (AppFastifyInstance alias)`
 - `test(e2e): cover D1 wizard-welcome auto-open path on fresh-tenant landing`
 - `fix(test): align architecture-review-fixes fallback to test_db`
 
-Subject ≤72 chars, imperative mood, no period. Body explains *why* + notable *what*; bullet groups OK; mention migrations / breaking changes / follow-ups.
+Subject ≤72 chars, imperative mood, no period. Body explains _why_ + notable _what_; bullet groups OK; mention migrations / breaking changes / follow-ups.
 
 ---
 
@@ -421,17 +427,17 @@ Run `npm run format` in any of the three projects (backend root, `agent/`, `dash
 
 ### Settings (locked in `.prettierrc.json`)
 
-| Setting | Value | Why this choice |
-|---|---|---|
-| `semi` | `true` | Backend was already using semis; standardize across the codebase rather than the other way around. Less ASI ambiguity. |
-| `singleQuote` | `true` | TS strings — matches existing code in both backend and dashboard. |
-| `jsxSingleQuote` | `false` | JSX attributes use double quotes — matches existing code and HTML convention. |
-| `trailingComma` | `"es5"` | Multi-line arrays / objects / function args. ES5-safe so older transpile targets don't choke. |
-| `tabWidth` | `2` | Existing convention. |
-| `printWidth` | `100` | Compromise between Prettier's default 80 (too narrow for this codebase's typical lines) and the existing ~120 norm (allows wall-of-text). |
-| `arrowParens` | `"always"` | Cheap to read, consistent with multi-param arrows. |
-| `bracketSameLine` | `false` | JSX closing `>` on its own line — easier to spot in diffs. |
-| `endOfLine` | `"lf"` | Cross-platform consistency; matches Linux/macOS dev environments. |
+| Setting           | Value      | Why this choice                                                                                                                           |
+| ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `semi`            | `true`     | Backend was already using semis; standardize across the codebase rather than the other way around. Less ASI ambiguity.                    |
+| `singleQuote`     | `true`     | TS strings — matches existing code in both backend and dashboard.                                                                         |
+| `jsxSingleQuote`  | `false`    | JSX attributes use double quotes — matches existing code and HTML convention.                                                             |
+| `trailingComma`   | `"es5"`    | Multi-line arrays / objects / function args. ES5-safe so older transpile targets don't choke.                                             |
+| `tabWidth`        | `2`        | Existing convention.                                                                                                                      |
+| `printWidth`      | `100`      | Compromise between Prettier's default 80 (too narrow for this codebase's typical lines) and the existing ~120 norm (allows wall-of-text). |
+| `arrowParens`     | `"always"` | Cheap to read, consistent with multi-param arrows.                                                                                        |
+| `bracketSameLine` | `false`    | JSX closing `>` on its own line — easier to spot in diffs.                                                                                |
+| `endOfLine`       | `"lf"`     | Cross-platform consistency; matches Linux/macOS dev environments.                                                                         |
 
 ### What Prettier doesn't own
 
@@ -443,6 +449,7 @@ Run `npm run format` in any of the three projects (backend root, `agent/`, `dash
 ### What's deliberately not in `.prettierignore`
 
 The full list lives in `.prettierignore` — notable inclusions:
+
 - `supabase/migrations/` — hand-written SQL with intentional formatting; reformatting risks breaking the migration chain.
 - `RESOLVED.md` and `docs/CURRENT_STATUS_ARCHIVED_*.md` — historical post-mortem narrative; reformatting would rewrite the past.
 

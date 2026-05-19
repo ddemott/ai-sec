@@ -1,14 +1,14 @@
-'use client'
+'use client';
 
-import React, { useEffect, useState } from 'react'
-import { Calendar, Users, Phone, Wrench, Wand2, X, ArrowRight, Sparkles } from 'lucide-react'
-import { Button } from './ui/Button'
-import { useActiveTenantId } from '../lib/SessionContext'
-import { useVocabulary } from '@/lib/VocabularyContext'
-import type { Tab } from '../app/dashboard/page'
+import React, { useEffect, useState } from 'react';
+import { Calendar, Users, Phone, Wrench, Wand2, X, ArrowRight, Sparkles } from 'lucide-react';
+import { Button } from './ui/Button';
+import { useActiveTenantId } from '../lib/SessionContext';
+import { useVocabulary } from '@/lib/VocabularyContext';
+import type { Tab } from '../app/dashboard/page';
 
 interface FirstRunTourProps {
-  onNavigate?: (tab: Tab) => void
+  onNavigate?: (tab: Tab) => void;
 }
 
 /**
@@ -31,28 +31,28 @@ interface FirstRunTourProps {
  * the tour once per tenant, not once per browser.
  */
 export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
-  const tenantId = useActiveTenantId()
-  const vocab = useVocabulary()
-  const [open, setOpen] = useState(false)
+  const tenantId = useActiveTenantId();
+  const vocab = useVocabulary();
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!tenantId) return
-    if (typeof window === 'undefined') return
-    const key = `firstRunTour_${tenantId}`
+    if (!tenantId) return;
+    if (typeof window === 'undefined') return;
+    const key = `firstRunTour_${tenantId}`;
     if (localStorage.getItem(key) === 'pending') {
-      setOpen(true)
+      setOpen(true);
       // Mark shown immediately so a quick re-render (Strict Mode, a state
       // flip elsewhere) doesn't trigger the modal twice. The user closing
       // it doesn't need to update localStorage again — it's already 'shown'.
-      localStorage.setItem(key, 'shown')
+      localStorage.setItem(key, 'shown');
     }
-  }, [tenantId])
+  }, [tenantId]);
 
-  if (!open) return null
+  if (!open) return null;
 
   function go(tab: Tab) {
-    setOpen(false)
-    onNavigate?.(tab)
+    setOpen(false);
+    onNavigate?.(tab);
   }
 
   return (
@@ -64,13 +64,26 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
     >
       <div
         className="rounded-2xl shadow-2xl border max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
-        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        onClick={e => e.stopPropagation()}
+        style={{
+          backgroundColor: 'var(--surface)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-primary)',
+        }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+        <div
+          className="px-6 py-4 border-b flex items-center justify-between"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
-            <h2 id="first-run-tour-title" className="text-lg font-bold">You&apos;re set up — here&apos;s what&apos;s where</h2>
+            <Sparkles
+              className="w-5 h-5"
+              style={{ color: 'var(--accent-soft)' }}
+              aria-hidden="true"
+            />
+            <h2 id="first-run-tour-title" className="text-lg font-bold">
+              You&apos;re set up — here&apos;s what&apos;s where
+            </h2>
           </div>
           <button
             onClick={() => setOpen(false)}
@@ -84,7 +97,8 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
 
         <div className="flex-1 overflow-auto px-6 py-5 space-y-3">
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Your AI receptionist is ready to take calls. Below is a quick map of where to find the things you&apos;ll use most. Click any card to jump there now.
+            Your AI receptionist is ready to take calls. Below is a quick map of where to find the
+            things you&apos;ll use most. Click any card to jump there now.
           </p>
 
           <TourCard
@@ -119,7 +133,10 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
           />
         </div>
 
-        <div className="px-6 py-3 border-t flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
+        <div
+          className="px-6 py-3 border-t flex justify-between items-center"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
             You can revisit any time from the Setup Assistant.
           </p>
@@ -129,14 +146,14 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 interface TourCardProps {
-  icon: React.ElementType
-  title: string
-  description: string
-  onClick: () => void
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  onClick: () => void;
 }
 
 function TourCard({ icon: Icon, title, description, onClick }: TourCardProps) {
@@ -145,23 +162,33 @@ function TourCard({ icon: Icon, title, description, onClick }: TourCardProps) {
       onClick={onClick}
       className="w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors group"
       style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)' }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = 'var(--accent-soft)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border-soft)';
+      }}
     >
       <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'var(--accent-muted)' }}>
         <Icon className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+        <div
+          className="flex items-center gap-1.5 font-semibold text-sm"
+          style={{ color: 'var(--text-primary)' }}
+        >
           {title}
-          <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
+          <ArrowRight
+            className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-hidden="true"
+          />
         </div>
         <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
           {description}
         </div>
       </div>
     </button>
-  )
+  );
 }
 
 /**
@@ -169,12 +196,12 @@ function TourCard({ icon: Icon, title, description, onClick }: TourCardProps) {
  * button so the tour fires when the user lands back on Home.
  */
 export function markFirstRunTourPending(tenantId: string | null) {
-  if (!tenantId) return
-  if (typeof window === 'undefined') return
-  const key = `firstRunTour_${tenantId}`
+  if (!tenantId) return;
+  if (typeof window === 'undefined') return;
+  const key = `firstRunTour_${tenantId}`;
   // Only mark pending if not already shown — re-running the wizard
   // shouldn't replay the tour.
   if (localStorage.getItem(key) === null) {
-    localStorage.setItem(key, 'pending')
+    localStorage.setItem(key, 'pending');
   }
 }

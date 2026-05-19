@@ -43,7 +43,10 @@ function buildApp() {
   registerVoiceRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+    mockWithTenantClient as unknown as <T>(
+      tenantId: string,
+      fn: (client: PoolClient) => Promise<T>
+    ) => Promise<T>
   );
 
   return fastify;
@@ -96,7 +99,14 @@ describe('Voice Routes — Happy Paths', () => {
         },
         upcoming_appointments: [],
       },
-      notes: [{ id: 'note-1', text: 'Prefers morning appointments', type: 'preference', created_at: '2026-02-01T10:00:00Z' }],
+      notes: [
+        {
+          id: 'note-1',
+          text: 'Prefers morning appointments',
+          type: 'preference',
+          created_at: '2026-02-01T10:00:00Z',
+        },
+      ],
       preferences: { preferred_time: 'morning' },
       tags: ['VIP', 'regular'],
       member_since: '2025-06-15T00:00:00Z',
@@ -317,7 +327,26 @@ describe('Voice Routes — Happy Paths', () => {
     // WHY: BUG-038 partial fix — soft-deletable tables must filter is_deleted
     //      in SELECT to avoid leaking deleted records into voice flows.
     queryResponses.push({ rows: [{ phone: '+1-555-123-4567' }] });
-    queryResponses.push({ rows: [{ context: { is_known_customer: true, customer: null, appointment_history: { total: 0, completed: 0, cancelled: 0, last_appointment: null, upcoming_appointments: [] }, notes: [], preferences: {}, tags: [] } }] });
+    queryResponses.push({
+      rows: [
+        {
+          context: {
+            is_known_customer: true,
+            customer: null,
+            appointment_history: {
+              total: 0,
+              completed: 0,
+              cancelled: 0,
+              last_appointment: null,
+              upcoming_appointments: [],
+            },
+            notes: [],
+            preferences: {},
+            tags: [],
+          },
+        },
+      ],
+    });
 
     await app.inject({
       method: 'GET',

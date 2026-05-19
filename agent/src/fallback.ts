@@ -81,7 +81,7 @@ export async function runFallback(
   ctx: JobContext,
   message: string,
   config: FallbackConfig,
-  deps?: FallbackDeps,
+  deps?: FallbackDeps
 ): Promise<void> {
   const AgentSessionCtor = deps?.AgentSessionCtor ?? voice.AgentSession;
   const AgentCtor = deps?.AgentCtor ?? voice.Agent;

@@ -25,7 +25,14 @@
  * debugger what behavior was expected and why.
  */
 import { describe, it, expect } from 'vitest';
-import { selectAssignments, type ResourceCandidate, type EmployeeCandidate, type ExistingAppointment, type TimeWindow, type Shift } from '../shared/scheduling';
+import {
+  selectAssignments,
+  type ResourceCandidate,
+  type EmployeeCandidate,
+  type ExistingAppointment,
+  type TimeWindow,
+  type Shift,
+} from '../shared/scheduling';
 
 function window(from: string, to: string): TimeWindow {
   return { from: new Date(from), to: new Date(to) };
@@ -174,10 +181,7 @@ describe('Scheduling selector – salon scenarios', () => {
       existingAppointments: existing,
     });
 
-    expect(options).toEqual([
-      { resourceId: 'suzy' },
-      { resourceId: 'alex' },
-    ]);
+    expect(options).toEqual([{ resourceId: 'suzy' }, { resourceId: 'alex' }]);
     expect(diagnostics.reason).toBe('ok');
     expect(diagnostics.totalResources).toBe(3);
     expect(diagnostics.capableResources).toBe(2);
@@ -579,9 +583,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
       { employee_id: 'john', day_of_week: 1, start_time: '09:00', end_time: '17:00' },
     ];
 
-    const employees: EmployeeCandidate[] = [
-      { employee_id: 'john', skills: ['oil-change'] },
-    ];
+    const employees: EmployeeCandidate[] = [{ employee_id: 'john', skills: ['oil-change'] }];
 
     const { options, diagnostics } = selectAssignments({
       requirements: {
@@ -662,10 +664,7 @@ describe('Scheduling selector – sad paths & edge cases', () => {
     });
 
     // Preferred not found among options — falls back to all qualified resources
-    expect(options).toEqual([
-      { resourceId: 'suzy' },
-      { resourceId: 'alex' },
-    ]);
+    expect(options).toEqual([{ resourceId: 'suzy' }, { resourceId: 'alex' }]);
     expect(diagnostics.reason).toBe('ok');
   });
 
@@ -906,11 +905,11 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     expect(options).toHaveLength(2); // bay1+john, bay3+john
     expect(diagnostics).toEqual({
       totalResources: 3,
-      capableResources: 2,   // bay1 + bay3
+      capableResources: 2, // bay1 + bay3
       availableResources: 2,
       totalEmployees: 3,
-      skilledEmployees: 2,   // john + sara
-      onShiftEmployees: 1,   // only john
+      skilledEmployees: 2, // john + sara
+      onShiftEmployees: 1, // only john
       reason: 'ok',
     });
   });
@@ -953,9 +952,7 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     // WHY: Same pluralization concern as the resources-busy case;
     //       pinning both keeps the contract symmetrical for both axes
     //       (resources vs. employees).
-    const resources: ResourceCandidate[] = [
-      { resource_id: 'r1', capabilities: ['x'] },
-    ];
+    const resources: ResourceCandidate[] = [{ resource_id: 'r1', capabilities: ['x'] }];
 
     const employees: EmployeeCandidate[] = [
       { employee_id: 'e1', skills: ['x'], onShift: false },
@@ -964,7 +961,11 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     ];
 
     const { diagnostics } = selectAssignments({
-      requirements: { serviceType: 'x', requiredResourceCapabilities: ['x'], requiredEmployeeSkills: ['x'] },
+      requirements: {
+        serviceType: 'x',
+        requiredResourceCapabilities: ['x'],
+        requiredEmployeeSkills: ['x'],
+      },
       window: baseWindow,
       resources,
       employees,
@@ -988,9 +989,7 @@ describe('Scheduling diagnostics – comprehensive coverage', () => {
     //       to fake employee data. Returning zero counts honestly is
     //       better than synthesizing fake employees to match an
     //       always-on pipeline.
-    const resources: ResourceCandidate[] = [
-      { resource_id: 'suzy', capabilities: ['cut'] },
-    ];
+    const resources: ResourceCandidate[] = [{ resource_id: 'suzy', capabilities: ['cut'] }];
 
     const { diagnostics } = selectAssignments({
       requirements: { serviceType: 'haircut', requiredResourceCapabilities: ['cut'] },
@@ -1019,13 +1018,28 @@ describe('selectAssignments — least-skilled-qualified auto-assignment policy (
   //        can do (e.g. Balancing — only Mike has it in DynaTire's seed).
 
   const seedResources = [{ resource_id: 'truck-1', capabilities: ['mobile-truck'] }];
-  const seedWindow = { from: new Date('2026-06-01T09:00:00Z'), to: new Date('2026-06-01T10:00:00Z') };
+  const seedWindow = {
+    from: new Date('2026-06-01T09:00:00Z'),
+    to: new Date('2026-06-01T10:00:00Z'),
+  };
 
   it('HAPPY: tire rotation — Mike (5 skills) does NOT win when 3-skill techs qualify', () => {
     const employees = [
-      { employee_id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
-      { employee_id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
-      { employee_id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+      {
+        employee_id: 'mike',
+        skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'],
+        onShift: true,
+      },
+      {
+        employee_id: 'carlos',
+        skills: ['flat-repair', 'tire-swap', 'tire-rotation'],
+        onShift: true,
+      },
+      {
+        employee_id: 'dana',
+        skills: ['flat-repair', 'tire-rotation', 'tire-install'],
+        onShift: true,
+      },
     ];
     const { options } = selectAssignments({
       requirements: {
@@ -1045,9 +1059,21 @@ describe('selectAssignments — least-skilled-qualified auto-assignment policy (
 
   it('HAPPY: balancing — Mike wins by elimination (only-qualified)', () => {
     const employees = [
-      { employee_id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
-      { employee_id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
-      { employee_id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+      {
+        employee_id: 'mike',
+        skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'],
+        onShift: true,
+      },
+      {
+        employee_id: 'carlos',
+        skills: ['flat-repair', 'tire-swap', 'tire-rotation'],
+        onShift: true,
+      },
+      {
+        employee_id: 'dana',
+        skills: ['flat-repair', 'tire-rotation', 'tire-install'],
+        onShift: true,
+      },
     ];
     const { options } = selectAssignments({
       requirements: {
@@ -1065,9 +1091,21 @@ describe('selectAssignments — least-skilled-qualified auto-assignment policy (
 
   it('HAPPY: tire install — Dana (3) wins over Mike (5)', () => {
     const employees = [
-      { employee_id: 'mike', skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'], onShift: true },
-      { employee_id: 'carlos', skills: ['flat-repair', 'tire-swap', 'tire-rotation'], onShift: true },
-      { employee_id: 'dana', skills: ['flat-repair', 'tire-rotation', 'tire-install'], onShift: true },
+      {
+        employee_id: 'mike',
+        skills: ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing'],
+        onShift: true,
+      },
+      {
+        employee_id: 'carlos',
+        skills: ['flat-repair', 'tire-swap', 'tire-rotation'],
+        onShift: true,
+      },
+      {
+        employee_id: 'dana',
+        skills: ['flat-repair', 'tire-rotation', 'tire-install'],
+        onShift: true,
+      },
     ];
     const { options } = selectAssignments({
       requirements: {

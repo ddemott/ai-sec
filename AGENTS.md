@@ -14,10 +14,12 @@ If a task requires reasoning about new logic, designing new code, fixing failing
 
 - For non-trivial multi-line changes, prefer `write` over `edit`. Read the file, modify it in your response, write the whole file back.
 - For single-string replacements across many files (the common case for renames), use `bash` with `grep` + `sed`:
+
 ```bash
   grep -rl "old_name" --include="*.ts" --include="*.tsx" .
   sed -i 's/old_name/new_name/g' <files>
 ```
+
 - If `edit` fails twice with the same validation error, fall back to `write` or `bash`/`sed`. Do not retry the same failing call.
 - After any rename, run `grep -r "old_name" .` to confirm zero remaining references. Report the count.
 

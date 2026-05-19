@@ -10,11 +10,13 @@ import { describe, it, expect } from 'vitest';
 import { collectStartupWarnings } from './envWarnings';
 
 /** Build a ctx with all vars set to "present" by default. */
-function baseCtx(overrides: {
-  env?: Record<string, string | undefined>;
-  TELNYX_API_KEY?: string;
-  TELNYX_SIP_CONNECTION_ID?: string;
-} = {}) {
+function baseCtx(
+  overrides: {
+    env?: Record<string, string | undefined>;
+    TELNYX_API_KEY?: string;
+    TELNYX_SIP_CONNECTION_ID?: string;
+  } = {}
+) {
   return {
     env: {
       GOOGLE_CLIENT_ID: 'google-client-id',

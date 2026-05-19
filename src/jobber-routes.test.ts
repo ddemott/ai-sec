@@ -80,7 +80,11 @@ function buildApp() {
     }
   });
 
-  registerJobberRoutes(fastify, mockPool, mockWithTenantClient as unknown as Parameters<typeof registerJobberRoutes>[2]);
+  registerJobberRoutes(
+    fastify,
+    mockPool,
+    mockWithTenantClient as unknown as Parameters<typeof registerJobberRoutes>[2]
+  );
 
   return fastify;
 }
@@ -116,7 +120,9 @@ describe('Jobber Routes — Happy Paths', () => {
     // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth handler
     // WHY: Without this, clicking "Connect Jobber" in the CRM integration card would fail silently — user sees no OAuth popup and cannot link their Jobber account
     vi.mocked(jobberClient.isJobberEnabled).mockReturnValue(true);
-    vi.mocked(jobberClient.getAuthUrl).mockReturnValue('https://api.getjobber.com/api/oauth/authorize?client_id=test');
+    vi.mocked(jobberClient.getAuthUrl).mockReturnValue(
+      'https://api.getjobber.com/api/oauth/authorize?client_id=test'
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -419,7 +425,9 @@ describe('Jobber Routes — Sad Paths', () => {
     // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth/callback token exchange try/catch
     // WHY: Without catching this, a Jobber outage during OAuth would show a raw 500 error — user would think SecretaryHQ is broken instead of seeing "connection failed, try again"
     vi.mocked(jobberClient.verifyState).mockReturnValue(TENANT_ID);
-    vi.mocked(jobberClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
+    vi.mocked(jobberClient.exchangeCodeForTokens).mockRejectedValue(
+      new Error('OAuth exchange failed')
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -427,7 +435,9 @@ describe('Jobber Routes — Sad Paths', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${DASHBOARD_URL}/dashboard?jobberError=token_exchange_failed`);
+    expect(res.headers.location).toBe(
+      `${DASHBOARD_URL}/dashboard?jobberError=token_exchange_failed`
+    );
   });
 
   // 14. POST /jobber/webhook/:tenantId returns 400 when missing signature

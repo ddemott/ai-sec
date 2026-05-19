@@ -123,24 +123,18 @@ describe('validateAppointmentTimeRange — 15-min increment integration', () => 
   //        real problem is "end < start". Pin the order.
 
   it('HAPPY: valid 15-min range returns null', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:30:00Z')
-    ).toBeNull();
+    expect(validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:30:00Z')).toBeNull();
   });
 
   it('SAD: off-grid start returns INVALID_INCREMENT', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:07:00Z', '2026-05-10T14:30:00Z')
-    ).toEqual({
+    expect(validateAppointmentTimeRange('2026-05-10T14:07:00Z', '2026-05-10T14:30:00Z')).toEqual({
       error: 'Start time must land on a 15-minute increment (:00, :15, :30, :45)',
       code: 'INVALID_INCREMENT',
     });
   });
 
   it('SAD: off-grid end returns INVALID_INCREMENT (start was valid)', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:23:00Z')
-    ).toEqual({
+    expect(validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:23:00Z')).toEqual({
       error: 'End time must land on a 15-minute increment (:00, :15, :30, :45)',
       code: 'INVALID_INCREMENT',
     });
@@ -157,18 +151,14 @@ describe('validateAppointmentTimeRange — 15-min increment integration', () => 
   });
 
   it('SAD: inverted range returns INVALID_RANGE, not INVALID_INCREMENT', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:30:00Z', '2026-05-10T14:00:00Z')
-    ).toEqual({
+    expect(validateAppointmentTimeRange('2026-05-10T14:30:00Z', '2026-05-10T14:00:00Z')).toEqual({
       error: 'End time must be after start time',
       code: 'INVALID_RANGE',
     });
   });
 
   it('SAD: 13-hour range returns INVALID_DURATION', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T08:00:00Z', '2026-05-10T21:00:00Z')
-    ).toEqual({
+    expect(validateAppointmentTimeRange('2026-05-10T08:00:00Z', '2026-05-10T21:00:00Z')).toEqual({
       error: 'Appointment duration cannot exceed 12 hours',
       code: 'INVALID_DURATION',
     });
@@ -178,9 +168,7 @@ describe('validateAppointmentTimeRange — 15-min increment integration', () => 
     // WHY: Date constructor on garbage gives NaN; the helper must catch
     //       that BEFORE the increment check (which short-circuits true on
     //       NaN to avoid double-reporting).
-    expect(
-      validateAppointmentTimeRange('not-a-date', '2026-05-10T14:30:00Z')
-    ).toEqual({
+    expect(validateAppointmentTimeRange('not-a-date', '2026-05-10T14:30:00Z')).toEqual({
       error: 'Invalid date/time',
       code: 'INVALID_PARAMS',
     });

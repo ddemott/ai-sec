@@ -11,10 +11,25 @@ import { filterEmployeesByService, filterResourcesByService } from '../../lib/av
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 import { ConflictModal, type BookingConflict, type AvailableAlternative } from './ConflictModal';
 
-interface QuickBookCustomer { customer_id: string; name?: string; phone?: string }
-interface QuickBookEmployee { employee_id: string; name: string; skills?: string[] }
-interface QuickBookResource { resource_id: string; name: string }
-interface QuickBookService { service_id: string; name: string; duration_minutes?: number }
+interface QuickBookCustomer {
+  customer_id: string;
+  name?: string;
+  phone?: string;
+}
+interface QuickBookEmployee {
+  employee_id: string;
+  name: string;
+  skills?: string[];
+}
+interface QuickBookResource {
+  resource_id: string;
+  name: string;
+}
+interface QuickBookService {
+  service_id: string;
+  name: string;
+  duration_minutes?: number;
+}
 
 interface QuickBookPanelProps {
   isOpen: boolean;
@@ -149,7 +164,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
         setEndTime(toLocalISOFromParts(prefill.date, prefill.endHour ?? prefill.hour + 1));
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, prefill]);
 
   // Update description and end time when service changes
@@ -219,7 +234,10 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-[#1a1a1a] shadow-2xl border-l border-gray-200 dark:border-gray-800 z-30 flex flex-col animate-in slide-in-from-right duration-200" data-testid="quick-book-panel">
+    <div
+      className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-[#1a1a1a] shadow-2xl border-l border-gray-200 dark:border-gray-800 z-30 flex flex-col animate-in slide-in-from-right duration-200"
+      data-testid="quick-book-panel"
+    >
       <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4" style={{ color: 'var(--warning)' }} />
@@ -241,13 +259,16 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
         {/* Customer search */}
         <CustomerCombobox
-          customers={customers.map((c) => ({ customer_id: c.customer_id, name: c.name ?? null, phone: c.phone ?? null }))}
+          customers={customers.map((c) => ({
+            customer_id: c.customer_id,
+            name: c.name ?? null,
+            phone: c.phone ?? null,
+          }))}
           value={customerId}
           onChange={setCustomerId}
           selectTestId="quick-book-customer"
           searchTestId="quick-book-customer-search"
         />
-
 
         {/* Service */}
         <Select
@@ -256,7 +277,10 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           onChange={(e) => setServiceId(e.target.value)}
           options={[
             { label: 'Walk-in (no service)', value: '' },
-            ...services.map((s) => ({ label: `${s.name} (${s.duration_minutes}min)`, value: String(s.service_id) })),
+            ...services.map((s) => ({
+              label: `${s.name} (${s.duration_minutes}min)`,
+              value: String(s.service_id),
+            })),
           ]}
           data-testid="quick-book-service"
         />
@@ -347,7 +371,6 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           setNextAvailable([]);
         }}
       />
-
 
       {/* Footer Book Now CTA.
           UX audit Devices 4.3.3 (2026-05-18): at iPhone SE landscape

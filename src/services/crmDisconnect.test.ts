@@ -36,7 +36,7 @@ describe('disconnectCrmIntegration — happy paths', () => {
     expect(queries[1].params).toEqual([TENANT_ID, 'jobber']);
   });
 
-  it("HAPPY: passes the provider literal verbatim to both DELETEs", async () => {
+  it('HAPPY: passes the provider literal verbatim to both DELETEs', async () => {
     // WHO: the route handlers calling this helper for each provider
     // WHAT: provider param flows unchanged into both DELETE param arrays
     // WHEN: every CRM disconnect — verifies all four provider names work
@@ -76,7 +76,7 @@ describe('disconnectCrmIntegration — happy paths', () => {
     queryResponses.push({ rows: [], rowCount: 0 });
 
     await expect(
-      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'square'),
+      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'square')
     ).resolves.toBeUndefined();
     expect(queries).toHaveLength(2);
   });
@@ -101,7 +101,7 @@ describe('disconnectCrmIntegration — sad paths', () => {
     queryFn.mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     await expect(
-      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'jobber'),
+      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'jobber')
     ).rejects.toThrow('lock_not_available');
 
     // The second DELETE must NOT have run
@@ -125,7 +125,7 @@ describe('disconnectCrmIntegration — sad paths', () => {
     queryFn.mockRejectedValueOnce(new Error('connection_terminated'));
 
     await expect(
-      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'hubspot'),
+      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'hubspot')
     ).rejects.toThrow('connection_terminated');
 
     // Both queries were attempted; vi-mock tracks .calls regardless of

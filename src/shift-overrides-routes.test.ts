@@ -59,7 +59,11 @@ function buildApp() {
     if (tid) (request as unknown as { tenantId: string }).tenantId = tid;
   });
 
-  registerShiftRoutes(fastify, mockPool, withTenantClient as Parameters<typeof registerShiftRoutes>[2]);
+  registerShiftRoutes(
+    fastify,
+    mockPool,
+    withTenantClient as Parameters<typeof registerShiftRoutes>[2]
+  );
   return fastify;
 }
 
@@ -121,7 +125,14 @@ describe('POST /shifts/overrides/create — happy paths', () => {
     expect(queries).toHaveLength(1);
     expect(queries[0].text).toContain('INSERT INTO employee_schedule');
     expect(queries[0].text).toContain('ON CONFLICT');
-    expect(queries[0].params).toEqual([TENANT_ID, EMPLOYEE_ID, '2026-05-15', '09:00', '17:00', false]);
+    expect(queries[0].params).toEqual([
+      TENANT_ID,
+      EMPLOYEE_ID,
+      '2026-05-15',
+      '09:00',
+      '17:00',
+      false,
+    ]);
   });
 
   it('HAPPY: inserts an is_off override with null start/end times', async () => {
@@ -239,7 +250,14 @@ describe('POST /shifts/overrides/:employeeId/:shiftDate/update — happy paths',
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, override: updatedRow });
     // null/undefined for unchanged fields → COALESCE keeps the existing column value
-    expect(queries[0].params).toEqual([undefined, '15:00', undefined, TENANT_ID, EMPLOYEE_ID, SHIFT_DATE]);
+    expect(queries[0].params).toEqual([
+      undefined,
+      '15:00',
+      undefined,
+      TENANT_ID,
+      EMPLOYEE_ID,
+      SHIFT_DATE,
+    ]);
   });
 });
 

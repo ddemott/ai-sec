@@ -110,11 +110,9 @@ export function createMockPool(mockClient: MockClient): Pool {
  * matching the production signature in `src/database/index.ts`.
  */
 export function createMockWithTenantClient(mockClient: MockClient): Mock {
-  return vi.fn(
-    async <T>(_tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> => {
-      return fn(mockClient as unknown as PoolClient);
-    },
-  );
+  return vi.fn(async <T>(_tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> => {
+    return fn(mockClient as unknown as PoolClient);
+  });
 }
 
 /**
@@ -197,8 +195,8 @@ export function buildRouteTestApp(
   register: (
     app: FastifyInstance,
     pool: Pool,
-    withTenantClient: ReturnType<typeof createMockWithTenantClient>,
-  ) => void,
+    withTenantClient: ReturnType<typeof createMockWithTenantClient>
+  ) => void
 ): RouteTestAppHandle {
   const handle = createMockClient();
   const mockPool = createMockPool(handle.mockClient);
@@ -245,10 +243,14 @@ export function buildRouteTestApp(
   });
 
   // Match `src/index.ts:162` — AppError-based handlers depend on this shape.
-  app.setErrorHandler(async (error: Error & { statusCode?: number; code?: string }, _request, reply) => {
-    const statusCode = error.statusCode || 500;
-    return reply.status(statusCode).send({ success: false, error: error.message || 'Internal server error' });
-  });
+  app.setErrorHandler(
+    async (error: Error & { statusCode?: number; code?: string }, _request, reply) => {
+      const statusCode = error.statusCode || 500;
+      return reply
+        .status(statusCode)
+        .send({ success: false, error: error.message || 'Internal server error' });
+    }
+  );
 
   register(app, mockPool, withTenantClient);
 

@@ -1,20 +1,45 @@
-import { normalizePhone } from './phone'
+import { normalizePhone } from './phone';
 import type {
-  Appointment, Customer, Resource, Employee, Service, ScheduleEntry, EffectiveShift, BulkEffectiveShift, Skill,
-  ServiceMapping, TenantFull, BusinessTemplate, Tenant,
-  CalendarSettings, AnalyticsStats, Vocabulary, CoverageItem,
-  CallSummary, JobberSettings, CrmSyncStatus, HubSpotSettings, SquareSettings, ServiceTitanSettings,
-  VoiceSession, VoiceSessionDisplay, CustomerContext,
-  RecordHistoryResponse, DeletedRecordsResponse, RecordRestorePreview, RecentChangesResponse,
-  VersionedTable, ChangeSource, RecordVersion, VersionComparison,
+  Appointment,
+  Customer,
+  Resource,
+  Employee,
+  Service,
+  ScheduleEntry,
+  EffectiveShift,
+  BulkEffectiveShift,
+  Skill,
+  ServiceMapping,
+  TenantFull,
+  BusinessTemplate,
+  Tenant,
+  CalendarSettings,
+  AnalyticsStats,
+  Vocabulary,
+  CoverageItem,
+  CallSummary,
+  JobberSettings,
+  CrmSyncStatus,
+  HubSpotSettings,
+  SquareSettings,
+  ServiceTitanSettings,
+  VoiceSession,
+  VoiceSessionDisplay,
+  CustomerContext,
+  RecordHistoryResponse,
+  DeletedRecordsResponse,
+  RecordRestorePreview,
+  RecentChangesResponse,
+  VersionedTable,
+  ChangeSource,
+  RecordVersion,
+  VersionComparison,
   TeamUser,
-} from './types'
+} from './types';
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (typeof window !== 'undefined'
-    ? 'https://localhost:4001'
-    : 'https://localhost:4001');
+  (typeof window !== 'undefined' ? 'https://localhost:4001' : 'https://localhost:4001');
 
 export const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -118,7 +143,7 @@ async function ensureTokenFresh(): Promise<void> {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
       if (response.ok) {
@@ -175,7 +200,9 @@ function handleFetchError(err: unknown) {
   ) {
     certRedirectTriggered = true;
     // Reset after 10 seconds so the user can retry if the redirect didn't help
-    setTimeout(() => { certRedirectTriggered = false; }, 10000);
+    setTimeout(() => {
+      certRedirectTriggered = false;
+    }, 10000);
     // Redirect to backend so the user can accept the self-signed cert
     window.location.href = `${API_BASE_URL}/health?redirect=${encodeURIComponent(window.location.href)}`;
   }
@@ -237,7 +264,8 @@ async function apiMutate<T>(
   }
 
   const authError = await checkAuthFailure(response);
-  if (authError) return { success: false, error: authError } as { success: boolean; error?: string } & T;
+  if (authError)
+    return { success: false, error: authError } as { success: boolean; error?: string } & T;
 
   const data = await response.json();
   if (!response.ok) {
@@ -269,11 +297,13 @@ export const Api = {
         phone: normalizePhone(data.phone),
       }),
 
-    delete: (id: string) =>
-      apiMutate(`/customers/${id}`, 'DELETE'),
+    delete: (id: string) => apiMutate(`/customers/${id}`, 'DELETE'),
 
     appointments: (customerId: string, tenantId: string | null) =>
-      apiFetch<Appointment[]>(`/customers/${customerId}/appointments`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Appointment[]>(
+        `/customers/${customerId}/appointments`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- APPOINTMENTS ---
@@ -283,7 +313,10 @@ export const Api = {
       if (tenantId) params.tenant_id = tenantId;
       if (opts?.startDate) params.start_date = opts.startDate;
       if (opts?.endDate) params.end_date = opts.endDate;
-      return apiFetch<Appointment[]>(`/appointments`, Object.keys(params).length > 0 ? params : undefined);
+      return apiFetch<Appointment[]>(
+        `/appointments`,
+        Object.keys(params).length > 0 ? params : undefined
+      );
     },
 
     create: (tenantId: string | null, data: Partial<Appointment> & Record<string, unknown>) =>
@@ -318,15 +351,18 @@ export const Api = {
         customer_phone: normalizePhone(data.customer_phone as string | undefined),
       }),
 
-    update: (id: string, entityTenantId: string, data: Partial<Appointment> & Record<string, unknown>) =>
+    update: (
+      id: string,
+      entityTenantId: string,
+      data: Partial<Appointment> & Record<string, unknown>
+    ) =>
       apiMutate(`/appointments/${id}/update`, 'POST', {
         tenant_id: getTargetTenantId(entityTenantId),
         ...data,
         customer_phone: normalizePhone(data.customer_phone as string | undefined),
       }),
 
-    delete: (id: string) =>
-      apiMutate(`/appointments/${id}`, 'DELETE'),
+    delete: (id: string) => apiMutate(`/appointments/${id}`, 'DELETE'),
 
     cancel: (id: string, tenantId: string | null) =>
       apiMutate(`/appointments/${id}/cancel`, 'POST', { tenant_id: tenantId }),
@@ -358,7 +394,10 @@ export const Api = {
       apiFetch<Resource[]>(`/resources`, tenantId ? { tenant_id: tenantId } : undefined),
 
     create: (tenantId: string | null, data: Partial<Resource>) =>
-      apiMutate<{ resource: Resource }>(`/resources/create`, 'POST', { tenant_id: tenantId, ...data }),
+      apiMutate<{ resource: Resource }>(`/resources/create`, 'POST', {
+        tenant_id: tenantId,
+        ...data,
+      }),
 
     update: (id: string, data: Partial<Resource>, tenantId?: string | null) =>
       apiMutate(`/resources/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
@@ -373,7 +412,10 @@ export const Api = {
       apiFetch<Employee[]>(`/employees`, tenantId ? { tenant_id: tenantId } : undefined),
 
     create: (tenantId: string | null, data: Partial<Employee>) =>
-      apiMutate<{ employee: Employee }>(`/employees/create`, 'POST', { tenant_id: tenantId, ...data }),
+      apiMutate<{ employee: Employee }>(`/employees/create`, 'POST', {
+        tenant_id: tenantId,
+        ...data,
+      }),
 
     update: (id: string, data: Partial<Employee>) =>
       apiMutate<{ employee: Employee }>(`/employees/${id}/update`, 'POST', data),
@@ -385,34 +427,56 @@ export const Api = {
   // --- USERS (login + role management) ---
   users: {
     list: (tenantId: string | null) =>
-      apiFetch<{ success: true; users: TeamUser[] }>(`/users`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ success: true; users: TeamUser[] }>(
+        `/users`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
-    invite: (tenantId: string | null, data: { email: string; full_name: string; role: 'owner' | 'front_desk' }) =>
-      apiMutate<{ user_id: string }>(`/users/invite`, 'POST', { tenant_id: tenantId, ...data }),
+    invite: (
+      tenantId: string | null,
+      data: { email: string; full_name: string; role: 'owner' | 'front_desk' }
+    ) => apiMutate<{ user_id: string }>(`/users/invite`, 'POST', { tenant_id: tenantId, ...data }),
 
     updateRole: (id: string, tenantId: string | null, role: 'owner' | 'front_desk') =>
-      apiMutate<{ role: 'owner' | 'front_desk' }>(`/users/${id}/role`, 'PATCH', { tenant_id: tenantId, role }),
+      apiMutate<{ role: 'owner' | 'front_desk' }>(`/users/${id}/role`, 'PATCH', {
+        tenant_id: tenantId,
+        role,
+      }),
   },
 
   // --- MAPPINGS ---
   mappings: {
     listServiceResource: (tenantId: string | null) =>
-      apiFetch<ServiceMapping[]>(`/mappings/service-resource`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<ServiceMapping[]>(
+        `/mappings/service-resource`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     assignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) =>
-      apiMutate(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', { tenant_id: tenantId }),
+      apiMutate(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', {
+        tenant_id: tenantId,
+      }),
 
     unassignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) =>
-      apiMutate(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', { tenant_id: tenantId }),
+      apiMutate(`/services/${serviceId}/resources/${resourceId}/unassign`, 'POST', {
+        tenant_id: tenantId,
+      }),
 
     assignServiceEmployee: (serviceId: string, employeeId: string, tenantId: string | null) =>
-      apiMutate(`/services/${serviceId}/employees/${employeeId}/assign`, 'POST', { tenant_id: tenantId }),
+      apiMutate(`/services/${serviceId}/employees/${employeeId}/assign`, 'POST', {
+        tenant_id: tenantId,
+      }),
 
     unassignServiceEmployee: (serviceId: string, employeeId: string, tenantId: string | null) =>
-      apiMutate(`/services/${serviceId}/employees/${employeeId}/unassign`, 'POST', { tenant_id: tenantId }),
+      apiMutate(`/services/${serviceId}/employees/${employeeId}/unassign`, 'POST', {
+        tenant_id: tenantId,
+      }),
 
     listServiceEmployee: (tenantId: string | null) =>
-      apiFetch<ServiceMapping[]>(`/mappings/service-employee`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<ServiceMapping[]>(
+        `/mappings/service-employee`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- SERVICES ---
@@ -424,7 +488,10 @@ export const Api = {
       apiMutate<{ service: Service }>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
 
     update: (id: string, tenantId: string | null, data: Partial<Service>) =>
-      apiMutate<{ service: Service }>(`/services/${id}/update`, 'POST', { tenant_id: tenantId, ...data }),
+      apiMutate<{ service: Service }>(`/services/${id}/update`, 'POST', {
+        tenant_id: tenantId,
+        ...data,
+      }),
 
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/services/${id}/delete?tenant_id=${tenantId}`, 'DELETE'),
@@ -438,7 +505,10 @@ export const Api = {
   shifts: {
     schedule: {
       list: (tenantId: string | null) =>
-        apiFetch<ScheduleEntry[]>(`/shifts/overrides`, tenantId ? { tenant_id: tenantId } : undefined),
+        apiFetch<ScheduleEntry[]>(
+          `/shifts/overrides`,
+          tenantId ? { tenant_id: tenantId } : undefined
+        ),
 
       forDate: (tenantId: string | null, employeeId: string, startDate: string, endDate: string) =>
         apiFetch<EffectiveShift[]>(`/shifts/overrides`, {
@@ -457,15 +527,26 @@ export const Api = {
         }),
 
       save: (tenantId: string | null, data: Partial<ScheduleEntry>) =>
-        apiMutate<{ override: ScheduleEntry }>(`/shifts/overrides/create`, 'POST', { tenant_id: tenantId, ...data }),
+        apiMutate<{ override: ScheduleEntry }>(`/shifts/overrides/create`, 'POST', {
+          tenant_id: tenantId,
+          ...data,
+        }),
 
       // 2026-05-18 pilot #3: composite-key path (employee_id, shift_date).
       // Tenant comes from JWT — no query param needed.
       remove: (employeeId: string, shiftDate: string, tenantId: string | null) =>
-        apiMutate(`/shifts/overrides/${encodeURIComponent(employeeId)}/${encodeURIComponent(shiftDate)}${tenantId ? `?tenant_id=${tenantId}` : ''}`, 'DELETE'),
+        apiMutate(
+          `/shifts/overrides/${encodeURIComponent(employeeId)}/${encodeURIComponent(shiftDate)}${tenantId ? `?tenant_id=${tenantId}` : ''}`,
+          'DELETE'
+        ),
     },
 
-    copyWeek: (tenantId: string | null, employeeId: string, sourceStart: string, targetStart: string) =>
+    copyWeek: (
+      tenantId: string | null,
+      employeeId: string,
+      sourceStart: string,
+      targetStart: string
+    ) =>
       apiMutate<{ copied: number }>(`/shifts/copy-week`, 'POST', {
         tenant_id: tenantId,
         employee_id: employeeId,
@@ -499,13 +580,22 @@ export const Api = {
   // --- CALENDAR SYNC ---
   calendar: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<CalendarSettings | null>(`/calendar/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CalendarSettings | null>(
+        `/calendar/settings`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     getAuthUrl: (tenantId: string | null, provider: 'google' | 'outlook' = 'google') =>
-      apiFetch<{ url: string }>(`/calendar/auth/${provider}`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ url: string }>(
+        `/calendar/auth/${provider}`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     updateSettings: (tenantId: string | null, data: Partial<CalendarSettings>) =>
-      apiMutate<{ settings: CalendarSettings }>(`/calendar/settings`, 'POST', { tenant_id: tenantId, ...data }),
+      apiMutate<{ settings: CalendarSettings }>(`/calendar/settings`, 'POST', {
+        tenant_id: tenantId,
+        ...data,
+      }),
 
     disconnect: (tenantId: string | null) =>
       apiMutate(`/calendar/settings/disconnect`, 'POST', { tenant_id: tenantId }),
@@ -529,17 +619,24 @@ export const Api = {
     // tenant_skill_id was dropped; the route now keys on the slug name.
     // Argument renamed so a wrong-type caller fails at type-check time.
     delete: (name: string, tenantId: string | null) =>
-      apiMutate(`/skills/${encodeURIComponent(name)}`, 'DELETE', tenantId ? { tenant_id: tenantId } : undefined),
+      apiMutate(
+        `/skills/${encodeURIComponent(name)}`,
+        'DELETE',
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- TENANTS & TEMPLATES ---
   tenants: {
     list: () => apiFetch<TenantFull[]>(`/tenants`),
     getConfig: (tenantId: string | null) => apiFetch<Tenant>(`/tenants/${tenantId}/config`),
-    update: (id: string, data: Partial<TenantFull>) => apiMutate(`/tenants/${id}/update-attributes`, 'POST', data as Record<string, unknown>),
-    updateConfig: (id: string, data: Partial<Tenant>) => apiMutate(`/tenants/${id}/update-config`, 'POST', data as Record<string, unknown>),
+    update: (id: string, data: Partial<TenantFull>) =>
+      apiMutate(`/tenants/${id}/update-attributes`, 'POST', data as Record<string, unknown>),
+    updateConfig: (id: string, data: Partial<Tenant>) =>
+      apiMutate(`/tenants/${id}/update-config`, 'POST', data as Record<string, unknown>),
     delete: (id: string) => apiMutate(`/tenants/${id}`, 'DELETE'),
-    create: (data: Record<string, unknown>) => apiMutate<{ tenant_id: string }>(`/tenants/create`, 'POST', data),
+    create: (data: Record<string, unknown>) =>
+      apiMutate<{ tenant_id: string }>(`/tenants/create`, 'POST', data),
     reorder: (order: string[]) => apiMutate(`/tenants/reorder`, 'POST', { order }),
   },
 
@@ -550,14 +647,19 @@ export const Api = {
 
   // --- FEEDBACK ---
   feedback: {
-    submit: (tenantId: string | null, data: { page: string; context?: string; comment: string; rating?: number }) =>
-      apiMutate(`/feedback`, 'POST', { tenant_id: tenantId, ...data }),
+    submit: (
+      tenantId: string | null,
+      data: { page: string; context?: string; comment: string; rating?: number }
+    ) => apiMutate(`/feedback`, 'POST', { tenant_id: tenantId, ...data }),
   },
 
   // --- CALL SUMMARIES ---
   callSummaries: {
     list: (tenantId: string | null, customerId: string) =>
-      apiFetch<CallSummary[]>(`/call-summaries`, tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }),
+      apiFetch<CallSummary[]>(
+        `/call-summaries`,
+        tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }
+      ),
   },
 
   // --- VOCABULARY ---
@@ -580,7 +682,16 @@ export const Api = {
   // --- KNOWLEDGE BASE (RAG) ---
   knowledge: {
     list: (tenantId: string | null) =>
-      apiFetch<Array<{ tenant_doc_id: string; title: string; section: string | null; content: string; source: string; created_at: string }>>(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<
+        Array<{
+          tenant_doc_id: string;
+          title: string;
+          section: string | null;
+          content: string;
+          source: string;
+          created_at: string;
+        }>
+      >(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
 
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
@@ -590,14 +701,21 @@ export const Api = {
     // Q&A added via the new Custom Questions section. The discriminator
     // lets the questionnaire UI filter its own preset answers without
     // mixing in custom entries.
-    add: (tenantId: string | null, data: { question: string; answer: string; category?: string; source?: string }) =>
+    add: (
+      tenantId: string | null,
+      data: { question: string; answer: string; category?: string; source?: string }
+    ) =>
       apiMutate<{ success: boolean; tenant_doc_id: string }>(`/knowledge/add`, 'POST', {
         tenant_id: tenantId,
         ...data,
         source: data.source ?? 'policy-questionnaire',
       }),
 
-    update: (id: string, tenantId: string | null, data: { question: string; answer: string; category?: string }) =>
+    update: (
+      id: string,
+      tenantId: string | null,
+      data: { question: string; answer: string; category?: string }
+    ) =>
       apiMutate<{ success: boolean }>(`/knowledge/${id}`, 'PUT', {
         tenant_id: tenantId,
         ...data,
@@ -605,10 +723,21 @@ export const Api = {
       }),
 
     unanswered: (tenantId: string | null) =>
-      apiFetch<{ success: boolean; questions: Array<{ unanswered_question_id: string; question: string; caller_phone: string | null; caller_message: string | null; created_at: string }> }>(`/knowledge/unanswered`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{
+        success: boolean;
+        questions: Array<{
+          unanswered_question_id: string;
+          question: string;
+          caller_phone: string | null;
+          caller_message: string | null;
+          created_at: string;
+        }>;
+      }>(`/knowledge/unanswered`, tenantId ? { tenant_id: tenantId } : undefined),
 
     resolveUnanswered: (id: string, tenantId: string | null) =>
-      apiMutate<{ success: boolean }>(`/knowledge/unanswered/${id}/resolve`, 'PATCH', { tenant_id: tenantId }),
+      apiMutate<{ success: boolean }>(`/knowledge/unanswered/${id}/resolve`, 'PATCH', {
+        tenant_id: tenantId,
+      }),
 
     ingest: async (tenantId: string | null, file: File) => {
       const formData = new FormData();
@@ -625,8 +754,12 @@ export const Api = {
         body: formData,
       });
 
-      return response.json() as Promise<{ success: boolean; chunksIngested: number; error?: string }>;
-    }
+      return response.json() as Promise<{
+        success: boolean;
+        chunksIngested: number;
+        error?: string;
+      }>;
+    },
   },
 
   // --- BILLING ---
@@ -635,14 +768,18 @@ export const Api = {
       apiMutate<{ url: string }>(`/billing/checkout`, 'POST', { tenant_id: tenantId, plan }),
 
     status: (tenantId: string) =>
-      apiFetch<{ subscription_status: string; subscription_plan: string | null }>(`/billing/status`, { tenant_id: tenantId }),
+      apiFetch<{ subscription_status: string; subscription_plan: string | null }>(
+        `/billing/status`,
+        { tenant_id: tenantId }
+      ),
   },
 
   // --- PHONE PROVISIONING ---
   provisioning: {
     activate: (tenantId: string, areaCode?: string) =>
       apiMutate<{ success: boolean; phone_number: string; telnyx_phone_number_id: string }>(
-        `/provisioning/activate`, 'POST',
+        `/provisioning/activate`,
+        'POST',
         { tenant_id: tenantId, ...(areaCode ? { area_code: areaCode } : {}) }
       ),
 
@@ -650,15 +787,20 @@ export const Api = {
       apiMutate<{ success: boolean }>(`/provisioning/deactivate`, 'POST', { tenant_id: tenantId }),
 
     status: (tenantId: string) =>
-      apiFetch<{ phone_status: string; inbound_phone: string | null; telnyx_phone_number_id: string | null }>(
-        `/provisioning/status`, { tenant_id: tenantId }
-      ),
+      apiFetch<{
+        phone_status: string;
+        inbound_phone: string | null;
+        telnyx_phone_number_id: string | null;
+      }>(`/provisioning/status`, { tenant_id: tenantId }),
   },
 
   // --- JOBBER CRM ---
   jobber: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<JobberSettings | null>(`/jobber/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<JobberSettings | null>(
+        `/jobber/settings`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     getAuthUrl: (tenantId: string | null) =>
       apiFetch<{ url: string }>(`/jobber/auth`, tenantId ? { tenant_id: tenantId } : undefined),
@@ -667,16 +809,26 @@ export const Api = {
       apiMutate(`/jobber/settings/disconnect`, 'POST', { tenant_id: tenantId }),
 
     triggerSync: (tenantId: string | null) =>
-      apiMutate<{ clientsSynced: number; visitsSynced: number; errors: number }>(`/jobber/sync`, 'POST', { tenant_id: tenantId }),
+      apiMutate<{ clientsSynced: number; visitsSynced: number; errors: number }>(
+        `/jobber/sync`,
+        'POST',
+        { tenant_id: tenantId }
+      ),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(`/jobber/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(
+        `/jobber/sync/status`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- HUBSPOT CRM ---
   hubspot: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<HubSpotSettings | null>(`/hubspot/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<HubSpotSettings | null>(
+        `/hubspot/settings`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     getAuthUrl: (tenantId: string | null) =>
       apiFetch<{ url: string }>(`/hubspot/auth`, tenantId ? { tenant_id: tenantId } : undefined),
@@ -685,16 +837,26 @@ export const Api = {
       apiMutate(`/hubspot/settings/disconnect`, 'POST', { tenant_id: tenantId }),
 
     triggerSync: (tenantId: string | null) =>
-      apiMutate<{ contactsSynced: number; meetingsSynced: number; errors: number }>(`/hubspot/sync`, 'POST', { tenant_id: tenantId }),
+      apiMutate<{ contactsSynced: number; meetingsSynced: number; errors: number }>(
+        `/hubspot/sync`,
+        'POST',
+        { tenant_id: tenantId }
+      ),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(`/hubspot/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(
+        `/hubspot/sync/status`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- SQUARE CRM ---
   square: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<SquareSettings | null>(`/square/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<SquareSettings | null>(
+        `/square/settings`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     getAuthUrl: (tenantId: string | null) =>
       apiFetch<{ url: string }>(`/square/auth`, tenantId ? { tenant_id: tenantId } : undefined),
@@ -703,54 +865,89 @@ export const Api = {
       apiMutate(`/square/settings/disconnect`, 'POST', { tenant_id: tenantId }),
 
     triggerSync: (tenantId: string | null) =>
-      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(`/square/sync`, 'POST', { tenant_id: tenantId }),
+      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(
+        `/square/sync`,
+        'POST',
+        { tenant_id: tenantId }
+      ),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(`/square/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(
+        `/square/sync/status`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- SERVICETITAN CRM ---
   servicetitan: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<ServiceTitanSettings | null>(`/servicetitan/settings`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<ServiceTitanSettings | null>(
+        `/servicetitan/settings`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ url: string }>(`/servicetitan/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ url: string }>(
+        `/servicetitan/auth`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     disconnect: (tenantId: string | null) =>
       apiMutate(`/servicetitan/settings/disconnect`, 'POST', { tenant_id: tenantId }),
 
     triggerSync: (tenantId: string | null) =>
-      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(`/servicetitan/sync`, 'POST', { tenant_id: tenantId }),
+      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(
+        `/servicetitan/sync`,
+        'POST',
+        { tenant_id: tenantId }
+      ),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(`/servicetitan/sync/status`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CrmSyncStatus>(
+        `/servicetitan/sync/status`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- VOICE CRM (Call Context) ---
   voice: {
     // Get active calls for dashboard
     getActiveCalls: (tenantId: string | null) =>
-      apiFetch<{ calls: VoiceSessionDisplay[]; total: number }>(`/voice/active`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ calls: VoiceSessionDisplay[]; total: number }>(
+        `/voice/active`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     // Get call history with optional filters
-    getHistory: (tenantId: string | null, opts?: { customer_id?: string; status?: string; limit?: number; offset?: number }) => {
+    getHistory: (
+      tenantId: string | null,
+      opts?: { customer_id?: string; status?: string; limit?: number; offset?: number }
+    ) => {
       const params: Record<string, string> = {};
       if (tenantId) params.tenant_id = tenantId;
       if (opts?.customer_id) params.customer_id = opts.customer_id;
       if (opts?.status) params.status = opts.status;
       if (opts?.limit) params.limit = String(opts.limit);
       if (opts?.offset) params.offset = String(opts.offset);
-      return apiFetch<{ calls: VoiceSession[]; total: number; has_more: boolean }>(`/voice/history`, Object.keys(params).length > 0 ? params : undefined);
+      return apiFetch<{ calls: VoiceSession[]; total: number; has_more: boolean }>(
+        `/voice/history`,
+        Object.keys(params).length > 0 ? params : undefined
+      );
     },
 
     // Get a specific voice session
     getSession: (tenantId: string | null, callId: string) =>
-      apiFetch<VoiceSession>(`/voice/session/${callId}`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<VoiceSession>(
+        `/voice/session/${callId}`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     // Get customer context (for viewing customer profile enrichment)
     getCustomerContext: (tenantId: string | null, customerId: string) =>
-      apiFetch<CustomerContext>(`/voice/customer/${customerId}/context`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CustomerContext>(
+        `/voice/customer/${customerId}/context`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     // Get call history for a specific customer
     getCustomerCalls: (tenantId: string | null, customerId: string, limit?: number) =>
@@ -760,46 +957,87 @@ export const Api = {
       }),
 
     // Add a note to a customer
-    addCustomerNote: (tenantId: string | null, data: { customer_id: string; note: string; note_type?: string; call_id?: string }) =>
-      apiMutate<{ success: boolean }>(`/voice/customer/note`, 'POST', { tenant_id: tenantId, ...data }),
+    addCustomerNote: (
+      tenantId: string | null,
+      data: { customer_id: string; note: string; note_type?: string; call_id?: string }
+    ) =>
+      apiMutate<{ success: boolean }>(`/voice/customer/note`, 'POST', {
+        tenant_id: tenantId,
+        ...data,
+      }),
 
     // Get customer context by phone (used during active calls)
     getContextByPhone: (tenantId: string | null, phone: string) =>
-      apiFetch<CustomerContext>(`/voice/context/${encodeURIComponent(phone)}`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<CustomerContext>(
+        `/voice/context/${encodeURIComponent(phone)}`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- Version History API ---
   versionHistory: {
     // Get full history for a record
     getHistory: (tenantId: string | null, table: VersionedTable, recordId: string) =>
-      apiFetch<RecordHistoryResponse>(`/records/${table}/${recordId}/history`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<RecordHistoryResponse>(
+        `/records/${table}/${recordId}/history`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     // Get a specific version
-    getVersion: (tenantId: string | null, table: VersionedTable, recordId: string, versionNumber: number) =>
-      apiFetch<RecordVersion>(`/records/${table}/${recordId}/version/${versionNumber}`, tenantId ? { tenant_id: tenantId } : undefined),
+    getVersion: (
+      tenantId: string | null,
+      table: VersionedTable,
+      recordId: string,
+      versionNumber: number
+    ) =>
+      apiFetch<RecordVersion>(
+        `/records/${table}/${recordId}/version/${versionNumber}`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     // Compare two versions
-    compareVersions: (tenantId: string | null, table: VersionedTable, recordId: string, versionA: number, versionB: number) =>
-      apiFetch<{ record_id: string; table_name: string; version_a: number; version_b: number; differences: VersionComparison[] }>(
+    compareVersions: (
+      tenantId: string | null,
+      table: VersionedTable,
+      recordId: string,
+      versionA: number,
+      versionB: number
+    ) =>
+      apiFetch<{
+        record_id: string;
+        table_name: string;
+        version_a: number;
+        version_b: number;
+        differences: VersionComparison[];
+      }>(
         `/records/${table}/${recordId}/compare/${versionA}/${versionB}`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
 
     // Get restore preview (all fields with historical values)
     getRestorePreview: (tenantId: string | null, table: VersionedTable, recordId: string) =>
-      apiFetch<RecordRestorePreview>(`/records/${table}/${recordId}/restore-preview`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<RecordRestorePreview>(
+        `/records/${table}/${recordId}/restore-preview`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     // Restore specific fields from a version
     restoreFields: (
       tenantId: string | null,
       table: VersionedTable,
       recordId: string,
-      data: { source_version: number; fields: string[]; restored_by?: string; change_source?: ChangeSource }
-    ) => apiMutate<{ success: boolean; data: Record<string, unknown>; message: string }>(
-      `/records/${table}/${recordId}/restore-fields`,
-      'POST',
-      { tenant_id: tenantId, ...data }
-    ),
+      data: {
+        source_version: number;
+        fields: string[];
+        restored_by?: string;
+        change_source?: ChangeSource;
+      }
+    ) =>
+      apiMutate<{ success: boolean; data: Record<string, unknown>; message: string }>(
+        `/records/${table}/${recordId}/restore-fields`,
+        'POST',
+        { tenant_id: tenantId, ...data }
+      ),
 
     // Soft delete a record
     softDelete: (
@@ -807,11 +1045,12 @@ export const Api = {
       table: VersionedTable,
       recordId: string,
       data?: { deleted_by?: string; change_source?: ChangeSource }
-    ) => apiMutate<{ success: boolean; message: string }>(
-      `/records/${table}/${recordId}/soft-delete`,
-      'POST',
-      { tenant_id: tenantId, ...(data || {}) }
-    ),
+    ) =>
+      apiMutate<{ success: boolean; message: string }>(
+        `/records/${table}/${recordId}/soft-delete`,
+        'POST',
+        { tenant_id: tenantId, ...(data || {}) }
+      ),
 
     // Restore a soft-deleted record
     restoreDeleted: (
@@ -819,36 +1058,57 @@ export const Api = {
       table: VersionedTable,
       recordId: string,
       data?: { restored_by?: string; change_source?: ChangeSource }
-    ) => apiMutate<{ success: boolean; message: string }>(
-      `/records/${table}/${recordId}/restore`,
-      'POST',
-      { tenant_id: tenantId, ...(data || {}) }
-    ),
+    ) =>
+      apiMutate<{ success: boolean; message: string }>(
+        `/records/${table}/${recordId}/restore`,
+        'POST',
+        { tenant_id: tenantId, ...(data || {}) }
+      ),
 
     // Get deleted records for a table
-    getDeleted: (tenantId: string | null, table: VersionedTable, opts?: { limit?: number; offset?: number }) => {
+    getDeleted: (
+      tenantId: string | null,
+      table: VersionedTable,
+      opts?: { limit?: number; offset?: number }
+    ) => {
       const params: Record<string, string> = {};
       if (tenantId) params.tenant_id = tenantId;
       if (opts?.limit) params.limit = String(opts.limit);
       if (opts?.offset) params.offset = String(opts.offset);
-      return apiFetch<DeletedRecordsResponse>(`/records/${table}/deleted`, Object.keys(params).length > 0 ? params : undefined);
+      return apiFetch<DeletedRecordsResponse>(
+        `/records/${table}/deleted`,
+        Object.keys(params).length > 0 ? params : undefined
+      );
     },
 
     // Copy fields from one record to another
     copyFields: (
       tenantId: string | null,
       table: VersionedTable,
-      data: { source_record_id: string; target_record_id: string; fields: string[]; copied_by?: string; change_source?: ChangeSource }
-    ) => apiMutate<{ success: boolean; data: Record<string, unknown>; message: string }>(
-      `/records/${table}/copy-fields`,
-      'POST',
-      { tenant_id: tenantId, ...data }
-    ),
+      data: {
+        source_record_id: string;
+        target_record_id: string;
+        fields: string[];
+        copied_by?: string;
+        change_source?: ChangeSource;
+      }
+    ) =>
+      apiMutate<{ success: boolean; data: Record<string, unknown>; message: string }>(
+        `/records/${table}/copy-fields`,
+        'POST',
+        { tenant_id: tenantId, ...data }
+      ),
 
     // Get recent changes across all tables
     getRecentChanges: (
       tenantId: string | null,
-      opts?: { limit?: number; offset?: number; table?: VersionedTable; change_type?: string; change_source?: ChangeSource }
+      opts?: {
+        limit?: number;
+        offset?: number;
+        table?: VersionedTable;
+        change_type?: string;
+        change_source?: ChangeSource;
+      }
     ) => {
       const params: Record<string, string> = {};
       if (tenantId) params.tenant_id = tenantId;
@@ -857,7 +1117,10 @@ export const Api = {
       if (opts?.table) params.table = opts.table;
       if (opts?.change_type) params.change_type = opts.change_type;
       if (opts?.change_source) params.change_source = opts.change_source;
-      return apiFetch<RecentChangesResponse>(`/records/recent-changes`, Object.keys(params).length > 0 ? params : undefined);
+      return apiFetch<RecentChangesResponse>(
+        `/records/recent-changes`,
+        Object.keys(params).length > 0 ? params : undefined
+      );
     },
   },
 };

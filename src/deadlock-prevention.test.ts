@@ -13,7 +13,14 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, createTenant,  skipIfDbDown } from './test-utils';
+import {
+  getRootClient,
+  clearDB,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  createTenant,
+  skipIfDbDown,
+} from './test-utils';
 
 let client: Client;
 let dbAvailable = false;
@@ -45,7 +52,7 @@ describe('Deadlock Prevention: Timeout Configuration', () => {
     if (!dbAvailable) return;
     // Test the principle: the application pool should set timeouts.
     // We verify the test DB has timeout support (the actual pool config uses options flags).
-    const res = await client.query("SHOW statement_timeout");
+    const res = await client.query('SHOW statement_timeout');
     expect(res.rows[0].statement_timeout).toBeDefined();
   });
 
@@ -58,7 +65,7 @@ describe('Deadlock Prevention: Timeout Configuration', () => {
     //      indefinitely. With 10 connections in the pool, 10 blocked requests = complete outage.
     //      lock_timeout makes it fail fast with a clear error instead of hanging silently.
     if (!dbAvailable) return;
-    const res = await client.query("SHOW lock_timeout");
+    const res = await client.query('SHOW lock_timeout');
     expect(res.rows[0].lock_timeout).toBeDefined();
   });
 
@@ -72,7 +79,7 @@ describe('Deadlock Prevention: Timeout Configuration', () => {
     //      row would be locked until the connection times out or the server restarts. This timeout
     //      ensures abandoned transactions are cleaned up automatically.
     if (!dbAvailable) return;
-    const res = await client.query("SHOW idle_in_transaction_session_timeout");
+    const res = await client.query('SHOW idle_in_transaction_session_timeout');
     expect(res.rows[0].idle_in_transaction_session_timeout).toBeDefined();
   });
 });
@@ -92,14 +99,18 @@ describe('Deadlock Prevention: Transaction Isolation in Tests', () => {
 
     // Create a tenant inside the transaction
     const tenantId = await createTenant(client, 'DeadlockTest', 'test-type');
-    const check1 = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [tenantId]);
+    const check1 = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [
+      tenantId,
+    ]);
     expect(check1.rows.length).toBe(1);
 
     // Rollback should undo the insert
     await rollbackTestTransaction(client);
 
     // Tenant should be gone — rollback undid the insert
-    const check2 = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [tenantId]);
+    const check2 = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [
+      tenantId,
+    ]);
     expect(check2.rows.length).toBe(0);
   });
 
@@ -177,9 +188,9 @@ describe('Deadlock Prevention: Application Lock Ordering', () => {
     const fs = require('fs');
     const src = fs.readFileSync('src/routes/services.ts', 'utf8');
     // Verify the order: service_employee before service_resource before services
-    const empIdx = src.indexOf("DELETE FROM service_employee");
-    const resIdx = src.indexOf("DELETE FROM service_resource");
-    const svcIdx = src.indexOf("DELETE FROM services WHERE");
+    const empIdx = src.indexOf('DELETE FROM service_employee');
+    const resIdx = src.indexOf('DELETE FROM service_resource');
+    const svcIdx = src.indexOf('DELETE FROM services WHERE');
     expect(empIdx).toBeLessThan(resIdx);
     expect(resIdx).toBeLessThan(svcIdx);
   });
@@ -211,8 +222,8 @@ describe('Deadlock Prevention: Application Lock Ordering', () => {
     const fs = require('fs');
     const src = fs.readFileSync('src/routes/appointments.ts', 'utf8');
     // UPDATE appointments should appear before UPDATE customers in the transaction
-    const apptUpdateIdx = src.indexOf("UPDATE appointments SET");
-    const custUpdateIdx = src.indexOf("UPDATE customers SET");
+    const apptUpdateIdx = src.indexOf('UPDATE appointments SET');
+    const custUpdateIdx = src.indexOf('UPDATE customers SET');
     expect(apptUpdateIdx).toBeLessThan(custUpdateIdx);
   });
 

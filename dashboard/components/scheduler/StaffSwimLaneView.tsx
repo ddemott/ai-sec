@@ -4,8 +4,15 @@ import { AppointmentBlock, getEmployeeColor } from './AppointmentBlock';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { formatHour } from '../../lib/utils';
 
-interface SwimLaneShift { id: string; start_time?: string; end_time?: string }
-interface SwimLaneEmployee { employee_id: string; name: string }
+interface SwimLaneShift {
+  id: string;
+  start_time?: string;
+  end_time?: string;
+}
+interface SwimLaneEmployee {
+  employee_id: string;
+  name: string;
+}
 
 interface StaffSwimLaneViewProps {
   employees: SwimLaneEmployee[];
@@ -83,14 +90,17 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Convert pixel X position to hour number
-  const xToHour = useCallback((clientX: number): number => {
-    if (!containerRef.current) return SCHEDULER_START_HOUR;
-    const rect = containerRef.current.getBoundingClientRect();
-    const scrollLeft = containerRef.current.scrollLeft;
-    const x = clientX - rect.left + scrollLeft - LABEL_WIDTH;
-    const hour = Math.floor(x / hourWidth) + SCHEDULER_START_HOUR;
-    return Math.max(SCHEDULER_START_HOUR, Math.min(hour, SCHEDULER_END_HOUR - 1));
-  }, [hourWidth]);
+  const xToHour = useCallback(
+    (clientX: number): number => {
+      if (!containerRef.current) return SCHEDULER_START_HOUR;
+      const rect = containerRef.current.getBoundingClientRect();
+      const scrollLeft = containerRef.current.scrollLeft;
+      const x = clientX - rect.left + scrollLeft - LABEL_WIDTH;
+      const hour = Math.floor(x / hourWidth) + SCHEDULER_START_HOUR;
+      return Math.max(SCHEDULER_START_HOUR, Math.min(hour, SCHEDULER_END_HOUR - 1));
+    },
+    [hourWidth]
+  );
 
   // Global mousemove during drag — works even when mouse is over shift bars/handles
   useEffect(() => {
@@ -139,11 +149,20 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
       if (onShiftResize && newEnd !== d.originalEnd) {
         onShiftResize(d.shiftId, d.originalStart, newEnd);
       }
-    } else if (d.mode === 'move' && d.shiftId != null && d.originalStart != null && d.originalEnd != null && d.grabOffset != null) {
+    } else if (
+      d.mode === 'move' &&
+      d.shiftId != null &&
+      d.originalStart != null &&
+      d.originalEnd != null &&
+      d.grabOffset != null
+    ) {
       // Move: shift the entire block by the drag delta
       const duration = d.originalEnd - d.originalStart;
       const newStart = d.currentHour - d.grabOffset;
-      const clampedStart = Math.max(SCHEDULER_START_HOUR, Math.min(newStart, SCHEDULER_END_HOUR - duration));
+      const clampedStart = Math.max(
+        SCHEDULER_START_HOUR,
+        Math.min(newStart, SCHEDULER_END_HOUR - duration)
+      );
       const newEnd = clampedStart + duration;
       if (onShiftResize && (clampedStart !== d.originalStart || newEnd !== d.originalEnd)) {
         onShiftResize(d.shiftId, clampedStart, newEnd);
@@ -155,53 +174,78 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     setDrag(null);
   }, [onShiftDrag, onShiftResize]);
 
-  const startDrag = useCallback((employeeId: string, hour: number, empShifts: SwimLaneShift[], mode?: DragMode, shift?: SwimLaneShift) => {
-    let dragMode: DragMode = mode || 'create';
-    let shiftId: string | undefined;
-    let originalStart: number | undefined;
-    let originalEnd: number | undefined;
-    let grabOffset: number | undefined;
+  const startDrag = useCallback(
+    (
+      employeeId: string,
+      hour: number,
+      empShifts: SwimLaneShift[],
+      mode?: DragMode,
+      shift?: SwimLaneShift
+    ) => {
+      let dragMode: DragMode = mode || 'create';
+      let shiftId: string | undefined;
+      let originalStart: number | undefined;
+      let originalEnd: number | undefined;
+      let grabOffset: number | undefined;
 
-    if (shift && (dragMode === 'resize-left' || dragMode === 'resize-right' || dragMode === 'move')) {
-      const { start, end } = parseShiftHours(shift);
-      shiftId = shift.id;
-      originalStart = start;
-      originalEnd = end;
-      if (dragMode === 'move') {
-        grabOffset = hour - start; // how far into the shift the user grabbed
-      }
-    } else if (!mode) {
-      // Auto-detect: empty space = create, inside shift = move
-      const existingShift = findShiftAtHour(empShifts, hour);
-      if (existingShift) {
-        dragMode = 'move';
-        const { start, end } = parseShiftHours(existingShift);
-        shiftId = existingShift.id;
+      if (
+        shift &&
+        (dragMode === 'resize-left' || dragMode === 'resize-right' || dragMode === 'move')
+      ) {
+        const { start, end } = parseShiftHours(shift);
+        shiftId = shift.id;
         originalStart = start;
         originalEnd = end;
-        grabOffset = hour - start;
-      } else {
-        dragMode = 'create';
+        if (dragMode === 'move') {
+          grabOffset = hour - start; // how far into the shift the user grabbed
+        }
+      } else if (!mode) {
+        // Auto-detect: empty space = create, inside shift = move
+        const existingShift = findShiftAtHour(empShifts, hour);
+        if (existingShift) {
+          dragMode = 'move';
+          const { start, end } = parseShiftHours(existingShift);
+          shiftId = existingShift.id;
+          originalStart = start;
+          originalEnd = end;
+          grabOffset = hour - start;
+        } else {
+          dragMode = 'create';
+        }
       }
-    }
 
-    const state: DragState = { employeeId, mode: dragMode, startHour: hour, currentHour: hour, shiftId, originalStart, originalEnd, grabOffset };
-    dragRef.current = state;
-    didDrag.current = false;
-    setDrag(state);
-    setSelectedLane(employeeId);
-  }, []);
+      const state: DragState = {
+        employeeId,
+        mode: dragMode,
+        startHour: hour,
+        currentHour: hour,
+        shiftId,
+        originalStart,
+        originalEnd,
+        grabOffset,
+      };
+      dragRef.current = state;
+      didDrag.current = false;
+      setDrag(state);
+      setSelectedLane(employeeId);
+    },
+    []
+  );
 
   // Compute visual shift during resize or move
   function getVisualShift(empId: string, shift: SwimLaneShift): { start: number; end: number } {
     const { start, end } = parseShiftHours(shift);
     if (!drag || drag.employeeId !== empId || drag.shiftId !== shift.id) return { start, end };
     if (drag.mode === 'resize-left') return { start: Math.min(drag.currentHour, end - 1), end };
-    if (drag.mode === 'resize-right') return { start, end: Math.max(drag.currentHour + 1, start + 1) };
+    if (drag.mode === 'resize-right')
+      return { start, end: Math.max(drag.currentHour + 1, start + 1) };
     if (drag.mode === 'move' && drag.grabOffset != null) {
       const duration = end - start;
       const newStart = drag.currentHour - drag.grabOffset;
-      const clamped = Math.max(SCHEDULER_START_HOUR, Math.min(newStart, SCHEDULER_END_HOUR - duration));
+      const clamped = Math.max(
+        SCHEDULER_START_HOUR,
+        Math.min(newStart, SCHEDULER_END_HOUR - duration)
+      );
       return { start: clamped, end: clamped + duration };
     }
     return { start, end };
@@ -210,7 +254,10 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   // Create drag overlay
   function getCreateRange(empId: string): { start: number; end: number } | null {
     if (!drag || drag.employeeId !== empId || drag.mode !== 'create') return null;
-    return { start: Math.min(drag.startHour, drag.currentHour), end: Math.max(drag.startHour, drag.currentHour) };
+    return {
+      start: Math.min(drag.startHour, drag.currentHour),
+      end: Math.max(drag.startHour, drag.currentHour),
+    };
   }
 
   function renderRow(
@@ -228,34 +275,66 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     return (
       <div
         className={`flex border-b transition-colors ${
-          isSelected
-            ? ''
-            : 'border-gray-100 dark:border-gray-800'
+          isSelected ? '' : 'border-gray-100 dark:border-gray-800'
         }`}
-        style={isSelected ? { minWidth: totalWidth, borderColor: 'var(--accent-muted)', backgroundColor: 'color-mix(in srgb, var(--accent-muted) 30%, transparent)' } : { minWidth: totalWidth }}
+        style={
+          isSelected
+            ? {
+                minWidth: totalWidth,
+                borderColor: 'var(--accent-muted)',
+                backgroundColor: 'color-mix(in srgb, var(--accent-muted) 30%, transparent)',
+              }
+            : { minWidth: totalWidth }
+        }
         data-testid={`swimlane-row-${empId}`}
       >
         {/* Employee label */}
         <div
           className={`p-2 border-r flex items-center gap-2 shrink-0 transition-colors ${
-            isSelected
-              ? ''
-              : 'border-gray-200 dark:border-gray-800'
+            isSelected ? '' : 'border-gray-200 dark:border-gray-800'
           } ${!isUnassigned ? 'cursor-pointer' : ''}`}
-          style={isSelected ? { width: LABEL_WIDTH, borderColor: 'var(--accent-muted)', backgroundColor: 'var(--accent-muted)' } : { width: LABEL_WIDTH }}
-          onMouseEnter={!isUnassigned ? (e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }) : undefined}
-          onMouseLeave={!isUnassigned ? (e => { if (!isSelected) e.currentTarget.style.backgroundColor = '' }) : undefined}
+          style={
+            isSelected
+              ? {
+                  width: LABEL_WIDTH,
+                  borderColor: 'var(--accent-muted)',
+                  backgroundColor: 'var(--accent-muted)',
+                }
+              : { width: LABEL_WIDTH }
+          }
+          onMouseEnter={
+            !isUnassigned
+              ? (e) => {
+                  if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--accent-muted)';
+                }
+              : undefined
+          }
+          onMouseLeave={
+            !isUnassigned
+              ? (e) => {
+                  if (!isSelected) e.currentTarget.style.backgroundColor = '';
+                }
+              : undefined
+          }
           onClick={() => {
-            setSelectedLane(prev => prev === empId ? null : empId);
+            setSelectedLane((prev) => (prev === empId ? null : empId));
             onClick?.();
           }}
         >
-          <div className={`w-3 h-3 rounded-full ${colorClass} ${isSelected ? 'ring-2' : ''}`} style={isSelected ? { ['--tw-ring-color' as string]: 'var(--accent-soft)' } : undefined} />
-          <span className={`text-sm font-bold truncate ${
-            isUnassigned ? 'text-gray-500 dark:text-gray-400 italic'
-            : isSelected ? ''
-            : 'text-gray-900 dark:text-gray-100'
-          }`} style={isSelected && !isUnassigned ? { color: 'var(--accent-soft)' } : undefined}>
+          <div
+            className={`w-3 h-3 rounded-full ${colorClass} ${isSelected ? 'ring-2' : ''}`}
+            style={isSelected ? { ['--tw-ring-color' as string]: 'var(--accent-soft)' } : undefined}
+          />
+          <span
+            className={`text-sm font-bold truncate ${
+              isUnassigned
+                ? 'text-gray-500 dark:text-gray-400 italic'
+                : isSelected
+                  ? ''
+                  : 'text-gray-900 dark:text-gray-100'
+            }`}
+            style={isSelected && !isUnassigned ? { color: 'var(--accent-soft)' } : undefined}
+          >
             {empName}
           </span>
         </div>
@@ -264,7 +343,8 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
         <div className="relative flex" style={{ width: hourCount * hourWidth }}>
           {hours.map((hour) => {
             const onShift = isUnassigned || isOnShift(empShifts, hour);
-            const isCreateDrag = createRange && hour >= createRange.start && hour <= createRange.end;
+            const isCreateDrag =
+              createRange && hour >= createRange.start && hour <= createRange.end;
             const isDragging = drag?.employeeId === empId;
 
             return (
@@ -274,8 +354,8 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                   isCreateDrag
                     ? 'bg-green-200/60 dark:bg-green-700/30'
                     : onShift
-                    ? 'bg-white dark:bg-[#1a1a1a]'
-                    : 'off-shift-hatching'
+                      ? 'bg-white dark:bg-[#1a1a1a]'
+                      : 'off-shift-hatching'
                 } ${!isUnassigned && !isDragging ? (onShift ? 'cursor-crosshair' : 'cursor-cell') : ''}`}
                 style={{ width: hourWidth }}
                 onMouseDown={(e) => {
@@ -290,84 +370,89 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
           })}
 
           {/* Shift blocks */}
-          {!isUnassigned && empShifts.map((shift, idx) => {
-            const vis = getVisualShift(empId, shift);
-            if (vis.end <= SCHEDULER_START_HOUR || vis.start >= SCHEDULER_END_HOUR) return null;
-            const cs = Math.max(vis.start, SCHEDULER_START_HOUR);
-            const ce = Math.min(vis.end, SCHEDULER_END_HOUR);
-            const isDragging = drag?.shiftId === shift.id;
-            const isMoving = isDragging && drag?.mode === 'move';
+          {!isUnassigned &&
+            empShifts.map((shift, idx) => {
+              const vis = getVisualShift(empId, shift);
+              if (vis.end <= SCHEDULER_START_HOUR || vis.start >= SCHEDULER_END_HOUR) return null;
+              const cs = Math.max(vis.start, SCHEDULER_START_HOUR);
+              const ce = Math.min(vis.end, SCHEDULER_END_HOUR);
+              const isDragging = drag?.shiftId === shift.id;
+              const isMoving = isDragging && drag?.mode === 'move';
 
-            return (
-              <div
-                key={`shift-${idx}`}
-                className={`absolute top-0.5 bottom-0.5 rounded border z-[2] group/shift transition-colors ${
-                  isMoving
-                    ? 'bg-green-300/90 dark:bg-green-600/60 border-green-500 dark:border-green-400 shadow-lg cursor-grabbing'
-                    : isDragging
-                    ? 'bg-green-300/80 dark:bg-green-700/50 border-green-500 dark:border-green-400 shadow-md'
-                    : 'bg-green-100/70 dark:bg-green-900/30 border-green-300/60 dark:border-green-700/40 hover:bg-green-200/80 dark:hover:bg-green-800/40 hover:border-green-400 dark:hover:border-green-500 cursor-grab'
-                }`}
-                style={{
-                  left: (cs - SCHEDULER_START_HOUR) * hourWidth,
-                  width: (ce - cs) * hourWidth,
-                  pointerEvents: isDragging ? 'none' : 'auto',
-                }}
-                onMouseDown={(e) => {
-                  // Click inside shift = move the shift
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const hour = xToHour(e.clientX);
-                  startDrag(empId, hour, empShifts, 'move', shift);
-                }}
-              >
-                {/* Time label */}
-                <span className={`absolute left-2 top-1 text-[10px] font-semibold pointer-events-none ${
-                  isDragging ? 'text-green-800 dark:text-green-200' : 'text-green-700/80 dark:text-green-400/60'
-                }`}>
-                  {formatHour(cs)} – {formatHour(ce)}
-                </span>
+              return (
+                <div
+                  key={`shift-${idx}`}
+                  className={`absolute top-0.5 bottom-0.5 rounded border z-[2] group/shift transition-colors ${
+                    isMoving
+                      ? 'bg-green-300/90 dark:bg-green-600/60 border-green-500 dark:border-green-400 shadow-lg cursor-grabbing'
+                      : isDragging
+                        ? 'bg-green-300/80 dark:bg-green-700/50 border-green-500 dark:border-green-400 shadow-md'
+                        : 'bg-green-100/70 dark:bg-green-900/30 border-green-300/60 dark:border-green-700/40 hover:bg-green-200/80 dark:hover:bg-green-800/40 hover:border-green-400 dark:hover:border-green-500 cursor-grab'
+                  }`}
+                  style={{
+                    left: (cs - SCHEDULER_START_HOUR) * hourWidth,
+                    width: (ce - cs) * hourWidth,
+                    pointerEvents: isDragging ? 'none' : 'auto',
+                  }}
+                  onMouseDown={(e) => {
+                    // Click inside shift = move the shift
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const hour = xToHour(e.clientX);
+                    startDrag(empId, hour, empShifts, 'move', shift);
+                  }}
+                >
+                  {/* Time label */}
+                  <span
+                    className={`absolute left-2 top-1 text-[10px] font-semibold pointer-events-none ${
+                      isDragging
+                        ? 'text-green-800 dark:text-green-200'
+                        : 'text-green-700/80 dark:text-green-400/60'
+                    }`}
+                  >
+                    {formatHour(cs)} – {formatHour(ce)}
+                  </span>
 
-                {/* Delete button */}
-                {onShiftDelete && !isDragging && (
-                  <button
-                    className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                  {/* Delete button */}
+                  {onShiftDelete && !isDragging && (
+                    <button
+                      className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onShiftDelete(shift.id);
+                      }}
+                    >
+                      ✕ Delete
+                    </button>
+                  )}
+
+                  {/* Left resize handle */}
+                  <div
+                    className="absolute -left-2 top-0 bottom-0 w-5 cursor-col-resize z-10 group/lh"
+                    onMouseDown={(e) => {
                       e.preventDefault();
-                      onShiftDelete(shift.id);
+                      e.stopPropagation();
+                      startDrag(empId, vis.start, empShifts, 'resize-left', shift);
                     }}
                   >
-                    ✕ Delete
-                  </button>
-                )}
+                    <div className="absolute left-2 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/lh:bg-green-500/70 transition-colors" />
+                  </div>
 
-                {/* Left resize handle */}
-                <div
-                  className="absolute -left-2 top-0 bottom-0 w-5 cursor-col-resize z-10 group/lh"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    startDrag(empId, vis.start, empShifts, 'resize-left', shift);
-                  }}
-                >
-                  <div className="absolute left-2 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/lh:bg-green-500/70 transition-colors" />
+                  {/* Right resize handle */}
+                  <div
+                    className="absolute -right-2 top-0 bottom-0 w-5 cursor-col-resize z-10 group/rh"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      startDrag(empId, vis.end - 1, empShifts, 'resize-right', shift);
+                    }}
+                  >
+                    <div className="absolute right-2 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/rh:bg-green-500/70 transition-colors" />
+                  </div>
                 </div>
-
-                {/* Right resize handle */}
-                <div
-                  className="absolute -right-2 top-0 bottom-0 w-5 cursor-col-resize z-10 group/rh"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    startDrag(empId, vis.end - 1, empShifts, 'resize-right', shift);
-                  }}
-                >
-                  <div className="absolute right-2 top-1 bottom-1 w-1 rounded-full bg-green-500/0 group-hover/rh:bg-green-500/70 transition-colors" />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
           {/* New shift creation overlay */}
           {createRange && (
@@ -402,11 +487,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="overflow-x-auto"
-      data-testid="staff-swimlane-view"
-    >
+    <div ref={containerRef} className="overflow-x-auto" data-testid="staff-swimlane-view">
       <TimeGrid hourWidth={hourWidth} />
       {employees.map((emp, empIdx) => {
         const empId = String(emp.employee_id);
@@ -415,7 +496,9 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
         const colorClass = getEmployeeColor(empId, empIdx);
         return (
           <React.Fragment key={empId}>
-            {renderRow(empId, emp.name, empAppointments, empShifts, colorClass, false, () => onEmployeeClick?.(emp))}
+            {renderRow(empId, emp.name, empAppointments, empShifts, colorClass, false, () =>
+              onEmployeeClick?.(emp)
+            )}
           </React.Fragment>
         );
       })}
@@ -452,4 +535,3 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
     </div>
   );
 };
-

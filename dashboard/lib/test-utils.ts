@@ -20,10 +20,7 @@
  * @param body  Value the consumer's `await res.json()` should resolve to.
  * @param init  Optional `ok` and/or `status` overrides (defaults: 200 / true).
  */
-export function mockJsonResponse<T>(
-  body: T,
-  init?: { ok?: boolean; status?: number },
-): Response {
+export function mockJsonResponse<T>(body: T, init?: { ok?: boolean; status?: number }): Response {
   return {
     ok: init?.ok ?? true,
     status: init?.status ?? 200,

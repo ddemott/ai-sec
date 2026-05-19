@@ -50,13 +50,7 @@ function buildApp(opts: {
   const getEmbedding = async () => opts.embedding ?? new Array(1536).fill(0);
 
   const app = Fastify({ logger: false });
-  registerAgentToolRoutes(
-    app,
-    {} as never,
-    withTenantClient,
-    getEmbedding,
-    opts.normalizer
-  );
+  registerAgentToolRoutes(app, {} as never, withTenantClient, getEmbedding, opts.normalizer);
   return { app, queries };
 }
 
@@ -293,7 +287,11 @@ describe('agentTools /tenant-config', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(body.result).toEqual({ name: 'DynaTire', timezone: 'America/Chicago', system_prompt: null });
+    expect(body.result).toEqual({
+      name: 'DynaTire',
+      timezone: 'America/Chicago',
+      system_prompt: null,
+    });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
     expect(queries[0].params).toEqual([TENANT_ID]);
@@ -309,7 +307,9 @@ describe('agentTools /tenant-config', () => {
     //      regardless of what the owner typed into the dashboard.
     const customText = 'You are a friendly receptionist for {{business_name}}.';
     const { app } = buildApp({
-      queryResponses: [{ rows: [{ name: 'DynaTire', timezone: 'America/Chicago', system_prompt: customText }] }],
+      queryResponses: [
+        { rows: [{ name: 'DynaTire', timezone: 'America/Chicago', system_prompt: customText }] },
+      ],
     });
     const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
     expect(res.json().result.system_prompt).toBe(customText);
@@ -331,7 +331,11 @@ describe('agentTools /tenant-config', () => {
       queryResponses: [{ rows: [{ name: 'Legacy Co', timezone: null, system_prompt: null }] }],
     });
     const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
-    expect(res.json().result).toEqual({ name: 'Legacy Co', timezone: 'America/Chicago', system_prompt: null });
+    expect(res.json().result).toEqual({
+      name: 'Legacy Co',
+      timezone: 'America/Chicago',
+      system_prompt: null,
+    });
   });
 
   it('SAD: unknown tenant returns success:false with explanatory error', async () => {
@@ -386,7 +390,10 @@ describe('agentTools /customer-context', () => {
         { rows: [{ summary: 'Booked oil change' }, { summary: 'Asked about winter tires' }] },
       ],
     });
-    const res = await post(app, '/agent-tools/customer-context', { tenant_id: TENANT_ID, phone: '5551234567' });
+    const res = await post(app, '/agent-tools/customer-context', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toEqual({
       name: 'Alice',
@@ -402,7 +409,10 @@ describe('agentTools /customer-context', () => {
     const { app, queries } = buildApp({
       queryResponses: [{ rows: [] }],
     });
-    const res = await post(app, '/agent-tools/customer-context', { tenant_id: TENANT_ID, phone: '5550000000' });
+    const res = await post(app, '/agent-tools/customer-context', {
+      tenant_id: TENANT_ID,
+      phone: '5550000000',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toBe('New caller - no history found.');
     expect(queries).toHaveLength(1); // did not run summaries query
@@ -415,7 +425,10 @@ describe('agentTools /customer-context', () => {
     // WHY: Avoids wasted round-trip and prevents "+1"-style short numbers
     //       from matching spurious customer records
     const { app, queries } = buildApp({ queryResponses: [] });
-    const res = await post(app, '/agent-tools/customer-context', { tenant_id: TENANT_ID, phone: 'abc123' });
+    const res = await post(app, '/agent-tools/customer-context', {
+      tenant_id: TENANT_ID,
+      phone: 'abc123',
+    });
     expect(res.json().result).toBe('New caller - no history found.');
     expect(queries).toHaveLength(0);
   });
@@ -446,7 +459,7 @@ describe('agentTools /check-availability', () => {
       resource_id: RESOURCE_ID,
       start_time: '2026-05-01T14:00:00',
       end_time: '2026-05-01T15:00:00',
-      });
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().result.available).toBe(true);
     // WHY: RPC must receive zone-applied timestamps (-05:00 CDT in May)
@@ -497,7 +510,10 @@ describe('agentTools /policy-answer', () => {
         },
       ],
     });
-    const res = await post(app, '/agent-tools/policy-answer', { tenant_id: TENANT_ID, question: 'What is your cancellation policy?' });
+    const res = await post(app, '/agent-tools/policy-answer', {
+      tenant_id: TENANT_ID,
+      question: 'What is your cancellation policy?',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toContain('24 hours notice');
     expect(res.json().result).toContain('No-show fee');
@@ -516,7 +532,10 @@ describe('agentTools /policy-answer', () => {
         { rows: [] }, // INSERT into unanswered_questions (fire-and-forget)
       ],
     });
-    const res = await post(app, '/agent-tools/policy-answer', { tenant_id: TENANT_ID, question: 'Do you accept Dogecoin?' });
+    const res = await post(app, '/agent-tools/policy-answer', {
+      tenant_id: TENANT_ID,
+      question: 'Do you accept Dogecoin?',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toContain("don't have specific information");
     // Wait a tick for the fire-and-forget insert to enqueue
@@ -543,7 +562,10 @@ describe('agentTools /policy-answer', () => {
   it('SAD: empty question fails validation', async () => {
     // WHAT: Zod min(1) on question; no DB call
     const { app, queries } = buildApp({ queryResponses: [] });
-    const res = await post(app, '/agent-tools/policy-answer', { tenant_id: TENANT_ID, question: '' });
+    const res = await post(app, '/agent-tools/policy-answer', {
+      tenant_id: TENANT_ID,
+      question: '',
+    });
     expectValidationFailure(res, queries);
   });
 });
@@ -619,12 +641,10 @@ describe('agentTools /book-appointment', () => {
     //       existing customer name if one is already on file
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [] },                           // existing-customer SELECT
-        { rows: [{ customer_id: 'new-customer-id' }] },  // INSERT new customer
+        { rows: [] }, // existing-customer SELECT
+        { rows: [{ customer_id: 'new-customer-id' }] }, // INSERT new customer
         {
-          rows: [
-            { success: true, appointment_id: 'appt-1', error_message: null },
-          ],
+          rows: [{ success: true, appointment_id: 'appt-1', error_message: null }],
         },
       ],
     });
@@ -635,7 +655,7 @@ describe('agentTools /book-appointment', () => {
       name: 'Bob',
       start_time: '2026-05-01T14:00:00',
       end_time: '2026-05-01T15:00:00',
-      });
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       success: true,
@@ -656,9 +676,7 @@ describe('agentTools /book-appointment', () => {
       queryResponses: [
         { rows: [{ customer_id: 'existing-cust' }] },
         {
-          rows: [
-            { success: true, appointment_id: 'appt-2', error_message: null },
-          ],
+          rows: [{ success: true, appointment_id: 'appt-2', error_message: null }],
         },
       ],
     });
@@ -668,7 +686,7 @@ describe('agentTools /book-appointment', () => {
       phone: '5551234567',
       start_time: '2026-05-01T14:00:00',
       end_time: '2026-05-01T15:00:00',
-      });
+    });
     expect(res.json().result.appointment_id).toBe('appt-2');
     // WHY: Exactly 2 queries — SELECT + RPC, no INSERT
     expect(queries).toHaveLength(2);
@@ -699,7 +717,7 @@ describe('agentTools /book-appointment', () => {
       phone: '5551234567',
       start_time: '2026-05-01T14:00:00',
       end_time: '2026-05-01T15:00:00',
-      });
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: false,
@@ -928,7 +946,7 @@ describe('agentTools /scheduling-options', () => {
         requiredEmployeeSkills: ['oil_change'],
       },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
@@ -964,7 +982,7 @@ describe('agentTools /scheduling-options', () => {
         requiredEmployeeSkills: ['tire_rotation'],
       },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     const body = res.json();
     expect(body.result.options).toEqual([]);
     expect(body.result.diagnostics.reason).toContain('tire_rotation');
@@ -1019,7 +1037,7 @@ describe('agentTools /scheduling-options', () => {
         requiredEmployeeSkills: ['oil_change'],
       },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     const body = res.json();
     expect(body.result.options).toEqual([]);
     // WHY: Diagnostics must explain *why* — this is the signal the agent
@@ -1068,13 +1086,11 @@ describe('agentTools /scheduling-options', () => {
         requiredEmployeeSkills: ['oil_change'],
       },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     const body = res.json();
     // Garbage row filtered → no overrides → no shifts → default on-shift=true
     // Current behavior: employee IS included. This documents that behavior.
-    expect(body.result.options).toEqual([
-      { resourceId: 'bay-1', employeeId: 'emp-1' },
-    ]);
+    expect(body.result.options).toEqual([{ resourceId: 'bay-1', employeeId: 'emp-1' }]);
   });
 });
 
@@ -1112,7 +1128,7 @@ describe('agentTools /book-with-scheduling', () => {
       name: 'Bob',
       requirements: { serviceType: 'Oil Change', requiredEmployeeSkills: ['oil_change'] },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toMatchObject({
       success: true,
@@ -1164,7 +1180,7 @@ describe('agentTools /book-with-scheduling', () => {
       phone: '5551234567',
       requirements: { serviceType: 'Oil Change' },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body).toMatchObject({
@@ -1183,7 +1199,7 @@ describe('agentTools /book-with-scheduling', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ customer_id: 'cust-fallback' }] }, // customer SELECT succeeds first
-        { rows: [] },                         // RPC returns no row
+        { rows: [] }, // RPC returns no row
         // findNextAvailableSlots: tz + slots
         { rows: [{ timezone: 'America/Chicago' }] },
         { rows: [] },
@@ -1194,7 +1210,7 @@ describe('agentTools /book-with-scheduling', () => {
       phone: '5551234567',
       requirements: { serviceType: 'Oil Change' },
       window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
-      });
+    });
     expect(res.json().error_code).toBe('NO_AVAILABILITY');
   });
 
@@ -1263,7 +1279,7 @@ describe('agentTools /available-slots', () => {
       tenant_id: TENANT_ID,
       service_type: 'Oil Change',
       date: '2030-01-01',
-      });
+    });
     expect(res.statusCode).toBe(200);
     const text = res.json().result as string;
     expect(text).toContain('Oil Change takes about 30 minutes');
@@ -1308,7 +1324,7 @@ describe('agentTools /available-slots', () => {
       tenant_id: TENANT_ID,
       service_type: 'Oil Change',
       date: '2030-01-01',
-      });
+    });
     const text = res.json().result as string;
     expect(text).toContain("don't have anyone scheduled");
   });
@@ -1321,7 +1337,7 @@ describe('agentTools /available-slots', () => {
       tenant_id: TENANT_ID,
       service_type: 'Unicorn Polishing',
       date: '2030-01-01',
-      });
+    });
     expect(res.json().result).toContain("couldn't find a service");
   });
 
@@ -1443,7 +1459,7 @@ describe('agentTools /available-slots', () => {
       });
       expect(res.statusCode).toBe(200);
       const text = res.json().result as string;
-      expect(text).toContain("fully booked");
+      expect(text).toContain('fully booked');
       expect(text).toContain('try a different day');
     } finally {
       vi.useRealTimers();
@@ -1455,7 +1471,10 @@ describe('agentTools /send-verification-code', () => {
   beforeEach(() => {
     process.env.TELNYX_API_KEY = 'test-telnyx-key';
     // Default fetch mock: Telnyx returns 200
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 }))
+    );
   });
   afterEach(() => {
     delete process.env.TELNYX_API_KEY;
@@ -1499,7 +1518,9 @@ describe('agentTools /send-verification-code', () => {
     const smsBody = JSON.parse((fetchCalls[0][1] as RequestInit).body as string);
     expect(smsBody.from).toBe('+15550001000');
     expect(smsBody.to).toBe('+15551234567');
-    expect(smsBody.text).toMatch(/Your SecretaryHQ verification code is: \d{6}\. Reply STOP to opt out\./);
+    expect(smsBody.text).toMatch(
+      /Your SecretaryHQ verification code is: \d{6}\. Reply STOP to opt out\./
+    );
   });
 
   it('SAD: invalid phone (under 10 digits after strip) never touches DB or Telnyx', async () => {
@@ -1637,7 +1658,10 @@ describe('agentTools /send-verification-code', () => {
     // WHY: Prior code would have crashed silently and left the caller in
     //        an awkward voice dead-air while waiting for a code that
     //        never arrives
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"bad"}', { status: 422 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"error":"bad"}', { status: 422 }))
+    );
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ inbound_phone: '+15550001000' }] },
@@ -1840,8 +1864,8 @@ describe('agentTools customer persistence on booking failure', () => {
     //        the next attempt re-uses the persisted customer_id.
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [] },                            // SELECT — no existing row
-        { rows: [{ customer_id: 'newly-created' }] },     // INSERT — customer persists
+        { rows: [] }, // SELECT — no existing row
+        { rows: [{ customer_id: 'newly-created' }] }, // INSERT — customer persists
         {
           rows: [
             {
@@ -1885,8 +1909,8 @@ describe('agentTools customer persistence on booking failure', () => {
     //        it into a separate withTenantClient call removes that fragility.
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [] },                            // SELECT — no existing row
-        { rows: [{ customer_id: 'sched-customer' }] },    // INSERT — customer persists
+        { rows: [] }, // SELECT — no existing row
+        { rows: [{ customer_id: 'sched-customer' }] }, // INSERT — customer persists
         {
           rows: [
             {

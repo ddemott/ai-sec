@@ -8,15 +8,15 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 
 ## Status
 
-| | |
-|---|---|
-| **Phase** | 13 — Production Readiness |
-| **Backend** | Live on Railway (`ai-sec-production.up.railway.app`) |
-| **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects |
-| **Voice AI** | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
-| **Phone** | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status |
-| **Tests** | 2,632 passing (1,910 backend + 631 dashboard + 91 agent) + 0 skips, zero TypeScript errors |
-| **E2e** | 71 Playwright tests + 29 live QA tool calls (88 assertions) |
+|               |                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase**     | 13 — Production Readiness                                                                                                                                     |
+| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                          |
+| **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                       |
+| **Voice AI**  | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
+| **Phone**     | Provisioned via Telnyx (`+1-630-937-9478`) — see `docs/TICKET_SUPPORT.md` for current LERG status                                                             |
+| **Tests**     | 2,632 passing (1,910 backend + 631 dashboard + 91 agent) + 0 skips, zero TypeScript errors                                                                    |
+| **E2e**       | 71 Playwright tests + 29 live QA tool calls (88 assertions)                                                                                                   |
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` for detailed historical session notes.
 
@@ -56,16 +56,16 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 Next.js 14 Dashboard
 ```
 
-| Layer | Tech |
-|-------|------|
-| **Voice** | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara` — warm & friendly secretary tone; any custom cloned voice_id also supported; OpenAI TTS retained as `runFallback()` dead-air guard) |
-| **Backend** | Fastify 4.x, 26 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`) |
-| **Frontend** | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons |
-| **Database** | PostgreSQL + pgvector, 122 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
-| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes) |
-| **Async** | Inline in Fastify routes (post-call summaries, calendar sync, SMS) |
-| **Billing** | Stripe Checkout, webhook (3 events), subscription gate middleware |
-| **Security** | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS |
+| Layer             | Tech                                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara` — warm & friendly secretary tone; any custom cloned voice_id also supported; OpenAI TTS retained as `runFallback()` dead-air guard) |
+| **Backend**       | Fastify 4.x, 26 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                        |
+| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                |
+| **Database**      | PostgreSQL + pgvector, 122 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                 |
+| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; tools at Fastify `/agent-tools/*` (10 routes)                                                                                                                                                                         |
+| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                 |
+| **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                  |
+| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                          |
 
 See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
@@ -74,17 +74,21 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 ## Quick Start
 
 ### Prerequisites
+
 - Node.js 20+
 - Docker (for local PostgreSQL)
 - npm
 
 ### 1. Bootstrap (full local setup)
+
 ```bash
 npm run bootstrap
 ```
+
 Installs dependencies, starts Docker DB, applies all migrations, seeds demo data, and runs tests.
 
 ### 2. Database Only (migrations + seed separately)
+
 ```bash
 # Apply schema migrations (works with any Postgres — local, Supabase, Railway)
 npm run db:migrate                              # uses DATABASE_URL from .env
@@ -96,18 +100,22 @@ npm run db:seed -- "postgres://user:pass@host:5432/db"     # explicit URL
 ```
 
 ### 3. Trust the Backend Certificate
+
 The backend uses HTTPS with self-signed certificates:
+
 - Visit [https://localhost:4001/health](https://localhost:4001/health)
 - Click **Advanced** > **Proceed to localhost**
 - You should see `{"status":"ok"}`
 
 ### 4. Start
+
 ```bash
 npm start
 ```
-| Service | URL |
-|---------|-----|
-| Dashboard | https://localhost:4000 |
+
+| Service     | URL                    |
+| ----------- | ---------------------- |
+| Dashboard   | https://localhost:4000 |
 | Backend API | https://localhost:4001 |
 
 ### 5. Sign In
@@ -153,15 +161,15 @@ python scripts/qa-live-test.py        # Live QA (29 tool calls, 88 assertions)
 
 ### Coverage
 
-| Area | Tests |
-|------|-------|
-| Backend routes (25 modules) | ~700 |
-| Backend services (16 files) | ~450 |
-| Middleware, scheduling, constants | ~100 |
-| CRM sync (4 providers + shared helpers) | ~240 |
-| Dashboard components + views | 465 |
-| Playwright e2e | 19 |
-| Live QA (production edge function) | 29 calls / 88 assertions |
+| Area                                    | Tests                    |
+| --------------------------------------- | ------------------------ |
+| Backend routes (25 modules)             | ~700                     |
+| Backend services (16 files)             | ~450                     |
+| Middleware, scheduling, constants       | ~100                     |
+| CRM sync (4 providers + shared helpers) | ~240                     |
+| Dashboard components + views            | 465                      |
+| Playwright e2e                          | 19                       |
+| Live QA (production edge function)      | 29 calls / 88 assertions |
 
 ### Test Philosophy
 
@@ -180,15 +188,15 @@ it('should reject country-code-only "+1" (BUG-060 root cause)', () => {
 
 ## Infrastructure
 
-| Concern | Implementation |
-|---------|---------------|
-| **Multi-tenancy** | Row Level Security on all tables, `FORCE ROW LEVEL SECURITY` enforced |
-| **Auth** | JWT (8h expiry), bcrypt, auto-logout on 401, token refresh endpoint |
-| **Security** | Helmet headers, rate limiting (100 req/min, 5/5min on login), CORS |
-| **Validation** | Zod schemas at API boundaries, CHECK constraints on JSONB |
-| **Deadlock prevention** | Pool timeouts (statement 30s, lock 10s, idle-txn 60s), sequential test execution |
-| **Mutation safety** | `assertRowAffected()` guard on all UPDATE/DELETE — zero-row ops return 404 |
-| **CRM sync** | Shared `syncMapHelpers.ts`, timestamp-based merge, `withSyncContext()` for version tracking |
+| Concern                 | Implementation                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| **Multi-tenancy**       | Row Level Security on all tables, `FORCE ROW LEVEL SECURITY` enforced                       |
+| **Auth**                | JWT (8h expiry), bcrypt, auto-logout on 401, token refresh endpoint                         |
+| **Security**            | Helmet headers, rate limiting (100 req/min, 5/5min on login), CORS                          |
+| **Validation**          | Zod schemas at API boundaries, CHECK constraints on JSONB                                   |
+| **Deadlock prevention** | Pool timeouts (statement 30s, lock 10s, idle-txn 60s), sequential test execution            |
+| **Mutation safety**     | `assertRowAffected()` guard on all UPDATE/DELETE — zero-row ops return 404                  |
+| **CRM sync**            | Shared `syncMapHelpers.ts`, timestamp-based merge, `withSyncContext()` for version tracking |
 
 ---
 
@@ -207,39 +215,39 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 ## Key Features
 
-| Feature | Details |
-|---------|---------|
-| 29 business types | 6 categories with per-type vocabulary |
-| Scheduler | Staff swimlanes, resource columns, list view, calendar, quick book |
-| Skill relationship map | Interactive 3-column employee > service > resource view |
-| 7-step setup wizard | Repeatable, re-enterable, live coverage feedback, phone activation |
-| 8 themes | Light, dark, midnight, nord, sunset, forest, high-contrast, solarized |
-| Stripe billing | Solo ($129/mo) + Growth ($279/mo), subscription gate |
-| Calendar sync | Google + Outlook, OAuth, auto-sync on all mutations |
-| CRM integrations | Jobber + HubSpot + Square + ServiceTitan, bidirectional sync |
-| Knowledge base | 40 policy Q&A pairs, document upload, RAG via pgvector |
-| Contextual feedback | In-app feedback button on every page |
-| Playwright e2e | 19 tests covering critical fixes and functional audit |
+| Feature                | Details                                                               |
+| ---------------------- | --------------------------------------------------------------------- |
+| 29 business types      | 6 categories with per-type vocabulary                                 |
+| Scheduler              | Staff swimlanes, resource columns, list view, calendar, quick book    |
+| Skill relationship map | Interactive 3-column employee > service > resource view               |
+| 7-step setup wizard    | Repeatable, re-enterable, live coverage feedback, phone activation    |
+| 8 themes               | Light, dark, midnight, nord, sunset, forest, high-contrast, solarized |
+| Stripe billing         | Solo ($129/mo) + Growth ($279/mo), subscription gate                  |
+| Calendar sync          | Google + Outlook, OAuth, auto-sync on all mutations                   |
+| CRM integrations       | Jobber + HubSpot + Square + ServiceTitan, bidirectional sync          |
+| Knowledge base         | 40 policy Q&A pairs, document upload, RAG via pgvector                |
+| Contextual feedback    | In-app feedback button on every page                                  |
+| Playwright e2e         | 19 tests covering critical fixes and functional audit                 |
 
 ---
 
 ## Documentation
 
-| Doc | Purpose |
-|-----|---------|
-| `CLAUDE.md` | Developer conventions, code patterns, project context |
-| `docs/TODO.md` | Unified task list — all remaining work |
-| `docs/ARCHITECTURE.md` | Full technical architecture deep-dive |
-| `docs/DIAGRAMS.md` | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.) |
-| `docs/DEPLOYMENT.md` | Step-by-step deployment guide |
-| `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` | Archived detailed historical session notes |
-| `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions (frozen — March 24 session) |
-| `docs/UI_UX_DESIGN.md` | Living design brief — interaction design + UX principles |
-| `docs/PLAN.md` | Historical phases (1-12) + post-launch backlog |
-| `docs/BUGS.md` | Historical bug tracker (72 bugs + 47 UX items, all resolved) |
-| `docs/FRAMEWORK_MIGRATIONS.md` | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (pending) |
-| `NEEDS-REFACTORING.md` | Code-cleanup backlog — dormant layers, dead code, conventions to enforce |
-| `docs/IMPROVEMENT_IDEAS.md` | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11) |
+| Doc                                          | Purpose                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `CLAUDE.md`                                  | Developer conventions, code patterns, project context                                       |
+| `docs/TODO.md`                               | Unified task list — all remaining work                                                      |
+| `docs/ARCHITECTURE.md`                       | Full technical architecture deep-dive                                                       |
+| `docs/DIAGRAMS.md`                           | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.)                             |
+| `docs/DEPLOYMENT.md`                         | Step-by-step deployment guide                                                               |
+| `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` | Archived detailed historical session notes                                                  |
+| `docs/DESIGN_HANDOFF.md`                     | Visual brand system + design decisions (frozen — March 24 session)                          |
+| `docs/UI_UX_DESIGN.md`                       | Living design brief — interaction design + UX principles                                    |
+| `docs/PLAN.md`                               | Historical phases (1-12) + post-launch backlog                                              |
+| `docs/BUGS.md`                               | Historical bug tracker (72 bugs + 47 UX items, all resolved)                                |
+| `docs/FRAMEWORK_MIGRATIONS.md`               | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (pending) |
+| `NEEDS-REFACTORING.md`                       | Code-cleanup backlog — dormant layers, dead code, conventions to enforce                    |
+| `docs/IMPROVEMENT_IDEAS.md`                  | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11)                         |
 
 ---
 

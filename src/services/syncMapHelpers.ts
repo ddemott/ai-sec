@@ -54,7 +54,7 @@ export async function syncMapUpsertOnCreate(
   localId: string,
   externalId: string,
   localUpdatedAt: string,
-  remoteUpdatedAt?: string,
+  remoteUpdatedAt?: string
 ): Promise<void> {
   const cols = remoteUpdatedAt
     ? 'tenant_id, provider, entity_type, local_id, external_id, local_updated_at, remote_updated_at, last_synced_at, sync_status'
@@ -83,7 +83,7 @@ export async function syncMapUpdateAfterPush(
   provider: string,
   entityType: EntityType,
   localId: string,
-  localUpdatedAt: string,
+  localUpdatedAt: string
 ): Promise<void> {
   await client.query(
     `UPDATE entity_sync_map SET local_updated_at = $1, last_synced_at = NOW(), sync_status = 'synced', error_message = NULL
@@ -98,7 +98,7 @@ export async function syncMapDeleteByLocalId(
   tenantId: string,
   provider: string,
   entityType: EntityType,
-  localId: string,
+  localId: string
 ): Promise<void> {
   await client.query(
     `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = $2 AND entity_type = $3 AND local_id = $4`,
@@ -113,7 +113,7 @@ export async function syncMapMarkDeleted(
   provider: string,
   entityType: EntityType,
   localId: string,
-  status: 'deleted' | 'canceled' = 'deleted',
+  status: 'deleted' | 'canceled' = 'deleted'
 ): Promise<void> {
   await client.query(
     `UPDATE entity_sync_map SET sync_status = $1, last_synced_at = NOW()
@@ -132,7 +132,7 @@ export async function syncMapFindByLocalId(
   tenantId: string,
   provider: string,
   entityType: EntityType,
-  localId: string,
+  localId: string
 ): Promise<SyncMapByLocalId | null> {
   const res = await client.query(
     `SELECT external_id, remote_updated_at FROM entity_sync_map
@@ -148,7 +148,7 @@ export async function syncMapFindByExternalId(
   tenantId: string,
   provider: string,
   entityType: EntityType,
-  externalId: string,
+  externalId: string
 ): Promise<SyncMapByExternalId | null> {
   const res = await client.query(
     `SELECT local_id, remote_updated_at FROM entity_sync_map
@@ -164,7 +164,7 @@ export async function syncMapGetExternalId(
   tenantId: string,
   provider: string,
   entityType: EntityType,
-  localId: string,
+  localId: string
 ): Promise<string | null> {
   const res = await client.query(
     `SELECT external_id FROM entity_sync_map
@@ -205,13 +205,25 @@ export async function ensureRemoteCustomer(
   tenantId: string,
   provider: string,
   localCustomerId: string,
-  pushCustomer: (pool: Pool, tenantId: string, customerId: string, action: SyncAction, logger?: SyncLogger) => Promise<void>,
+  pushCustomer: (
+    pool: Pool,
+    tenantId: string,
+    customerId: string,
+    action: SyncAction,
+    logger?: SyncLogger
+  ) => Promise<void>,
   logger?: SyncLogger,
-  prefix?: string,
+  prefix?: string
 ): Promise<string | null> {
   const log = logger || { warn: console.warn, error: console.error, info: console.info };
 
-  let externalId = await syncMapGetExternalId(client, tenantId, provider, 'customer', localCustomerId);
+  let externalId = await syncMapGetExternalId(
+    client,
+    tenantId,
+    provider,
+    'customer',
+    localCustomerId
+  );
   if (externalId) return externalId;
 
   // Customer not yet synced — push them first
@@ -219,7 +231,9 @@ export async function ensureRemoteCustomer(
 
   externalId = await syncMapGetExternalId(client, tenantId, provider, 'customer', localCustomerId);
   if (!externalId) {
-    log.error(`${prefix || `[${provider}-sync]`} — cannot push appointment: customer sync failed (customerId=${localCustomerId})`);
+    log.error(
+      `${prefix || `[${provider}-sync]`} — cannot push appointment: customer sync failed (customerId=${localCustomerId})`
+    );
     return null;
   }
   return externalId;
@@ -237,7 +251,7 @@ export async function syncMapUpsertOnPull(
   entityType: EntityType,
   localId: string,
   externalId: string,
-  remoteUpdatedAt: string,
+  remoteUpdatedAt: string
 ): Promise<void> {
   await client.query(
     `INSERT INTO entity_sync_map (tenant_id, provider, entity_type, local_id, external_id, remote_updated_at, last_synced_at, sync_status)
@@ -255,7 +269,7 @@ export async function syncMapUpdateAfterPull(
   provider: string,
   entityType: EntityType,
   externalId: string,
-  remoteUpdatedAt: string,
+  remoteUpdatedAt: string
 ): Promise<void> {
   await client.query(
     `UPDATE entity_sync_map SET remote_updated_at = $1, last_synced_at = NOW(), sync_status = 'synced'
@@ -291,19 +305,28 @@ export async function pullRemoteCustomer(opts: {
   logger?: SyncLogger;
   prefix?: string;
 }): Promise<void> {
-  const { pool, tenantId, provider, changeSource, externalId, remoteUpdatedAt, fields, logger } = opts;
+  const { pool, tenantId, provider, changeSource, externalId, remoteUpdatedAt, fields, logger } =
+    opts;
   const log = logger || { warn: console.warn, error: console.error, info: console.info };
   const prefix = opts.prefix || `[${provider}-sync] tenant=${tenantId}`;
 
   if (!fields.phone) {
-    log.warn(`${prefix} — skipped: ${provider} customer ${externalId} has no phone number (required field)`);
+    log.warn(
+      `${prefix} — skipped: ${provider} customer ${externalId} has no phone number (required field)`
+    );
     return;
   }
 
   const client = await pool.connect();
   try {
     await withSyncContext(client, changeSource, `sync-${provider}`, async () => {
-      const syncEntry = await syncMapFindByExternalId(client, tenantId, provider, 'customer', externalId);
+      const syncEntry = await syncMapFindByExternalId(
+        client,
+        tenantId,
+        provider,
+        'customer',
+        externalId
+      );
 
       if (!syncEntry) {
         // New — check if customer with same phone exists
@@ -325,18 +348,24 @@ export async function pullRemoteCustomer(opts: {
                WHERE customer_id = $${localIdIdx} AND tenant_id = $${tenantIdIdx}`,
               [...opts.updateValues, localId, tenantId]
             );
-            log.info(`${prefix} — merged ${provider} customer into existing customer (${provider}Id=${externalId} localId=${localId} phone=${fields.phone} — remote was newer)`);
+            log.info(
+              `${prefix} — merged ${provider} customer into existing customer (${provider}Id=${externalId} localId=${localId} phone=${fields.phone} — remote was newer)`
+            );
           } else {
-            log.info(`${prefix} — matched existing customer by phone (${provider}Id=${externalId} localId=${localId} — local was newer, kept local values)`);
+            log.info(
+              `${prefix} — matched existing customer by phone (${provider}Id=${externalId} localId=${localId} — local was newer, kept local values)`
+            );
           }
         } else {
           // Brand new customer
-          const insertCols = fields.address !== undefined
-            ? 'tenant_id, name, phone, email, address'
-            : 'tenant_id, name, phone, email';
-          const insertVals = fields.address !== undefined
-            ? [tenantId, fields.name, fields.phone, fields.email, fields.address]
-            : [tenantId, fields.name, fields.phone, fields.email];
+          const insertCols =
+            fields.address !== undefined
+              ? 'tenant_id, name, phone, email, address'
+              : 'tenant_id, name, phone, email';
+          const insertVals =
+            fields.address !== undefined
+              ? [tenantId, fields.name, fields.phone, fields.email, fields.address]
+              : [tenantId, fields.name, fields.phone, fields.email];
           const insertPlaceholders = insertVals.map((_, i) => `$${i + 1}`).join(', ');
 
           const insertRes = await client.query(
@@ -344,16 +373,28 @@ export async function pullRemoteCustomer(opts: {
             insertVals
           );
           localId = insertRes.rows[0].customer_id;
-          log.info(`${prefix} — created local customer from ${provider} customer (${provider}Id=${externalId} localId=${localId} name=${fields.name})`);
+          log.info(
+            `${prefix} — created local customer from ${provider} customer (${provider}Id=${externalId} localId=${localId} name=${fields.name})`
+          );
         }
 
-        await syncMapUpsertOnPull(client, tenantId, provider, 'customer', localId, externalId, remoteUpdatedAt);
+        await syncMapUpsertOnPull(
+          client,
+          tenantId,
+          provider,
+          'customer',
+          localId,
+          externalId,
+          remoteUpdatedAt
+        );
       } else {
         // Existing mapping — timestamp-based merge
         const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
 
         if (isAlreadySynced(remoteUpdatedAt, lastRemoteUpdate)) {
-          log.info(`${prefix} — skipped: already synced this version (${provider}Id=${externalId} remoteUpdatedAt=${remoteUpdatedAt})`);
+          log.info(
+            `${prefix} — skipped: already synced this version (${provider}Id=${externalId} remoteUpdatedAt=${remoteUpdatedAt})`
+          );
           return;
         }
 
@@ -371,12 +412,23 @@ export async function pullRemoteCustomer(opts: {
              WHERE customer_id = $${localIdIdx} AND tenant_id = $${tenantIdIdx}`,
             [...opts.updateValues, localId, tenantId]
           );
-          log.info(`${prefix} — updated local customer from ${provider} (${provider}Id=${externalId} localId=${localId} — remote was newer)`);
+          log.info(
+            `${prefix} — updated local customer from ${provider} (${provider}Id=${externalId} localId=${localId} — remote was newer)`
+          );
         } else {
-          log.info(`${prefix} — kept local values (${provider}Id=${externalId} localId=${localId} — local was newer)`);
+          log.info(
+            `${prefix} — kept local values (${provider}Id=${externalId} localId=${localId} — local was newer)`
+          );
         }
 
-        await syncMapUpdateAfterPull(client, tenantId, provider, 'customer', externalId, remoteUpdatedAt);
+        await syncMapUpdateAfterPull(
+          client,
+          tenantId,
+          provider,
+          'customer',
+          externalId,
+          remoteUpdatedAt
+        );
       }
     });
   } finally {
@@ -392,7 +444,7 @@ export async function pullRemoteCustomer(opts: {
 export async function updateLastSyncAt(
   pool: Pool,
   tenantId: string,
-  provider: string,
+  provider: string
 ): Promise<void> {
   const client = await pool.connect();
   try {

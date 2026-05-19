@@ -41,9 +41,7 @@ describe('ConflictModal', () => {
     // WHY: a string-only error ("Resource already booked") gives the
     //       operator no way to decide between "pick another time" and
     //       "ask Alice to reschedule"; showing the existing booking does
-    render(
-      <ConflictModal isOpen onClose={() => {}} conflict={baseConflict} />
-    );
+    render(<ConflictModal isOpen onClose={() => {}} conflict={baseConflict} />);
     expect(screen.getByText('That time is already booked')).toBeInTheDocument();
     expect(screen.getByText('Alice Lee')).toBeInTheDocument();
     expect(screen.getByText('Mike Rivera')).toBeInTheDocument();
@@ -93,14 +91,7 @@ describe('ConflictModal', () => {
 
   it('WIRING: View button invokes onView with the conflict appointment_id', () => {
     const onView = vi.fn();
-    render(
-      <ConflictModal
-        isOpen
-        onClose={() => {}}
-        conflict={baseConflict}
-        onView={onView}
-      />
-    );
+    render(<ConflictModal isOpen onClose={() => {}} conflict={baseConflict} onView={onView} />);
     fireEvent.click(screen.getByTestId('conflict-modal-view'));
     expect(onView).toHaveBeenCalledWith('existing-1');
   });
@@ -109,9 +100,7 @@ describe('ConflictModal', () => {
     // WHY: makes the host JSX simpler — `isOpen={conflict !== null}` plus
     //       `conflict={conflict}` is enough; no need for `{conflict && <Modal>}`
     //       dance. The component handles the null case internally.
-    const { container } = render(
-      <ConflictModal isOpen onClose={() => {}} conflict={null} />
-    );
+    const { container } = render(<ConflictModal isOpen onClose={() => {}} conflict={null} />);
     expect(container).toBeEmptyDOMElement();
   });
 

@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, createTenant,  hashPassword, skipIfDbDown } from "./test-utils";
-import { type Client } from "pg";
-import type { FastifyReply } from "fastify";
-import bcrypt from "bcrypt";
-import type { AppRequest } from "./middleware";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { getRootClient, clearDB, createTenant, hashPassword, skipIfDbDown } from './test-utils';
+import { type Client } from 'pg';
+import type { FastifyReply } from 'fastify';
+import bcrypt from 'bcrypt';
+import type { AppRequest } from './middleware';
 
 // Mock the email sender so route tests don't try to send real mail
 vi.mock('./services/communications/systemEmail', () => ({
@@ -27,18 +27,30 @@ function createMockReply(): MockReply {
   const reply = {
     statusCode: 200,
     body: null as unknown,
-    status(code: number) { reply.statusCode = code; return reply; },
-    send(data: unknown) { reply.body = data; return reply; },
+    status(code: number) {
+      reply.statusCode = code;
+      return reply;
+    },
+    send(data: unknown) {
+      reply.body = data;
+      return reply;
+    },
   } as unknown as MockReply;
   return reply;
 }
 
-function createMockRequest(body: Record<string, unknown> = {}, auth?: AppRequest['auth']): AppRequest {
+function createMockRequest(
+  body: Record<string, unknown> = {},
+  auth?: AppRequest['auth']
+): AppRequest {
   return {
-    body, auth,
-    headers: {}, ip: '127.0.0.1',
+    body,
+    auth,
+    headers: {},
+    ip: '127.0.0.1',
     log: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), child: vi.fn().mockReturnThis() },
-    url: '/test', method: 'POST',
+    url: '/test',
+    method: 'POST',
   } as unknown as AppRequest;
 }
 
@@ -46,7 +58,12 @@ const TEST_TOKEN = 'jwt.test.token';
 const TENANT_ID_MOCK = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const USER_ID_MOCK = '11111111-2222-3333-4444-555555555555';
 
-interface RouteCapture { method: string; path: string; handler: RouteHandler; opts?: RouteOpts; }
+interface RouteCapture {
+  method: string;
+  path: string;
+  handler: RouteHandler;
+  opts?: RouteOpts;
+}
 
 function captureRoutes() {
   const routes: RouteCapture[] = [];
@@ -61,19 +78,19 @@ function captureRoutes() {
 }
 
 function findRoute(routes: RouteCapture[], path: string) {
-  return routes.find(r => r.path === path)!;
+  return routes.find((r) => r.path === path)!;
 }
 
 import { createMockClient, createMockPool } from './test-utils-mock';
 import type * as AuthRoutes from './routes/auth';
 
-describe("Auth Routes — Handler-Level", () => {
+describe('Auth Routes — Handler-Level', () => {
   let registerAuthRoutes: typeof AuthRoutes.registerAuthRoutes;
   const generateToken = vi.fn().mockReturnValue(TEST_TOKEN);
 
   beforeAll(async () => {
     // Dynamic import to allow bcrypt mock to take effect
-    const mod = await import("./routes/auth");
+    const mod = await import('./routes/auth');
     registerAuthRoutes = mod.registerAuthRoutes;
   });
 
@@ -81,17 +98,24 @@ describe("Auth Routes — Handler-Level", () => {
 
   // ── /login ──────────────────────────────────────────────────────────
 
-  describe("POST /login handler", () => {
-    it("returns token on valid credentials (WHO: user | WHAT: email+password → JWT | WHERE: /login handler | WHY: successful auth grants session)", async () => {
+  describe('POST /login handler', () => {
+    it('returns token on valid credentials (WHO: user | WHAT: email+password → JWT | WHERE: /login handler | WHY: successful auth grants session)', async () => {
       const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
 
-      queryResponses.push({ rows: [{
-        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
-        email: 'test@example.com', password_hash: '$hash', full_name: 'Test User',
-      }] });
+      queryResponses.push({
+        rows: [
+          {
+            user_id: USER_ID_MOCK,
+            tenant_id: TENANT_ID_MOCK,
+            email: 'test@example.com',
+            password_hash: '$hash',
+            full_name: 'Test User',
+          },
+        ],
+      });
 
       const route = findRoute(routes, '/login');
       const req = createMockRequest({ email: 'test@example.com', password: 'pass123' });
@@ -102,11 +126,18 @@ describe("Auth Routes — Handler-Level", () => {
       // So let's use a real hash
       const realHash = await bcrypt.hash('pass123', 10);
       queryResponses.length = 0;
-      queryResponses.push({ rows: [{
-        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
-        email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
-        role: 'owner',
-      }] });
+      queryResponses.push({
+        rows: [
+          {
+            user_id: USER_ID_MOCK,
+            tenant_id: TENANT_ID_MOCK,
+            email: 'test@example.com',
+            password_hash: realHash,
+            full_name: 'Test User',
+            role: 'owner',
+          },
+        ],
+      });
 
       await route.handler(req, reply);
 
@@ -117,7 +148,10 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.user_name).toBe('Test User');
       expect(reply.body.role).toBe('owner');
       expect(generateToken).toHaveBeenCalledWith({
-        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@example.com', role: 'owner',
+        tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK,
+        email: 'test@example.com',
+        role: 'owner',
       });
     });
 
@@ -129,18 +163,25 @@ describe("Auth Routes — Handler-Level", () => {
     // WHERE: /login handler — runs before SessionContext sees the value.
     // WHY: without this the front-desk gating in OutlookLayout has nothing
     // to read; a front_desk user would still see Back Office.
-    it("returns role=front_desk when user record has it", async () => {
+    it('returns role=front_desk when user record has it', async () => {
       const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
 
       const realHash = await bcrypt.hash('pass123', 10);
-      queryResponses.push({ rows: [{
-        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
-        email: 'desk@example.com', password_hash: realHash, full_name: 'Desk Staff',
-        role: 'front_desk',
-      }] });
+      queryResponses.push({
+        rows: [
+          {
+            user_id: USER_ID_MOCK,
+            tenant_id: TENANT_ID_MOCK,
+            email: 'desk@example.com',
+            password_hash: realHash,
+            full_name: 'Desk Staff',
+            role: 'front_desk',
+          },
+        ],
+      });
 
       const route = findRoute(routes, '/login');
       const req = createMockRequest({ email: 'desk@example.com', password: 'pass123' });
@@ -151,7 +192,10 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.success).toBe(true);
       expect(reply.body.role).toBe('front_desk');
       expect(generateToken).toHaveBeenCalledWith({
-        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'desk@example.com', role: 'front_desk',
+        tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK,
+        email: 'desk@example.com',
+        role: 'front_desk',
       });
     });
 
@@ -172,11 +216,18 @@ describe("Auth Routes — Handler-Level", () => {
       registerAuthRoutes(app, pool, generateToken);
 
       const realHash = await bcrypt.hash('pass123', 10);
-      queryResponses.push({ rows: [{
-        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
-        email: 'legacy@example.com', password_hash: realHash, full_name: 'Legacy',
-        role: 'unknown_future_role',
-      }] });
+      queryResponses.push({
+        rows: [
+          {
+            user_id: USER_ID_MOCK,
+            tenant_id: TENANT_ID_MOCK,
+            email: 'legacy@example.com',
+            password_hash: realHash,
+            full_name: 'Legacy',
+            role: 'unknown_future_role',
+          },
+        ],
+      });
 
       const route = findRoute(routes, '/login');
       const req = createMockRequest({ email: 'legacy@example.com', password: 'pass123' });
@@ -187,7 +238,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.role).toBe('owner');
     });
 
-    it("returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)", async () => {
+    it('returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)', async () => {
       const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -203,7 +254,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.success).toBe(false);
     });
 
-    it("returns 401 when user not found (WHO: unknown email | WHAT: no DB row | WHERE: /login | WHY: generic error prevents email enumeration)", async () => {
+    it('returns 401 when user not found (WHO: unknown email | WHAT: no DB row | WHERE: /login | WHY: generic error prevents email enumeration)', async () => {
       const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -228,10 +279,17 @@ describe("Auth Routes — Handler-Level", () => {
       registerAuthRoutes(app, pool, generateToken);
 
       const realHash = await bcrypt.hash('correctpass', 10);
-      queryResponses.push({ rows: [{
-        user_id: USER_ID_MOCK, tenant_id: TENANT_ID_MOCK,
-        email: 'test@example.com', password_hash: realHash, full_name: 'Test User',
-      }] });
+      queryResponses.push({
+        rows: [
+          {
+            user_id: USER_ID_MOCK,
+            tenant_id: TENANT_ID_MOCK,
+            email: 'test@example.com',
+            password_hash: realHash,
+            full_name: 'Test User',
+          },
+        ],
+      });
 
       const route = findRoute(routes, '/login');
       const req = createMockRequest({ email: 'test@example.com', password: 'wrongpass' });
@@ -243,7 +301,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(generateToken).not.toHaveBeenCalled();
     });
 
-    it("has rate limit of 5 per 5 minutes (WHO: system | WHAT: brute-force protection | WHERE: /login opts | WHY: prevents credential stuffing)", () => {
+    it('has rate limit of 5 per 5 minutes (WHO: system | WHAT: brute-force protection | WHERE: /login opts | WHY: prevents credential stuffing)', () => {
       const pool = createMockPool({});
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -257,8 +315,8 @@ describe("Auth Routes — Handler-Level", () => {
 
   // ── /register ───────────────────────────────────────────────────────
 
-  describe("POST /register handler", () => {
-    it("returns 400 on missing fields (WHO: incomplete form | WHAT: Zod rejects | WHERE: /register | WHY: prevents partial tenant creation)", async () => {
+  describe('POST /register handler', () => {
+    it('returns 400 on missing fields (WHO: incomplete form | WHAT: Zod rejects | WHERE: /register | WHY: prevents partial tenant creation)', async () => {
       const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -274,7 +332,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.error).toBe('Validation failed');
     });
 
-    it("returns 400 on short password (WHO: new user | WHAT: password < 6 chars | WHERE: /register | WHY: minimum password strength)", async () => {
+    it('returns 400 on short password (WHO: new user | WHAT: password < 6 chars | WHERE: /register | WHY: minimum password strength)', async () => {
       const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -282,8 +340,11 @@ describe("Auth Routes — Handler-Level", () => {
 
       const route = findRoute(routes, '/register');
       const req = createMockRequest({
-        business_name: 'Shop', business_type: 'salon',
-        owner_name: 'Test', email: 'a@b.com', password: '12345',
+        business_name: 'Shop',
+        business_type: 'salon',
+        owner_name: 'Test',
+        email: 'a@b.com',
+        password: '12345',
       });
       const reply = createMockReply();
 
@@ -292,7 +353,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.statusCode).toBe(400);
     });
 
-    it("returns 409 on duplicate email (WHO: returning user | WHAT: email exists in users table | WHERE: /register | WHY: prevents duplicate accounts)", async () => {
+    it('returns 409 on duplicate email (WHO: returning user | WHAT: email exists in users table | WHERE: /register | WHY: prevents duplicate accounts)', async () => {
       const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -307,8 +368,11 @@ describe("Auth Routes — Handler-Level", () => {
 
       const route = findRoute(routes, '/register');
       const req = createMockRequest({
-        business_name: 'Shop', business_type: 'salon',
-        owner_name: 'Owner', email: 'dupe@test.com', password: 'secure123',
+        business_name: 'Shop',
+        business_type: 'salon',
+        owner_name: 'Owner',
+        email: 'dupe@test.com',
+        password: 'secure123',
       });
       const reply = createMockReply();
 
@@ -318,7 +382,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.error).toContain('already exists');
     });
 
-    it("creates tenant+user and returns 201 (WHO: new business | WHAT: full registration | WHERE: /register | WHY: self-service onboarding)", async () => {
+    it('creates tenant+user and returns 201 (WHO: new business | WHAT: full registration | WHERE: /register | WHY: self-service onboarding)', async () => {
       const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -337,8 +401,11 @@ describe("Auth Routes — Handler-Level", () => {
 
       const route = findRoute(routes, '/register');
       const req = createMockRequest({
-        business_name: 'DynaTire', business_type: 'mobile-tire',
-        owner_name: 'Dale', email: 'dale@test.com', password: 'secure123',
+        business_name: 'DynaTire',
+        business_type: 'mobile-tire',
+        owner_name: 'Dale',
+        email: 'dale@test.com',
+        password: 'secure123',
       });
       const reply = createMockReply();
 
@@ -353,16 +420,22 @@ describe("Auth Routes — Handler-Level", () => {
 
   // ── /auth/refresh ───────────────────────────────────────────────────
 
-  describe("POST /auth/refresh handler", () => {
-    it("returns fresh token when authenticated (WHO: logged-in user | WHAT: new JWT from existing auth | WHERE: /auth/refresh | WHY: extend session)", async () => {
+  describe('POST /auth/refresh handler', () => {
+    it('returns fresh token when authenticated (WHO: logged-in user | WHAT: new JWT from existing auth | WHERE: /auth/refresh | WHY: extend session)', async () => {
       const pool = createMockPool({});
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
 
       const route = findRoute(routes, '/auth/refresh');
-      const req = createMockRequest({}, {
-        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@test.com', role: 'front_desk',
-      });
+      const req = createMockRequest(
+        {},
+        {
+          tenant_id: TENANT_ID_MOCK,
+          user_id: USER_ID_MOCK,
+          email: 'test@test.com',
+          role: 'front_desk',
+        }
+      );
       const reply = createMockReply();
 
       await route.handler(req, reply);
@@ -372,7 +445,10 @@ describe("Auth Routes — Handler-Level", () => {
       // If it didn't, every refresh would silently promote a front_desk
       // user back to owner.
       expect(generateToken).toHaveBeenCalledWith({
-        tenant_id: TENANT_ID_MOCK, user_id: USER_ID_MOCK, email: 'test@test.com', role: 'front_desk',
+        tenant_id: TENANT_ID_MOCK,
+        user_id: USER_ID_MOCK,
+        email: 'test@test.com',
+        role: 'front_desk',
       });
     });
 
@@ -394,8 +470,8 @@ describe("Auth Routes — Handler-Level", () => {
 
   // ── /forgot-password ────────────────────────────────────────────────
 
-  describe("POST /forgot-password handler", () => {
-    it("returns 200 + sends email when user exists (WHO: registered user | WHAT: requests reset | WHERE: /forgot-password | WHY: enables self-service recovery)", async () => {
+  describe('POST /forgot-password handler', () => {
+    it('returns 200 + sends email when user exists (WHO: registered user | WHAT: requests reset | WHERE: /forgot-password | WHY: enables self-service recovery)', async () => {
       const sysmail = await import('./services/communications/systemEmail');
       vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
 
@@ -423,7 +499,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(link).toMatch(/\/reset-password\?token=[A-Za-z0-9_-]{30,}/);
     });
 
-    it("returns 200 silently when user does NOT exist (WHO: stranger | WHAT: probes for account | WHERE: /forgot-password | WHY: prevent email enumeration)", async () => {
+    it('returns 200 silently when user does NOT exist (WHO: stranger | WHAT: probes for account | WHERE: /forgot-password | WHY: prevent email enumeration)', async () => {
       const sysmail = await import('./services/communications/systemEmail');
       vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
 
@@ -445,7 +521,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(sysmail.sendPasswordResetEmail).not.toHaveBeenCalled();
     });
 
-    it("returns 400 when email is malformed (WHO: garbage input | WHAT: Zod rejects | WHERE: /forgot-password | WHY: skip DB lookup on bad data)", async () => {
+    it('returns 400 when email is malformed (WHO: garbage input | WHAT: Zod rejects | WHERE: /forgot-password | WHY: skip DB lookup on bad data)', async () => {
       const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -460,7 +536,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.statusCode).toBe(400);
     });
 
-    it("has rate limit of 3 per hour (WHO: system | WHAT: throttle reset abuse | WHERE: /forgot-password opts | WHY: limit email-spam vector)", () => {
+    it('has rate limit of 3 per hour (WHO: system | WHAT: throttle reset abuse | WHERE: /forgot-password opts | WHY: limit email-spam vector)', () => {
       const pool = createMockPool({});
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -471,8 +547,8 @@ describe("Auth Routes — Handler-Level", () => {
 
   // ── /reset-password ─────────────────────────────────────────────────
 
-  describe("POST /reset-password handler", () => {
-    it("updates password + marks token used on valid token (WHO: user with reset link | WHAT: completes reset | WHERE: /reset-password | WHY: changes credentials and forces re-login of other sessions)", async () => {
+  describe('POST /reset-password handler', () => {
+    it('updates password + marks token used on valid token (WHO: user with reset link | WHAT: completes reset | WHERE: /reset-password | WHY: changes credentials and forces re-login of other sessions)', async () => {
       const { mockClient: client, queryResponses } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -499,7 +575,7 @@ describe("Auth Routes — Handler-Level", () => {
 
       expect(reply.body).toEqual({ success: true });
       // Verify the queries: BEGIN, SELECT, UPDATE users, UPDATE this reset, UPDATE other resets, COMMIT
-      const queries = client.query.mock.calls.map(c => (c[0] as string).trim().split('\n')[0]);
+      const queries = client.query.mock.calls.map((c) => (c[0] as string).trim().split('\n')[0]);
       expect(queries[0]).toBe('BEGIN');
       expect(queries[1]).toContain('SELECT password_reset_id, user_id FROM password_resets');
       expect(queries[2]).toContain('UPDATE users SET password_hash');
@@ -530,7 +606,7 @@ describe("Auth Routes — Handler-Level", () => {
       expect(reply.body.error).toMatch(/invalid|expired/i);
     });
 
-    it("returns 400 when password is too short (WHO: user picks weak password | WHAT: Zod rejects <6 chars | WHERE: /reset-password | WHY: enforce minimum strength)", async () => {
+    it('returns 400 when password is too short (WHO: user picks weak password | WHAT: Zod rejects <6 chars | WHERE: /reset-password | WHY: enforce minimum strength)', async () => {
       const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
@@ -547,353 +623,353 @@ describe("Auth Routes — Handler-Level", () => {
   });
 });
 
-describe("Auth - Database Level", () => {
-    let client: Client;
-    let dbAvailable = true;
-    beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
+describe('Auth - Database Level', () => {
+  let client: Client;
+  let dbAvailable = true;
+  beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
-    beforeAll(async () => {
-        try {
-            client = await getRootClient();
-        } catch (err) {
-            dbAvailable = false;
-            console.warn("[auth.test] Skipping DB tests - connection failed", err);
-        }
+  beforeAll(async () => {
+    try {
+      client = await getRootClient();
+    } catch (err) {
+      dbAvailable = false;
+      console.warn('[auth.test] Skipping DB tests - connection failed', err);
+    }
+  });
+
+  afterAll(async () => {
+    if (dbAvailable && client) {
+      await client.end();
+    }
+  });
+
+  beforeEach(async () => {
+    if (!dbAvailable) return;
+    await clearDB(client);
+  });
+
+  // ── Section 1: Login ──────────────────────────────────────────────────
+
+  describe('Login', () => {
+    it('should verify correct password with bcrypt.compare', async () => {
+      if (!dbAvailable) return;
+
+      const password = 'securePass123';
+      const hash = await hashPassword(password);
+
+      const tenantId = await createTenant(client, 'LoginTest', 'salon');
+
+      await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
+        [tenantId, 'login@test.com', hash, 'Test User']
+      );
+
+      // Simulate the login query
+      const res = await client.query('SELECT * FROM users WHERE email = $1', ['login@test.com']);
+      expect(res.rows).toHaveLength(1);
+
+      const user = res.rows[0];
+      const match = await bcrypt.compare(password, user.password_hash);
+      expect(match).toBe(true);
+      expect(user.tenant_id).toBe(tenantId);
+      expect(user.full_name).toBe('Test User');
     });
 
-    afterAll(async () => {
-        if (dbAvailable && client) {
-            await client.end();
-        }
+    it('should reject wrong password with bcrypt.compare', async () => {
+      if (!dbAvailable) return;
+
+      const hash = await hashPassword('correctPassword');
+
+      const tenantId = await createTenant(client, 'LoginTest2', 'salon');
+
+      await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
+        [tenantId, 'wrong@test.com', hash, 'Wrong Pass User']
+      );
+
+      const res = await client.query('SELECT * FROM users WHERE email = $1', ['wrong@test.com']);
+      const user = res.rows[0];
+
+      const match = await bcrypt.compare('wrongPassword', user.password_hash);
+      expect(match).toBe(false);
     });
 
-    beforeEach(async () => {
-        if (!dbAvailable) return;
-        await clearDB(client);
+    it('should return no user for non-existent email', async () => {
+      if (!dbAvailable) return;
+
+      const res = await client.query('SELECT * FROM users WHERE email = $1', ['noone@test.com']);
+      expect(res.rows).toHaveLength(0);
+    });
+  });
+
+  // ── Section 2: Registration ───────────────────────────────────────────
+
+  describe('Registration', () => {
+    it('should create tenant and user in a transaction', async () => {
+      if (!dbAvailable) return;
+
+      const hash = await hashPassword('newUser123');
+
+      await client.query('BEGIN');
+
+      const tenantRes = await client.query(
+        'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id',
+        ['New Business', 'mobile-tire']
+      );
+      const tenantId = tenantRes.rows[0].tenant_id;
+
+      const userRes = await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, full_name',
+        [tenantId, 'new@biz.com', hash, 'Owner Name']
+      );
+
+      await client.query('COMMIT');
+
+      expect(tenantId).toBeDefined();
+      expect(userRes.rows[0].user_id).toBeDefined();
+      expect(userRes.rows[0].full_name).toBe('Owner Name');
+
+      // Verify both exist after commit
+      const tenantCheck = await client.query('SELECT * FROM tenants WHERE tenant_id = $1', [
+        tenantId,
+      ]);
+      const userCheck = await client.query('SELECT * FROM users WHERE tenant_id = $1', [tenantId]);
+      expect(tenantCheck.rows).toHaveLength(1);
+      expect(userCheck.rows).toHaveLength(1);
     });
 
-    // ── Section 1: Login ──────────────────────────────────────────────────
+    it('should create a tenant and user in a single transaction (with template verification)', async () => {
+      if (!dbAvailable) return;
 
-    describe("Login", () => {
-        it("should verify correct password with bcrypt.compare", async () => {
-            if (!dbAvailable) return;
+      // Simulate what POST /tenants/register does
+      await client.query('BEGIN');
 
-            const password = "securePass123";
-            const hash = await hashPassword(password);
+      const tenantRes = await client.query(
+        'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id',
+        ['Test Salon', 'salon']
+      );
+      const tenantId = tenantRes.rows[0].tenant_id;
 
-            const tenantId = await createTenant(client, "LoginTest", "salon");
+      const hash = await hashPassword('testpass123');
 
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [tenantId, "login@test.com", hash, "Test User"]
-            );
+      const userRes = await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, tenant_id, email, full_name',
+        [tenantId, 'owner@testsalon.com', hash, 'Salon Owner']
+      );
 
-            // Simulate the login query
-            const res = await client.query("SELECT * FROM users WHERE email = $1", ["login@test.com"]);
-            expect(res.rows).toHaveLength(1);
+      await client.query('COMMIT');
 
-            const user = res.rows[0];
-            const match = await bcrypt.compare(password, user.password_hash);
-            expect(match).toBe(true);
-            expect(user.tenant_id).toBe(tenantId);
-            expect(user.full_name).toBe("Test User");
-        });
+      expect(userRes.rows[0].tenant_id).toBe(tenantId);
+      expect(userRes.rows[0].email).toBe('owner@testsalon.com');
+      expect(userRes.rows[0].full_name).toBe('Salon Owner');
 
-        it("should reject wrong password with bcrypt.compare", async () => {
-            if (!dbAvailable) return;
+      // Verify template defaults were applied via trigger
+      const tenantCheck = await client.query(
+        'SELECT system_prompt, voice_id, first_message FROM tenants WHERE tenant_id = $1',
+        [tenantId]
+      );
+      expect(tenantCheck.rows[0].system_prompt).toContain('receptionist');
+      expect(tenantCheck.rows[0].voice_id).toBeTruthy();
+      expect(tenantCheck.rows[0].first_message).toBeTruthy();
 
-            const hash = await hashPassword("correctPassword");
-
-            const tenantId = await createTenant(client, "LoginTest2", "salon");
-
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [tenantId, "wrong@test.com", hash, "Wrong Pass User"]
-            );
-
-            const res = await client.query("SELECT * FROM users WHERE email = $1", ["wrong@test.com"]);
-            const user = res.rows[0];
-
-            const match = await bcrypt.compare("wrongPassword", user.password_hash);
-            expect(match).toBe(false);
-        });
-
-        it("should return no user for non-existent email", async () => {
-            if (!dbAvailable) return;
-
-            const res = await client.query("SELECT * FROM users WHERE email = $1", ["noone@test.com"]);
-            expect(res.rows).toHaveLength(0);
-        });
+      // Verify default resource was created via trigger
+      const resourceCheck = await client.query('SELECT name FROM resources WHERE tenant_id = $1', [
+        tenantId,
+      ]);
+      expect(resourceCheck.rows[0].name).toBe('Styling Station 1');
     });
 
-    // ── Section 2: Registration ───────────────────────────────────────────
+    it('should apply template defaults (system_prompt populated) for known business_type', async () => {
+      if (!dbAvailable) return;
 
-    describe("Registration", () => {
-        it("should create tenant and user in a transaction", async () => {
-            if (!dbAvailable) return;
+      const tenantRes = await client.query(
+        'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING *',
+        ['Template Test', 'mobile-tire']
+      );
 
-            const hash = await hashPassword("newUser123");
-
-            await client.query("BEGIN");
-
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
-                ["New Business", "mobile-tire"]
-            );
-            const tenantId = tenantRes.rows[0].tenant_id;
-
-            const userRes = await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, full_name",
-                [tenantId, "new@biz.com", hash, "Owner Name"]
-            );
-
-            await client.query("COMMIT");
-
-            expect(tenantId).toBeDefined();
-            expect(userRes.rows[0].user_id).toBeDefined();
-            expect(userRes.rows[0].full_name).toBe("Owner Name");
-
-            // Verify both exist after commit
-            const tenantCheck = await client.query("SELECT * FROM tenants WHERE tenant_id = $1", [tenantId]);
-            const userCheck = await client.query("SELECT * FROM users WHERE tenant_id = $1", [tenantId]);
-            expect(tenantCheck.rows).toHaveLength(1);
-            expect(userCheck.rows).toHaveLength(1);
-        });
-
-        it("should create a tenant and user in a single transaction (with template verification)", async () => {
-            if (!dbAvailable) return;
-
-            // Simulate what POST /tenants/register does
-            await client.query('BEGIN');
-
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
-                ['Test Salon', 'salon']
-            );
-            const tenantId = tenantRes.rows[0].tenant_id;
-
-            const hash = await hashPassword('testpass123');
-
-            const userRes = await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4) RETURNING user_id, tenant_id, email, full_name",
-                [tenantId, 'owner@testsalon.com', hash, 'Salon Owner']
-            );
-
-            await client.query('COMMIT');
-
-            expect(userRes.rows[0].tenant_id).toBe(tenantId);
-            expect(userRes.rows[0].email).toBe('owner@testsalon.com');
-            expect(userRes.rows[0].full_name).toBe('Salon Owner');
-
-            // Verify template defaults were applied via trigger
-            const tenantCheck = await client.query(
-                "SELECT system_prompt, voice_id, first_message FROM tenants WHERE tenant_id = $1",
-                [tenantId]
-            );
-            expect(tenantCheck.rows[0].system_prompt).toContain('receptionist');
-            expect(tenantCheck.rows[0].voice_id).toBeTruthy();
-            expect(tenantCheck.rows[0].first_message).toBeTruthy();
-
-            // Verify default resource was created via trigger
-            const resourceCheck = await client.query(
-                "SELECT name FROM resources WHERE tenant_id = $1",
-                [tenantId]
-            );
-            expect(resourceCheck.rows[0].name).toBe('Styling Station 1');
-        });
-
-        it("should apply template defaults (system_prompt populated) for known business_type", async () => {
-            if (!dbAvailable) return;
-
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING *",
-                ["Template Test", "mobile-tire"]
-            );
-
-            const tenant = tenantRes.rows[0];
-            expect(tenant.system_prompt).toBeTruthy();
-            expect(tenant.system_prompt).toContain("tire");
-            expect(tenant.voice_id).toBeTruthy();
-            expect(tenant.first_message).toBeTruthy();
-        });
-
-        it("should create default resource for known business_type", async () => {
-            if (!dbAvailable) return;
-
-            const tenantId = await createTenant(client, "Resource Test", "salon");
-
-            const resources = await client.query(
-                "SELECT * FROM resources WHERE tenant_id = $1",
-                [tenantId]
-            );
-
-            expect(resources.rows).toHaveLength(1);
-            expect(resources.rows[0].name).toBe("Styling Station 1");
-        });
+      const tenant = tenantRes.rows[0];
+      expect(tenant.system_prompt).toBeTruthy();
+      expect(tenant.system_prompt).toContain('tire');
+      expect(tenant.voice_id).toBeTruthy();
+      expect(tenant.first_message).toBeTruthy();
     });
 
-    // ── Section 3: Email Uniqueness ───────────────────────────────────────
+    it('should create default resource for known business_type', async () => {
+      if (!dbAvailable) return;
 
-    describe("Email Uniqueness", () => {
-        it("should reject duplicate email within same tenant (per-tenant unique constraint)", async () => {
-            if (!dbAvailable) return;
+      const tenantId = await createTenant(client, 'Resource Test', 'salon');
 
-            const hash = await hashPassword("pass123");
-            const tenantId = await createTenant(client, "Biz1", "salon");
+      const resources = await client.query('SELECT * FROM resources WHERE tenant_id = $1', [
+        tenantId,
+      ]);
 
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [tenantId, "dupe@test.com", hash, "First User"]
-            );
+      expect(resources.rows).toHaveLength(1);
+      expect(resources.rows[0].name).toBe('Styling Station 1');
+    });
+  });
 
-            // Same email within same tenant should fail (unique on tenant_id, email)
-            await expect(
-                client.query(
-                    "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                    [tenantId, "dupe@test.com", hash, "Second User"]
-                )
-            ).rejects.toThrow();
-        });
+  // ── Section 3: Email Uniqueness ───────────────────────────────────────
 
-        it("should reject duplicate email within same tenant (unique constraint message)", async () => {
-            if (!dbAvailable) return;
+  describe('Email Uniqueness', () => {
+    it('should reject duplicate email within same tenant (per-tenant unique constraint)', async () => {
+      if (!dbAvailable) return;
 
-            const tenantId = await createTenant(client, "Dup Test", "salon");
-            const hash = await hashPassword("pass");
+      const hash = await hashPassword('pass123');
+      const tenantId = await createTenant(client, 'Biz1', 'salon');
 
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'dupe@test.com', $2, 'User 1')",
-                [tenantId, hash]
-            );
+      await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
+        [tenantId, 'dupe@test.com', hash, 'First User']
+      );
 
-            await expect(
-                client.query(
-                    "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'dupe@test.com', $2, 'User 2')",
-                    [tenantId, hash]
-                )
-            ).rejects.toThrow(/unique/i);
-        });
-
-        it("should allow same email across different tenants", async () => {
-            if (!dbAvailable) return;
-
-            const t1Id = await createTenant(client, "T1", "salon");
-            const t2Id = await createTenant(client, "T2", "auto-shop");
-
-            const hash = await hashPassword("pass");
-
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 1')",
-                [t1Id, hash]
-            );
-
-            const res = await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 2') RETURNING user_id",
-                [t2Id, hash]
-            );
-
-            expect(res.rows[0].user_id).toBeTruthy();
-        });
-
-        it("should detect duplicate email across tenants via application-level check", async () => {
-            if (!dbAvailable) return;
-
-            const hash = await hashPassword("pass123");
-            const t1Id = await createTenant(client, "Biz1", "salon");
-
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [t1Id, "crosscheck@test.com", hash, "First User"]
-            );
-
-            // Application-level check used by /register
-            const existing = await client.query("SELECT user_id FROM users WHERE email = $1", ["crosscheck@test.com"]);
-            expect(existing.rows.length).toBeGreaterThan(0);
-        });
-
-        it("should detect existing email before registration (application-level check)", async () => {
-            if (!dbAvailable) return;
-
-            const hash = await hashPassword("pass123");
-            const t1Id = await createTenant(client, "ExistingBiz", "salon");
-
-            await client.query(
-                "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)",
-                [t1Id, "exists@test.com", hash, "Existing User"]
-            );
-
-            // Simulate the registration check query
-            const existingUser = await client.query(
-                "SELECT user_id FROM users WHERE email = $1",
-                ["exists@test.com"]
-            );
-            expect(existingUser.rows.length).toBeGreaterThan(0);
-
-            // For a new email, should return empty
-            const newUser = await client.query(
-                "SELECT user_id FROM users WHERE email = $1",
-                ["fresh@test.com"]
-            );
-            expect(newUser.rows).toHaveLength(0);
-        });
+      // Same email within same tenant should fail (unique on tenant_id, email)
+      await expect(
+        client.query(
+          'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
+          [tenantId, 'dupe@test.com', hash, 'Second User']
+        )
+      ).rejects.toThrow();
     });
 
-    // ── Section 4: Onboarding ─────────────────────────────────────────────
+    it('should reject duplicate email within same tenant (unique constraint message)', async () => {
+      if (!dbAvailable) return;
 
-    describe("Onboarding", () => {
-        it("should default onboarding_completed to false", async () => {
-            if (!dbAvailable) return;
+      const tenantId = await createTenant(client, 'Dup Test', 'salon');
+      const hash = await hashPassword('pass');
 
-            const tenantRes = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING *",
-                ["Onboarding Test", "auto-shop"]
-            );
+      await client.query(
+        "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'dupe@test.com', $2, 'User 1')",
+        [tenantId, hash]
+      );
 
-            expect(tenantRes.rows[0].onboarding_completed).toBe(false);
-        });
-
-        it("should set onboarding_completed to false by default (plumber)", async () => {
-            if (!dbAvailable) return;
-
-            const res = await client.query(
-                "INSERT INTO tenants (name, business_type) VALUES ('New Biz', 'plumber') RETURNING onboarding_completed"
-            );
-            expect(res.rows[0].onboarding_completed).toBe(false);
-        });
+      await expect(
+        client.query(
+          "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'dupe@test.com', $2, 'User 2')",
+          [tenantId, hash]
+        )
+      ).rejects.toThrow(/unique/i);
     });
 
-    // ── Section 5: Transaction Rollback ───────────────────────────────────
+    it('should allow same email across different tenants', async () => {
+      if (!dbAvailable) return;
 
-    describe("Transaction Rollback", () => {
-        it("should rollback both tenant and user if user creation fails", async () => {
-            if (!dbAvailable) return;
+      const t1Id = await createTenant(client, 'T1', 'salon');
+      const t2Id = await createTenant(client, 'T2', 'auto-shop');
 
-            const countBefore = await client.query("SELECT count(*) FROM tenants");
-            const tenantCountBefore = parseInt(countBefore.rows[0].count);
+      const hash = await hashPassword('pass');
 
-            try {
-                await client.query("BEGIN");
+      await client.query(
+        "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 1')",
+        [t1Id, hash]
+      );
 
-                await client.query(
-                    "INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id",
-                    ["Rollback Test", "salon"]
-                );
+      const res = await client.query(
+        "INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, 'same@email.com', $2, 'User 2') RETURNING user_id",
+        [t2Id, hash]
+      );
 
-                // Force an error by inserting a user with missing required field (password_hash NOT NULL)
-                await client.query(
-                    "INSERT INTO users (tenant_id, email, password_hash) VALUES ($1, $2, NULL)",
-                    ["00000000-0000-0000-0000-000000000000", "fail@test.com"]
-                );
-
-                await client.query("COMMIT");
-            } catch {
-                await client.query("ROLLBACK");
-            }
-
-            const countAfter = await client.query("SELECT count(*) FROM tenants");
-            const tenantCountAfter = parseInt(countAfter.rows[0].count);
-
-            expect(tenantCountAfter).toBe(tenantCountBefore);
-        });
+      expect(res.rows[0].user_id).toBeTruthy();
     });
+
+    it('should detect duplicate email across tenants via application-level check', async () => {
+      if (!dbAvailable) return;
+
+      const hash = await hashPassword('pass123');
+      const t1Id = await createTenant(client, 'Biz1', 'salon');
+
+      await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
+        [t1Id, 'crosscheck@test.com', hash, 'First User']
+      );
+
+      // Application-level check used by /register
+      const existing = await client.query('SELECT user_id FROM users WHERE email = $1', [
+        'crosscheck@test.com',
+      ]);
+      expect(existing.rows.length).toBeGreaterThan(0);
+    });
+
+    it('should detect existing email before registration (application-level check)', async () => {
+      if (!dbAvailable) return;
+
+      const hash = await hashPassword('pass123');
+      const t1Id = await createTenant(client, 'ExistingBiz', 'salon');
+
+      await client.query(
+        'INSERT INTO users (tenant_id, email, password_hash, full_name) VALUES ($1, $2, $3, $4)',
+        [t1Id, 'exists@test.com', hash, 'Existing User']
+      );
+
+      // Simulate the registration check query
+      const existingUser = await client.query('SELECT user_id FROM users WHERE email = $1', [
+        'exists@test.com',
+      ]);
+      expect(existingUser.rows.length).toBeGreaterThan(0);
+
+      // For a new email, should return empty
+      const newUser = await client.query('SELECT user_id FROM users WHERE email = $1', [
+        'fresh@test.com',
+      ]);
+      expect(newUser.rows).toHaveLength(0);
+    });
+  });
+
+  // ── Section 4: Onboarding ─────────────────────────────────────────────
+
+  describe('Onboarding', () => {
+    it('should default onboarding_completed to false', async () => {
+      if (!dbAvailable) return;
+
+      const tenantRes = await client.query(
+        'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING *',
+        ['Onboarding Test', 'auto-shop']
+      );
+
+      expect(tenantRes.rows[0].onboarding_completed).toBe(false);
+    });
+
+    it('should set onboarding_completed to false by default (plumber)', async () => {
+      if (!dbAvailable) return;
+
+      const res = await client.query(
+        "INSERT INTO tenants (name, business_type) VALUES ('New Biz', 'plumber') RETURNING onboarding_completed"
+      );
+      expect(res.rows[0].onboarding_completed).toBe(false);
+    });
+  });
+
+  // ── Section 5: Transaction Rollback ───────────────────────────────────
+
+  describe('Transaction Rollback', () => {
+    it('should rollback both tenant and user if user creation fails', async () => {
+      if (!dbAvailable) return;
+
+      const countBefore = await client.query('SELECT count(*) FROM tenants');
+      const tenantCountBefore = parseInt(countBefore.rows[0].count);
+
+      try {
+        await client.query('BEGIN');
+
+        await client.query(
+          'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id',
+          ['Rollback Test', 'salon']
+        );
+
+        // Force an error by inserting a user with missing required field (password_hash NOT NULL)
+        await client.query(
+          'INSERT INTO users (tenant_id, email, password_hash) VALUES ($1, $2, NULL)',
+          ['00000000-0000-0000-0000-000000000000', 'fail@test.com']
+        );
+
+        await client.query('COMMIT');
+      } catch {
+        await client.query('ROLLBACK');
+      }
+
+      const countAfter = await client.query('SELECT count(*) FROM tenants');
+      const tenantCountAfter = parseInt(countAfter.rows[0].count);
+
+      expect(tenantCountAfter).toBe(tenantCountBefore);
+    });
+  });
 });

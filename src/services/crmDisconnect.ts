@@ -35,14 +35,14 @@ export type { CrmProvider };
 export async function disconnectCrmIntegration(
   client: PoolClient,
   tenantId: string,
-  provider: CrmProvider,
+  provider: CrmProvider
 ): Promise<void> {
   await client.query(
     `DELETE FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = $2`,
-    [tenantId, provider],
+    [tenantId, provider]
   );
-  await client.query(
-    `DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = $2`,
-    [tenantId, provider],
-  );
+  await client.query(`DELETE FROM entity_sync_map WHERE tenant_id = $1 AND provider = $2`, [
+    tenantId,
+    provider,
+  ]);
 }

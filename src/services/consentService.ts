@@ -7,7 +7,9 @@ export class ConsentService {
   /**
    * Record customer consent for communications
    */
-  async recordConsent(consentData: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord> {
+  async recordConsent(
+    consentData: Omit<ConsentRecord, 'consent_record_id'>
+  ): Promise<ConsentRecord> {
     const consent: Omit<ConsentRecord, 'consent_record_id'> = {
       ...consentData,
     };
@@ -18,7 +20,7 @@ export class ConsentService {
     console.log(
       `✅ Consent recorded for ${result.customer_email || result.customer_phone} (${
         result.consent_type
-      })`,
+      })`
     );
     return result;
   }
@@ -30,12 +32,12 @@ export class ConsentService {
     tenantId: string,
     customerEmail?: string,
     customerPhone?: string,
-    consentType: 'email' | 'sms' = 'email',
+    consentType: 'email' | 'sms' = 'email'
   ): Promise<boolean> {
     const consents = await this.db.getConsentRecordsByCustomer(
       tenantId,
       customerEmail,
-      customerPhone,
+      customerPhone
     );
 
     // Find the most recent consent for the requested type
@@ -69,12 +71,12 @@ export class ConsentService {
     customerEmail?: string,
     customerPhone?: string,
     consentType: 'email' | 'sms' | 'both' = 'both',
-    reason?: string,
+    reason?: string
   ): Promise<boolean> {
     const consents = await this.db.getConsentRecordsByCustomer(
       tenantId,
       customerEmail,
-      customerPhone,
+      customerPhone
     );
 
     let revokedCount = 0;
@@ -83,11 +85,11 @@ export class ConsentService {
       filteredConsents = consents.filter(
         (c) =>
           (c.consent_type === 'email' || c.consent_type === 'sms' || c.consent_type === 'both') &&
-          !c.revoked_at,
+          !c.revoked_at
       );
     } else {
       filteredConsents = consents.filter(
-        (c) => (c.consent_type === consentType || c.consent_type === 'both') && !c.revoked_at,
+        (c) => (c.consent_type === consentType || c.consent_type === 'both') && !c.revoked_at
       );
     }
 
@@ -148,8 +150,7 @@ export class ConsentService {
       customerEmail: optOutData.customerEmail ?? snake.customer_email,
       customerPhone: optOutData.customerPhone ?? snake.customer_phone,
       optOutType: optOutData.optOutType ?? snake.opt_out_type,
-      optOutDate:
-        optOutData.optOutDate ?? snake.opt_out_date ?? new Date().toISOString(),
+      optOutDate: optOutData.optOutDate ?? snake.opt_out_date ?? new Date().toISOString(),
       optOutMethod: optOutData.optOutMethod ?? snake.opt_out_method,
       originalConsentRecordId:
         optOutData.originalConsentRecordId ?? snake.original_consent_record_id,
@@ -174,13 +175,13 @@ export class ConsentService {
       optOut.customerEmail,
       optOut.customerPhone,
       optOut.optOutType,
-      revokeReason,
+      revokeReason
     );
 
     console.log(
       `✅ Opt-out recorded for ${optOut.customerEmail || optOut.customerPhone} (${
         optOut.optOutType
-      })`,
+      })`
     );
     return optOut;
   }
@@ -193,7 +194,7 @@ export class ConsentService {
     command: string,
     customerPhone?: string,
     customerEmail?: string,
-    messageBody?: string,
+    messageBody?: string
   ): Promise<OptOutRecord | null> {
     const commandLower = command.toLowerCase().trim();
 
@@ -236,7 +237,7 @@ export class ConsentService {
   async canReceiveCommunications(
     tenantId: string,
     customerEmail?: string,
-    customerPhone?: string,
+    customerPhone?: string
   ): Promise<{
     canReceiveEmail: boolean;
     canReceiveSMS: boolean;

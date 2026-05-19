@@ -28,7 +28,7 @@ const resource: ResourceCandidate = { resource_id: 'bay-1', capabilities: ['oil-
 const employee: EmployeeCandidate = { employee_id: 'mike', skills: ['oil-change'] };
 
 // Weekly pattern: Mike works Mon-Fri 8-5
-const patternShifts: Shift[] = [1, 2, 3, 4, 5].map(dow => ({
+const patternShifts: Shift[] = [1, 2, 3, 4, 5].map((dow) => ({
   employee_id: 'mike',
   day_of_week: dow,
   start_time: '08:00',
@@ -58,13 +58,15 @@ describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
       // WHO: Mike with override on Monday: 10am-2pm instead of 8-5
       // WHAT: Should be available at 10am (within override window)
       // WHY: Override takes precedence over pattern
-      const overrides: ShiftOverride[] = [{
-        employee_id: 'mike',
-        shift_date: '2026-06-01',
-        start_time: '10:00',
-        end_time: '14:00',
-        is_off: false,
-      }];
+      const overrides: ShiftOverride[] = [
+        {
+          employee_id: 'mike',
+          shift_date: '2026-06-01',
+          start_time: '10:00',
+          end_time: '14:00',
+          is_off: false,
+        },
+      ];
 
       const result = selectAssignments({
         requirements: { serviceType: 'oil-change', requiredEmployeeSkills: ['oil-change'] },
@@ -82,13 +84,15 @@ describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
       // WHO: Mike with is_off override on Monday
       // WHAT: Should NOT be available (day off overrides pattern)
       // WHY: is_off=true means employee is not working that day
-      const overrides: ShiftOverride[] = [{
-        employee_id: 'mike',
-        shift_date: '2026-06-01',
-        start_time: null,
-        end_time: null,
-        is_off: true,
-      }];
+      const overrides: ShiftOverride[] = [
+        {
+          employee_id: 'mike',
+          shift_date: '2026-06-01',
+          start_time: null,
+          end_time: null,
+          is_off: true,
+        },
+      ];
 
       const result = selectAssignments({
         requirements: { serviceType: 'oil-change', requiredEmployeeSkills: ['oil-change'] },
@@ -108,13 +112,15 @@ describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
       // WHO: Mike with override 10am-12pm on Monday
       // WHAT: Booking at 1pm should fail (outside override window)
       // WHY: Override narrows available hours
-      const overrides: ShiftOverride[] = [{
-        employee_id: 'mike',
-        shift_date: '2026-06-01',
-        start_time: '10:00',
-        end_time: '12:00',
-        is_off: false,
-      }];
+      const overrides: ShiftOverride[] = [
+        {
+          employee_id: 'mike',
+          shift_date: '2026-06-01',
+          start_time: '10:00',
+          end_time: '12:00',
+          is_off: false,
+        },
+      ];
 
       const result = selectAssignments({
         requirements: { serviceType: 'oil-change', requiredEmployeeSkills: ['oil-change'] },
@@ -132,13 +138,15 @@ describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
       // WHO: Mike who normally doesn't work Saturday
       // WHAT: Override for Saturday 9am-1pm should make him available
       // WHY: Business needs extra coverage on a specific Saturday
-      const overrides: ShiftOverride[] = [{
-        employee_id: 'mike',
-        shift_date: '2026-06-06',
-        start_time: '09:00',
-        end_time: '13:00',
-        is_off: false,
-      }];
+      const overrides: ShiftOverride[] = [
+        {
+          employee_id: 'mike',
+          shift_date: '2026-06-06',
+          start_time: '09:00',
+          end_time: '13:00',
+          is_off: false,
+        },
+      ];
 
       const result = selectAssignments({
         requirements: { serviceType: 'oil-change', requiredEmployeeSkills: ['oil-change'] },
@@ -173,20 +181,22 @@ describe('Fix #18: shared/scheduling.ts employee_schedule support', () => {
       // WHAT: Sarah should still be available even though Mike is off
       // WHY: Overrides are per-employee
       const sarah: EmployeeCandidate = { employee_id: 'sarah', skills: ['oil-change'] };
-      const sarahShifts: Shift[] = [1, 2, 3, 4, 5].map(dow => ({
+      const sarahShifts: Shift[] = [1, 2, 3, 4, 5].map((dow) => ({
         employee_id: 'sarah',
         day_of_week: dow,
         start_time: '08:00',
         end_time: '17:00',
       }));
 
-      const overrides: ShiftOverride[] = [{
-        employee_id: 'mike',
-        shift_date: '2026-06-01',
-        start_time: null,
-        end_time: null,
-        is_off: true,
-      }];
+      const overrides: ShiftOverride[] = [
+        {
+          employee_id: 'mike',
+          shift_date: '2026-06-01',
+          start_time: null,
+          end_time: null,
+          is_off: true,
+        },
+      ];
 
       const result = selectAssignments({
         requirements: { serviceType: 'oil-change', requiredEmployeeSkills: ['oil-change'] },

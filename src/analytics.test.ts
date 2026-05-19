@@ -43,8 +43,10 @@ function buildApp() {
     query: vi.fn(async (text: string, params?: unknown[]) => mockClient.query(text, params)),
   } as unknown as Pool;
 
-  const withTenantClient = async <T>(_tenantId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> =>
-    fn(mockClient as unknown as PoolClient);
+  const withTenantClient = async <T>(
+    _tenantId: string,
+    fn: (client: PoolClient) => Promise<T>
+  ): Promise<T> => fn(mockClient as unknown as PoolClient);
 
   const fastify = Fastify({ logger: false });
 

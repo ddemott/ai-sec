@@ -22,7 +22,8 @@ export const Card: React.FC<CardProps> = ({
 }) => {
   const variants = {
     default: 'border text-inherit',
-    success: 'bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900/40 text-green-900 dark:text-green-100',
+    success:
+      'bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900/40 text-green-900 dark:text-green-100',
     info: 'border',
     dark: 'border-transparent text-white',
   };
@@ -34,31 +35,54 @@ export const Card: React.FC<CardProps> = ({
     dark: '',
   };
 
-  const defaultStyle = variant === 'default' ? {
-    backgroundColor: 'var(--surface)',
-    borderColor: 'var(--border)',
-    color: 'var(--text-primary)',
-  } : undefined
+  const defaultStyle =
+    variant === 'default'
+      ? {
+          backgroundColor: 'var(--surface)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-primary)',
+        }
+      : undefined;
 
   const variantInlineStyles: React.CSSProperties | undefined =
     variant === 'info'
-      ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }
+      ? {
+          backgroundColor: 'var(--accent-muted)',
+          borderColor: 'var(--accent-muted)',
+          color: 'var(--accent-soft)',
+        }
       : variant === 'dark'
         ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
-        : undefined
+        : undefined;
 
   return (
     <div
       className={`p-6 rounded-2xl border shadow-sm ${variants[variant]} ${onClick ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2' : ''} ${className}`}
-      style={style ? { ...defaultStyle, ...variantInlineStyles, ...style } : { ...defaultStyle, ...variantInlineStyles }}
+      style={
+        style
+          ? { ...defaultStyle, ...variantInlineStyles, ...style }
+          : { ...defaultStyle, ...variantInlineStyles }
+      }
       onClick={onClick}
       role={role ?? (onClick ? 'button' : undefined)}
       tabIndex={tabIndex ?? (onClick ? 0 : undefined)}
-      onKeyDown={onKeyDown ?? (onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e as unknown as React.MouseEvent<HTMLDivElement>); } } : undefined)}
+      onKeyDown={
+        onKeyDown ??
+        (onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick(e as unknown as React.MouseEvent<HTMLDivElement>);
+              }
+            }
+          : undefined)
+      }
       {...rest}
     >
       {title && (
-        <h3 className={`font-bold mb-4 flex items-center text-sm uppercase tracking-widest ${titleColors[variant]}`}>
+        <h3
+          className={`font-bold mb-4 flex items-center text-sm uppercase tracking-widest ${titleColors[variant]}`}
+        >
           {icon && <span className="mr-2">{icon}</span>}
           {title}
         </h3>

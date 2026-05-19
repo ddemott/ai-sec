@@ -1,12 +1,12 @@
-'use client'
+'use client';
 
-import React from 'react'
-import { Wand2, X } from 'lucide-react'
-import { Button } from '../ui/Button'
+import React from 'react';
+import { Wand2, X } from 'lucide-react';
+import { Button } from '../ui/Button';
 
 interface WizardWelcomeProps {
-  onContinue: () => void
-  onDismiss: () => void
+  onContinue: () => void;
+  onDismiss: () => void;
 }
 
 export function WizardWelcome({ onContinue, onDismiss }: WizardWelcomeProps) {
@@ -19,13 +19,22 @@ export function WizardWelcome({ onContinue, onDismiss }: WizardWelcomeProps) {
     >
       <div
         className="rounded-2xl shadow-xl border max-w-lg w-full overflow-hidden"
-        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        onClick={e => e.stopPropagation()}
+        style={{
+          backgroundColor: 'var(--surface)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-primary)',
+        }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+        <div
+          className="px-6 py-4 border-b flex items-center justify-between"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <div className="flex items-center gap-2">
             <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
-            <h2 id="wizard-welcome-title" className="text-lg font-bold">Welcome to your AI receptionist</h2>
+            <h2 id="wizard-welcome-title" className="text-lg font-bold">
+              Welcome to your AI receptionist
+            </h2>
           </div>
           <button
             onClick={onDismiss}
@@ -39,29 +48,21 @@ export function WizardWelcome({ onContinue, onDismiss }: WizardWelcomeProps) {
 
         <div className="p-6 space-y-5">
           <p className="text-base" style={{ color: 'var(--text-primary)' }}>
-            Your AI receptionist is about <span className="font-semibold">10 minutes from going live</span>.
-            We&apos;ll ask 6 quick questions, and you can stop and come back any time.
+            Your AI receptionist is about{' '}
+            <span className="font-semibold">10 minutes from going live</span>. We&apos;ll ask 6
+            quick questions, and you can stop and come back any time.
           </p>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2">
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={onDismiss}
-            >
+            <Button variant="ghost" size="md" onClick={onDismiss}>
               I&apos;ll set up later, just show me around
             </Button>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={onContinue}
-              autoFocus
-            >
+            <Button variant="primary" size="md" onClick={onContinue} autoFocus>
               Let&apos;s go
             </Button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

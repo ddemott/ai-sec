@@ -77,7 +77,7 @@ async function waitForDbQuiescence(timeoutMs = 5000): Promise<void> {
        WHERE state = 'active'
          AND pid <> pg_backend_pid()
          AND datname = current_database()
-         AND query NOT LIKE 'SELECT COUNT(*)%pg_backend_pid%'`,
+         AND query NOT LIKE 'SELECT COUNT(*)%pg_backend_pid%'`
     );
     const active = Number(result.rows[0]?.active ?? 0);
     if (active === 0) return;
@@ -87,7 +87,9 @@ async function waitForDbQuiescence(timeoutMs = 5000): Promise<void> {
   // Don't fail the test — just emit a hint. Most cases that hit this
   // are a sign of something else broken (deadlock, runaway query),
   // and we'd rather see the downstream failure than mask it here.
-  console.warn(`[quiesce] timeout waiting for DB quiescence; ${lastActive} other connections still active`);
+  console.warn(
+    `[quiesce] timeout waiting for DB quiescence; ${lastActive} other connections still active`
+  );
 }
 
 export const test = base.extend({
@@ -109,7 +111,7 @@ export const test = base.extend({
     }
     expect(
       errors,
-      `Browser fired ${errors.length} uncaught JavaScript error(s) — see attached browser-errors.log`,
+      `Browser fired ${errors.length} uncaught JavaScript error(s) — see attached browser-errors.log`
     ).toHaveLength(0);
 
     // Error-boundary watchdog. Short timeout so a closed page or
@@ -117,15 +119,13 @@ export const test = base.extend({
     // know whether the boundary text is currently on screen.
     let boundaryVisible = false;
     try {
-      boundaryVisible = await page
-        .getByText('Something went wrong')
-        .isVisible({ timeout: 250 });
+      boundaryVisible = await page.getByText('Something went wrong').isVisible({ timeout: 250 });
     } catch {
       // Page already closed or navigated away — not a watchdog failure.
     }
     expect(
       boundaryVisible,
-      'Page rendered the generic error boundary — a child component threw silently',
+      'Page rendered the generic error boundary — a child component threw silently'
     ).toBe(false);
 
     // Drain backend before letting Playwright start the next test.

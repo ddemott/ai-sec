@@ -1,15 +1,15 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { ExternalLink, Unlink, CheckCircle2, Link2, RefreshCw } from 'lucide-react'
-import { Card } from './ui/Card'
-import { Badge } from './ui/Badge'
-import { Button } from './ui/Button'
+import React, { useState, useEffect, useCallback } from 'react';
+import { ExternalLink, Unlink, CheckCircle2, Link2, RefreshCw } from 'lucide-react';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
 
 interface CRMProvider {
   name: string;
-  color: string;       // tailwind color prefix (e.g. 'green', 'orange')
-  icon: string;        // single letter/emoji for avatar
+  color: string; // tailwind color prefix (e.g. 'green', 'orange')
+  icon: string; // single letter/emoji for avatar
   description: string;
   getSettings: (tenantId: string | null) => Promise<{ last_sync_at?: string } | null>;
   getAuthUrl: (tenantId: string | null) => Promise<{ url: string }>;
@@ -24,82 +24,114 @@ interface CRMIntegrationCardProps {
 }
 
 export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardProps) {
-  const [settings, setSettings] = useState<{ last_sync_at?: string } | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [syncing, setSyncing] = useState(false)
+  const [settings, setSettings] = useState<{ last_sync_at?: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
-      const data = await provider.getSettings(tenantId)
-      setSettings(data)
+      const data = await provider.getSettings(tenantId);
+      setSettings(data);
     } catch {
       // Settings not available — provider not connected
     }
-  }, [tenantId, provider])
+  }, [tenantId, provider]);
 
   useEffect(() => {
-    if (tenantId) void fetchSettings()
-  }, [tenantId, fetchSettings])
+    if (tenantId) void fetchSettings();
+  }, [tenantId, fetchSettings]);
 
   // Check for OAuth callback success
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
     if (params.get(provider.connectedParam) === 'true') {
-      void fetchSettings()
-      const url = new URL(window.location.href)
-      url.searchParams.delete(provider.connectedParam)
-      window.history.replaceState({}, '', url.toString())
+      void fetchSettings();
+      const url = new URL(window.location.href);
+      url.searchParams.delete(provider.connectedParam);
+      window.history.replaceState({}, '', url.toString());
     }
-  }, [provider.connectedParam, fetchSettings])
+  }, [provider.connectedParam, fetchSettings]);
 
   async function handleConnect() {
-    setLoading(true)
+    setLoading(true);
     try {
-      const res = await provider.getAuthUrl(tenantId)
-      window.location.href = res.url
+      const res = await provider.getAuthUrl(tenantId);
+      window.location.href = res.url;
     } catch {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function handleDisconnect() {
-    setLoading(true)
+    setLoading(true);
     try {
-      const res = await provider.disconnect(tenantId)
-      if (res.success) setSettings(null)
+      const res = await provider.disconnect(tenantId);
+      if (res.success) setSettings(null);
     } catch {
       // disconnect failed
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function handleSync() {
-    setSyncing(true)
+    setSyncing(true);
     try {
-      await provider.triggerSync(tenantId)
-      await fetchSettings()
+      await provider.triggerSync(tenantId);
+      await fetchSettings();
     } catch {
       // sync failed
     } finally {
-      setSyncing(false)
+      setSyncing(false);
     }
   }
 
-  const colorMap: Record<string, { bg: string; text: string; avatar: string; style?: { bg: React.CSSProperties; text: React.CSSProperties; avatar: React.CSSProperties } }> = {
-    green: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', avatar: 'bg-green-500' },
-    orange: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-600 dark:text-orange-400', avatar: 'bg-orange-500' },
-    blue: { bg: '', text: '', avatar: '', style: { bg: { backgroundColor: 'var(--accent-muted)' }, text: { color: 'var(--accent-soft)' }, avatar: { backgroundColor: 'var(--accent)' } } },
-    purple: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400', avatar: 'bg-purple-500' },
-  }
-  const colors = colorMap[provider.color] || colorMap.blue
+  const colorMap: Record<
+    string,
+    {
+      bg: string;
+      text: string;
+      avatar: string;
+      style?: { bg: React.CSSProperties; text: React.CSSProperties; avatar: React.CSSProperties };
+    }
+  > = {
+    green: {
+      bg: 'bg-green-100 dark:bg-green-900/30',
+      text: 'text-green-600 dark:text-green-400',
+      avatar: 'bg-green-500',
+    },
+    orange: {
+      bg: 'bg-orange-100 dark:bg-orange-900/30',
+      text: 'text-orange-600 dark:text-orange-400',
+      avatar: 'bg-orange-500',
+    },
+    blue: {
+      bg: '',
+      text: '',
+      avatar: '',
+      style: {
+        bg: { backgroundColor: 'var(--accent-muted)' },
+        text: { color: 'var(--accent-soft)' },
+        avatar: { backgroundColor: 'var(--accent)' },
+      },
+    },
+    purple: {
+      bg: 'bg-purple-100 dark:bg-purple-900/30',
+      text: 'text-purple-600 dark:text-purple-400',
+      avatar: 'bg-purple-500',
+    },
+  };
+  const colors = colorMap[provider.color] || colorMap.blue;
 
   return (
     <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
-          <div className={`${colors.bg} p-2 rounded-lg mr-4 ${colors.text}`} style={colors.style ? { ...colors.style.bg, ...colors.style.text } : undefined}>
+          <div
+            className={`${colors.bg} p-2 rounded-lg mr-4 ${colors.text}`}
+            style={colors.style ? { ...colors.style.bg, ...colors.style.text } : undefined}
+          >
             <Link2 className="w-5 h-5" />
           </div>
           <div>
@@ -124,7 +156,10 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
             className="flex items-center justify-center gap-3 p-4 border rounded-2xl hover:border-green-500 transition-all font-bold group w-full"
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
           >
-            <div className={`w-8 h-8 ${colors.bg} rounded-lg flex items-center justify-center ${colors.text} font-bold`} style={colors.style ? { ...colors.style.bg, ...colors.style.text } : undefined}>
+            <div
+              className={`w-8 h-8 ${colors.bg} rounded-lg flex items-center justify-center ${colors.text} font-bold`}
+              style={colors.style ? { ...colors.style.bg, ...colors.style.text } : undefined}
+            >
               {provider.icon}
             </div>
             <span>Connect {provider.name}</span>
@@ -132,9 +167,15 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
           </button>
         </div>
       ) : (
-        <div className="p-4 border rounded-2xl flex items-center justify-between" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+        <div
+          className="p-4 border rounded-2xl flex items-center justify-between"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+        >
           <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${colors.avatar}`} style={colors.style?.avatar}>
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${colors.avatar}`}
+              style={colors.style?.avatar}
+            >
               {provider.icon}
             </div>
             <div>
@@ -147,15 +188,27 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={handleSync} disabled={syncing} isLoading={syncing} icon={RefreshCw}>
+            <Button
+              variant="ghost"
+              onClick={handleSync}
+              disabled={syncing}
+              isLoading={syncing}
+              icon={RefreshCw}
+            >
               Sync Now
             </Button>
-            <Button variant="ghost" onClick={handleDisconnect} disabled={loading} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" icon={Unlink}>
+            <Button
+              variant="ghost"
+              onClick={handleDisconnect}
+              disabled={loading}
+              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+              icon={Unlink}
+            >
               Disconnect
             </Button>
           </div>
         </div>
       )}
     </Card>
-  )
+  );
 }

@@ -31,7 +31,9 @@ export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
     warnings.push('GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
   }
   if (!env.AGENT_SECRET) {
-    warnings.push('AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls');
+    warnings.push(
+      'AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls'
+    );
   }
 
   return warnings;

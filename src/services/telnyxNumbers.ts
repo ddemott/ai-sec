@@ -80,7 +80,10 @@ export class TelnyxNumbersClient {
    */
   async orderNumber(phoneNumber: string): Promise<OrderedNumber> {
     const orderRes = await this.fetch<{
-      data: { id: string; phone_numbers: Array<{ id: string; phone_number: string; status: string }> };
+      data: {
+        id: string;
+        phone_numbers: Array<{ id: string; phone_number: string; status: string }>;
+      };
     }>('POST', '/number_orders', {
       phone_numbers: [{ phone_number: phoneNumber }],
     });

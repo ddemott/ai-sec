@@ -23,7 +23,7 @@ export class ReminderRepository {
    */
   async getAppointmentDetails(
     appointmentId: string,
-    _tenantId: string,
+    _tenantId: string
   ): Promise<Appointment | null> {
     const appointment = await this.db.getAppointmentById(appointmentId);
     if (!appointment) return null;
@@ -59,7 +59,7 @@ export class ReminderRepository {
   async updateReminderStatus(
     reminderId: string,
     status: ReminderSchedule['status'],
-    error?: string,
+    error?: string
   ): Promise<void> {
     const updateData: Partial<ReminderSchedule> = { status };
     if (error) {
@@ -89,15 +89,14 @@ export class ReminderRepository {
    * Cancel reminders for an appointment
    */
   async cancelAppointmentReminders(appointmentId: string, tenantId: string): Promise<void> {
-    const reminders = await this.db.getReminderSchedulesByAppointment(
-      appointmentId,
-      tenantId,
-    );
+    const reminders = await this.db.getReminderSchedulesByAppointment(appointmentId, tenantId);
     if (!reminders) return;
 
     for (const reminder of reminders) {
       if (reminder.status === 'scheduled') {
-        await this.db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), { status: 'cancelled' });
+        await this.db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
+          status: 'cancelled',
+        });
       }
     }
   }
@@ -108,7 +107,7 @@ export class ReminderRepository {
   async rescheduleAppointmentReminders(
     appointmentId: string,
     tenantId: string,
-    _newDateTime: string,
+    _newDateTime: string
   ): Promise<void> {
     // This is a complex operation that would need to be implemented
     // For now, we'll cancel existing reminders and let the scheduler create new ones

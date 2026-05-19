@@ -140,9 +140,7 @@ describe('PostgresDatabaseService', () => {
         // WHERE: getReminderSchedule method
         // WHY: Needed for status checks and before triggering sends
 
-        const mockClient = createMockClient([
-          { rows: [sampleReminderSchedule] },
-        ]);
+        const mockClient = createMockClient([{ rows: [sampleReminderSchedule] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
@@ -162,10 +160,12 @@ describe('PostgresDatabaseService', () => {
         // WHERE: updateReminderSchedule method
         // WHY: Track delivery status for reporting and prevent duplicate sends
 
-        const updatedReminder = { ...sampleReminderSchedule, status: 'sent' as const, sent_at: '2026-04-15T10:00:00.000Z' };
-        const mockClient = createMockClient([
-          { rows: [updatedReminder] },
-        ]);
+        const updatedReminder = {
+          ...sampleReminderSchedule,
+          status: 'sent' as const,
+          sent_at: '2026-04-15T10:00:00.000Z',
+        };
+        const mockClient = createMockClient([{ rows: [updatedReminder] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
@@ -238,9 +238,7 @@ describe('PostgresDatabaseService', () => {
           sampleReminderSchedule,
           { ...sampleReminderSchedule, id: 2, tenant_id: 2 },
         ];
-        const mockClient = createMockClient([
-          { rows: dueReminders },
-        ]);
+        const mockClient = createMockClient([{ rows: dueReminders }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
@@ -275,9 +273,7 @@ describe('PostgresDatabaseService', () => {
           status: 'confirmed',
           notes: 'First visit',
         };
-        const mockClient = createMockClient([
-          { rows: [appointment] },
-        ]);
+        const mockClient = createMockClient([{ rows: [appointment] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
@@ -321,7 +317,12 @@ describe('PostgresDatabaseService', () => {
 
         const consents: ConsentRecord[] = [
           { id: 1, ...sampleConsentRecord },
-          { id: 2, ...sampleConsentRecord, consent_type: 'email' as const, consent_date: '2026-03-01T10:00:00.000Z' },
+          {
+            id: 2,
+            ...sampleConsentRecord,
+            consent_type: 'email' as const,
+            consent_date: '2026-03-01T10:00:00.000Z',
+          },
         ];
         const mockClient = createMockClient([
           { rows: [] }, // set_tenant_context
@@ -330,10 +331,7 @@ describe('PostgresDatabaseService', () => {
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
-        const result = await service.getConsentRecordsByCustomer(
-          1,
-          'customer@example.com'
-        );
+        const result = await service.getConsentRecordsByCustomer(1, 'customer@example.com');
 
         expect(result).toHaveLength(2);
         expect(result[0].consent_type).toBe('both');
@@ -376,9 +374,7 @@ describe('PostgresDatabaseService', () => {
           revoked_at: '2026-04-14T12:00:00.000Z',
           revoke_reason: 'Customer requested via STOP',
         };
-        const mockClient = createMockClient([
-          { rows: [revokedConsent] },
-        ]);
+        const mockClient = createMockClient([{ rows: [revokedConsent] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
@@ -540,10 +536,7 @@ describe('PostgresDatabaseService', () => {
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
-        const result = await service.getConsentRecordsByCustomer(
-          1,
-          'unknown@example.com'
-        );
+        const result = await service.getConsentRecordsByCustomer(1, 'unknown@example.com');
 
         expect(result).toEqual([]);
       });
@@ -582,9 +575,7 @@ describe('PostgresDatabaseService', () => {
         } as unknown as Pool;
         const service = new PostgresDatabaseService(mockPool);
 
-        await expect(service.getReminderSchedule('1')).rejects.toThrow(
-          'Connection refused'
-        );
+        await expect(service.getReminderSchedule('1')).rejects.toThrow('Connection refused');
       });
 
       it('propagates query error from client', async () => {
@@ -601,9 +592,9 @@ describe('PostgresDatabaseService', () => {
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
-        await expect(
-          service.createReminderSchedule(sampleReminderData)
-        ).rejects.toThrow('violates foreign key constraint');
+        await expect(service.createReminderSchedule(sampleReminderData)).rejects.toThrow(
+          'violates foreign key constraint'
+        );
 
         // Ensure connection is released even on error
         expect(mockClient.release).toHaveBeenCalled();
@@ -737,9 +728,7 @@ describe('PostgresDatabaseService', () => {
         // WHY: Failed reminders should update status without sent_at timestamp
 
         const failedReminder = { ...sampleReminderSchedule, status: 'failed' as const };
-        const mockClient = createMockClient([
-          { rows: [failedReminder] },
-        ]);
+        const mockClient = createMockClient([{ rows: [failedReminder] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
@@ -763,9 +752,7 @@ describe('PostgresDatabaseService', () => {
           status: 'failed' as const,
           error: 'Invalid phone number format',
         };
-        const mockClient = createMockClient([
-          { rows: [failedReminder] },
-        ]);
+        const mockClient = createMockClient([{ rows: [failedReminder] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 

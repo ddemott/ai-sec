@@ -182,7 +182,9 @@ test.beforeEach(async ({ request }, testInfo) => {
 // Appointment lifecycle dispatch
 // ────────────────────────────────────────────────────────────────────────────
 
-test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', async ({ request }) => {
+test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', async ({
+  request,
+}) => {
   // WHO: front-desk creates a normal appointment via the API
   // WHAT: /appointments/create returns 200 + the orchestrator records 5
   //        sync dispatches with action='create' and matching appointmentId
@@ -252,15 +254,24 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
       (e) => e.entity === 'appointment' && e.action === 'create' && e.entityId === appointmentId
     );
     expect(matching).toHaveLength(5);
-    expect(matching.map((e) => e.provider).sort()).toEqual(
-      ['calendar', 'hubspot', 'jobber', 'servicetitan', 'square']
-    );
+    expect(matching.map((e) => e.provider).sort()).toEqual([
+      'calendar',
+      'hubspot',
+      'jobber',
+      'servicetitan',
+      'square',
+    ]);
     for (const e of matching) {
       expect(e.tenantId).toBe(DYNATIRE_ID);
     }
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    for (const id of apptIdsToCleanup)
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
+    if (scheduleSeeded && mikeId)
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -336,12 +347,20 @@ test('appointment-update dispatches all 5 providers with action=update', async (
       (e) => e.entity === 'appointment' && e.action === 'update' && e.entityId === apptId
     );
     expect(matching).toHaveLength(5);
-    expect(matching.map((e) => e.provider).sort()).toEqual(
-      ['calendar', 'hubspot', 'jobber', 'servicetitan', 'square']
-    );
+    expect(matching.map((e) => e.provider).sort()).toEqual([
+      'calendar',
+      'hubspot',
+      'jobber',
+      'servicetitan',
+      'square',
+    ]);
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    if (scheduleSeeded && mikeId)
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -412,13 +431,21 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
       (e) => e.entity === 'appointment' && e.action === 'delete' && e.entityId === apptId
     );
     expect(matching).toHaveLength(5);
-    expect(matching.map((e) => e.provider).sort()).toEqual(
-      ['calendar', 'hubspot', 'jobber', 'servicetitan', 'square']
-    );
+    expect(matching.map((e) => e.provider).sort()).toEqual([
+      'calendar',
+      'hubspot',
+      'jobber',
+      'servicetitan',
+      'square',
+    ]);
     apptId = null; // already deleted
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    if (scheduleSeeded && mikeId)
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });
@@ -464,9 +491,12 @@ test('customer-create dispatches to 4 CRMs (no calendar — by contract)', async
       (e) => e.entity === 'customer' && e.action === 'create' && e.entityId === customerId
     );
     expect(matching).toHaveLength(4);
-    expect(matching.map((e) => e.provider).sort()).toEqual(
-      ['hubspot', 'jobber', 'servicetitan', 'square']
-    );
+    expect(matching.map((e) => e.provider).sort()).toEqual([
+      'hubspot',
+      'jobber',
+      'servicetitan',
+      'square',
+    ]);
     expect(
       matching.find((e) => e.provider === 'calendar'),
       'calendars must NOT receive customer events'
@@ -606,8 +636,13 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
     const events = await getSyncEvents(request);
     expect(events.filter((e) => e.entity === 'appointment').length).toBeGreaterThanOrEqual(5);
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleSeeded && mikeId) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, mikeId, FUTURE_DATE]);
+    for (const id of apptIdsToCleanup)
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
+    if (scheduleSeeded && mikeId)
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
 });

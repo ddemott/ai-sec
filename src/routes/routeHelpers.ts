@@ -101,8 +101,9 @@ export interface DateRange {
 export function parseDateRange(query: Record<string, string>): DateRange {
   const rawStart = query.start_date;
   const rawEnd = query.end_date;
-  const startDate = (rawStart && DATE_RE.test(rawStart)) ? rawStart : new Date().toISOString().split('T')[0];
-  const endDate = (rawEnd && DATE_RE.test(rawEnd)) ? rawEnd : null;
+  const startDate =
+    rawStart && DATE_RE.test(rawStart) ? rawStart : new Date().toISOString().split('T')[0];
+  const endDate = rawEnd && DATE_RE.test(rawEnd) ? rawEnd : null;
   return { startDate, endDate };
 }
 
@@ -117,15 +118,19 @@ export interface PaginationParams {
  * Parse limit/offset from query params with bounds checking.
  * Defaults: limit=100, offset=0. Max limit=1000.
  */
-export function parsePagination(query: Record<string, string>, defaults?: { limit?: number; maxLimit?: number }): PaginationParams {
+export function parsePagination(
+  query: Record<string, string>,
+  defaults?: { limit?: number; maxLimit?: number }
+): PaginationParams {
   const maxLimit = defaults?.maxLimit ?? 1000;
   const defaultLimit = defaults?.limit ?? 100;
 
   const rawLimit = parseInt(query.limit, 10);
   const rawOffset = parseInt(query.offset, 10);
 
-  const limit = (!Number.isNaN(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, maxLimit) : defaultLimit;
-  const offset = (!Number.isNaN(rawOffset) && rawOffset >= 0) ? rawOffset : 0;
+  const limit =
+    !Number.isNaN(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, maxLimit) : defaultLimit;
+  const offset = !Number.isNaN(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
   return { limit, offset };
 }

@@ -14,7 +14,12 @@ const customers: CustomerOption[] = [
 
 // Controlled wrapper so tests can verify selection persists.
 function Harness(props: Partial<React.ComponentProps<typeof CustomerCombobox>>) {
-  const { value: initialValue, onChange: externalOnChange, customers: customersOverride, ...rest } = props;
+  const {
+    value: initialValue,
+    onChange: externalOnChange,
+    customers: customersOverride,
+    ...rest
+  } = props;
   const [value, setValue] = useState(initialValue ?? '');
   return (
     <CustomerCombobox
@@ -88,7 +93,13 @@ describe('CustomerCombobox — front-desk audit P0 #3', () => {
   });
 
   test('renders custom label, placeholder, and promptLabel when overridden', () => {
-    render(<Harness label="Select Customer" placeholder="Find by name or phone" promptLabel="— pick one —" />);
+    render(
+      <Harness
+        label="Select Customer"
+        placeholder="Find by name or phone"
+        promptLabel="— pick one —"
+      />
+    );
     expect(screen.getByText('Select Customer')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Find by name or phone')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '— pick one —' })).toBeInTheDocument();

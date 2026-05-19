@@ -1,101 +1,109 @@
-'use client'
+'use client';
 
-import React, { useEffect, useState, useCallback } from 'react'
-import { Plus, ShieldCheck, UserCircle2 } from 'lucide-react'
-import { Api } from '../lib/api'
-import { useActiveTenantId } from '@/lib/SessionContext'
-import type { TeamUser } from '@/lib/types'
-import { Button } from './ui/Button'
-import { Input } from './ui/Input'
-import { Modal } from './ui/Modal'
-import { showToast } from './ui/Toast'
-import { EmptyState } from './ui/EmptyState'
+import React, { useEffect, useState, useCallback } from 'react';
+import { Plus, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Api } from '../lib/api';
+import { useActiveTenantId } from '@/lib/SessionContext';
+import type { TeamUser } from '@/lib/types';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
+import { showToast } from './ui/Toast';
+import { EmptyState } from './ui/EmptyState';
 
-type Role = 'owner' | 'front_desk'
+type Role = 'owner' | 'front_desk';
 
 const ROLE_LABEL: Record<Role, string> = {
   owner: 'Owner',
   front_desk: 'Front Desk',
-}
+};
 
 const ROLE_DESCRIPTION: Record<Role, string> = {
   owner: 'Full access — can configure services, staff, vocabulary, and team logins.',
   front_desk: 'Daily-use access only — schedule, customers, calls. No configuration.',
-}
+};
 
 export default function TeamAccessView() {
-  const tenantId = useActiveTenantId()
-  const [users, setUsers] = useState<TeamUser[]>([])
-  const [loading, setLoading] = useState(true)
-  const [inviteOpen, setInviteOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteName, setInviteName] = useState('')
-  const [inviteRole, setInviteRole] = useState<Role>('front_desk')
-  const [inviteError, setInviteError] = useState<string | null>(null)
-  const [inviting, setInviting] = useState(false)
-  const [pendingRoleId, setPendingRoleId] = useState<string | null>(null)
+  const tenantId = useActiveTenantId();
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState<Role>('front_desk');
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [pendingRoleId, setPendingRoleId] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
-    if (!tenantId) return
-    setLoading(true)
+    if (!tenantId) return;
+    setLoading(true);
     try {
-      const res = await Api.users.list(tenantId)
-      setUsers(res.users)
+      const res = await Api.users.list(tenantId);
+      setUsers(res.users);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not load team logins', 'error')
+      showToast(err instanceof Error ? err.message : 'Could not load team logins', 'error');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [tenantId])
+  }, [tenantId]);
 
-  useEffect(() => { void loadUsers() }, [loadUsers])
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
 
   const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setInviteError(null)
-    if (!tenantId) return
-    setInviting(true)
+    e.preventDefault();
+    setInviteError(null);
+    if (!tenantId) return;
+    setInviting(true);
     const res = await Api.users.invite(tenantId, {
       email: inviteEmail.trim(),
       full_name: inviteName.trim(),
       role: inviteRole,
-    })
-    setInviting(false)
+    });
+    setInviting(false);
     if (res.success) {
-      setInviteOpen(false)
-      setInviteEmail('')
-      setInviteName('')
-      setInviteRole('front_desk')
-      showToast(`Invite sent to ${inviteEmail.trim()}`, 'success')
-      void loadUsers()
+      setInviteOpen(false);
+      setInviteEmail('');
+      setInviteName('');
+      setInviteRole('front_desk');
+      showToast(`Invite sent to ${inviteEmail.trim()}`, 'success');
+      void loadUsers();
     } else {
-      setInviteError(res.error || 'Invite failed')
+      setInviteError(res.error || 'Invite failed');
     }
-  }
+  };
 
   const handleRoleChange = async (user: TeamUser, nextRole: Role) => {
-    if (!tenantId || nextRole === user.role) return
-    setPendingRoleId(user.user_id)
-    const res = await Api.users.updateRole(user.user_id, tenantId, nextRole)
-    setPendingRoleId(null)
+    if (!tenantId || nextRole === user.role) return;
+    setPendingRoleId(user.user_id);
+    const res = await Api.users.updateRole(user.user_id, tenantId, nextRole);
+    setPendingRoleId(null);
     if (res.success) {
-      setUsers((prev) => prev.map((u) => (u.user_id === user.user_id ? { ...u, role: nextRole } : u)))
-      showToast(`${user.email} is now ${ROLE_LABEL[nextRole]}`, 'success')
+      setUsers((prev) =>
+        prev.map((u) => (u.user_id === user.user_id ? { ...u, role: nextRole } : u))
+      );
+      showToast(`${user.email} is now ${ROLE_LABEL[nextRole]}`, 'success');
     } else {
-      showToast(res.error || 'Could not update role', 'error')
+      showToast(res.error || 'Could not update role', 'error');
     }
-  }
+  };
 
   return (
     <div className="flex-1 overflow-auto p-6">
       <div className="max-w-3xl mx-auto">
         <header className="flex items-start justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-display tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            <h2
+              className="text-2xl font-display tracking-tight"
+              style={{ color: 'var(--text-primary)' }}
+            >
               Team Logins
             </h2>
             <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              Invite staff to sign in. Owners see everything. Front Desk sees only the daily schedule, customers, and calls.
+              Invite staff to sign in. Owners see everything. Front Desk sees only the daily
+              schedule, customers, and calls.
             </p>
           </div>
           <Button icon={Plus} onClick={() => setInviteOpen(true)} aria-label="Invite teammate">
@@ -129,24 +137,45 @@ export default function TeamAccessView() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {u.role === 'owner' ? (
-                    <ShieldCheck className="w-5 h-5 shrink-0" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
+                    <ShieldCheck
+                      className="w-5 h-5 shrink-0"
+                      style={{ color: 'var(--accent-soft)' }}
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <UserCircle2 className="w-5 h-5 shrink-0" style={{ color: 'var(--text-secondary)' }} aria-hidden="true" />
+                    <UserCircle2
+                      className="w-5 h-5 shrink-0"
+                      style={{ color: 'var(--text-secondary)' }}
+                      aria-hidden="true"
+                    />
                   )}
                   <div className="min-w-0">
-                    <div className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                    <div
+                      className="text-sm font-bold truncate"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
                       {u.full_name || u.email}
                       {u.is_self && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}>
+                        <span
+                          className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                          style={{
+                            backgroundColor: 'var(--accent-muted)',
+                            color: 'var(--accent-soft)',
+                          }}
+                        >
                           You
                         </span>
                       )}
                     </div>
-                    <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>{u.email}</div>
+                    <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {u.email}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <label className="sr-only" htmlFor={`role-${u.user_id}`}>Role for {u.email}</label>
+                  <label className="sr-only" htmlFor={`role-${u.user_id}`}>
+                    Role for {u.email}
+                  </label>
                   <select
                     id={`role-${u.user_id}`}
                     value={u.role}
@@ -158,7 +187,9 @@ export default function TeamAccessView() {
                       color: 'var(--text-primary)',
                       border: '1px solid var(--border)',
                     }}
-                    title={u.is_self ? "You can't change your own role" : `Change ${u.email}'s role`}
+                    title={
+                      u.is_self ? "You can't change your own role" : `Change ${u.email}'s role`
+                    }
                   >
                     <option value="owner">Owner</option>
                     <option value="front_desk">Front Desk</option>
@@ -172,11 +203,18 @@ export default function TeamAccessView() {
 
       <Modal
         isOpen={inviteOpen}
-        onClose={() => { if (!inviting) setInviteOpen(false) }}
+        onClose={() => {
+          if (!inviting) setInviteOpen(false);
+        }}
         title="Invite a teammate"
         footer={
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)} disabled={inviting}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setInviteOpen(false)}
+              disabled={inviting}
+            >
               Cancel
             </Button>
             <Button type="submit" form="invite-form" isLoading={inviting}>
@@ -205,7 +243,10 @@ export default function TeamAccessView() {
             placeholder="pat@business.com"
           />
           <div>
-            <label className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label
+              className="block text-xs font-bold uppercase mb-1"
+              style={{ color: 'var(--text-secondary)' }}
+            >
               Role
             </label>
             <div className="space-y-2">
@@ -227,21 +268,28 @@ export default function TeamAccessView() {
                     className="mt-0.5"
                   />
                   <div>
-                    <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{ROLE_LABEL[r]}</div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{ROLE_DESCRIPTION[r]}</div>
+                    <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {ROLE_LABEL[r]}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {ROLE_DESCRIPTION[r]}
+                    </div>
                   </div>
                 </label>
               ))}
             </div>
           </div>
           {inviteError && (
-            <p role="alert" className="text-sm" style={{ color: 'var(--danger)' }}>{inviteError}</p>
+            <p role="alert" className="text-sm" style={{ color: 'var(--danger)' }}>
+              {inviteError}
+            </p>
           )}
           <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            They&rsquo;ll receive an email with a link to set their password and sign in. The link expires in 3 days.
+            They&rsquo;ll receive an email with a link to set their password and sign in. The link
+            expires in 3 days.
           </p>
         </form>
       </Modal>
     </div>
-  )
+  );
 }

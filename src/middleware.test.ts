@@ -9,9 +9,9 @@
  *       and logging helpers all need tests
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { FastifyReply, FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { FastifyReply, FastifyInstance } from 'fastify';
+import type { Pool } from 'pg';
 import {
   withHandler,
   withPoolClient,
@@ -24,7 +24,7 @@ import {
   logError,
   AppError,
   type AppRequest,
-} from "./middleware";
+} from './middleware';
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -54,7 +54,9 @@ function createMockReply(): FastifyReply {
   return reply as unknown as FastifyReply;
 }
 
-function createMockRequest(overrides: Partial<AppRequest> & Record<string, unknown> = {}): AppRequest {
+function createMockRequest(
+  overrides: Partial<AppRequest> & Record<string, unknown> = {}
+): AppRequest {
   return {
     tenantId: undefined,
     auth: undefined,
@@ -78,8 +80,8 @@ beforeEach(() => vi.clearAllMocks());
 // AppError
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("AppError", () => {
-  it("constructs with message, code, and statusCode (WHO: any service/route | WHAT: structured error creation | WHERE: AppError constructor | WHY: consistent error shape across all routes)", () => {
+describe('AppError', () => {
+  it('constructs with message, code, and statusCode (WHO: any service/route | WHAT: structured error creation | WHERE: AppError constructor | WHY: consistent error shape across all routes)', () => {
     const err = new AppError('Not found', 'NOT_FOUND', 404);
     expect(err.message).toBe('Not found');
     expect(err.code).toBe('NOT_FOUND');
@@ -93,9 +95,11 @@ describe("AppError", () => {
 // withHandler — HAPPY PATHS
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("withHandler — happy paths", () => {
-  it("passes through successful handler result (WHO: any route | WHAT: handler runs without error → result returned | WHERE: withHandler wrapper | WHY: decorator should be transparent on success)", async () => {
-    const handler = vi.fn(async (_req: AppRequest, reply: FastifyReply) => reply.send({ success: true }));
+describe('withHandler — happy paths', () => {
+  it('passes through successful handler result (WHO: any route | WHAT: handler runs without error → result returned | WHERE: withHandler wrapper | WHY: decorator should be transparent on success)', async () => {
+    const handler = vi.fn(async (_req: AppRequest, reply: FastifyReply) =>
+      reply.send({ success: true })
+    );
     const wrapped = withHandler(handler, 'Test failed');
 
     const req = createMockRequest();
@@ -111,9 +115,11 @@ describe("withHandler — happy paths", () => {
 // withHandler — SAD PATHS
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("withHandler — sad paths", () => {
-  it("returns AppError status and message (WHO: route handler | WHAT: AppError thrown → status+message from error | WHERE: withHandler catch | WHY: AppErrors carry their own status, not always 500)", async () => {
-    const handler = vi.fn(async () => { throw new AppError('Forbidden', 'FORBIDDEN', 403); });
+describe('withHandler — sad paths', () => {
+  it('returns AppError status and message (WHO: route handler | WHAT: AppError thrown → status+message from error | WHERE: withHandler catch | WHY: AppErrors carry their own status, not always 500)', async () => {
+    const handler = vi.fn(async () => {
+      throw new AppError('Forbidden', 'FORBIDDEN', 403);
+    });
     const wrapped = withHandler(handler, 'Operation failed');
 
     const req = createMockRequest();
@@ -124,10 +130,12 @@ describe("withHandler — sad paths", () => {
     expect(reply.body).toEqual({ success: false, error: 'Forbidden', code: 'FORBIDDEN' });
   });
 
-  it("re-throws TENANT_NOT_FOUND for global handler (WHO: route handler | WHAT: TENANT_NOT_FOUND error propagated | WHERE: withHandler catch | WHY: global handler must catch this for auto-logout on deleted tenant)", async () => {
+  it('re-throws TENANT_NOT_FOUND for global handler (WHO: route handler | WHAT: TENANT_NOT_FOUND error propagated | WHERE: withHandler catch | WHY: global handler must catch this for auto-logout on deleted tenant)', async () => {
     const err = new Error('Tenant gone') as Error & { code?: string };
     err.code = 'TENANT_NOT_FOUND';
-    const handler = vi.fn(async () => { throw err; });
+    const handler = vi.fn(async () => {
+      throw err;
+    });
     const wrapped = withHandler(handler, 'Fetch failed');
 
     const req = createMockRequest();
@@ -139,7 +147,9 @@ describe("withHandler — sad paths", () => {
   it("uses statusCode from error if present (WHO: validation layer | WHAT: error.statusCode used as HTTP status | WHERE: withHandler catch | WHY: validation errors carry statusCode but aren't AppErrors)", async () => {
     const err = new Error('Bad input') as Error & { statusCode?: number };
     err.statusCode = 422;
-    const handler = vi.fn(async () => { throw err; });
+    const handler = vi.fn(async () => {
+      throw err;
+    });
     const wrapped = withHandler(handler, 'Validation failed');
 
     const req = createMockRequest();
@@ -150,8 +160,10 @@ describe("withHandler — sad paths", () => {
     expect(reply.body).toEqual({ success: false, error: 'Bad input' });
   });
 
-  it("returns 500 with generic message for unknown errors (WHO: any route | WHAT: unexpected Error → 500 with contextual message | WHERE: withHandler catch | WHY: never leak internal details to client)", async () => {
-    const handler = vi.fn(async () => { throw new Error('DB crashed'); });
+  it('returns 500 with generic message for unknown errors (WHO: any route | WHAT: unexpected Error → 500 with contextual message | WHERE: withHandler catch | WHY: never leak internal details to client)', async () => {
+    const handler = vi.fn(async () => {
+      throw new Error('DB crashed');
+    });
     const wrapped = withHandler(handler, 'Could not fetch data');
 
     const req = createMockRequest({ tenantId: 'tenant-123' });
@@ -162,7 +174,7 @@ describe("withHandler — sad paths", () => {
     expect(reply.body).toEqual({ success: false, error: 'Could not fetch data' });
     expect(req.log.error).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'tenant-123', route: '/test', method: 'GET' }),
-      'Could not fetch data',
+      'Could not fetch data'
     );
   });
 });
@@ -171,8 +183,8 @@ describe("withHandler — sad paths", () => {
 // withPoolClient
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("withPoolClient", () => {
-  it("returns fn result and releases client (WHO: any DB operation | WHAT: pool.connect → fn → client.release | WHERE: withPoolClient | WHY: eliminates try/finally boilerplate in every route)", async () => {
+describe('withPoolClient', () => {
+  it('returns fn result and releases client (WHO: any DB operation | WHAT: pool.connect → fn → client.release | WHERE: withPoolClient | WHY: eliminates try/finally boilerplate in every route)', async () => {
     const client = { query: vi.fn(), release: vi.fn() };
     const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
 
@@ -185,12 +197,14 @@ describe("withPoolClient", () => {
     expect(client.release).toHaveBeenCalledOnce();
   });
 
-  it("releases client even when fn throws (WHO: any DB operation | WHAT: fn throws → client still released | WHERE: withPoolClient finally | WHY: prevents pool exhaustion on errors)", async () => {
+  it('releases client even when fn throws (WHO: any DB operation | WHAT: fn throws → client still released | WHERE: withPoolClient finally | WHY: prevents pool exhaustion on errors)', async () => {
     const client = { query: vi.fn(), release: vi.fn() };
     const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
 
     await expect(
-      withPoolClient(pool, async () => { throw new Error('Query failed'); })
+      withPoolClient(pool, async () => {
+        throw new Error('Query failed');
+      })
     ).rejects.toThrow('Query failed');
 
     expect(client.release).toHaveBeenCalledOnce();
@@ -201,22 +215,22 @@ describe("withPoolClient", () => {
 // requireTenantId
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("requireTenantId", () => {
-  it("returns tenantId from request (WHO: tenant-scoped route | WHAT: req.tenantId extracted | WHERE: requireTenantId | WHY: all tenant-scoped queries need this value)", () => {
+describe('requireTenantId', () => {
+  it('returns tenantId from request (WHO: tenant-scoped route | WHAT: req.tenantId extracted | WHERE: requireTenantId | WHY: all tenant-scoped queries need this value)', () => {
     const req = createMockRequest({ tenantId: 'tid-123' });
     const reply = createMockReply();
     const result = requireTenantId(req, reply);
     expect(result).toBe('tid-123');
   });
 
-  it("falls back to body.tenant_id (WHO: cross-tenant admin | WHAT: tenant_id from request body | WHERE: requireTenantId fallback | WHY: admin routes pass tenant_id in body, not middleware)", () => {
+  it('falls back to body.tenant_id (WHO: cross-tenant admin | WHAT: tenant_id from request body | WHERE: requireTenantId fallback | WHY: admin routes pass tenant_id in body, not middleware)', () => {
     const req = createMockRequest({ body: { tenant_id: 'body-tid' } });
     const reply = createMockReply();
     const result = requireTenantId(req, reply);
     expect(result).toBe('body-tid');
   });
 
-  it("returns null and sends 400 when missing (WHO: misconfigured client | WHAT: no tenant_id anywhere → 400 error | WHERE: requireTenantId | WHY: prevents null tenant queries that bypass RLS)", () => {
+  it('returns null and sends 400 when missing (WHO: misconfigured client | WHAT: no tenant_id anywhere → 400 error | WHERE: requireTenantId | WHY: prevents null tenant queries that bypass RLS)', () => {
     const req = createMockRequest();
     const reply = createMockReply();
     const result = requireTenantId(req, reply);
@@ -230,14 +244,14 @@ describe("requireTenantId", () => {
 // requireAuth
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("requireAuth", () => {
-  it("returns true when authenticated (WHO: admin route | WHAT: req.auth exists → true | WHERE: requireAuth | WHY: gates admin-only routes)", () => {
+describe('requireAuth', () => {
+  it('returns true when authenticated (WHO: admin route | WHAT: req.auth exists → true | WHERE: requireAuth | WHY: gates admin-only routes)', () => {
     const req = createMockRequest({ auth: { tenant_id: 'x', user_id: 'y', email: 'z' } });
     const reply = createMockReply();
     expect(requireAuth(req, reply)).toBe(true);
   });
 
-  it("returns false and sends 401 when not authenticated (WHO: unauthenticated request | WHAT: req.auth missing → 401 | WHERE: requireAuth | WHY: prevents unauthorized access to admin routes)", () => {
+  it('returns false and sends 401 when not authenticated (WHO: unauthenticated request | WHAT: req.auth missing → 401 | WHERE: requireAuth | WHY: prevents unauthorized access to admin routes)', () => {
     const req = createMockRequest();
     const reply = createMockReply();
     expect(requireAuth(req, reply)).toBe(false);
@@ -250,8 +264,8 @@ describe("requireAuth", () => {
 // requireSuperAdmin
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("requireSuperAdmin", () => {
-  it("returns true for super-admin JWT", () => {
+describe('requireSuperAdmin', () => {
+  it('returns true for super-admin JWT', () => {
     // WHO: super-admin user (tenant_id === SUPER_ADMIN_TENANT_ID)
     // WHAT: gate passes, returns true
     // WHEN: any /tenants/* admin operation
@@ -267,7 +281,7 @@ describe("requireSuperAdmin", () => {
     expect(reply.statusCode).toBe(200);
   });
 
-  it("returns false and sends 401 when no auth context attached", () => {
+  it('returns false and sends 401 when no auth context attached', () => {
     // WHO: unauthenticated request reaching an admin route
     // WHAT: req.auth missing → 401 + 'Authentication required'
     // WHEN: token expired, never logged in, manually-crafted request
@@ -281,7 +295,7 @@ describe("requireSuperAdmin", () => {
     expect(reply.body.error).toBe('Authentication required');
   });
 
-  it("returns false and sends 403 when authenticated as a non-admin tenant", () => {
+  it('returns false and sends 403 when authenticated as a non-admin tenant', () => {
     // WHO: regular tenant owner (valid JWT, tenant_id !== super-admin)
     // WHAT: gate rejects with 403 + 'Forbidden: super-admin only'
     // WHEN: any tenant user attempting GET /tenants, DELETE /tenants/:id,
@@ -292,7 +306,12 @@ describe("requireSuperAdmin", () => {
     //      2026-05-06 — without this gate every tenant's user could
     //      enumerate the entire customer list and DELETE another tenant.
     const req = createMockRequest({
-      auth: { tenant_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', user_id: 'u', email: 'u@x', role: 'owner' },
+      auth: {
+        tenant_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        user_id: 'u',
+        email: 'u@x',
+        role: 'owner',
+      },
     });
     const reply = createMockReply();
     expect(requireSuperAdmin(req, reply)).toBe(false);
@@ -305,12 +324,14 @@ describe("requireSuperAdmin", () => {
 // tenantMiddleware
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("tenantMiddleware", () => {
+describe('tenantMiddleware', () => {
   type HookFn = (req: AppRequest, reply: FastifyReply) => Promise<void> | void;
   function setupMiddleware() {
     let hookFn: HookFn | undefined;
     const app = {
-      addHook: vi.fn((_name: string, fn: HookFn) => { hookFn = fn; }),
+      addHook: vi.fn((_name: string, fn: HookFn) => {
+        hookFn = fn;
+      }),
     } as unknown as FastifyInstance;
     tenantMiddleware(app);
     if (!hookFn) throw new Error('tenantMiddleware did not register a preHandler hook');
@@ -327,28 +348,28 @@ describe("tenantMiddleware", () => {
   const FAKE_BODY_TENANT = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
   const FAKE_JWT_TENANT = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 
-  it("extracts tenant_id from query params (WHO: dashboard API call | WHAT: query.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: dashboard passes tenant_id as query param)", async () => {
+  it('extracts tenant_id from query params (WHO: dashboard API call | WHAT: query.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: dashboard passes tenant_id as query param)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ query: { tenant_id: FAKE_QUERY_TENANT } });
     await hook(req, {});
     expect(req.tenantId).toBe(FAKE_QUERY_TENANT);
   });
 
-  it("extracts tenant_id from body (WHO: POST route | WHAT: body.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: some mutations send tenant_id in body)", async () => {
+  it('extracts tenant_id from body (WHO: POST route | WHAT: body.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: some mutations send tenant_id in body)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ body: { tenant_id: FAKE_BODY_TENANT } });
     await hook(req, {});
     expect(req.tenantId).toBe(FAKE_BODY_TENANT);
   });
 
-  it("extracts tenant_id from auth token (WHO: JWT-authenticated request | WHAT: auth.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: fallback when not in query/body)", async () => {
+  it('extracts tenant_id from auth token (WHO: JWT-authenticated request | WHAT: auth.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: fallback when not in query/body)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ auth: { tenant_id: FAKE_JWT_TENANT } });
     await hook(req, {});
     expect(req.tenantId).toBe(FAKE_JWT_TENANT);
   });
 
-  it("skips exempt routes like /login (WHO: public endpoint | WHAT: /login skipped by middleware | WHERE: tenantMiddleware isTenantExempt | WHY: login happens before tenant context exists)", async () => {
+  it('skips exempt routes like /login (WHO: public endpoint | WHAT: /login skipped by middleware | WHERE: tenantMiddleware isTenantExempt | WHY: login happens before tenant context exists)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ url: '/login' });
     await hook(req, {});
@@ -362,7 +383,7 @@ describe("tenantMiddleware", () => {
     expect(req.tenantId).toBeUndefined();
   });
 
-  it("skips /tenants/* routes (WHO: admin | WHAT: /tenants/xyz skipped | WHERE: tenantMiddleware isTenantExempt | WHY: tenant management routes operate across tenants)", async () => {
+  it('skips /tenants/* routes (WHO: admin | WHAT: /tenants/xyz skipped | WHERE: tenantMiddleware isTenantExempt | WHY: tenant management routes operate across tenants)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ url: '/tenants/abc-123' });
     await hook(req, {});
@@ -376,7 +397,7 @@ describe("tenantMiddleware", () => {
     expect(req.tenantId).toBeUndefined();
   });
 
-  it("skips OAuth callback routes (WHO: external OAuth redirect | WHAT: /calendar/auth/google/callback skipped | WHERE: tenantMiddleware isTenantExempt | WHY: OAuth callbacks come from external providers without tenant context)", async () => {
+  it('skips OAuth callback routes (WHO: external OAuth redirect | WHAT: /calendar/auth/google/callback skipped | WHERE: tenantMiddleware isTenantExempt | WHY: OAuth callbacks come from external providers without tenant context)', async () => {
     const hook = setupMiddleware();
     for (const path of [
       '/calendar/auth/google/callback',
@@ -392,23 +413,28 @@ describe("tenantMiddleware", () => {
     }
   });
 
-  it("skips webhook routes (WHO: external CRM | WHAT: webhook paths skipped | WHERE: tenantMiddleware isTenantExempt | WHY: webhooks use HMAC auth, not JWT)", async () => {
+  it('skips webhook routes (WHO: external CRM | WHAT: webhook paths skipped | WHERE: tenantMiddleware isTenantExempt | WHY: webhooks use HMAC auth, not JWT)', async () => {
     const hook = setupMiddleware();
-    for (const path of ['/hubspot/webhook', '/square/webhook', '/servicetitan/webhook', '/billing/webhook']) {
+    for (const path of [
+      '/hubspot/webhook',
+      '/square/webhook',
+      '/servicetitan/webhook',
+      '/billing/webhook',
+    ]) {
       const req = createMockRequest({ url: path });
       await hook(req, {});
       expect(req.tenantId).toBeUndefined();
     }
   });
 
-  it("skips Jobber webhook with tenant ID in path (WHO: Jobber webhook | WHAT: /jobber/webhook/xxx skipped | WHERE: tenantMiddleware isTenantExempt | WHY: Jobber uses tenant ID in URL path)", async () => {
+  it('skips Jobber webhook with tenant ID in path (WHO: Jobber webhook | WHAT: /jobber/webhook/xxx skipped | WHERE: tenantMiddleware isTenantExempt | WHY: Jobber uses tenant ID in URL path)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ url: '/jobber/webhook/abc-123' });
     await hook(req, {});
     expect(req.tenantId).toBeUndefined();
   });
 
-  it("enriches logger with tenant context (WHO: tenant-scoped request | WHAT: req.log gets tenantId+userId child | WHERE: tenantMiddleware preHandler | WHY: structured logging for log aggregation)", async () => {
+  it('enriches logger with tenant context (WHO: tenant-scoped request | WHAT: req.log gets tenantId+userId child | WHERE: tenantMiddleware preHandler | WHY: structured logging for log aggregation)', async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({
       query: { tenant_id: FAKE_QUERY_TENANT },
@@ -424,7 +450,7 @@ describe("tenantMiddleware", () => {
   // ── Cross-tenant override gate (added 2026-05-06 after the
   //    multi-tenant-isolation probe found a cross-tenant data leak) ─────
 
-  it("BLOCKS cross-tenant override via query: A token + ?tenant_id=B → 403", async () => {
+  it('BLOCKS cross-tenant override via query: A token + ?tenant_id=B → 403', async () => {
     // WHO: tenant A user appending ?tenant_id=<B> to a request URL
     // WHAT: gate detects candidate (B) ≠ JWT (A) AND not super-admin → 403
     // WHEN: every authenticated request — load-bearing case for isolation
@@ -438,7 +464,12 @@ describe("tenantMiddleware", () => {
     const reply = createMockReply();
     const req = createMockRequest({
       query: { tenant_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
-      auth: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', user_id: 'u', email: 'u@x', role: 'owner' },
+      auth: {
+        tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        user_id: 'u',
+        email: 'u@x',
+        role: 'owner',
+      },
     });
     await hook(req, reply);
     expect(reply.statusCode).toBe(403);
@@ -446,19 +477,24 @@ describe("tenantMiddleware", () => {
     expect(req.tenantId).toBeUndefined(); // request short-circuited before tenantId set
   });
 
-  it("BLOCKS cross-tenant override via body: A token + body.tenant_id=B → 403", async () => {
+  it('BLOCKS cross-tenant override via body: A token + body.tenant_id=B → 403', async () => {
     const hook = setupMiddleware();
     const reply = createMockReply();
     const req = createMockRequest({
       body: { tenant_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
-      auth: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', user_id: 'u', email: 'u@x', role: 'owner' },
+      auth: {
+        tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        user_id: 'u',
+        email: 'u@x',
+        role: 'owner',
+      },
     });
     await hook(req, reply);
     expect(reply.statusCode).toBe(403);
     expect(req.tenantId).toBeUndefined();
   });
 
-  it("ALLOWS super-admin to override tenant_id via query (legitimate cross-tenant scoping)", async () => {
+  it('ALLOWS super-admin to override tenant_id via query (legitimate cross-tenant scoping)', async () => {
     // WHO: super-admin scoping a request to tenant A from the admin UI
     // WHAT: candidate (A) ≠ JWT (super-admin), but isSuperAdmin=true → pass
     // WHY: the dashboard's admin tooling depends on the override to scope
@@ -474,7 +510,7 @@ describe("tenantMiddleware", () => {
     expect(req.tenantId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
   });
 
-  it("ALLOWS noisy noop: A token + ?tenant_id=A passes (matches JWT)", async () => {
+  it('ALLOWS noisy noop: A token + ?tenant_id=A passes (matches JWT)', async () => {
     // WHO: dashboard sending ?tenant_id=<self> on a tenant user's request
     // WHAT: candidate equals JWT tenant — no mismatch, gate doesn't fire
     // WHY: the dashboard does this on every page load; the gate must
@@ -483,14 +519,19 @@ describe("tenantMiddleware", () => {
     const reply = createMockReply();
     const req = createMockRequest({
       query: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' },
-      auth: { tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', user_id: 'u', email: 'u@x', role: 'owner' },
+      auth: {
+        tenant_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        user_id: 'u',
+        email: 'u@x',
+        role: 'owner',
+      },
     });
     await hook(req, reply);
     expect(reply.statusCode).toBe(200);
     expect(req.tenantId).toBe('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
   });
 
-  it("BLOCKS query-vs-body tenant_id mismatch with 400", async () => {
+  it('BLOCKS query-vs-body tenant_id mismatch with 400', async () => {
     // WHO: a buggy or hostile client sending different tenant_ids in
     //      the query string and the body of the same request
     // WHAT: gate refuses to guess which one was intended → 400
@@ -508,7 +549,7 @@ describe("tenantMiddleware", () => {
     expect(reply.body.error).toContain('tenant_id mismatch');
   });
 
-  it("permits anonymous requests with no JWT to fall through (downstream requireAuth handles)", async () => {
+  it('permits anonymous requests with no JWT to fall through (downstream requireAuth handles)', async () => {
     // WHO: an unauthenticated request that hits a tenant-scoped route
     // WHAT: no JWT means no JWT-vs-candidate comparison; gate doesn't
     //       fire; the downstream requireAuth() / route guard takes over
@@ -528,30 +569,30 @@ describe("tenantMiddleware", () => {
 // Logging helpers
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("logEvent", () => {
-  it("logs business event with structured data (WHO: route handler | WHAT: structured event log | WHERE: logEvent | WHY: enables filtering in Datadog/CloudWatch)", () => {
+describe('logEvent', () => {
+  it('logs business event with structured data (WHO: route handler | WHAT: structured event log | WHERE: logEvent | WHY: enables filtering in Datadog/CloudWatch)', () => {
     const req = createMockRequest();
     logEvent(req, 'appointment_booked', { appointmentId: '123' });
     expect(req.log.info).toHaveBeenCalledWith(
       { event: 'appointment_booked', appointmentId: '123' },
-      'appointment_booked',
+      'appointment_booked'
     );
   });
 });
 
-describe("logWarning", () => {
-  it("logs warning with structured data (WHO: route handler | WHAT: structured warning log | WHERE: logWarning | WHY: distinguishes warnings from errors in log aggregation)", () => {
+describe('logWarning', () => {
+  it('logs warning with structured data (WHO: route handler | WHAT: structured warning log | WHERE: logWarning | WHY: distinguishes warnings from errors in log aggregation)', () => {
     const req = createMockRequest();
     logWarning(req, 'shift_overlap', { employeeId: 'emp1' });
     expect(req.log.warn).toHaveBeenCalledWith(
       { event: 'shift_overlap', employeeId: 'emp1' },
-      'shift_overlap',
+      'shift_overlap'
     );
   });
 });
 
-describe("logError", () => {
-  it("logs Error object with structured fields (WHO: route handler | WHAT: error with stack+code+message | WHERE: logError | WHY: structured error data for incident investigation)", () => {
+describe('logError', () => {
+  it('logs Error object with structured fields (WHO: route handler | WHAT: error with stack+code+message | WHERE: logError | WHY: structured error data for incident investigation)', () => {
     const req = createMockRequest({ tenantId: 'tid-1', auth: { user_id: 'uid-1' } });
     const err = new Error('Connection timeout');
     logError(req, 'db_query_failed', err, { table: 'appointments' });
@@ -564,11 +605,11 @@ describe("logError", () => {
         userId: 'uid-1',
         table: 'appointments',
       }),
-      'db_query_failed: Connection timeout',
+      'db_query_failed: Connection timeout'
     );
   });
 
-  it("handles non-Error values (WHO: catch block with unknown throw | WHAT: string/number coerced to Error | WHERE: logError | WHY: catch(err: unknown) may receive non-Error values)", () => {
+  it('handles non-Error values (WHO: catch block with unknown throw | WHAT: string/number coerced to Error | WHERE: logError | WHY: catch(err: unknown) may receive non-Error values)', () => {
     const req = createMockRequest();
     logError(req, 'weird_throw', 'string error');
 
@@ -576,7 +617,7 @@ describe("logError", () => {
       expect.objectContaining({
         error_message: 'string error',
       }),
-      'weird_throw: string error',
+      'weird_throw: string error'
     );
   });
 
@@ -588,11 +629,11 @@ describe("logError", () => {
 
     expect(req.log.error).toHaveBeenCalledWith(
       expect.objectContaining({ error_code: '23505' }),
-      expect.any(String),
+      expect.any(String)
     );
   });
 
-  it("truncates stack to 5 lines (WHO: any error | WHAT: error_stack limited to 5 lines | WHERE: logError | WHY: full stacks bloat structured logs, 5 lines gives enough context)", () => {
+  it('truncates stack to 5 lines (WHO: any error | WHAT: error_stack limited to 5 lines | WHERE: logError | WHY: full stacks bloat structured logs, 5 lines gives enough context)', () => {
     const req = createMockRequest();
     const err = new Error('deep stack');
     logError(req, 'stack_test', err);

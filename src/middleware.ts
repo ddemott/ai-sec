@@ -63,7 +63,10 @@ export function withHandler(handler: RouteHandler, errorMessage: string): RouteH
       return await handler(req, reply);
     } catch (err: unknown) {
       // TENANT_NOT_FOUND: propagate to global handler for 404 + auto-logout
-      if (err instanceof Error && (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND') {
+      if (
+        err instanceof Error &&
+        (err as unknown as { code?: string }).code === 'TENANT_NOT_FOUND'
+      ) {
         throw err;
       }
 
@@ -83,12 +86,15 @@ export function withHandler(handler: RouteHandler, errorMessage: string): RouteH
       }
 
       // Unknown error: log and return 500
-      req.log.error({
-        err,
-        tenantId: req.tenantId,
-        route: req.url,
-        method: req.method,
-      }, errorMessage);
+      req.log.error(
+        {
+          err,
+          tenantId: req.tenantId,
+          route: req.url,
+          method: req.method,
+        },
+        errorMessage
+      );
 
       return reply.status(500).send({ success: false, error: errorMessage });
     }
@@ -108,7 +114,10 @@ import type { Pool, PoolClient } from 'pg';
  *     return client.query('SELECT * FROM tenants');
  *   });
  */
-export async function withPoolClient<T>(pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+export async function withPoolClient<T>(
+  pool: Pool,
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
   const client = await pool.connect();
   try {
     return await fn(client);
@@ -176,7 +185,10 @@ export function requireSuperAdmin(req: AppRequest, reply: FastifyReply): boolean
 
 /** Routes that don't require a tenant_id */
 const TENANT_EXEMPT_ROUTES = [
-  '/health', '/login', '/register', '/',
+  '/health',
+  '/login',
+  '/register',
+  '/',
   '/billing/webhook',
   // OAuth callbacks (redirects from external providers)
   '/calendar/auth/google/callback',
@@ -189,14 +201,19 @@ const TENANT_EXEMPT_ROUTES = [
   '/hubspot/webhook',
   '/square/webhook',
   '/servicetitan/webhook',
-  '/tenants', '/templates', '/templates/full', '/templates/create',
+  '/tenants',
+  '/templates',
+  '/templates/full',
+  '/templates/create',
 ];
 
 function isTenantExempt(url: string): boolean {
   const path = url.split('?')[0];
-  return TENANT_EXEMPT_ROUTES.some(r => path === r || path.startsWith('/tenants/'))
-    || path.startsWith('/jobber/webhook/') // Jobber webhook uses tenantId in URL path
-    || path.startsWith('/agent-tools/'); // LiveKit agent tool calls; tenant_id supplied in body
+  return (
+    TENANT_EXEMPT_ROUTES.some((r) => path === r || path.startsWith('/tenants/')) ||
+    path.startsWith('/jobber/webhook/') || // Jobber webhook uses tenantId in URL path
+    path.startsWith('/agent-tools/')
+  ); // LiveKit agent tool calls; tenant_id supplied in body
 }
 
 /**
@@ -243,11 +260,14 @@ export function tenantMiddleware(app: AppFastifyInstance) {
       (t) => t !== undefined && t !== null && t !== '' && !UUID_RE.test(t)
     );
     if (malformed !== undefined) {
-      request.log.warn({
-        event: 'malformed_tenant_id',
-        value: malformed,
-        url: request.url,
-      }, 'malformed_tenant_id');
+      request.log.warn(
+        {
+          event: 'malformed_tenant_id',
+          value: malformed,
+          url: request.url,
+        },
+        'malformed_tenant_id'
+      );
       return reply.status(400).send({
         success: false,
         error: `tenant_id must be a valid UUID (received: ${JSON.stringify(malformed)})`,
@@ -259,14 +279,17 @@ export function tenantMiddleware(app: AppFastifyInstance) {
     const isSuperAdmin = jwtTenant === SUPER_ADMIN;
 
     if (candidate && jwtTenant && candidate !== jwtTenant && !isSuperAdmin) {
-      request.log.warn({
-        event: 'cross_tenant_override_blocked',
-        jwtTenant,
-        attemptedTenant: candidate,
-        source: queryTenant ? 'query' : 'body',
-        url: request.url,
-        userId: request.auth?.user_id,
-      }, 'cross_tenant_override_blocked');
+      request.log.warn(
+        {
+          event: 'cross_tenant_override_blocked',
+          jwtTenant,
+          attemptedTenant: candidate,
+          source: queryTenant ? 'query' : 'body',
+          url: request.url,
+          userId: request.auth?.user_id,
+        },
+        'cross_tenant_override_blocked'
+      );
       return reply.status(403).send({
         success: false,
         error: 'Forbidden: tenant_id does not match authenticated session',
@@ -277,12 +300,15 @@ export function tenantMiddleware(app: AppFastifyInstance) {
     // if both equal the JWT (super-admin edge case where one is wrong),
     // a mismatched pair is ambiguous and rejected.
     if (queryTenant && bodyTenant && queryTenant !== bodyTenant) {
-      request.log.warn({
-        event: 'tenant_id_mismatch_query_vs_body',
-        queryTenant,
-        bodyTenant,
-        url: request.url,
-      }, 'tenant_id_mismatch_query_vs_body');
+      request.log.warn(
+        {
+          event: 'tenant_id_mismatch_query_vs_body',
+          queryTenant,
+          bodyTenant,
+          url: request.url,
+        },
+        'tenant_id_mismatch_query_vs_body'
+      );
       return reply.status(400).send({
         success: false,
         error: 'tenant_id mismatch between query and body',
@@ -339,25 +365,28 @@ export function logError(
   data?: Record<string, unknown>
 ) {
   const error = err instanceof Error ? err : new Error(String(err));
-  req.log.error({
-    event,
-    error_message: error.message,
-    // Errors from various sources carry their own non-standard
-    // diagnostic fields: pg errors have `code`, fetch/HTTP errors
-    // have `statusCode`. The Error base type doesn't declare either —
-    // the intersection types name exactly the optional shapes we read.
-    error_code:
-      (error as Error & { code?: string }).code ||
-      (error as Error & { statusCode?: number }).statusCode ||
-      null,
-    error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
-    route: req.url,
-    method: req.method,
-    tenantId: req.tenantId,
-    userId: req.auth?.user_id,
-    timestamp: new Date().toISOString(),
-    ...data,
-  }, `${event}: ${error.message}`);
+  req.log.error(
+    {
+      event,
+      error_message: error.message,
+      // Errors from various sources carry their own non-standard
+      // diagnostic fields: pg errors have `code`, fetch/HTTP errors
+      // have `statusCode`. The Error base type doesn't declare either —
+      // the intersection types name exactly the optional shapes we read.
+      error_code:
+        (error as Error & { code?: string }).code ||
+        (error as Error & { statusCode?: number }).statusCode ||
+        null,
+      error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+      route: req.url,
+      method: req.method,
+      tenantId: req.tenantId,
+      userId: req.auth?.user_id,
+      timestamp: new Date().toISOString(),
+      ...data,
+    },
+    `${event}: ${error.message}`
+  );
   // Counter sibling so dashboards can alert on rate(errors_total[5m])
   // by event name — much higher signal than scraping log lines.
   errorsTotal.inc({ event });
@@ -383,7 +412,13 @@ const JWT_SECRET =
   (process.env.NODE_ENV === 'production' ? '' : 'dev-jwt-secret-change-in-production');
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
-type JwtPayload = { tenant_id: string; user_id: string; email: string; role: UserRole; iat?: number };
+type JwtPayload = {
+  tenant_id: string;
+  user_id: string;
+  email: string;
+  role: UserRole;
+  iat?: number;
+};
 
 /**
  * Sign a session token. Exported so the auth route can mint tokens on
@@ -393,7 +428,12 @@ type JwtPayload = { tenant_id: string; user_id: string; email: string; role: Use
  * treated as 'owner' on read so existing sessions don't get downgraded
  * mid-flight. New tokens always carry an explicit role.
  */
-export function generateToken(payload: { tenant_id: string; user_id: string; email: string; role: UserRole }): string {
+export function generateToken(payload: {
+  tenant_id: string;
+  user_id: string;
+  email: string;
+  role: UserRole;
+}): string {
   // jsonwebtoken's `expiresIn` is typed as `string | number` in older
   // versions but the runtime accepts ms-format strings like "8h".
   // SignOptions['expiresIn'] is the exact slot we're filling — narrower
@@ -411,7 +451,12 @@ function verifyToken(token: string): JwtPayload | null {
 
 /** Routes that bypass JWT verification entirely (no Bearer token expected). */
 const PUBLIC_ROUTES = [
-  '/health', '/login', '/forgot-password', '/reset-password', '/', '/demo',
+  '/health',
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+  '/',
+  '/demo',
   '/billing/webhook',
   // Prometheus scrape endpoint — auth is via METRICS_TOKEN bearer header
   // checked inside the route handler (not JWT). When the env var is unset
@@ -458,17 +503,24 @@ export function registerJwtAuthHook(app: AppFastifyInstance, pool: Pool) {
     const token = authHeader.slice(7);
     const decoded = verifyToken(token);
     if (!decoded) {
-      request.log.warn({ url: request.url, ip: request.ip }, 'JWT verification failed — invalid or expired token');
+      request.log.warn(
+        { url: request.url, ip: request.ip },
+        'JWT verification failed — invalid or expired token'
+      );
       return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
     }
 
     if (decoded.iat) {
       const client = await pool.connect();
       try {
-        const r = await client.query('SELECT password_changed_at FROM users WHERE user_id = $1', [decoded.user_id]);
+        const r = await client.query('SELECT password_changed_at FROM users WHERE user_id = $1', [
+          decoded.user_id,
+        ]);
         const changedAt = r.rows[0]?.password_changed_at as Date | undefined;
         if (changedAt && Math.floor(changedAt.getTime() / 1000) > decoded.iat) {
-          return reply.status(401).send({ success: false, error: 'Session expired — please log in again' });
+          return reply
+            .status(401)
+            .send({ success: false, error: 'Session expired — please log in again' });
         }
       } finally {
         client.release();

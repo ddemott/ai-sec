@@ -7,12 +7,12 @@
  *
  * Each test carries 5W diagnostic context.
  */
-import { describe, test, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import '@testing-library/jest-dom'
-import React from 'react'
+import { describe, test, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
 
-import { WizardWelcome } from './WizardWelcome'
+import { WizardWelcome } from './WizardWelcome';
 
 describe('WizardWelcome', () => {
   test('HAPPY: renders the scope-setting headline + 10-minute copy', async () => {
@@ -23,12 +23,12 @@ describe('WizardWelcome', () => {
     //       chooser because they didn't know how long the wizard takes or
     //       whether they could pause. Welcome screen sets both expectations
     //       before the binary solo/team fork.
-    render(<WizardWelcome onContinue={vi.fn()} onDismiss={vi.fn()} />)
+    render(<WizardWelcome onContinue={vi.fn()} onDismiss={vi.fn()} />);
 
-    expect(screen.getByRole('dialog', { name: /welcome/i })).toBeInTheDocument()
-    expect(screen.getByText(/10 minutes from going live/i)).toBeInTheDocument()
-    expect(screen.getByText(/stop and come back any time/i)).toBeInTheDocument()
-  })
+    expect(screen.getByRole('dialog', { name: /welcome/i })).toBeInTheDocument();
+    expect(screen.getByText(/10 minutes from going live/i)).toBeInTheDocument();
+    expect(screen.getByText(/stop and come back any time/i)).toBeInTheDocument();
+  });
 
   test('HAPPY: "Let\'s go" fires onContinue and not onDismiss', async () => {
     // WHO: User ready to set up
@@ -36,15 +36,15 @@ describe('WizardWelcome', () => {
     // WHY:  The wizard flow stages on onContinue advancing to the mode
     //       chooser. If onDismiss fired too, the wizard would close
     //       immediately after advancing — a race condition between siblings.
-    const onContinue = vi.fn()
-    const onDismiss = vi.fn()
-    render(<WizardWelcome onContinue={onContinue} onDismiss={onDismiss} />)
+    const onContinue = vi.fn();
+    const onDismiss = vi.fn();
+    render(<WizardWelcome onContinue={onContinue} onDismiss={onDismiss} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /let's go/i }))
+    fireEvent.click(screen.getByRole('button', { name: /let's go/i }));
 
-    expect(onContinue).toHaveBeenCalledTimes(1)
-    expect(onDismiss).not.toHaveBeenCalled()
-  })
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
 
   test('HAPPY: "I\'ll set up later, just show me around" fires onDismiss and not onContinue', async () => {
     // WHO: User who landed on the dashboard but wants to explore first
@@ -52,15 +52,15 @@ describe('WizardWelcome', () => {
     // WHY:  Forcing setup before exploration is a Heuristic H3 violation
     //       (user control). The "show me around" exit must close the
     //       wizard entirely, not advance the flow under the welcome.
-    const onContinue = vi.fn()
-    const onDismiss = vi.fn()
-    render(<WizardWelcome onContinue={onContinue} onDismiss={onDismiss} />)
+    const onContinue = vi.fn();
+    const onDismiss = vi.fn();
+    render(<WizardWelcome onContinue={onContinue} onDismiss={onDismiss} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /set up later/i }))
+    fireEvent.click(screen.getByRole('button', { name: /set up later/i }));
 
-    expect(onDismiss).toHaveBeenCalledTimes(1)
-    expect(onContinue).not.toHaveBeenCalled()
-  })
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onContinue).not.toHaveBeenCalled();
+  });
 
   test('HAPPY: header X close button also fires onDismiss', async () => {
     // WHO: User who closes via the affordance they expect on any modal
@@ -68,15 +68,15 @@ describe('WizardWelcome', () => {
     // WHY:  Two exits ("show me around" + X) must behave identically;
     //       otherwise users learn that the X "does something different,"
     //       eroding trust in the close affordance across the app.
-    const onContinue = vi.fn()
-    const onDismiss = vi.fn()
-    render(<WizardWelcome onContinue={onContinue} onDismiss={onDismiss} />)
+    const onContinue = vi.fn();
+    const onDismiss = vi.fn();
+    render(<WizardWelcome onContinue={onContinue} onDismiss={onDismiss} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /close welcome/i }))
+    fireEvent.click(screen.getByRole('button', { name: /close welcome/i }));
 
-    expect(onDismiss).toHaveBeenCalledTimes(1)
-    expect(onContinue).not.toHaveBeenCalled()
-  })
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onContinue).not.toHaveBeenCalled();
+  });
 
   test('HAPPY: dialog is marked role="dialog" and aria-modal for screen readers', async () => {
     // WHO: Screen-reader user landing on the new-tenant dashboard
@@ -85,11 +85,11 @@ describe('WizardWelcome', () => {
     // WHY:  Native <dialog> semantics + aria-labelledby pointing at the
     //       title give screen readers the "Welcome to your AI
     //       receptionist" announcement on appearance.
-    render(<WizardWelcome onContinue={vi.fn()} onDismiss={vi.fn()} />)
+    render(<WizardWelcome onContinue={vi.fn()} onDismiss={vi.fn()} />);
 
-    const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveAttribute('aria-modal', 'true')
-    expect(dialog).toHaveAttribute('aria-labelledby', 'wizard-welcome-title')
-    expect(document.getElementById('wizard-welcome-title')).toHaveTextContent(/welcome/i)
-  })
-})
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'wizard-welcome-title');
+    expect(document.getElementById('wizard-welcome-title')).toHaveTextContent(/welcome/i);
+  });
+});

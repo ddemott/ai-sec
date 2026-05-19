@@ -13,7 +13,13 @@ export interface SchedulerAppointment {
   description: string;
   status: string;
   location?: string;
-  customers?: { name: string; first_name?: string; last_name?: string; phone?: string; metadata?: Record<string, unknown> };
+  customers?: {
+    name: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    metadata?: Record<string, unknown>;
+  };
   resources?: { name: string };
 }
 
@@ -24,11 +30,26 @@ function toDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-interface SchedulerEmployee { employee_id: string; name: string }
-interface SchedulerResource { resource_id: string; name: string }
-interface SchedulerShift { employee_id?: string; start_time?: string; end_time?: string }
+interface SchedulerEmployee {
+  employee_id: string;
+  name: string;
+}
+interface SchedulerResource {
+  resource_id: string;
+  name: string;
+}
+interface SchedulerShift {
+  employee_id?: string;
+  start_time?: string;
+  end_time?: string;
+}
 
-export function useSchedulerData(tenantId: string | null, selectedDate: Date, employees: SchedulerEmployee[], resources: SchedulerResource[]) {
+export function useSchedulerData(
+  tenantId: string | null,
+  selectedDate: Date,
+  employees: SchedulerEmployee[],
+  resources: SchedulerResource[]
+) {
   const [appointments, setAppointments] = useState<SchedulerAppointment[]>([]);
   const [allShifts, setAllShifts] = useState<BulkEffectiveShift[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,8 +75,9 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
       ]);
 
       setAppointments(
-        (Array.isArray(apptRes) ? apptRes : [])
-          .filter((a: SchedulerAppointment) => a.status !== 'canceled')
+        (Array.isArray(apptRes) ? apptRes : []).filter(
+          (a: SchedulerAppointment) => a.status !== 'canceled'
+        )
       );
       setAllShifts(Array.isArray(shiftRes) ? shiftRes : []);
     } catch {

@@ -194,14 +194,18 @@ export function formatContextForAI(context: CustomerContext): string {
   // Appointment history
   const history = context.appointment_history;
   if (history.total > 0) {
-    lines.push(`Appointment history: ${history.total} total (${history.completed} completed, ${history.cancelled} cancelled)`);
+    lines.push(
+      `Appointment history: ${history.total} total (${history.completed} completed, ${history.cancelled} cancelled)`
+    );
   }
 
   // Upcoming appointments
   if (history.upcoming_appointments.length > 0) {
     const upcoming = history.upcoming_appointments[0];
     const date = new Date(upcoming.start_time);
-    lines.push(`Next appointment: ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+    lines.push(
+      `Next appointment: ${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    );
     if (upcoming.description) {
       lines.push(`  Service: ${upcoming.description}`);
     }

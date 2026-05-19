@@ -1,4 +1,3 @@
-
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -30,93 +29,134 @@ export function registerServiceRoutes(
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   // GET /services/catalog?tenant_id=X — public-facing service list for AI callers (Layer 1: database facts)
-  app.get('/services/catalog', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/services/catalog',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query(
-        `SELECT service_id, name, subtitle, description, duration_minutes, price
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          `SELECT service_id, name, subtitle, description, duration_minutes, price
          FROM services WHERE tenant_id = $1 AND is_deleted = false ORDER BY name ASC`,
-        [tenantId]
-      );
-    });
-    return reply.send({ services: res.rows });
-  }, 'Failed to fetch service catalog'));
+          [tenantId]
+        );
+      });
+      return reply.send({ services: res.rows });
+    }, 'Failed to fetch service catalog')
+  );
 
-  app.get('/services', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/services',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('SELECT * FROM services WHERE tenant_id = $1 AND is_deleted = false ORDER BY name ASC', [tenantId]);
-    });
-    return reply.send(res.rows);
-  }, 'Failed to fetch services'));
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          'SELECT * FROM services WHERE tenant_id = $1 AND is_deleted = false ORDER BY name ASC',
+          [tenantId]
+        );
+      });
+      return reply.send(res.rows);
+    }, 'Failed to fetch services')
+  );
 
-  app.post('/services/create', withHandler(async (req: AppRequest, reply) => {
-    const parsed = CreateServiceSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
-    }
-    const body = parsed.data;
-
-    const res = await withTenantClient(body.tenant_id, async (client) => {
-      return client.query(
-        'INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [body.tenant_id, body.name, body.subtitle || '', body.description || '', body.duration_minutes, body.required_skills || [], body.required_resources || []]
-      );
-    });
-
-    logEvent(req, 'service_created', { serviceId: res.rows[0].service_id, name: body.name });
-    return reply.send({ success: true, service: res.rows[0] });
-  }, 'Failed to create service'));
-
-  app.post('/services/:id/update', withHandler(async (req: AppRequest, reply) => {
-    const { id } = req.params as { id: string };
-    const parsed = UpdateServiceSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
-    }
-    const body = parsed.data;
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
-
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query(
-        'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE service_id = $6 AND tenant_id = $7 RETURNING *',
-        [body.name, body.subtitle, body.description, body.duration_minutes, body.price, id, tenantId]
-      );
-    });
-    if (!assertRowAffected(res, reply, 'Service')) return;
-
-    logEvent(req, 'service_updated', { serviceId: id });
-    return reply.send({ success: true, service: res.rows[0] });
-  }, 'Failed to update service'));
-
-  app.delete('/services/:id/delete', withHandler(async (req: AppRequest, reply) => {
-    const { id } = req.params as { id: string };
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
-
-    const res = await withTenantClient(tenantId, async (client) => {
-      // Wrap in transaction to ensure atomicity
-      await client.query('BEGIN');
-      try {
-        // Remove mappings first, then delete the service
-        await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
-        await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
-        const deleteRes = await client.query('DELETE FROM services WHERE service_id = $1 AND tenant_id = $2 RETURNING service_id', [id, tenantId]);
-        await client.query('COMMIT');
-        return deleteRes;
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
+  app.post(
+    '/services/create',
+    withHandler(async (req: AppRequest, reply) => {
+      const parsed = CreateServiceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
       }
-    });
-    if (!assertRowAffected(res, reply, 'Service')) return;
+      const body = parsed.data;
 
-    logEvent(req, 'service_deleted', { serviceId: id });
-    return reply.send({ success: true });
-  }, 'Failed to delete service'));
+      const res = await withTenantClient(body.tenant_id, async (client) => {
+        return client.query(
+          'INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+          [
+            body.tenant_id,
+            body.name,
+            body.subtitle || '',
+            body.description || '',
+            body.duration_minutes,
+            body.required_skills || [],
+            body.required_resources || [],
+          ]
+        );
+      });
+
+      logEvent(req, 'service_created', { serviceId: res.rows[0].service_id, name: body.name });
+      return reply.send({ success: true, service: res.rows[0] });
+    }, 'Failed to create service')
+  );
+
+  app.post(
+    '/services/:id/update',
+    withHandler(async (req: AppRequest, reply) => {
+      const { id } = req.params as { id: string };
+      const parsed = UpdateServiceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+      const body = parsed.data;
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE service_id = $6 AND tenant_id = $7 RETURNING *',
+          [
+            body.name,
+            body.subtitle,
+            body.description,
+            body.duration_minutes,
+            body.price,
+            id,
+            tenantId,
+          ]
+        );
+      });
+      if (!assertRowAffected(res, reply, 'Service')) return;
+
+      logEvent(req, 'service_updated', { serviceId: id });
+      return reply.send({ success: true, service: res.rows[0] });
+    }, 'Failed to update service')
+  );
+
+  app.delete(
+    '/services/:id/delete',
+    withHandler(async (req: AppRequest, reply) => {
+      const { id } = req.params as { id: string };
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const res = await withTenantClient(tenantId, async (client) => {
+        // Wrap in transaction to ensure atomicity
+        await client.query('BEGIN');
+        try {
+          // Remove mappings first, then delete the service
+          await client.query('DELETE FROM service_employee WHERE service_id = $1', [id]);
+          await client.query('DELETE FROM service_resource WHERE service_id = $1', [id]);
+          const deleteRes = await client.query(
+            'DELETE FROM services WHERE service_id = $1 AND tenant_id = $2 RETURNING service_id',
+            [id, tenantId]
+          );
+          await client.query('COMMIT');
+          return deleteRes;
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+      });
+      if (!assertRowAffected(res, reply, 'Service')) return;
+
+      logEvent(req, 'service_deleted', { serviceId: id });
+      return reply.send({ success: true });
+    }, 'Failed to delete service')
+  );
 }

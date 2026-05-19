@@ -31,7 +31,19 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { type Client, Pool } from 'pg';
-import { API_DB_URL, getRootClient, clearDB, createTenant, createCustomer, createEmployee, createService, createResource, createAppointment, createUser, skipIfDbDown } from './test-utils';
+import {
+  API_DB_URL,
+  getRootClient,
+  clearDB,
+  createTenant,
+  createCustomer,
+  createEmployee,
+  createService,
+  createResource,
+  createAppointment,
+  createUser,
+  skipIfDbDown,
+} from './test-utils';
 import { registerJwtAuthHook, tenantMiddleware, generateToken } from './middleware';
 import { createWithTenantClient } from './database';
 import { registerCustomerRoutes } from './routes/customers';
@@ -74,9 +86,19 @@ beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 const stubEmbedding = async (_text: string): Promise<number[]> => new Array(1536).fill(0);
 const stubNormalizer = async (text: string): Promise<string> => text;
 
-async function seedTenant(client: Client, label: string, businessType: string): Promise<TenantFixture> {
+async function seedTenant(
+  client: Client,
+  label: string,
+  businessType: string
+): Promise<TenantFixture> {
   const tenantId = await createTenant(client, `${label}-Co`, businessType);
-  const userId = await createUser(client, tenantId, `owner-${label.toLowerCase()}@probe.test`, 'pw', `${label} Owner`);
+  const userId = await createUser(
+    client,
+    tenantId,
+    `owner-${label.toLowerCase()}@probe.test`,
+    'pw',
+    `${label} Owner`
+  );
   const token = generateToken({
     tenant_id: tenantId,
     user_id: userId,
@@ -84,7 +106,12 @@ async function seedTenant(client: Client, label: string, businessType: string): 
     role: 'owner',
   });
 
-  const customerId = await createCustomer(client, tenantId, `${label}-Secret-Customer`, `+1555${label.charCodeAt(0)}001234`);
+  const customerId = await createCustomer(
+    client,
+    tenantId,
+    `${label}-Secret-Customer`,
+    `+1555${label.charCodeAt(0)}001234`
+  );
   const employeeId = await createEmployee(client, tenantId, `${label}-Tech`, ['repair']);
   const serviceId = await createService(client, tenantId, `${label}-Service`, 60);
   const resourceId = await createResource(client, tenantId, `${label}-Bay-1`);
@@ -94,18 +121,25 @@ async function seedTenant(client: Client, label: string, businessType: string): 
   const aptStart = '2030-06-15T15:00:00Z';
   const aptEnd = '2030-06-15T16:00:00Z';
   const appointmentId = await createAppointment(
-    client, tenantId, resourceId, customerId, aptStart, aptEnd,
-    `${label}-Appointment`, 'scheduled', employeeId
+    client,
+    tenantId,
+    resourceId,
+    customerId,
+    aptStart,
+    aptEnd,
+    `${label}-Appointment`,
+    'scheduled',
+    employeeId
   );
 
   // Composite-PK retrofit pilot #2 (2026-05-18) dropped the surrogate
   // tenant_skill_id. Identity is now (tenant_id, name); the name itself
   // is the URL identifier the cross-tenant DELETE probe targets.
   const skillName = `${label}-special-skill`;
-  await client.query(
-    `INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, $2)`,
-    [tenantId, skillName]
-  );
+  await client.query(`INSERT INTO tenant_skills (tenant_id, name) VALUES ($1, $2)`, [
+    tenantId,
+    skillName,
+  ]);
 
   // Knowledge doc — search_tenant_docs RPC uses pgvector cosine similarity.
   // We seed with a zero-vector embedding stub so the RPC has something to
@@ -229,7 +263,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      const leaked = body.filter(r => r.tenant_id === B.id || r.name === 'B-Secret-Customer');
+      const leaked = body.filter((r) => r.tenant_id === B.id || r.name === 'B-Secret-Customer');
       expect(leaked).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
@@ -246,7 +280,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      const leaked = body.filter(r => r.name === 'B-Tech');
+      const leaked = body.filter((r) => r.name === 'B-Tech');
       expect(leaked).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
@@ -263,7 +297,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      expect(body.filter(r => r.name === 'B-Service')).toEqual([]);
+      expect(body.filter((r) => r.name === 'B-Service')).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
     }
@@ -279,7 +313,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      expect(body.filter(r => r.name === 'B-Bay-1')).toEqual([]);
+      expect(body.filter((r) => r.name === 'B-Bay-1')).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
     }
@@ -295,8 +329,10 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      const rows = Array.isArray(body) ? body : (body.appointments || body.rows || []);
-      expect((rows as Array<{ description?: string }>).filter(r => r.description === 'B-Appointment')).toEqual([]);
+      const rows = Array.isArray(body) ? body : body.appointments || body.rows || [];
+      expect(
+        (rows as Array<{ description?: string }>).filter((r) => r.description === 'B-Appointment')
+      ).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
     }
@@ -312,7 +348,7 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      expect(body.filter(r => r.name === 'B-special-skill')).toEqual([]);
+      expect(body.filter((r) => r.name === 'B-special-skill')).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
     }
@@ -328,8 +364,10 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      const rows = Array.isArray(body) ? body : (body.docs || body.rows || []);
-      expect((rows as Array<{ title?: string }>).filter(r => r.title === 'B-Secret-Policy')).toEqual([]);
+      const rows = Array.isArray(body) ? body : body.docs || body.rows || [];
+      expect(
+        (rows as Array<{ title?: string }>).filter((r) => r.title === 'B-Secret-Policy')
+      ).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
     }
@@ -345,8 +383,10 @@ describe('Probe 1: tenant_id query-param override under non-admin JWT', () => {
     expect(res.statusCode).not.toBe(500);
     if (res.statusCode === 200) {
       const body = res.json();
-      const rows = Array.isArray(body) ? body : (body.users || []);
-      expect((rows as Array<{ email?: string }>).filter(r => r.email === 'owner-b@probe.test')).toEqual([]);
+      const rows = Array.isArray(body) ? body : body.users || [];
+      expect(
+        (rows as Array<{ email?: string }>).filter((r) => r.email === 'owner-b@probe.test')
+      ).toEqual([]);
     } else {
       expect([400, 403]).toContain(res.statusCode);
     }
@@ -381,7 +421,9 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
     expect(res.statusCode).toBe(404);
 
     // Verify B's employee is intact via root client
-    const check = await setup.query('SELECT is_deleted FROM employees WHERE employee_id = $1', [B.employeeId]);
+    const check = await setup.query('SELECT is_deleted FROM employees WHERE employee_id = $1', [
+      B.employeeId,
+    ]);
     expect(check.rows[0].is_deleted).toBe(false);
   });
 
@@ -393,7 +435,9 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT is_deleted FROM resources WHERE resource_id = $1', [B.resourceId]);
+    const check = await setup.query('SELECT is_deleted FROM resources WHERE resource_id = $1', [
+      B.resourceId,
+    ]);
     expect(check.rows[0].is_deleted).toBe(false);
   });
 
@@ -405,7 +449,9 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT is_deleted FROM services WHERE service_id = $1', [B.serviceId]);
+    const check = await setup.query('SELECT is_deleted FROM services WHERE service_id = $1', [
+      B.serviceId,
+    ]);
     expect(check.rows[0].is_deleted).toBe(false);
   });
 
@@ -434,7 +480,9 @@ describe('Probe 2: cross-tenant id under A JWT (no override)', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(404);
-    const check = await setup.query('SELECT title FROM tenant_docs WHERE tenant_doc_id = $1', [B.knowledgeDocId]);
+    const check = await setup.query('SELECT title FROM tenant_docs WHERE tenant_doc_id = $1', [
+      B.knowledgeDocId,
+    ]);
     expect(check.rows[0]?.title).toBe('B-Secret-Policy');
   });
 });
@@ -461,10 +509,9 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
     //      defense; the route should also reject.
     if (!dbAvailable) return;
 
-    const beforeCount = await setup.query(
-      'SELECT COUNT(*) FROM customers WHERE tenant_id = $1',
-      [B.id]
-    );
+    const beforeCount = await setup.query('SELECT COUNT(*) FROM customers WHERE tenant_id = $1', [
+      B.id,
+    ]);
 
     const res = await app.inject({
       method: 'POST',
@@ -480,10 +527,9 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
     // Must reject. Acceptable: 400 / 403. Unacceptable: 200 with insert.
     expect([400, 403]).toContain(res.statusCode);
 
-    const afterCount = await setup.query(
-      'SELECT COUNT(*) FROM customers WHERE tenant_id = $1',
-      [B.id]
-    );
+    const afterCount = await setup.query('SELECT COUNT(*) FROM customers WHERE tenant_id = $1', [
+      B.id,
+    ]);
     expect(afterCount.rows[0].count).toBe(beforeCount.rows[0].count);
 
     const check = await setup.query(
@@ -494,10 +540,9 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
 
   it('SAD: POST /employees/create with body.tenant_id=<B> under A JWT must not insert into B', async () => {
     if (!dbAvailable) return;
-    const beforeCount = await setup.query(
-      'SELECT COUNT(*) FROM employees WHERE tenant_id = $1',
-      [B.id]
-    );
+    const beforeCount = await setup.query('SELECT COUNT(*) FROM employees WHERE tenant_id = $1', [
+      B.id,
+    ]);
 
     const res = await app.inject({
       method: 'POST',
@@ -508,19 +553,17 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
 
     expect([400, 403]).toContain(res.statusCode);
 
-    const afterCount = await setup.query(
-      'SELECT COUNT(*) FROM employees WHERE tenant_id = $1',
-      [B.id]
-    );
+    const afterCount = await setup.query('SELECT COUNT(*) FROM employees WHERE tenant_id = $1', [
+      B.id,
+    ]);
     expect(afterCount.rows[0].count).toBe(beforeCount.rows[0].count);
   });
 
   it('SAD: POST /services/create with body.tenant_id=<B> under A JWT must not insert into B', async () => {
     if (!dbAvailable) return;
-    const beforeCount = await setup.query(
-      'SELECT COUNT(*) FROM services WHERE tenant_id = $1',
-      [B.id]
-    );
+    const beforeCount = await setup.query('SELECT COUNT(*) FROM services WHERE tenant_id = $1', [
+      B.id,
+    ]);
 
     const res = await app.inject({
       method: 'POST',
@@ -531,19 +574,17 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
 
     expect([400, 403]).toContain(res.statusCode);
 
-    const afterCount = await setup.query(
-      'SELECT COUNT(*) FROM services WHERE tenant_id = $1',
-      [B.id]
-    );
+    const afterCount = await setup.query('SELECT COUNT(*) FROM services WHERE tenant_id = $1', [
+      B.id,
+    ]);
     expect(afterCount.rows[0].count).toBe(beforeCount.rows[0].count);
   });
 
   it('SAD: POST /resources/create with body.tenant_id=<B> under A JWT must not insert into B', async () => {
     if (!dbAvailable) return;
-    const beforeCount = await setup.query(
-      'SELECT COUNT(*) FROM resources WHERE tenant_id = $1',
-      [B.id]
-    );
+    const beforeCount = await setup.query('SELECT COUNT(*) FROM resources WHERE tenant_id = $1', [
+      B.id,
+    ]);
 
     const res = await app.inject({
       method: 'POST',
@@ -554,10 +595,9 @@ describe('Probe 3: cross-tenant FK injection via POST body', () => {
 
     expect([400, 403]).toContain(res.statusCode);
 
-    const afterCount = await setup.query(
-      'SELECT COUNT(*) FROM resources WHERE tenant_id = $1',
-      [B.id]
-    );
+    const afterCount = await setup.query('SELECT COUNT(*) FROM resources WHERE tenant_id = $1', [
+      B.id,
+    ]);
     expect(afterCount.rows[0].count).toBe(beforeCount.rows[0].count);
   });
 });
@@ -580,7 +620,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.find(r => r.name === 'A-Secret-Customer')).toBeTruthy();
+    expect(body.find((r) => r.name === 'A-Secret-Customer')).toBeTruthy();
   });
 
   it('HAPPY: A token (no override) on GET /customers returns A-Secret-Customer only', async () => {
@@ -592,8 +632,8 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.find(r => r.name === 'A-Secret-Customer')).toBeTruthy();
-    expect(body.find(r => r.name === 'B-Secret-Customer')).toBeUndefined();
+    expect(body.find((r) => r.name === 'A-Secret-Customer')).toBeTruthy();
+    expect(body.find((r) => r.name === 'B-Secret-Customer')).toBeUndefined();
   });
 
   it('HAPPY: super-admin token + ?tenant_id=<A> on GET /customers returns A-Secret-Customer', async () => {
@@ -612,7 +652,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.find(r => r.name === 'A-Secret-Customer')).toBeTruthy();
+    expect(body.find((r) => r.name === 'A-Secret-Customer')).toBeTruthy();
   });
 
   it('HAPPY: super-admin token + ?tenant_id=<B> on GET /customers returns B-Secret-Customer', async () => {
@@ -624,7 +664,7 @@ describe('Probe 4: positive controls (legitimate paths must still work)', () => 
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.find(r => r.name === 'B-Secret-Customer')).toBeTruthy();
+    expect(body.find((r) => r.name === 'B-Secret-Customer')).toBeTruthy();
   });
 });
 
@@ -659,7 +699,9 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
 
   it('SAD: DELETE /tenants/<B> under A JWT must not delete tenant B', async () => {
     if (!dbAvailable) return;
-    const beforeRow = await setup.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [B.id]);
+    const beforeRow = await setup.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [
+      B.id,
+    ]);
     expect(beforeRow.rows).toHaveLength(1);
 
     const res = await app.inject({
@@ -669,7 +711,9 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
     });
     expect([401, 403]).toContain(res.statusCode);
 
-    const afterRow = await setup.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [B.id]);
+    const afterRow = await setup.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [
+      B.id,
+    ]);
     expect(afterRow.rows).toHaveLength(1);
   });
 
@@ -693,8 +737,8 @@ describe('Probe 5: admin-only /tenants/* routes must reject non-admins', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.find(r => r.tenant_id === A.id)).toBeTruthy();
-    expect(body.find(r => r.tenant_id === B.id)).toBeTruthy();
+    expect(body.find((r) => r.tenant_id === A.id)).toBeTruthy();
+    expect(body.find((r) => r.tenant_id === B.id)).toBeTruthy();
   });
 });
 
@@ -768,10 +812,9 @@ describe('Probe 6: RLS configuration on tables fixed 2026-05-09', () => {
     );
     expect(flagRes.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
 
-    const policyRes = await setup.query(
-      `SELECT policyname FROM pg_policies WHERE tablename = $1`,
-      ['password_resets']
-    );
+    const policyRes = await setup.query(`SELECT policyname FROM pg_policies WHERE tablename = $1`, [
+      'password_resets',
+    ]);
     const names = (policyRes.rows as Array<{ policyname: string }>).map((r) => r.policyname);
     expect(names).toContain('password_resets_unauthenticated_only');
   });
@@ -796,10 +839,9 @@ describe('Probe 6: RLS configuration on tables fixed 2026-05-09', () => {
          VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
         [A.userId, 'probe6-positive-token']
       );
-      const res = await client.query(
-        `SELECT user_id FROM password_resets WHERE token_hash = $1`,
-        ['probe6-positive-token']
-      );
+      const res = await client.query(`SELECT user_id FROM password_resets WHERE token_hash = $1`, [
+        'probe6-positive-token',
+      ]);
       expect(res.rows, 'unauthenticated flow MUST be able to read password_resets').toHaveLength(1);
       expect(res.rows[0].user_id).toBe(A.userId);
       await client.query(`DELETE FROM password_resets WHERE token_hash = $1`, [
@@ -870,7 +912,7 @@ describe('Probe 7: malformed tenant_id sanitization', () => {
       headers: { authorization: `Bearer ${A.token}` },
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json()).error).toMatch(/tenant_id must be a valid UUID/);
+    expect(res.json().error).toMatch(/tenant_id must be a valid UUID/);
   });
 
   it('SAD: ?tenant_id=not-a-uuid returns 400', async () => {
@@ -900,7 +942,7 @@ describe('Probe 7: malformed tenant_id sanitization', () => {
       payload: { tenant_id: 'undefined', name: 'X', phone: '+15550000000' },
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json()).error).toMatch(/tenant_id must be a valid UUID/);
+    expect(res.json().error).toMatch(/tenant_id must be a valid UUID/);
   });
 
   it('HAPPY: ?tenant_id=<valid-uuid> still works after the gate', async () => {

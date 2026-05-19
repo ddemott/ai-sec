@@ -196,7 +196,7 @@ function countRoutes(repoRoot: string): number {
   const dir = join(repoRoot, 'src/routes');
   if (!existsSync(dir)) return 0;
   return readdirSync(dir).filter(
-    (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'routeHelpers.ts',
+    (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'routeHelpers.ts'
   ).length;
 }
 
@@ -208,10 +208,12 @@ function countFiles(dir: string, predicate: (filename: string) => boolean): numb
 /** Run every check against the live filesystem + git, return aggregated drifts. */
 export function runAllChecks(content: string, repoRoot: string): Drift[] {
   const routeCount = countRoutes(repoRoot);
-  const migrationCount = countFiles(join(repoRoot, 'supabase/migrations'), (f) => f.endsWith('.sql'));
+  const migrationCount = countFiles(join(repoRoot, 'supabase/migrations'), (f) =>
+    f.endsWith('.sql')
+  );
   const templateCount = countFiles(
     join(repoRoot, 'src/templates'),
-    (f) => f.endsWith('.yaml') || f.endsWith('.yml'),
+    (f) => f.endsWith('.yaml') || f.endsWith('.yml')
   );
 
   // Numeric counts are date-locked facts in the Resolved Issues archive — only

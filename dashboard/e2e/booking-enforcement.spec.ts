@@ -57,10 +57,9 @@ const ADMIN_PASSWORD = 'password';
 let pool: Pool;
 
 async function countAppointmentsForTenant(tenantId: string): Promise<number> {
-  const r = await pool.query(
-    `SELECT count(*)::int AS n FROM appointments WHERE tenant_id = $1`,
-    [tenantId]
-  );
+  const r = await pool.query(`SELECT count(*)::int AS n FROM appointments WHERE tenant_id = $1`, [
+    tenantId,
+  ]);
   return r.rows[0].n;
 }
 
@@ -110,10 +109,9 @@ async function findDynaTireResourceId(name: string): Promise<string | null> {
 }
 
 async function findDynaTireCustomerId(): Promise<string> {
-  const r = await pool.query(
-    'SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1',
-    [DYNATIRE_ID]
-  );
+  const r = await pool.query('SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1', [
+    DYNATIRE_ID,
+  ]);
   if (!r.rows[0]?.customer_id) throw new Error('No DynaTire customer found in seed');
   return r.rows[0].customer_id;
 }
@@ -135,7 +133,7 @@ test.beforeAll(async () => {
   const insert = await pool.query(
     `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
      VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture'],
+    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture']
   );
   fixtureCustomerId = insert.rows[0].customer_id;
 });
@@ -150,7 +148,9 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. Out-of-hours blocked
 // ────────────────────────────────────────────────────────────────────────────
-test('out-of-hours: booking outside the assigned employee shift is rejected with a clear error', async ({ request }) => {
+test('out-of-hours: booking outside the assigned employee shift is rejected with a clear error', async ({
+  request,
+}) => {
   // WHO: front-desk operator trying to fit a customer in before the shop opens
   // WHAT: backend's book_appointment_atomic checks employee_schedule and
   //        rejects with "Employee is not on shift during this time"
@@ -205,7 +205,9 @@ test('out-of-hours: booking outside the assigned employee shift is rejected with
 // ────────────────────────────────────────────────────────────────────────────
 // 2. Employee double-book → conflict block surfaces existing appointment
 // ────────────────────────────────────────────────────────────────────────────
-test('employee-double-book: overlap returns 409 with conflict block showing the existing appointment', async ({ request }) => {
+test('employee-double-book: overlap returns 409 with conflict block showing the existing appointment', async ({
+  request,
+}) => {
   // WHO: operator trying to fit a second customer in with the same tech
   //        during a time he's already booked
   // WHAT: backend rejects with 409 + error_code TIMESLOT_OCCUPIED + a
@@ -274,7 +276,9 @@ test('employee-double-book: overlap returns 409 with conflict block showing the 
 // ────────────────────────────────────────────────────────────────────────────
 // 3. Resource double-book → conflict block surfaces existing appointment
 // ────────────────────────────────────────────────────────────────────────────
-test('resource-double-book: same resource + different employee still returns 409 with conflict', async ({ request }) => {
+test('resource-double-book: same resource + different employee still returns 409 with conflict', async ({
+  request,
+}) => {
   // WHO: operator who picked a different employee but the same truck/
   //        bay during a time the truck is already in use
   // WHAT: backend rejects on the resource axis (appointments_no_resource_overlap)
@@ -328,7 +332,10 @@ test('resource-double-book: same resource + different employee still returns 409
     expect(res.status).toBe(409);
     expect(res.body.error_code).toBe('TIMESLOT_OCCUPIED');
     const conflict = res.body.conflict as Record<string, unknown> | undefined;
-    expect(conflict, 'conflict block must be present even when only resource overlaps').toBeTruthy();
+    expect(
+      conflict,
+      'conflict block must be present even when only resource overlaps'
+    ).toBeTruthy();
     expect(conflict?.appointment_id).toBe(existingId);
     // The conflict surfaces the EXISTING booking's employee (Mike), not
     // the requested employee (Carlos). The modal's job is to show what's
@@ -345,7 +352,9 @@ test('resource-double-book: same resource + different employee still returns 409
 // ────────────────────────────────────────────────────────────────────────────
 // 4. Partial overlap blocked (whole-slot check, not just exact-match)
 // ────────────────────────────────────────────────────────────────────────────
-test('partial-overlap: 14:15-14:45 is blocked by an existing 14:00-14:30 booking', async ({ request }) => {
+test('partial-overlap: 14:15-14:45 is blocked by an existing 14:00-14:30 booking', async ({
+  request,
+}) => {
   // WHO: operator who knows there's a 14:00 booking and tries to slip
   //        in starting at 14:15 (overlapping the tail half of the
   //        existing slot)
@@ -425,7 +434,9 @@ test('partial-overlap: 14:15-14:45 is blocked by an existing 14:00-14:30 booking
 // ────────────────────────────────────────────────────────────────────────────
 // 5. UI smoke: ConflictModal renders when /appointments/create returns 409
 // ────────────────────────────────────────────────────────────────────────────
-test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointment when overlap detected', async ({ page }) => {
+test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointment when overlap detected', async ({
+  page,
+}) => {
   // WHO: front-desk operator going through the actual UI (not direct API)
   // WHAT: open Schedule → Quick Book → fill the form to overlap an
   //        existing appointment → submit → ConflictModal renders with
@@ -497,8 +508,14 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     await switchToDynaTireTenant(page);
 
     // Open the Schedule tab + Quick Book panel.
-    await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
-    await page.getByRole('button', { name: /Quick Book/i }).first().click();
+    await page
+      .getByRole('tab', { name: /^Schedule$/ })
+      .first()
+      .click();
+    await page
+      .getByRole('button', { name: /Quick Book/i })
+      .first()
+      .click();
     await expect(page.getByTestId('quick-book-panel')).toBeVisible({ timeout: 10000 });
 
     // Wait for dropdowns to populate before selecting — the hooks that
@@ -507,15 +524,21 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     // selectOption call retries silently for 30s before timing out.
     const customerSelect = page.getByTestId('quick-book-customer');
     await expect(customerSelect).toBeVisible({ timeout: 10000 });
-    await expect(customerSelect.locator(`option[value="${customerId}"]`)).toHaveCount(1, { timeout: 10000 });
+    await expect(customerSelect.locator(`option[value="${customerId}"]`)).toHaveCount(1, {
+      timeout: 10000,
+    });
     await customerSelect.selectOption(customerId);
 
     const resourceSelect = page.getByTestId('quick-book-resource');
-    await expect(resourceSelect.locator(`option[value="${truckId}"]`)).toHaveCount(1, { timeout: 10000 });
+    await expect(resourceSelect.locator(`option[value="${truckId}"]`)).toHaveCount(1, {
+      timeout: 10000,
+    });
     await resourceSelect.selectOption(truckId);
 
     const employeeSelect = page.getByTestId('quick-book-employee');
-    await expect(employeeSelect.locator(`option[value="${mikeId}"]`)).toHaveCount(1, { timeout: 10000 });
+    await expect(employeeSelect.locator(`option[value="${mikeId}"]`)).toHaveCount(1, {
+      timeout: 10000,
+    });
     await employeeSelect.selectOption(mikeId);
 
     const localDateTime = (d: Date) => {
@@ -548,7 +571,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     if (scheduleSeeded && mikeId) {
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, mikeId, '2026-06-22'],
+        [DYNATIRE_ID, mikeId, '2026-06-22']
       );
     }
   }
@@ -557,7 +580,9 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
 // ────────────────────────────────────────────────────────────────────────────
 // 6. Form-level 15-minute increment rejection through the UI
 // ────────────────────────────────────────────────────────────────────────────
-test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline error and never reaches the backend', async ({ page }) => {
+test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline error and never reaches the backend', async ({
+  page,
+}) => {
   // WHO: front-desk operator who types or pastes "1:23" into the start
   //        time input (or whose autofill software produces an off-grid
   //        time that bypasses the browser's step="900" hint)
@@ -588,8 +613,14 @@ test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline e
   await page.waitForTimeout(1500);
 
   // Open Schedule tab + Quick Book panel.
-  await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
-  await page.getByRole('button', { name: /Quick Book/i }).first().click();
+  await page
+    .getByRole('tab', { name: /^Schedule$/ })
+    .first()
+    .click();
+  await page
+    .getByRole('button', { name: /Quick Book/i })
+    .first()
+    .click();
   await expect(page.getByTestId('quick-book-panel')).toBeVisible({ timeout: 10000 });
 
   // Wait for dropdowns to populate, then pick the first option in each.
@@ -652,7 +683,9 @@ test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline e
 // ────────────────────────────────────────────────────────────────────────────
 // 7. Editing an appointment to overlap another returns 409 + conflict block
 // ────────────────────────────────────────────────────────────────────────────
-test('edit-overlap: updating an appointment to a taken time returns 409 with conflict details', async ({ request }) => {
+test('edit-overlap: updating an appointment to a taken time returns 409 with conflict details', async ({
+  request,
+}) => {
   // WHO: operator who decides to move appointment B from 15:00 to 14:00,
   //        but 14:00 on the same resource is already booked by A
   // WHAT: POST /appointments/:id/update should reject the overlap; B's

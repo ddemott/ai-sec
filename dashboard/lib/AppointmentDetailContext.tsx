@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react'
-import type { Appointment } from './types'
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import type { Appointment } from './types';
 
 export interface AppointmentForm {
   customer_id: string;
@@ -29,7 +29,7 @@ const EMPTY_FORM: AppointmentForm = {
   customer_last_name: '',
   customer_phone: '',
   customer_notes: '',
-}
+};
 
 interface AppointmentDetailState {
   selectedAppointment: Appointment | null;
@@ -52,34 +52,49 @@ interface AppointmentDetailState {
   resetForm: () => void;
 }
 
-const AppointmentDetailContext = createContext<AppointmentDetailState | null>(null)
+const AppointmentDetailContext = createContext<AppointmentDetailState | null>(null);
 
 export function AppointmentDetailProvider({ children }: { children: React.ReactNode }) {
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
-  const [isCreating, setIsCreating] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [showDetailOnMobile, setShowDetailOnMobile] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState<AppointmentForm>(EMPTY_FORM)
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDetailOnMobile, setShowDetailOnMobile] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState<AppointmentForm>(EMPTY_FORM);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const resetForm = useCallback(() => setForm(EMPTY_FORM), [])
+  const resetForm = useCallback(() => setForm(EMPTY_FORM), []);
 
   return (
-    <AppointmentDetailContext.Provider value={{
-      selectedAppointment, isCreating, isEditing, showDetailOnMobile,
-      saving, error, form, showConfirmModal,
-      setSelectedAppointment, setIsCreating, setIsEditing, setShowDetailOnMobile,
-      setSaving, setError, setForm, setShowConfirmModal, resetForm,
-    }}>
+    <AppointmentDetailContext.Provider
+      value={{
+        selectedAppointment,
+        isCreating,
+        isEditing,
+        showDetailOnMobile,
+        saving,
+        error,
+        form,
+        showConfirmModal,
+        setSelectedAppointment,
+        setIsCreating,
+        setIsEditing,
+        setShowDetailOnMobile,
+        setSaving,
+        setError,
+        setForm,
+        setShowConfirmModal,
+        resetForm,
+      }}
+    >
       {children}
     </AppointmentDetailContext.Provider>
-  )
+  );
 }
 
 export function useAppointmentDetail() {
-  const ctx = useContext(AppointmentDetailContext)
-  if (!ctx) throw new Error('useAppointmentDetail must be used within AppointmentDetailProvider')
-  return ctx
+  const ctx = useContext(AppointmentDetailContext);
+  if (!ctx) throw new Error('useAppointmentDetail must be used within AppointmentDetailProvider');
+  return ctx;
 }

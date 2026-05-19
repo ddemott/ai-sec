@@ -28,7 +28,8 @@ function buildCoverageSlots(
   for (let h = startHour; h < endHour; h++) {
     const bookedInHour = appointments.filter((a) => {
       const startH = new Date(a.start_time).getHours();
-      const endH = new Date(a.end_time).getHours() + (new Date(a.end_time).getMinutes() > 0 ? 1 : 0);
+      const endH =
+        new Date(a.end_time).getHours() + (new Date(a.end_time).getMinutes() > 0 ? 1 : 0);
       return h >= startH && h < endH && a.status !== 'canceled';
     });
     slots.push({
@@ -49,7 +50,10 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
 }) => {
   if (resources.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 dark:text-gray-600 italic" data-testid="resource-columns-empty">
+      <div
+        className="flex items-center justify-center h-64 text-gray-400 dark:text-gray-600 italic"
+        data-testid="resource-columns-empty"
+      >
         No resources configured
       </div>
     );
@@ -62,7 +66,10 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
   return (
     <div className="overflow-x-auto" data-testid="resource-columns-view">
       {/* Hour axis header */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800" style={{ minWidth: totalWidth }}>
+      <div
+        className="flex border-b border-gray-200 dark:border-gray-800"
+        style={{ minWidth: totalWidth }}
+      >
         <div
           className="p-2 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase border-r border-gray-200 dark:border-gray-800 shrink-0"
           style={{ width: LABEL_WIDTH }}
@@ -81,21 +88,45 @@ export const ResourceColumnsView: React.FC<ResourceColumnsViewProps> = ({
       {resources.map((resource) => {
         const resId = String(resource.resource_id);
         const resAppointments = appointmentsByResource.get(resId) || [];
-        const coverageSlots = buildCoverageSlots(resId, resAppointments, SCHEDULER_START_HOUR, SCHEDULER_END_HOUR);
+        const coverageSlots = buildCoverageSlots(
+          resId,
+          resAppointments,
+          SCHEDULER_START_HOUR,
+          SCHEDULER_END_HOUR
+        );
 
         return (
-          <div key={resId} className="border-b border-gray-100 dark:border-gray-800" style={{ minWidth: totalWidth }} data-testid={`resource-column-${resId}`}>
+          <div
+            key={resId}
+            className="border-b border-gray-100 dark:border-gray-800"
+            style={{ minWidth: totalWidth }}
+            data-testid={`resource-column-${resId}`}
+          >
             <div className="flex">
               <div
                 className="p-3 border-r border-gray-200 dark:border-gray-800 shrink-0"
                 style={{ width: LABEL_WIDTH }}
               >
-                <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{resource.name}</div>
-                <CoverageBar slots={coverageSlots} height={16} showHourLabels={false} className="mt-2" />
+                <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                  {resource.name}
+                </div>
+                <CoverageBar
+                  slots={coverageSlots}
+                  height={16}
+                  showHourLabels={false}
+                  className="mt-2"
+                />
               </div>
               <div className="relative min-h-[64px]" style={{ width: hourCount * hourWidth }}>
                 {resAppointments.map((appt) => (
-                  <AppointmentBlock key={appt.appointment_id} appointment={appt} onClick={onAppointmentClick} onDelete={onAppointmentDelete} onMove={onAppointmentMove} hourWidth={hourWidth} />
+                  <AppointmentBlock
+                    key={appt.appointment_id}
+                    appointment={appt}
+                    onClick={onAppointmentClick}
+                    onDelete={onAppointmentDelete}
+                    onMove={onAppointmentMove}
+                    hourWidth={hourWidth}
+                  />
                 ))}
               </div>
             </div>

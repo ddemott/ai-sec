@@ -1,6 +1,12 @@
 import type { Pool } from 'pg';
 import * as square from './squareClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, withSyncContext } from './tokenManagement';
+import {
+  type SyncLogger,
+  syncCtx,
+  getIntegrationTokens,
+  TOKEN_BUFFER_MS,
+  withSyncContext,
+} from './tokenManagement';
 import { splitName, joinName } from './nameUtils';
 import {
   syncMapUpsertOnCreate,
@@ -32,7 +38,14 @@ export async function getTokensWithRefresh(
   logger?: SyncLogger
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
   // Square tokens expire in ~30 days — use 24h buffer instead of standard 5min
-  return getIntegrationTokens(pool, tenantId, 'square', square.refreshAccessToken, TOKEN_BUFFER_MS.SQUARE, logger);
+  return getIntegrationTokens(
+    pool,
+    tenantId,
+    'square',
+    square.refreshAccessToken,
+    TOKEN_BUFFER_MS.SQUARE,
+    logger
+  );
 }
 
 // -----------------------------------------------------------------------
@@ -49,7 +62,11 @@ export async function syncCustomerToSquare(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'customer', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -64,7 +81,13 @@ export async function syncCustomerToSquare(
     }
 
     // Read sync_map BEFORE customers — lock order
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'square', 'customer', customerId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'square',
+      'customer',
+      customerId
+    );
 
     const custRes = await client.query(
       `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
@@ -90,16 +113,31 @@ export async function syncCustomerToSquare(
       const squareCustomer = result.customer;
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'square', 'customer', customerId, squareCustomer.id,
-        cust.updated_at, squareCustomer.updated_at || new Date().toISOString()
+        client,
+        tenantId,
+        'square',
+        'customer',
+        customerId,
+        squareCustomer.id,
+        cust.updated_at,
+        squareCustomer.updated_at || new Date().toISOString()
       );
-      log.info(`${prefix} — customer pushed to Square (squareId=${squareCustomer.id} name=${cust.name})`);
+      log.info(
+        `${prefix} — customer pushed to Square (squareId=${squareCustomer.id} name=${cust.name})`
+      );
     } else {
       // Update in Square
       const externalId = syncEntry.external_id;
       await square.updateCustomer(tokens.accessToken, externalId, customerData);
 
-      await syncMapUpdateAfterPush(client, tenantId, 'square', 'customer', customerId, cust.updated_at);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'square',
+        'customer',
+        customerId,
+        cust.updated_at
+      );
       log.info(`${prefix} — customer updated in Square (squareId=${externalId} name=${cust.name})`);
     }
   } finally {
@@ -117,7 +155,11 @@ export async function syncAppointmentToSquare(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -126,23 +168,44 @@ export async function syncAppointmentToSquare(
   const client = await pool.connect();
   try {
     if (action === 'delete') {
-      const syncEntry = await syncMapFindByLocalId(client, tenantId, 'square', 'appointment', appointmentId);
+      const syncEntry = await syncMapFindByLocalId(
+        client,
+        tenantId,
+        'square',
+        'appointment',
+        appointmentId
+      );
 
       if (syncEntry) {
         try {
           await square.cancelBooking(tokens.accessToken, syncEntry.external_id);
         } catch (err) {
-          log.warn(`${prefix} — failed to cancel Square booking (squareId=${syncEntry.external_id} | ERROR: ${String(err)})`);
+          log.warn(
+            `${prefix} — failed to cancel Square booking (squareId=${syncEntry.external_id} | ERROR: ${String(err)})`
+          );
         }
 
-        await syncMapMarkDeleted(client, tenantId, 'square', 'appointment', appointmentId, 'deleted');
+        await syncMapMarkDeleted(
+          client,
+          tenantId,
+          'square',
+          'appointment',
+          appointmentId,
+          'deleted'
+        );
       }
       log.info(`${prefix} — sync map entry updated (canceled)`);
       return;
     }
 
     // Read sync_map BEFORE appointments — lock order
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'square', 'appointment', appointmentId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'square',
+      'appointment',
+      appointmentId
+    );
 
     const apptRes = await client.query(
       `SELECT a.*, c.name as customer_name, c.phone as customer_phone, r.name as resource_name
@@ -160,7 +223,14 @@ export async function syncAppointmentToSquare(
 
     // Ensure customer is synced to Square first
     const squareCustomerId = await ensureRemoteCustomer(
-      client, pool, tenantId, 'square', appt.customer_id, syncCustomerToSquare, logger, prefix
+      client,
+      pool,
+      tenantId,
+      'square',
+      appt.customer_id,
+      syncCustomerToSquare,
+      logger,
+      prefix
     );
 
     // Calculate duration in minutes
@@ -168,7 +238,11 @@ export async function syncAppointmentToSquare(
     const endTime = new Date(appt.end_time);
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
 
-    const bookingData: { start_at: string; appointment_segments: Array<{ duration_minutes: number }>; customer_id?: string } = {
+    const bookingData: {
+      start_at: string;
+      appointment_segments: Array<{ duration_minutes: number }>;
+      customer_id?: string;
+    } = {
       start_at: startTime.toISOString(),
       appointment_segments: [{ duration_minutes: durationMinutes }],
     };
@@ -179,15 +253,29 @@ export async function syncAppointmentToSquare(
       const squareBooking = result.booking;
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'square', 'appointment', appointmentId, squareBooking.id,
+        client,
+        tenantId,
+        'square',
+        'appointment',
+        appointmentId,
+        squareBooking.id,
         appt.updated_at || new Date().toISOString()
       );
-      log.info(`${prefix} — appointment pushed to Square as booking (squareId=${squareBooking.id} customer=${appt.customer_name})`);
+      log.info(
+        `${prefix} — appointment pushed to Square as booking (squareId=${squareBooking.id} customer=${appt.customer_name})`
+      );
     } else {
       const externalId = syncEntry.external_id;
       await square.updateBooking(tokens.accessToken, externalId, bookingData);
 
-      await syncMapUpdateAfterPush(client, tenantId, 'square', 'appointment', appointmentId, appt.updated_at);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'square',
+        'appointment',
+        appointmentId,
+        appt.updated_at
+      );
       log.info(`${prefix} — booking updated in Square (squareId=${externalId})`);
     }
   } finally {
@@ -237,7 +325,11 @@ export async function pullSquareBooking(
   bookingData: square.SquareBooking,
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', 'pull');
 
   const client = await pool.connect();
@@ -254,19 +346,33 @@ export async function pullSquareBooking(
       // Look up local customer via sync map if booking has customer_id
       let localCustomerId: string | null = null;
       if (bookingData.customer_id) {
-        const custSync = await syncMapFindByExternalId(client, tenantId, 'square', 'customer', bookingData.customer_id);
+        const custSync = await syncMapFindByExternalId(
+          client,
+          tenantId,
+          'square',
+          'customer',
+          bookingData.customer_id
+        );
         localCustomerId = custSync?.local_id || null;
       }
 
-      const syncEntry = await syncMapFindByExternalId(client, tenantId, 'square', 'appointment', squareId);
+      const syncEntry = await syncMapFindByExternalId(
+        client,
+        tenantId,
+        'square',
+        'appointment',
+        squareId
+      );
 
       const startTime = new Date(bookingData.start_at);
       const durationMinutes = bookingData.appointment_segments?.[0]?.duration_minutes || 60;
       const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
 
-      const status = bookingData.status === 'CANCELLED_BY_CUSTOMER' || bookingData.status === 'CANCELLED_BY_SELLER'
-        ? 'canceled'
-        : 'scheduled';
+      const status =
+        bookingData.status === 'CANCELLED_BY_CUSTOMER' ||
+        bookingData.status === 'CANCELLED_BY_SELLER'
+          ? 'canceled'
+          : 'scheduled';
 
       if (!syncEntry) {
         const insertRes = await client.query(
@@ -276,8 +382,18 @@ export async function pullSquareBooking(
         );
         const localId = insertRes.rows[0].appointment_id;
 
-        await syncMapUpsertOnPull(client, tenantId, 'square', 'appointment', localId, squareId, remoteUpdatedAt);
-        log.info(`${prefix} — created local appointment from Square booking (squareId=${squareId} localId=${localId})`);
+        await syncMapUpsertOnPull(
+          client,
+          tenantId,
+          'square',
+          'appointment',
+          localId,
+          squareId,
+          remoteUpdatedAt
+        );
+        log.info(
+          `${prefix} — created local appointment from Square booking (squareId=${squareId} localId=${localId})`
+        );
       } else {
         const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
 
@@ -289,11 +405,27 @@ export async function pullSquareBooking(
         await client.query(
           `UPDATE appointments SET start_time = $1, end_time = $2, status = $3, customer_id = COALESCE($4, customer_id)
            WHERE appointment_id = $5 AND tenant_id = $6`,
-          [startTime.toISOString(), endTime.toISOString(), status, localCustomerId, localId, tenantId]
+          [
+            startTime.toISOString(),
+            endTime.toISOString(),
+            status,
+            localCustomerId,
+            localId,
+            tenantId,
+          ]
         );
 
-        await syncMapUpdateAfterPull(client, tenantId, 'square', 'appointment', squareId, remoteUpdatedAt);
-        log.info(`${prefix} — updated local appointment from Square (squareId=${squareId} localId=${localId})`);
+        await syncMapUpdateAfterPull(
+          client,
+          tenantId,
+          'square',
+          'appointment',
+          squareId,
+          remoteUpdatedAt
+        );
+        log.info(
+          `${prefix} — updated local appointment from Square (squareId=${squareId} localId=${localId})`
+        );
       }
     });
   } finally {
@@ -310,7 +442,11 @@ export async function fullSync(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ customersSynced: number; appointmentsSynced: number; errors: number }> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { customersSynced: 0, appointmentsSynced: 0, errors: 0 };
 
@@ -353,11 +489,12 @@ export async function fullSync(
   const errors = customerResult.errors + bookingResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'square');
-  log.info(`${contextLabel} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`);
+  log.info(
+    `${contextLabel} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`
+  );
   return { customersSynced, appointmentsSynced, errors };
 }
 
 // -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
-

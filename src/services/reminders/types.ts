@@ -19,4 +19,3 @@ export interface ReminderData {
   reminder_type: 'confirmation' | '72h' | '24h' | '2h';
   scheduled_for: string;
 }
-

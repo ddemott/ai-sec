@@ -10,7 +10,7 @@ export class AppointmentCommunicationService {
 
   constructor(
     private configService: TenantConfigService,
-    private consentService?: ConsentService,
+    private consentService?: ConsentService
   ) {
     this.emailService = new EmailService(configService, consentService);
     this.smsService = new SMSService(configService, consentService);
@@ -23,7 +23,7 @@ export class AppointmentCommunicationService {
     tenantId: string,
     customerEmail: string,
     customerPhone: string | undefined,
-    appointmentDetails: AppointmentData,
+    appointmentDetails: AppointmentData
   ): Promise<{ email?: CommunicationResult; sms?: CommunicationResult }> {
     const results: { email?: CommunicationResult; sms?: CommunicationResult } = {};
 
@@ -31,7 +31,7 @@ export class AppointmentCommunicationService {
     results.email = await this.sendAppointmentConfirmationEmail(
       tenantId,
       customerEmail,
-      appointmentDetails,
+      appointmentDetails
     );
 
     // Send SMS confirmation if phone provided and consented
@@ -39,7 +39,7 @@ export class AppointmentCommunicationService {
       results.sms = await this.sendAppointmentConfirmationSMS(
         tenantId,
         customerPhone,
-        appointmentDetails,
+        appointmentDetails
       );
     }
 
@@ -54,7 +54,7 @@ export class AppointmentCommunicationService {
     customerEmail: string,
     customerPhone: string | undefined,
     appointmentDetails: AppointmentData,
-    hoursUntilAppointment: number,
+    hoursUntilAppointment: number
   ): Promise<{ email?: CommunicationResult; sms?: CommunicationResult }> {
     const results: { email?: CommunicationResult; sms?: CommunicationResult } = {};
 
@@ -63,7 +63,7 @@ export class AppointmentCommunicationService {
       tenantId,
       customerEmail,
       appointmentDetails,
-      hoursUntilAppointment,
+      hoursUntilAppointment
     );
 
     // Send SMS reminder if phone provided and consented
@@ -72,7 +72,7 @@ export class AppointmentCommunicationService {
         tenantId,
         customerPhone,
         appointmentDetails,
-        hoursUntilAppointment,
+        hoursUntilAppointment
       );
     }
 
@@ -86,7 +86,7 @@ export class AppointmentCommunicationService {
     tenantId: string,
     customerEmail: string,
     customerPhone: string | undefined,
-    appointmentDetails: AppointmentData & { reason?: string },
+    appointmentDetails: AppointmentData & { reason?: string }
   ): Promise<{ email?: CommunicationResult; sms?: CommunicationResult }> {
     const results: { email?: CommunicationResult; sms?: CommunicationResult } = {};
 
@@ -94,7 +94,7 @@ export class AppointmentCommunicationService {
     results.email = await this.sendAppointmentCancellationEmail(
       tenantId,
       customerEmail,
-      appointmentDetails,
+      appointmentDetails
     );
 
     // Send SMS cancellation if phone provided and consented
@@ -102,7 +102,7 @@ export class AppointmentCommunicationService {
       results.sms = await this.sendAppointmentCancellationSMS(
         tenantId,
         customerPhone,
-        appointmentDetails,
+        appointmentDetails
       );
     }
 
@@ -115,7 +115,7 @@ export class AppointmentCommunicationService {
   async sendAppointmentConfirmationEmail(
     tenantId: string,
     customerEmail: string,
-    appointmentDetails: AppointmentData,
+    appointmentDetails: AppointmentData
   ): Promise<CommunicationResult> {
     const templateData = {
       customerName: appointmentDetails.customerName,
@@ -139,7 +139,7 @@ export class AppointmentCommunicationService {
   async sendAppointmentConfirmationSMS(
     tenantId: string,
     customerPhone: string,
-    appointmentDetails: AppointmentData,
+    appointmentDetails: AppointmentData
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const templateData = {
@@ -155,7 +155,7 @@ export class AppointmentCommunicationService {
       tenantId,
       customerPhone,
       'appointment-confirmation',
-      templateData,
+      templateData
     );
   }
 
@@ -166,7 +166,7 @@ export class AppointmentCommunicationService {
     tenantId: string,
     customerEmail: string,
     appointmentDetails: AppointmentData,
-    hoursUntilAppointment: number,
+    hoursUntilAppointment: number
   ): Promise<CommunicationResult> {
     const templateData = {
       customerName: appointmentDetails.customerName,
@@ -191,7 +191,7 @@ export class AppointmentCommunicationService {
     tenantId: string,
     customerPhone: string,
     appointmentDetails: AppointmentData,
-    hoursUntilAppointment: number,
+    hoursUntilAppointment: number
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const templateData = {
@@ -208,7 +208,7 @@ export class AppointmentCommunicationService {
       tenantId,
       customerPhone,
       'appointment-reminder',
-      templateData,
+      templateData
     );
   }
 
@@ -218,7 +218,7 @@ export class AppointmentCommunicationService {
   async sendAppointmentCancellationEmail(
     tenantId: string,
     customerEmail: string,
-    appointmentDetails: AppointmentData & { reason?: string },
+    appointmentDetails: AppointmentData & { reason?: string }
   ): Promise<CommunicationResult> {
     const templateData = {
       customerName: appointmentDetails.customerName,
@@ -241,7 +241,7 @@ export class AppointmentCommunicationService {
   async sendAppointmentCancellationSMS(
     tenantId: string,
     customerPhone: string,
-    appointmentDetails: AppointmentData & { reason?: string },
+    appointmentDetails: AppointmentData & { reason?: string }
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const templateData = {
@@ -256,7 +256,7 @@ export class AppointmentCommunicationService {
       tenantId,
       customerPhone,
       'appointment-cancellation',
-      templateData,
+      templateData
     );
   }
 }

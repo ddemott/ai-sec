@@ -52,9 +52,10 @@ export interface PaginateSyncArgs<TItem, TCursor> {
  * returns the partial result.
  */
 export async function paginateSync<TItem, TCursor>(
-  args: PaginateSyncArgs<TItem, TCursor>,
+  args: PaginateSyncArgs<TItem, TCursor>
 ): Promise<PaginateSyncResult> {
-  const { initialCursor, fetchPage, processItem, itemContext, contextLabel, entityType, logger } = args;
+  const { initialCursor, fetchPage, processItem, itemContext, contextLabel, entityType, logger } =
+    args;
   let count = 0;
   let errors = 0;
   let cursor: TCursor = initialCursor;
@@ -74,7 +75,9 @@ export async function paginateSync<TItem, TCursor>(
         count++;
       } catch (err) {
         errors++;
-        logger.error(`${contextLabel} — failed to pull ${entityType} ${itemContext(item)}: ${String(err)}`);
+        logger.error(
+          `${contextLabel} — failed to pull ${entityType} ${itemContext(item)}: ${String(err)}`
+        );
       }
     }
 

@@ -37,10 +37,7 @@ export function initSentry(): void {
   initialized = true;
 }
 
-export function captureException(
-  err: unknown,
-  context?: Record<string, unknown>
-): void {
+export function captureException(err: unknown, context?: Record<string, unknown>): void {
   if (!initialized) return;
   const error = err instanceof Error ? err : new Error(String(err));
   Sentry.withScope((scope) => {

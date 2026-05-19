@@ -80,10 +80,11 @@ async function patchCustomerEmail(
   customerId: string,
   email: string
 ): Promise<void> {
-  await pool.query(
-    `UPDATE customers SET email = $1 WHERE customer_id = $2 AND tenant_id = $3`,
-    [email, customerId, tenantId]
-  );
+  await pool.query(`UPDATE customers SET email = $1 WHERE customer_id = $2 AND tenant_id = $3`, [
+    email,
+    customerId,
+    tenantId,
+  ]);
 }
 
 async function waitForReminders(
@@ -119,7 +120,9 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. HAPPY: 4 rows with correct scheduled_for offsets + phone-only customer
 // ────────────────────────────────────────────────────────────────────────────
-test('reminder-on-create-happy: future appointment produces 4 reminder rows with correct scheduled_for offsets', async ({ request }) => {
+test('reminder-on-create-happy: future appointment produces 4 reminder rows with correct scheduled_for offsets', async ({
+  request,
+}) => {
   // WHO: front-desk operator booking a customer 7 days out via the dashboard.
   // WHAT: POST /appointments/create returns 200 with appointment_id; within
   //        a few hundred ms, reminder_schedules contains 4 rows for that
@@ -198,7 +201,9 @@ test('reminder-on-create-happy: future appointment produces 4 reminder rows with
 // ────────────────────────────────────────────────────────────────────────────
 // 2. HAPPY: customer with both email and phone — both columns populate
 // ────────────────────────────────────────────────────────────────────────────
-test('reminder-on-create-contact-propagation: customer with both email and phone populates both columns on every row', async ({ request }) => {
+test('reminder-on-create-contact-propagation: customer with both email and phone populates both columns on every row', async ({
+  request,
+}) => {
   // WHO: a customer who provided both email AND phone (the most-common
   //       beta-customer shape, not the call-in walk-in shape).
   // WHAT: 4 reminder rows still produced; each row's customer_email AND

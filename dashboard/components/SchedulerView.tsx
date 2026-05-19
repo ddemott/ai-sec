@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { Api } from '../lib/api';
-import { useStaticData, useTenantTimezone } from '../lib/hooks'
+import { useStaticData, useTenantTimezone } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { showToast } from './ui/Toast';
@@ -47,12 +47,15 @@ export default function SchedulerView() {
     { key: 'resources', label: vocab.resource_plural, icon: Columns3 },
     { key: 'list', label: 'List', icon: List },
   ];
-  const { customers, resources, employees: allStaff, services, refresh: refreshStaticData } = useStaticData(tenantId);
+  const {
+    customers,
+    resources,
+    employees: allStaff,
+    services,
+    refresh: refreshStaticData,
+  } = useStaticData(tenantId);
   // Only show actual employees in the scheduler, not user accounts (owners/admins)
-  const employees = useMemo(() =>
-    allStaff.filter(e => e.type !== 'user'),
-    [allStaff]
-  );
+  const employees = useMemo(() => allStaff.filter((e) => e.type !== 'user'), [allStaff]);
 
   // Default sub-tab: Staff (front-desk audit P1 #5, 2026-05-07).
   // The Staff sub-tab is the daily-use surface for front-desk operators —
@@ -92,7 +95,7 @@ export default function SchedulerView() {
   useEffect(() => {
     function onPopState() {
       const next = resolveInitialView();
-      setActiveView(prev => (prev === next ? prev : next));
+      setActiveView((prev) => (prev === next ? prev : next));
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -114,7 +117,9 @@ export default function SchedulerView() {
   }>({});
 
   // Employee focus panel state
-  const [focusEmployee, setFocusEmployee] = useState<{ employee_id: string; name: string } | null>(null);
+  const [focusEmployee, setFocusEmployee] = useState<{ employee_id: string; name: string } | null>(
+    null
+  );
 
   const {
     appointments,
@@ -130,7 +135,10 @@ export default function SchedulerView() {
     void refreshStaticData();
   }, [refreshScheduler, refreshStaticData]);
 
-  const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
+  const [apptPopover, setApptPopover] = useState<{
+    appointment: SchedulerAppointment;
+    anchorRect: DOMRect;
+  } | null>(null);
 
   const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
 
@@ -140,13 +148,14 @@ export default function SchedulerView() {
   // AppointmentDetailContext above SchedulerView.
   const [pendingEditAppointmentId, setPendingEditAppointmentId] = useState<string | null>(null);
 
-  const handleAppointmentClick = useCallback(
-    (appt: SchedulerAppointment, e: React.MouseEvent) => {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      setApptPopover(prev =>
-        prev?.appointment.appointment_id === appt.appointment_id ? null : { appointment: appt, anchorRect: rect }
-      );
-    }, []);
+  const handleAppointmentClick = useCallback((appt: SchedulerAppointment, e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setApptPopover((prev) =>
+      prev?.appointment.appointment_id === appt.appointment_id
+        ? null
+        : { appointment: appt, anchorRect: rect }
+    );
+  }, []);
 
   // Edit-from-popover (any sub-tab → Calendar with the appointment in
   // edit mode). Closes the architectural gap where Resources / List /
@@ -168,52 +177,64 @@ export default function SchedulerView() {
   // 5-second Undo window on the cancel-success toast. TIMESLOT_OCCUPIED
   // means another booking landed in the freed slot before the user hit
   // Undo — surface that as a hard error, not silent failure.
-  const undoCancel = useCallback(async (appointmentId: string) => {
-    if (!tenantId) return;
-    try {
-      const res = await Api.appointments.reactivate(appointmentId, tenantId);
-      if (res.success) {
-        showToast('Appointment restored', 'success');
-        void refreshScheduler();
-        void refreshStaticData();
-      } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
-        showToast('That time slot is no longer available. Book a new appointment instead.', 'error');
-      } else {
-        showToast(res.error || 'Could not restore appointment', 'error');
-      }
-    } catch {
-      showToast('Connection error — could not restore appointment', 'error');
-    }
-  }, [tenantId, refreshScheduler, refreshStaticData]);
-
-  const handlePopoverCancel = useCallback((appointmentId: string) => {
-    if (!tenantId) return;
-    confirmAction({
-      title: 'Cancel appointment?',
-      message: 'The slot will free up, but the record stays for history. You can restore it later from Customers.',
-      confirmLabel: 'Cancel appointment',
-      confirmVariant: 'danger',
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          const res = await Api.appointments.cancel(appointmentId, tenantId);
-          if (res.success) {
-            showToast('Appointment canceled', 'success', {
-              label: 'Undo',
-              onClick: () => { void undoCancel(appointmentId); },
-            });
-            setApptPopover(null);
-            void refreshScheduler();
-            void refreshStaticData();
-          } else {
-            showToast(res.error || 'Failed to cancel appointment', 'error');
-          }
-        } catch {
-          showToast('Connection error — could not cancel appointment', 'error');
+  const undoCancel = useCallback(
+    async (appointmentId: string) => {
+      if (!tenantId) return;
+      try {
+        const res = await Api.appointments.reactivate(appointmentId, tenantId);
+        if (res.success) {
+          showToast('Appointment restored', 'success');
+          void refreshScheduler();
+          void refreshStaticData();
+        } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
+          showToast(
+            'That time slot is no longer available. Book a new appointment instead.',
+            'error'
+          );
+        } else {
+          showToast(res.error || 'Could not restore appointment', 'error');
         }
-      },
-    });
-  }, [tenantId, refreshScheduler, refreshStaticData, confirmAction, closeConfirm, undoCancel]);
+      } catch {
+        showToast('Connection error — could not restore appointment', 'error');
+      }
+    },
+    [tenantId, refreshScheduler, refreshStaticData]
+  );
+
+  const handlePopoverCancel = useCallback(
+    (appointmentId: string) => {
+      if (!tenantId) return;
+      confirmAction({
+        title: 'Cancel appointment?',
+        message:
+          'The slot will free up, but the record stays for history. You can restore it later from Customers.',
+        confirmLabel: 'Cancel appointment',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          closeConfirm();
+          try {
+            const res = await Api.appointments.cancel(appointmentId, tenantId);
+            if (res.success) {
+              showToast('Appointment canceled', 'success', {
+                label: 'Undo',
+                onClick: () => {
+                  void undoCancel(appointmentId);
+                },
+              });
+              setApptPopover(null);
+              void refreshScheduler();
+              void refreshStaticData();
+            } else {
+              showToast(res.error || 'Failed to cancel appointment', 'error');
+            }
+          } catch {
+            showToast('Connection error — could not cancel appointment', 'error');
+          }
+        },
+      });
+    },
+    [tenantId, refreshScheduler, refreshStaticData, confirmAction, closeConfirm, undoCancel]
+  );
 
   const handleQuickBooked = useCallback(() => {
     void refreshScheduler();
@@ -225,32 +246,38 @@ export default function SchedulerView() {
   // a one-click delete on a scheduled appointment is too punishing for
   // a misclick. Origin: 2026-05-13 — user reported "no delete button"
   // for appointments; the hover-trash gives a direct affordance.
-  const handleAppointmentDelete = useCallback((appointmentId: string) => {
-    if (!tenantId) return;
-    confirmAction({
-      title: 'Cancel appointment?',
-      message: 'The slot will free up, but the record stays for history. You can restore it later from Customers.',
-      confirmLabel: 'Cancel appointment',
-      confirmVariant: 'danger',
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          const res = await Api.appointments.cancel(appointmentId, tenantId);
-          if (res.success) {
-            showToast('Appointment canceled', 'success', {
-              label: 'Undo',
-              onClick: () => { void undoCancel(appointmentId); },
-            });
-            void refreshScheduler();
-          } else {
-            showToast(res.error || 'Failed to cancel appointment', 'error');
+  const handleAppointmentDelete = useCallback(
+    (appointmentId: string) => {
+      if (!tenantId) return;
+      confirmAction({
+        title: 'Cancel appointment?',
+        message:
+          'The slot will free up, but the record stays for history. You can restore it later from Customers.',
+        confirmLabel: 'Cancel appointment',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          closeConfirm();
+          try {
+            const res = await Api.appointments.cancel(appointmentId, tenantId);
+            if (res.success) {
+              showToast('Appointment canceled', 'success', {
+                label: 'Undo',
+                onClick: () => {
+                  void undoCancel(appointmentId);
+                },
+              });
+              void refreshScheduler();
+            } else {
+              showToast(res.error || 'Failed to cancel appointment', 'error');
+            }
+          } catch {
+            showToast('Connection error — could not cancel appointment', 'error');
           }
-        } catch {
-          showToast('Connection error — could not cancel appointment', 'error');
-        }
-      },
-    });
-  }, [tenantId, refreshScheduler, confirmAction, closeConfirm, undoCancel]);
+        },
+      });
+    },
+    [tenantId, refreshScheduler, confirmAction, closeConfirm, undoCancel]
+  );
 
   // Outlook-style drag-to-move. The block already snapped the delta
   // to a 15-min grid (matches the booking-form gridding); we compute
@@ -258,29 +285,39 @@ export default function SchedulerView() {
   // GiST exclusion constraint in book_with_scheduling_atomic catches
   // any race-conflict (409 → toast + refresh, which snaps the visual
   // back to the DB-of-record position).
-  const handleAppointmentMove = useCallback(async (appointmentId: string, deltaMinutes: number) => {
-    if (!tenantId || deltaMinutes === 0) return;
-    const appt = appointments.find(a => a.appointment_id === appointmentId);
-    if (!appt) return;
-    const newStart = new Date(new Date(appt.start_time).getTime() + deltaMinutes * 60_000).toISOString();
-    const newEnd = new Date(new Date(appt.end_time).getTime() + deltaMinutes * 60_000).toISOString();
-    try {
-      const res = await Api.appointments.update(appointmentId, tenantId, {
-        start_time: newStart,
-        end_time: newEnd,
-      });
-      if (res.success) {
-        showToast(`Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, 'success');
-        void refreshScheduler();
-      } else {
-        showToast(res.error || 'Could not move appointment', 'error');
+  const handleAppointmentMove = useCallback(
+    async (appointmentId: string, deltaMinutes: number) => {
+      if (!tenantId || deltaMinutes === 0) return;
+      const appt = appointments.find((a) => a.appointment_id === appointmentId);
+      if (!appt) return;
+      const newStart = new Date(
+        new Date(appt.start_time).getTime() + deltaMinutes * 60_000
+      ).toISOString();
+      const newEnd = new Date(
+        new Date(appt.end_time).getTime() + deltaMinutes * 60_000
+      ).toISOString();
+      try {
+        const res = await Api.appointments.update(appointmentId, tenantId, {
+          start_time: newStart,
+          end_time: newEnd,
+        });
+        if (res.success) {
+          showToast(
+            `Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+            'success'
+          );
+          void refreshScheduler();
+        } else {
+          showToast(res.error || 'Could not move appointment', 'error');
+          void refreshScheduler();
+        }
+      } catch {
+        showToast('Connection error — appointment not moved', 'error');
         void refreshScheduler();
       }
-    } catch {
-      showToast('Connection error — appointment not moved', 'error');
-      void refreshScheduler();
-    }
-  }, [tenantId, appointments, refreshScheduler]);
+    },
+    [tenantId, appointments, refreshScheduler]
+  );
 
   // Single Quick Book opener — used by the toolbar button (no args) and by
   // empty-cell clicks on the Staff/Calendar sub-tabs (with cell prefill).
@@ -288,7 +325,13 @@ export default function SchedulerView() {
   // date nav (which doesn't sync with SchedulerView's) doesn't get
   // overwritten when a user clicks a slot on a different day.
   const handleNewQuickBook = useCallback(
-    (prefill?: { employeeId?: string; resourceId?: string; hour?: number; endHour?: number; date?: Date }) => {
+    (prefill?: {
+      employeeId?: string;
+      resourceId?: string;
+      hour?: number;
+      endHour?: number;
+      date?: Date;
+    }) => {
       setQuickBookPrefill({ date: selectedDate, ...prefill });
       setQuickBookOpen(true);
     },
@@ -309,8 +352,12 @@ export default function SchedulerView() {
       {activeView === 'calendar' && (
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Schedule</div>
-            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Month, week, or day view. Click a slot to book.</div>
+            <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+              Schedule
+            </div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Month, week, or day view. Click a slot to book.
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
@@ -323,7 +370,11 @@ export default function SchedulerView() {
                       ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                       : ''
                   }`}
-                  style={activeView === key ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}
+                  style={
+                    activeView === key
+                      ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
+                      : undefined
+                  }
                   data-testid={`view-tab-${key}`}
                 >
                   <Icon className="w-4 h-4" />
@@ -351,7 +402,11 @@ export default function SchedulerView() {
                     ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                     : ''
                 }`}
-                style={activeView === key ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' } : undefined}
+                style={
+                  activeView === key
+                    ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
+                    : undefined
+                }
                 data-testid={`view-tab-${key}`}
               >
                 <Icon className="w-4 h-4" />
@@ -360,7 +415,11 @@ export default function SchedulerView() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} tenantTimezone={tenantTimezone} />
+            <SchedulerDateNav
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              tenantTimezone={tenantTimezone}
+            />
             {activeView === 'resources' && (
               <div
                 className="flex items-center gap-1 border rounded-lg overflow-hidden"
@@ -369,7 +428,7 @@ export default function SchedulerView() {
                 aria-label={`Scheduler zoom · level ${zoomIndex + 1} of ${ZOOM_LEVELS.length} · ${hourWidth} pixels per hour`}
               >
                 <button
-                  onClick={() => setZoomIndex(i => Math.max(i - 1, 0))}
+                  onClick={() => setZoomIndex((i) => Math.max(i - 1, 0))}
                   disabled={zoomIndex <= 0}
                   className="p-1.5 hover:brightness-110 disabled:opacity-30 transition-colors"
                   title="Zoom out"
@@ -392,7 +451,7 @@ export default function SchedulerView() {
                   {zoomIndex + 1}/{ZOOM_LEVELS.length}
                 </span>
                 <button
-                  onClick={() => setZoomIndex(i => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
+                  onClick={() => setZoomIndex((i) => Math.min(i + 1, ZOOM_LEVELS.length - 1))}
                   disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
                   className="p-1.5 hover:brightness-110 disabled:opacity-30 transition-colors"
                   title="Zoom in"
@@ -415,7 +474,13 @@ export default function SchedulerView() {
       )}
 
       {/* View content */}
-      <div className={activeView === 'staff' ? 'flex-1 flex overflow-hidden' : 'flex-1 overflow-auto bg-white dark:bg-[#111]'}>
+      <div
+        className={
+          activeView === 'staff'
+            ? 'flex-1 flex overflow-hidden'
+            : 'flex-1 overflow-auto bg-white dark:bg-[#111]'
+        }
+      >
         {activeView === 'calendar' && (
           <AppointmentView
             initialEditAppointmentId={pendingEditAppointmentId}
@@ -480,8 +545,10 @@ export default function SchedulerView() {
         isOpen={!!focusEmployee}
         onClose={() => setFocusEmployee(null)}
         employee={focusEmployee}
-        appointments={focusEmployee ? (appointmentsByEmployee.get(String(focusEmployee.employee_id)) || []) : []}
-        shifts={focusEmployee ? (shiftsByEmployee.get(String(focusEmployee.employee_id)) || []) : []}
+        appointments={
+          focusEmployee ? appointmentsByEmployee.get(String(focusEmployee.employee_id)) || [] : []
+        }
+        shifts={focusEmployee ? shiftsByEmployee.get(String(focusEmployee.employee_id)) || [] : []}
         onAppointmentClick={handleAppointmentClick}
       />
 
@@ -491,7 +558,9 @@ export default function SchedulerView() {
           appointment={apptPopover.appointment}
           employeeName={
             apptPopover.appointment.employee_id
-              ? employees.find(e => String(e.employee_id) === String(apptPopover.appointment.employee_id))?.name || null
+              ? employees.find(
+                  (e) => String(e.employee_id) === String(apptPopover.appointment.employee_id)
+                )?.name || null
               : null
           }
           resourceName={apptPopover.appointment.resources?.name || null}

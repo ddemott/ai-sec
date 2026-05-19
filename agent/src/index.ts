@@ -19,13 +19,7 @@
 import { initSentry, captureException as captureSentry } from './sentry.js';
 initSentry();
 
-import {
-  type JobContext,
-  WorkerOptions,
-  cli,
-  defineAgent,
-  voice,
-} from '@livekit/agents';
+import { type JobContext, WorkerOptions, cli, defineAgent, voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -74,7 +68,11 @@ export default defineAgent({
         reason: 'dispatch_metadata_invalid',
         room: ctx.room.name,
       });
-      await runFallback(ctx, "I'm sorry, we're having a system issue. Please try calling back in a moment.", config);
+      await runFallback(
+        ctx,
+        "I'm sorry, we're having a system issue. Please try calling back in a moment.",
+        config
+      );
       return;
     }
 
@@ -144,7 +142,11 @@ export default defineAgent({
     const tools = buildTools(sessionCtx, client);
     const tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
     callLog.info(
-      { event: 'tenant_config_fetched', tenant_name: tenantConfig.name, timezone: tenantConfig.timezone },
+      {
+        event: 'tenant_config_fetched',
+        tenant_name: tenantConfig.name,
+        timezone: tenantConfig.timezone,
+      },
       'tenant config resolved'
     );
 
@@ -191,5 +193,5 @@ cli.runApp(
     // (SDR_if97ky4Zf7e6 / dynatire-dispatch). If these drift, dispatched
     // jobs won't route to this worker and calls will hit dead air.
     agentName: 'ai-secretary-agent',
-  }),
+  })
 );

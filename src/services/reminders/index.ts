@@ -60,7 +60,7 @@ export class ReminderService {
     if (!normalizedAppointment.dateTime) {
       console.error(
         '❌ Cannot schedule reminders: appointment dateTime is missing or invalid',
-        normalizedAppointment,
+        normalizedAppointment
       );
       return;
     }
@@ -69,7 +69,7 @@ export class ReminderService {
     if (isNaN(appointmentDateTime.getTime())) {
       console.error(
         '❌ Cannot schedule reminders: appointment dateTime is invalid',
-        normalizedAppointment.dateTime,
+        normalizedAppointment.dateTime
       );
       return;
     }
@@ -94,7 +94,7 @@ export class ReminderService {
         scheduledFor = now;
       } else {
         scheduledFor = new Date(
-          appointmentDateTime.getTime() - reminder.hoursBefore * 60 * 60 * 1000,
+          appointmentDateTime.getTime() - reminder.hoursBefore * 60 * 60 * 1000
         );
       }
 
@@ -169,7 +169,7 @@ export class ReminderService {
         await this.updateReminderStatus(
           reminderId,
           'cancelled',
-          'Appointment cancelled or time passed',
+          'Appointment cancelled or time passed'
         );
         return;
       }
@@ -189,7 +189,11 @@ export class ReminderService {
         await this.updateReminderStatus(reminderId, 'failed', 'Communication failed');
       }
     } catch (error) {
-      await this.updateReminderStatus(reminderId, 'failed', error instanceof Error ? error.message : 'Unknown error');
+      await this.updateReminderStatus(
+        reminderId,
+        'failed',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
     }
   }
 
@@ -219,7 +223,9 @@ export class ReminderService {
     const reminders = await this.db.getReminderSchedulesByAppointment(appointmentId, tenantId);
     if (reminders && reminders.length) {
       for (const reminder of reminders) {
-        await this.db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), { status: 'cancelled' });
+        await this.db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
+          status: 'cancelled',
+        });
       }
     }
     return;
@@ -231,7 +237,7 @@ export class ReminderService {
   async rescheduleAppointmentReminders(
     appointmentId: string,
     tenantId: string,
-    newDateTime: string,
+    newDateTime: string
   ): Promise<void> {
     await this.cancelAppointmentReminders(appointmentId, tenantId);
 
@@ -284,13 +290,13 @@ export class ReminderService {
         normalizedAppointment.tenantId,
         normalizedAppointment.customerEmail,
         undefined,
-        'email',
+        'email'
       );
       const smsConsent = await this.consentService.checkConsent(
         normalizedAppointment.tenantId,
         undefined,
         normalizedAppointment.customerPhone,
-        'sms',
+        'sms'
       );
       return emailConsent && smsConsent;
     } else if (normalizedAppointment.customerEmail) {
@@ -298,14 +304,14 @@ export class ReminderService {
         normalizedAppointment.tenantId,
         normalizedAppointment.customerEmail,
         undefined,
-        'email',
+        'email'
       );
     } else if (normalizedAppointment.customerPhone) {
       return await this.consentService.checkConsent(
         normalizedAppointment.tenantId,
         undefined,
         normalizedAppointment.customerPhone,
-        'sms',
+        'sms'
       );
     }
     return false;
@@ -346,7 +352,7 @@ export class ReminderService {
           dateTime: normalizedAppointment.dateTime,
           duration: normalizedAppointment.duration,
           notes: normalizedAppointment.notes,
-        },
+        }
       );
       return result?.email?.success === true;
     }
@@ -365,7 +371,7 @@ export class ReminderService {
           dateTime: normalizedAppointment.dateTime,
           duration: normalizedAppointment.duration,
         },
-        hours,
+        hours
       );
       return result?.email?.success === true;
     }
@@ -377,7 +383,7 @@ export class ReminderService {
   async updateReminderStatus(
     reminderId: string,
     status: ReminderSchedule['status'],
-    error?: string,
+    error?: string
   ): Promise<void> {
     // For test compatibility, update status using db mock
     await this.db.updateReminderSchedule(reminderId, { status, error });

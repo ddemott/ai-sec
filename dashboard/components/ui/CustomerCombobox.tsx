@@ -66,7 +66,10 @@ export function CustomerCombobox({
   return (
     <div>
       {label && (
-        <label className="block text-xs font-bold uppercase mb-1" style={{ color: 'var(--text-muted, #888)' }}>
+        <label
+          className="block text-xs font-bold uppercase mb-1"
+          style={{ color: 'var(--text-muted, #888)' }}
+        >
           {label}
         </label>
       )}

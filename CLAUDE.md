@@ -1,6 +1,7 @@
 # SecretaryHQ — Multi-Tenant Voice AI Reception SaaS
 
 ## Project Overview
+
 Multi-tenant AI receptionist for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage).
 
 **HIPAA verticals are permanently excluded** (medical, dental, chiropractic, optometry, veterinary).
@@ -8,6 +9,7 @@ Multi-tenant AI receptionist for service businesses (tire shops, salons, auto sh
 Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framework-migration history (Vapi → LiveKit, Edge Functions → Fastify, OpenAI TTS → xAI Grok) in `docs/FRAMEWORK_MIGRATIONS.md`. Historical session notes archived in `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`.
 
 ## Architecture
+
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) → Fastify `/agent-tools/*`
 - **Backend**: Fastify (26 route modules under `src/routes/`) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
@@ -17,6 +19,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framewo
 - **Auth**: JWT (8h, auto-logout on 401), bcrypt
 
 ## Tech Stack
+
 - **Backend**: Fastify 4, bcrypt, zod, pg
 - **Frontend**: Next.js 14, React 18, Tailwind 3.4, Lucide, react-big-calendar
 - **Voice agent**: LiveKit Agents (Node), `@livekit/agents-plugin-{deepgram,openai}`, `livekit-server-sdk`
@@ -25,6 +28,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framewo
 - **Testing**: Vitest (backend + dashboard), Playwright (e2e), `scripts/qa-live-test.py` (29 tool calls, 88 assertions)
 
 ## Key Directories
+
 Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
 
 - `/src` — Fastify backend (slim `index.ts` + 26 route modules)
@@ -41,6 +45,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `/scripts` — `qa-live-test.py`, `verify-claude-md.ts` drift detector
 
 ## Development
+
 - Bootstrap: `npm run bootstrap` (deps + DB + migrations + seed + tests)
 - Migrate: `npm run db:migrate [-- "postgres://..."]`
 - Seed: `npm run db:seed [-- "postgres://..."]`
@@ -54,6 +59,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - Docker DB on port 5433
 
 ## Database Key Details
+
 - RLS via `app.current_tenant_id` context var. `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables.
 - Single DB pool via `DATABASE_URL` (Supabase managed; no separate `api_user` pool).
 - Admin bypass policies on `tenants`, `users`, `business_templates` for cross-tenant ops with no tenant context.
@@ -68,14 +74,15 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `check_coverage_gaps()` — coverage analysis powering the dashboard bars
 - `search_tenant_docs()` — cosine similarity over pgvector embeddings
 - **ID convention** — domain entity tables (`tenants`, `customers`, `appointments`, `employees`, `resources`, `services`, `skills`, `users`, `voice_sessions`, `record_versions`) use `UUID PRIMARY KEY DEFAULT gen_random_uuid()`. Append-only audit / event tables (`reminder_schedules`, `consent_records`, `opt_out_records`, similar) use `SERIAL PRIMARY KEY` for the row's own id, but `UUID` for every FK column pointing at a domain entity. Mental rule: if an id is referenced from outside its own table, it's UUID; if it's only ever an internal sequence number, it's SERIAL. TS types must match — `string` for UUID columns, `number` for SERIAL. Polymorphic assignment uses `p_assignment_id` UUID. Origin of the rule: 2026-05-11 found `ReminderSchedule.appointment_id` typed `number` against a UUID FK column — every INSERT would have crashed against real Postgres, but 24 mocked unit tests hid it.
-- **PK column-name convention** — every single-column PK is named `<table_singular>_id`, never bare `id`. So `customers.customer_id`, `appointments.appointment_id`, `reminder_schedules.reminder_schedule_id`. The benefit is JOIN symmetry: `appointments.customer_id = customers.customer_id` lets you write `JOIN customers USING (customer_id)`, and a `SELECT *` across joined tables produces unambiguous column names (no aliasing needed). Sub-rules: (a) junction tables (`service_employee`, `service_resource`) keep composite PKs `(left_id, right_id)` — no surrogate `<junction>_id` added; the composite IS the identity. (a2) 1:1 extension tables (`tenant_calendar_settings`, `appointment_sync_map`) reuse the parent's PK as their own (`<parent>_id UUID PRIMARY KEY REFERENCES <parent>(<parent>_id) ON DELETE CASCADE`) — same "relationship IS the identity" reasoning, and the PK-as-FK enforces "at most one row per parent" at the PK level. (b) When a FK is *role-based* and can't share its target's PK name (e.g. `audit_log.created_by_user_id` vs `audit_log.edited_by_user_id` both pointing at `users.user_id`), the FK is named `<role>_<table>_id`, keeping the `_<table>_id` suffix so the column name still tells you the referenced table. Symmetric `USING` is available only on the unambiguous columns; the role-based ones use explicit `ON`. (c) Abbreviations are forbidden — `voice_session_id` not `vs_id`, `reminder_schedule_id` not `rs_id`. Self-derivability beats brevity. Origin: 2026-05-11 conversation locking the standard down after the reminder-bug surface area review surfaced the asymmetric `<table>.id` vs `<other>.<table>_id` shape across the schema. Migrations to apply this rule land table-by-table as pilot work proves the pattern; each migration is `ALTER TABLE <name> RENAME COLUMN id TO <name_singular>_id`.
+- **PK column-name convention** — every single-column PK is named `<table_singular>_id`, never bare `id`. So `customers.customer_id`, `appointments.appointment_id`, `reminder_schedules.reminder_schedule_id`. The benefit is JOIN symmetry: `appointments.customer_id = customers.customer_id` lets you write `JOIN customers USING (customer_id)`, and a `SELECT *` across joined tables produces unambiguous column names (no aliasing needed). Sub-rules: (a) junction tables (`service_employee`, `service_resource`) keep composite PKs `(left_id, right_id)` — no surrogate `<junction>_id` added; the composite IS the identity. (a2) 1:1 extension tables (`tenant_calendar_settings`, `appointment_sync_map`) reuse the parent's PK as their own (`<parent>_id UUID PRIMARY KEY REFERENCES <parent>(<parent>_id) ON DELETE CASCADE`) — same "relationship IS the identity" reasoning, and the PK-as-FK enforces "at most one row per parent" at the PK level. (b) When a FK is _role-based_ and can't share its target's PK name (e.g. `audit_log.created_by_user_id` vs `audit_log.edited_by_user_id` both pointing at `users.user_id`), the FK is named `<role>_<table>_id`, keeping the `_<table>_id` suffix so the column name still tells you the referenced table. Symmetric `USING` is available only on the unambiguous columns; the role-based ones use explicit `ON`. (c) Abbreviations are forbidden — `voice_session_id` not `vs_id`, `reminder_schedule_id` not `rs_id`. Self-derivability beats brevity. Origin: 2026-05-11 conversation locking the standard down after the reminder-bug surface area review surfaced the asymmetric `<table>.id` vs `<other>.<table>_id` shape across the schema. Migrations to apply this rule land table-by-table as pilot work proves the pattern; each migration is `ALTER TABLE <name> RENAME COLUMN id TO <name_singular>_id`.
 - **Composite / natural keys preferred when the natural key is short and stable.** When designing a table — new or being retrofitted — ask first: "what would make a row natural-keyed?" If the answer is 1-2 stable columns (e.g. `(tenant_id, slug)` for `business_templates`, `(service_id, employee_id)` for junctions), use that composite as the PK directly — no surrogate UUID. The key carries meaning the surrogate doesn't: it tells the reader what makes a row unique, and the schema enforces it at the PK level rather than a separate UNIQUE constraint. Use a surrogate `<table>_id UUID` only when (a) the natural key is 3+ columns, (b) any part of it is mutable, or (c) the row needs a portable identifier in URLs / external systems. **Retrofit cadence:** one table per day, same pilot pattern as the 2026-04→05 PK rename. Each retrofit lands as its own migration (drop surrogate, switch PK to composite, rewrite every FK, update TS types, run full e2e), CI-green per commit before moving to the next. Origin: 2026-05-18 — Dale's reflection that scattered surrogate UUIDs across the schema lost the natural-uniqueness intent. Every NEW table from this point on must justify its surrogate UUID before adding one; every EXISTING surrogate-PK table is on the retrofit queue.
 
 ## Build Principles
+
 Durable rules-of-engagement that override "build for the future":
 
 - **Test it or delete it.** Code that can't be exercised against a real external surface (real CRM, real provider API, real billing event) doesn't ship. Mocked-API tests prove the mock works, not the integration. Origin: deleted 21 dormant CRM adapters 2026-05-02 (none had ever touched a real CRM; two were HIPAA-vertical violations).
-- **Build for real customers, not the imagined Pro tier.** No provider integrations, billing tiers, dashboard sections, or service layers because we *might* need them. Wait for a beta customer or sales call that names the need.
+- **Build for real customers, not the imagined Pro tier.** No provider integrations, billing tiers, dashboard sections, or service layers because we _might_ need them. Wait for a beta customer or sales call that names the need.
 - **Working flat code beats a dormant abstraction.** When a "shared interface" or "registry" exists alongside the working flat-file equivalent, the flat files are the source of truth. Extract a shared shape after the third or fourth real consumer asks for it.
 - **HIPAA verticals are permanently excluded.** Medical, dental, chiropractic, optometry, veterinary. Anything that surfaces them gets deleted on sight.
 - **DB starts bare-bones, tests own their data, DB ends bare-bones.** The seed (`supabase/seed.sql`) seeds ONLY what an empty business needs to exist: tenants + owner users + DynaTire's business-shape configuration (services/employees/resources/shifts). No customers, no appointments, no transactional rows. Every test that needs transactional data **creates it in `beforeAll` and deletes it in `afterAll`** — `feedback_test_isolation.md` is the standing rule. Playwright's `globalSetup` runs `scripts/rebuild-db.sh --yes` once per suite (DROP SCHEMA + apply `supabase/baseline.sql` + seed) so every E2E invocation starts from an identical, validated state. A test failure is provably the code or the test, never "the previous test left a stray row." Origin: 2026-05-18 — seed had accumulated 17 stale appointments + 12 stale customers across `db:seed` re-runs, masking real bugs.
@@ -84,6 +91,7 @@ Durable rules-of-engagement that override "build for the future":
 ## Code Conventions
 
 **Dashboard**
+
 - Single primary nav bar: Primary tabs (Home, Schedule, Customers, Calls) always visible; Advanced tabs (My Business, My Team, Phone Assistant) shown for owners/admins only. Front-desk-only users see Primary tabs only and are snapped back to Home if they hit a restricted tab via a stale URL.
 - Components: List+Detail pane pattern (sidebar list, detail right). Large views split into sub-components.
 - UI primitives in `dashboard/components/ui/` — Button (`isLoading`), Card, Input, Select, Modal (Escape/backdrop close), Badge, Toast (5s err/warn, 3s success/info, max 5), `ConfirmModal` + `useConfirm()` for destructive actions.
@@ -95,6 +103,7 @@ Durable rules-of-engagement that override "build for the future":
 - **Zero TypeScript errors** (`npx tsc --noEmit`).
 
 **Backend**
+
 - Slim `index.ts` registers 26 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
 - All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
 - Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
@@ -102,27 +111,33 @@ Durable rules-of-engagement that override "build for the future":
 - Fetch timeouts on OpenAI calls (10s embeddings, 15s normalization) via AbortController.
 
 **Agent tools**
+
 - `/agent-tools/*` responses: `{ success: true, result }` or `{ success: false, error }` at status 200 — LLM relays both shapes naturally. Auth via `x-agent-secret` header.
 - `SYNC_TEST_RECORDER=1` (off by default) flips on an in-memory ring buffer in `syncOrchestrator.ts` that records every appointment + customer sync dispatch (provider, action, tenantId, entityId, ts). Exposed via `GET /agent-tools/_test/sync-events` (read) and `DELETE /agent-tools/_test/sync-events` (clear), both gated by the env var AND the existing agent-secret. Used exclusively by `dashboard/e2e/calendar-sync.spec.ts` to assert the orchestration contract without real Google/Outlook/CRM credentials. Strict opt-in — anything other than the literal string `"1"` keeps it disabled, so a stray prod request can't enumerate sync activity.
 
 **Observability**
+
 - Pino → stdout (Railway live-tail) + Better Stack (when `BETTER_STACK_TOKEN` is set). Per-request enrichment: `service`, `env`, `tenant_id`, `call_id`. `logEvent`/`logWarning`/`logError` helpers in `middleware.ts` add structured fields.
 - Prometheus-style metrics at `GET /metrics`, gated by `METRICS_TOKEN` env var (returns 404 when unset, 401 on missing/wrong Bearer). In-process registry in `src/services/metrics.ts` — no external deps, hard cap at 1000 series per metric (overflow funnels to `overflow="true"`). Pre-declared metrics: `http_requests_total{route,method,status}` + `http_request_duration_ms` (histogram, same labels), `booking_attempts_total{outcome,source}`, `tool_calls_total{tool,outcome}`, `sync_dispatches_total{provider,entity,action}`, `errors_total{event}`. Auto-emitted by Fastify `onResponse` hook (HTTP) and inside `logError` (errors); domain counters wired into appointments + agentTools + syncOrchestrator.
 
 **Tests**
+
 - All tests cover happy + sad paths with 5W diagnostic comments (WHO/WHAT/WHEN/WHERE/WHY).
 - Mock helpers in `src/services/test-utils-mock.ts`.
 
 ## Known Issues
+
 - OpenAI API quota needs monitoring (GPT-4o-mini for LLM + embeddings).
 - Voice AI filler phrases ("Absolutely!", "Great!") still slip through occasionally despite prompt engineering.
 
 ## Project Status
+
 **Phase 13 (Production Readiness) in progress.** 1,910 backend + 680 dashboard = 2,590 tests passing (verified 2026-05-17 against real DB; 0 skips, 0 failures). 91 agent tests, 99 Playwright e2e passing (7 skipped, intentional), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + Sentry + Better Stack setup in `docs/DEPLOYMENT.md`.
 
 Remaining blockers: Telnyx PSTN unblock, `DASHBOARD_URL` + `SENTRY_DSN` on Railway, 4 prod migrations apply. Full task list in `docs/TODO.md`.
 
 ## Production
+
 - Backend: `https://ai-sec-production.up.railway.app/` (`/health` endpoint)
 - Phone: `+1-630-937-9478` (Telnyx). Provisioning via `POST /provisioning/activate` (search → purchase → assign to SIP Connection `livekit-outbound`).
 - Stripe webhook: `https://ai-sec-production.up.railway.app/billing/webhook` (3 events).

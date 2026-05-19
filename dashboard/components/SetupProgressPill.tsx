@@ -1,9 +1,9 @@
-'use client'
+'use client';
 
-import React from 'react'
-import { Wand2 } from 'lucide-react'
-import { useActiveTenantId } from '../lib/SessionContext'
-import { useSetupProgress } from '../lib/useSetupProgress'
+import React from 'react';
+import { Wand2 } from 'lucide-react';
+import { useActiveTenantId } from '../lib/SessionContext';
+import { useSetupProgress } from '../lib/useSetupProgress';
 
 /**
  * SetupProgressPill — persistent "Setup: N of 6 done" affordance pinned
@@ -23,12 +23,12 @@ import { useSetupProgress } from '../lib/useSetupProgress'
  * the pill — they've already committed to setting up).
  */
 export function SetupProgressPill() {
-  const tenantId = useActiveTenantId()
-  const { done, total, complete, items, loading } = useSetupProgress(tenantId)
+  const tenantId = useActiveTenantId();
+  const { done, total, complete, items, loading } = useSetupProgress(tenantId);
 
-  if (!tenantId) return null
-  if (loading) return null
-  if (complete) return null
+  if (!tenantId) return null;
+  if (loading) return null;
+  if (complete) return null;
 
   // Build a "what's left" string for the native tooltip. The pill
   // used to show "Setup: N of 6 done" with no hint about which steps
@@ -36,32 +36,33 @@ export function SetupProgressPill() {
   // remained meant (UX audit Natural 4.5.3, 2026-05-18). Native
   // `title` renders `\n` as line breaks across all major browsers,
   // so a multi-line list works without introducing a custom tooltip.
-  const remaining = items.filter(i => !i.done).map(i => i.label)
-  const tooltipBody = remaining.length > 0
-    ? `Setup: ${done} of ${total} done — click to continue\nRemaining:\n• ${remaining.join('\n• ')}`
-    : `Setup: ${done} of ${total} done — click to continue`
+  const remaining = items.filter((i) => !i.done).map((i) => i.label);
+  const tooltipBody =
+    remaining.length > 0
+      ? `Setup: ${done} of ${total} done — click to continue\nRemaining:\n• ${remaining.join('\n• ')}`
+      : `Setup: ${done} of ${total} done — click to continue`;
 
   function handleClick() {
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(window.location.search);
     // Internal tab id is `dashboard`, not `home` — the label is "Home"
     // in the FolderTab UI but the VALID_TABS list in app/dashboard/page.tsx
     // uses `'dashboard'`. Writing `tab=home` would no-op against the
     // popstate listener's validation, leaving the user on whatever tab
     // they were on with no wizard opened.
-    params.set('tab', 'dashboard')
-    params.set('wizard', 'open')
-    const next = `${window.location.pathname}?${params.toString()}`
+    params.set('tab', 'dashboard');
+    params.set('wizard', 'open');
+    const next = `${window.location.pathname}?${params.toString()}`;
     // Use pushState + a popstate dispatch so the dashboard's URL-driven
     // tab state reads the new value without a hard reload (which would
     // re-trigger the auth bootstrap and visibly flash the page).
-    window.history.pushState({}, '', next)
-    window.dispatchEvent(new PopStateEvent('popstate'))
+    window.history.pushState({}, '', next);
+    window.dispatchEvent(new PopStateEvent('popstate'));
   }
 
   // Dot row: solid for completed steps, hollow for pending. Six dots
   // mirror the wizard's chip strip 1:1 so the user reads them as the
   // same six steps from D2.
-  const dots = Array.from({ length: total }, (_, i) => i < done)
+  const dots = Array.from({ length: total }, (_, i) => i < done);
 
   return (
     <button
@@ -93,7 +94,9 @@ export function SetupProgressPill() {
           />
         ))}
       </span>
-      <span className="whitespace-nowrap">Setup: {done} of {total} done</span>
+      <span className="whitespace-nowrap">
+        Setup: {done} of {total} done
+      </span>
     </button>
-  )
+  );
 }

@@ -8,11 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { PoolClient } from 'pg';
-import {
-  createMockClient,
-  createMockPool,
-  createMockWithTenantClient,
-} from './test-utils-mock';
+import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 describe('createMockClient', () => {
   describe('Happy paths', () => {
@@ -97,7 +93,7 @@ describe('createMockClient', () => {
 
       expect(queries).toHaveLength(3);
       const dataQueries = queries.filter(
-        (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'),
+        (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET')
       );
       expect(dataQueries).toHaveLength(1);
       expect(dataQueries[0].text).toBe('SELECT 1');
@@ -153,10 +149,9 @@ describe('createMockPool', () => {
     queryResponses.push({ rows: [{ via: 'pool.query' }] });
     const pool = createMockPool(mockClient);
 
-    const result = await (pool as unknown as { query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }> }).query(
-      'SELECT now()',
-      [],
-    );
+    const result = await (
+      pool as unknown as { query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }> }
+    ).query('SELECT now()', []);
 
     expect(result.rows[0]).toEqual({ via: 'pool.query' });
     expect(queries).toHaveLength(1);
@@ -212,7 +207,7 @@ describe('createMockWithTenantClient', () => {
     await expect(
       withTenantClient('t1', async () => {
         throw new Error('boom');
-      }),
+      })
     ).rejects.toThrow('boom');
   });
 });

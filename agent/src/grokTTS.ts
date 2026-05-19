@@ -64,7 +64,7 @@ export class GrokTTS extends tts.TTS {
   synthesize(
     text: string,
     connOptions?: APIConnectOptions,
-    abortSignal?: AbortSignal,
+    abortSignal?: AbortSignal
   ): GrokChunkedStream {
     const responsePromise = this.fetchImpl(GROK_TTS_URL, {
       method: 'POST',
@@ -105,7 +105,7 @@ export class GrokChunkedStream extends tts.ChunkedStream {
     text: string,
     response: Promise<Response>,
     connOptions?: APIConnectOptions,
-    abortSignal?: AbortSignal,
+    abortSignal?: AbortSignal
   ) {
     super(text, parent, connOptions, abortSignal);
     this.response = response;
@@ -151,9 +151,11 @@ export class GrokChunkedStream extends tts.ChunkedStream {
       // unhandled-rejection warning that surfaced under vitest.
       // Cast: emitError is declared `private` in the framework's .d.ts but
       // not actually `#private` in the JS — runtime-accessible to subclasses.
-      (this as unknown as {
-        emitError: (args: { error: Error; recoverable: boolean }) => void;
-      }).emitError({
+      (
+        this as unknown as {
+          emitError: (args: { error: Error; recoverable: boolean }) => void;
+        }
+      ).emitError({
         error: error instanceof Error ? error : new Error(String(error)),
         recoverable: false,
       });

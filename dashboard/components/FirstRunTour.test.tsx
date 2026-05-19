@@ -14,14 +14,14 @@
  *
  * Each test carries 5W context.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import '@testing-library/jest-dom'
-import React from 'react'
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
 
 vi.mock('../lib/SessionContext', () => ({
   useActiveTenantId: () => 'tenant-XYZ',
-}))
+}));
 
 vi.mock('@/lib/VocabularyContext', () => ({
   useVocabulary: () => ({
@@ -31,15 +31,15 @@ vi.mock('@/lib/VocabularyContext', () => ({
     employee_plural: 'Techs',
     booking_label: 'Appointment',
   }),
-}))
+}));
 
-import { FirstRunTour, markFirstRunTourPending } from './FirstRunTour'
+import { FirstRunTour, markFirstRunTourPending } from './FirstRunTour';
 
-const KEY = 'firstRunTour_tenant-XYZ'
+const KEY = 'firstRunTour_tenant-XYZ';
 
 beforeEach(() => {
-  localStorage.clear()
-})
+  localStorage.clear();
+});
 
 describe('FirstRunTour — visibility gating', () => {
   test('SAD: no pending flag → tour renders nothing', () => {
@@ -49,9 +49,9 @@ describe('FirstRunTour — visibility gating', () => {
     //       component must render nothing at all.
     // WHY: re-showing the tour on every dashboard visit would be the
     //      exact friction this skill exists to avoid.
-    const { container } = render(<FirstRunTour onNavigate={vi.fn()} />)
-    expect(container.firstChild).toBeNull()
-  })
+    const { container } = render(<FirstRunTour onNavigate={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+  });
 
   test('HAPPY: pending flag → tour renders with welcome heading', () => {
     // WHO: tenant who just clicked "Done" on the wizard's step 7
@@ -62,10 +62,10 @@ describe('FirstRunTour — visibility gating', () => {
     //      from the wizard. Without this assertion, a regression that
     //      forgets the localStorage check or breaks the open state would
     //      silently leave new tenants stranded on Home.
-    localStorage.setItem(KEY, 'pending')
-    render(<FirstRunTour onNavigate={vi.fn()} />)
-    expect(screen.getByRole('dialog', { name: /set up.*here.*where/i })).toBeInTheDocument()
-  })
+    localStorage.setItem(KEY, 'pending');
+    render(<FirstRunTour onNavigate={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: /set up.*here.*where/i })).toBeInTheDocument();
+  });
 
   test('HAPPY: mounting flips pending → shown so a re-render never replays', () => {
     // WHO: any tenant; the test models a React.StrictMode double-mount
@@ -73,15 +73,15 @@ describe('FirstRunTour — visibility gating', () => {
     //       'shown'. A second mount must therefore render nothing.
     // WHY: without this guard a quick parent re-render (StrictMode, a
     //      tenant-context flip) would replay the tour, which feels broken.
-    localStorage.setItem(KEY, 'pending')
-    const { unmount } = render(<FirstRunTour onNavigate={vi.fn()} />)
-    expect(localStorage.getItem(KEY)).toBe('shown')
-    unmount()
+    localStorage.setItem(KEY, 'pending');
+    const { unmount } = render(<FirstRunTour onNavigate={vi.fn()} />);
+    expect(localStorage.getItem(KEY)).toBe('shown');
+    unmount();
 
-    const { container } = render(<FirstRunTour onNavigate={vi.fn()} />)
-    expect(container.firstChild).toBeNull()
-  })
-})
+    const { container } = render(<FirstRunTour onNavigate={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+  });
+});
 
 describe('FirstRunTour — interactions', () => {
   test('HAPPY: clicking a tab card calls onNavigate AND closes the modal', () => {
@@ -93,43 +93,43 @@ describe('FirstRunTour — interactions', () => {
     //      immediately. A regression that wired the cards without the
     //      close-on-click behavior would leave the modal stuck on top
     //      of the navigated-to tab.
-    localStorage.setItem(KEY, 'pending')
-    const onNavigate = vi.fn()
-    render(<FirstRunTour onNavigate={onNavigate} />)
+    localStorage.setItem(KEY, 'pending');
+    const onNavigate = vi.fn();
+    render(<FirstRunTour onNavigate={onNavigate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Schedule/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Schedule/i }));
 
-    expect(onNavigate).toHaveBeenCalledWith('schedule')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
+    expect(onNavigate).toHaveBeenCalledWith('schedule');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 
   test('HAPPY: "Got it" closes without navigating', () => {
     // WHO: tenant who just wants to dismiss after skimming
     // WHAT: clicking "Got it" closes the modal, onNavigate is NOT called.
     // WHY: the explicit dismissal path must not silently redirect the
     //      user to a tab they didn't choose.
-    localStorage.setItem(KEY, 'pending')
-    const onNavigate = vi.fn()
-    render(<FirstRunTour onNavigate={onNavigate} />)
+    localStorage.setItem(KEY, 'pending');
+    const onNavigate = vi.fn();
+    render(<FirstRunTour onNavigate={onNavigate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /got it/i }))
+    fireEvent.click(screen.getByRole('button', { name: /got it/i }));
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(onNavigate).not.toHaveBeenCalled()
-  })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
 
   test('HAPPY: header X close button also closes', () => {
     // WHO: tenant who closes via the affordance they expect on any modal
     // WHAT: clicking the X (aria-label "Close tour") dismisses.
     // WHY: two exits ("Got it" and X) must behave identically — any
     //      drift erodes trust in the close affordance across the app.
-    localStorage.setItem(KEY, 'pending')
-    render(<FirstRunTour onNavigate={vi.fn()} />)
+    localStorage.setItem(KEY, 'pending');
+    render(<FirstRunTour onNavigate={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /close tour/i }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-})
+    fireEvent.click(screen.getByRole('button', { name: /close tour/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
 
 describe('markFirstRunTourPending', () => {
   test('HAPPY: arms the flag for a tenant with no prior state', () => {
@@ -138,9 +138,9 @@ describe('markFirstRunTourPending', () => {
     // WHY: this is the trigger that makes the tour fire when the user
     //      lands on Home. A regression that drops the localStorage
     //      write would silently disable the entire tour surface.
-    markFirstRunTourPending('tenant-XYZ')
-    expect(localStorage.getItem(KEY)).toBe('pending')
-  })
+    markFirstRunTourPending('tenant-XYZ');
+    expect(localStorage.getItem(KEY)).toBe('pending');
+  });
 
   test('SAD: does NOT replay the tour for a tenant who already saw it', () => {
     // WHO: tenant who completed the wizard, saw the tour, and now is
@@ -150,10 +150,10 @@ describe('markFirstRunTourPending', () => {
     //       'pending'.
     // WHY: re-running the wizard is a power-user action — it should not
     //      be punished with a beginner-mode tour every time.
-    localStorage.setItem(KEY, 'shown')
-    markFirstRunTourPending('tenant-XYZ')
-    expect(localStorage.getItem(KEY)).toBe('shown')
-  })
+    localStorage.setItem(KEY, 'shown');
+    markFirstRunTourPending('tenant-XYZ');
+    expect(localStorage.getItem(KEY)).toBe('shown');
+  });
 
   test('SAD: no-op when tenantId is null', () => {
     // WHO: super-admin on the All-Businesses grid clicking Done somehow
@@ -161,7 +161,7 @@ describe('markFirstRunTourPending', () => {
     // WHAT: passing null must not throw and must not pollute localStorage.
     // WHY: a localStorage write keyed on `firstRunTour_null` would be a
     //      latent bug — null-key flags collide across tenants.
-    markFirstRunTourPending(null)
-    expect(localStorage.getItem('firstRunTour_null')).toBeNull()
-  })
-})
+    markFirstRunTourPending(null);
+    expect(localStorage.getItem('firstRunTour_null')).toBeNull();
+  });
+});

@@ -26,7 +26,9 @@ export interface SessionContext {
  * is missing, malformed JSON, or lacks a tenant_id — the caller decides
  * what to do (greet anyway vs. abandon the call).
  */
-export function parseRoomMetadata(metadata: string | null | undefined): { tenantId: string } | null {
+export function parseRoomMetadata(
+  metadata: string | null | undefined
+): { tenantId: string } | null {
   if (!metadata) return null;
   let parsed: unknown;
   try {

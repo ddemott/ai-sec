@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const LANDING_CSS = `/* ─── RESET & BASE ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -584,7 +584,7 @@ footer {
   .logo-bar { padding: 24px; }
   .logo-bar-inner { flex-direction: column; gap: 16px; align-items: flex-start; }
 }
-`
+`;
 const LANDING_HTML = `
 <div class="grid-bg"></div>
 
@@ -1083,55 +1083,62 @@ if (timer) {
   }, 1000);
 }
 </script>
-`
+`;
 
 export default function LandingPage() {
-  const router = useRouter()
-  const [checked, setChecked] = useState(false)
+  const router = useRouter();
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     // If already logged in, redirect to dashboard
-    const token = localStorage.getItem('authToken')
+    const token = localStorage.getItem('authToken');
     if (token) {
-      router.replace('/dashboard')
-      return
+      router.replace('/dashboard');
+      return;
     }
-    setChecked(true)
-  }, [router])
+    setChecked(true);
+  }, [router]);
 
   useEffect(() => {
-    if (!checked) return
+    if (!checked) return;
     // Set up intersection observer for reveal animations
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) entry.target.classList.add('visible')
-      })
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' })
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el))
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add('visible');
+        });
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    );
+    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
 
     // Call timer
-    let seconds = 221
-    const timer = document.getElementById('callTimer')
-    const interval = timer ? setInterval(() => {
-      seconds++
-      const m = Math.floor(seconds / 60).toString().padStart(2, '0')
-      const s = (seconds % 60).toString().padStart(2, '0')
-      timer.textContent = m + ':' + s
-    }, 1000) : null
+    let seconds = 221;
+    const timer = document.getElementById('callTimer');
+    const interval = timer
+      ? setInterval(() => {
+          seconds++;
+          const m = Math.floor(seconds / 60)
+            .toString()
+            .padStart(2, '0');
+          const s = (seconds % 60).toString().padStart(2, '0');
+          timer.textContent = m + ':' + s;
+        }, 1000)
+      : null;
 
     return () => {
-      observer.disconnect()
-      if (interval) clearInterval(interval)
-    }
-  }, [checked])
+      observer.disconnect();
+      if (interval) clearInterval(interval);
+    };
+  }, [checked]);
 
   // Don't flash landing page for logged-in users
-  if (!checked) return null
+  if (!checked) return null;
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: LANDING_CSS }} />
       <div dangerouslySetInnerHTML={{ __html: LANDING_HTML }} />
     </>
-  )
+  );
 }

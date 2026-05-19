@@ -15,7 +15,7 @@
  * deliver, just intercepted at the persistence layer.
  */
 import { test, expect } from './helpers/test';
-import {  type APIRequestContext } from '@playwright/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { createHash, randomUUID } from 'crypto'; // createHash for password-reset token (sha256), randomUUID for token plaintext
 import { readFileSync } from 'fs';
@@ -55,7 +55,11 @@ function uniqueTag(): string {
  * was tripping page.evaluate's fetch with "Failed to fetch" when the
  * dashboard page hadn't fully loaded). Same wire format, simpler call site.
  */
-async function loginAs(req: APIRequestContext, email: string, password: string): Promise<{
+async function loginAs(
+  req: APIRequestContext,
+  email: string,
+  password: string
+): Promise<{
   token?: string;
   tenant_id?: string;
   role?: string;
@@ -120,7 +124,9 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. Front-desk role 403 at the route level (not just nav-hide)
 // ────────────────────────────────────────────────────────────────────────────
-test('role-gate: front_desk user hitting owner-only routes is rejected with 403', async ({ request }) => {
+test('role-gate: front_desk user hitting owner-only routes is rejected with 403', async ({
+  request,
+}) => {
   // WHO: front_desk user who knows the API and tries to invite a teammate
   //        or change a teammate's role via direct API call (bypassing the
   //        UI nav-hide that workflows test 14 verifies)
@@ -185,7 +191,9 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
     expect(list.status, 'GET /users must reject front_desk').toBe(403);
 
     // Belt-and-suspenders: target user's role is unchanged.
-    const targetCheck = await pool.query('SELECT role FROM users WHERE user_id = $1', [inviteeUserId]);
+    const targetCheck = await pool.query('SELECT role FROM users WHERE user_id = $1', [
+      inviteeUserId,
+    ]);
     expect(targetCheck.rows[0].role).toBe('owner');
   } finally {
     if (frontDeskUserId) {
@@ -201,7 +209,9 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
 // ────────────────────────────────────────────────────────────────────────────
 // 2. Password reset round-trip
 // ────────────────────────────────────────────────────────────────────────────
-test('password-reset: forgot-password → token persisted → reset-password → login with new password works', async ({ request }) => {
+test('password-reset: forgot-password → token persisted → reset-password → login with new password works', async ({
+  request,
+}) => {
   // WHO: tenant user who locked themselves out and uses the public
   //        password-reset flow
   // WHAT: POST /forgot-password seeds password_resets table; user
@@ -287,7 +297,9 @@ test('password-reset: forgot-password → token persisted → reset-password →
 // ────────────────────────────────────────────────────────────────────────────
 // 3. OTP verify route — happy path (known bcrypt-hashed code) + sad path
 // ────────────────────────────────────────────────────────────────────────────
-test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong one', async ({ request }) => {
+test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong one', async ({
+  request,
+}) => {
   // WHO: voice-agent caller whose phone needs verification before the
   //        agent will book on their behalf (post-2026-04-23 OTP gating)
   // WHAT: /agent-tools/verify-phone-code matches the unhashed code
@@ -356,11 +368,13 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
     expect(afterRight.rows[0].verified_at, 'correct code must populate verified_at').not.toBeNull();
   } finally {
     if (phoneVerificationId) {
-      await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [phoneVerificationId]);
+      await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [
+        phoneVerificationId,
+      ]);
     }
-    await pool.query(
-      `DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`,
-      [DYNATIRE_ID, phone]
-    );
+    await pool.query(`DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`, [
+      DYNATIRE_ID,
+      phone,
+    ]);
   }
 });

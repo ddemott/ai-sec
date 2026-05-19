@@ -9,11 +9,11 @@
  * Owners (and super-admins, who keep full access regardless of `role`)
  * should still see the management tabs.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import '@testing-library/jest-dom'
-import React from 'react'
-import { OutlookLayout } from './OutlookLayout'
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
+import { OutlookLayout } from './OutlookLayout';
 
 // Stub the APIs the layout uses on mount. Without these, the layout
 // fires real fetches on render and litters the console with rejected
@@ -35,8 +35,8 @@ const { mockApi } = vi.hoisted(() => ({
     shifts: { schedule: { bulkForDate: vi.fn() } },
     mappings: { listServiceEmployee: vi.fn() },
   },
-}))
-vi.mock('../lib/api', () => ({ Api: mockApi }))
+}));
+vi.mock('../lib/api', () => ({ Api: mockApi }));
 
 vi.mock('@/lib/ThemeContext', () => ({
   useTheme: () => ({
@@ -45,7 +45,7 @@ vi.mock('@/lib/ThemeContext', () => ({
     themeInfo: { name: 'Dark' },
   }),
   THEMES: [{ id: 'dark', name: 'Dark' }],
-}))
+}));
 
 // OutlookLayout pulls tenantsVersion off useSessionContext; the
 // FeedbackButton (rendered inside the layout) pulls useActiveTenantId.
@@ -54,26 +54,26 @@ vi.mock('@/lib/ThemeContext', () => ({
 let sessionMock: { tenantsVersion: number; managedTenantId: string | null } = {
   tenantsVersion: 0,
   managedTenantId: null,
-}
+};
 vi.mock('@/lib/SessionContext', () => ({
   useSessionContext: () => sessionMock,
   useActiveTenantId: () => sessionMock.managedTenantId,
-}))
+}));
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  sessionMock = { tenantsVersion: 0, managedTenantId: null }
-  mockApi.knowledge.unanswered.mockResolvedValue({ questions: [] })
-  mockApi.voice.getActiveCalls.mockResolvedValue({ calls: [], total: 0 })
-  mockApi.tenants.list.mockResolvedValue([])
+  vi.clearAllMocks();
+  sessionMock = { tenantsVersion: 0, managedTenantId: null };
+  mockApi.knowledge.unanswered.mockResolvedValue({ questions: [] });
+  mockApi.voice.getActiveCalls.mockResolvedValue({ calls: [], total: 0 });
+  mockApi.tenants.list.mockResolvedValue([]);
   // SetupProgressPill defaults — empty everything so the pill is hidden
   // by default. Tests that need the pill visible can override per-test.
-  mockApi.services.list.mockResolvedValue([])
-  mockApi.resources.list.mockResolvedValue([])
-  mockApi.employees.list.mockResolvedValue([])
-  mockApi.shifts.schedule.bulkForDate.mockResolvedValue([])
-  mockApi.mappings.listServiceEmployee.mockResolvedValue([])
-})
+  mockApi.services.list.mockResolvedValue([]);
+  mockApi.resources.list.mockResolvedValue([]);
+  mockApi.employees.list.mockResolvedValue([]);
+  mockApi.shifts.schedule.bulkForDate.mockResolvedValue([]);
+  mockApi.mappings.listServiceEmployee.mockResolvedValue([]);
+});
 
 describe('OutlookLayout role gating', () => {
   test('HAPPY: owner sees management tabs', async () => {
@@ -86,12 +86,12 @@ describe('OutlookLayout role gating', () => {
       <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="owner">
         <div>content</div>
       </OutlookLayout>
-    )
-    expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /schedule/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /my business/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /my team/i })).toBeInTheDocument()
-  })
+    );
+    expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /schedule/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /my business/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /my team/i })).toBeInTheDocument();
+  });
 
   test('SAD: front_desk user does NOT see management tabs', () => {
     // WHO: Shop staff member promoted to a 'front_desk' role.
@@ -103,13 +103,13 @@ describe('OutlookLayout role gating', () => {
       <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="front_desk">
         <div>content</div>
       </OutlookLayout>
-    )
-    expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /my business/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /my team/i })).not.toBeInTheDocument()
+    );
+    expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /my business/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /my team/i })).not.toBeInTheDocument();
     // Mobile nav has plain <button>s rather than role="tab"; assert by name.
-    expect(screen.queryByRole('button', { name: /^businesses$/i })).not.toBeInTheDocument()
-  })
+    expect(screen.queryByRole('button', { name: /^businesses$/i })).not.toBeInTheDocument();
+  });
 
   test('SAD: front_desk user landing on a management tab is redirected to dashboard', async () => {
     // WHO: Front-desk user who clicked a stale ?tab=my-business link or
@@ -119,16 +119,16 @@ describe('OutlookLayout role gating', () => {
     //        activeTab.
     // WHY: Without this guard the user would see a management view even
     //      though the tab to switch back is gone — a dead-end for the user.
-    const setActiveTab = vi.fn()
+    const setActiveTab = vi.fn();
     render(
       <OutlookLayout activeTab="my-business" setActiveTab={setActiveTab} role="front_desk">
         <div>content</div>
       </OutlookLayout>
-    )
+    );
     await waitFor(() => {
-      expect(setActiveTab).toHaveBeenCalledWith('dashboard')
-    })
-  })
+      expect(setActiveTab).toHaveBeenCalledWith('dashboard');
+    });
+  });
 
   test('HAPPY: Calls tab shows an active-call badge when getActiveCalls returns > 0 (E3, 2026-05-17)', async () => {
     // WHO: front-desk operator looking at a non-Calls tab while a live
@@ -146,7 +146,7 @@ describe('OutlookLayout role gating', () => {
     mockApi.voice.getActiveCalls.mockResolvedValue({
       calls: [{ id: 'c1' }, { id: 'c2' }],
       total: 2,
-    })
+    });
 
     render(
       <OutlookLayout
@@ -157,22 +157,22 @@ describe('OutlookLayout role gating', () => {
       >
         <div>content</div>
       </OutlookLayout>
-    )
+    );
 
     // The badge's aria-label is the authoritative test handle — title-
     // attribute matching is brittle to copy edits. Desktop + mobile
     // nav both render the badge, so we expect at least one match.
     await waitFor(() => {
-      expect(screen.getAllByLabelText(/2 active calls/i).length).toBeGreaterThan(0)
-    })
-  })
+      expect(screen.getAllByLabelText(/2 active calls/i).length).toBeGreaterThan(0);
+    });
+  });
 
   test('SAD: Calls tab badge stays hidden when active-call count is 0', async () => {
     // WHO: operator on a quiet line — no calls in progress
     // WHAT: getActiveCalls returns total: 0 → the badge must NOT render.
     //       A 0-badge would be visual noise and would erode trust in the
     //       badge's actionability.
-    mockApi.voice.getActiveCalls.mockResolvedValue({ calls: [], total: 0 })
+    mockApi.voice.getActiveCalls.mockResolvedValue({ calls: [], total: 0 });
 
     render(
       <OutlookLayout
@@ -183,14 +183,14 @@ describe('OutlookLayout role gating', () => {
       >
         <div>content</div>
       </OutlookLayout>
-    )
+    );
 
     // Wait for the effect to fire then assert nothing rendered.
     await waitFor(() => {
-      expect(mockApi.voice.getActiveCalls).toHaveBeenCalled()
-    })
-    expect(screen.queryByLabelText(/active call/i)).not.toBeInTheDocument()
-  })
+      expect(mockApi.voice.getActiveCalls).toHaveBeenCalled();
+    });
+    expect(screen.queryByLabelText(/active call/i)).not.toBeInTheDocument();
+  });
 
   test('HAPPY: super-admin with role=front_desk still sees management tabs', async () => {
     // WHO: Platform super-admin (tenant_id = 00000000...). The role
@@ -201,15 +201,10 @@ describe('OutlookLayout role gating', () => {
     // WHY: Without this, demoting a super-admin's user record would
     //      lock them out of the very dashboard they manage tenants from.
     render(
-      <OutlookLayout
-        activeTab="dashboard"
-        setActiveTab={vi.fn()}
-        role="front_desk"
-        isAdmin
-      >
+      <OutlookLayout activeTab="dashboard" setActiveTab={vi.fn()} role="front_desk" isAdmin>
         <div>content</div>
       </OutlookLayout>
-    )
-    expect(await screen.findByRole('tab', { name: /my business/i })).toBeInTheDocument()
-  })
-})
+    );
+    expect(await screen.findByRole('tab', { name: /my business/i })).toBeInTheDocument();
+  });
+});

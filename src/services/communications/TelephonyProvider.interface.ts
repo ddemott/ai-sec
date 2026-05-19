@@ -35,7 +35,7 @@ export interface TelephonyProvider {
    */
   createInstruction(
     action: 'say' | 'gather' | 'record' | 'hangup' | 'dial' | 'redirect',
-    options: Record<string, unknown>,
+    options: Record<string, unknown>
   ): string;
 
   /**
@@ -46,5 +46,8 @@ export interface TelephonyProvider {
   /**
    * Legacy method for generating a single instruction response
    */
-  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: Record<string, unknown>): string;
+  generateInstruction(
+    action: 'say' | 'gather' | 'record' | 'hangup',
+    options: Record<string, unknown>
+  ): string;
 }

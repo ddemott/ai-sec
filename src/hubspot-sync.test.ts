@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock hubspotClient before importing hubspotSync
 vi.mock('./services/hubspotClient', () => ({
@@ -17,8 +17,8 @@ import {
   syncAppointmentToHubSpot,
   pullHubSpotContact,
   fullSync,
-} from "./services/hubspotSync";
-import * as hubspot from "./services/hubspotClient";
+} from './services/hubspotSync';
+import * as hubspot from './services/hubspotClient';
 
 // ---- Mock helpers ----
 
@@ -83,16 +83,21 @@ function makeHubSpotContactData(overrides: Record<string, unknown> = {}): hubspo
   };
 }
 
-import { createMockClient as createBaseMockClient, createMockPool, type MockQuery, type MockResponse } from './test-utils-mock';
+import {
+  createMockClient as createBaseMockClient,
+  createMockPool,
+  type MockQuery,
+  type MockResponse,
+} from './test-utils-mock';
 
 // Wrap the shared mock client with a getDataQueries() helper that filters out
 // session-variable queries (vi-mock-calls shape, indexed positionally).
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
-      (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
-    );
+    (
+      base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }
+    ).mock.calls.filter((call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'));
   return { ...base, getDataQueries };
 }
 
@@ -110,8 +115,8 @@ beforeEach(() => {
 // HAPPY PATHS — PUSH
 // =============================================
 
-describe("HubSpot Sync — Push Happy Paths", () => {
-  it("PUSH-CREATE: When tenant pushes new customer to HubSpot, system creates contact in HubSpot and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
+describe('HubSpot Sync — Push Happy Paths', () => {
+  it('PUSH-CREATE: When tenant pushes new customer to HubSpot, system creates contact in HubSpot and records mapping in sync_map so future syncs can update rather than duplicate', async () => {
     // WHO: syncCustomerToHubSpot with action='create'
     // WHAT: Local customer exists, no entity_sync_map entry — triggers createContact REST v3 API call
     // WHEN: Push sync after new customer created in dashboard or via voice AI booking
@@ -142,10 +147,12 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(hubspot.createContact).toHaveBeenCalledOnce();
     expect(hubspot.createContact).toHaveBeenCalledWith(
       'valid-access-token',
-      expect.objectContaining({ firstname: 'John', lastname: 'Doe' }),
+      expect.objectContaining({ firstname: 'John', lastname: 'Doe' })
     );
     expect(mockClient.release).toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to HubSpot'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to HubSpot')
+    );
 
     // Verify sync map INSERT was called with correct external_id
     const dataQueries = getDataQueries();
@@ -154,7 +161,7 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(HUBSPOT_CONTACT_ID);
   });
 
-  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing HubSpot contact using stored external_id to maintain data consistency across systems", async () => {
+  it('PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing HubSpot contact using stored external_id to maintain data consistency across systems', async () => {
     // WHO: syncCustomerToHubSpot with action='update'
     // WHAT: Local customer updated, entity_sync_map has existing external_id — triggers updateContact REST v3 API call
     // WHEN: Push sync after customer phone/email/name edited in dashboard
@@ -186,13 +193,15 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     expect(hubspot.updateContact).toHaveBeenCalledWith(
       'valid-access-token',
       HUBSPOT_CONTACT_ID,
-      expect.objectContaining({ firstname: 'John', lastname: 'Doe' }),
+      expect.objectContaining({ firstname: 'John', lastname: 'Doe' })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer updated in HubSpot'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer updated in HubSpot')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling HubSpot API, preserving HubSpot data while breaking the link", async () => {
+  it('PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling HubSpot API, preserving HubSpot data while breaking the link', async () => {
     // WHO: syncCustomerToHubSpot with action='delete'
     // WHAT: Local customer soft-deleted, sync_map entry exists — only removes mapping, no HubSpot API call
     // WHEN: Push sync after customer deleted from dashboard
@@ -212,7 +221,9 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     // Should NOT call HubSpot API at all
     expect(hubspot.createContact).not.toHaveBeenCalled();
     expect(hubspot.updateContact).not.toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry removed'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry removed')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
@@ -254,18 +265,20 @@ describe("HubSpot Sync — Push Happy Paths", () => {
       expect.objectContaining({
         hs_meeting_title: 'Oil Change - John Doe',
         hs_meeting_outcome: 'SCHEDULED',
-      }),
+      })
     );
     expect(hubspot.associateMeetingToContact).toHaveBeenCalledWith(
       'valid-access-token',
       HUBSPOT_MEETING_ID,
-      HUBSPOT_CONTACT_ID,
+      HUBSPOT_CONTACT_ID
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to HubSpot as meeting'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to HubSpot as meeting')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates meeting, ensuring referential integrity in HubSpot", async () => {
+  it('PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates meeting, ensuring referential integrity in HubSpot', async () => {
     // WHO: syncAppointmentToHubSpot calling syncCustomerToHubSpot recursively
     // WHAT: Appointment's customer has no sync_map entry — system auto-syncs customer before creating meeting
     // WHEN: Push sync when voice AI books appointment for a brand-new caller (customer created moments before)
@@ -336,8 +349,12 @@ describe("HubSpot Sync — Push Happy Paths", () => {
     // Should have called createContact once and createMeeting once
     expect(hubspot.createContact).toHaveBeenCalledOnce();
     expect(hubspot.createMeeting).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to HubSpot'));
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to HubSpot as meeting'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to HubSpot')
+    );
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to HubSpot as meeting')
+    );
   });
 });
 
@@ -345,8 +362,8 @@ describe("HubSpot Sync — Push Happy Paths", () => {
 // HAPPY PATHS — PULL
 // =============================================
 
-describe("HubSpot Sync — Pull Happy Paths", () => {
-  it("PULL-CREATE: When HubSpot contact has no local match (by sync_map or phone), system creates new customer locally so CRM leads appear in scheduling system", async () => {
+describe('HubSpot Sync — Pull Happy Paths', () => {
+  it('PULL-CREATE: When HubSpot contact has no local match (by sync_map or phone), system creates new customer locally so CRM leads appear in scheduling system', async () => {
     // WHO: pullHubSpotContact processing a new HubSpot contact
     // WHAT: No entity_sync_map match AND no customers row matching phone — triggers INSERT INTO customers + sync_map
     // WHEN: Pull sync during fullSync or webhook when HubSpot contact was created by sales team outside SecretaryHQ
@@ -369,7 +386,9 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 
     await pullHubSpotContact(pool, TENANT_ID, makeHubSpotContactData(), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from hubspot customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local customer from hubspot customer')
+    );
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query (getDataQueries filters out session variable queries)
@@ -380,7 +399,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("PULL-MERGE-REMOTE-WINS: When HubSpot contact matches local customer by phone and HubSpot data is newer, system updates local record to keep most recent data from authoritative source", async () => {
+  it('PULL-MERGE-REMOTE-WINS: When HubSpot contact matches local customer by phone and HubSpot data is newer, system updates local record to keep most recent data from authoritative source', async () => {
     // WHO: pullHubSpotContact merging with existing local customer
     // WHAT: Phone match found, HubSpot lastmodifieddate (2026-03-25) > local updated_at (2026-03-10) — remote wins timestamp merge
     // WHEN: Pull sync when sales rep updated customer email in HubSpot after original booking
@@ -393,7 +412,9 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }],
+    });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -405,7 +426,9 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 
     await pullHubSpotContact(pool, TENANT_ID, contactData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged hubspot customer into existing customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('merged hubspot customer into existing customer')
+    );
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued (getDataQueries filters out session variable queries)
@@ -413,7 +436,7 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     expect(dataQueries[2][0]).toContain('UPDATE customers');
   });
 
-  it("PULL-MERGE-LOCAL-WINS: When HubSpot contact matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+  it('PULL-MERGE-LOCAL-WINS: When HubSpot contact matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites', async () => {
     // WHO: pullHubSpotContact merging with existing local customer where local is newer
     // WHAT: Phone match found, local updated_at (2026-03-28) > HubSpot lastmodifieddate (2026-03-25) — local wins, no UPDATE issued
     // WHEN: Pull sync when receptionist updated customer info via dashboard after HubSpot's last modification
@@ -426,7 +449,9 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }],
+    });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -445,8 +470,8 @@ describe("HubSpot Sync — Pull Happy Paths", () => {
 // SAD PATHS
 // =============================================
 
-describe("HubSpot Sync — Sad Paths", () => {
-  it("NO-SETTINGS: When tenant has no HubSpot integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
+describe('HubSpot Sync — Sad Paths', () => {
+  it('NO-SETTINGS: When tenant has no HubSpot integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors', async () => {
     // WHO: getTokensWithRefresh for a tenant without HubSpot integration
     // WHAT: tenant_integration_settings query returns 0 rows — function returns null
     // WHEN: Push/pull sync triggered for tenant that never connected HubSpot OAuth
@@ -482,7 +507,7 @@ describe("HubSpot Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
+  it('TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked access), system marks integration inactive in DB and returns null to prevent repeated failed API calls', async () => {
     // WHO: getTokensWithRefresh when token is expired and refresh fails
     // WHAT: token_expires_at is in the past, refreshAccessToken throws 'OAuth grant revoked' — marks is_active=false in DB
     // WHEN: Sync triggered after user revoked HubSpot OAuth access from their HubSpot account settings
@@ -493,9 +518,11 @@ describe("HubSpot Sync — Sad Paths", () => {
 
     // Token is expired (forces refresh)
     queryResponses.push({
-      rows: [makeIntegrationSettings({
-        token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
-      })],
+      rows: [
+        makeIntegrationSettings({
+          token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
+        }),
+      ],
     });
 
     // UPDATE to mark inactive
@@ -506,8 +533,12 @@ describe("HubSpot Sync — Sad Paths", () => {
     const result = await getTokensWithRefresh(pool, TENANT_ID, silentLogger);
 
     expect(result).toBeNull();
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('token refresh FAILED'));
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('integration marked inactive'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('token refresh FAILED')
+    );
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('integration marked inactive')
+    );
 
     // Should have issued UPDATE to set is_active = false
     const updateCall = mockClient.query.mock.calls[1];
@@ -536,11 +567,13 @@ describe("HubSpot Sync — Sad Paths", () => {
     await syncCustomerToHubSpot(pool, TENANT_ID, CUSTOMER_ID, 'create', silentLogger);
 
     expect(hubspot.createContact).not.toHaveBeenCalled();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('customer not found in DB'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('customer not found in DB')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("NO-PHONE-SKIP: When HubSpot contact has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
+  it('NO-PHONE-SKIP: When HubSpot contact has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows', async () => {
     // WHO: pullHubSpotContact receiving a HubSpot contact with empty phone property
     // WHAT: HubSpotContact.properties.phone = '' — skip pull entirely, no DB queries issued
     // WHEN: Pull sync when HubSpot has marketing-only contacts with no phone collected (email-only leads)
@@ -577,13 +610,15 @@ describe("HubSpot Sync — Sad Paths", () => {
 
     await pullHubSpotContact(pool, TENANT_ID, contactData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
     // Only 1 data query: the sync map check (excludes session variable queries)
     expect(getDataQueries()).toHaveLength(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+  it('CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion', async () => {
     // WHO: getTokensWithRefresh when database connection fails mid-query
     // WHAT: First query throws 'DB connection lost' — function re-throws but still calls client.release()
     // WHEN: Any sync operation when Postgres is temporarily unreachable (network blip, connection timeout)
@@ -595,15 +630,15 @@ describe("HubSpot Sync — Sad Paths", () => {
     // Make the first query throw
     mockClient.query.mockRejectedValueOnce(new Error('DB connection lost'));
 
-    await expect(
-      getTokensWithRefresh(pool, TENANT_ID, silentLogger)
-    ).rejects.toThrow('DB connection lost');
+    await expect(getTokensWithRefresh(pool, TENANT_ID, silentLogger)).rejects.toThrow(
+      'DB connection lost'
+    );
 
     // Even after error, release must be called
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PAGINATION-ERROR: When HubSpot API returns error during contact list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
+  it('PAGINATION-ERROR: When HubSpot API returns error during contact list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state', async () => {
     // WHO: fullSync when HubSpot API returns 500 during pagination
     // WHAT: listContacts throws on first page — sync completes with 0 records but updates last_sync_at
     // WHEN: HubSpot API experiencing downtime during scheduled full sync
@@ -625,7 +660,9 @@ describe("HubSpot Sync — Sad Paths", () => {
 
     expect(result.contactsSynced).toBe(0);
     expect(result.errors).toBe(0); // errors counter is for individual contact failures, not pagination
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('contact pagination failed'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('contact pagination failed')
+    );
     // Should still update last_sync_at
     expect(mockClient.release).toHaveBeenCalled();
   });

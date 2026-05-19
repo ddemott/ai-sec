@@ -68,7 +68,6 @@ function toFractionalHour(isoStr: string): number {
   return d.getHours() + d.getMinutes() / 60;
 }
 
-
 /** Get appointment status color classes */
 function getStatusColor(status: string): { bg: string; border: string; text: string } {
   switch (status) {
@@ -84,9 +83,7 @@ function getStatusColor(status: string): { bg: string; border: string; text: str
 
 function findServiceName(description: string, services: Service[]): string {
   // Try to match appointment description to a service name
-  const svc = services.find(s =>
-    s.name.toLowerCase() === description?.toLowerCase()
-  );
+  const svc = services.find((s) => s.name.toLowerCase() === description?.toLowerCase());
   return svc?.name || description || '';
 }
 
@@ -104,9 +101,12 @@ function buildSkillColorMap(allSkillNames: string[]): Map<string, string> {
 function GripDots() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" data-testid="grip-handle">
-      <circle cx="3" cy="2" r="1.5" /><circle cx="9" cy="2" r="1.5" />
-      <circle cx="3" cy="6" r="1.5" /><circle cx="9" cy="6" r="1.5" />
-      <circle cx="3" cy="10" r="1.5" /><circle cx="9" cy="10" r="1.5" />
+      <circle cx="3" cy="2" r="1.5" />
+      <circle cx="9" cy="2" r="1.5" />
+      <circle cx="3" cy="6" r="1.5" />
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="3" cy="10" r="1.5" />
+      <circle cx="9" cy="10" r="1.5" />
     </svg>
   );
 }
@@ -128,7 +128,13 @@ export interface NewSchedulerViewProps {
   onQuickBook?: (prefill?: { employeeId?: string; hour?: number; date?: Date }) => void;
 }
 
-export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, activeView, onViewChange, onQuickBook }: NewSchedulerViewProps) {
+export default function NewSchedulerView({
+  tenantId: tenantIdProp,
+  viewTabs,
+  activeView,
+  onViewChange,
+  onQuickBook,
+}: NewSchedulerViewProps) {
   const contextTenantId = useActiveTenantId();
   const tenantId = tenantIdProp !== undefined ? tenantIdProp : contextTenantId;
 
@@ -138,7 +144,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   const [empMappings, setEmpMappings] = useState<ServiceMapping[]>([]);
   useEffect(() => {
     if (!tenantId) return;
-    Api.mappings.listServiceEmployee(tenantId).then(m => setEmpMappings(Array.isArray(m) ? m : [])).catch(() => {});
+    Api.mappings
+      .listServiceEmployee(tenantId)
+      .then((m) => setEmpMappings(Array.isArray(m) ? m : []))
+      .catch(() => {});
   }, [tenantId]);
 
   // Build skills per employee from mappings + service names
@@ -146,7 +155,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     const map = new Map<string, string[]>();
     for (const m of empMappings) {
       const empId = String(m.employee_id);
-      const svc = services.find(s => String(s.service_id) === String(m.service_id));
+      const svc = services.find((s) => String(s.service_id) === String(m.service_id));
       if (svc) {
         const list = map.get(empId) || [];
         list.push(svc.name);
@@ -161,10 +170,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   }, [empMappings, services]);
 
   // Filter out user accounts — only show employees in scheduler
-  const baseEmployees = useMemo(
-    () => allStaff.filter(e => e.type !== 'user'),
-    [allStaff]
-  );
+  const baseEmployees = useMemo(() => allStaff.filter((e) => e.type !== 'user'), [allStaff]);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [colW, setColW] = useState(DEFAULT_COL_W);
@@ -179,14 +185,18 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     try {
       const stored = localStorage.getItem(storageKey);
       return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   });
   const [savedOrder, setSavedOrder] = useState<string[]>(() => {
     if (!storageKey) return [];
     try {
       const stored = localStorage.getItem(storageKey);
       return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   });
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [orderDirty, setOrderDirty] = useState(false);
@@ -194,23 +204,26 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // Warn before leaving with unsaved reorder
   useEffect(() => {
     if (!orderDirty) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [orderDirty]);
 
   // Sync staff order with baseEmployees when they change
   useEffect(() => {
-    const ids = baseEmployees.map(e => String(e.employee_id));
+    const ids = baseEmployees.map((e) => String(e.employee_id));
     // Only reset if the set of employee IDs changed (not just reordering)
     const currentSet = new Set(savedOrder);
     const newSet = new Set(ids);
-    const sameSet = currentSet.size === newSet.size && ids.every(id => currentSet.has(id));
+    const sameSet = currentSet.size === newSet.size && ids.every((id) => currentSet.has(id));
     if (!sameSet) {
       // If we have a persisted order, apply it (filter to only existing employees)
       if (savedOrder.length > 0) {
-        const validSaved = savedOrder.filter(id => newSet.has(id));
-        const newIds = ids.filter(id => !new Set(validSaved).has(id));
+        const validSaved = savedOrder.filter((id) => newSet.has(id));
+        const newIds = ids.filter((id) => !new Set(validSaved).has(id));
         const merged = [...validSaved, ...newIds];
         setStaffOrder(merged);
         setSavedOrder(merged);
@@ -225,7 +238,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // Ordered employees based on staffOrder
   const employees = useMemo(() => {
     if (staffOrder.length === 0) return baseEmployees;
-    const empMap = new Map(baseEmployees.map(e => [String(e.employee_id), e]));
+    const empMap = new Map(baseEmployees.map((e) => [String(e.employee_id), e]));
     const ordered: Employee[] = [];
     for (const id of staffOrder) {
       const emp = empMap.get(id);
@@ -242,7 +255,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
   // --- Profile card state (Item #4) ---
   const [profileCard, setProfileCard] = useState<ProfileCardState | null>(null);
-  const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
+  const [apptPopover, setApptPopover] = useState<{
+    appointment: SchedulerAppointment;
+    anchorRect: DOMRect;
+  } | null>(null);
 
   const {
     appointments,
@@ -338,11 +354,11 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
   // --- Zoom ---
   const handleZoomIn = useCallback(() => {
-    setColW(prev => Math.min(prev + ZOOM_STEP, MAX_COL_W));
+    setColW((prev) => Math.min(prev + ZOOM_STEP, MAX_COL_W));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setColW(prev => Math.max(prev - ZOOM_STEP, MIN_COL_W));
+    setColW((prev) => Math.max(prev - ZOOM_STEP, MIN_COL_W));
   }, []);
 
   // --- Empty-slot click → open Quick Book prefilled (front-desk audit P1 #4) ---
@@ -350,29 +366,35 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // the hour on the viewed date. Cells outside that window are passive —
   // booking would be rejected by the RPC with EMPLOYEE_NOT_SCHEDULED, so
   // the UI shouldn't invite the click.
-  const isEmployeeWorkingAt = useCallback((employeeId: string, hour: number): boolean => {
-    const empShifts = shiftsByEmployee.get(employeeId) || [];
-    // useSchedulerData already drops is_off days from the map, so any
-    // shift returned here is a real working window.
-    for (const s of empShifts) {
-      if (!s.start_time || !s.end_time) continue;
-      const startH = shiftTimeToHour(String(s.start_time));
-      const endH = shiftTimeToHour(String(s.end_time));
-      if (hour >= startH && hour < endH) return true;
-    }
-    return false;
-  }, [shiftsByEmployee]);
+  const isEmployeeWorkingAt = useCallback(
+    (employeeId: string, hour: number): boolean => {
+      const empShifts = shiftsByEmployee.get(employeeId) || [];
+      // useSchedulerData already drops is_off days from the map, so any
+      // shift returned here is a real working window.
+      for (const s of empShifts) {
+        if (!s.start_time || !s.end_time) continue;
+        const startH = shiftTimeToHour(String(s.start_time));
+        const endH = shiftTimeToHour(String(s.end_time));
+        if (hour >= startH && hour < endH) return true;
+      }
+      return false;
+    },
+    [shiftsByEmployee]
+  );
 
-  const handleSlotClick = useCallback((employeeId: string, hour: number) => {
-    if (!onQuickBook) return;
-    if (!isEmployeeWorkingAt(employeeId, hour)) return;
-    onQuickBook({ employeeId, hour, date: selectedDate });
-  }, [onQuickBook, selectedDate, isEmployeeWorkingAt]);
+  const handleSlotClick = useCallback(
+    (employeeId: string, hour: number) => {
+      if (!onQuickBook) return;
+      if (!isEmployeeWorkingAt(employeeId, hour)) return;
+      onQuickBook({ employeeId, hour, date: selectedDate });
+    },
+    [onQuickBook, selectedDate, isEmployeeWorkingAt]
+  );
 
   // --- Staff name click -> open profile card (Item #4) ---
   const handleStaffNameClick = useCallback((employeeId: string, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setProfileCard(prev =>
+    setProfileCard((prev) =>
       prev?.employeeId === employeeId ? null : { employeeId, anchorRect: rect }
     );
   }, []);
@@ -389,13 +411,18 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   const { state: confirmState, confirm: openConfirm, close: closeConfirm } = useConfirm();
 
   // --- Appointment click -> open popover ---
-  const handleAppointmentClick = useCallback((appointment: SchedulerAppointment, e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setApptPopover(prev =>
-      prev?.appointment.appointment_id === appointment.appointment_id ? null : { appointment, anchorRect: rect }
-    );
-    setProfileCard(null); // close profile card if open
-  }, []);
+  const handleAppointmentClick = useCallback(
+    (appointment: SchedulerAppointment, e: React.MouseEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setApptPopover((prev) =>
+        prev?.appointment.appointment_id === appointment.appointment_id
+          ? null
+          : { appointment, anchorRect: rect }
+      );
+      setProfileCard(null); // close profile card if open
+    },
+    []
+  );
 
   const handleApptPopoverClose = useCallback(() => {
     setApptPopover(null);
@@ -410,100 +437,125 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // Undo for cancel-appointment — reactivates the row via the dedicated
   // backend route. TIMESLOT_OCCUPIED means another booking landed in the
   // freed slot before the user clicked Undo; surface that explicitly.
-  const undoApptCancel = useCallback(async (appointmentId: string) => {
-    if (!tenantId) return;
-    try {
-      const res = await Api.appointments.reactivate(appointmentId, tenantId);
-      if (res.success) {
-        showToast('Appointment restored', 'success');
-        void refreshScheduler();
-      } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
-        showToast('That time slot is no longer available. Book a new appointment instead.', 'error');
-      } else {
-        showToast(res.error || 'Could not restore appointment', 'error');
+  const undoApptCancel = useCallback(
+    async (appointmentId: string) => {
+      if (!tenantId) return;
+      try {
+        const res = await Api.appointments.reactivate(appointmentId, tenantId);
+        if (res.success) {
+          showToast('Appointment restored', 'success');
+          void refreshScheduler();
+        } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
+          showToast(
+            'That time slot is no longer available. Book a new appointment instead.',
+            'error'
+          );
+        } else {
+          showToast(res.error || 'Could not restore appointment', 'error');
+        }
+      } catch {
+        showToast('Connection error — could not restore appointment', 'error');
       }
-    } catch {
-      showToast('Connection error — could not restore appointment', 'error');
-    }
-  }, [tenantId, refreshScheduler]);
+    },
+    [tenantId, refreshScheduler]
+  );
 
-  const handleApptCancel = useCallback((appointmentId: string) => {
-    if (!tenantId) return;
-    openConfirm({
-      title: 'Cancel appointment?',
-      message: 'The slot will free up, but the record stays for history. You can restore it later from Customers.',
-      confirmLabel: 'Cancel appointment',
-      confirmVariant: 'danger',
-      onConfirm: () => {
-        void (async () => {
-          closeConfirm();
-          try {
-            const res = await Api.appointments.cancel(appointmentId, tenantId);
-            if (res.success) {
-              showToast('Appointment canceled', 'success', {
-                label: 'Undo',
-                onClick: () => { void undoApptCancel(appointmentId); },
-              });
-              setApptPopover(null);
-              void refreshScheduler();
-            } else {
-              showToast(res.error || 'Failed to cancel appointment', 'error');
+  const handleApptCancel = useCallback(
+    (appointmentId: string) => {
+      if (!tenantId) return;
+      openConfirm({
+        title: 'Cancel appointment?',
+        message:
+          'The slot will free up, but the record stays for history. You can restore it later from Customers.',
+        confirmLabel: 'Cancel appointment',
+        confirmVariant: 'danger',
+        onConfirm: () => {
+          void (async () => {
+            closeConfirm();
+            try {
+              const res = await Api.appointments.cancel(appointmentId, tenantId);
+              if (res.success) {
+                showToast('Appointment canceled', 'success', {
+                  label: 'Undo',
+                  onClick: () => {
+                    void undoApptCancel(appointmentId);
+                  },
+                });
+                setApptPopover(null);
+                void refreshScheduler();
+              } else {
+                showToast(res.error || 'Failed to cancel appointment', 'error');
+              }
+            } catch {
+              showToast('Connection error — could not cancel appointment', 'error');
             }
-          } catch {
-            showToast('Connection error — could not cancel appointment', 'error');
-          }
-        })();
-      },
-    });
-  }, [tenantId, refreshScheduler, openConfirm, closeConfirm, undoApptCancel]);
+          })();
+        },
+      });
+    },
+    [tenantId, refreshScheduler, openConfirm, closeConfirm, undoApptCancel]
+  );
 
   // Drag-to-move from a Staff-lane block. Block already snapped delta
   // to 15 min and called us with the resolved minute count. We compute
   // new start/end ISO times and PUT them; the GiST exclusion constraint
   // in the booking RPC catches any race-conflict (409 → toast + revert
   // via refreshScheduler).
-  const handleApptMove = useCallback(async (appointmentId: string, deltaMinutes: number) => {
-    if (!tenantId || deltaMinutes === 0) return;
-    const appt = appointments.find(a => a.appointment_id === appointmentId);
-    if (!appt) return;
-    const newStart = new Date(new Date(appt.start_time).getTime() + deltaMinutes * 60_000).toISOString();
-    const newEnd = new Date(new Date(appt.end_time).getTime() + deltaMinutes * 60_000).toISOString();
-    try {
-      const res = await Api.appointments.update(appointmentId, tenantId, {
-        start_time: newStart,
-        end_time: newEnd,
-      });
-      if (res.success) {
-        showToast(`Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, 'success');
+  const handleApptMove = useCallback(
+    async (appointmentId: string, deltaMinutes: number) => {
+      if (!tenantId || deltaMinutes === 0) return;
+      const appt = appointments.find((a) => a.appointment_id === appointmentId);
+      if (!appt) return;
+      const newStart = new Date(
+        new Date(appt.start_time).getTime() + deltaMinutes * 60_000
+      ).toISOString();
+      const newEnd = new Date(
+        new Date(appt.end_time).getTime() + deltaMinutes * 60_000
+      ).toISOString();
+      try {
+        const res = await Api.appointments.update(appointmentId, tenantId, {
+          start_time: newStart,
+          end_time: newEnd,
+        });
+        if (res.success) {
+          showToast(
+            `Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+            'success'
+          );
+          void refreshScheduler();
+        } else {
+          showToast(res.error || 'Could not move appointment', 'error');
+          void refreshScheduler(); // snap visual back to DB state
+        }
+      } catch {
+        showToast('Connection error — appointment not moved', 'error');
         void refreshScheduler();
-      } else {
-        showToast(res.error || 'Could not move appointment', 'error');
-        void refreshScheduler(); // snap visual back to DB state
       }
-    } catch {
-      showToast('Connection error — appointment not moved', 'error');
-      void refreshScheduler();
-    }
-  }, [tenantId, appointments, refreshScheduler]);
+    },
+    [tenantId, appointments, refreshScheduler]
+  );
 
   // --- Drag-to-reorder handlers (Item #6) ---
   const handleDragStart = useCallback((index: number) => {
     setDragIndex(index);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === index) return;
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, index: number) => {
+      e.preventDefault();
+      if (dragIndex === null || dragIndex === index) return;
 
-    setStaffOrder(prev => {
-      const updated = [...prev];
-      const [moved] = updated.splice(dragIndex, 1);
-      updated.splice(index, 0, moved);
-      return updated;
-    });
-    setDragIndex(index);
-    setOrderDirty(true);
-  }, [dragIndex]);
+      setStaffOrder((prev) => {
+        const updated = [...prev];
+        const [moved] = updated.splice(dragIndex, 1);
+        updated.splice(index, 0, moved);
+        return updated;
+      });
+      setDragIndex(index);
+      setOrderDirty(true);
+    },
+    [dragIndex]
+  );
 
   const handleDragEnd = useCallback(() => {
     setDragIndex(null);
@@ -513,7 +565,11 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
     setSavedOrder([...staffOrder]);
     setOrderDirty(false);
     if (storageKey) {
-      try { localStorage.setItem(storageKey, JSON.stringify(staffOrder)); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(staffOrder));
+      } catch {
+        /* ignore */
+      }
     }
   }, [staffOrder, storageKey]);
 
@@ -525,7 +581,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   // --- Compute profile card data (Item #4) ---
   const profileCardEmployee = useMemo(() => {
     if (!profileCard) return null;
-    return employees.find(e => String(e.employee_id) === profileCard.employeeId) || null;
+    return employees.find((e) => String(e.employee_id) === profileCard.employeeId) || null;
   }, [profileCard, employees]);
 
   const profileCardData = useMemo(() => {
@@ -564,10 +620,16 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
   const selectedDateLabel = useMemo(() => {
     if (isSelectedDateToday) return 'today';
-    return selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    return selectedDate.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
   }, [selectedDate, isSelectedDateToday]);
 
-  const markOffButtonLabel = isSelectedDateToday ? 'Mark off today' : `Mark off ${selectedDateLabel}`;
+  const markOffButtonLabel = isSelectedDateToday
+    ? 'Mark off today'
+    : `Mark off ${selectedDateLabel}`;
 
   const handleMarkOffClick = useCallback(() => {
     if (!profileCardEmployee || !tenantId) return;
@@ -615,11 +677,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   ]);
 
   // --- Compute row heights for skills mode (Item #5) ---
-  const getRowHeight = useCallback((emp: Employee): number => {
-    if (viewMode !== 'skills') return ROW_HEIGHT;
-    const skillCount = employeeSkillsMap.get(String(emp.employee_id))?.length || 0;
-    return Math.max(SKILL_ROW_MIN_HEIGHT, Math.min(skillCount * SKILL_BAR_HEIGHT + 10, 200));
-  }, [viewMode, employeeSkillsMap]);
+  const getRowHeight = useCallback(
+    (emp: Employee): number => {
+      if (viewMode !== 'skills') return ROW_HEIGHT;
+      const skillCount = employeeSkillsMap.get(String(emp.employee_id))?.length || 0;
+      return Math.max(SKILL_ROW_MIN_HEIGHT, Math.min(skillCount * SKILL_BAR_HEIGHT + 10, 200));
+    },
+    [viewMode, employeeSkillsMap]
+  );
 
   // --- Compute grid width ---
   const totalGridWidth = 24 * colW;
@@ -647,7 +712,8 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                   }`}
                   style={{
                     background: activeView === key ? 'var(--accent, #3b82f6)' : 'transparent',
-                    color: activeView === key ? 'var(--primary-text, #fff)' : 'var(--text-secondary)',
+                    color:
+                      activeView === key ? 'var(--primary-text, #fff)' : 'var(--text-secondary)',
                   }}
                   data-testid={`view-tab-${key}`}
                 >
@@ -658,15 +724,15 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
             </div>
           )}
           {!viewTabs && (
-          <h1
-            className="font-display text-2xl tracking-wide uppercase"
-            style={{
-              fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
-              color: 'var(--text-primary, #fff)',
-            }}
-          >
-            Schedule
-          </h1>
+            <h1
+              className="font-display text-2xl tracking-wide uppercase"
+              style={{
+                fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
+                color: 'var(--text-primary, #fff)',
+              }}
+            >
+              Schedule
+            </h1>
           )}
         </div>
 
@@ -700,7 +766,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               className="px-3 py-1.5 text-xs font-bold transition-colors"
               style={{
                 background: viewMode === 'hours' ? 'var(--accent, #3b82f6)' : 'transparent',
-                color: viewMode === 'hours' ? 'var(--primary-text, #fff)' : 'var(--text-secondary, #aaa)',
+                color:
+                  viewMode === 'hours'
+                    ? 'var(--primary-text, #fff)'
+                    : 'var(--text-secondary, #aaa)',
               }}
               data-testid="view-mode-hours"
             >
@@ -711,7 +780,10 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               className="px-3 py-1.5 text-xs font-bold transition-colors"
               style={{
                 background: viewMode === 'skills' ? 'var(--accent, #3b82f6)' : 'transparent',
-                color: viewMode === 'skills' ? 'var(--primary-text, #fff)' : 'var(--text-secondary, #aaa)',
+                color:
+                  viewMode === 'skills'
+                    ? 'var(--primary-text, #fff)'
+                    : 'var(--text-secondary, #aaa)',
               }}
               data-testid="view-mode-skills"
             >
@@ -810,149 +882,170 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
 
       {/* Main scheduler body */}
       {employees.length > 0 && (
-      <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--bg-base, #111)' }}>
-        {/* Left: fixed staff names panel */}
-        <div
-          className="flex flex-col shrink-0"
-          style={{ width: STAFF_PANEL_WIDTH, borderRight: '1px solid var(--border-soft)' }}
-        >
-          {/* Top-left corner (aligns with hour header) */}
+        <div className="flex flex-1 overflow-hidden" style={{ background: 'var(--bg-base, #111)' }}>
+          {/* Left: fixed staff names panel */}
           <div
-            className="shrink-0"
-            style={{
-              height: HEADER_HEIGHT,
-              borderBottom: '1px solid var(--border-soft)',
-              background: 'var(--bg-surface, #1a1a1a)',
-            }}
-          />
-
-          {/* Staff names (scrolls vertically in sync with grid) */}
-          <div
-            ref={staffPanelRef}
-            className="flex-1 overflow-hidden"
-            style={{ background: 'var(--bg-surface, #1a1a1a)' }}
-            data-testid="staff-names-panel"
+            className="flex flex-col shrink-0"
+            style={{ width: STAFF_PANEL_WIDTH, borderRight: '1px solid var(--border-soft)' }}
           >
-            {employees.map((emp, idx) => {
-              const rowH = getRowHeight(emp);
-              return (
-                <div
-                  key={String(emp.employee_id)}
-                  role="button"
-                  tabIndex={0}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragOver={(e) => handleDragOver(e, idx)}
-                  onDragEnd={handleDragEnd}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStaffNameClick(String(emp.employee_id), e as unknown as React.MouseEvent); } }}
-                  className="flex items-center px-1.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-inset"
-                  style={{
-                    ['--tw-ring-color' as string]: 'var(--accent)',
-                    height: rowH,
-                    borderBottom: '1px solid var(--border-soft)',
-                    color: 'var(--text-primary, #fff)',
-                    opacity: dragIndex === idx ? 0.5 : 1,
-                    transform: dragIndex === idx ? 'scale(1.02)' : 'none',
-                  }}
-                  onClick={(e) => handleStaffNameClick(String(emp.employee_id), e)}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted, rgba(59,130,246,0.1))';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = 'transparent';
-                  }}
-                  data-testid={`staff-name-${emp.employee_id}`}
-                >
-                  {/* Drag handle (Item #6) */}
-                  <div
-                    className="shrink-0 cursor-grab active:cursor-grabbing mr-1.5 flex items-center"
-                    style={{ color: 'var(--text-muted, #666)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-secondary, #aaa)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted, #666)'; }}
-                    data-testid={`drag-handle-${emp.employee_id}`}
-                  >
-                    <GripDots />
-                  </div>
-                  <span
-                    className="text-sm font-bold truncate"
-                    style={{ fontFamily: 'var(--font-body, "DM Sans", sans-serif)' }}
-                  >
-                    {emp.name}
-                  </span>
-                </div>
-              );
-            })}
+            {/* Top-left corner (aligns with hour header) */}
+            <div
+              className="shrink-0"
+              style={{
+                height: HEADER_HEIGHT,
+                borderBottom: '1px solid var(--border-soft)',
+                background: 'var(--bg-surface, #1a1a1a)',
+              }}
+            />
 
-            {/* Unassigned row if applicable */}
-            {(appointmentsByEmployee.get('unassigned')?.length || 0) > 0 && (
-              <div
-                className="flex items-center px-3"
-                style={{
-                  height: ROW_HEIGHT,
-                  borderBottom: '1px solid var(--border-soft)',
-                  color: 'var(--text-muted, #888)',
-                  fontStyle: 'italic',
-                }}
-                data-testid="staff-name-unassigned"
-              >
-                <span className="text-sm truncate" style={{ fontFamily: 'var(--font-body, "DM Sans", sans-serif)' }}>
-                  Unassigned
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right: hour header + appointment grid */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Hour header (scrolls horizontally in sync with grid) */}
-          <div
-            ref={headerRef}
-            className="shrink-0 overflow-hidden"
-            style={{
-              height: HEADER_HEIGHT,
-              borderBottom: '1px solid var(--border-soft)',
-              background: 'var(--bg-surface, #1a1a1a)',
-            }}
-            data-testid="hour-header"
-          >
-            <div className="flex" style={{ width: totalGridWidth }}>
-              {HOURS.map((h) => {
-                const isOutsideBusiness = h < openHour || h >= closeHour;
-                // Mark the open/close boundaries with an accent-colored
-                // left border so the transition from "closed" to "open"
-                // hours is visible at a glance. Pre-fix the rgba(0,0,0,0.2)
-                // outside-business overlay was nearly invisible on dark
-                // themes (near-black on near-black) — the user reported
-                // "can't see business hours very easily" on 2026-05-13.
-                const isOpenBoundary = h === openHour && openHour > 0;
-                const isCloseBoundary = h === closeHour && closeHour < 24;
+            {/* Staff names (scrolls vertically in sync with grid) */}
+            <div
+              ref={staffPanelRef}
+              className="flex-1 overflow-hidden"
+              style={{ background: 'var(--bg-surface, #1a1a1a)' }}
+              data-testid="staff-names-panel"
+            >
+              {employees.map((emp, idx) => {
+                const rowH = getRowHeight(emp);
                 return (
                   <div
-                    key={h}
-                    className="text-center text-[10px] font-bold shrink-0 flex items-center justify-center select-none"
-                    style={{
-                      width: colW,
-                      height: HEADER_HEIGHT,
-                      color: isOutsideBusiness ? 'var(--text-muted, #666)' : 'var(--text-secondary, #aaa)',
-                      // Bumped from 0.2 → 0.45 so the outside-business
-                      // band is clearly visible on both light and dark
-                      // themes. Inside-business stays transparent so
-                      // the underlying surface color reads through.
-                      background: isOutsideBusiness ? 'rgba(0,0,0,0.45)' : 'transparent',
-                      borderLeft: (isOpenBoundary || isCloseBoundary) ? '2px solid var(--accent, #3b82f6)' : undefined,
-                      borderRight: '1px solid var(--border-soft)',
+                    key={String(emp.employee_id)}
+                    role="button"
+                    tabIndex={0}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDragEnd={handleDragEnd}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleStaffNameClick(
+                          String(emp.employee_id),
+                          e as unknown as React.MouseEvent
+                        );
+                      }
                     }}
-                    data-testid={`hour-cell-${h}`}
+                    className="flex items-center px-1.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-inset"
+                    style={{
+                      ['--tw-ring-color' as string]: 'var(--accent)',
+                      height: rowH,
+                      borderBottom: '1px solid var(--border-soft)',
+                      color: 'var(--text-primary, #fff)',
+                      opacity: dragIndex === idx ? 0.5 : 1,
+                      transform: dragIndex === idx ? 'scale(1.02)' : 'none',
+                    }}
+                    onClick={(e) => handleStaffNameClick(String(emp.employee_id), e)}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background =
+                        'var(--accent-muted, rgba(59,130,246,0.1))';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                    data-testid={`staff-name-${emp.employee_id}`}
                   >
-                    {formatHour(h)}
+                    {/* Drag handle (Item #6) */}
+                    <div
+                      className="shrink-0 cursor-grab active:cursor-grabbing mr-1.5 flex items-center"
+                      style={{ color: 'var(--text-muted, #666)' }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--text-secondary, #aaa)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'var(--text-muted, #666)';
+                      }}
+                      data-testid={`drag-handle-${emp.employee_id}`}
+                    >
+                      <GripDots />
+                    </div>
+                    <span
+                      className="text-sm font-bold truncate"
+                      style={{ fontFamily: 'var(--font-body, "DM Sans", sans-serif)' }}
+                    >
+                      {emp.name}
+                    </span>
                   </div>
                 );
               })}
+
+              {/* Unassigned row if applicable */}
+              {(appointmentsByEmployee.get('unassigned')?.length || 0) > 0 && (
+                <div
+                  className="flex items-center px-3"
+                  style={{
+                    height: ROW_HEIGHT,
+                    borderBottom: '1px solid var(--border-soft)',
+                    color: 'var(--text-muted, #888)',
+                    fontStyle: 'italic',
+                  }}
+                  data-testid="staff-name-unassigned"
+                >
+                  <span
+                    className="text-sm truncate"
+                    style={{ fontFamily: 'var(--font-body, "DM Sans", sans-serif)' }}
+                  >
+                    Unassigned
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Scrollable grid area.
+          {/* Right: hour header + appointment grid */}
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Hour header (scrolls horizontally in sync with grid) */}
+            <div
+              ref={headerRef}
+              className="shrink-0 overflow-hidden"
+              style={{
+                height: HEADER_HEIGHT,
+                borderBottom: '1px solid var(--border-soft)',
+                background: 'var(--bg-surface, #1a1a1a)',
+              }}
+              data-testid="hour-header"
+            >
+              <div className="flex" style={{ width: totalGridWidth }}>
+                {HOURS.map((h) => {
+                  const isOutsideBusiness = h < openHour || h >= closeHour;
+                  // Mark the open/close boundaries with an accent-colored
+                  // left border so the transition from "closed" to "open"
+                  // hours is visible at a glance. Pre-fix the rgba(0,0,0,0.2)
+                  // outside-business overlay was nearly invisible on dark
+                  // themes (near-black on near-black) — the user reported
+                  // "can't see business hours very easily" on 2026-05-13.
+                  const isOpenBoundary = h === openHour && openHour > 0;
+                  const isCloseBoundary = h === closeHour && closeHour < 24;
+                  return (
+                    <div
+                      key={h}
+                      className="text-center text-[10px] font-bold shrink-0 flex items-center justify-center select-none"
+                      style={{
+                        width: colW,
+                        height: HEADER_HEIGHT,
+                        color: isOutsideBusiness
+                          ? 'var(--text-muted, #666)'
+                          : 'var(--text-secondary, #aaa)',
+                        // Bumped from 0.2 → 0.45 so the outside-business
+                        // band is clearly visible on both light and dark
+                        // themes. Inside-business stays transparent so
+                        // the underlying surface color reads through.
+                        background: isOutsideBusiness ? 'rgba(0,0,0,0.45)' : 'transparent',
+                        borderLeft:
+                          isOpenBoundary || isCloseBoundary
+                            ? '2px solid var(--accent, #3b82f6)'
+                            : undefined,
+                        borderRight: '1px solid var(--border-soft)',
+                      }}
+                      data-testid={`hour-cell-${h}`}
+                    >
+                      {formatHour(h)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Scrollable grid area.
               `touch-action: pan-x pan-y pinch-zoom` (2026-05-18, UX
               audit Devices 4.3 row 2): 1-finger touches still fire
               as mouse events for the AppointmentBlock drag handler
@@ -963,34 +1056,41 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
               Without this, the block's mousedown-emulated-from-
               touchstart captured every 2-finger gesture and the
               scheduler felt frozen on iPad. */}
-          <div
-            ref={gridContainerRef}
-            className="flex-1 overflow-auto relative"
-            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
-            data-testid="scheduler-grid"
-          >
-            {loading && (
-              <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: 'rgba(0,0,0,0.15)' }} data-testid="scheduler-loading">
-                <RefreshCw className="w-5 h-5 animate-spin" style={{ color: 'var(--text-secondary)' }} />
-              </div>
-            )}
-            <div style={{ width: totalGridWidth, minHeight: '100%' }}>
-              {employees.map((emp) => {
-                const empId = String(emp.employee_id);
-                const empAppointments = appointmentsByEmployee.get(empId) || [];
-                const rowH = getRowHeight(emp);
+            <div
+              ref={gridContainerRef}
+              className="flex-1 overflow-auto relative"
+              style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+              data-testid="scheduler-grid"
+            >
+              {loading && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center z-10"
+                  style={{ background: 'rgba(0,0,0,0.15)' }}
+                  data-testid="scheduler-loading"
+                >
+                  <RefreshCw
+                    className="w-5 h-5 animate-spin"
+                    style={{ color: 'var(--text-secondary)' }}
+                  />
+                </div>
+              )}
+              <div style={{ width: totalGridWidth, minHeight: '100%' }}>
+                {employees.map((emp) => {
+                  const empId = String(emp.employee_id);
+                  const empAppointments = appointmentsByEmployee.get(empId) || [];
+                  const rowH = getRowHeight(emp);
 
-                return (
-                  <div
-                    key={empId}
-                    className="relative"
-                    style={{
-                      height: rowH,
-                      borderBottom: '1px solid var(--border-soft)',
-                    }}
-                    data-testid={`scheduler-row-${empId}`}
-                  >
-                    {/* Hour slot backgrounds — clickable in hours mode when
+                  return (
+                    <div
+                      key={empId}
+                      className="relative"
+                      style={{
+                        height: rowH,
+                        borderBottom: '1px solid var(--border-soft)',
+                      }}
+                      data-testid={`scheduler-row-${empId}`}
+                    >
+                      {/* Hour slot backgrounds — clickable in hours mode when
                         Quick Book is wired AND the row's employee actually
                         has a shift covering this hour (audit P1 #4 +
                         out-of-hours fix). Cells outside the employee's
@@ -1002,127 +1102,129 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                         overall open window vs. a single employee's day off
                         within open hours both render shaded — but only
                         the per-employee gate decides clickability). */}
-                    <div className="absolute inset-0 flex">
-                      {HOURS.map((h) => {
-                        const isOutsideBusiness = h < openHour || h >= closeHour;
-                        const employeeWorking = viewMode === 'hours' && isEmployeeWorkingAt(empId, h);
-                        const isClickable = !!onQuickBook && employeeWorking;
-                        return (
-                          <div
-                            key={h}
-                            role={isClickable ? 'button' : undefined}
-                            aria-label={isClickable ? `Book ${emp.name} at ${formatHour(h)}` : undefined}
-                            tabIndex={isClickable ? 0 : undefined}
-                            onClick={isClickable ? () => handleSlotClick(empId, h) : undefined}
-                            onKeyDown={
-                              isClickable
-                                ? (e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault();
-                                      handleSlotClick(empId, h);
+                      <div className="absolute inset-0 flex">
+                        {HOURS.map((h) => {
+                          const isOutsideBusiness = h < openHour || h >= closeHour;
+                          const employeeWorking =
+                            viewMode === 'hours' && isEmployeeWorkingAt(empId, h);
+                          const isClickable = !!onQuickBook && employeeWorking;
+                          return (
+                            <div
+                              key={h}
+                              role={isClickable ? 'button' : undefined}
+                              aria-label={
+                                isClickable ? `Book ${emp.name} at ${formatHour(h)}` : undefined
+                              }
+                              tabIndex={isClickable ? 0 : undefined}
+                              onClick={isClickable ? () => handleSlotClick(empId, h) : undefined}
+                              onKeyDown={
+                                isClickable
+                                  ? (e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        handleSlotClick(empId, h);
+                                      }
                                     }
-                                  }
-                                : undefined
-                            }
-                            className={`shrink-0${isClickable ? ' cursor-pointer hover:bg-[rgba(59,130,246,0.08)]' : ''}`}
-                            style={{
-                              width: colW,
-                              height: rowH,
-                              background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
-                              borderRight: '1px solid var(--border-soft)',
-                            }}
-                            data-testid={`slot-${empId}-${h}`}
-                          />
-                        );
-                      })}
-                    </div>
+                                  : undefined
+                              }
+                              className={`shrink-0${isClickable ? ' cursor-pointer hover:bg-[rgba(59,130,246,0.08)]' : ''}`}
+                              style={{
+                                width: colW,
+                                height: rowH,
+                                background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
+                                borderRight: '1px solid var(--border-soft)',
+                              }}
+                              data-testid={`slot-${empId}-${h}`}
+                            />
+                          );
+                        })}
+                      </div>
 
-                    {/* Hours mode: shift bar + appointment blocks */}
-                    {viewMode === 'hours' && (
-                      <>
-                        <ShiftBar
+                      {/* Hours mode: shift bar + appointment blocks */}
+                      {viewMode === 'hours' && (
+                        <>
+                          <ShiftBar shifts={shiftsByEmployee.get(empId) || []} colW={colW} />
+                          {empAppointments.map((appt) => (
+                            <AppointmentBlockNew
+                              key={appt.appointment_id}
+                              appointment={appt}
+                              colW={colW}
+                              services={services}
+                              onClick={handleAppointmentClick}
+                              onDelete={handleApptCancel}
+                              onMove={handleApptMove}
+                            />
+                          ))}
+                        </>
+                      )}
+
+                      {/* Skills mode: stacked skill bars (Item #5) */}
+                      {viewMode === 'skills' && (
+                        <SkillBars
+                          employee={emp}
+                          employeeSkills={employeeSkillsMap.get(empId) || []}
                           shifts={shiftsByEmployee.get(empId) || []}
                           colW={colW}
+                          skillColorMap={skillColorMap}
+                          openHour={openHour}
+                          closeHour={closeHour}
                         />
-                        {empAppointments.map((appt) => (
-                          <AppointmentBlockNew
-                            key={appt.appointment_id}
-                            appointment={appt}
-                            colW={colW}
-                            services={services}
-                            onClick={handleAppointmentClick}
-                            onDelete={handleApptCancel}
-                            onMove={handleApptMove}
-                          />
-                        ))}
-                      </>
-                    )}
+                      )}
+                    </div>
+                  );
+                })}
 
-                    {/* Skills mode: stacked skill bars (Item #5) */}
-                    {viewMode === 'skills' && (
-                      <SkillBars
-                        employee={emp}
-                        employeeSkills={employeeSkillsMap.get(empId) || []}
-                        shifts={shiftsByEmployee.get(empId) || []}
-                        colW={colW}
-                        skillColorMap={skillColorMap}
-                        openHour={openHour}
-                        closeHour={closeHour}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+                {/* Unassigned row */}
+                {viewMode === 'hours' &&
+                  (appointmentsByEmployee.get('unassigned')?.length || 0) > 0 && (
+                    <div
+                      className="relative"
+                      style={{
+                        height: ROW_HEIGHT,
+                        borderBottom: '1px solid var(--border-soft)',
+                      }}
+                      data-testid="scheduler-row-unassigned"
+                    >
+                      <div className="absolute inset-0 flex">
+                        {HOURS.map((h) => {
+                          const isOutsideBusiness = h < openHour || h >= closeHour;
+                          return (
+                            <div
+                              key={h}
+                              className="shrink-0"
+                              style={{
+                                width: colW,
+                                height: ROW_HEIGHT,
+                                background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
+                                borderLeft:
+                                  (h === openHour && openHour > 0) ||
+                                  (h === closeHour && closeHour < 24)
+                                    ? '2px solid var(--accent, #3b82f6)'
+                                    : undefined,
+                                borderRight: '1px solid var(--border-soft)',
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
 
-              {/* Unassigned row */}
-              {viewMode === 'hours' && (appointmentsByEmployee.get('unassigned')?.length || 0) > 0 && (
-                <div
-                  className="relative"
-                  style={{
-                    height: ROW_HEIGHT,
-                    borderBottom: '1px solid var(--border-soft)',
-                  }}
-                  data-testid="scheduler-row-unassigned"
-                >
-                  <div className="absolute inset-0 flex">
-                    {HOURS.map((h) => {
-                      const isOutsideBusiness = h < openHour || h >= closeHour;
-                      return (
-                        <div
-                          key={h}
-                          className="shrink-0"
-                          style={{
-                            width: colW,
-                            height: ROW_HEIGHT,
-                            background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
-                            borderLeft:
-                              (h === openHour && openHour > 0) || (h === closeHour && closeHour < 24)
-                                ? '2px solid var(--accent, #3b82f6)'
-                                : undefined,
-                            borderRight: '1px solid var(--border-soft)',
-                          }}
+                      {(appointmentsByEmployee.get('unassigned') || []).map((appt) => (
+                        <AppointmentBlockNew
+                          key={appt.appointment_id}
+                          appointment={appt}
+                          colW={colW}
+                          services={services}
+                          onClick={handleAppointmentClick}
+                          onDelete={handleApptCancel}
+                          onMove={handleApptMove}
                         />
-                      );
-                    })}
-                  </div>
-
-                  {(appointmentsByEmployee.get('unassigned') || []).map((appt) => (
-                    <AppointmentBlockNew
-                      key={appt.appointment_id}
-                      appointment={appt}
-                      colW={colW}
-                      services={services}
-                      onClick={handleAppointmentClick}
-                      onDelete={handleApptCancel}
-                      onMove={handleApptMove}
-                    />
-                  ))}
-                </div>
-              )}
+                      ))}
+                    </div>
+                  )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* Staff Profile Card (Item #4) */}
@@ -1153,14 +1255,15 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
         loading={markingOff}
       />
 
-
       {/* Appointment popover */}
       {apptPopover && (
         <AppointmentPopover
           appointment={apptPopover.appointment}
           employeeName={
             apptPopover.appointment.employee_id
-              ? employees.find(e => String(e.employee_id) === String(apptPopover.appointment.employee_id))?.name || null
+              ? employees.find(
+                  (e) => String(e.employee_id) === String(apptPopover.appointment.employee_id)
+                )?.name || null
               : null
           }
           resourceName={apptPopover.appointment.resources?.name || null}
@@ -1213,7 +1316,8 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
                 className="absolute inset-0 flex items-center px-2 text-[11px] font-bold truncate"
                 style={{ color: 'var(--primary-text)', textShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
               >
-                {formatTime24to12(shift.start_time.substring(0, 5))} – {formatTime24to12(shift.end_time.substring(0, 5))}
+                {formatTime24to12(shift.start_time.substring(0, 5))} –{' '}
+                {formatTime24to12(shift.end_time.substring(0, 5))}
               </span>
             )}
           </div>
@@ -1235,7 +1339,15 @@ interface SkillBarsProps {
   closeHour: number;
 }
 
-function SkillBars({ employee, employeeSkills, shifts, colW, skillColorMap, openHour, closeHour }: SkillBarsProps) {
+function SkillBars({
+  employee,
+  employeeSkills,
+  shifts,
+  colW,
+  skillColorMap,
+  openHour,
+  closeHour,
+}: SkillBarsProps) {
   const skills = employeeSkills;
   if (skills.length === 0) return null;
 
@@ -1320,7 +1432,14 @@ interface AppointmentBlockNewProps {
 const NEW_CLICK_DRAG_THRESHOLD_PX = 4;
 const NEW_SNAP_MIN = 15;
 
-function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, onMove }: AppointmentBlockNewProps) {
+function AppointmentBlockNew({
+  appointment,
+  colW,
+  services,
+  onClick,
+  onDelete,
+  onMove,
+}: AppointmentBlockNewProps) {
   const startH = toFractionalHour(appointment.start_time);
   const endH = toFractionalHour(appointment.end_time);
   const duration = Math.max(endH - startH, 0.25); // min 15 min visual
@@ -1390,9 +1509,10 @@ function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, o
   // rationale. Without a visible handle, the cursor:move cue is
   // invisible on touch and on quick scans (UX audit #6, 2026-05-18).
   const showDragHandle = !!onMove && !isCanceled && !isDragging && !isNarrowBlock;
-  const moveHintTitle = onMove && !isCanceled
-    ? `${customerName} — ${serviceName}\nDrag to move · click for details`
-    : `${customerName} — ${serviceName}`;
+  const moveHintTitle =
+    onMove && !isCanceled
+      ? `${customerName} — ${serviceName}\nDrag to move · click for details`
+      : `${customerName} — ${serviceName}`;
 
   return (
     <div
@@ -1423,9 +1543,15 @@ function AppointmentBlockNew({ appointment, colW, services, onClick, onDelete, o
           <GripVertical className="w-3 h-3" style={{ color: statusColors.text }} />
         </span>
       )}
-      <span className={`block truncate leading-tight${showDragHandle ? ' pl-3' : ''}`}>{customerName}</span>
+      <span className={`block truncate leading-tight${showDragHandle ? ' pl-3' : ''}`}>
+        {customerName}
+      </span>
       {width > 60 && (
-        <span className={`block truncate leading-tight text-[10px] opacity-80${showDragHandle ? ' pl-3' : ''}`}>{serviceName}</span>
+        <span
+          className={`block truncate leading-tight text-[10px] opacity-80${showDragHandle ? ' pl-3' : ''}`}
+        >
+          {serviceName}
+        </span>
       )}
       {showTrash && (
         <button

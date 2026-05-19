@@ -23,7 +23,11 @@ describe('telnyxSms.sendSms', () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await sendSms({ from: '+15550001000', to: '+15551234567', body: 'Your code: 123456' });
+    const result = await sendSms({
+      from: '+15550001000',
+      to: '+15551234567',
+      body: 'Your code: 123456',
+    });
 
     expect(result).toEqual({ ok: true, status: 200 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -61,8 +65,8 @@ describe('telnyxSms.sendSms', () => {
     // WHO: Telnyx rejected the send (bad number, throttled, unauthorized)
     // WHAT: Helper returns { ok: false, status, error: <body> }; caller
     //        decides whether to retry or translate for the user
-    const fetchMock = vi.fn(async () =>
-      new Response('{"error":"invalid destination"}', { status: 422 })
+    const fetchMock = vi.fn(
+      async () => new Response('{"error":"invalid destination"}', { status: 422 })
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -76,7 +80,12 @@ describe('telnyxSms.sendSms', () => {
   it('SAD: network error is caught and surfaced', async () => {
     // WHAT: fetch rejection (DNS failure, connection refused, timeout) must
     //        not crash the caller — return { ok: false } with a message
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      })
+    );
 
     const result = await sendSms({ from: '+15550001000', to: '+15551234567', body: 'x' });
 

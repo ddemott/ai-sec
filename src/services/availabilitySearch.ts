@@ -166,21 +166,23 @@ export async function findNextAvailableSlots(
     String(count),
   ]);
 
-  return res.rows.map((r: {
-    slot_start: Date;
-    slot_end: Date;
-    employee_id: string;
-    employee_name: string;
-    resource_id: string;
-    resource_name: string;
-    skill_count: number;
-  }) => ({
-    start_time: r.slot_start.toISOString(),
-    end_time: r.slot_end.toISOString(),
-    employee_id: r.employee_id,
-    employee_name: r.employee_name,
-    resource_id: r.resource_id,
-    resource_name: r.resource_name,
-    skill_count: Number(r.skill_count),
-  }));
+  return res.rows.map(
+    (r: {
+      slot_start: Date;
+      slot_end: Date;
+      employee_id: string;
+      employee_name: string;
+      resource_id: string;
+      resource_name: string;
+      skill_count: number;
+    }) => ({
+      start_time: r.slot_start.toISOString(),
+      end_time: r.slot_end.toISOString(),
+      employee_id: r.employee_id,
+      employee_name: r.employee_name,
+      resource_id: r.resource_id,
+      resource_name: r.resource_name,
+      skill_count: Number(r.skill_count),
+    })
+  );
 }

@@ -22,7 +22,14 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import {
+  getRootClient,
+  clearDB,
+  setupBasicTenant,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
 import { decideRetry, MAX_RETRIES } from './services/reminders/retryPolicy';
 
 describe('reminder retry worker — real-DB integration', () => {
@@ -99,9 +106,16 @@ describe('reminder retry worker — real-DB integration', () => {
         WHERE table_schema = 'public' AND table_name = 'reminder_schedules'
           AND column_name IN ('retry_count', 'next_retry_at')`
     );
-    const map: Record<string, { data_type: string; is_nullable: string; column_default: string | null }> = {};
+    const map: Record<
+      string,
+      { data_type: string; is_nullable: string; column_default: string | null }
+    > = {};
     for (const r of cols.rows) {
-      map[r.column_name] = { data_type: r.data_type, is_nullable: r.is_nullable, column_default: r.column_default };
+      map[r.column_name] = {
+        data_type: r.data_type,
+        is_nullable: r.is_nullable,
+        column_default: r.column_default,
+      };
     }
     expect(map.retry_count?.data_type).toBe('integer');
     expect(map.retry_count?.is_nullable).toBe('NO');
@@ -249,7 +263,9 @@ describe('reminder retry worker — real-DB integration', () => {
     );
     expect(after.rows[0].status).toBe('scheduled'); // load-bearing: NOT 'failed'
     expect(after.rows[0].retry_count).toBe(1);
-    expect(new Date(after.rows[0].next_retry_at).getTime()).toBeGreaterThan(Date.now() + 4 * 60_000);
+    expect(new Date(after.rows[0].next_retry_at).getTime()).toBeGreaterThan(
+      Date.now() + 4 * 60_000
+    );
     expect(new Date(after.rows[0].next_retry_at).getTime()).toBeLessThan(Date.now() + 6 * 60_000);
     expect(after.rows[0].error).toBe('Service Unavailable');
   });

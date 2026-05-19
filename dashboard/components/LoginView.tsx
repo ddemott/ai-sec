@@ -1,77 +1,97 @@
-'use client'
+'use client';
 
-import React, { useState } from 'react'
-import { Lock, Mail, Loader2, Bot, Eye, EyeOff } from 'lucide-react'
-import { API_BASE_URL } from '../lib/api'
+import React, { useState } from 'react';
+import { Lock, Mail, Loader2, Bot, Eye, EyeOff } from 'lucide-react';
+import { API_BASE_URL } from '../lib/api';
 
 interface LoginViewProps {
   onLoginSuccess: (data: { tenant_id: string; user_name: string; role?: string }) => void;
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
     try {
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (response.ok && data.success) {
-        localStorage.setItem('tenantId', data.tenant_id)
-        localStorage.setItem('userName', data.user_name)
-        localStorage.setItem('userEmail', email)
-        if (data.token) localStorage.setItem('authToken', data.token)
-        onLoginSuccess(data)
+        localStorage.setItem('tenantId', data.tenant_id);
+        localStorage.setItem('userName', data.user_name);
+        localStorage.setItem('userEmail', email);
+        if (data.token) localStorage.setItem('authToken', data.token);
+        onLoginSuccess(data);
       } else {
-        setError(data.error || 'Sign in failed. Please try again.')
+        setError(data.error || 'Sign in failed. Please try again.');
       }
     } catch {
-      setError("Couldn't connect. Check your internet and try again.")
+      setError("Couldn't connect. Check your internet and try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
-      <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}>
-
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-4 font-sans transition-colors duration-200"
+      style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden border"
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
+      >
         {/* Header/Logo */}
-        <div className="p-8 flex flex-col items-center" style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}>
+        <div
+          className="p-8 flex flex-col items-center"
+          style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
+        >
           <div className="bg-white/20 p-3 rounded-xl mb-4 backdrop-blur-sm">
             <Bot className="w-10 h-10" />
           </div>
           <h1 className="text-2xl font-display tracking-tight">Secretary HQ</h1>
-          <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>Your AI Receptionist</p>
+          <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Your AI Receptionist
+          </p>
         </div>
 
         <div className="p-8">
           {error && (
-            <div role="alert" className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 text-sm rounded-r-md">
+            <div
+              role="alert"
+              className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 text-sm rounded-r-md"
+            >
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="login-email" className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
+              <label
+                htmlFor="login-email"
+                className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+                <Mail
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  aria-hidden="true"
+                />
                 <input
                   id="login-email"
                   type="email"
@@ -80,18 +100,32 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="username"
                   className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
-                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
+                  style={
+                    {
+                      backgroundColor: 'var(--bg-raised)',
+                      borderColor: 'var(--border-soft)',
+                      color: 'var(--text-primary)',
+                      '--tw-ring-color': 'var(--accent-glow)',
+                    } as React.CSSProperties
+                  }
                   placeholder="you@business.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--text-secondary)' }}>
+              <label
+                htmlFor="login-password"
+                className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+                <Lock
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  aria-hidden="true"
+                />
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
@@ -99,7 +133,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-11 pr-12 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
-                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-glow)' } as React.CSSProperties}
+                  style={
+                    {
+                      backgroundColor: 'var(--bg-raised)',
+                      borderColor: 'var(--border-soft)',
+                      color: 'var(--text-primary)',
+                      '--tw-ring-color': 'var(--accent-glow)',
+                    } as React.CSSProperties
+                  }
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
@@ -133,7 +174,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             </button>
 
             <div className="text-center">
-              <a href="/forgot-password" className="text-xs hover:underline" style={{ color: 'var(--text-secondary)' }}>
+              <a
+                href="/forgot-password"
+                className="text-xs hover:underline"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 Forgot password?
               </a>
             </div>
@@ -145,7 +190,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               audit #8 (2026-05-18): don't ship the affordance until
               the destination works — rephrased to a real mailto until
               self-serve signup lands. */}
-          <div className="mt-8 pt-6 border-t text-center" style={{ borderColor: 'var(--border-soft)' }}>
+          <div
+            className="mt-8 pt-6 border-t text-center"
+            style={{ borderColor: 'var(--border-soft)' }}
+          >
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Don&apos;t have an account?{' '}
               <a
@@ -160,5 +208,5 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -76,7 +76,9 @@ export const Modal: React.FC<ModalProps> = ({
       if (previousFocusRef.current && document.body.contains(previousFocusRef.current)) {
         previousFocusRef.current.focus();
       } else {
-        (document.querySelector<HTMLElement>('[role="main"], main, [data-testid]') ?? document.body).focus();
+        (
+          document.querySelector<HTMLElement>('[role="main"], main, [data-testid]') ?? document.body
+        ).focus();
       }
     };
   }, [isOpen]);
@@ -84,15 +86,34 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={disableBackdropClose ? undefined : onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      onClick={disableBackdropClose ? undefined : onClose}
+    >
       <div
         ref={modalRef}
         className="rounded-2xl shadow-xl border max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200"
-        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+        style={{
+          backgroundColor: 'var(--surface)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-primary)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-          <h2 id="modal-title" className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+        <header
+          className="px-6 py-4 border-b flex items-center justify-between"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <h2
+            id="modal-title"
+            className="text-lg font-bold"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            {title}
+          </h2>
           <button
             onClick={onClose}
             aria-label="Close dialog"
@@ -103,12 +124,13 @@ export const Modal: React.FC<ModalProps> = ({
           </button>
         </header>
 
-        <div className="p-6">
-          {children}
-        </div>
+        <div className="p-6">{children}</div>
 
         {footer && (
-          <footer className="px-6 py-4 border-t flex justify-end space-x-3" style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}>
+          <footer
+            className="px-6 py-4 border-t flex justify-end space-x-3"
+            style={{ backgroundColor: 'var(--surface-elevated)', borderColor: 'var(--border)' }}
+          >
             {footer}
           </footer>
         )}

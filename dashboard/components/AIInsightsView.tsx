@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import React, { useState } from 'react'
-import { FolderTab, FolderTabBar } from './ui/FolderTabs'
-import AIConfigView from './AIConfigView'
-import AnalyticsView from './AnalyticsView'
-import KnowledgeBaseView from './KnowledgeBaseView'
+import React, { useState } from 'react';
+import { FolderTab, FolderTabBar } from './ui/FolderTabs';
+import AIConfigView from './AIConfigView';
+import AnalyticsView from './AnalyticsView';
+import KnowledgeBaseView from './KnowledgeBaseView';
 
 // Sub-tab order intentionally reads as setup → setup → outcome:
 //   Persona      — HOW the AI talks (configure)
@@ -14,22 +14,28 @@ import KnowledgeBaseView from './KnowledgeBaseView'
 // everything that defines the caller's experience. The unanswered-
 // questions badge on the Phone Assistant top tab already pointed here
 // — it now points to a sub-tab that exists.
-type SubTab = 'persona' | 'knowledge' | 'analytics'
+type SubTab = 'persona' | 'knowledge' | 'analytics';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'persona', label: 'AI Persona' },
   { id: 'knowledge', label: 'Knowledge Base' },
   { id: 'analytics', label: 'Analytics' },
-]
+];
 
 export default function AIInsightsView() {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('persona')
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('persona');
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <FolderTabBar size="sm" ariaLabel="AI sections">
-        {SUB_TABS.map(tab => (
-          <FolderTab key={tab.id} label={tab.label} size="sm" isActive={activeSubTab === tab.id} onClick={() => setActiveSubTab(tab.id)} />
+        {SUB_TABS.map((tab) => (
+          <FolderTab
+            key={tab.id}
+            label={tab.label}
+            size="sm"
+            isActive={activeSubTab === tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+          />
         ))}
       </FolderTabBar>
       {/* overflow-y-auto (not overflow-hidden) so the Knowledge Base
@@ -43,5 +49,5 @@ export default function AIInsightsView() {
         {activeSubTab === 'analytics' && <AnalyticsView />}
       </div>
     </div>
-  )
+  );
 }

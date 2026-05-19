@@ -106,8 +106,7 @@ describe('extractSection', () => {
     // WHO: checkPathsExist scoping its scan to one section of the doc
     // WHAT: header found, slice ends at the next H2 header
     // WHY: prevents false positives from list items in unrelated sections
-    const md =
-      '# Title\n## Section A\nfirst body\n- `/path-a`\n## Section B\nthe other body\n';
+    const md = '# Title\n## Section A\nfirst body\n- `/path-a`\n## Section B\nthe other body\n';
     expect(extractSection(md, '## Section A')).toBe('\nfirst body\n- `/path-a`\n');
   });
 

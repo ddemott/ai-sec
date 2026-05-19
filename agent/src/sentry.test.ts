@@ -31,8 +31,12 @@ vi.mock('@sentry/node', () => {
       currentExtras = {};
       currentTags = {};
       const scope = {
-        setExtra: (k: string, v: unknown) => { currentExtras[k] = v; },
-        setTag: (k: string, v: string) => { currentTags[k] = v; },
+        setExtra: (k: string, v: unknown) => {
+          currentExtras[k] = v;
+        },
+        setTag: (k: string, v: string) => {
+          currentTags[k] = v;
+        },
       };
       await fn(scope);
     }),
@@ -40,7 +44,12 @@ vi.mock('@sentry/node', () => {
   return Sentry;
 });
 
-import { initSentry, captureException, resetSentryForTesting, isSentryInitializedForTesting } from './sentry.js';
+import {
+  initSentry,
+  captureException,
+  resetSentryForTesting,
+  isSentryInitializedForTesting,
+} from './sentry.js';
 
 describe('agent/src/sentry.ts', () => {
   beforeEach(() => {

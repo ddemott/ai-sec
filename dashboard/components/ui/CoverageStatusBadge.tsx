@@ -8,7 +8,10 @@ interface CoverageStatusBadgeProps {
   className?: string;
 }
 
-const statusConfig: Record<CoverageStatus, { label: string; variant: 'success' | 'warning' | 'danger' | 'secondary' }> = {
+const statusConfig: Record<
+  CoverageStatus,
+  { label: string; variant: 'success' | 'warning' | 'danger' | 'secondary' }
+> = {
   full: { label: 'Full Coverage', variant: 'success' },
   partial: { label: 'Partial', variant: 'warning' },
   uncovered: { label: 'Uncovered', variant: 'danger' },

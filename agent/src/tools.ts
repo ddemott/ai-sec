@@ -109,7 +109,8 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
           required_resource_capabilities: {
             type: 'array',
             items: { type: 'string' },
-            description: "Optional capability tags the resource must have, e.g., ['lift', 'alignment'].",
+            description:
+              "Optional capability tags the resource must have, e.g., ['lift', 'alignment'].",
           },
           required_employee_skills: {
             type: 'array',
@@ -183,7 +184,8 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
           end_time: { type: 'string' },
           phone: {
             type: 'string',
-            description: 'Caller phone (E.164 preferred). Pass the caller-ID phone unless the caller gave you a different one verbally.',
+            description:
+              'Caller phone (E.164 preferred). Pass the caller-ID phone unless the caller gave you a different one verbally.',
           },
           name: { type: 'string', description: "Caller's name if known." },
           employee_id: { type: 'string', description: 'Optional — bind to a specific employee.' },
@@ -275,7 +277,7 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
         properties: {
           question: {
             type: 'string',
-            description: 'The caller\'s question as a natural-language string.',
+            description: "The caller's question as a natural-language string.",
           },
         },
         required: ['question'],
@@ -298,7 +300,8 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
         properties: {
           phone: {
             type: 'string',
-            description: 'The full phone number the caller gave you. Must include area code (10+ digits).',
+            description:
+              'The full phone number the caller gave you. Must include area code (10+ digits).',
           },
         },
         required: ['phone'],

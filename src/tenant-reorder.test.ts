@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { type Client } from "pg";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import {
+  getRootClient,
+  clearDB,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
+import { type Client } from 'pg';
 
-describe("Tenant reorder (drag-and-drop)", () => {
+describe('Tenant reorder (drag-and-drop)', () => {
   let client: Client;
   let dbAvailable = true;
   beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
@@ -13,7 +19,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
       await clearDB(client);
     } catch (err) {
       dbAvailable = false;
-      console.warn("[tenant-reorder.test] Skipping DB tests - connection failed", err);
+      console.warn('[tenant-reorder.test] Skipping DB tests - connection failed', err);
     }
   });
 
@@ -33,7 +39,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
     await rollbackTestTransaction(client);
   });
 
-  it("tenants table has sort_order column defaulting to 0", async () => {
+  it('tenants table has sort_order column defaulting to 0', async () => {
     // WHO: maintainer adding new tenants without specifying sort_order
     // WHAT: information_schema confirms the column exists AND its DEFAULT
     //       is 0 (literal "0" appears in column_default)
@@ -54,7 +60,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
     expect(res.rows[0].column_default).toContain('0');
   });
 
-  it("new tenants get sort_order = 0 by default", async () => {
+  it('new tenants get sort_order = 0 by default', async () => {
     // WHO: any flow inserting a tenant without explicit sort_order
     //      (POST /tenants/create, register flow, manual admin entry)
     // WHAT: the inserted row has sort_order = 0 (the documented default)
@@ -72,7 +78,7 @@ describe("Tenant reorder (drag-and-drop)", () => {
     expect(res.rows[0].sort_order).toBe(0);
   });
 
-  it("can update sort_order for multiple tenants", async () => {
+  it('can update sort_order for multiple tenants', async () => {
     // WHO: super-admin saving a new tenant ordering after drag-reorder
     // WHAT: 3 sequential UPDATEs assigning sort_order = 0, 1, 2 to specific
     //       tenant ids; subsequent SELECT ORDER BY sort_order returns the
@@ -86,24 +92,30 @@ describe("Tenant reorder (drag-and-drop)", () => {
     //      the admin would save a new order and see the old one come back
     if (!dbAvailable) return;
 
-    const r1 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING tenant_id");
-    const r2 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz B', 'test') RETURNING tenant_id");
-    const r3 = await client.query("INSERT INTO tenants (name, business_type) VALUES ('Biz C', 'test') RETURNING tenant_id");
+    const r1 = await client.query(
+      "INSERT INTO tenants (name, business_type) VALUES ('Biz A', 'test') RETURNING tenant_id"
+    );
+    const r2 = await client.query(
+      "INSERT INTO tenants (name, business_type) VALUES ('Biz B', 'test') RETURNING tenant_id"
+    );
+    const r3 = await client.query(
+      "INSERT INTO tenants (name, business_type) VALUES ('Biz C', 'test') RETURNING tenant_id"
+    );
 
     const idA = r1.rows[0].tenant_id;
     const idB = r2.rows[0].tenant_id;
     const idC = r3.rows[0].tenant_id;
 
     // Reorder: C, A, B
-    await client.query("UPDATE tenants SET sort_order = 0 WHERE tenant_id = $1", [idC]);
-    await client.query("UPDATE tenants SET sort_order = 1 WHERE tenant_id = $1", [idA]);
-    await client.query("UPDATE tenants SET sort_order = 2 WHERE tenant_id = $1", [idB]);
+    await client.query('UPDATE tenants SET sort_order = 0 WHERE tenant_id = $1', [idC]);
+    await client.query('UPDATE tenants SET sort_order = 1 WHERE tenant_id = $1', [idA]);
+    await client.query('UPDATE tenants SET sort_order = 2 WHERE tenant_id = $1', [idB]);
 
-    const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC");
+    const res = await client.query('SELECT name FROM tenants ORDER BY sort_order ASC');
     expect(res.rows.map((r: { name: string }) => r.name)).toEqual(['Biz C', 'Biz A', 'Biz B']);
   });
 
-  it("ORDER BY sort_order ASC, created_at DESC matches tenant listing query", async () => {
+  it('ORDER BY sort_order ASC, created_at DESC matches tenant listing query', async () => {
     // WHO: GET /tenants — the dashboard's tenant picker query
     // WHAT: the canonical listing ORDER BY clause produces the right
     //       sequence when sort_order values are distinct
@@ -116,15 +128,23 @@ describe("Tenant reorder (drag-and-drop)", () => {
     //      level keeps the route + DB contract aligned
     if (!dbAvailable) return;
 
-    await client.query("INSERT INTO tenants (name, business_type, sort_order) VALUES ('First', 'test', 2)");
-    await client.query("INSERT INTO tenants (name, business_type, sort_order) VALUES ('Second', 'test', 0)");
-    await client.query("INSERT INTO tenants (name, business_type, sort_order) VALUES ('Third', 'test', 1)");
+    await client.query(
+      "INSERT INTO tenants (name, business_type, sort_order) VALUES ('First', 'test', 2)"
+    );
+    await client.query(
+      "INSERT INTO tenants (name, business_type, sort_order) VALUES ('Second', 'test', 0)"
+    );
+    await client.query(
+      "INSERT INTO tenants (name, business_type, sort_order) VALUES ('Third', 'test', 1)"
+    );
 
-    const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC, created_at DESC");
+    const res = await client.query(
+      'SELECT name FROM tenants ORDER BY sort_order ASC, created_at DESC'
+    );
     expect(res.rows.map((r: { name: string }) => r.name)).toEqual(['Second', 'Third', 'First']);
   });
 
-  it("tenants with same sort_order fall back to created_at DESC", async () => {
+  it('tenants with same sort_order fall back to created_at DESC', async () => {
     // WHO: dashboard listing tenants where the admin hasn't yet manually
     //      reordered (so all sort_order values are still 0)
     // WHAT: the secondary ORDER BY (created_at DESC) takes over and
@@ -141,10 +161,16 @@ describe("Tenant reorder (drag-and-drop)", () => {
 
     // All default sort_order = 0, so order by created_at DESC
     // Use explicit timestamps since NOW() is stable within a transaction
-    await client.query("INSERT INTO tenants (name, business_type, created_at) VALUES ('Oldest', 'test', '2026-01-01T00:00:00Z')");
-    await client.query("INSERT INTO tenants (name, business_type, created_at) VALUES ('Newest', 'test', '2026-01-02T00:00:00Z')");
+    await client.query(
+      "INSERT INTO tenants (name, business_type, created_at) VALUES ('Oldest', 'test', '2026-01-01T00:00:00Z')"
+    );
+    await client.query(
+      "INSERT INTO tenants (name, business_type, created_at) VALUES ('Newest', 'test', '2026-01-02T00:00:00Z')"
+    );
 
-    const res = await client.query("SELECT name FROM tenants ORDER BY sort_order ASC, created_at DESC");
+    const res = await client.query(
+      'SELECT name FROM tenants ORDER BY sort_order ASC, created_at DESC'
+    );
     expect(res.rows[0].name).toBe('Newest');
     expect(res.rows[1].name).toBe('Oldest');
   });

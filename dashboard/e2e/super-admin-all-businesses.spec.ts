@@ -64,7 +64,7 @@ test('super-admin all-businesses: tenant cards render with name + truncated UUID
   const firstCardText = await cards.first().innerText();
   expect(
     firstCardText,
-    'TenantCard must show a truncated UUID (8 hex chars) — regression to `tenant.id` would print "undefined" instead',
+    'TenantCard must show a truncated UUID (8 hex chars) — regression to `tenant.id` would print "undefined" instead'
   ).toMatch(/[0-9a-f]{8}/i);
 
   // At least the platform admin and DynaTire (from supabase/seed.sql)
@@ -74,6 +74,6 @@ test('super-admin all-businesses: tenant cards render with name + truncated UUID
   const cardCount = await cards.count();
   expect(
     cardCount,
-    'Expected at least 2 tenants (SecretaryHQ Platform + DynaTire from supabase/seed.sql)',
+    'Expected at least 2 tenants (SecretaryHQ Platform + DynaTire from supabase/seed.sql)'
   ).toBeGreaterThanOrEqual(2);
 });

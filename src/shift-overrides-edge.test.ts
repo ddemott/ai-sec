@@ -6,7 +6,16 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, createTenant, createEmployee, createResource, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import {
+  getRootClient,
+  clearDB,
+  createTenant,
+  createEmployee,
+  createResource,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
 
 describe('Fix #16 + #17: Edge function employee_schedule support', () => {
   let client: Client;
@@ -18,7 +27,9 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
   beforeAll(async () => {
     try {
       client = await getRootClient();
-      const res = await client.query("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')");
+      const res = await client.query(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')"
+      );
       if (!res.rows[0].exists) {
         console.warn('[shift-overrides-edge] employee_schedule table missing, skipping DB tests');
         return;
@@ -84,13 +95,13 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
         const day = new Date(monday);
         day.setDate(day.getDate() + i);
         await client.query(
-          "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, $4, $5)",
+          'INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time) VALUES ($1, $2, $3, $4, $5)',
           [tenantId, employeeId, toDateStr(day), hours[i].start, hours[i].end]
         );
       }
 
       const res = await client.query(
-        "SELECT shift_date, start_time::text AS start_time, end_time::text AS end_time, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $4::DATE) ORDER BY shift_date",
+        'SELECT shift_date, start_time::text AS start_time, end_time::text AS end_time, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $4::DATE) ORDER BY shift_date',
         [tenantId, employeeId, toDateStr(monday), toDateStr(friday)]
       );
 
@@ -102,7 +113,9 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
         expect(res.rows[i].start_time).toContain(hours[i].start);
         expect(res.rows[i].end_time).toContain(hours[i].end);
       }
-      const shiftDates = res.rows.map((r: { shift_date: Date }) => toDateStr(new Date(r.shift_date)));
+      const shiftDates = res.rows.map((r: { shift_date: Date }) =>
+        toDateStr(new Date(r.shift_date))
+      );
       const expectedDates = hours.map((_, i) => {
         const d = new Date(monday);
         d.setDate(d.getDate() + i);
@@ -121,7 +134,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       const dateStr = toDateStr(saturday);
 
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, dateStr]
       );
 
@@ -144,7 +157,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       );
 
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, dateStr]
       );
 
@@ -165,12 +178,12 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       const dateStr = toDateStr(tuesday);
 
       await client.query(
-        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
+        'INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)',
         [tenantId, employeeId, dateStr]
       );
 
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, dateStr]
       );
 
@@ -194,7 +207,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       );
 
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT * FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, dateStr]
       );
 
@@ -244,7 +257,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       );
 
       const res = await client.query(
-        "SELECT shift_date, start_time::text AS start_time, end_time::text AS end_time FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT shift_date, start_time::text AS start_time, end_time::text AS end_time FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, toDateStr(wednesday)]
       );
 
@@ -275,7 +288,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
 
       // Query effective shifts (what the edge function does)
       const res = await client.query(
-        "SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, dateStr]
       );
 
@@ -296,12 +309,12 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       const dateStr = toDateStr(monday);
 
       await client.query(
-        "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
+        'INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)',
         [tenantId, employeeId, dateStr]
       );
 
       const res = await client.query(
-        "SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)",
+        'SELECT start_time::text, end_time::text, is_off FROM get_effective_shifts($1, $2::UUID, $3::DATE, $3::DATE)',
         [tenantId, employeeId, dateStr]
       );
 
@@ -317,7 +330,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
 
       const fakeId = '00000000-0000-0000-0000-000000000099';
       const res = await client.query(
-        "SELECT * FROM get_effective_shifts($1, $2::UUID, CURRENT_DATE, CURRENT_DATE)",
+        'SELECT * FROM get_effective_shifts($1, $2::UUID, CURRENT_DATE, CURRENT_DATE)',
         [tenantId, fakeId]
       );
 

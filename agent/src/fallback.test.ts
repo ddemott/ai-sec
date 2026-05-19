@@ -207,7 +207,7 @@ describe('runFallback — happy path', () => {
     const ctx = makeCtx();
     const { deps, sayCalls } = buildSpyDeps();
 
-    await runFallback(ctx, "msg", TEST_CONFIG, deps);
+    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
 
     expect((sayCalls[0].opts as { allowInterruptions: boolean }).allowInterruptions).toBe(false);
   });
@@ -225,7 +225,7 @@ describe('runFallback — happy path', () => {
     const ctx = makeCtx();
     const { deps, startCalls, sayCalls } = buildSpyDeps();
 
-    await runFallback(ctx, "msg", TEST_CONFIG, deps);
+    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
 
     expect(startCalls).toHaveLength(1);
     expect(startCalls[0]).toMatchObject({ room: ctx.room });
@@ -248,7 +248,7 @@ describe('runFallback — happy path', () => {
     const ctx = makeCtx();
     const { deps, AgentSessionCalls } = buildSpyDeps();
 
-    await runFallback(ctx, "msg", TEST_CONFIG, deps);
+    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
 
     expect(AgentSessionCalls).toHaveLength(1);
     const sessionArgs = AgentSessionCalls[0].args[0] as { vad: unknown };
@@ -279,7 +279,7 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
     const ctx = makeCtx();
     const { deps, AgentSessionCalls, TTSCalls, Classes } = buildSpyDeps();
 
-    await runFallback(ctx, "msg", TEST_CONFIG, deps);
+    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
 
     expect(AgentSessionCalls).toHaveLength(1);
     expect(TTSCalls).toHaveLength(1);
@@ -307,7 +307,7 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
     const ctx = makeCtx();
     const { deps, AgentSessionCalls } = buildSpyDeps();
 
-    await runFallback(ctx, "msg", TEST_CONFIG, deps);
+    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
 
     const sessionArgs = AgentSessionCalls[0].args[0] as { tts: unknown };
     expect(sessionArgs.tts).not.toBeInstanceOf(GrokTTS);
@@ -325,7 +325,7 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
     const ctx = makeCtx();
     const { deps, TTSCalls } = buildSpyDeps();
 
-    await runFallback(ctx, "msg", TEST_CONFIG, deps);
+    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
 
     expect(TTSCalls).toHaveLength(1);
     const ttsArgs = TTSCalls[0].args[0] as { apiKey?: string };

@@ -101,7 +101,9 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. HAPPY: full canceled → scheduled lifecycle
 // ────────────────────────────────────────────────────────────────────────────
-test('reactivate-happy: cancel then reactivate cycles a row from scheduled→canceled→scheduled', async ({ request }) => {
+test('reactivate-happy: cancel then reactivate cycles a row from scheduled→canceled→scheduled', async ({
+  request,
+}) => {
   // WHO: front-desk operator restoring a canceled appointment from customer
   //       history (the only UI surface where canceled rows are reachable).
   // WHAT: POST /:id/cancel sets status='canceled' (slot freed); POST /:id/
@@ -143,13 +145,17 @@ test('reactivate-happy: cancel then reactivate cycles a row from scheduled→can
 
     // Cancel
     const cancelRes = await cancelAppointmentAs(request, tenant.token, tenant.tenantId, apptId);
-    expect(cancelRes.status, `cancel must succeed; body=${JSON.stringify(cancelRes.body)}`).toBe(200);
+    expect(cancelRes.status, `cancel must succeed; body=${JSON.stringify(cancelRes.body)}`).toBe(
+      200
+    );
     expect(cancelRes.body.success).toBe(true);
     expect(await getAppointmentStatus(tenant.tenantId, apptId)).toBe('canceled');
 
     // Reactivate
     const reactRes = await reactivateAppointmentAs(request, tenant.token, tenant.tenantId, apptId);
-    expect(reactRes.status, `reactivate must succeed; body=${JSON.stringify(reactRes.body)}`).toBe(200);
+    expect(reactRes.status, `reactivate must succeed; body=${JSON.stringify(reactRes.body)}`).toBe(
+      200
+    );
     expect(reactRes.body.success).toBe(true);
     expect(await getAppointmentStatus(tenant.tenantId, apptId)).toBe('scheduled');
   } finally {
@@ -160,7 +166,9 @@ test('reactivate-happy: cancel then reactivate cycles a row from scheduled→can
 // ────────────────────────────────────────────────────────────────────────────
 // 2. SAD: slot-rebooked race
 // ────────────────────────────────────────────────────────────────────────────
-test('reactivate-conflict: reactivating into a slot that was rebooked while canceled returns 409 with conflict block', async ({ request }) => {
+test('reactivate-conflict: reactivating into a slot that was rebooked while canceled returns 409 with conflict block', async ({
+  request,
+}) => {
   // WHO: operator who canceled appointment A, the slot got taken by
   //        appointment B, and now wants to undo the cancellation.
   // WHAT: appointment A is 14:00-14:30; cancel A; book B at the same
@@ -244,7 +252,9 @@ test('reactivate-conflict: reactivating into a slot that was rebooked while canc
 // ────────────────────────────────────────────────────────────────────────────
 // 3. SAD: reactivate on a non-canceled row
 // ────────────────────────────────────────────────────────────────────────────
-test('reactivate-not-canceled: reactivating a scheduled row returns 400 NOT_CANCELED', async ({ request }) => {
+test('reactivate-not-canceled: reactivating a scheduled row returns 400 NOT_CANCELED', async ({
+  request,
+}) => {
   // WHO: a stale UI session — the operator clicked reactivate on a row
   //        another session (or another tab) already restored, OR clicked
   //        on a row that was never canceled in the first place.

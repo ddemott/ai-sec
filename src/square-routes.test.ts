@@ -77,7 +77,10 @@ function buildApp() {
   registerSquareRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+    mockWithTenantClient as unknown as <T>(
+      tenantId: string,
+      fn: (client: PoolClient) => Promise<T>
+    ) => Promise<T>
   );
 
   return fastify;
@@ -114,7 +117,9 @@ describe('Square Routes — Happy Paths', () => {
     // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth handler
     // WHY: Without this, clicking "Connect Square" would fail silently — user cannot link their Square account for customer/booking sync
     vi.mocked(squareClient.isSquareEnabled).mockReturnValue(true);
-    vi.mocked(squareClient.getAuthUrl).mockReturnValue('https://connect.squareup.com/oauth2/authorize?client_id=test');
+    vi.mocked(squareClient.getAuthUrl).mockReturnValue(
+      'https://connect.squareup.com/oauth2/authorize?client_id=test'
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -384,7 +389,9 @@ describe('Square Routes — Sad Paths', () => {
     // WHERE: src/routes/square.ts registerSquareRoutes — GET /square/auth/callback token exchange try/catch
     // WHY: Without catching this, a Square outage during OAuth would show a raw 500 error — user sees broken page instead of "connection failed, try again"
     vi.mocked(squareClient.verifyState).mockReturnValue(TENANT_ID);
-    vi.mocked(squareClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
+    vi.mocked(squareClient.exchangeCodeForTokens).mockRejectedValue(
+      new Error('OAuth exchange failed')
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -392,7 +399,9 @@ describe('Square Routes — Sad Paths', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${DASHBOARD_URL}/dashboard?squareError=token_exchange_failed`);
+    expect(res.headers.location).toBe(
+      `${DASHBOARD_URL}/dashboard?squareError=token_exchange_failed`
+    );
   });
 
   it('12. POST /square/webhook 400 on missing signature', async () => {

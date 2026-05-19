@@ -71,7 +71,12 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHEN: Token is still valid (not expired)
       // WHERE: /auth/refresh endpoint
       // WHY: Users need token refresh to stay logged in past 8h
-      const payload = { tenant_id: TENANT_ID, user_id: '11111111-1111-1111-1111-111111111111', email: 'test@test.com', role: 'owner' as const };
+      const payload = {
+        tenant_id: TENANT_ID,
+        user_id: '11111111-1111-1111-1111-111111111111',
+        email: 'test@test.com',
+        role: 'owner' as const,
+      };
       const token = generateToken(payload);
 
       const res = await app.inject({
@@ -85,7 +90,11 @@ describe('Fix #14: Token refresh endpoint', () => {
       expect(data.success).toBe(true);
       expect(typeof data.token).toBe('string');
 
-      const decoded = jwt.verify(data.token, JWT_SECRET) as { tenant_id: string; user_id: string; email: string };
+      const decoded = jwt.verify(data.token, JWT_SECRET) as {
+        tenant_id: string;
+        user_id: string;
+        email: string;
+      };
       expect(decoded.tenant_id).toBe(payload.tenant_id);
       expect(decoded.user_id).toBe(payload.user_id);
       expect(decoded.email).toBe(payload.email);
@@ -95,7 +104,12 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHO: User refreshing their token
       // WHAT: New token should have a fresh expiry
       // WHY: The whole point of refresh is to extend the session
-      const payload = { tenant_id: TENANT_ID, user_id: '11111111-1111-1111-1111-111111111111', email: 'test@test.com', role: 'owner' as const };
+      const payload = {
+        tenant_id: TENANT_ID,
+        user_id: '11111111-1111-1111-1111-111111111111',
+        email: 'test@test.com',
+        role: 'owner' as const,
+      };
       // Sign with a short expiry so the refreshed expiry is observably later.
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30m' });
       const originalDecoded = jwt.decode(token) as { exp: number };
@@ -124,7 +138,12 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHO: User with an expired token
       // WHAT: Should reject — expired tokens cannot be refreshed
       // WHY: Security — don't allow indefinite token extension from stale tokens
-      const payload = { tenant_id: TENANT_ID, user_id: '11111111-1111-1111-1111-111111111111', email: 'test@test.com', role: 'owner' };
+      const payload = {
+        tenant_id: TENANT_ID,
+        user_id: '11111111-1111-1111-1111-111111111111',
+        email: 'test@test.com',
+        role: 'owner',
+      };
       const expiredToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '-1s' });
 
       const res = await app.inject({
@@ -140,7 +159,12 @@ describe('Fix #14: Token refresh endpoint', () => {
       // WHO: Request with a tampered/forged token
       // WHAT: Should reject
       // WHY: Forged tokens must not be refreshable
-      const payload = { tenant_id: 'fake-tenant', user_id: 'fake-user', email: 'fake@test.com', role: 'owner' };
+      const payload = {
+        tenant_id: 'fake-tenant',
+        user_id: 'fake-user',
+        email: 'fake@test.com',
+        role: 'owner',
+      };
       const forgedToken = jwt.sign(payload, 'wrong-secret', { expiresIn: '1h' });
 
       const res = await app.inject({

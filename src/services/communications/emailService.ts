@@ -10,7 +10,7 @@ export class EmailService {
 
   constructor(
     private configService: TenantConfigService,
-    private consentService?: ConsentService,
+    private consentService?: ConsentService
   ) {
     // Initialize email transporter - skip in test environment
     if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -48,7 +48,7 @@ export class EmailService {
         const consentCheck = await this.consentService.canReceiveCommunications(
           tenantId,
           message.to, // email address
-          undefined, // no phone for email
+          undefined // no phone for email
         );
 
         if (!consentCheck.canReceiveEmail) {
@@ -107,7 +107,7 @@ export class EmailService {
    */
   public async applyTemplate(
     template: string,
-    data: Record<string, unknown>,
+    data: Record<string, unknown>
   ): Promise<{
     subject?: string;
     text?: string;

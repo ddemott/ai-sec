@@ -8,9 +8,30 @@ const mockRefreshStaticData = vi.fn();
 const mockRefreshScheduler = vi.fn();
 
 const mockEmployees = [
-  { employee_id: 'emp-1', tenant_id: 't1', name: 'Mike Jones', skills: ['Oil Change', 'Tire Rotation'], is_active: true, type: 'employee' as const },
-  { employee_id: 'emp-2', tenant_id: 't1', name: 'Carlos Rivera', skills: ['Tire Rotation', 'Balancing'], is_active: true, type: 'employee' as const },
-  { employee_id: 'emp-3', tenant_id: 't1', name: 'Admin User', skills: [], is_active: true, type: 'user' as const },
+  {
+    employee_id: 'emp-1',
+    tenant_id: 't1',
+    name: 'Mike Jones',
+    skills: ['Oil Change', 'Tire Rotation'],
+    is_active: true,
+    type: 'employee' as const,
+  },
+  {
+    employee_id: 'emp-2',
+    tenant_id: 't1',
+    name: 'Carlos Rivera',
+    skills: ['Tire Rotation', 'Balancing'],
+    is_active: true,
+    type: 'employee' as const,
+  },
+  {
+    employee_id: 'emp-3',
+    tenant_id: 't1',
+    name: 'Admin User',
+    skills: [],
+    is_active: true,
+    type: 'user' as const,
+  },
 ];
 
 const mockServices = [
@@ -61,8 +82,20 @@ const mockAppointments = [
 ];
 
 const mockShifts = [
-  { id: 'shift-1', employee_id: 'emp-1', day_of_week: new Date().getDay(), start_time: '08:00:00', end_time: '16:00:00' },
-  { id: 'shift-2', employee_id: 'emp-2', day_of_week: new Date().getDay(), start_time: '09:00:00', end_time: '17:00:00' },
+  {
+    id: 'shift-1',
+    employee_id: 'emp-1',
+    day_of_week: new Date().getDay(),
+    start_time: '08:00:00',
+    end_time: '16:00:00',
+  },
+  {
+    id: 'shift-2',
+    employee_id: 'emp-2',
+    day_of_week: new Date().getDay(),
+    start_time: '09:00:00',
+    end_time: '17:00:00',
+  },
 ];
 
 // Build appointmentsByEmployee map
@@ -160,7 +193,9 @@ beforeEach(() => {
   ]);
   // Composite-PK shape after pilot #3 (2026-05-18) — the response row
   // returns (tenant_id, employee_id, shift_date) instead of a surrogate.
-  mockApi.shifts.schedule.save.mockResolvedValue({ override: { tenant_id: 't1', employee_id: 'emp-1', shift_date: '2026-05-22' } });
+  mockApi.shifts.schedule.save.mockResolvedValue({
+    override: { tenant_id: 't1', employee_id: 'emp-1', shift_date: '2026-05-22' },
+  });
 });
 
 describe('NewSchedulerView', () => {
@@ -563,7 +598,7 @@ describe('NewSchedulerView', () => {
       // WHO: operator viewing the skill matrix instead of the hour grid | WHAT: cells become passive — clicking a skill bar position is meaningless for booking | WHEN: viewMode === 'skills' | WHERE: NewSchedulerView slot conditional gate | WHY: in skills mode the row's content is "what skills this employee covers across the day," not "is this hour booked"; surfacing a Book affordance there would let the operator click on what looks like a skill-color band and unintentionally open Quick Book — a UX trap
     });
 
-    test('cells outside the row employee\'s shift are NOT clickable (per-employee gate)', () => {
+    test("cells outside the row employee's shift are NOT clickable (per-employee gate)", () => {
       const onQuickBook = vi.fn();
       render(<NewSchedulerView onQuickBook={onQuickBook} />);
       // Mike (emp-1) works 8-16 in the fixture. Hour 6 is before his shift.
@@ -576,12 +611,14 @@ describe('NewSchedulerView', () => {
       // WHO: front-desk operator + the booking RPC's contract enforcement | WHAT: cells outside the employee's own shift become passive — not clickable, no role=button, no hover, click is a no-op | WHEN: any cell where this row's employee has no shift covering the hour on the viewed date | WHERE: NewSchedulerView slot click gate (`isEmployeeWorkingAt`) | WHY: original P1 #4 left these clickable with the rationale "operators may book early/late" — but the booking RPC immediately rejects with EMPLOYEE_NOT_SCHEDULED, so the click was an invitation to a guaranteed-failure path. The system's design contract is "book when employee+skill+resource+time align" — the UI must enforce the time half before the operator types in a customer name. Off-schedule one-offs require adding an employee_schedule entry first (Back Office → Shifts), then booking; this is the correct mental model rather than a "let it fail" fallback
     });
 
-    test('cells inside the row employee\'s shift ARE clickable even on a row where another employee is also working', () => {
+    test("cells inside the row employee's shift ARE clickable even on a row where another employee is also working", () => {
       // Carlos (emp-2) works 9-17 in the fixture. Hour 9 is inside his shift.
       const onQuickBook = vi.fn();
       render(<NewSchedulerView onQuickBook={onQuickBook} />);
       fireEvent.click(screen.getByTestId('slot-emp-2-9'));
-      expect(onQuickBook).toHaveBeenCalledWith(expect.objectContaining({ employeeId: 'emp-2', hour: 9 }));
+      expect(onQuickBook).toHaveBeenCalledWith(
+        expect.objectContaining({ employeeId: 'emp-2', hour: 9 })
+      );
       // WHO: front-desk operator booking with Carlos specifically | WHAT: the gate is per-row, not global — Carlos's 9am cell is clickable because Carlos is on shift, regardless of whether Mike is | WHEN: shifts overlap or staggered; e.g., Mike 8-16, Carlos 9-17 | WHERE: NewSchedulerView per-row shift lookup | WHY: a global "any employee working" gate would falsely show Mike's row as clickable at 16:30 (because Carlos works until 17), even though Mike is gone — booking through that path lands EMPLOYEE_NOT_SCHEDULED on the specific Mike booking; the per-row gate matches the actual booking shape
     });
   });
@@ -677,7 +714,7 @@ describe('NewSchedulerView', () => {
       expect(screen.getByTestId('staff-profile-card')).toBeInTheDocument();
 
       // Wait for the setTimeout(0) in StaffProfileCard before outside listener is registered
-      await new Promise(r => setTimeout(r, 10));
+      await new Promise((r) => setTimeout(r, 10));
 
       // Click outside the card
       fireEvent.mouseDown(document.body);
@@ -933,10 +970,7 @@ describe('NewSchedulerView', () => {
       fireEvent.dragEnd(firstRow);
       fireEvent.click(screen.getByTestId('save-order'));
 
-      expect(setItemSpy).toHaveBeenCalledWith(
-        'scheduler-staff-order-tenant-1',
-        expect.any(String)
-      );
+      expect(setItemSpy).toHaveBeenCalledWith('scheduler-staff-order-tenant-1', expect.any(String));
       setItemSpy.mockRestore();
     });
 

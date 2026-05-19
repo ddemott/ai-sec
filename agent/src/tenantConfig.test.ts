@@ -40,7 +40,10 @@ describe('fetchTenantConfig', () => {
     //       name or "today" reasoned about in the wrong zone.
     const client = clientWith({
       status: 200,
-      body: { success: true, result: { name: 'DynaTire', timezone: 'America/Chicago', system_prompt: null } },
+      body: {
+        success: true,
+        result: { name: 'DynaTire', timezone: 'America/Chicago', system_prompt: null },
+      },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
     expect(cfg).toEqual({ name: 'DynaTire', timezone: 'America/Chicago', systemPrompt: null });

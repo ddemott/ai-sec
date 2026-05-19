@@ -16,7 +16,7 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 };
 
 const MIN_LEVEL: LogLevel =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_LOG_LEVEL as LogLevel) || 'info';
+  (typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_LOG_LEVEL as LogLevel)) || 'info';
 
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= LOG_LEVELS[MIN_LEVEL];
@@ -52,9 +52,13 @@ function log(level: LogLevel, component: string, message: string, data?: Record<
 
 export function createLogger(component: string) {
   return {
-    debug: (message: string, data?: Record<string, unknown>) => log('debug', component, message, data),
-    info: (message: string, data?: Record<string, unknown>) => log('info', component, message, data),
-    warn: (message: string, data?: Record<string, unknown>) => log('warn', component, message, data),
-    error: (message: string, data?: Record<string, unknown>) => log('error', component, message, data),
+    debug: (message: string, data?: Record<string, unknown>) =>
+      log('debug', component, message, data),
+    info: (message: string, data?: Record<string, unknown>) =>
+      log('info', component, message, data),
+    warn: (message: string, data?: Record<string, unknown>) =>
+      log('warn', component, message, data),
+    error: (message: string, data?: Record<string, unknown>) =>
+      log('error', component, message, data),
   };
 }

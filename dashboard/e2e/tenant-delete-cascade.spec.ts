@@ -93,7 +93,9 @@ async function countTenantRows(tenantId: string): Promise<Record<string, number>
   ];
   const counts: Record<string, number> = {};
   for (const t of tables) {
-    const r = await pool.query(`SELECT count(*)::int AS n FROM ${t} WHERE tenant_id = $1`, [tenantId]);
+    const r = await pool.query(`SELECT count(*)::int AS n FROM ${t} WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
     counts[t] = r.rows[0].n;
   }
   return counts;
@@ -117,7 +119,9 @@ async function deleteTenantAsSuperAdmin(
 // ────────────────────────────────────────────────────────────────────────────
 // 1. HAPPY: full cascade across every tenant-scoped table
 // ────────────────────────────────────────────────────────────────────────────
-test('cascade: super-admin delete drops the tenant AND all dependent rows across 11 tables', async ({ request }) => {
+test('cascade: super-admin delete drops the tenant AND all dependent rows across 11 tables', async ({
+  request,
+}) => {
   // WHO: super-admin retiring a customer tenant (offboarding / GDPR
   //       deletion request / failed-trial cleanup).
   // WHAT: seed a tenant with realistic dependents — services, resources,
@@ -194,7 +198,9 @@ test('cascade: super-admin delete drops the tenant AND all dependent rows across
     // saves the next debugger ten minutes of guessing.
     const post = await countTenantRows(tenant.tenantId);
     for (const [table, count] of Object.entries(post)) {
-      expect(count, `cascade left ${count} orphan row(s) in '${table}' (pre=${pre[table]})`).toBe(0);
+      expect(count, `cascade left ${count} orphan row(s) in '${table}' (pre=${pre[table]})`).toBe(
+        0
+      );
     }
 
     tenant = null; // tenant is gone; skip the finally cleanup
@@ -209,7 +215,9 @@ test('cascade: super-admin delete drops the tenant AND all dependent rows across
 // ────────────────────────────────────────────────────────────────────────────
 // 2. ISOLATION: bystander tenant survives the cascade unchanged
 // ────────────────────────────────────────────────────────────────────────────
-test('isolation: deleting one tenant does not touch any other tenant\'s rows', async ({ request }) => {
+test("isolation: deleting one tenant does not touch any other tenant's rows", async ({
+  request,
+}) => {
   // WHO: super-admin retiring tenant A while tenant B is operating
   //       normally (the typical multi-tenant production case).
   // WHAT: seed two independent fresh tenants A + B with the same
@@ -234,10 +242,14 @@ test('isolation: deleting one tenant does not touch any other tenant\'s rows', a
 
     // Seed both tenants identically so the comparison is apples-to-apples.
     const seedA = await seedBookingScenario(request, pool, tenantA.token, tenantA.tenantId, {
-      employees: ['A Tech'], resources: ['A Bay'], shiftDates: [date],
+      employees: ['A Tech'],
+      resources: ['A Bay'],
+      shiftDates: [date],
     });
     const seedB = await seedBookingScenario(request, pool, tenantB.token, tenantB.tenantId, {
-      employees: ['B Tech'], resources: ['B Bay'], shiftDates: [date],
+      employees: ['B Tech'],
+      resources: ['B Bay'],
+      shiftDates: [date],
     });
     await seedAppointment(pool, tenantA.tenantId, {
       resourceId: seedA.resourceIds[0],
@@ -285,7 +297,9 @@ test('isolation: deleting one tenant does not touch any other tenant\'s rows', a
 // ────────────────────────────────────────────────────────────────────────────
 // 3. AUTHZ: non-super-admin DELETE returns 403, tenant + data untouched
 // ────────────────────────────────────────────────────────────────────────────
-test('authz: a tenant owner cannot delete their own tenant — returns 403, tenant survives', async ({ request }) => {
+test('authz: a tenant owner cannot delete their own tenant — returns 403, tenant survives', async ({
+  request,
+}) => {
   // WHO: a tenant owner (not super-admin) who tries to call DELETE
   //       /tenants/:id with their own token.
   // WHAT: the requireSuperAdmin gate must reject with 403 BEFORE the
@@ -307,7 +321,9 @@ test('authz: a tenant owner cannot delete their own tenant — returns 403, tena
     tenant = await registerFreshTenant(request);
     const date = isoDateDaysFromNow(7);
     const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
-      employees: ['Owner Test'], resources: ['Owner Bay'], shiftDates: [date],
+      employees: ['Owner Test'],
+      resources: ['Owner Bay'],
+      shiftDates: [date],
     });
     await seedAppointment(pool, tenant.tenantId, {
       resourceId: seed.resourceIds[0],
@@ -329,7 +345,10 @@ test('authz: a tenant owner cannot delete their own tenant — returns 403, tena
     // The 403 must fire BEFORE any DELETE SQL runs. If the gate is
     // somehow only at the response layer (e.g. it sends 403 but lets
     // the handler continue), this would catch it.
-    expect(await tenantExists(tenant.tenantId), 'tenant must still exist after a rejected delete').toBe(true);
+    expect(
+      await tenantExists(tenant.tenantId),
+      'tenant must still exist after a rejected delete'
+    ).toBe(true);
     const post = await countTenantRows(tenant.tenantId);
     for (const [table, count] of Object.entries(post)) {
       expect(

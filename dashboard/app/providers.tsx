@@ -1,9 +1,9 @@
-'use client'
+'use client';
 
-import { SessionProvider } from '@/lib/SessionContext'
-import { VocabularyProvider } from '@/lib/VocabularyContext'
-import { ThemeProvider } from '@/lib/ThemeContext'
-import { ToastContainer } from '@/components/ui/Toast'
+import { SessionProvider } from '@/lib/SessionContext';
+import { VocabularyProvider } from '@/lib/VocabularyContext';
+import { ThemeProvider } from '@/lib/ThemeContext';
+import { ToastContainer } from '@/components/ui/Toast';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -15,5 +15,5 @@ export function Providers({ children }: { children: React.ReactNode }) {
         </VocabularyProvider>
       </SessionProvider>
     </ThemeProvider>
-  )
+  );
 }

@@ -7,52 +7,60 @@
  * too, but the UI should never even let them try). These tests pin both
  * the happy paths and the self-edit guard.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import '@testing-library/jest-dom'
-import React from 'react'
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
 
-const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a'
+const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
 vi.mock('@/lib/SessionContext', () => ({
   useActiveTenantId: () => TENANT_ID,
-}))
+}));
 
 // Toast is not under test — stub it so we don't render the portal.
 vi.mock('./ui/Toast', () => ({
   showToast: vi.fn(),
-}))
+}));
 
-import TeamAccessView from './TeamAccessView'
+import TeamAccessView from './TeamAccessView';
 
 const ownerRow = {
-  user_id: 'owner-1', email: 'owner@biz.com', full_name: 'Owner Boss',
-  role: 'owner' as const, created_at: '2026-01-01', is_self: true,
-}
+  user_id: 'owner-1',
+  email: 'owner@biz.com',
+  full_name: 'Owner Boss',
+  role: 'owner' as const,
+  created_at: '2026-01-01',
+  is_self: true,
+};
 const deskRow = {
-  user_id: 'desk-1', email: 'desk@biz.com', full_name: 'Desk Staff',
-  role: 'front_desk' as const, created_at: '2026-02-01', is_self: false,
-}
+  user_id: 'desk-1',
+  email: 'desk@biz.com',
+  full_name: 'Desk Staff',
+  role: 'front_desk' as const,
+  created_at: '2026-02-01',
+  is_self: false,
+};
 
 function mockListResponse(users: (typeof ownerRow | typeof deskRow)[]) {
   return {
     ok: true,
     json: async () => ({ success: true, users }),
-  } as unknown as Response
+  } as unknown as Response;
 }
 
 function mockMutateResponse(body: Record<string, unknown> = {}) {
   return {
     ok: true,
     json: async () => body,
-  } as unknown as Response
+  } as unknown as Response;
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  localStorage.setItem('tenantId', TENANT_ID)
-  ;(global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn()
-})
+  vi.clearAllMocks();
+  localStorage.setItem('tenantId', TENANT_ID);
+  (global.fetch as unknown as ReturnType<typeof vi.fn>) = vi.fn();
+});
 
 describe('TeamAccessView — list rendering', () => {
   test('HAPPY: renders one row per teammate with role label + self badge', async () => {
@@ -63,20 +71,22 @@ describe('TeamAccessView — list rendering', () => {
     //      who has access, in what role, and can spot anomalies (a
     //      teammate accidentally promoted to owner, an old account
     //      that should be removed, etc.)
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockListResponse([ownerRow, deskRow]))
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockListResponse([ownerRow, deskRow])
+    );
 
-    render(<TeamAccessView />)
+    render(<TeamAccessView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Owner Boss')).toBeInTheDocument()
-      expect(screen.getByText('Desk Staff')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Owner Boss')).toBeInTheDocument();
+      expect(screen.getByText('Desk Staff')).toBeInTheDocument();
+    });
     // The current user's row gets a "You" badge
-    expect(screen.getByText('You')).toBeInTheDocument()
+    expect(screen.getByText('You')).toBeInTheDocument();
     // Both rows render their email
-    expect(screen.getByText('owner@biz.com')).toBeInTheDocument()
-    expect(screen.getByText('desk@biz.com')).toBeInTheDocument()
-  })
+    expect(screen.getByText('owner@biz.com')).toBeInTheDocument();
+    expect(screen.getByText('desk@biz.com')).toBeInTheDocument();
+  });
 
   test('HAPPY: empty state renders when no users come back', async () => {
     // WHO: owner of a brand-new tenant who hasn't invited anyone yet
@@ -85,15 +95,15 @@ describe('TeamAccessView — list rendering', () => {
     //      handle the "empty list" branch without crashing)
     // WHAT: list is empty → friendly "Invite your first teammate" copy
     // WHY: avoids a blank rectangle that looks like a bug
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockListResponse([]))
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockListResponse([]));
 
-    render(<TeamAccessView />)
+    render(<TeamAccessView />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no team logins yet/i)).toBeInTheDocument()
-    })
-  })
-})
+      expect(screen.getByText(/no team logins yet/i)).toBeInTheDocument();
+    });
+  });
+});
 
 describe('TeamAccessView — self-edit guard', () => {
   test('SAD: own-row role dropdown is disabled — UI-side foot-gun guard', async () => {
@@ -106,19 +116,21 @@ describe('TeamAccessView — self-edit guard', () => {
     //      they could undo the change — a hard lockout requiring SQL.
     //      The API rejects this with 400 too, but the UI should never
     //      let it be attempted.
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockListResponse([ownerRow, deskRow]))
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockListResponse([ownerRow, deskRow])
+    );
 
-    render(<TeamAccessView />)
+    render(<TeamAccessView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Owner Boss')).toBeInTheDocument()
-    })
-    const ownSelect = screen.getByLabelText<HTMLSelectElement>('Role for owner@biz.com')
-    const otherSelect = screen.getByLabelText<HTMLSelectElement>('Role for desk@biz.com')
-    expect(ownSelect).toBeDisabled()
-    expect(otherSelect).not.toBeDisabled()
-  })
-})
+      expect(screen.getByText('Owner Boss')).toBeInTheDocument();
+    });
+    const ownSelect = screen.getByLabelText<HTMLSelectElement>('Role for owner@biz.com');
+    const otherSelect = screen.getByLabelText<HTMLSelectElement>('Role for desk@biz.com');
+    expect(ownSelect).toBeDisabled();
+    expect(otherSelect).not.toBeDisabled();
+  });
+});
 
 describe('TeamAccessView — invite flow', () => {
   test('HAPPY: clicking Invite opens the modal with role + name + email fields', async () => {
@@ -127,19 +139,19 @@ describe('TeamAccessView — invite flow', () => {
     //       Front Desk (the safer default — promoting later is one
     //       click; demoting an accidental owner is one click too,
     //       but defaulting to Front Desk avoids privilege drift)
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockListResponse([ownerRow]))
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(mockListResponse([ownerRow]));
 
-    render(<TeamAccessView />)
-    await waitFor(() => screen.getByText('Owner Boss'))
-    fireEvent.click(screen.getByRole('button', { name: /invite/i }))
+    render(<TeamAccessView />);
+    await waitFor(() => screen.getByText('Owner Boss'));
+    fireEvent.click(screen.getByRole('button', { name: /invite/i }));
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     // Default role is front_desk → that radio is checked
-    const frontDeskRadio = screen.getByRole<HTMLInputElement>('radio', { name: /front desk/i })
-    expect(frontDeskRadio.checked).toBe(true)
-  })
+    const frontDeskRadio = screen.getByRole<HTMLInputElement>('radio', { name: /front desk/i });
+    expect(frontDeskRadio.checked).toBe(true);
+  });
 
   test('HAPPY: submitting the invite form POSTs to /users/invite and closes the modal', async () => {
     // WHO: owner submitting a valid invite
@@ -150,39 +162,41 @@ describe('TeamAccessView — invite flow', () => {
     // WHY: the round-trip is the contract — if the form silently
     //      drops a field or hits the wrong URL, an owner thinks the
     //      invite went out when it didn't
-    let listCalls = 0
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
-      if (url.includes('/users/invite') && init?.method === 'POST') {
-        return Promise.resolve(mockMutateResponse({ success: true, user_id: 'new-1' }))
+    let listCalls = 0;
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (url.includes('/users/invite') && init?.method === 'POST') {
+          return Promise.resolve(mockMutateResponse({ success: true, user_id: 'new-1' }));
+        }
+        // GET /users — return only owner on first load, then both rows after invite
+        listCalls += 1;
+        const list = listCalls === 1 ? [ownerRow] : [ownerRow, deskRow];
+        return Promise.resolve(mockListResponse(list));
       }
-      // GET /users — return only owner on first load, then both rows after invite
-      listCalls += 1
-      const list = listCalls === 1 ? [ownerRow] : [ownerRow, deskRow]
-      return Promise.resolve(mockListResponse(list))
-    })
+    );
 
-    render(<TeamAccessView />)
-    await waitFor(() => screen.getByText('Owner Boss'))
-    fireEvent.click(screen.getByRole('button', { name: /invite/i }))
+    render(<TeamAccessView />);
+    await waitFor(() => screen.getByText('Owner Boss'));
+    fireEvent.click(screen.getByRole('button', { name: /invite/i }));
 
-    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'New Hire' } })
-    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'new@biz.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /send invite/i }))
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'New Hire' } });
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'new@biz.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /send invite/i }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
     // Verify the invite POST happened with the right payload shape
     const inviteCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => typeof c[0] === 'string' && c[0].includes('/users/invite')
-    )
-    expect(inviteCall).toBeDefined()
-    const body = JSON.parse((inviteCall![1] as RequestInit).body as string)
+    );
+    expect(inviteCall).toBeDefined();
+    const body = JSON.parse((inviteCall![1] as RequestInit).body as string);
     expect(body).toMatchObject({
       tenant_id: TENANT_ID,
       email: 'new@biz.com',
       full_name: 'New Hire',
       role: 'front_desk',
-    })
-  })
-})
+    });
+  });
+});

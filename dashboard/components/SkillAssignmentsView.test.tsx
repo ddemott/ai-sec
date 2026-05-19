@@ -16,28 +16,28 @@
  *
  * Each test carries 5W context.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import '@testing-library/jest-dom'
-import React from 'react'
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(window.location.search),
-}))
+}));
 
 vi.mock('./SkillMatrixView', () => ({
   default: () => <div data-testid="grid-view-marker">grid</div>,
-}))
+}));
 
 vi.mock('./skill-map/SkillRelationshipMap', () => ({
   default: () => <div data-testid="map-view-marker">map</div>,
-}))
+}));
 
-import SkillAssignmentsView from './SkillAssignmentsView'
+import SkillAssignmentsView from './SkillAssignmentsView';
 
 beforeEach(() => {
-  window.history.replaceState({}, '', '/dashboard?tab=my-team&subtab=skills')
-})
+  window.history.replaceState({}, '', '/dashboard?tab=my-team&subtab=skills');
+});
 
 describe('SkillAssignmentsView — initial view from URL', () => {
   test('HAPPY: no ?view param → Grid view renders by default', () => {
@@ -48,10 +48,10 @@ describe('SkillAssignmentsView — initial view from URL', () => {
     // WHY: Grid is the bulk-edit affordance most owners reach for first;
     //      making it the default avoids putting them in the visual Map
     //      they may never have seen before.
-    render(<SkillAssignmentsView />)
-    expect(screen.getByTestId('grid-view-marker')).toBeInTheDocument()
-    expect(screen.queryByTestId('map-view-marker')).not.toBeInTheDocument()
-  })
+    render(<SkillAssignmentsView />);
+    expect(screen.getByTestId('grid-view-marker')).toBeInTheDocument();
+    expect(screen.queryByTestId('map-view-marker')).not.toBeInTheDocument();
+  });
 
   test('HAPPY: ?view=map on the URL → Map view renders initially', () => {
     // WHO: user who bookmarked the legacy Skill Map tab (the legacy
@@ -59,12 +59,12 @@ describe('SkillAssignmentsView — initial view from URL', () => {
     //      `?subtab=skills&view=map` on mount)
     // WHAT: the Map marker is in the DOM; the Grid marker is NOT.
     // WHY: deep-link preservation is the whole reason the URL param exists.
-    window.history.replaceState({}, '', '/dashboard?subtab=skills&view=map')
-    render(<SkillAssignmentsView />)
-    expect(screen.getByTestId('map-view-marker')).toBeInTheDocument()
-    expect(screen.queryByTestId('grid-view-marker')).not.toBeInTheDocument()
-  })
-})
+    window.history.replaceState({}, '', '/dashboard?subtab=skills&view=map');
+    render(<SkillAssignmentsView />);
+    expect(screen.getByTestId('map-view-marker')).toBeInTheDocument();
+    expect(screen.queryByTestId('grid-view-marker')).not.toBeInTheDocument();
+  });
+});
 
 describe('SkillAssignmentsView — toggle behavior', () => {
   test('HAPPY: clicking Map switches view AND writes ?view=map to the URL', () => {
@@ -75,13 +75,13 @@ describe('SkillAssignmentsView — toggle behavior', () => {
     //       keeps the choice.
     // WHY: a toggle that didn't persist would re-default to Grid on
     //      every reload, making the Map view feel hidden.
-    render(<SkillAssignmentsView />)
+    render(<SkillAssignmentsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: /map/i }))
+    fireEvent.click(screen.getByRole('button', { name: /map/i }));
 
-    expect(screen.getByTestId('map-view-marker')).toBeInTheDocument()
-    expect(window.location.search).toContain('view=map')
-  })
+    expect(screen.getByTestId('map-view-marker')).toBeInTheDocument();
+    expect(window.location.search).toContain('view=map');
+  });
 
   test('HAPPY: clicking Grid strips ?view from the URL (default state)', () => {
     // WHO: same owner, switching back from Map to Grid
@@ -90,14 +90,14 @@ describe('SkillAssignmentsView — toggle behavior', () => {
     //       leftover params so URLs stay clean.
     // WHY: keeping `?view=grid` would still be redundant; canonical URL
     //      shape for the default is no view param at all.
-    window.history.replaceState({}, '', '/dashboard?subtab=skills&view=map')
-    render(<SkillAssignmentsView />)
+    window.history.replaceState({}, '', '/dashboard?subtab=skills&view=map');
+    render(<SkillAssignmentsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: /grid/i }))
+    fireEvent.click(screen.getByRole('button', { name: /grid/i }));
 
-    expect(screen.getByTestId('grid-view-marker')).toBeInTheDocument()
-    expect(window.location.search).not.toContain('view=')
-  })
+    expect(screen.getByTestId('grid-view-marker')).toBeInTheDocument();
+    expect(window.location.search).not.toContain('view=');
+  });
 
   test('HAPPY: aria-pressed reflects the active toggle for screen readers', () => {
     // WHO: screen-reader user navigating the toggle group
@@ -106,16 +106,16 @@ describe('SkillAssignmentsView — toggle behavior', () => {
     // WHY: aria-pressed is the canonical signal for two-state toggle
     //      buttons. Without it the screen reader can't distinguish
     //      the active view from the inactive one.
-    render(<SkillAssignmentsView />)
+    render(<SkillAssignmentsView />);
 
-    const grid = screen.getByRole('button', { name: /grid/i })
-    const map = screen.getByRole('button', { name: /map/i })
+    const grid = screen.getByRole('button', { name: /grid/i });
+    const map = screen.getByRole('button', { name: /map/i });
 
-    expect(grid).toHaveAttribute('aria-pressed', 'true')
-    expect(map).toHaveAttribute('aria-pressed', 'false')
+    expect(grid).toHaveAttribute('aria-pressed', 'true');
+    expect(map).toHaveAttribute('aria-pressed', 'false');
 
-    fireEvent.click(map)
-    expect(grid).toHaveAttribute('aria-pressed', 'false')
-    expect(map).toHaveAttribute('aria-pressed', 'true')
-  })
-})
+    fireEvent.click(map);
+    expect(grid).toHaveAttribute('aria-pressed', 'false');
+    expect(map).toHaveAttribute('aria-pressed', 'true');
+  });
+});

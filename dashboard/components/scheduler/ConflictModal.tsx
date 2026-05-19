@@ -117,11 +117,7 @@ export function ConflictModal({
               View appointment
             </Button>
           )}
-          <Button
-            variant="primary"
-            onClick={onClose}
-            data-testid="conflict-modal-pick-another"
-          >
+          <Button variant="primary" onClick={onClose} data-testid="conflict-modal-pick-another">
             Pick another time
           </Button>
         </div>
@@ -131,21 +127,29 @@ export function ConflictModal({
         <p style={{ color: 'var(--text-secondary)' }}>
           The slot you picked is taken. Here&rsquo;s what&rsquo;s on the books for that time:
         </p>
-        <dl className="space-y-2 rounded-md border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+        <dl
+          className="space-y-2 rounded-md border p-3"
+          style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+        >
           <div className="flex items-start gap-2">
             <Clock className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--text-secondary)' }} />
             <div>
               <dt className="sr-only">Time</dt>
               <dd>
                 <span className="font-medium">{formatDate(conflict.start_time)}</span>
-                <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>·</span>
+                <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  ·
+                </span>
                 <span>{formatRange(conflict.start_time, conflict.end_time)}</span>
               </dd>
             </div>
           </div>
           {conflict.customer_name && (
             <div className="flex items-start gap-2">
-              <User className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--text-secondary)' }} />
+              <User
+                className="w-4 h-4 mt-0.5 shrink-0"
+                style={{ color: 'var(--text-secondary)' }}
+              />
               <div>
                 <dt className="sr-only">Customer</dt>
                 <dd className="font-medium">{conflict.customer_name}</dd>
@@ -154,7 +158,10 @@ export function ConflictModal({
           )}
           {(conflict.employee_name || conflict.resource_name) && (
             <div className="flex items-start gap-2">
-              <Wrench className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--text-secondary)' }} />
+              <Wrench
+                className="w-4 h-4 mt-0.5 shrink-0"
+                style={{ color: 'var(--text-secondary)' }}
+              />
               <div className="space-y-0.5">
                 <dt className="sr-only">Assignment</dt>
                 {conflict.employee_name && <dd>{conflict.employee_name}</dd>}
@@ -193,10 +200,16 @@ export function ConflictModal({
                     }}
                     data-testid={`conflict-modal-alt-${slot.start_time}`}
                   >
-                    <span className="font-medium">{formatRange(slot.start_time, slot.end_time)}</span>
-                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>·</span>
+                    <span className="font-medium">
+                      {formatRange(slot.start_time, slot.end_time)}
+                    </span>
+                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      ·
+                    </span>
                     <span>{slot.employee_name}</span>
-                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>·</span>
+                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      ·
+                    </span>
                     <span style={{ color: 'var(--text-secondary)' }}>{slot.resource_name}</span>
                   </button>
                 </li>

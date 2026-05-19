@@ -80,21 +80,19 @@ describe('isFifteenMinuteIncrement (dashboard)', () => {
 
 describe('validateAppointmentTimeRange (dashboard) — 15-min integration', () => {
   it('HAPPY: valid 15-min range returns null', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:30:00Z')
-    ).toBeNull();
+    expect(validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:30:00Z')).toBeNull();
   });
 
   it('SAD: off-grid start returns the increment error', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:07:00Z', '2026-05-10T14:30:00Z')
-    ).toBe('Start time must land on a 15-minute increment (:00, :15, :30, :45)');
+    expect(validateAppointmentTimeRange('2026-05-10T14:07:00Z', '2026-05-10T14:30:00Z')).toBe(
+      'Start time must land on a 15-minute increment (:00, :15, :30, :45)'
+    );
   });
 
   it('SAD: off-grid end returns the increment error (start was valid)', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:23:00Z')
-    ).toBe('End time must land on a 15-minute increment (:00, :15, :30, :45)');
+    expect(validateAppointmentTimeRange('2026-05-10T14:00:00Z', '2026-05-10T14:23:00Z')).toBe(
+      'End time must land on a 15-minute increment (:00, :15, :30, :45)'
+    );
   });
 
   it('SAD: ordering — empty time error precedes increment error', () => {
@@ -105,14 +103,14 @@ describe('validateAppointmentTimeRange (dashboard) — 15-min integration', () =
   });
 
   it('SAD: ordering — inverted range error precedes increment error', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T14:30:00Z', '2026-05-10T14:00:00Z')
-    ).toBe('End time must be after start time');
+    expect(validateAppointmentTimeRange('2026-05-10T14:30:00Z', '2026-05-10T14:00:00Z')).toBe(
+      'End time must be after start time'
+    );
   });
 
   it('SAD: ordering — over-12-hour range error precedes increment error', () => {
-    expect(
-      validateAppointmentTimeRange('2026-05-10T08:00:00Z', '2026-05-10T21:00:00Z')
-    ).toBe('Appointment duration cannot exceed 12 hours');
+    expect(validateAppointmentTimeRange('2026-05-10T08:00:00Z', '2026-05-10T21:00:00Z')).toBe(
+      'Appointment duration cannot exceed 12 hours'
+    );
   });
 });

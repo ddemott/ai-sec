@@ -17,10 +17,20 @@ interface SyncLogger {
   warn: (obj: Record<string, unknown>, msg: string) => void;
 }
 
-function logSyncError(logger: SyncLogger | null, provider: string, entity: string, action: string, entityId: string, err: unknown) {
+function logSyncError(
+  logger: SyncLogger | null,
+  provider: string,
+  entity: string,
+  action: string,
+  entityId: string,
+  err: unknown
+) {
   const msg = err instanceof Error ? err.message : String(err);
   if (logger) {
-    logger.error({ provider, entity, action, entityId, error: msg }, `Sync failed: ${provider} ${entity} ${action}`);
+    logger.error(
+      { provider, entity, action, entityId, error: msg },
+      `Sync failed: ${provider} ${entity} ${action}`
+    );
   }
 }
 
@@ -49,7 +59,13 @@ function recordingEnabled(): boolean {
   return process.env.SYNC_TEST_RECORDER === '1';
 }
 
-function record(provider: string, entity: 'appointment' | 'customer', action: 'create' | 'update' | 'delete', tenantId: string, entityId: string) {
+function record(
+  provider: string,
+  entity: 'appointment' | 'customer',
+  action: 'create' | 'update' | 'delete',
+  tenantId: string,
+  entityId: string
+) {
   if (!recordingEnabled()) return;
   recorder.push({ ts: new Date().toISOString(), provider, entity, action, tenantId, entityId });
   if (recorder.length > RECORDER_MAX) recorder.splice(0, recorder.length - RECORDER_MAX);
@@ -61,7 +77,11 @@ function record(provider: string, entity: 'appointment' | 'customer', action: 'c
  * once. Labels are bounded (5 providers × 2 entities × 3 actions = 30
  * series max) so cardinality is safe.
  */
-function meter(provider: string, entity: 'appointment' | 'customer', action: 'create' | 'update' | 'delete') {
+function meter(
+  provider: string,
+  entity: 'appointment' | 'customer',
+  action: 'create' | 'update' | 'delete'
+) {
   syncDispatchesTotal.inc({ provider, entity, action });
 }
 
@@ -95,7 +115,7 @@ export function syncAppointmentToAll(
   for (const { name, fn } of providers) {
     record(name, 'appointment', action, tenantId, appointmentId);
     meter(name, 'appointment', action);
-    fn(pool, tenantId, appointmentId, action).catch(e =>
+    fn(pool, tenantId, appointmentId, action).catch((e) =>
       logSyncError(logger, name, 'appointment', action, appointmentId, e)
     );
   }
@@ -122,7 +142,7 @@ export function syncCustomerToAll(
   for (const { name, fn } of providers) {
     record(name, 'customer', action, tenantId, customerId);
     meter(name, 'customer', action);
-    fn(pool, tenantId, customerId, action).catch(e =>
+    fn(pool, tenantId, customerId, action).catch((e) =>
       logSyncError(logger, name, 'customer', action, customerId, e)
     );
   }

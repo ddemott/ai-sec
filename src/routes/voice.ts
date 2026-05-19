@@ -13,11 +13,7 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
-import type {
-  CustomerContext,
-  VoiceSession,
-  VoiceSessionDisplay,
-} from '../types/voiceCrm';
+import type { CustomerContext, VoiceSession, VoiceSessionDisplay } from '../types/voiceCrm';
 
 const StartSessionSchema = z.object({
   call_id: z.string().min(1),
@@ -27,16 +23,18 @@ const StartSessionSchema = z.object({
 const EndSessionSchema = z.object({
   call_id: z.string().min(1),
   duration_seconds: z.number().int().min(0).optional(),
-  outcome: z.enum([
-    'appointment_booked',
-    'appointment_rescheduled',
-    'appointment_cancelled',
-    'info_provided',
-    'transferred',
-    'voicemail',
-    'abandoned',
-    'other',
-  ]).optional(),
+  outcome: z
+    .enum([
+      'appointment_booked',
+      'appointment_rescheduled',
+      'appointment_cancelled',
+      'info_provided',
+      'transferred',
+      'voicemail',
+      'abandoned',
+      'other',
+    ])
+    .optional(),
   transcript: z.string().optional(),
   summary: z.string().optional(),
   appointment_id: z.string().uuid().optional(),
@@ -67,59 +65,62 @@ export function registerVoiceRoutes(
    *
    * Called by the LiveKit agent when a call starts
    */
-  app.post('/voice/session/start', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/voice/session/start',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const parsed = StartSessionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        success: false,
-        error: 'Validation failed',
-        details: parsed.error.issues,
+      const parsed = StartSessionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+      }
+
+      const { call_id, caller_phone } = parsed.data;
+
+      const context = await withTenantClient(tenantId, async (client) => {
+        // Use the database function to start session and get context
+        const result = await client.query<{ context: CustomerContext }>(
+          'SELECT start_voice_session($1, $2, $3) as context',
+          [tenantId, call_id, caller_phone]
+        );
+        return result.rows[0]?.context || null;
       });
-    }
 
-    const { call_id, caller_phone } = parsed.data;
+      if (!context) {
+        return reply.status(500).send({
+          success: false,
+          error: 'Failed to create voice session',
+        });
+      }
 
-    const context = await withTenantClient(tenantId, async (client) => {
-      // Use the database function to start session and get context
-      const result = await client.query<{ context: CustomerContext }>(
-        'SELECT start_voice_session($1, $2, $3) as context',
-        [tenantId, call_id, caller_phone]
-      );
-      return result.rows[0]?.context || null;
-    });
-
-    if (!context) {
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to create voice session',
-      });
-    }
-
-    logEvent(req, 'voice_session_started', {
-      call_id,
-      caller_phone,
-      is_known_customer: context.is_known_customer,
-      customer_id: context.customer?.customer_id,
-    });
-
-    // Emit real-time event if Socket.IO is available
-    if (io) {
-      io.to(`tenant:${tenantId}`).emit('call-started', {
+      logEvent(req, 'voice_session_started', {
         call_id,
         caller_phone,
-        customer_context: context,
-        timestamp: new Date().toISOString(),
+        is_known_customer: context.is_known_customer,
+        customer_id: context.customer?.customer_id,
       });
-    }
 
-    return reply.send({
-      success: true,
-      context,
-    });
-  }, 'Failed to start voice session'));
+      // Emit real-time event if Socket.IO is available
+      if (io) {
+        io.to(`tenant:${tenantId}`).emit('call-started', {
+          call_id,
+          caller_phone,
+          customer_context: context,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({
+        success: true,
+        context,
+      });
+    }, 'Failed to start voice session')
+  );
 
   /**
    * POST /voice/session/end
@@ -127,95 +128,112 @@ export function registerVoiceRoutes(
    *
    * Called by the LiveKit agent when a call ends
    */
-  app.post('/voice/session/end', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/voice/session/end',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const parsed = EndSessionSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        success: false,
-        error: 'Validation failed',
-        details: parsed.error.issues,
+      const parsed = EndSessionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+      }
+
+      const { call_id, duration_seconds, outcome, transcript, summary, appointment_id } =
+        parsed.data;
+
+      const ended = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query<{ ended: boolean }>(
+          'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) as ended',
+          [
+            tenantId,
+            call_id,
+            duration_seconds || null,
+            outcome || null,
+            transcript || null,
+            summary || null,
+            appointment_id || null,
+          ]
+        );
+        return result.rows[0]?.ended || false;
       });
-    }
 
-    const { call_id, duration_seconds, outcome, transcript, summary, appointment_id } = parsed.data;
+      if (!ended) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Voice session not found',
+        });
+      }
 
-    const ended = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<{ ended: boolean }>(
-        'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) as ended',
-        [tenantId, call_id, duration_seconds || null, outcome || null, transcript || null, summary || null, appointment_id || null]
-      );
-      return result.rows[0]?.ended || false;
-    });
-
-    if (!ended) {
-      return reply.status(404).send({
-        success: false,
-        error: 'Voice session not found',
-      });
-    }
-
-    logEvent(req, 'voice_session_ended', {
-      call_id,
-      duration_seconds,
-      outcome,
-      appointment_id,
-    });
-
-    // Emit real-time event
-    if (io) {
-      io.to(`tenant:${tenantId}`).emit('call-ended', {
+      logEvent(req, 'voice_session_ended', {
         call_id,
         duration_seconds,
         outcome,
-        timestamp: new Date().toISOString(),
+        appointment_id,
       });
-    }
 
-    return reply.send({ success: true });
-  }, 'Failed to end voice session'));
+      // Emit real-time event
+      if (io) {
+        io.to(`tenant:${tenantId}`).emit('call-ended', {
+          call_id,
+          duration_seconds,
+          outcome,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return reply.send({ success: true });
+    }, 'Failed to end voice session')
+  );
 
   /**
    * GET /voice/session/:callId
    * Get a specific voice session with full context
    */
-  app.get('/voice/session/:callId', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/voice/session/:callId',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const { callId } = req.params as { callId: string };
+      const { callId } = req.params as { callId: string };
 
-    const session = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<VoiceSession>(
-        `SELECT * FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2 AND is_deleted = false`,
-        [tenantId, callId]
-      );
-      return result.rows[0] || null;
-    });
-
-    if (!session) {
-      return reply.status(404).send({
-        success: false,
-        error: 'Voice session not found',
+      const session = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query<VoiceSession>(
+          `SELECT * FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2 AND is_deleted = false`,
+          [tenantId, callId]
+        );
+        return result.rows[0] || null;
       });
-    }
 
-    return reply.send(session);
-  }, 'Failed to get voice session'));
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Voice session not found',
+        });
+      }
+
+      return reply.send(session);
+    }, 'Failed to get voice session')
+  );
 
   /**
    * GET /voice/active
    * Get list of active calls for dashboard
    */
-  app.get('/voice/active', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/voice/active',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const calls = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<VoiceSessionDisplay>(
-        `SELECT
+      const calls = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query<VoiceSessionDisplay>(
+          `SELECT
           vs.voice_session_id,
           vs.call_id,
           vs.caller_phone,
@@ -230,63 +248,66 @@ export function registerVoiceRoutes(
         LEFT JOIN customers c ON c.customer_id = vs.customer_id
         WHERE vs.tenant_id = $1 AND vs.status = 'active'
         ORDER BY vs.started_at DESC`,
-        [tenantId]
-      );
-      return result.rows;
-    });
+          [tenantId]
+        );
+        return result.rows;
+      });
 
-    return reply.send({
-      calls,
-      total: calls.length,
-    });
-  }, 'Failed to get active calls'));
+      return reply.send({
+        calls,
+        total: calls.length,
+      });
+    }, 'Failed to get active calls')
+  );
 
   /**
    * GET /voice/history
    * Get call history with optional filters
    */
-  app.get('/voice/history', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/voice/history',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const query = req.query as {
-      customer_id?: string;
-      status?: string;
-      limit?: string;
-      offset?: string;
-    };
+      const query = req.query as {
+        customer_id?: string;
+        status?: string;
+        limit?: string;
+        offset?: string;
+      };
 
-    const limit = Math.min(parseInt(query.limit || '50'), 200);
-    const offset = parseInt(query.offset || '0');
+      const limit = Math.min(parseInt(query.limit || '50'), 200);
+      const offset = parseInt(query.offset || '0');
 
-    const { calls, total } = await withTenantClient(tenantId, async (client) => {
-      let whereClause = 'WHERE vs.tenant_id = $1';
-      const params: (string | number)[] = [tenantId];
-      let paramIndex = 2;
+      const { calls, total } = await withTenantClient(tenantId, async (client) => {
+        let whereClause = 'WHERE vs.tenant_id = $1';
+        const params: (string | number)[] = [tenantId];
+        let paramIndex = 2;
 
-      if (query.customer_id) {
-        whereClause += ` AND vs.customer_id = $${paramIndex}`;
-        params.push(query.customer_id);
-        paramIndex++;
-      }
+        if (query.customer_id) {
+          whereClause += ` AND vs.customer_id = $${paramIndex}`;
+          params.push(query.customer_id);
+          paramIndex++;
+        }
 
-      if (query.status) {
-        whereClause += ` AND vs.status = $${paramIndex}`;
-        params.push(query.status);
-        paramIndex++;
-      }
+        if (query.status) {
+          whereClause += ` AND vs.status = $${paramIndex}`;
+          params.push(query.status);
+          paramIndex++;
+        }
 
-      // Get total count
-      const countResult = await client.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM voice_sessions vs ${whereClause}`,
-        params
-      );
-      const totalCount = parseInt(countResult.rows[0]?.count || '0');
+        // Get total count
+        const countResult = await client.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM voice_sessions vs ${whereClause}`,
+          params
+        );
+        const totalCount = parseInt(countResult.rows[0]?.count || '0');
 
-      // Get sessions
-      params.push(limit, offset);
-      const result = await client.query<VoiceSession>(
-        `SELECT
+        // Get sessions
+        params.push(limit, offset);
+        const result = await client.query<VoiceSession>(
+          `SELECT
           vs.*,
           c.name as customer_name
         FROM voice_sessions vs
@@ -294,164 +315,179 @@ export function registerVoiceRoutes(
         ${whereClause}
         ORDER BY vs.started_at DESC
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-        params
-      );
+          params
+        );
 
-      return {
-        calls: result.rows,
-        total: totalCount,
-      };
-    });
+        return {
+          calls: result.rows,
+          total: totalCount,
+        };
+      });
 
-    return reply.send({
-      calls,
-      total,
-      has_more: offset + calls.length < total,
-    });
-  }, 'Failed to get call history'));
+      return reply.send({
+        calls,
+        total,
+        has_more: offset + calls.length < total,
+      });
+    }, 'Failed to get call history')
+  );
 
   /**
    * GET /voice/customer/:customerId/context
    * Get full CRM context for a specific customer
    */
-  app.get('/voice/customer/:customerId/context', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/voice/customer/:customerId/context',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const { customerId } = req.params as { customerId: string };
+      const { customerId } = req.params as { customerId: string };
 
-    const context = await withTenantClient(tenantId, async (client) => {
-      // Get customer phone to use with context function
-      const customerResult = await client.query<{ phone: string }>(
-        'SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
-        [customerId, tenantId]
-      );
+      const context = await withTenantClient(tenantId, async (client) => {
+        // Get customer phone to use with context function
+        const customerResult = await client.query<{ phone: string }>(
+          'SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
+          [customerId, tenantId]
+        );
 
-      if (customerResult.rows.length === 0) {
-        return null;
+        if (customerResult.rows.length === 0) {
+          return null;
+        }
+
+        const result = await client.query<{ context: CustomerContext }>(
+          'SELECT get_customer_context_for_call($1, $2) as context',
+          [tenantId, customerResult.rows[0].phone]
+        );
+        return result.rows[0]?.context || null;
+      });
+
+      if (!context) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Customer not found',
+        });
       }
 
-      const result = await client.query<{ context: CustomerContext }>(
-        'SELECT get_customer_context_for_call($1, $2) as context',
-        [tenantId, customerResult.rows[0].phone]
-      );
-      return result.rows[0]?.context || null;
-    });
-
-    if (!context) {
-      return reply.status(404).send({
-        success: false,
-        error: 'Customer not found',
-      });
-    }
-
-    return reply.send(context);
-  }, 'Failed to get customer context'));
+      return reply.send(context);
+    }, 'Failed to get customer context')
+  );
 
   /**
    * GET /voice/customer/:customerId/calls
    * Get call history for a specific customer
    */
-  app.get('/voice/customer/:customerId/calls', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/voice/customer/:customerId/calls',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const { customerId } = req.params as { customerId: string };
-    const limit = Math.min(parseInt((req.query as { limit?: string }).limit || '20'), 100);
+      const { customerId } = req.params as { customerId: string };
+      const limit = Math.min(parseInt((req.query as { limit?: string }).limit || '20'), 100);
 
-    const calls = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<VoiceSession>(
-        `SELECT * FROM voice_sessions
+      const calls = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query<VoiceSession>(
+          `SELECT * FROM voice_sessions
         WHERE tenant_id = $1 AND customer_id = $2 AND is_deleted = false
         ORDER BY started_at DESC
         LIMIT $3`,
-        [tenantId, customerId, limit]
-      );
-      return result.rows;
-    });
+          [tenantId, customerId, limit]
+        );
+        return result.rows;
+      });
 
-    return reply.send({ calls });
-  }, 'Failed to get customer call history'));
+      return reply.send({ calls });
+    }, 'Failed to get customer call history')
+  );
 
   /**
    * POST /voice/customer/note
    * Add a note to a customer record
    */
-  app.post('/voice/customer/note', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/voice/customer/note',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const parsed = AddNoteSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        success: false,
-        error: 'Validation failed',
-        details: parsed.error.issues,
-      });
-    }
-
-    const { customer_id, note, note_type, call_id } = parsed.data;
-
-    const added = await withTenantClient(tenantId, async (client) => {
-      // Verify customer belongs to tenant
-      const checkResult = await client.query(
-        'SELECT customer_id FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
-        [customer_id, tenantId]
-      );
-
-      if (checkResult.rows.length === 0) {
-        return false;
+      const parsed = AddNoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
       }
 
-      const result = await client.query<{ added: boolean }>(
-        'SELECT add_customer_note($1, $2, $3, $4) as added',
-        [customer_id, note, note_type || 'general', call_id || null]
-      );
-      return result.rows[0]?.added || false;
-    });
+      const { customer_id, note, note_type, call_id } = parsed.data;
 
-    if (!added) {
-      return reply.status(404).send({
-        success: false,
-        error: 'Customer not found',
+      const added = await withTenantClient(tenantId, async (client) => {
+        // Verify customer belongs to tenant
+        const checkResult = await client.query(
+          'SELECT customer_id FROM customers WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false',
+          [customer_id, tenantId]
+        );
+
+        if (checkResult.rows.length === 0) {
+          return false;
+        }
+
+        const result = await client.query<{ added: boolean }>(
+          'SELECT add_customer_note($1, $2, $3, $4) as added',
+          [customer_id, note, note_type || 'general', call_id || null]
+        );
+        return result.rows[0]?.added || false;
       });
-    }
 
-    logEvent(req, 'customer_note_added', {
-      customer_id,
-      note_type,
-      call_id,
-    });
+      if (!added) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Customer not found',
+        });
+      }
 
-    return reply.send({ success: true });
-  }, 'Failed to add customer note'));
+      logEvent(req, 'customer_note_added', {
+        customer_id,
+        note_type,
+        call_id,
+      });
+
+      return reply.send({ success: true });
+    }, 'Failed to add customer note')
+  );
 
   /**
    * GET /voice/context/:phone
    * Get customer context by phone number (used by the LiveKit agent's tool layer)
    * This endpoint can be called during a call to enrich AI context
    */
-  app.get('/voice/context/:phone', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/voice/context/:phone',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const { phone } = req.params as { phone: string };
+      const { phone } = req.params as { phone: string };
 
-    const context = await withTenantClient(tenantId, async (client) => {
-      const result = await client.query<{ context: CustomerContext }>(
-        'SELECT get_customer_context_for_call($1, $2) as context',
-        [tenantId, phone]
+      const context = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query<{ context: CustomerContext }>(
+          'SELECT get_customer_context_for_call($1, $2) as context',
+          [tenantId, phone]
+        );
+        return result.rows[0]?.context || null;
+      });
+
+      return reply.send(
+        context || {
+          is_known_customer: false,
+          customer: null,
+          appointment_history: { total: 0, completed: 0, cancelled: 0, upcoming_appointments: [] },
+          notes: [],
+          preferences: {},
+          tags: [],
+        }
       );
-      return result.rows[0]?.context || null;
-    });
-
-    return reply.send(context || {
-      is_known_customer: false,
-      customer: null,
-      appointment_history: { total: 0, completed: 0, cancelled: 0, upcoming_appointments: [] },
-      notes: [],
-      preferences: {},
-      tags: [],
-    });
-  }, 'Failed to get customer context'));
+    }, 'Failed to get customer context')
+  );
 }

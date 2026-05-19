@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock both calendar modules before importing calendarSync
 vi.mock('./services/googleCalendar', () => ({
@@ -15,9 +15,9 @@ vi.mock('./services/outlookCalendar', () => ({
   deleteEvent: vi.fn(),
 }));
 
-import { syncAppointmentToCalendar } from "./services/calendarSync";
-import * as gcal from "./services/googleCalendar";
-import * as outlookCal from "./services/outlookCalendar";
+import { syncAppointmentToCalendar } from './services/calendarSync';
+import * as gcal from './services/googleCalendar';
+import * as outlookCal from './services/outlookCalendar';
 
 // ---- Mock helpers ----
 
@@ -73,7 +73,7 @@ beforeEach(() => {
 // HAPPY PATHS
 // =============================================
 
-describe("Calendar Sync — Happy Paths", () => {
+describe('Calendar Sync — Happy Paths', () => {
   it("GOOGLE-CREATE: When tenant creates appointment with Google Calendar connected, system creates calendar event so customer receives invite and appointment shows on provider's calendar", async () => {
     // WHO: calendarSync.ts syncAppointmentToCalendar() with Google provider
     // WHAT: tenant creates a new appointment while Google Calendar OAuth is active
@@ -99,7 +99,8 @@ describe("Calendar Sync — Happy Paths", () => {
 
     // Verify createEvent was called with correct args
     expect(gcal.createEvent).toHaveBeenCalledOnce();
-    const [accessToken, refreshToken, calendarId, event] = vi.mocked(gcal.createEvent).mock.calls[0];
+    const [accessToken, refreshToken, calendarId, event] = vi.mocked(gcal.createEvent).mock
+      .calls[0];
     expect(accessToken).toBe('valid-access-token');
     expect(refreshToken).toBe('valid-refresh-token');
     expect(calendarId).toBe(CALENDAR_ID);
@@ -117,7 +118,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event created'));
   });
 
-  it("GOOGLE-UPDATE: When tenant updates appointment that was previously synced, system updates Google Calendar event using stored event_id to keep calendar in sync with scheduling changes", async () => {
+  it('GOOGLE-UPDATE: When tenant updates appointment that was previously synced, system updates Google Calendar event using stored event_id to keep calendar in sync with scheduling changes', async () => {
     // WHO: calendarSync.ts syncAppointmentToCalendar() with Google provider
     // WHAT: tenant reschedules or modifies an existing appointment that was previously synced
     // WHEN: appointment update action triggers calendar sync with existing sync_map entry
@@ -143,7 +144,8 @@ describe("Calendar Sync — Happy Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
 
     expect(gcal.updateEvent).toHaveBeenCalledOnce();
-    const [accessToken, _refreshToken, calendarId, eventId, event] = vi.mocked(gcal.updateEvent).mock.calls[0];
+    const [accessToken, _refreshToken, calendarId, eventId, event] = vi.mocked(gcal.updateEvent)
+      .mock.calls[0];
     expect(accessToken).toBe('valid-access-token');
     expect(calendarId).toBe(CALENDAR_ID);
     expect(eventId).toBe(EXTERNAL_EVENT_ID);
@@ -181,7 +183,8 @@ describe("Calendar Sync — Happy Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
 
     expect(gcal.deleteEvent).toHaveBeenCalledOnce();
-    const [accessToken, _refreshToken, calendarId, eventId] = vi.mocked(gcal.deleteEvent).mock.calls[0];
+    const [accessToken, _refreshToken, calendarId, eventId] = vi.mocked(gcal.deleteEvent).mock
+      .calls[0];
     expect(accessToken).toBe('valid-access-token');
     expect(calendarId).toBe(CALENDAR_ID);
     expect(eventId).toBe(EXTERNAL_EVENT_ID);
@@ -195,7 +198,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted'));
   });
 
-  it("GOOGLE-TOKEN-REFRESH: When Google OAuth token is expired, system refreshes it before syncing to ensure uninterrupted calendar integration", async () => {
+  it('GOOGLE-TOKEN-REFRESH: When Google OAuth token is expired, system refreshes it before syncing to ensure uninterrupted calendar integration', async () => {
     // WHO: calendarSync.ts token refresh logic for Google provider
     // WHAT: Google OAuth access_token has expired (token_expires_at in the past)
     // WHEN: any sync action detects expired token before making Google Calendar API call
@@ -245,7 +248,7 @@ describe("Calendar Sync — Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('token refreshed'));
   });
 
-  it("GOOGLE-UPDATE-FALLBACK: When update triggered for appointment with no sync_map entry (e.g., calendar connected after appointment created), system creates new event instead of failing", async () => {
+  it('GOOGLE-UPDATE-FALLBACK: When update triggered for appointment with no sync_map entry (e.g., calendar connected after appointment created), system creates new event instead of failing', async () => {
     // WHO: calendarSync.ts syncAppointmentToCalendar() update->create fallback
     // WHAT: appointment update triggered but no sync_map entry exists (calendar connected after appointment was created)
     // WHEN: update action finds empty sync_map lookup and recursively calls create
@@ -281,12 +284,13 @@ describe("Calendar Sync — Happy Paths", () => {
 
     // Verify sync map INSERT happened
     const lastInsertCall = mockClient.query.mock.calls.find(
-      (call: [string, unknown[]?]) => typeof call[0] === 'string' && call[0].includes('INSERT INTO appointment_sync_map')
+      (call: [string, unknown[]?]) =>
+        typeof call[0] === 'string' && call[0].includes('INSERT INTO appointment_sync_map')
     );
     expect(lastInsertCall).toBeDefined();
   });
 
-  it("EVENT-PAYLOAD: When creating calendar event, system builds correct payload with summary (service + customer), description, and ISO timestamps so event displays properly in Google Calendar", async () => {
+  it('EVENT-PAYLOAD: When creating calendar event, system builds correct payload with summary (service + customer), description, and ISO timestamps so event displays properly in Google Calendar', async () => {
     // WHO: calendarSync.ts event payload builder
     // WHAT: appointment with full details (description, customer, phone, resource, service, location, timestamps)
     // WHEN: create action builds the event object before calling Google Calendar API
@@ -356,8 +360,8 @@ describe("Calendar Sync — Happy Paths", () => {
 // SAD PATHS
 // =============================================
 
-describe("Calendar Sync — Sad Paths", () => {
-  it("NO-SETTINGS: When tenant has no calendar integration configured, sync returns silently allowing appointment operations to complete without calendar errors", async () => {
+describe('Calendar Sync — Sad Paths', () => {
+  it('NO-SETTINGS: When tenant has no calendar integration configured, sync returns silently allowing appointment operations to complete without calendar errors', async () => {
     // WHO: calendarSync.ts syncAppointmentToCalendar() settings check
     // WHAT: tenant_calendar_settings query returns no rows (no calendar integration configured)
     // WHEN: any sync action starts and checks for calendar settings
@@ -411,7 +415,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it("MISSING-ACCESS-TOKEN: When calendar integration has no access_token (incomplete OAuth), system skips sync to prevent API calls with invalid credentials", async () => {
+  it('MISSING-ACCESS-TOKEN: When calendar integration has no access_token (incomplete OAuth), system skips sync to prevent API calls with invalid credentials', async () => {
     // WHO: calendarSync.ts token validation logic
     // WHAT: tenant_calendar_settings has null access_token (OAuth flow started but not completed)
     // WHEN: sync action validates tokens before attempting API call
@@ -428,7 +432,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it("MISSING-REFRESH-TOKEN: When calendar integration has no refresh_token (incomplete OAuth), system skips sync because token refresh would fail", async () => {
+  it('MISSING-REFRESH-TOKEN: When calendar integration has no refresh_token (incomplete OAuth), system skips sync because token refresh would fail', async () => {
     // WHO: calendarSync.ts token validation logic
     // WHAT: tenant_calendar_settings has null refresh_token (OAuth flow incomplete or refresh_token revoked)
     // WHEN: sync action validates tokens before attempting API call
@@ -445,7 +449,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Google authorization), system marks calendar inactive in DB to prevent repeated failed API calls", async () => {
+  it('TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Google authorization), system marks calendar inactive in DB to prevent repeated failed API calls', async () => {
     // WHO: calendarSync.ts token refresh error handler for Google provider
     // WHAT: Google OAuth refresh_token is revoked or invalidated by user
     // WHEN: token refresh attempt throws error during sync operation
@@ -576,7 +580,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
-  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+  it('CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion', async () => {
     // WHO: calendarSync.ts finally block DB client cleanup
     // WHAT: initial DB query (settings lookup) throws connection error
     // WHEN: pool.connect() succeeds but first query fails (e.g., network partition)
@@ -600,7 +604,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it("PROACTIVE-REFRESH: When token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync", async () => {
+  it('PROACTIVE-REFRESH: When token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync', async () => {
     // WHO: calendarSync.ts proactive token refresh logic
     // WHAT: Google OAuth token expires in 3 minutes (within the 5-minute safety buffer)
     // WHEN: sync action checks token_expires_at against Date.now() + buffer before API call
@@ -632,7 +636,7 @@ describe("Calendar Sync — Sad Paths", () => {
     expect(vi.mocked(gcal.createEvent).mock.calls[0][0]).toBe('refreshed-token');
   });
 
-  it("NULL-EXPIRY-REFRESH: When token_expires_at is null (legacy data), system treats token as expired and refreshes to ensure valid credentials", async () => {
+  it('NULL-EXPIRY-REFRESH: When token_expires_at is null (legacy data), system treats token as expired and refreshes to ensure valid credentials', async () => {
     // WHO: calendarSync.ts null expiry handling logic
     // WHAT: tenant_calendar_settings has null token_expires_at (legacy row or migration gap)
     // WHEN: sync action parses token_expires_at and gets 0/NaN, treating it as expired
@@ -678,8 +682,8 @@ function makeOutlookSettings(overrides: Record<string, any> = {}) {
   };
 }
 
-describe("Calendar Sync — Outlook Happy Paths", () => {
-  it("OUTLOOK-CREATE: When tenant creates appointment with Outlook Calendar connected, system creates calendar event via Microsoft Graph API so appointment shows in Outlook", async () => {
+describe('Calendar Sync — Outlook Happy Paths', () => {
+  it('OUTLOOK-CREATE: When tenant creates appointment with Outlook Calendar connected, system creates calendar event via Microsoft Graph API so appointment shows in Outlook', async () => {
     // WHO: calendarSync.ts syncAppointmentToCalendar() with Outlook provider
     // WHAT: tenant creates a new appointment while Outlook Calendar OAuth is active
     // WHEN: appointment create action triggers calendar sync and provider is 'outlook'
@@ -703,7 +707,8 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(outlookCal.createEvent).toHaveBeenCalledOnce();
     expect(gcal.createEvent).not.toHaveBeenCalled();
 
-    const [accessToken, refreshToken, calendarId, event] = vi.mocked(outlookCal.createEvent).mock.calls[0];
+    const [accessToken, refreshToken, calendarId, event] = vi.mocked(outlookCal.createEvent).mock
+      .calls[0];
     expect(accessToken).toBe('outlook-access-token');
     expect(refreshToken).toBe('outlook-refresh-token');
     expect(calendarId).toBe(CALENDAR_ID);
@@ -718,7 +723,7 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('Outlook Calendar'));
   });
 
-  it("OUTLOOK-UPDATE: When tenant updates appointment synced to Outlook, system updates calendar event using stored event_id to keep Outlook in sync with scheduling changes", async () => {
+  it('OUTLOOK-UPDATE: When tenant updates appointment synced to Outlook, system updates calendar event using stored event_id to keep Outlook in sync with scheduling changes', async () => {
     // WHO: calendarSync.ts syncAppointmentToCalendar() with Outlook provider
     // WHAT: tenant reschedules an existing appointment that was previously synced to Outlook
     // WHEN: appointment update action triggers sync with existing sync_map entry for Outlook
@@ -742,12 +747,16 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(outlookCal.updateEvent).toHaveBeenCalledOnce();
     expect(gcal.updateEvent).not.toHaveBeenCalled();
 
-    const [accessToken, _refreshToken, _calendarId, eventId, event] = vi.mocked(outlookCal.updateEvent).mock.calls[0];
+    const [accessToken, _refreshToken, _calendarId, eventId, event] = vi.mocked(
+      outlookCal.updateEvent
+    ).mock.calls[0];
     expect(accessToken).toBe('outlook-access-token');
     expect(eventId).toBe(OUTLOOK_EVENT_ID);
     expect(event.summary).toBe('Oil Change - John Doe');
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event updated in Outlook'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('event updated in Outlook')
+    );
   });
 
   it("OUTLOOK-DELETE: When tenant deletes appointment synced to Outlook, system deletes calendar event via Graph API so cancelled appointments don't appear in Outlook", async () => {
@@ -772,17 +781,20 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(outlookCal.deleteEvent).toHaveBeenCalledOnce();
     expect(gcal.deleteEvent).not.toHaveBeenCalled();
 
-    const [accessToken, _refreshToken, _calendarId, eventId] = vi.mocked(outlookCal.deleteEvent).mock.calls[0];
+    const [accessToken, _refreshToken, _calendarId, eventId] = vi.mocked(outlookCal.deleteEvent)
+      .mock.calls[0];
     expect(accessToken).toBe('outlook-access-token');
     expect(eventId).toBe(OUTLOOK_EVENT_ID);
 
     const deleteCall = mockClient.query.mock.calls[2];
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted from Outlook'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('event deleted from Outlook')
+    );
   });
 
-  it("OUTLOOK-TOKEN-REFRESH: When Outlook OAuth token is expired, system refreshes via Microsoft identity platform before syncing to ensure uninterrupted calendar integration", async () => {
+  it('OUTLOOK-TOKEN-REFRESH: When Outlook OAuth token is expired, system refreshes via Microsoft identity platform before syncing to ensure uninterrupted calendar integration', async () => {
     // WHO: calendarSync.ts token refresh logic for Outlook provider
     // WHAT: Outlook OAuth access_token has expired (token_expires_at in the past)
     // WHEN: sync action detects expired token and calls outlookCalendar.refreshAccessToken()
@@ -820,7 +832,7 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('token refreshed'));
   });
 
-  it("OUTLOOK-UPDATE-FALLBACK: When update triggered for Outlook appointment with no sync_map entry (e.g., calendar connected after appointment created), system creates new event instead of failing", async () => {
+  it('OUTLOOK-UPDATE-FALLBACK: When update triggered for Outlook appointment with no sync_map entry (e.g., calendar connected after appointment created), system creates new event instead of failing', async () => {
     // WHO: calendarSync.ts update->create fallback for Outlook provider
     // WHAT: appointment update triggered but no sync_map entry exists for Outlook
     // WHEN: update action finds empty sync_map lookup and recursively calls create
@@ -855,8 +867,8 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
 // OUTLOOK — SAD PATHS
 // =============================================
 
-describe("Calendar Sync — Outlook Sad Paths", () => {
-  it("OUTLOOK-REFRESH-FAILURE: When Outlook OAuth token refresh fails (e.g., user revoked Microsoft authorization), system marks calendar inactive to prevent repeated failed API calls", async () => {
+describe('Calendar Sync — Outlook Sad Paths', () => {
+  it('OUTLOOK-REFRESH-FAILURE: When Outlook OAuth token refresh fails (e.g., user revoked Microsoft authorization), system marks calendar inactive to prevent repeated failed API calls', async () => {
     // WHO: calendarSync.ts token refresh error handler for Outlook provider
     // WHAT: Microsoft identity platform rejects refresh_token (user revoked app access)
     // WHEN: token refresh attempt throws error during Outlook sync operation
@@ -936,8 +948,12 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
 
     // Warning logged with Outlook context
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Outlook deleteEvent failed'));
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('event deleted from Outlook'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Outlook deleteEvent failed')
+    );
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('event deleted from Outlook')
+    );
     expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
@@ -979,7 +995,9 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     expect(outlookCal.createEvent).not.toHaveBeenCalled();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('appointment not found'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('appointment not found')
+    );
     expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
@@ -999,11 +1017,13 @@ describe("Calendar Sync — Outlook Sad Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
 
     expect(outlookCal.updateEvent).not.toHaveBeenCalled();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('appointment not found'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('appointment not found')
+    );
     expect(mockClient.release).toHaveBeenCalledTimes(2);
   });
 
-  it("OUTLOOK-PROACTIVE-REFRESH: When Outlook token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync", async () => {
+  it('OUTLOOK-PROACTIVE-REFRESH: When Outlook token_expires_at is within 5-minute buffer, system proactively refreshes token to prevent mid-operation expiration during calendar sync', async () => {
     // WHO: calendarSync.ts proactive token refresh logic for Outlook provider
     // WHAT: Outlook OAuth token expires in 3 minutes (within the 5-minute safety buffer)
     // WHEN: sync action checks token_expires_at against Date.now() + buffer before Graph API call

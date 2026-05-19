@@ -189,13 +189,18 @@ describe('SchedulerDateNav', () => {
     const now = new Date();
     const tz = 'America/Chicago';
     const todayParts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).formatToParts(now);
-    const y = Number(todayParts.find(p => p.type === 'year')?.value);
-    const m = Number(todayParts.find(p => p.type === 'month')?.value);
-    const d = Number(todayParts.find(p => p.type === 'day')?.value);
+    const y = Number(todayParts.find((p) => p.type === 'year')?.value);
+    const m = Number(todayParts.find((p) => p.type === 'month')?.value);
+    const d = Number(todayParts.find((p) => p.type === 'day')?.value);
     const todayInTz = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)); // noon UTC anchor
-    render(<SchedulerDateNav selectedDate={todayInTz} onDateChange={() => {}} tenantTimezone={tz} />);
+    render(
+      <SchedulerDateNav selectedDate={todayInTz} onDateChange={() => {}} tenantTimezone={tz} />
+    );
     expect(screen.getByTestId('date-chip-today')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('date-chip-yesterday')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('date-chip-tomorrow')).toHaveAttribute('aria-pressed', 'false');
@@ -214,7 +219,13 @@ describe('SchedulerDateNav', () => {
     //      regression where the +24h math accidentally subtracts.
     const onChange = vi.fn();
     const tz = 'Asia/Tokyo';
-    render(<SchedulerDateNav selectedDate={new Date('2000-01-01T00:00:00Z')} onDateChange={onChange} tenantTimezone={tz} />);
+    render(
+      <SchedulerDateNav
+        selectedDate={new Date('2000-01-01T00:00:00Z')}
+        onDateChange={onChange}
+        tenantTimezone={tz}
+      />
+    );
     fireEvent.click(screen.getByTestId('date-chip-tomorrow'));
     expect(onChange).toHaveBeenCalledTimes(1);
     const passed = onChange.mock.calls[0][0] as Date;
@@ -223,11 +234,14 @@ describe('SchedulerDateNav', () => {
     // dispatched Date matches.
     const tomorrowInstant = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).formatToParts(tomorrowInstant);
-    const y = Number(parts.find(p => p.type === 'year')?.value);
-    const m = Number(parts.find(p => p.type === 'month')?.value);
-    const d = Number(parts.find(p => p.type === 'day')?.value);
+    const y = Number(parts.find((p) => p.type === 'year')?.value);
+    const m = Number(parts.find((p) => p.type === 'month')?.value);
+    const d = Number(parts.find((p) => p.type === 'day')?.value);
 
     expect(passed.getUTCFullYear()).toBe(y);
     expect(passed.getUTCMonth()).toBe(m - 1);
@@ -333,11 +347,7 @@ describe('AppointmentBlock', () => {
   });
 
   test('getTimeSpan calculates correct position', () => {
-    const { left, width } = getTimeSpan(
-      '2026-03-19T09:00:00',
-      '2026-03-19T10:00:00',
-      7, 20
-    );
+    const { left, width } = getTimeSpan('2026-03-19T09:00:00', '2026-03-19T10:00:00', 7, 20);
     // 9am is 2 hours into the 13-hour range (7-20), so left ≈ 0.154
     expect(left).toBeCloseTo(2 / 13, 1);
     // 1 hour out of 13-hour range, so width ≈ 0.077
@@ -354,7 +364,10 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
+    const shiftMap = new Map<
+      string,
+      { id: string; start_time: string; end_time: string; day_of_week: number }[]
+    >();
     shiftMap.set('1', []);
     shiftMap.set('2', []);
 
@@ -377,7 +390,10 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', [makeAppointment({ employee_id: null })]);
-    const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
+    const shiftMap = new Map<
+      string,
+      { id: string; start_time: string; end_time: string; day_of_week: number }[]
+    >();
 
     render(
       <StaffSwimLaneView
@@ -396,7 +412,10 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
+    const shiftMap = new Map<
+      string,
+      { id: string; start_time: string; end_time: string; day_of_week: number }[]
+    >();
     const onEmployeeClick = vi.fn();
 
     render(
@@ -417,7 +436,10 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
+    const shiftMap = new Map<
+      string,
+      { id: string; start_time: string; end_time: string; day_of_week: number }[]
+    >();
     shiftMap.set('1', [{ id: 'shift-1', start_time: '09:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);
     const onShiftResize = vi.fn();
@@ -444,7 +466,10 @@ describe('StaffSwimLaneView', () => {
     apptMap.set('1', []);
     apptMap.set('2', []);
     apptMap.set('unassigned', []);
-    const shiftMap = new Map<string, { id: string; start_time: string; end_time: string; day_of_week: number }[]>();
+    const shiftMap = new Map<
+      string,
+      { id: string; start_time: string; end_time: string; day_of_week: number }[]
+    >();
     shiftMap.set('1', [{ id: 'shift-2', start_time: '12:00', end_time: '17:00', day_of_week: 4 }]);
     shiftMap.set('2', []);
     const onShiftDrag = vi.fn();
@@ -523,29 +548,29 @@ describe('ResourceColumnsView', () => {
 
 describe('AppointmentListView', () => {
   test('renders empty state when no appointments', () => {
-    render(
-      <AppointmentListView
-        appointments={[]}
-        employees={employees}
-        resources={resources}
-      />
-    );
+    render(<AppointmentListView appointments={[]} employees={employees} resources={resources} />);
     expect(screen.getByTestId('appointment-list-empty')).toBeInTheDocument();
     // WHO: receptionist | WHAT: see empty state for no appointments | WHEN: day has zero bookings | WHERE: AppointmentListView | WHY: blank list without messaging makes receptionist think data failed to load
   });
 
   test('renders appointments in chronological order', () => {
     const appts = [
-      makeAppointment({ appointment_id: 'a2', start_time: '2026-03-19T14:00:00Z', end_time: '2026-03-19T15:00:00Z', customers: { name: 'Bob' } }),
-      makeAppointment({ appointment_id: 'a1', start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z', customers: { name: 'Alice' } }),
+      makeAppointment({
+        appointment_id: 'a2',
+        start_time: '2026-03-19T14:00:00Z',
+        end_time: '2026-03-19T15:00:00Z',
+        customers: { name: 'Bob' },
+      }),
+      makeAppointment({
+        appointment_id: 'a1',
+        start_time: '2026-03-19T09:00:00Z',
+        end_time: '2026-03-19T10:00:00Z',
+        customers: { name: 'Alice' },
+      }),
     ];
 
     render(
-      <AppointmentListView
-        appointments={appts}
-        employees={employees}
-        resources={resources}
-      />
+      <AppointmentListView appointments={appts} employees={employees} resources={resources} />
     );
     const items = screen.getAllByText(/Alice|Bob/);
     expect(items[0]).toHaveTextContent('Alice');
@@ -555,16 +580,20 @@ describe('AppointmentListView', () => {
 
   test('shows gap warning for gaps > 1 hour', () => {
     const appts = [
-      makeAppointment({ appointment_id: 'a1', start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z' }),
-      makeAppointment({ appointment_id: 'a2', start_time: '2026-03-19T13:00:00Z', end_time: '2026-03-19T14:00:00Z' }),
+      makeAppointment({
+        appointment_id: 'a1',
+        start_time: '2026-03-19T09:00:00Z',
+        end_time: '2026-03-19T10:00:00Z',
+      }),
+      makeAppointment({
+        appointment_id: 'a2',
+        start_time: '2026-03-19T13:00:00Z',
+        end_time: '2026-03-19T14:00:00Z',
+      }),
     ];
 
     render(
-      <AppointmentListView
-        appointments={appts}
-        employees={employees}
-        resources={resources}
-      />
+      <AppointmentListView appointments={appts} employees={employees} resources={resources} />
     );
     expect(screen.getByTestId('gap-warning-1')).toBeInTheDocument();
     expect(screen.getByTestId('gap-warning-1')).toHaveTextContent('3h 0m gap');
@@ -573,16 +602,16 @@ describe('AppointmentListView', () => {
 
   test('hides canceled appointments', () => {
     const appts = [
-      makeAppointment({ appointment_id: 'a1', status: 'canceled', customers: { name: 'Canceled Guy' } }),
+      makeAppointment({
+        appointment_id: 'a1',
+        status: 'canceled',
+        customers: { name: 'Canceled Guy' },
+      }),
       makeAppointment({ appointment_id: 'a2', customers: { name: 'Active Alice' } }),
     ];
 
     render(
-      <AppointmentListView
-        appointments={appts}
-        employees={employees}
-        resources={resources}
-      />
+      <AppointmentListView appointments={appts} employees={employees} resources={resources} />
     );
     expect(screen.queryByText('Canceled Guy')).not.toBeInTheDocument();
     expect(screen.getByText('Active Alice')).toBeInTheDocument();
@@ -642,7 +671,11 @@ describe('EmployeeDayFocusPanel', () => {
   test('shows appointment count and utilization stats', () => {
     const appts = [
       makeAppointment({ start_time: '2026-03-19T09:00:00Z', end_time: '2026-03-19T10:00:00Z' }),
-      makeAppointment({ appointment_id: 'appt-2', start_time: '2026-03-19T11:00:00Z', end_time: '2026-03-19T12:00:00Z' }),
+      makeAppointment({
+        appointment_id: 'appt-2',
+        start_time: '2026-03-19T11:00:00Z',
+        end_time: '2026-03-19T12:00:00Z',
+      }),
     ];
     const shifts = [{ start_time: '09:00', end_time: '17:00' }];
 
@@ -753,7 +786,11 @@ describe('QuickBookPanel', () => {
   });
 
   test('rejects end time before start time and does not book', async () => {
-    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-123' } as Awaited<ReturnType<typeof Api.appointments.create>>);
+    const createSpy = vi
+      .spyOn(Api.appointments, 'create')
+      .mockResolvedValue({ success: true, appointment_id: 'appt-123' } as Awaited<
+        ReturnType<typeof Api.appointments.create>
+      >);
 
     render(
       <QuickBookPanel
@@ -780,7 +817,11 @@ describe('QuickBookPanel', () => {
   });
 
   test('rejects an appointment longer than 12 hours and does not book', async () => {
-    const createSpy = vi.spyOn(Api.appointments, 'create').mockResolvedValue({ success: true, appointment_id: 'appt-456' } as Awaited<ReturnType<typeof Api.appointments.create>>);
+    const createSpy = vi
+      .spyOn(Api.appointments, 'create')
+      .mockResolvedValue({ success: true, appointment_id: 'appt-456' } as Awaited<
+        ReturnType<typeof Api.appointments.create>
+      >);
 
     render(
       <QuickBookPanel
@@ -801,7 +842,9 @@ describe('QuickBookPanel', () => {
     fireEvent.change(screen.getByLabelText('End'), { target: { value: '2026-05-02T09:00' } });
     fireEvent.click(screen.getByTestId('quick-book-confirm'));
 
-    expect(await screen.findByText('Appointment duration cannot exceed 12 hours')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Appointment duration cannot exceed 12 hours')
+    ).toBeInTheDocument();
     expect(createSpy).not.toHaveBeenCalled();
     // WHO: receptionist | WHAT: block accidental 23-hour booking | WHEN: quick book submit | WHERE: QuickBookPanel | WHY: absurd durations are almost always a start/end mix-up and should fail fast
   });

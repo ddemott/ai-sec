@@ -43,10 +43,7 @@ export const CoverageBar: React.FC<CoverageBarProps> = ({
   if (slots.length === 0) {
     return (
       <div className={className}>
-        <div
-          className="w-full rounded bg-gray-200 dark:bg-gray-700"
-          style={{ height }}
-        />
+        <div className="w-full rounded bg-gray-200 dark:bg-gray-700" style={{ height }} />
         {showHourLabels && (
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">No scheduled hours</p>
         )}
@@ -59,12 +56,17 @@ export const CoverageBar: React.FC<CoverageBarProps> = ({
 
   return (
     <div className={className}>
-      <div className="flex w-full rounded overflow-hidden" style={{ height }} role="img" aria-label={`Coverage: ${sorted.filter(s => s.status === 'covered').length} of ${sorted.length} hours covered`}>
+      <div
+        className="flex w-full rounded overflow-hidden"
+        style={{ height }}
+        role="img"
+        aria-label={`Coverage: ${sorted.filter((s) => s.status === 'covered').length} of ${sorted.length} hours covered`}
+      >
         {sorted.map((slot, i) => (
           <div
             key={slot.hour}
             className={`flex-1 ${slotColors[slot.status]} ${i > 0 ? 'border-l border-white/20 dark:border-gray-900/40' : ''}`}
-            title={`${formatHour(slot.hour)}–${formatHour(slot.hour + 1)}: ${slot.status}${slot.employees?.length ? ` (${slot.employees.map(e => e.name).join(', ')})` : ''}`}
+            title={`${formatHour(slot.hour)}–${formatHour(slot.hour + 1)}: ${slot.status}${slot.employees?.length ? ` (${slot.employees.map((e) => e.name).join(', ')})` : ''}`}
             aria-hidden="true"
           />
         ))}

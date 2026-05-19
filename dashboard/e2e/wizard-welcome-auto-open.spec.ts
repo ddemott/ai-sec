@@ -31,8 +31,12 @@ import {
 } from './helpers/fixtures';
 
 let pool: Pool;
-test.beforeAll(() => { pool = new Pool({ connectionString: PG_URL }); });
-test.afterAll(async () => { await pool.end(); });
+test.beforeAll(() => {
+  pool = new Pool({ connectionString: PG_URL });
+});
+test.afterAll(async () => {
+  await pool.end();
+});
 
 /**
  * Switch the super-admin's "managed tenant" to the fresh tenant via the
@@ -48,10 +52,13 @@ test.afterAll(async () => { await pool.end(); });
 async function switchToFreshTenant(page: Page, tenantId: string, tenantName: string) {
   // Land on the dashboard once to access localStorage on its origin.
   await page.goto('/dashboard');
-  await page.evaluate(({ id, name }) => {
-    localStorage.setItem('managedTenantId', id);
-    localStorage.setItem('managedTenantName', name);
-  }, { id: tenantId, name: tenantName });
+  await page.evaluate(
+    ({ id, name }) => {
+      localStorage.setItem('managedTenantId', id);
+      localStorage.setItem('managedTenantName', name);
+    },
+    { id: tenantId, name: tenantName }
+  );
 
   // The super-admin auth state can leave the active tab anywhere
   // (often All Businesses after a previous spec's tile-grid run).
@@ -60,14 +67,20 @@ async function switchToFreshTenant(page: Page, tenantId: string, tenantName: str
   // first mount, so the click guarantees we end up where we want.
   await page.goto('/dashboard?tab=home');
   await page.waitForTimeout(600);
-  await page.getByRole('tab', { name: /^Home$/ }).first().click();
+  await page
+    .getByRole('tab', { name: /^Home$/ })
+    .first()
+    .click();
   // Wait for the dashboard's loadData() round-trip to settle so the
   // needsSetup calculation reflects the fresh tenant's empty state.
   await page.waitForTimeout(2000);
 }
 
 test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
-  test('D1: fresh tenant lands on Home → welcome auto-opens, mode chooser is NOT yet visible', async ({ page, request }) => {
+  test('D1: fresh tenant lands on Home → welcome auto-opens, mode chooser is NOT yet visible', async ({
+    page,
+    request,
+  }) => {
     // WHO: a new owner who just walked the register form and clicked through to /dashboard.
     // WHAT: the welcome dialog must appear on Home WITHOUT any further click,
     //       and the WizardModeChooser must NOT be co-rendered (the staged
@@ -85,7 +98,11 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
     let tenant: RegisteredTenant | null = null;
     try {
       tenant = await registerFreshTenant(request);
-      await switchToFreshTenant(page, tenant.tenantId, `D1 Auto-Open ${tenant.tenantId.slice(0, 6)}`);
+      await switchToFreshTenant(
+        page,
+        tenant.tenantId,
+        `D1 Auto-Open ${tenant.tenantId.slice(0, 6)}`
+      );
 
       // Welcome dialog auto-opens. The Home tab is the default landing.
       await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible({ timeout: 8000 });
@@ -106,7 +123,10 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
     }
   });
 
-  test('D1: "Let\'s go" advances welcome → mode chooser; welcome disappears', async ({ page, request }) => {
+  test('D1: "Let\'s go" advances welcome → mode chooser; welcome disappears', async ({
+    page,
+    request,
+  }) => {
     // WHO: owner ready to set up after the scope-setting framing
     // WHAT: clicking "Let's go" must hide the welcome AND show the mode
     //       chooser. They cannot be visible at the same time.
@@ -130,13 +150,19 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
 
       // Close cleanly without stepping into BusinessTypePicker, which
       // would call /tenants/.../config and mutate this tenant's config.
-      await page.getByRole('button', { name: /Close wizard/i }).first().click();
+      await page
+        .getByRole('button', { name: /Close wizard/i })
+        .first()
+        .click();
     } finally {
       if (tenant) await cleanTenantData(pool, tenant.tenantId);
     }
   });
 
-  test('D1: dismissing welcome shows the in-page Setup Assistant banner', async ({ page, request }) => {
+  test('D1: dismissing welcome shows the in-page Setup Assistant banner', async ({
+    page,
+    request,
+  }) => {
     // WHO: owner who wants to explore the dashboard before setting up
     // WHAT: "I'll set up later" must close BOTH the welcome and any
     //       chooser, AND surface the post-dismiss banner on Home so the
@@ -166,7 +192,10 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
     }
   });
 
-  test('D4: setup-progress pill renders "Setup: 0 of 6 done" for a fresh tenant and opens the wizard on click', async ({ page, request }) => {
+  test('D4: setup-progress pill renders "Setup: 0 of 6 done" for a fresh tenant and opens the wizard on click', async ({
+    page,
+    request,
+  }) => {
     // WHO: fresh tenant whose owner is exploring the dashboard chrome
     //      (not Home — any tab) and notices the persistent pill.
     // WHAT: the pill is mounted in OutlookLayout's top utility row and
@@ -202,7 +231,10 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
       // Navigate away from Home so the click has to bring us back via
       // the URL push — this tests the navigation behavior, not just the
       // wizard state. Schedule is a safe primary tab to land on first.
-      await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+      await page
+        .getByRole('tab', { name: /^Schedule$/ })
+        .first()
+        .click();
       await page.waitForTimeout(400);
 
       // Pill still visible from the Schedule tab — it's chrome-level.
@@ -220,13 +252,19 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
       const url = new URL(page.url());
       expect(url.searchParams.get('wizard')).toBeNull();
 
-      await page.getByRole('button', { name: /Close wizard/i }).first().click();
+      await page
+        .getByRole('button', { name: /Close wizard/i })
+        .first()
+        .click();
     } finally {
       if (tenant) await cleanTenantData(pool, tenant.tenantId);
     }
   });
 
-  test('D1: clicking "Open Setup Assistant" banner skips welcome and goes straight to the mode chooser', async ({ page, request }) => {
+  test('D1: clicking "Open Setup Assistant" banner skips welcome and goes straight to the mode chooser', async ({
+    page,
+    request,
+  }) => {
     // WHO: owner who dismissed welcome earlier and now decides to set up
     // WHAT: the banner click jumps directly to the mode chooser WITHOUT
     //       re-showing welcome. Welcome's job is one-time scope framing
@@ -253,7 +291,10 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
       await expect(page.getByText('How is your business set up?')).toBeVisible({ timeout: 4000 });
       await expect(page.getByRole('dialog', { name: /welcome/i })).toHaveCount(0);
 
-      await page.getByRole('button', { name: /Close wizard/i }).first().click();
+      await page
+        .getByRole('button', { name: /Close wizard/i })
+        .first()
+        .click();
     } finally {
       if (tenant) await cleanTenantData(pool, tenant.tenantId);
     }

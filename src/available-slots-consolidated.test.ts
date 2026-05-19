@@ -5,7 +5,20 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource, createService, createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import {
+  getRootClient,
+  clearDB,
+  createTenant,
+  createEmployee,
+  createScheduleEntry,
+  createResource,
+  createService,
+  createCustomer,
+  createAppointment,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
 
 const TEST_DATE = '2026-06-01'; // Monday (DOW=1)
 
@@ -20,7 +33,9 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     try {
       client = await getRootClient();
       // Check if required tables exist (schema may not match after renames)
-      const res = await client.query("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')");
+      const res = await client.query(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'employee_schedule')"
+      );
       if (!res.rows[0].exists) {
         console.warn('[available-slots] employee_schedule table missing, skipping DB tests');
         return;
@@ -48,7 +63,8 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
 
   // Simulates the consolidated query from repository.ts
   async function queryAvailableSlots(serviceType: string, date: string) {
-    const res = await client.query(`
+    const res = await client.query(
+      `
       WITH svc AS (
         SELECT name, duration_minutes, price
         FROM services
@@ -115,8 +131,15 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     const empId = await createEmployee(client, tenantId, 'Mike', ['oil-change']);
     await createScheduleEntry(client, tenantId, empId, TEST_DATE, '08:00', '17:00');
     const custId = await createCustomer(client, tenantId, 'Alice', '+15551234567');
-    await createAppointment(client, tenantId, resourceId, custId,
-      `${TEST_DATE}T10:00:00-05:00`, `${TEST_DATE}T10:30:00-05:00`, 'Oil Change');
+    await createAppointment(
+      client,
+      tenantId,
+      resourceId,
+      custId,
+      `${TEST_DATE}T10:00:00-05:00`,
+      `${TEST_DATE}T10:30:00-05:00`,
+      'Oil Change'
+    );
 
     const result = await queryAvailableSlots('oil', TEST_DATE);
 
@@ -198,7 +221,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     // Mark the employee off for the queried date — no shifts should
     // be returned for them.
     await client.query(
-      "INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)",
+      'INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, is_off) VALUES ($1, $2, $3, true)',
       [tenantId, empId, TEST_DATE]
     );
 

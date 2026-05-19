@@ -85,9 +85,13 @@ describe('syncOrchestrator recorder', () => {
 
     const events = getSyncRecorder();
     expect(events).toHaveLength(5);
-    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual(
-      ['calendar', 'hubspot', 'jobber', 'servicetitan', 'square']
-    );
+    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual([
+      'calendar',
+      'hubspot',
+      'jobber',
+      'servicetitan',
+      'square',
+    ]);
     for (const e of events) {
       expect(e.entity).toBe('appointment');
       expect(e.action).toBe('create');
@@ -111,9 +115,12 @@ describe('syncOrchestrator recorder', () => {
 
     const events = getSyncRecorder();
     expect(events).toHaveLength(4);
-    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual(
-      ['hubspot', 'jobber', 'servicetitan', 'square']
-    );
+    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual([
+      'hubspot',
+      'jobber',
+      'servicetitan',
+      'square',
+    ]);
     for (const e of events) {
       expect(e.entity).toBe('customer');
       expect(e.action).toBe('update');

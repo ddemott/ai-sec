@@ -26,12 +26,12 @@ export interface Shift {
   employee_id: number | string;
   day_of_week: number;
   start_time: string; // "HH:MM"
-  end_time: string;   // "HH:MM"
+  end_time: string; // "HH:MM"
 }
 
 export interface ShiftOverride {
   employee_id: string;
-  shift_date: string;  // "YYYY-MM-DD"
+  shift_date: string; // "YYYY-MM-DD"
   start_time: string | null;
   end_time: string | null;
   is_off: boolean;
@@ -83,7 +83,7 @@ function hasAll(have: string[], need: string[] | undefined): boolean {
 function isResourceFree(
   resourceId: string,
   window: TimeWindow,
-  existing: ExistingAppointment[],
+  existing: ExistingAppointment[]
 ): boolean {
   return !existing.some((appt) => {
     if (appt.resourceId !== resourceId) return false;
@@ -95,7 +95,7 @@ function isEmployeeOnShift(
   employeeId: string,
   window: TimeWindow,
   shifts: Shift[],
-  overrides?: ShiftOverride[],
+  overrides?: ShiftOverride[]
 ): boolean {
   const day = window.from.getUTCDay();
   const startStr = window.from.toISOString().substring(11, 16);
@@ -159,7 +159,9 @@ export function selectAssignments(args: {
     isResourceFree(r.resource_id, win, existing)
   );
 
-  const needEmployee = !!(requirements.requiredEmployeeSkills && requirements.requiredEmployeeSkills.length > 0);
+  const needEmployee = !!(
+    requirements.requiredEmployeeSkills && requirements.requiredEmployeeSkills.length > 0
+  );
 
   // Step 3: Employee filtering (only when skills are required)
   const totalEmployees = employees.length;
@@ -170,9 +172,12 @@ export function selectAssignments(args: {
     for (const e of employees) {
       if (hasAll(e.skills, requirements.requiredEmployeeSkills)) {
         skilledEmployees++;
-        const onShift = e.onShift !== undefined
-          ? e.onShift
-          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.employee_id, win, shifts, overrides) : true);
+        const onShift =
+          e.onShift !== undefined
+            ? e.onShift
+            : shifts.length > 0 || overrides.length > 0
+              ? isEmployeeOnShift(e.employee_id, win, shifts, overrides)
+              : true;
         if (onShift) {
           onShiftEmployees++;
         }
@@ -195,9 +200,8 @@ export function selectAssignments(args: {
       // employee_id today (only resourceId), so this falls back to 0
       // until the upstream caller threads it through. The RPC has the
       // proper SQL-side count; this helper is best-effort for now.
-      return existing.filter(
-        (a) => (a as { employeeId?: string }).employeeId === employeeId
-      ).length;
+      return existing.filter((a) => (a as { employeeId?: string }).employeeId === employeeId)
+        .length;
     };
     const sortedEmployees = [...employees].sort((a, b) => {
       const skillDiff = (a.skills?.length ?? 0) - (b.skills?.length ?? 0);
@@ -210,9 +214,12 @@ export function selectAssignments(args: {
     });
     for (const r of availableResources) {
       for (const e of sortedEmployees) {
-        const onShift = e.onShift !== undefined
-          ? e.onShift
-          : (shifts.length > 0 || overrides.length > 0 ? isEmployeeOnShift(e.employee_id, win, shifts, overrides) : true);
+        const onShift =
+          e.onShift !== undefined
+            ? e.onShift
+            : shifts.length > 0 || overrides.length > 0
+              ? isEmployeeOnShift(e.employee_id, win, shifts, overrides)
+              : true;
         if (!onShift) continue;
         if (!hasAll(e.skills, requirements.requiredEmployeeSkills)) continue;
         options.push({ resourceId: r.resource_id, employeeId: e.employee_id });

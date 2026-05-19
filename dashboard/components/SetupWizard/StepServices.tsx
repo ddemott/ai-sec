@@ -1,16 +1,11 @@
-'use client'
+'use client';
 
-import React from 'react'
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Clock,
-} from 'lucide-react'
-import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
-import { useVocabulary } from '../../lib/VocabularyContext'
-import type { Step1Props, WizardService } from './types'
+import React from 'react';
+import { Plus, Pencil, Trash2, Clock } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { useVocabulary } from '../../lib/VocabularyContext';
+import type { Step1Props, WizardService } from './types';
 
 /**
  * Build the "e.g. …" placeholder string from per-industry examples.
@@ -21,21 +16,34 @@ import type { Step1Props, WizardService } from './types'
  * Haircut, Tire Rotation" we had before.
  */
 function servicePlaceholder(examples: readonly string[] | undefined): string {
-  if (!examples || examples.length === 0) return 'e.g. 30-minute consultation'
-  return `e.g. ${examples.slice(0, 3).join(', ')}`
+  if (!examples || examples.length === 0) return 'e.g. 30-minute consultation';
+  return `e.g. ${examples.slice(0, 3).join(', ')}`;
 }
 
 export function Step1Services({
-  services, loading, editingService, editingServiceId, saving, error,
-  onAdd, onEdit, onDelete, onSave, onCancel, onChange,
+  services,
+  loading,
+  editingService,
+  editingServiceId,
+  saving,
+  error,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onChange,
 }: Step1Props) {
-  const vocab = useVocabulary()
+  const vocab = useVocabulary();
   return (
     <div>
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">What services do you offer?</h3>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          What services do you offer?
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Add each service your business provides. You&apos;ll assign staff and resources to them in later steps.
+          Add each service your business provides. You&apos;ll assign staff and resources to them in
+          later steps.
         </p>
       </div>
 
@@ -50,7 +58,9 @@ export function Step1Services({
               className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]"
             >
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{svc.name}</div>
+                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                  {svc.name}
+                </div>
                 <div className="flex items-center gap-3 mt-0.5">
                   <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <Clock className="w-3 h-3" /> {svc.duration_minutes} min
@@ -65,18 +75,28 @@ export function Step1Services({
               <div className="flex items-center gap-1 ml-2 shrink-0">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onEdit(svc) }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(svc);
+                  }}
                   className="p-1.5 text-gray-400 transition-colors"
-                  style={{ }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-soft)' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '' }}
+                  style={{}}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--accent-soft)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = '';
+                  }}
                   title="Edit"
                 >
                   <Pencil className="w-3.5 h-3.5 pointer-events-none" />
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(svc.service_id) }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(svc.service_id);
+                  }}
                   className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
                   title="Delete"
                 >
@@ -100,20 +120,23 @@ export function Step1Services({
 
       {/* Add/Edit form */}
       {editingService ? (
-        <div className="rounded-xl border-2 p-4 space-y-3" style={{ borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }}>
+        <div
+          className="rounded-xl border-2 p-4 space-y-3"
+          style={{ borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }}
+        >
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {editingServiceId ? 'Edit Service' : 'New Service'}
           </div>
           <Input
             label="Service Name"
             value={editingService.name}
-            onChange={e => onChange({ ...editingService, name: e.target.value })}
+            onChange={(e) => onChange({ ...editingService, name: e.target.value })}
             placeholder={servicePlaceholder(vocab.example_services)}
           />
           <Input
             label="Description (optional)"
             value={editingService.description}
-            onChange={e => onChange({ ...editingService, description: e.target.value })}
+            onChange={(e) => onChange({ ...editingService, description: e.target.value })}
             placeholder="Brief description"
           />
           <Input
@@ -122,14 +145,14 @@ export function Step1Services({
             step={15}
             min={15}
             value={String(editingService.duration_minutes)}
-            onChange={e => onChange({ ...editingService, duration_minutes: parseInt(e.target.value) || 0 })}
+            onChange={(e) =>
+              onChange({ ...editingService, duration_minutes: parseInt(e.target.value) || 0 })
+            }
           />
           <p className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>
             Scheduled in 15-minute slots — non-multiples are rounded up on save.
           </p>
-          {error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2 pt-1">
             <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
               {saving ? 'Saving...' : editingServiceId ? 'Update' : 'Add Service'}
@@ -143,13 +166,19 @@ export function Step1Services({
         <button
           onClick={onAdd}
           className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 transition-colors"
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.color = 'var(--accent-soft)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.color = '' }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-soft)';
+            e.currentTarget.style.color = 'var(--accent-soft)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '';
+            e.currentTarget.style.color = '';
+          }}
         >
           <Plus className="w-4 h-4" />
           Add a service
         </button>
       )}
     </div>
-  )
+  );
 }

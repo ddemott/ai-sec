@@ -2,11 +2,7 @@
  * Tests for session context extraction — pure unit, no LiveKit runtime.
  */
 import { describe, it, expect } from 'vitest';
-import {
-  parseRoomMetadata,
-  extractCallerInfo,
-  buildSessionContext,
-} from './sessionContext.js';
+import { parseRoomMetadata, extractCallerInfo, buildSessionContext } from './sessionContext.js';
 
 const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
@@ -97,10 +93,19 @@ describe('extractCallerInfo', () => {
     //        would fail at the booking gate AND the /send-verification-
     //        code route would try to text the string "anonymous", which
     //        Telnyx would reject with a confusing error
-    for (const marker of ['anonymous', 'ANONYMOUS', 'unavailable', 'restricted', 'private', 'unknown', '+1', '+0', '+00000000000', '']) {
-      expect(
-        extractCallerInfo({ 'sip.phoneNumber': marker }).callerPhone
-      ).toBeNull();
+    for (const marker of [
+      'anonymous',
+      'ANONYMOUS',
+      'unavailable',
+      'restricted',
+      'private',
+      'unknown',
+      '+1',
+      '+0',
+      '+00000000000',
+      '',
+    ]) {
+      expect(extractCallerInfo({ 'sip.phoneNumber': marker }).callerPhone).toBeNull();
     }
   });
 

@@ -10,7 +10,7 @@ const REMINDER_BUNDLE = [
 
 export type WithTenantClient = <T>(
   tenantId: string,
-  fn: (client: PoolClient) => Promise<T>,
+  fn: (client: PoolClient) => Promise<T>
 ) => Promise<T>;
 
 /**
@@ -32,7 +32,7 @@ export async function scheduleRemindersForAppointment(
   withTenantClient: WithTenantClient,
   tenantId: string,
   appointmentId: string,
-  logger?: FastifyBaseLogger,
+  logger?: FastifyBaseLogger
 ): Promise<void> {
   try {
     await withTenantClient(tenantId, async (client) => {
@@ -45,7 +45,7 @@ export async function scheduleRemindersForAppointment(
            FROM appointments a
            LEFT JOIN customers c ON c.customer_id = a.customer_id AND c.tenant_id = a.tenant_id
           WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
-        [appointmentId, tenantId],
+        [appointmentId, tenantId]
       );
       const row = rows[0];
       if (!row) return;
@@ -73,7 +73,7 @@ export async function scheduleRemindersForAppointment(
             : new Date(appointmentDateTime.getTime() - r.hoursBefore * 60 * 60 * 1000);
         const base = i * 6;
         valuesSql.push(
-          `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, 'scheduled')`,
+          `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, 'scheduled')`
         );
         params.push(
           appointmentId,
@@ -81,14 +81,14 @@ export async function scheduleRemindersForAppointment(
           row.customer_email,
           row.customer_phone,
           r.type,
-          scheduledFor.toISOString(),
+          scheduledFor.toISOString()
         );
       });
       await client.query(
         `INSERT INTO reminder_schedules
            (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
          VALUES ${valuesSql.join(', ')}`,
-        params,
+        params
       );
     });
   } catch (err) {
@@ -98,7 +98,7 @@ export async function scheduleRemindersForAppointment(
         tenantId,
         appointmentId,
       },
-      'Failed to schedule reminders for appointment',
+      'Failed to schedule reminders for appointment'
     );
   }
 }
@@ -128,7 +128,7 @@ export async function rescheduleRemindersForAppointment(
   withTenantClient: WithTenantClient,
   tenantId: string,
   appointmentId: string,
-  logger?: FastifyBaseLogger,
+  logger?: FastifyBaseLogger
 ): Promise<void> {
   try {
     await withTenantClient(tenantId, async (client) => {
@@ -136,7 +136,7 @@ export async function rescheduleRemindersForAppointment(
         `UPDATE reminder_schedules
             SET status = 'cancelled', updated_at = NOW()
           WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'scheduled'`,
-        [appointmentId, tenantId],
+        [appointmentId, tenantId]
       );
     });
   } catch (err) {
@@ -146,7 +146,7 @@ export async function rescheduleRemindersForAppointment(
         tenantId,
         appointmentId,
       },
-      'Failed to cancel existing reminders for appointment',
+      'Failed to cancel existing reminders for appointment'
     );
     // Don't bail — still try to seed fresh reminders.
   }

@@ -119,7 +119,9 @@ export function createWithTenantClient(pool: Pool): WithTenantClient {
     const client = await pool.connect();
     try {
       // Validate tenant exists (before setting context, so RLS doesn't block the check)
-      const tenantCheck = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [tenantId]);
+      const tenantCheck = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [
+        tenantId,
+      ]);
       if (tenantCheck.rows.length === 0) {
         const err = new Error(`Tenant ${tenantId} not found`);
         (err as unknown as { statusCode: number }).statusCode = 404;
@@ -145,9 +147,15 @@ export interface DatabaseService {
   // Reminder operations
   createReminderSchedule(data: ReminderData): Promise<ReminderSchedule>;
   getReminderSchedule(id: string): Promise<ReminderSchedule | null>;
-  updateReminderSchedule(id: string, data: Partial<ReminderSchedule>): Promise<ReminderSchedule | null>;
+  updateReminderSchedule(
+    id: string,
+    data: Partial<ReminderSchedule>
+  ): Promise<ReminderSchedule | null>;
   getReminderSchedulesByTenant(tenantId: string, status?: string): Promise<ReminderSchedule[]>;
-  getReminderSchedulesByAppointment(appointmentId: string, tenantId: string): Promise<ReminderSchedule[]>;
+  getReminderSchedulesByAppointment(
+    appointmentId: string,
+    tenantId: string
+  ): Promise<ReminderSchedule[]>;
   getDueReminders(): Promise<ReminderSchedule[]>;
 
   // Appointment operations
@@ -372,7 +380,9 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Consent Operations ─────────────────────────────────────────────
 
-  async createConsentRecord(data: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord> {
+  async createConsentRecord(
+    data: Omit<ConsentRecord, 'consent_record_id'>
+  ): Promise<ConsentRecord> {
     return this.withTenantClient(data.tenant_id, async (client) => {
       const result = await client.query(
         `INSERT INTO consent_records

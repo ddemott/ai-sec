@@ -108,7 +108,9 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. Returning caller — get_customer_context returns name + history
 // ────────────────────────────────────────────────────────────────────────────
-test('conversation: returning caller is greeted by name (customer-context lookup)', async ({ request }) => {
+test('conversation: returning caller is greeted by name (customer-context lookup)', async ({
+  request,
+}) => {
   // WHO: agent picks up a call from a caller whose phone is in the CRM
   // WHAT: /agent-tools/customer-context returns the customer's name and
   //        a brief history string the agent can read back ("Hi Alice...")
@@ -175,7 +177,9 @@ test('conversation: unknown caller returns "new caller" prompt', async ({ reques
 // ────────────────────────────────────────────────────────────────────────────
 // 3. Successful booking via book_with_scheduling
 // ────────────────────────────────────────────────────────────────────────────
-test('conversation: tire-rotation request books successfully via book_with_scheduling', async ({ request }) => {
+test('conversation: tire-rotation request books successfully via book_with_scheduling', async ({
+  request,
+}) => {
   // WHO: caller asks for a tire rotation tomorrow afternoon; agent
   //        bridges that to a specific window + skill, books in one call
   // WHAT: /agent-tools/book-with-scheduling auto-picks the lowest-skill
@@ -250,8 +254,13 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     expect(cust.rowCount).toBe(1);
     expect(cust.rows[0].name).toBe(`${tag}-AgentBookCustomer`);
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    for (const s of shiftsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, s.employeeId, s.shiftDate]);
+    for (const id of apptIdsToCleanup)
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
+    for (const s of shiftsToCleanup)
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, s.employeeId, s.shiftDate]
+      );
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
 });
@@ -259,7 +268,9 @@ test('conversation: tire-rotation request books successfully via book_with_sched
 // ────────────────────────────────────────────────────────────────────────────
 // 4. Conflict path — booking returns next_available alternatives
 // ────────────────────────────────────────────────────────────────────────────
-test('conversation: full-busy slot returns next_available alternatives the agent can propose', async ({ request }) => {
+test('conversation: full-busy slot returns next_available alternatives the agent can propose', async ({
+  request,
+}) => {
   // WHO: caller wants a tire rotation at 2pm; every qualified tech is
   //        already booked at that time on the only resource
   // WHAT: book-with-scheduling fails NO_AVAILABILITY but the response
@@ -310,15 +321,31 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     // booking attempt at that slot, alternatives kick in for 14:30+.
     const ph = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-blocker-customer`, `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`]
+      [
+        DYNATIRE_ID,
+        `${tag}-blocker-customer`,
+        `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`,
+      ]
     );
     const blockerCust = ph.rows[0].customer_id;
-    for (const [empId, resId] of [[carlosId, truck1], [danaId, truck2], [mikeId, serviceTruck1]]) {
+    for (const [empId, resId] of [
+      [carlosId, truck1],
+      [danaId, truck2],
+      [mikeId, serviceTruck1],
+    ]) {
       const a = await pool.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
          RETURNING appointment_id`,
-        [DYNATIRE_ID, resId, blockerCust, empId, `${FUTURE}T14:00:00.000Z`, `${FUTURE}T14:30:00.000Z`, `${tag}-blocker`]
+        [
+          DYNATIRE_ID,
+          resId,
+          blockerCust,
+          empId,
+          `${FUTURE}T14:00:00.000Z`,
+          `${FUTURE}T14:30:00.000Z`,
+          `${tag}-blocker`,
+        ]
       );
       apptIdsToCleanup.push(a.rows[0].appointment_id);
     }
@@ -353,7 +380,10 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     // The critical assertion: alternatives propagated through the route.
     const alternatives = res.body.next_available as Array<Record<string, unknown>> | undefined;
     expect(alternatives, 'next_available must be present even on failure').toBeDefined();
-    expect(alternatives!.length, 'at least one alternative since techs are free at 14:30+').toBeGreaterThan(0);
+    expect(
+      alternatives!.length,
+      'at least one alternative since techs are free at 14:30+'
+    ).toBeGreaterThan(0);
     // Each alternative has the fields the agent prompt reads from.
     for (const alt of alternatives!.slice(0, 3)) {
       expect(alt.start_time).toBeTruthy();
@@ -379,8 +409,13 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     // Cleanup the blocker customer too.
     await pool.query('DELETE FROM customers WHERE customer_id = $1', [blockerCust]);
   } finally {
-    for (const id of apptIdsToCleanup) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    for (const s of shiftsToCleanup) await pool.query('DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3', [DYNATIRE_ID, s.employeeId, s.shiftDate]);
+    for (const id of apptIdsToCleanup)
+      await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
+    for (const s of shiftsToCleanup)
+      await pool.query(
+        'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
+        [DYNATIRE_ID, s.employeeId, s.shiftDate]
+      );
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
 });
@@ -388,7 +423,9 @@ test('conversation: full-busy slot returns next_available alternatives the agent
 // ────────────────────────────────────────────────────────────────────────────
 // 5. Service catalog — agent gets the list it needs to discuss services
 // ────────────────────────────────────────────────────────────────────────────
-test('conversation: service-catalog returns the tenant\'s services for the LLM to discuss', async ({ request }) => {
+test("conversation: service-catalog returns the tenant's services for the LLM to discuss", async ({
+  request,
+}) => {
   // WHO: caller asks "what do you offer?" — agent calls service-catalog
   //        and reads the list (or summarizes for length)
   // WHAT: returns service name + duration + price for every active
@@ -479,7 +516,11 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
     expect(after.rows[0].verified_at).not.toBeNull();
     void tag;
   } finally {
-    if (pvId) await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [pvId]);
-    await pool.query(`DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`, [DYNATIRE_ID, phone]);
+    if (pvId)
+      await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [pvId]);
+    await pool.query(`DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`, [
+      DYNATIRE_ID,
+      phone,
+    ]);
   }
 });

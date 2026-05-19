@@ -17,14 +17,17 @@ export function useFormState<T extends Record<string, unknown>>(initialState: T)
   const [original, setOriginal] = useState<T>(initialState);
 
   const setField = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }));
+    setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const reset = useCallback((newState?: T) => {
-    const state = newState ?? original;
-    setForm(state);
-    setOriginal(state);
-  }, [original]);
+  const reset = useCallback(
+    (newState?: T) => {
+      const state = newState ?? original;
+      setForm(state);
+      setOriginal(state);
+    },
+    [original]
+  );
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(original);
 
@@ -69,9 +72,9 @@ export function useStaticData(tenantIdOverride?: string | null) {
     setServices(sRes.status === 'fulfilled' && Array.isArray(sRes.value) ? sRes.value : []);
     setSkills(skRes.status === 'fulfilled' && Array.isArray(skRes.value) ? skRes.value : []);
 
-    const failures = [cRes, rRes, eRes, sRes, skRes].filter(r => r.status === 'rejected');
+    const failures = [cRes, rRes, eRes, sRes, skRes].filter((r) => r.status === 'rejected');
     if (failures.length > 0) {
-      const firstError = (failures[0]).reason;
+      const firstError = failures[0].reason;
       console.error('Some data fetches failed', failures);
       setError(firstError?.message || 'Some data failed to load');
     }
@@ -91,7 +94,7 @@ export function useStaticData(tenantIdOverride?: string | null) {
     skills,
     loading,
     error,
-    refresh: fetchData
+    refresh: fetchData,
   };
 }
 
@@ -121,7 +124,9 @@ function useEntityList<T>(
     }
   }, [tenantId, fetcher]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   return { data, loading, refresh };
 }
@@ -163,8 +168,12 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
 } {
   const contextTenantId = useActiveTenantId();
   const tenantId = tenantIdOverride !== undefined ? tenantIdOverride : contextTenantId;
-  const [serviceEmployeeRows, setServiceEmployeeRows] = useState<Awaited<ReturnType<typeof Api.mappings.listServiceEmployee>>>([]);
-  const [serviceResourceRows, setServiceResourceRows] = useState<Awaited<ReturnType<typeof Api.mappings.listServiceResource>>>([]);
+  const [serviceEmployeeRows, setServiceEmployeeRows] = useState<
+    Awaited<ReturnType<typeof Api.mappings.listServiceEmployee>>
+  >([]);
+  const [serviceResourceRows, setServiceResourceRows] = useState<
+    Awaited<ReturnType<typeof Api.mappings.listServiceResource>>
+  >([]);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -175,14 +184,20 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
         Api.mappings.listServiceEmployee(tenantId),
         Api.mappings.listServiceResource(tenantId),
       ]);
-      setServiceEmployeeRows(seRes.status === 'fulfilled' && Array.isArray(seRes.value) ? seRes.value : []);
-      setServiceResourceRows(srRes.status === 'fulfilled' && Array.isArray(srRes.value) ? srRes.value : []);
+      setServiceEmployeeRows(
+        seRes.status === 'fulfilled' && Array.isArray(seRes.value) ? seRes.value : []
+      );
+      setServiceResourceRows(
+        srRes.status === 'fulfilled' && Array.isArray(srRes.value) ? srRes.value : []
+      );
     } finally {
       setLoading(false);
     }
   }, [tenantId]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const maps = useMemo(
     () => buildMappingMaps(serviceEmployeeRows, serviceResourceRows),
@@ -216,14 +231,17 @@ export function useTenantTimezone(): string | undefined {
       return;
     }
     let cancelled = false;
-    Api.tenants.getConfig(tenantId)
+    Api.tenants
+      .getConfig(tenantId)
       .then((data) => {
         if (!cancelled) setTimezone(data?.timezone);
       })
       .catch(() => {
         if (!cancelled) setTimezone(undefined);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [tenantId]);
 
   return timezone;

@@ -140,9 +140,7 @@ describe('metrics — histogram', () => {
     // WHY: prom-client requires sorted buckets and so does the
     //       Prometheus server. Catch the error at boot rather than
     //       letting it produce malformed scrapes.
-    expect(() =>
-      registry.histogram('bad', 'bad', [100, 50, 200])
-    ).toThrow(/strictly ascending/i);
+    expect(() => registry.histogram('bad', 'bad', [100, 50, 200])).toThrow(/strictly ascending/i);
   });
 });
 

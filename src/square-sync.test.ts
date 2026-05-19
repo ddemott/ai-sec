@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock squareClient before importing squareSync
 vi.mock('./services/squareClient', () => ({
@@ -18,8 +18,8 @@ import {
   syncAppointmentToSquare,
   pullSquareCustomer,
   fullSync,
-} from "./services/squareSync";
-import * as square from "./services/squareClient";
+} from './services/squareSync';
+import * as square from './services/squareClient';
 
 // ---- Mock helpers ----
 
@@ -89,9 +89,9 @@ import { createMockClient as createBaseMockClient, createMockPool } from './test
 function createMockClient() {
   const base = createBaseMockClient();
   const getDataQueries = () =>
-    (base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }).mock.calls.filter(
-      (call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'),
-    );
+    (
+      base.mockClient.query as unknown as { mock: { calls: [string, unknown[]?][] } }
+    ).mock.calls.filter((call) => !call[0].startsWith('SET LOCAL') && !call[0].startsWith('RESET'));
   return { ...base, getDataQueries };
 }
 
@@ -109,8 +109,8 @@ beforeEach(() => {
 // HAPPY PATHS — PUSH
 // =============================================
 
-describe("Square Sync — Push Happy Paths", () => {
-  it("PUSH-CREATE: When tenant pushes new customer to Square, system creates customer via API and records mapping in sync_map so future syncs can update rather than duplicate", async () => {
+describe('Square Sync — Push Happy Paths', () => {
+  it('PUSH-CREATE: When tenant pushes new customer to Square, system creates customer via API and records mapping in sync_map so future syncs can update rather than duplicate', async () => {
     // WHO: syncCustomerToSquare with action='create'
     // WHAT: Local customer exists, no entity_sync_map entry — triggers createCustomer REST v2 API call
     // WHEN: Push sync after new customer created in dashboard or via voice AI booking
@@ -145,10 +145,12 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(square.createCustomer).toHaveBeenCalledOnce();
     expect(square.createCustomer).toHaveBeenCalledWith(
       'valid-access-token',
-      expect.objectContaining({ given_name: 'John', family_name: 'Doe' }),
+      expect.objectContaining({ given_name: 'John', family_name: 'Doe' })
     );
     expect(mockClient.release).toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to Square'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to Square')
+    );
 
     // Verify sync map INSERT was called with correct external_id
     const insertQuery = mockClient.query.mock.calls[3];
@@ -156,7 +158,7 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(insertQuery[1]).toContain(SQUARE_CUSTOMER_ID);
   });
 
-  it("PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing Square customer using stored external_id to maintain data consistency across systems", async () => {
+  it('PUSH-UPDATE: When tenant updates customer that was previously synced, system updates existing Square customer using stored external_id to maintain data consistency across systems', async () => {
     // WHO: syncCustomerToSquare with action='update'
     // WHAT: Local customer updated, entity_sync_map has existing external_id — triggers updateCustomer REST v2 API call
     // WHEN: Push sync after customer phone/email/name edited in dashboard
@@ -192,13 +194,15 @@ describe("Square Sync — Push Happy Paths", () => {
     expect(square.updateCustomer).toHaveBeenCalledWith(
       'valid-access-token',
       SQUARE_CUSTOMER_ID,
-      expect.objectContaining({ given_name: 'John', family_name: 'Doe' }),
+      expect.objectContaining({ given_name: 'John', family_name: 'Doe' })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer updated in Square'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer updated in Square')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling Square API, preserving Square data while breaking the link", async () => {
+  it('PUSH-DELETE: When tenant deletes customer locally, system removes sync_map entry without calling Square API, preserving Square data while breaking the link', async () => {
     // WHO: syncCustomerToSquare with action='delete'
     // WHAT: Local customer soft-deleted, sync_map entry exists — only removes mapping, no Square API call
     // WHEN: Push sync after customer deleted from dashboard
@@ -218,11 +222,13 @@ describe("Square Sync — Push Happy Paths", () => {
     // Should NOT call Square API at all
     expect(square.createCustomer).not.toHaveBeenCalled();
     expect(square.updateCustomer).not.toHaveBeenCalled();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry removed'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry removed')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-APPOINTMENT: When tenant creates appointment, system creates Square booking linked to the customer so point-of-sale system shows scheduled appointments", async () => {
+  it('PUSH-APPOINTMENT: When tenant creates appointment, system creates Square booking linked to the customer so point-of-sale system shows scheduled appointments', async () => {
     // WHO: syncAppointmentToSquare with action='create'
     // WHAT: Local appointment with synced customer — triggers createBooking REST v2 API call with customer_id from sync_map
     // WHEN: Push sync after appointment booked via dashboard or voice AI
@@ -260,13 +266,15 @@ describe("Square Sync — Push Happy Paths", () => {
       'valid-access-token',
       expect.objectContaining({
         customer_id: SQUARE_CUSTOMER_ID,
-      }),
+      })
     );
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to Square as booking'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to Square as booking')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates booking, ensuring referential integrity in Square", async () => {
+  it('PUSH-APPOINTMENT-CASCADE: When tenant creates appointment for unsynced customer, system automatically syncs customer first then creates booking, ensuring referential integrity in Square', async () => {
     // WHO: syncAppointmentToSquare calling syncCustomerToSquare recursively
     // WHAT: Appointment's customer has no sync_map entry — system auto-syncs customer before creating booking
     // WHEN: Push sync when voice AI books appointment for a brand-new caller (customer created moments before)
@@ -341,11 +349,15 @@ describe("Square Sync — Push Happy Paths", () => {
     // Should have called createCustomer once and createBooking once
     expect(square.createCustomer).toHaveBeenCalledOnce();
     expect(square.createBooking).toHaveBeenCalledOnce();
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('customer pushed to Square'));
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('appointment pushed to Square as booking'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('customer pushed to Square')
+    );
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('appointment pushed to Square as booking')
+    );
   });
 
-  it("PUSH-APPOINTMENT-DELETE: When tenant cancels appointment, system cancels Square booking via API and updates sync_map status so POS reflects cancellation", async () => {
+  it('PUSH-APPOINTMENT-DELETE: When tenant cancels appointment, system cancels Square booking via API and updates sync_map status so POS reflects cancellation', async () => {
     // WHO: syncAppointmentToSquare with action='delete'
     // WHAT: Appointment sync_map entry exists — triggers cancelBooking API call and updates sync_map status to canceled
     // WHEN: Push sync after receptionist or voice AI cancels an appointment
@@ -371,7 +383,9 @@ describe("Square Sync — Push Happy Paths", () => {
 
     expect(square.cancelBooking).toHaveBeenCalledOnce();
     expect(square.cancelBooking).toHaveBeenCalledWith('valid-access-token', SQUARE_BOOKING_ID);
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('sync map entry updated (canceled)'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('sync map entry updated (canceled)')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 });
@@ -380,8 +394,8 @@ describe("Square Sync — Push Happy Paths", () => {
 // HAPPY PATHS — PULL
 // =============================================
 
-describe("Square Sync — Pull Happy Paths", () => {
-  it("PULL-CREATE: When Square customer has no local match (by sync_map or phone), system creates new customer locally so POS customers appear in scheduling system", async () => {
+describe('Square Sync — Pull Happy Paths', () => {
+  it('PULL-CREATE: When Square customer has no local match (by sync_map or phone), system creates new customer locally so POS customers appear in scheduling system', async () => {
     // WHO: pullSquareCustomer processing a new Square customer
     // WHAT: No entity_sync_map match AND no customers row matching phone — triggers INSERT INTO customers + sync_map
     // WHEN: Pull sync during fullSync when Square customer was created at POS terminal outside SecretaryHQ
@@ -404,7 +418,9 @@ describe("Square Sync — Pull Happy Paths", () => {
 
     await pullSquareCustomer(pool, TENANT_ID, makeSquareCustomerData(), silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local customer from square customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local customer from square customer')
+    );
     expect(mockClient.release).toHaveBeenCalled();
 
     // Verify the INSERT customers query
@@ -414,7 +430,7 @@ describe("Square Sync — Pull Happy Paths", () => {
     expect(insertCall[1]).toContain('555-9999');
   });
 
-  it("PULL-MERGE-REMOTE-WINS: When Square customer matches local customer by phone and Square data is newer, system updates local record to keep most recent data from POS", async () => {
+  it('PULL-MERGE-REMOTE-WINS: When Square customer matches local customer by phone and Square data is newer, system updates local record to keep most recent data from POS', async () => {
     // WHO: pullSquareCustomer merging with existing local customer
     // WHAT: Phone match found, Square updated_at (2026-03-25) > local updated_at (2026-03-10) — remote wins timestamp merge
     // WHEN: Pull sync when POS staff updated customer email in Square after original booking
@@ -427,7 +443,9 @@ describe("Square Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but older
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-10T10:00:00Z' }],
+    });
 
     // UPDATE existing customer (remote newer)
     queryResponses.push({ rows: [] });
@@ -439,7 +457,9 @@ describe("Square Sync — Pull Happy Paths", () => {
 
     await pullSquareCustomer(pool, TENANT_ID, customerData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('merged square customer into existing customer'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('merged square customer into existing customer')
+    );
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('remote was newer'));
 
     // Verify UPDATE was issued (getDataQueries filters out session variable queries)
@@ -447,7 +467,7 @@ describe("Square Sync — Pull Happy Paths", () => {
     expect(dataQueries[2][0]).toContain('UPDATE customers');
   });
 
-  it("PULL-MERGE-LOCAL-WINS: When Square customer matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites", async () => {
+  it('PULL-MERGE-LOCAL-WINS: When Square customer matches local customer by phone but local data is newer, system keeps local values and only creates sync_map link to prevent stale overwrites', async () => {
     // WHO: pullSquareCustomer merging with existing local customer where local is newer
     // WHAT: Phone match found, local updated_at (2026-03-28) > Square updated_at (2026-03-25) — local wins, no UPDATE issued
     // WHEN: Pull sync when receptionist updated customer info via dashboard after Square's last modification
@@ -460,7 +480,9 @@ describe("Square Sync — Pull Happy Paths", () => {
     queryResponses.push({ rows: [] });
 
     // check existing customer by phone — found, but newer than remote
-    queryResponses.push({ rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ customer_id: 'existing-local-id', updated_at: '2026-03-28T10:00:00Z' }],
+    });
 
     // INSERT sync map (still creates mapping even when keeping local)
     queryResponses.push({ rows: [] });
@@ -480,8 +502,8 @@ describe("Square Sync — Pull Happy Paths", () => {
 // SAD PATHS
 // =============================================
 
-describe("Square Sync — Sad Paths", () => {
-  it("NO-SETTINGS: When tenant has no Square integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors", async () => {
+describe('Square Sync — Sad Paths', () => {
+  it('NO-SETTINGS: When tenant has no Square integration configured, getTokensWithRefresh returns null allowing sync operations to skip gracefully without errors', async () => {
     // WHO: getTokensWithRefresh for a tenant without Square integration
     // WHAT: tenant_integration_settings query returns 0 rows — function returns null
     // WHEN: Push/pull sync triggered for tenant that never connected Square OAuth
@@ -517,7 +539,7 @@ describe("Square Sync — Sad Paths", () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Square authorization), system marks integration inactive in DB and returns null to prevent repeated failed API calls", async () => {
+  it('TOKEN-REFRESH-FAILURE: When OAuth token refresh fails (e.g., user revoked Square authorization), system marks integration inactive in DB and returns null to prevent repeated failed API calls', async () => {
     // WHO: getTokensWithRefresh when token is expired and refresh fails
     // WHAT: token_expires_at is in the past, refreshAccessToken throws 'OAuth grant revoked' — marks is_active=false in DB
     // WHEN: Sync triggered after user revoked Square OAuth access from their Square Developer Dashboard
@@ -528,9 +550,11 @@ describe("Square Sync — Sad Paths", () => {
 
     // Token is expired (forces refresh)
     queryResponses.push({
-      rows: [makeIntegrationSettings({
-        token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
-      })],
+      rows: [
+        makeIntegrationSettings({
+          token_expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
+        }),
+      ],
     });
 
     // UPDATE to mark inactive
@@ -541,8 +565,12 @@ describe("Square Sync — Sad Paths", () => {
     const result = await getTokensWithRefresh(pool, TENANT_ID, silentLogger);
 
     expect(result).toBeNull();
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('token refresh FAILED'));
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('integration marked inactive'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('token refresh FAILED')
+    );
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('integration marked inactive')
+    );
 
     // Should have issued UPDATE to set is_active = false
     const updateCall = mockClient.query.mock.calls[1];
@@ -568,11 +596,13 @@ describe("Square Sync — Sad Paths", () => {
     await syncCustomerToSquare(pool, TENANT_ID, CUSTOMER_ID, 'create', silentLogger);
 
     expect(square.createCustomer).not.toHaveBeenCalled();
-    expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('customer not found in DB'));
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('customer not found in DB')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("NO-PHONE-SKIP: When Square customer has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows", async () => {
+  it('NO-PHONE-SKIP: When Square customer has no phone number, pull skips it because phone is required for customer matching and appointment booking workflows', async () => {
     // WHO: pullSquareCustomer receiving a Square customer with empty phone_number
     // WHAT: SquareCustomer.phone_number = '' — skip pull entirely, no DB queries issued
     // WHEN: Pull sync when Square has walk-in customers added at POS with no phone collected
@@ -609,13 +639,15 @@ describe("Square Sync — Sad Paths", () => {
 
     await pullSquareCustomer(pool, TENANT_ID, customerData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
     // Only 1 data query: the sync map check (excludes session variable queries)
     expect(getDataQueries()).toHaveLength(1);
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion", async () => {
+  it('CLIENT-RELEASE-ON-ERROR: When DB query throws during sync operation, system still releases pool client in finally block to prevent connection pool exhaustion', async () => {
     // WHO: getTokensWithRefresh when database connection fails mid-query
     // WHAT: First query throws 'DB connection lost' — function re-throws but still calls client.release()
     // WHEN: Any sync operation when Postgres is temporarily unreachable (network blip, connection timeout)
@@ -627,15 +659,15 @@ describe("Square Sync — Sad Paths", () => {
     // Make the first query throw
     mockClient.query.mockRejectedValueOnce(new Error('DB connection lost'));
 
-    await expect(
-      getTokensWithRefresh(pool, TENANT_ID, silentLogger)
-    ).rejects.toThrow('DB connection lost');
+    await expect(getTokensWithRefresh(pool, TENANT_ID, silentLogger)).rejects.toThrow(
+      'DB connection lost'
+    );
 
     // Even after error, release must be called
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  it("PAGINATION-ERROR: When Square API returns error during customer list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state", async () => {
+  it('PAGINATION-ERROR: When Square API returns error during customer list pagination, fullSync logs error and continues to update last_sync_at so next sync resumes from clean state', async () => {
     // WHO: fullSync when Square API returns 500 during pagination
     // WHAT: listCustomers and listBookings both throw on first page — sync completes with 0 records but updates last_sync_at
     // WHEN: Square API experiencing downtime during scheduled full sync
@@ -661,7 +693,9 @@ describe("Square Sync — Sad Paths", () => {
     expect(result.customersSynced).toBe(0);
     expect(result.appointmentsSynced).toBe(0);
     expect(result.errors).toBe(0); // errors counter is for individual failures, not pagination
-    expect(silentLogger.error).toHaveBeenCalledWith(expect.stringContaining('customer pagination failed'));
+    expect(silentLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining('customer pagination failed')
+    );
     // Should still update last_sync_at
     expect(mockClient.release).toHaveBeenCalled();
   });
@@ -671,10 +705,10 @@ describe("Square Sync — Sad Paths", () => {
 // PULL BOOKING — HAPPY + SAD PATHS
 // =============================================
 
-import { pullSquareBooking } from "./services/squareSync";
+import { pullSquareBooking } from './services/squareSync';
 
-describe("Square Sync — Pull Booking", () => {
-  it("PULL-BOOKING-CREATE: When Square booking has no local match, system creates appointment locally with correct start/end times calculated from duration_minutes", async () => {
+describe('Square Sync — Pull Booking', () => {
+  it('PULL-BOOKING-CREATE: When Square booking has no local match, system creates appointment locally with correct start/end times calculated from duration_minutes', async () => {
     // WHO: pullSquareBooking processing a new Square booking
     // WHAT: No entity_sync_map match → INSERT INTO appointments with start_at + duration → end_time, plus sync_map entry
     // WHEN: Pull sync during fullSync when booking was created at POS terminal
@@ -706,7 +740,9 @@ describe("Square Sync — Pull Booking", () => {
 
     await pullSquareBooking(pool, TENANT_ID, bookingData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('created local appointment from Square booking'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('created local appointment from Square booking')
+    );
     expect(mockClient.release).toHaveBeenCalled();
   });
 
@@ -747,7 +783,7 @@ describe("Square Sync — Pull Booking", () => {
     expect(insertCall![1]).toContain('canceled');
   });
 
-  it("PULL-BOOKING-UPDATE: When already-synced Square booking has newer data, system updates local appointment times and status", async () => {
+  it('PULL-BOOKING-UPDATE: When already-synced Square booking has newer data, system updates local appointment times and status', async () => {
     // WHO: pullSquareBooking updating an existing mapped appointment
     // WHAT: sync_map entry exists with older timestamp → UPDATE appointments SET times+status
     // WHEN: Square booking was rescheduled after initial sync
@@ -757,7 +793,9 @@ describe("Square Sync — Pull Booking", () => {
     const pool = createMockPool(mockClient);
 
     // booking sync map — existing with older timestamp
-    queryResponses.push({ rows: [{ local_id: 'existing-appt', remote_updated_at: '2026-03-20T10:00:00Z' }] });
+    queryResponses.push({
+      rows: [{ local_id: 'existing-appt', remote_updated_at: '2026-03-20T10:00:00Z' }],
+    });
 
     // UPDATE appointment
     queryResponses.push({ rows: [] });
@@ -775,10 +813,12 @@ describe("Square Sync — Pull Booking", () => {
 
     await pullSquareBooking(pool, TENANT_ID, bookingData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('updated local appointment from Square'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('updated local appointment from Square')
+    );
   });
 
-  it("PULL-BOOKING-NO-START: When Square booking has no start_at, system skips it because start time is required for scheduling", async () => {
+  it('PULL-BOOKING-NO-START: When Square booking has no start_at, system skips it because start time is required for scheduling', async () => {
     // WHO: pullSquareBooking with missing start_at field
     // WHAT: start_at undefined/null → skip pull, log warning
     // WHEN: Corrupted/incomplete booking data from Square API
@@ -799,7 +839,7 @@ describe("Square Sync — Pull Booking", () => {
     expect(silentLogger.warn).toHaveBeenCalledWith(expect.stringContaining('no start_at'));
   });
 
-  it("PULL-BOOKING-SKIP-UNCHANGED: When booking updatedAt matches sync_map, system skips to avoid redundant writes", async () => {
+  it('PULL-BOOKING-SKIP-UNCHANGED: When booking updatedAt matches sync_map, system skips to avoid redundant writes', async () => {
     // WHO: pullSquareBooking with already-synced version
     // WHAT: sync_map.remote_updated_at matches → early return
     // WHEN: fullSync re-processes unchanged bookings
@@ -822,7 +862,9 @@ describe("Square Sync — Pull Booking", () => {
 
     await pullSquareBooking(pool, TENANT_ID, bookingData, silentLogger);
 
-    expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('already synced this version'));
+    expect(silentLogger.info).toHaveBeenCalledWith(
+      expect.stringContaining('already synced this version')
+    );
   });
 });
 
@@ -830,8 +872,8 @@ describe("Square Sync — Pull Booking", () => {
 // FULL SYNC WITH DATA
 // =============================================
 
-describe("Square Sync — Full Sync with Data", () => {
-  it("FULL-SYNC-WITH-DATA: When Square API returns customers and bookings, system pulls them all and updates last_sync_at", async () => {
+describe('Square Sync — Full Sync with Data', () => {
+  it('FULL-SYNC-WITH-DATA: When Square API returns customers and bookings, system pulls them all and updates last_sync_at', async () => {
     // WHO: fullSync with active Square integration
     // WHAT: Paginates customers (1 page) + bookings (1 page), pulls each, updates last_sync_at
     // WHEN: Scheduled nightly full sync
@@ -863,13 +905,15 @@ describe("Square Sync — Full Sync with Data", () => {
     });
 
     vi.mocked(square.listBookings).mockResolvedValueOnce({
-      bookings: [{
-        id: SQUARE_BOOKING_ID,
-        start_at: '2026-03-28T09:00:00Z',
-        status: 'ACCEPTED',
-        appointment_segments: [{ duration_minutes: 60 }],
-        updated_at: '2026-03-28T09:00:00Z',
-      }],
+      bookings: [
+        {
+          id: SQUARE_BOOKING_ID,
+          start_at: '2026-03-28T09:00:00Z',
+          status: 'ACCEPTED',
+          appointment_segments: [{ duration_minutes: 60 }],
+          updated_at: '2026-03-28T09:00:00Z',
+        },
+      ],
       cursor: undefined,
     });
 
@@ -881,7 +925,7 @@ describe("Square Sync — Full Sync with Data", () => {
     expect(silentLogger.info).toHaveBeenCalledWith(expect.stringContaining('full sync complete'));
   });
 
-  it("FULL-SYNC-INDIVIDUAL-ERROR: When one customer fails during fullSync, system increments error count but continues syncing remaining records", async () => {
+  it('FULL-SYNC-INDIVIDUAL-ERROR: When one customer fails during fullSync, system increments error count but continues syncing remaining records', async () => {
     // WHO: fullSync when individual pull throws
     // WHAT: First customer pull throws, second succeeds → errors=1, customersSynced=1
     // WHEN: One customer has corrupt data but others are fine

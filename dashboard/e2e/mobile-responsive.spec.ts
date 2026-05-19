@@ -34,8 +34,12 @@ import { Pool } from 'pg';
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 let pool: Pool;
-test.beforeAll(() => { pool = new Pool({ connectionString: PG_URL }); });
-test.afterAll(async () => { await pool.end(); });
+test.beforeAll(() => {
+  pool = new Pool({ connectionString: PG_URL });
+});
+test.afterAll(async () => {
+  await pool.end();
+});
 
 // Mobile viewports for the audit. Sizes lifted from the Playwright
 // `devices['iPhone 14']` and `devices['Pixel 7']` descriptors. We set
@@ -85,7 +89,9 @@ test.describe('iPhone 14 viewport', () => {
     await page.setViewportSize(IPHONE_14);
   });
 
-  test('today\'s schedule: mobile nav renders, scheduler view reachable, no horizontal overflow', async ({ page }) => {
+  test("today's schedule: mobile nav renders, scheduler view reachable, no horizontal overflow", async ({
+    page,
+  }) => {
     // WHO: shop owner pulling up today's schedule between customers
     // WHAT: dashboard loads on a phone, the mobile bottom nav surfaces
     //        the Schedule tab, tapping it renders the scheduler view
@@ -116,12 +122,16 @@ test.describe('iPhone 14 viewport', () => {
     // Scheduler renders + date display visible (proves SchedulerView
     // mounted its sub-components, not just the outer container)
     await expect(page.locator('[data-testid="scheduler-view"]')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-testid="scheduler-date-display"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="scheduler-date-display"]')).toBeVisible({
+      timeout: 10_000,
+    });
 
     await assertNoHorizontalOverflow(page, 'iPhone 14 — schedule view');
   });
 
-  test('quick book: panel reachable on mobile, form inputs render without overflow', async ({ page }) => {
+  test('quick book: panel reachable on mobile, form inputs render without overflow', async ({
+    page,
+  }) => {
     // WHO: front-desk operator booking a walk-in from their phone
     // WHAT: navigate to Schedule's Resources sub-view, open Quick Book,
     //        verify the panel and its primary form controls render
@@ -161,7 +171,9 @@ test.describe('iPhone 14 viewport', () => {
     await assertNoHorizontalOverflow(page, 'iPhone 14 — quick book panel open');
   });
 
-  test('customer lookup: list renders and a customer is visible without overflow', async ({ page }) => {
+  test('customer lookup: list renders and a customer is visible without overflow', async ({
+    page,
+  }) => {
     // WHO: front-desk operator looking up a customer who just walked in
     // WHAT: tap Customers in the mobile nav → list renders with at
     //        least one customer name visible
@@ -178,15 +190,21 @@ test.describe('iPhone 14 viewport', () => {
     //        "James Kowalski" — the seed was stripped of customers
     //        (transactional data must be created+destroyed per test);
     //        this spec now owns its own data lifecycle.
-    const customerName = `MR-Test ${Date.now()}`
-    let createdId: string | null = null
+    const customerName = `MR-Test ${Date.now()}`;
+    let createdId: string | null = null;
     try {
       const insert = await pool.query(
         `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
          VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-        [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, customerName, 'MR-Test', String(Date.now())]
-      )
-      createdId = insert.rows[0].customer_id
+        [
+          DYNATIRE_ID,
+          `+1${String(Date.now()).slice(-10)}`,
+          customerName,
+          'MR-Test',
+          String(Date.now()),
+        ]
+      );
+      createdId = insert.rows[0].customer_id;
 
       await page.goto('/dashboard');
       await switchToDynaTireTenant(page);
@@ -201,7 +219,7 @@ test.describe('iPhone 14 viewport', () => {
       await assertNoHorizontalOverflow(page, 'iPhone 14 — customer list');
     } finally {
       if (createdId) {
-        await pool.query('DELETE FROM customers WHERE customer_id = $1', [createdId])
+        await pool.query('DELETE FROM customers WHERE customer_id = $1', [createdId]);
       }
     }
   });
@@ -216,7 +234,9 @@ test.describe('Pixel 7 viewport', () => {
     await page.setViewportSize(PIXEL_7);
   });
 
-  test('smoke: schedule reachable + no horizontal overflow on Android viewport', async ({ page }) => {
+  test('smoke: schedule reachable + no horizontal overflow on Android viewport', async ({
+    page,
+  }) => {
     // WHO: shop owner on Android (Pixel 7's 412×915 viewport differs
     //        slightly from iPhone 14's 390×844 — catches issues that
     //        only show at one width)

@@ -17,11 +17,11 @@
  * (WHO/WHAT/WHEN/WHERE/WHY) header so a sad-path failure tells the
  * debugger what behavior was expected and why.
  */
-import { describe, it, expect, vi } from "vitest";
-import { createNormalizer } from "../shared/normalizeForEmbedding";
+import { describe, it, expect, vi } from 'vitest';
+import { createNormalizer } from '../shared/normalizeForEmbedding';
 
-describe("normalizeForEmbedding", () => {
-  it("returns original text when no API key is provided", async () => {
+describe('normalizeForEmbedding', () => {
+  it('returns original text when no API key is provided', async () => {
     // WHO: A backend running without OPENAI_API_KEY (local dev / test)
     // WHAT: Pass-through — input returned verbatim, no fetch ever issued
     // WHEN: createNormalizer("") — empty-string key signals "skip LLM"
@@ -29,36 +29,36 @@ describe("normalizeForEmbedding", () => {
     // WHY: We never want a missing key to throw and break the embedding
     //       pipeline; pass-through keeps similarity search working with
     //       un-normalized text instead of failing the whole call.
-    const normalize = createNormalizer("");
-    const result = await normalize("I think Suzy is great at oil changes");
-    expect(result).toBe("I think Suzy is great at oil changes");
+    const normalize = createNormalizer('');
+    const result = await normalize('I think Suzy is great at oil changes');
+    expect(result).toBe('I think Suzy is great at oil changes');
   });
 
-  it("returns short text unchanged (under 20 chars)", async () => {
+  it('returns short text unchanged (under 20 chars)', async () => {
     // WHO: A caller normalizing a short utterance ("Hi there", "Yes")
     // WHAT: Pass-through — no LLM call for trivially short inputs
     // WHEN: Input length below the normalization threshold
     // WHERE: Length-guard at the top of the normalize function
     // WHY: gpt-4o-mini calls cost real money; short snippets carry no
     //       filler worth stripping, so we save the round-trip.
-    const normalize = createNormalizer("");
-    const result = await normalize("Hi there");
-    expect(result).toBe("Hi there");
+    const normalize = createNormalizer('');
+    const result = await normalize('Hi there');
+    expect(result).toBe('Hi there');
   });
 
-  it("returns empty string for empty input", async () => {
+  it('returns empty string for empty input', async () => {
     // WHO: An upstream caller that hands us an empty summary
     // WHAT: Empty in → empty out, no fetch
     // WHEN: Called with `""` (e.g. a call ended before any user speech)
     // WHERE: Empty-input guard at the top of the function
     // WHY: An empty embedding-source row is fine; we just don't want to
     //       burn an OpenAI request to learn that.
-    const normalize = createNormalizer("");
-    const result = await normalize("");
-    expect(result).toBe("");
+    const normalize = createNormalizer('');
+    const result = await normalize('');
+    expect(result).toBe('');
   });
 
-  it("trims whitespace from input", async () => {
+  it('trims whitespace from input', async () => {
     // WHO: A caller passing text with stray whitespace from STT padding
     // WHAT: Trimmed text returned (still under the LLM threshold here)
     // WHEN: Input has leading/trailing whitespace
@@ -66,12 +66,12 @@ describe("normalizeForEmbedding", () => {
     // WHY: Embedding the same text with vs. without leading whitespace
     //       produces slightly different vectors; trimming first keeps
     //       similarity stable.
-    const normalize = createNormalizer("");
-    const result = await normalize("   short   ");
-    expect(result).toBe("short");
+    const normalize = createNormalizer('');
+    const result = await normalize('   short   ');
+    expect(result).toBe('short');
   });
 
-  it("accepts custom options", async () => {
+  it('accepts custom options', async () => {
     // WHO: A caller passing { context, maxTokens } overrides
     // WHAT: With no API key, options are ignored and pass-through wins
     //        — we still trim, but no LLM call happens
@@ -80,16 +80,16 @@ describe("normalizeForEmbedding", () => {
     //         shape ever matters
     // WHY: Confirms the options object doesn't accidentally trigger a
     //       fetch when the empty-key short-circuit should win.
-    const normalize = createNormalizer("");
+    const normalize = createNormalizer('');
     // With no API key, just returns trimmed text regardless of options
-    const result = await normalize("This is a test sentence for normalization", {
-      context: "call summary",
+    const result = await normalize('This is a test sentence for normalization', {
+      context: 'call summary',
       maxTokens: 100,
     });
-    expect(result).toBe("This is a test sentence for normalization");
+    expect(result).toBe('This is a test sentence for normalization');
   });
 
-  it("calls OpenAI API with correct parameters when API key is set", async () => {
+  it('calls OpenAI API with correct parameters when API key is set', async () => {
     // WHO: A configured backend with OPENAI_API_KEY set, normalizing a
     //       real call-summary utterance
     // WHAT: One POST to https://api.openai.com/v1/chat/completions with
@@ -105,33 +105,35 @@ describe("normalizeForEmbedding", () => {
     const mockResponse = {
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "Customer prefers Suzy for oil changes." } }],
+        choices: [{ message: { content: 'Customer prefers Suzy for oil changes.' } }],
       }),
     };
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    const fetchSpy = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    const result = await normalize("I think Suzy is great at oil changes", {
-      context: "call summary",
+    const normalize = createNormalizer('test-api-key');
+    const result = await normalize('I think Suzy is great at oil changes', {
+      context: 'call summary',
     });
 
-    expect(result).toBe("Customer prefers Suzy for oil changes.");
+    expect(result).toBe('Customer prefers Suzy for oil changes.');
     expect(fetchSpy).toHaveBeenCalledOnce();
 
     const [url, options] = fetchSpy.mock.calls[0];
-    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    expect(url).toBe('https://api.openai.com/v1/chat/completions');
     const init = options as RequestInit;
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe("gpt-4o-mini");
+    expect(body.model).toBe('gpt-4o-mini');
     expect(body.temperature).toBe(0);
-    expect(body.messages[1].content).toContain("call summary");
-    expect(body.messages[1].content).toContain("I think Suzy is great at oil changes");
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-api-key");
+    expect(body.messages[1].content).toContain('call summary');
+    expect(body.messages[1].content).toContain('I think Suzy is great at oil changes');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-api-key');
 
     fetchSpy.mockRestore();
   });
 
-  it("falls back to original text when LLM returns empty response", async () => {
+  it('falls back to original text when LLM returns empty response', async () => {
     // WHO: A configured backend whose OpenAI call returned 200 OK but
     //       with an empty completion (rare but observed in production)
     // WHAT: Fall back to the original input verbatim
@@ -143,20 +145,20 @@ describe("normalizeForEmbedding", () => {
     const mockResponse = {
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "" } }],
+        choices: [{ message: { content: '' } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    const result = await normalize("I think Suzy is great at oil changes");
+    const normalize = createNormalizer('test-api-key');
+    const result = await normalize('I think Suzy is great at oil changes');
 
-    expect(result).toBe("I think Suzy is great at oil changes");
+    expect(result).toBe('I think Suzy is great at oil changes');
 
     vi.restoreAllMocks();
   });
 
-  it("throws on API error", async () => {
+  it('throws on API error', async () => {
     // WHO: A backend with a bad/expired/revoked OpenAI key
     // WHAT: Throw a "Normalization LLM Error" so the operator sees the
     //        misconfig in logs instead of silently storing un-normalized text
@@ -167,13 +169,13 @@ describe("normalizeForEmbedding", () => {
     //       the bad key would be sub-optimal and nobody would know.
     const mockResponse = {
       ok: false,
-      json: async () => ({ error: { message: "Invalid API key" } }),
+      json: async () => ({ error: { message: 'Invalid API key' } }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("bad-key");
-    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
-      "Normalization LLM Error"
+    const normalize = createNormalizer('bad-key');
+    await expect(normalize('I think Suzy is great at oil changes')).rejects.toThrow(
+      'Normalization LLM Error'
     );
 
     vi.restoreAllMocks();
@@ -181,7 +183,7 @@ describe("normalizeForEmbedding", () => {
 
   // --- Sad path tests ---
 
-  it("throws timeout error when fetch is aborted via AbortController", async () => {
+  it('throws timeout error when fetch is aborted via AbortController', async () => {
     // WHO: The 15s AbortController-driven timeout firing during a slow
     //       OpenAI call (network stall or upstream latency spike)
     // WHAT: Throw a descriptive "Normalization request timed out after
@@ -192,21 +194,21 @@ describe("normalizeForEmbedding", () => {
     // WHY: Without the rewrite, the bare AbortError "The operation was
     //       aborted" tells the operator nothing about which call timed
     //       out. The rewritten message names the layer + the budget.
-    const abortError = new Error("The operation was aborted");
-    abortError.name = "AbortError";
-    vi.spyOn(global, "fetch").mockImplementationOnce(async () => {
+    const abortError = new Error('The operation was aborted');
+    abortError.name = 'AbortError';
+    vi.spyOn(global, 'fetch').mockImplementationOnce(async () => {
       throw abortError;
     });
 
-    const normalize = createNormalizer("test-api-key");
-    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
-      "Normalization request timed out after 15000ms"
+    const normalize = createNormalizer('test-api-key');
+    await expect(normalize('I think Suzy is great at oil changes')).rejects.toThrow(
+      'Normalization request timed out after 15000ms'
     );
 
     vi.restoreAllMocks();
   });
 
-  it("throws on OpenAI 500 server error", async () => {
+  it('throws on OpenAI 500 server error', async () => {
     // WHO: A backend hitting OpenAI during a transient OpenAI outage
     // WHAT: Throw "Normalization LLM Error" — same surface as auth
     //        failures so the upstream caller has one error class to
@@ -218,19 +220,19 @@ describe("normalizeForEmbedding", () => {
     //       text upstream). Throwing here surfaces the outage in logs.
     const mockResponse = {
       ok: false,
-      json: async () => ({ error: { message: "Internal server error", type: "server_error" } }),
+      json: async () => ({ error: { message: 'Internal server error', type: 'server_error' } }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
-      "Normalization LLM Error"
+    const normalize = createNormalizer('test-api-key');
+    await expect(normalize('I think Suzy is great at oil changes')).rejects.toThrow(
+      'Normalization LLM Error'
     );
 
     vi.restoreAllMocks();
   });
 
-  it("throws on OpenAI 429 rate limit error", async () => {
+  it('throws on OpenAI 429 rate limit error', async () => {
     // WHO: A backend hammering OpenAI past the per-minute rate limit
     //       (high-volume call ingestion + low rate-limit tier)
     // WHAT: Throw "Normalization LLM Error" so the operator can see
@@ -244,20 +246,20 @@ describe("normalizeForEmbedding", () => {
     const mockResponse = {
       ok: false,
       json: async () => ({
-        error: { message: "Rate limit exceeded", type: "rate_limit_error" },
+        error: { message: 'Rate limit exceeded', type: 'rate_limit_error' },
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
-      "Normalization LLM Error"
+    const normalize = createNormalizer('test-api-key');
+    await expect(normalize('I think Suzy is great at oil changes')).rejects.toThrow(
+      'Normalization LLM Error'
     );
 
     vi.restoreAllMocks();
   });
 
-  it("throws when OpenAI returns malformed JSON", async () => {
+  it('throws when OpenAI returns malformed JSON', async () => {
     // WHO: A backend hitting an OpenAI endpoint that responded with HTML
     //       (502 from a CDN edge, or a misrouted load balancer)
     // WHAT: Let the SyntaxError propagate — it's an upstream-shape
@@ -272,20 +274,18 @@ describe("normalizeForEmbedding", () => {
     const mockResponse = {
       ok: false,
       json: async () => {
-        throw new SyntaxError("Unexpected token < in JSON at position 0");
+        throw new SyntaxError('Unexpected token < in JSON at position 0');
       },
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
-      SyntaxError
-    );
+    const normalize = createNormalizer('test-api-key');
+    await expect(normalize('I think Suzy is great at oil changes')).rejects.toThrow(SyntaxError);
 
     vi.restoreAllMocks();
   });
 
-  it("falls back to original text when OpenAI returns empty choices array", async () => {
+  it('falls back to original text when OpenAI returns empty choices array', async () => {
     // WHO: A backend hitting an OpenAI variant that returned 200 OK with
     //       a `choices: []` body (corner case observed during model
     //       deprecation transitions)
@@ -298,16 +298,16 @@ describe("normalizeForEmbedding", () => {
       ok: true,
       json: async () => ({ choices: [] }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    const result = await normalize("I think Suzy is great at oil changes");
-    expect(result).toBe("I think Suzy is great at oil changes");
+    const normalize = createNormalizer('test-api-key');
+    const result = await normalize('I think Suzy is great at oil changes');
+    expect(result).toBe('I think Suzy is great at oil changes');
 
     vi.restoreAllMocks();
   });
 
-  it("falls back to original text when choices[0].message.content is null", async () => {
+  it('falls back to original text when choices[0].message.content is null', async () => {
     // WHO: A backend hitting an OpenAI response where the model returned
     //       a tool-call instead of a text completion (shouldn't happen
     //       at temperature=0 + our prompt, but defensive)
@@ -323,16 +323,16 @@ describe("normalizeForEmbedding", () => {
         choices: [{ message: { content: null } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
-    const result = await normalize("I think Suzy is great at oil changes");
-    expect(result).toBe("I think Suzy is great at oil changes");
+    const normalize = createNormalizer('test-api-key');
+    const result = await normalize('I think Suzy is great at oil changes');
+    expect(result).toBe('I think Suzy is great at oil changes');
 
     vi.restoreAllMocks();
   });
 
-  it("re-throws network error (TypeError: Failed to fetch)", async () => {
+  it('re-throws network error (TypeError: Failed to fetch)', async () => {
     // WHO: A backend with no network reachability to api.openai.com
     //       (DNS failure, container egress blocked, OpenAI region down)
     // WHAT: Re-throw the original TypeError so the operator sees the
@@ -344,17 +344,17 @@ describe("normalizeForEmbedding", () => {
     // WHY: Network failures and abort-timeouts have different fixes
     //       (network = check egress; abort = check upstream latency).
     //       Preserving the original TypeError keeps that distinction.
-    vi.spyOn(global, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    vi.spyOn(global, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-    const normalize = createNormalizer("test-api-key");
-    await expect(normalize("I think Suzy is great at oil changes")).rejects.toThrow(
-      "Failed to fetch"
+    const normalize = createNormalizer('test-api-key');
+    await expect(normalize('I think Suzy is great at oil changes')).rejects.toThrow(
+      'Failed to fetch'
     );
 
     vi.restoreAllMocks();
   });
 
-  it("handles input with special unicode characters without crashing", async () => {
+  it('handles input with special unicode characters without crashing', async () => {
     // WHO: A real call summary containing emoji, accented Latin (René),
     //       and multi-byte glyphs (🚗💨)
     // WHAT: Forward the raw text to OpenAI; receive the canonicalized
@@ -367,19 +367,19 @@ describe("normalizeForEmbedding", () => {
     const mockResponse = {
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "Customer asks about brake service. Name: Rene." } }],
+        choices: [{ message: { content: 'Customer asks about brake service. Name: Rene.' } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
+    const normalize = createNormalizer('test-api-key');
     const result = await normalize("Hey! 😊 I'm René — do you guys do brakes? 🚗💨");
-    expect(result).toBe("Customer asks about brake service. Name: Rene.");
+    expect(result).toBe('Customer asks about brake service. Name: Rene.');
 
     vi.restoreAllMocks();
   });
 
-  it("handles very long input text without crashing", async () => {
+  it('handles very long input text without crashing', async () => {
     // WHO: A long-running call summary (~110k chars — many minutes of
     //       transcript)
     // WHAT: Pass through to OpenAI without truncating client-side; let
@@ -391,18 +391,18 @@ describe("normalizeForEmbedding", () => {
     //       exceeds OpenAI's context, OpenAI returns an explicit error
     //       (caught by the API-error path). Truncating here would be
     //       lossy and invisible.
-    const longText = "I need an oil change. ".repeat(5000); // ~110k chars
+    const longText = 'I need an oil change. '.repeat(5000); // ~110k chars
     const mockResponse = {
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "Customer requests oil change." } }],
+        choices: [{ message: { content: 'Customer requests oil change.' } }],
       }),
     };
-    vi.spyOn(global, "fetch").mockResolvedValueOnce(mockResponse as unknown as Response);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-    const normalize = createNormalizer("test-api-key");
+    const normalize = createNormalizer('test-api-key');
     const result = await normalize(longText);
-    expect(result).toBe("Customer requests oil change.");
+    expect(result).toBe('Customer requests oil change.');
 
     vi.restoreAllMocks();
   });

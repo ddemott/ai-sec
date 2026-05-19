@@ -49,7 +49,10 @@ async function landOnDynatireDashboard(page: Page) {
   await tenantBtn.waitFor({ state: 'visible', timeout: 5000 });
   await tenantBtn.click();
   await page.waitForTimeout(400);
-  await page.getByRole('tab', { name: /^Home$/ }).first().click();
+  await page
+    .getByRole('tab', { name: /^Home$/ })
+    .first()
+    .click();
   await page.waitForTimeout(800);
 }
 
@@ -71,7 +74,10 @@ test.describe('UI rename — A1 + B2', () => {
   test('B2: My Team sub-tab reads "Working Days", not "Shifts"', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
-    await page.getByRole('tab', { name: /^My Team$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^My Team$/ })
+      .first()
+      .click();
     await page.waitForTimeout(500);
 
     await expect(page.getByRole('tab', { name: /Working Days/ }).first()).toBeVisible();
@@ -84,13 +90,19 @@ test.describe('UI rename — A1 + B2', () => {
     await landOnDynatireDashboard(page);
 
     // Under Phone Assistant: Knowledge Base sub-tab is present.
-    await page.getByRole('tab', { name: /^Phone Assistant$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^Phone Assistant$/ })
+      .first()
+      .click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('tab', { name: /Knowledge Base/ }).first()).toBeVisible();
 
     // Under My Business: Knowledge Base sub-tab is absent. Only Services
     // and the vocab-driven resources sub-tab remain.
-    await page.getByRole('tab', { name: /^My Business$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^My Business$/ })
+      .first()
+      .click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('tab', { name: /Knowledge Base/ })).toHaveCount(0);
   });
@@ -117,7 +129,10 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
   test('Setup Assistant opens welcome → "Let\'s go" advances to mode chooser', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
-    await page.getByRole('tab', { name: /^My Business$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^My Business$/ })
+      .first()
+      .click();
     await page.waitForTimeout(500);
 
     // The Setup Assistant button lives in the FolderTabBar right slot.
@@ -143,17 +158,25 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
 
     // Close without picking a mode — stepping further opens
     // BusinessTypePicker which writes tenant config on select.
-    await page.getByRole('button', { name: /Close wizard/i }).first().click();
+    await page
+      .getByRole('button', { name: /Close wizard/i })
+      .first()
+      .click();
   });
 
-  test('Setup Assistant → welcome "show me around" exits cleanly (no chooser appears)', async ({ page }) => {
+  test('Setup Assistant → welcome "show me around" exits cleanly (no chooser appears)', async ({
+    page,
+  }) => {
     // WHY (D1): the explicit "I'll set up later, just show me around" exit
     // must close the entire wizard — it cannot silently advance to the
     // mode chooser or trap the user in another modal. DynaTire is already
     // fully configured so this is non-destructive (no writes possible).
     await landOnDynatireDashboard(page);
 
-    await page.getByRole('tab', { name: /^My Business$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^My Business$/ })
+      .first()
+      .click();
     await page.waitForTimeout(500);
 
     await page.getByRole('button', { name: /Setup Assistant/i }).click();
@@ -169,7 +192,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
   });
 });
 
-test.describe('Business Type move — Settings hosts it, AI Persona doesn\'t', () => {
+test.describe("Business Type move — Settings hosts it, AI Persona doesn't", () => {
   test('Business Settings has the new "Business type" card', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
@@ -187,7 +210,10 @@ test.describe('Business Type move — Settings hosts it, AI Persona doesn\'t', (
   test('AI Persona page no longer shows the template grid', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
-    await page.getByRole('tab', { name: /^Phone Assistant$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^Phone Assistant$/ })
+      .first()
+      .click();
     await page.waitForTimeout(500);
     // The AI Persona sub-tab is the default landing for Phone Assistant.
 
@@ -196,10 +222,14 @@ test.describe('Business Type move — Settings hosts it, AI Persona doesn\'t', (
     // Old section heading removed — the 24-card grid no longer here.
     await expect(page.getByRole('heading', { name: /^Business Type Templates$/ })).toHaveCount(0);
     // The new header subtitle directs the user where business-type now lives.
-    await expect(page.getByText(/To change your industry template, go to Business Settings/i)).toBeVisible();
+    await expect(
+      page.getByText(/To change your industry template, go to Business Settings/i)
+    ).toBeVisible();
   });
 
-  test('Apply-to-my-business is guarded by a confirmation modal (cancel exits cleanly)', async ({ page }) => {
+  test('Apply-to-my-business is guarded by a confirmation modal (cancel exits cleanly)', async ({
+    page,
+  }) => {
     await landOnDynatireDashboard(page);
 
     await page.getByRole('button', { name: /Account menu/i }).click();
@@ -226,7 +256,9 @@ test.describe('Business Type move — Settings hosts it, AI Persona doesn\'t', (
 
     // Confirmation guard — copy mentions the destructive consequences.
     await expect(page.getByRole('heading', { name: /Change business type\?/i })).toBeVisible();
-    await expect(page.getByText(/replaces your AI persona, voice, and first message/i)).toBeVisible();
+    await expect(
+      page.getByText(/replaces your AI persona, voice, and first message/i)
+    ).toBeVisible();
 
     // Cancel — no write, no visible change to the page after the modals
     // close. We do NOT click "Change business type" inside the guard,

@@ -30,8 +30,13 @@
  */
 export class RateLimitedError extends Error {
   status = 429;
-  constructor(public tenantId: string, public retryAfterMs: number) {
-    super(`SMS rate limit reached for tenant ${tenantId}; retry after ${Math.ceil(retryAfterMs / 1000)}s`);
+  constructor(
+    public tenantId: string,
+    public retryAfterMs: number
+  ) {
+    super(
+      `SMS rate limit reached for tenant ${tenantId}; retry after ${Math.ceil(retryAfterMs / 1000)}s`
+    );
     this.name = 'RateLimitedError';
   }
 }
@@ -133,7 +138,10 @@ export class SmsRateLimiter {
   private refill(bucket: BucketState, now: number): void {
     if (now <= bucket.lastRefill) return; // clock didn't advance
     const elapsedSec = (now - bucket.lastRefill) / 1000;
-    bucket.tokens = Math.min(this.config.capacity, bucket.tokens + elapsedSec * this.config.refillRate);
+    bucket.tokens = Math.min(
+      this.config.capacity,
+      bucket.tokens + elapsedSec * this.config.refillRate
+    );
     bucket.lastRefill = now;
   }
 }

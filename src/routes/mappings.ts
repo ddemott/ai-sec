@@ -1,4 +1,3 @@
-
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
@@ -10,99 +9,125 @@ export function registerMappingRoutes(
   _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
-  app.get('/mappings/service-resource', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/mappings/service-resource',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('SELECT * FROM service_resource WHERE tenant_id = $1', [tenantId]);
-    });
-    return reply.send(res.rows);
-  }, 'Failed to fetch resource mappings'));
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query('SELECT * FROM service_resource WHERE tenant_id = $1', [tenantId]);
+      });
+      return reply.send(res.rows);
+    }, 'Failed to fetch resource mappings')
+  );
 
-  app.get('/mappings/service-employee', withHandler(async (req: AppRequest, reply) => {
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.get(
+    '/mappings/service-employee',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    const res = await withTenantClient(tenantId, async (client) => {
-      return client.query('SELECT * FROM service_employee WHERE tenant_id = $1', [tenantId]);
-    });
-    return reply.send(res.rows);
-  }, 'Failed to fetch employee mappings'));
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query('SELECT * FROM service_employee WHERE tenant_id = $1', [tenantId]);
+      });
+      return reply.send(res.rows);
+    }, 'Failed to fetch employee mappings')
+  );
 
-  app.post('/services/:serviceId/employees/:employeeId/assign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
-    if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
-      return reply.status(400).send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
-    }
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/services/:serviceId/employees/:employeeId/assign',
+    withHandler(async (req: AppRequest, reply) => {
+      const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
+      if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
+      }
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        'INSERT INTO service_employee (service_id, employee_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-        [serviceId, employeeId, tenantId]
-      );
-    });
+      await withTenantClient(tenantId, async (client) => {
+        await client.query(
+          'INSERT INTO service_employee (service_id, employee_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [serviceId, employeeId, tenantId]
+        );
+      });
 
-    logEvent(req, 'employee_assigned_to_service', { serviceId, employeeId });
-    return reply.send({ success: true });
-  }, 'Failed to assign employee to service'));
+      logEvent(req, 'employee_assigned_to_service', { serviceId, employeeId });
+      return reply.send({ success: true });
+    }, 'Failed to assign employee to service')
+  );
 
-  app.post('/services/:serviceId/employees/:employeeId/unassign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
-    if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
-      return reply.status(400).send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
-    }
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/services/:serviceId/employees/:employeeId/unassign',
+    withHandler(async (req: AppRequest, reply) => {
+      const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
+      if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
+      }
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        'DELETE FROM service_employee WHERE service_id = $1 AND employee_id = $2 AND tenant_id = $3',
-        [serviceId, employeeId, tenantId]
-      );
-    });
+      await withTenantClient(tenantId, async (client) => {
+        await client.query(
+          'DELETE FROM service_employee WHERE service_id = $1 AND employee_id = $2 AND tenant_id = $3',
+          [serviceId, employeeId, tenantId]
+        );
+      });
 
-    logEvent(req, 'employee_unassigned_from_service', { serviceId, employeeId });
-    return reply.send({ success: true });
-  }, 'Failed to unassign employee'));
+      logEvent(req, 'employee_unassigned_from_service', { serviceId, employeeId });
+      return reply.send({ success: true });
+    }, 'Failed to unassign employee')
+  );
 
-  app.post('/services/:serviceId/resources/:resourceId/assign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
-    if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
-      return reply.status(400).send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
-    }
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/services/:serviceId/resources/:resourceId/assign',
+    withHandler(async (req: AppRequest, reply) => {
+      const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
+      if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
+      }
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        'INSERT INTO service_resource (service_id, resource_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-        [serviceId, resourceId, tenantId]
-      );
-    });
+      await withTenantClient(tenantId, async (client) => {
+        await client.query(
+          'INSERT INTO service_resource (service_id, resource_id, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [serviceId, resourceId, tenantId]
+        );
+      });
 
-    logEvent(req, 'resource_assigned_to_service', { serviceId, resourceId });
-    return reply.send({ success: true });
-  }, 'Failed to assign resource to service'));
+      logEvent(req, 'resource_assigned_to_service', { serviceId, resourceId });
+      return reply.send({ success: true });
+    }, 'Failed to assign resource to service')
+  );
 
-  app.post('/services/:serviceId/resources/:resourceId/unassign', withHandler(async (req: AppRequest, reply) => {
-    const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
-    if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
-      return reply.status(400).send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
-    }
-    const tenantId = requireTenantId(req, reply);
-    if (!tenantId) return;
+  app.post(
+    '/services/:serviceId/resources/:resourceId/unassign',
+    withHandler(async (req: AppRequest, reply) => {
+      const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
+      if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
+      }
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
 
-    await withTenantClient(tenantId, async (client) => {
-      await client.query(
-        'DELETE FROM service_resource WHERE service_id = $1 AND resource_id = $2 AND tenant_id = $3',
-        [serviceId, resourceId, tenantId]
-      );
-    });
+      await withTenantClient(tenantId, async (client) => {
+        await client.query(
+          'DELETE FROM service_resource WHERE service_id = $1 AND resource_id = $2 AND tenant_id = $3',
+          [serviceId, resourceId, tenantId]
+        );
+      });
 
-    logEvent(req, 'resource_unassigned_from_service', { serviceId, resourceId });
-    return reply.send({ success: true });
-  }, 'Failed to unassign resource'));
+      logEvent(req, 'resource_unassigned_from_service', { serviceId, resourceId });
+      return reply.send({ success: true });
+    }, 'Failed to unassign resource')
+  );
 }

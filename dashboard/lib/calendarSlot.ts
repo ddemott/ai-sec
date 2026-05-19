@@ -18,10 +18,7 @@
  * half-hour zones, all valid).
  */
 export function isSlotOnFifteenMinuteGrid(slot: { start: Date; end: Date }): boolean {
-  return (
-    isOnGrid(slot.start) &&
-    isOnGrid(slot.end)
-  );
+  return isOnGrid(slot.start) && isOnGrid(slot.end);
 }
 
 function isOnGrid(d: Date): boolean {

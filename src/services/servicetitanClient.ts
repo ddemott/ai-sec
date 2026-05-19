@@ -98,7 +98,10 @@ export function verifyState(state: string): string | null {
 /** Exchange authorization code for tokens */
 export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
   const config = getConfig();
-  if (!config) throw new Error('ServiceTitan not configured — missing env vars (check SERVICETITAN_CLIENT_ID, SERVICETITAN_CLIENT_SECRET, SERVICETITAN_CALLBACK_URL, SERVICETITAN_APP_KEY)');
+  if (!config)
+    throw new Error(
+      'ServiceTitan not configured — missing env vars (check SERVICETITAN_CLIENT_ID, SERVICETITAN_CLIENT_SECRET, SERVICETITAN_CALLBACK_URL, SERVICETITAN_APP_KEY)'
+    );
 
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -118,17 +121,23 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
     });
   } catch (networkErr: unknown) {
     const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-    throw new Error(`ServiceTitan OAuth code exchange failed: network error reaching ServiceTitan token endpoint — ${msg}`);
+    throw new Error(
+      `ServiceTitan OAuth code exchange failed: network error reaching ServiceTitan token endpoint — ${msg}`
+    );
   }
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`ServiceTitan OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`);
+    throw new Error(
+      `ServiceTitan OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token || !data.refresh_token) {
-    throw new Error('ServiceTitan OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).');
+    throw new Error(
+      'ServiceTitan OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).'
+    );
   }
 
   return {
@@ -139,9 +148,14 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
 }
 
 /** Refresh an expired access token */
-export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date: number }> {
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; expiry_date: number }> {
   const config = getConfig();
-  if (!config) throw new Error('ServiceTitan not configured — missing env vars (check SERVICETITAN_CLIENT_ID, SERVICETITAN_CLIENT_SECRET, SERVICETITAN_CALLBACK_URL, SERVICETITAN_APP_KEY)');
+  if (!config)
+    throw new Error(
+      'ServiceTitan not configured — missing env vars (check SERVICETITAN_CLIENT_ID, SERVICETITAN_CLIENT_SECRET, SERVICETITAN_CALLBACK_URL, SERVICETITAN_APP_KEY)'
+    );
 
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -165,12 +179,16 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`ServiceTitan token refresh failed (${res.status}): ${errorBody}. The user should reconnect ServiceTitan from the dashboard.`);
+    throw new Error(
+      `ServiceTitan token refresh failed (${res.status}): ${errorBody}. The user should reconnect ServiceTitan from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token) {
-    throw new Error('ServiceTitan token refresh returned no access_token. The user should reconnect ServiceTitan from the dashboard.');
+    throw new Error(
+      'ServiceTitan token refresh returned no access_token. The user should reconnect ServiceTitan from the dashboard.'
+    );
   }
 
   return {
@@ -225,7 +243,12 @@ export async function listCustomers(
 ): Promise<ServiceTitanListResponse<ServiceTitanCustomer>> {
   const params = new URLSearchParams({ pageSize: '100' });
   if (page) params.set('page', String(page));
-  return apiRequest('GET', `/crm/v2/tenant/${tenantSid}/customers?${params.toString()}`, accessToken, appKey);
+  return apiRequest(
+    'GET',
+    `/crm/v2/tenant/${tenantSid}/customers?${params.toString()}`,
+    accessToken,
+    appKey
+  );
 }
 
 export async function getCustomer(
@@ -234,7 +257,12 @@ export async function getCustomer(
   tenantSid: string,
   customerId: string
 ): Promise<ServiceTitanCustomer> {
-  return apiRequest('GET', `/crm/v2/tenant/${tenantSid}/customers/${customerId}`, accessToken, appKey);
+  return apiRequest(
+    'GET',
+    `/crm/v2/tenant/${tenantSid}/customers/${customerId}`,
+    accessToken,
+    appKey
+  );
 }
 
 export async function createCustomer(
@@ -251,9 +279,20 @@ export async function updateCustomer(
   appKey: string,
   tenantSid: string,
   customerId: string,
-  customer: { name?: string; email?: string; phoneNumber?: string; address?: Record<string, string> }
+  customer: {
+    name?: string;
+    email?: string;
+    phoneNumber?: string;
+    address?: Record<string, string>;
+  }
 ): Promise<ServiceTitanCustomer> {
-  return apiRequest('PATCH', `/crm/v2/tenant/${tenantSid}/customers/${customerId}`, accessToken, appKey, customer);
+  return apiRequest(
+    'PATCH',
+    `/crm/v2/tenant/${tenantSid}/customers/${customerId}`,
+    accessToken,
+    appKey,
+    customer
+  );
 }
 
 export async function listJobs(
@@ -264,7 +303,12 @@ export async function listJobs(
 ): Promise<ServiceTitanListResponse<ServiceTitanJob>> {
   const params = new URLSearchParams({ pageSize: '100' });
   if (page) params.set('page', String(page));
-  return apiRequest('GET', `/jpm/v2/tenant/${tenantSid}/jobs?${params.toString()}`, accessToken, appKey);
+  return apiRequest(
+    'GET',
+    `/jpm/v2/tenant/${tenantSid}/jobs?${params.toString()}`,
+    accessToken,
+    appKey
+  );
 }
 
 export async function createJob(
@@ -292,5 +336,7 @@ export async function cancelJob(
   tenantSid: string,
   jobId: string
 ): Promise<ServiceTitanJob> {
-  return apiRequest('PATCH', `/jpm/v2/tenant/${tenantSid}/jobs/${jobId}`, accessToken, appKey, { status: 'Canceled' });
+  return apiRequest('PATCH', `/jpm/v2/tenant/${tenantSid}/jobs/${jobId}`, accessToken, appKey, {
+    status: 'Canceled',
+  });
 }

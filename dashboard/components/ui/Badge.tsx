@@ -6,13 +6,12 @@ interface BadgeProps {
   className?: string;
 }
 
-export const Badge: React.FC<BadgeProps> = ({
-  children,
-  variant = 'primary',
-  className = '',
-}) => {
+export const Badge: React.FC<BadgeProps> = ({ children, variant = 'primary', className = '' }) => {
   const variantStyles: Record<string, React.CSSProperties> = {
-    primary: { backgroundColor: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: 'var(--accent-soft)' },
+    primary: {
+      backgroundColor: 'color-mix(in srgb, var(--accent) 20%, transparent)',
+      color: 'var(--accent-soft)',
+    },
     secondary: { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' },
     success: { backgroundColor: 'rgba(34,197,94,0.15)', color: '#4ade80' },
     danger: { backgroundColor: 'rgba(239,68,68,0.15)', color: '#f87171' },

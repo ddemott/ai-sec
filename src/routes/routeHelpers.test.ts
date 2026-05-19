@@ -18,15 +18,24 @@ import {
 
 // ── Mock Reply ──────────────────────────────────────────────────────
 
-type MockReplyBody = { success?: boolean; error?: string; details?: ZodIssue[] | unknown[] } | Record<string, unknown> | null;
+type MockReplyBody =
+  | { success?: boolean; error?: string; details?: ZodIssue[] | unknown[] }
+  | Record<string, unknown>
+  | null;
 type MockReply = FastifyReply & { _status: number; _body: MockReplyBody };
 
 function createMockReply(): MockReply {
   const reply = {
     _status: 200,
     _body: null as MockReplyBody,
-    status(code: number) { reply._status = code; return reply; },
-    send(body: unknown) { reply._body = body as MockReplyBody; return reply; },
+    status(code: number) {
+      reply._status = code;
+      return reply;
+    },
+    send(body: unknown) {
+      reply._body = body as MockReplyBody;
+      return reply;
+    },
   } as unknown as MockReply;
   return reply;
 }
@@ -42,7 +51,9 @@ describe('sendValidationError', () => {
     // WHY: before this helper, 15+ routes hand-built the same 400 envelope — one typo in any of them
     //      would cause the dashboard to misparse the error and show a generic "Something went wrong"
     const reply = createMockReply();
-    const issues = [{ code: 'invalid_type', path: ['name'], message: 'Required' }] as unknown as ZodIssue[];
+    const issues = [
+      { code: 'invalid_type', path: ['name'], message: 'Required' },
+    ] as unknown as ZodIssue[];
     sendValidationError(reply, issues);
     expect(reply._status).toBe(400);
     expect(reply._body).toEqual({ success: false, error: 'Validation failed', details: issues });
@@ -133,7 +144,10 @@ describe('sendConflict', () => {
     const reply = createMockReply();
     sendConflict(reply, 'A tenant with this name already exists');
     expect(reply._status).toBe(409);
-    expect(reply._body).toEqual({ success: false, error: 'A tenant with this name already exists' });
+    expect(reply._body).toEqual({
+      success: false,
+      error: 'A tenant with this name already exists',
+    });
   });
 });
 

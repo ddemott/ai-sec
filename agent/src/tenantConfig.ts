@@ -31,13 +31,13 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
 
 export async function fetchTenantConfig(
   client: ToolsClient,
-  tenantId: string,
+  tenantId: string
 ): Promise<TenantDisplayConfig> {
   // Backend returns { name, timezone, system_prompt } — convert snake_case
   // to the TS-idiomatic camelCase at the boundary.
   const res = await client.call<{ name: string; timezone: string; system_prompt: string | null }>(
     '/agent-tools/tenant-config',
-    { tenant_id: tenantId },
+    { tenant_id: tenantId }
   );
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {

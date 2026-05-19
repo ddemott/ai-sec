@@ -13,10 +13,10 @@
  *
  * Each test carries 5W context.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import '@testing-library/jest-dom'
-import React from 'react'
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
 
 // Mock the hook so the component tests don't need to mock five different
 // API surfaces — that's already covered in useSetupProgress.test.ts.
@@ -24,24 +24,24 @@ const { mockProgress } = vi.hoisted(() => ({
   mockProgress: {
     fn: vi.fn(),
   },
-}))
+}));
 
 vi.mock('../lib/useSetupProgress', () => ({
   useSetupProgress: (tenantId: string | null) => mockProgress.fn(tenantId),
-}))
+}));
 
 vi.mock('../lib/SessionContext', () => ({
   useActiveTenantId: () => globalTenantId,
-}))
+}));
 
-let globalTenantId: string | null = 'tenant-x'
+let globalTenantId: string | null = 'tenant-x';
 
-import { SetupProgressPill } from './SetupProgressPill'
+import { SetupProgressPill } from './SetupProgressPill';
 
 beforeEach(() => {
-  mockProgress.fn.mockReset()
-  globalTenantId = 'tenant-x'
-})
+  mockProgress.fn.mockReset();
+  globalTenantId = 'tenant-x';
+});
 
 describe('SetupProgressPill — visibility', () => {
   test('SAD: no active tenant → pill renders nothing', () => {
@@ -52,12 +52,19 @@ describe('SetupProgressPill — visibility', () => {
     //       broken ("Setup: 0 of 6" against no tenant).
     // WHY:  the OutlookLayout utility row stays clean during cross-
     //       tenant admin work; the pill is per-tenant context.
-    globalTenantId = null
-    mockProgress.fn.mockReturnValue({ done: 0, total: 6, complete: false, items: [], loading: false, refresh: vi.fn() })
+    globalTenantId = null;
+    mockProgress.fn.mockReturnValue({
+      done: 0,
+      total: 6,
+      complete: false,
+      items: [],
+      loading: false,
+      refresh: vi.fn(),
+    });
 
-    const { container } = render(<SetupProgressPill />)
-    expect(container.firstChild).toBeNull()
-  })
+    const { container } = render(<SetupProgressPill />);
+    expect(container.firstChild).toBeNull();
+  });
 
   test('SAD: hook still loading → pill renders nothing (no zero-flash)', () => {
     // WHO: owner whose dashboard just mounted; the 5 fetches are still in flight
@@ -65,11 +72,18 @@ describe('SetupProgressPill — visibility', () => {
     //       only to disappear once the data arrives.
     // WHY:  a flash of "0 of 6" on a fully-configured tenant would be
     //       jarring and would erode trust in the pill's accuracy.
-    mockProgress.fn.mockReturnValue({ done: 0, total: 6, complete: false, items: [], loading: true, refresh: vi.fn() })
+    mockProgress.fn.mockReturnValue({
+      done: 0,
+      total: 6,
+      complete: false,
+      items: [],
+      loading: true,
+      refresh: vi.fn(),
+    });
 
-    const { container } = render(<SetupProgressPill />)
-    expect(container.firstChild).toBeNull()
-  })
+    const { container } = render(<SetupProgressPill />);
+    expect(container.firstChild).toBeNull();
+  });
 
   test('SAD: progress complete → pill auto-dismisses (renders nothing)', () => {
     // WHO: owner who finished every wizard step
@@ -77,12 +91,19 @@ describe('SetupProgressPill — visibility', () => {
     // WHY:  D4's done signal is "auto-dismisses on completion." A pill
     //       that stayed at "6 of 6" would be visual clutter — exactly
     //       what a fully-configured tenant should never see.
-    mockProgress.fn.mockReturnValue({ done: 6, total: 6, complete: true, items: [], loading: false, refresh: vi.fn() })
+    mockProgress.fn.mockReturnValue({
+      done: 6,
+      total: 6,
+      complete: true,
+      items: [],
+      loading: false,
+      refresh: vi.fn(),
+    });
 
-    const { container } = render(<SetupProgressPill />)
-    expect(container.firstChild).toBeNull()
-  })
-})
+    const { container } = render(<SetupProgressPill />);
+    expect(container.firstChild).toBeNull();
+  });
+});
 
 describe('SetupProgressPill — rendering', () => {
   test('HAPPY: pill renders "Setup: 3 of 6 done" for a partially-configured tenant', () => {
@@ -102,15 +123,15 @@ describe('SetupProgressPill — rendering', () => {
       items: [],
       loading: false,
       refresh: vi.fn(),
-    })
+    });
 
-    render(<SetupProgressPill />)
+    render(<SetupProgressPill />);
 
-    const button = screen.getByRole('button', { name: /setup 3 of 6 done/i })
-    expect(button).toBeInTheDocument()
-    expect(button).toHaveTextContent(/Setup: 3 of 6 done/)
-  })
-})
+    const button = screen.getByRole('button', { name: /setup 3 of 6 done/i });
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveTextContent(/Setup: 3 of 6 done/);
+  });
+});
 
 describe('SetupProgressPill — click behavior', () => {
   test('HAPPY: click pushes ?tab=home&wizard=open and dispatches popstate', () => {
@@ -132,21 +153,21 @@ describe('SetupProgressPill — click behavior', () => {
       items: [],
       loading: false,
       refresh: vi.fn(),
-    })
+    });
 
     // Start from a known clean URL. JSDOM history is per-test.
-    window.history.replaceState({}, '', '/dashboard?tab=schedule')
+    window.history.replaceState({}, '', '/dashboard?tab=schedule');
 
-    const popstateSpy = vi.fn()
-    window.addEventListener('popstate', popstateSpy)
+    const popstateSpy = vi.fn();
+    window.addEventListener('popstate', popstateSpy);
 
-    render(<SetupProgressPill />)
-    fireEvent.click(screen.getByRole('button', { name: /setup 2 of 6 done/i }))
+    render(<SetupProgressPill />);
+    fireEvent.click(screen.getByRole('button', { name: /setup 2 of 6 done/i }));
 
-    expect(window.location.search).toContain('tab=dashboard')
-    expect(window.location.search).toContain('wizard=open')
-    expect(popstateSpy).toHaveBeenCalledTimes(1)
+    expect(window.location.search).toContain('tab=dashboard');
+    expect(window.location.search).toContain('wizard=open');
+    expect(popstateSpy).toHaveBeenCalledTimes(1);
 
-    window.removeEventListener('popstate', popstateSpy)
-  })
-})
+    window.removeEventListener('popstate', popstateSpy);
+  });
+});

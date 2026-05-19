@@ -183,12 +183,21 @@ describe('ConsentService', () => {
       ]);
 
       const service = new ConsentService(mockDb as unknown as DatabaseService);
-      const result = await service.revokeConsent(1, 'test@example.com', undefined, 'email', 'User requested');
+      const result = await service.revokeConsent(
+        1,
+        'test@example.com',
+        undefined,
+        'email',
+        'User requested'
+      );
 
       expect(result).toBe(true);
-      expect(mockDb.updateConsentRecord).toHaveBeenCalledWith(1, expect.objectContaining({
-        revoke_reason: 'User requested',
-      }));
+      expect(mockDb.updateConsentRecord).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          revoke_reason: 'User requested',
+        })
+      );
     });
 
     it('should return false when no consent exists to revoke', async () => {
@@ -285,7 +294,12 @@ describe('ConsentService', () => {
 
       const service = new ConsentService(mockDb as unknown as DatabaseService);
 
-      const result = await service.processOptOutCommand(1, 'UNSUBSCRIBE', undefined, 'test@example.com');
+      const result = await service.processOptOutCommand(
+        1,
+        'UNSUBSCRIBE',
+        undefined,
+        'test@example.com'
+      );
 
       expect(result).toBeDefined();
       const call = mockDb.createOptOutRecord.mock.calls[0][0];

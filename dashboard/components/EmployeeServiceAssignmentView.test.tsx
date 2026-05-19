@@ -13,7 +13,7 @@ describe('EmployeeManagementView', () => {
     localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => []
+      json: async () => [],
     });
   });
 
@@ -32,7 +32,9 @@ describe('EmployeeManagementView - Sad Paths', () => {
   });
 
   test('renders without crashing when API fetch fails', async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Network error')
+    );
     render(<EmployeeManagementView />);
     // Component should still render its heading even if the data fetch fails
     expect(await screen.findByRole('heading', { name: /Employees/i })).toBeInTheDocument();
@@ -42,7 +44,7 @@ describe('EmployeeManagementView - Sad Paths', () => {
   test('shows empty state when employee list is empty', async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => []
+      json: async () => [],
     });
     render(<EmployeeManagementView />);
     expect(await screen.findByRole('heading', { name: /Employees/i })).toBeInTheDocument();
@@ -71,8 +73,7 @@ vi.mock('@/lib/SessionContext', () => ({
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
   SessionProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
-
+}));
 
 describe('ServiceAssignmentView', () => {
   beforeEach(() => {
@@ -80,7 +81,7 @@ describe('ServiceAssignmentView', () => {
     localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => []
+      json: async () => [],
     });
   });
 
@@ -98,7 +99,9 @@ describe('ServiceAssignmentView - Sad Paths', () => {
   });
 
   test('renders without crashing when API fetch fails', async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Network error')
+    );
     render(<ServiceAssignmentView />);
     // Component should still render its heading even if the data fetch fails
     expect(await screen.findByText(/Service Catalog/i)).toBeInTheDocument();
@@ -108,7 +111,7 @@ describe('ServiceAssignmentView - Sad Paths', () => {
   test('shows empty state when service list is empty', async () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => []
+      json: async () => [],
     });
     render(<ServiceAssignmentView />);
     expect(await screen.findByText(/Service Catalog/i)).toBeInTheDocument();

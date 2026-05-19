@@ -1,11 +1,11 @@
-import React from 'react'
-import { Step1Services } from './StepServices'
-import { Step2Resources } from './StepResources'
-import { Step3Employees } from './StepEmployees'
-import { Step4Shifts } from './StepShifts'
-import { Step5Assignments } from './StepAssignments'
-import { Step6Review } from './StepReview'
-import { Step7GoLive } from './Step7GoLive'
+import React from 'react';
+import { Step1Services } from './StepServices';
+import { Step2Resources } from './StepResources';
+import { Step3Employees } from './StepEmployees';
+import { Step4Shifts } from './StepShifts';
+import { Step5Assignments } from './StepAssignments';
+import { Step6Review } from './StepReview';
+import { Step7GoLive } from './Step7GoLive';
 import type {
   WizardStep,
   ServiceForm,
@@ -17,71 +17,76 @@ import type {
   WizardService,
   WizardResource,
   WizardEmployee,
-} from './types'
+} from './types';
 
 interface WizardStepContentProps {
-  step: WizardStep
+  step: WizardStep;
 
   // Step 1 — Services
-  services: WizardService[]
-  editingService: ServiceForm | null
-  editingServiceId: string | null
-  onAddService: () => void
-  onEditService: (svc: WizardService) => void
-  onDeleteService: (id: string) => void
-  onSaveService: () => void
-  onCancelEditService: () => void
-  onChangeService: (form: ServiceForm | null) => void
+  services: WizardService[];
+  editingService: ServiceForm | null;
+  editingServiceId: string | null;
+  onAddService: () => void;
+  onEditService: (svc: WizardService) => void;
+  onDeleteService: (id: string) => void;
+  onSaveService: () => void;
+  onCancelEditService: () => void;
+  onChangeService: (form: ServiceForm | null) => void;
 
   // Step 2 — Resources
-  resources: WizardResource[]
-  editingResource: ResourceForm | null
-  editingResourceId: string | null
-  onAddResource: () => void
-  onEditResource: (res: WizardResource) => void
-  onDeleteResource: (id: string) => void
-  onSaveResource: () => void
-  onCancelEditResource: () => void
-  onChangeResource: (form: ResourceForm | null) => void
+  resources: WizardResource[];
+  editingResource: ResourceForm | null;
+  editingResourceId: string | null;
+  onAddResource: () => void;
+  onEditResource: (res: WizardResource) => void;
+  onDeleteResource: (id: string) => void;
+  onSaveResource: () => void;
+  onCancelEditResource: () => void;
+  onChangeResource: (form: ResourceForm | null) => void;
 
   // Step 3 — Employees
-  employees: WizardEmployee[]
-  editingEmployee: EmployeeForm | null
-  editingEmployeeId: string | null
-  onAddEmployee: () => void
-  onEditEmployee: (emp: WizardEmployee) => void
-  onDeleteEmployee: (id: string) => void
-  onSaveEmployee: () => void
-  onCancelEditEmployee: () => void
-  onChangeEmployee: (form: EmployeeForm | null) => void
+  employees: WizardEmployee[];
+  editingEmployee: EmployeeForm | null;
+  editingEmployeeId: string | null;
+  onAddEmployee: () => void;
+  onEditEmployee: (emp: WizardEmployee) => void;
+  onDeleteEmployee: (id: string) => void;
+  onSaveEmployee: () => void;
+  onCancelEditEmployee: () => void;
+  onChangeEmployee: (form: EmployeeForm | null) => void;
 
   // Step 4 — Shifts
-  shifts: WizardShift[]
-  shiftsLoading: boolean
-  selectedShiftEmployee: string | null
-  onSelectShiftEmployee: (id: string | null) => void
-  onToggleShift: (employeeId: string, dayOfWeek: number, startTime: string, endTime: string) => void
-  onUpdateShiftTime: (shiftId: string, startTime: string, endTime: string) => void
+  shifts: WizardShift[];
+  shiftsLoading: boolean;
+  selectedShiftEmployee: string | null;
+  onSelectShiftEmployee: (id: string | null) => void;
+  onToggleShift: (
+    employeeId: string,
+    dayOfWeek: number,
+    startTime: string,
+    endTime: string
+  ) => void;
+  onUpdateShiftTime: (shiftId: string, startTime: string, endTime: string) => void;
 
   // Step 5 — Assignments
-  serviceEmployeeMappings: WizardMapping[]
-  serviceResourceMappings: WizardMapping[]
-  mappingsLoading: boolean
-  onToggleEmployeeAssignment: (serviceId: string, employeeId: string) => void
-  onToggleResourceAssignment: (serviceId: string, resourceId: string) => void
+  serviceEmployeeMappings: WizardMapping[];
+  serviceResourceMappings: WizardMapping[];
+  mappingsLoading: boolean;
+  onToggleEmployeeAssignment: (serviceId: string, employeeId: string) => void;
+  onToggleResourceAssignment: (serviceId: string, resourceId: string) => void;
 
   // Step 6 — Coverage
-  coverageData: CoverageItem[]
-  coverageLoading: boolean
+  coverageData: CoverageItem[];
+  coverageLoading: boolean;
 
   // Step 7 — Go Live
-  phoneStatus: string | null
-  inboundPhone: string | null
+  phoneStatus: string | null;
+  inboundPhone: string | null;
 
   // Shared
-  loading: boolean
-  saving: boolean
-  error: string | null
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
 }
 
 export function WizardStepContent({
@@ -149,7 +154,7 @@ export function WizardStepContent({
           onCancel={onCancelEditService}
           onChange={onChangeService}
         />
-      )
+      );
     case 2:
       return (
         <Step2Resources
@@ -166,7 +171,7 @@ export function WizardStepContent({
           onCancel={onCancelEditResource}
           onChange={onChangeResource}
         />
-      )
+      );
     case 3:
       return (
         <Step3Employees
@@ -183,7 +188,7 @@ export function WizardStepContent({
           onCancel={onCancelEditEmployee}
           onChange={onChangeEmployee}
         />
-      )
+      );
     case 4:
       return (
         <Step4Shifts
@@ -197,7 +202,7 @@ export function WizardStepContent({
           onToggleShift={onToggleShift}
           onUpdateTime={onUpdateShiftTime}
         />
-      )
+      );
     case 5:
       return (
         <Step5Assignments
@@ -212,7 +217,7 @@ export function WizardStepContent({
           onToggleEmployee={onToggleEmployeeAssignment}
           onToggleResource={onToggleResourceAssignment}
         />
-      )
+      );
     case 6:
       return (
         <Step6Review
@@ -222,15 +227,10 @@ export function WizardStepContent({
           coverageData={coverageData}
           loading={coverageLoading}
         />
-      )
+      );
     case 7:
-      return (
-        <Step7GoLive
-          phoneStatus={phoneStatus}
-          inboundPhone={inboundPhone}
-        />
-      )
+      return <Step7GoLive phoneStatus={phoneStatus} inboundPhone={inboundPhone} />;
     default:
-      return null
+      return null;
   }
 }

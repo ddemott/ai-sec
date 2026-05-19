@@ -77,7 +77,10 @@ function buildApp() {
   registerHubSpotRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+    mockWithTenantClient as unknown as <T>(
+      tenantId: string,
+      fn: (client: PoolClient) => Promise<T>
+    ) => Promise<T>
   );
 
   return fastify;
@@ -114,7 +117,9 @@ describe('HubSpot Routes — Happy Paths', () => {
     // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth handler
     // WHY: Without this, clicking "Connect HubSpot" would fail silently — user cannot link their HubSpot account for contact/meeting sync
     vi.mocked(hubspotClient.isHubSpotEnabled).mockReturnValue(true);
-    vi.mocked(hubspotClient.getAuthUrl).mockReturnValue('https://app.hubspot.com/oauth/authorize?client_id=test');
+    vi.mocked(hubspotClient.getAuthUrl).mockReturnValue(
+      'https://app.hubspot.com/oauth/authorize?client_id=test'
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -381,7 +386,9 @@ describe('HubSpot Routes — Sad Paths', () => {
     // WHERE: src/routes/hubspot.ts registerHubSpotRoutes — GET /hubspot/auth/callback token exchange try/catch
     // WHY: Without catching this, a HubSpot outage during OAuth would show a raw 500 error — user sees broken page instead of "connection failed, try again"
     vi.mocked(hubspotClient.verifyState).mockReturnValue(TENANT_ID);
-    vi.mocked(hubspotClient.exchangeCodeForTokens).mockRejectedValue(new Error('OAuth exchange failed'));
+    vi.mocked(hubspotClient.exchangeCodeForTokens).mockRejectedValue(
+      new Error('OAuth exchange failed')
+    );
 
     const res = await app.inject({
       method: 'GET',
@@ -389,7 +396,9 @@ describe('HubSpot Routes — Sad Paths', () => {
     });
 
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(`${DASHBOARD_URL}/dashboard?hubspotError=token_exchange_failed`);
+    expect(res.headers.location).toBe(
+      `${DASHBOARD_URL}/dashboard?hubspotError=token_exchange_failed`
+    );
   });
 
   it('12. POST /hubspot/webhook 400 on missing signature', async () => {

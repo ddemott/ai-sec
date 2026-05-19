@@ -48,7 +48,7 @@ export class TwilioAdapter implements TelephonyProvider {
 
   createInstruction(
     action: 'say' | 'gather' | 'record' | 'hangup' | 'dial' | 'redirect',
-    options: Record<string, unknown>,
+    options: Record<string, unknown>
   ): string {
     const response = new twilio.twiml.VoiceResponse();
 
@@ -63,7 +63,7 @@ export class TwilioAdapter implements TelephonyProvider {
       case 'say':
         response.say(
           { voice: 'Polly.Joanna', language: 'en-US', ...options } as SayAttrs,
-          options.text as string,
+          options.text as string
         );
         break;
       case 'gather': {
@@ -71,7 +71,7 @@ export class TwilioAdapter implements TelephonyProvider {
         if (options.say) {
           gather.say(
             { voice: 'Polly.Joanna', language: 'en-US', ...options } as SayAttrs,
-            options.say as string,
+            options.say as string
           );
         }
         break;
@@ -101,7 +101,10 @@ export class TwilioAdapter implements TelephonyProvider {
     return `<?xml version="1.0" encoding="UTF-8"?><Response>${instructions}</Response>`;
   }
 
-  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: Record<string, unknown>): string {
+  generateInstruction(
+    action: 'say' | 'gather' | 'record' | 'hangup',
+    options: Record<string, unknown>
+  ): string {
     const instruction = this.createInstruction(action, options);
     return this.wrapResponse(instruction);
   }

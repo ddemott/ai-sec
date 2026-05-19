@@ -245,7 +245,10 @@ describe('send_verification_code + verify_phone_code', () => {
     // WHY: The whole point of this tool is to verify a phone the LLM
     //        just collected. Using context.callerPhone would defeat it.
     const { client, calls } = makeClient([
-      { ok: true, result: { sent: true, phone: '+15551234567', message: 'I just sent you a text...' } },
+      {
+        ok: true,
+        result: { sent: true, phone: '+15551234567', message: 'I just sent you a text...' },
+      },
     ]);
     const tools = buildTools(makeCtx({ callerPhone: null }), client);
 

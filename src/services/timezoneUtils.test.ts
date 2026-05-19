@@ -52,18 +52,14 @@ describe('timezoneUtils', () => {
     it('HAPPY: UTC zone gets +00:00', () => {
       // WHO: Tenant configured with UTC timezone
       // WHAT: Offset is +00:00 year-round
-      expect(applyTimezone('2026-05-01T14:00:00', 'UTC')).toBe(
-        '2026-05-01T14:00:00+00:00'
-      );
+      expect(applyTimezone('2026-05-01T14:00:00', 'UTC')).toBe('2026-05-01T14:00:00+00:00');
     });
 
     it('HAPPY: datetime with existing Z passes through unchanged', () => {
       // WHO: Caller already gave a zone-aware string
       // WHAT: Must not double-apply an offset
       // WHY: Applying an offset to "14:00:00Z-05:00" would be malformed
-      expect(applyTimezone('2026-05-01T14:00:00Z', 'America/Chicago')).toBe(
-        '2026-05-01T14:00:00Z'
-      );
+      expect(applyTimezone('2026-05-01T14:00:00Z', 'America/Chicago')).toBe('2026-05-01T14:00:00Z');
     });
 
     it('HAPPY: datetime with existing -05:00 passes through unchanged', () => {

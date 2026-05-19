@@ -45,7 +45,12 @@ export interface TokenResult {
  * Builds a standard sync log prefix: [provider-sync] tenant=UUID
  * Replaces the 5 identical ctx() functions across sync services.
  */
-export function syncCtx(provider: string, tenantId: string, entityType?: string, action?: string): string {
+export function syncCtx(
+  provider: string,
+  tenantId: string,
+  entityType?: string,
+  action?: string
+): string {
   let prefix = `[${provider}-sync] tenant=${tenantId}`;
   if (entityType) prefix += ` entity=${entityType}`;
   if (action) prefix += ` action=${action}`;
@@ -72,8 +77,12 @@ export async function getIntegrationTokens(
   refreshFn: RefreshFn,
   bufferMs: number = TOKEN_BUFFER_MS.STANDARD,
   logger?: SyncLogger,
-  extraColumns?: string,
-): Promise<{ accessToken: string; refreshToken: string; settings: Record<string, unknown> | null } | null> {
+  extraColumns?: string
+): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  settings: Record<string, unknown> | null;
+} | null> {
   const log = logger || defaultSyncLogger;
   const prefix = syncCtx(provider, tenantId);
   const client = await pool.connect();
@@ -113,7 +122,12 @@ export async function getIntegrationTokens(
         await client.query(
           `UPDATE tenant_integration_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
            WHERE tenant_id = $3 AND provider = $4`,
-          [refreshed.access_token, new Date(refreshed.expiry_date).toISOString(), tenantId, provider]
+          [
+            refreshed.access_token,
+            new Date(refreshed.expiry_date).toISOString(),
+            tenantId,
+            provider,
+          ]
         );
         log.info(`${prefix} — token refreshed`);
       } catch (err) {
@@ -123,7 +137,9 @@ export async function getIntegrationTokens(
            WHERE tenant_id = $1 AND provider = $2`,
           [tenantId, provider]
         );
-        log.error(`${prefix} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${provider} OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${String(err)})`);
+        log.error(
+          `${prefix} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${provider} OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${String(err)})`
+        );
         return null;
       }
     }
@@ -195,9 +211,9 @@ export async function setSyncContext(
  * Clears the sync context session variables.
  * Should be called when done with sync operations (before releasing connection).
  */
-export async function clearSyncContext(
-  client: { query: (sql: string) => Promise<unknown> }
-): Promise<void> {
+export async function clearSyncContext(client: {
+  query: (sql: string) => Promise<unknown>;
+}): Promise<void> {
   await client.query(`RESET app.change_source`);
   await client.query(`RESET app.changed_by`);
 }
@@ -257,7 +273,7 @@ export async function getCalendarTokens(
   pool: Pool,
   tenantId: string,
   refreshMap: CalendarRefreshMap,
-  logger?: SyncLogger,
+  logger?: SyncLogger
 ): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -314,7 +330,9 @@ export async function getCalendarTokens(
           `UPDATE tenant_calendar_settings SET is_active = false, updated_at = NOW() WHERE tenant_id = $1`,
           [tenantId]
         );
-        log.error(`${prefix} — ${providerName} token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked | HOW: is_active set to false | ERROR: ${String(err)})`);
+        log.error(
+          `${prefix} — ${providerName} token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked | HOW: is_active set to false | ERROR: ${String(err)})`
+        );
         return null;
       }
     }

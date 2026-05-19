@@ -1,9 +1,9 @@
-import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
-import "https://deno.land/std@0.224.0/dotenv/load.ts";
+import { Client } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+import 'https://deno.land/std@0.224.0/dotenv/load.ts';
 
 /**
  * SecretaryHQ: Knowledge Ingestion CLI
- * 
+ *
  * Usage:
  * export OPENAI_API_KEY=your_key
  * export DATABASE_URL=your_db_url
@@ -14,30 +14,30 @@ const tenantId = Deno.args[0];
 const filePath = Deno.args[1];
 
 if (!tenantId || !filePath) {
-  console.error("Usage: deno run ... scripts/ingest-knowledge.ts <tenant_id> <file_path>");
+  console.error('Usage: deno run ... scripts/ingest-knowledge.ts <tenant_id> <file_path>');
   Deno.exit(1);
 }
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const DATABASE_URL = Deno.env.get("DATABASE_URL");
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+const DATABASE_URL = Deno.env.get('DATABASE_URL');
 
 if (!OPENAI_API_KEY) {
-  console.error("Error: OPENAI_API_KEY environment variable is not set.");
+  console.error('Error: OPENAI_API_KEY environment variable is not set.');
   Deno.exit(1);
 }
 
 const client = new Client(DATABASE_URL);
 
 async function getEmbedding(text: string): Promise<number[]> {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      input: text.replace(/\n/g, " "),
-      model: "text-embedding-3-small",
+      input: text.replace(/\n/g, ' '),
+      model: 'text-embedding-3-small',
     }),
   });
 
@@ -55,7 +55,7 @@ async function getEmbedding(text: string): Promise<number[]> {
  * Splits on paragraph boundaries but merges small chunks and adds overlap.
  */
 function chunkDocument(content: string, maxChunkSize = 1500, overlapSize = 200): string[] {
-  const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+  const paragraphs = content.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
   const chunks: string[] = [];
   let current = '';
 
@@ -108,10 +108,10 @@ async function main() {
     const existingCount = parseInt(String(existing.rows[0]?.[0] || '0'));
     if (existingCount > 0) {
       console.log(`Found ${existingCount} existing chunks for source "${source}" — replacing...`);
-      await client.queryArray(
-        `DELETE FROM tenant_docs WHERE tenant_id = $1 AND source = $2`,
-        [tenantId, source]
-      );
+      await client.queryArray(`DELETE FROM tenant_docs WHERE tenant_id = $1 AND source = $2`, [
+        tenantId,
+        source,
+      ]);
     }
 
     for (let i = 0; i < chunks.length; i++) {
@@ -127,14 +127,13 @@ async function main() {
         [tenantId, chunk, source, JSON.stringify(embedding)]
       );
 
-      console.log("Success!");
+      console.log('Success!');
     }
 
     console.log(`\n--- Ingestion Complete ---`);
     console.log(`Successfully ingested ${chunks.length} chunks for tenant ${tenantId}.`);
-
   } catch (err) {
-    console.error("\nIngestion Failed:", err.message);
+    console.error('\nIngestion Failed:', err.message);
   } finally {
     await client.end();
   }

@@ -88,7 +88,7 @@ export class ReminderScheduler {
   async rescheduleAppointmentReminders(
     appointmentId: string,
     tenantId: string,
-    newDateTime: string,
+    newDateTime: string
   ): Promise<void> {
     await this.repository.rescheduleAppointmentReminders(appointmentId, tenantId, newDateTime);
     // Cancel existing and schedule new ones

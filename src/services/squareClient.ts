@@ -96,7 +96,10 @@ export function verifyState(state: string): string | null {
 /** Exchange authorization code for tokens */
 export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
   const config = getConfig();
-  if (!config) throw new Error('Square not configured — missing env vars (check SQUARE_CLIENT_ID, SQUARE_CLIENT_SECRET, SQUARE_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'Square not configured — missing env vars (check SQUARE_CLIENT_ID, SQUARE_CLIENT_SECRET, SQUARE_CALLBACK_URL)'
+    );
 
   const body = {
     client_id: config.clientId,
@@ -116,17 +119,23 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
     });
   } catch (networkErr: unknown) {
     const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-    throw new Error(`Square OAuth code exchange failed: network error reaching Square token endpoint — ${msg}`);
+    throw new Error(
+      `Square OAuth code exchange failed: network error reaching Square token endpoint — ${msg}`
+    );
   }
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`Square OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`);
+    throw new Error(
+      `Square OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token || !data.refresh_token) {
-    throw new Error('Square OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).');
+    throw new Error(
+      'Square OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).'
+    );
   }
 
   // Square returns expires_at as ISO string
@@ -142,9 +151,14 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
 }
 
 /** Refresh an expired access token */
-export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date: number }> {
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; expiry_date: number }> {
   const config = getConfig();
-  if (!config) throw new Error('Square not configured — missing env vars (check SQUARE_CLIENT_ID, SQUARE_CLIENT_SECRET, SQUARE_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'Square not configured — missing env vars (check SQUARE_CLIENT_ID, SQUARE_CLIENT_SECRET, SQUARE_CALLBACK_URL)'
+    );
 
   const body = {
     client_id: config.clientId,
@@ -168,12 +182,16 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`Square token refresh failed (${res.status}): ${errorBody}. The user should reconnect Square from the dashboard.`);
+    throw new Error(
+      `Square token refresh failed (${res.status}): ${errorBody}. The user should reconnect Square from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token) {
-    throw new Error('Square token refresh returned no access_token. The user should reconnect Square from the dashboard.');
+    throw new Error(
+      'Square token refresh returned no access_token. The user should reconnect Square from the dashboard.'
+    );
   }
 
   const expiryDate = data.expires_at
@@ -246,19 +264,30 @@ export function verifyWebhookSignature(
 // Convenience methods for customers and bookings
 // -----------------------------------------------------------------------
 
-export async function listCustomers(accessToken: string, cursor?: string): Promise<SquareListResponse<SquareCustomer>> {
+export async function listCustomers(
+  accessToken: string,
+  cursor?: string
+): Promise<SquareListResponse<SquareCustomer>> {
   const params = new URLSearchParams({ limit: '100' });
   if (cursor) params.set('cursor', cursor);
   return apiRequest('GET', `/customers?${params.toString()}`, accessToken);
 }
 
-export async function getCustomer(accessToken: string, customerId: string): Promise<{ customer: SquareCustomer }> {
+export async function getCustomer(
+  accessToken: string,
+  customerId: string
+): Promise<{ customer: SquareCustomer }> {
   return apiRequest('GET', `/customers/${customerId}`, accessToken);
 }
 
 export async function createCustomer(
   accessToken: string,
-  customer: { given_name?: string; family_name?: string; email_address?: string; phone_number?: string }
+  customer: {
+    given_name?: string;
+    family_name?: string;
+    email_address?: string;
+    phone_number?: string;
+  }
 ): Promise<{ customer: SquareCustomer }> {
   return apiRequest('POST', '/customers', accessToken, customer);
 }
@@ -266,12 +295,20 @@ export async function createCustomer(
 export async function updateCustomer(
   accessToken: string,
   customerId: string,
-  customer: { given_name?: string; family_name?: string; email_address?: string; phone_number?: string }
+  customer: {
+    given_name?: string;
+    family_name?: string;
+    email_address?: string;
+    phone_number?: string;
+  }
 ): Promise<{ customer: SquareCustomer }> {
   return apiRequest('PUT', `/customers/${customerId}`, accessToken, customer);
 }
 
-export async function listBookings(accessToken: string, cursor?: string): Promise<SquareListResponse<SquareBooking>> {
+export async function listBookings(
+  accessToken: string,
+  cursor?: string
+): Promise<SquareListResponse<SquareBooking>> {
   const params = new URLSearchParams({ limit: '100' });
   if (cursor) params.set('cursor', cursor);
   return apiRequest('GET', `/bookings?${params.toString()}`, accessToken);
@@ -279,7 +316,16 @@ export async function listBookings(accessToken: string, cursor?: string): Promis
 
 export async function createBooking(
   accessToken: string,
-  booking: { start_at: string; customer_id?: string; location_id?: string; appointment_segments?: Array<{ service_variation_id?: string; team_member_id?: string; duration_minutes?: number }> }
+  booking: {
+    start_at: string;
+    customer_id?: string;
+    location_id?: string;
+    appointment_segments?: Array<{
+      service_variation_id?: string;
+      team_member_id?: string;
+      duration_minutes?: number;
+    }>;
+  }
 ): Promise<{ booking: SquareBooking }> {
   return apiRequest('POST', '/bookings', accessToken, { booking });
 }
@@ -287,7 +333,16 @@ export async function createBooking(
 export async function updateBooking(
   accessToken: string,
   bookingId: string,
-  booking: { start_at?: string; customer_id?: string; location_id?: string; appointment_segments?: Array<{ service_variation_id?: string; team_member_id?: string; duration_minutes?: number }> }
+  booking: {
+    start_at?: string;
+    customer_id?: string;
+    location_id?: string;
+    appointment_segments?: Array<{
+      service_variation_id?: string;
+      team_member_id?: string;
+      duration_minutes?: number;
+    }>;
+  }
 ): Promise<{ booking: SquareBooking }> {
   return apiRequest('PUT', `/bookings/${bookingId}`, accessToken, { booking });
 }

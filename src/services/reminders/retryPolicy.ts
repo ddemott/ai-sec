@@ -100,7 +100,7 @@ export type RetryDecision =
 export function decideRetry(
   error: unknown,
   currentRetryCount: number,
-  now: Date = new Date(),
+  now: Date = new Date()
 ): RetryDecision {
   if (!isRetryable(error)) {
     return { action: 'fail', reason: 'non_retryable' };

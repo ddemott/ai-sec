@@ -166,7 +166,9 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
         if (testTenantId) {
           await client.query('DELETE FROM tenants WHERE tenant_id = $1', [testTenantId]);
         }
-      } catch { /* cleanup */ }
+      } catch {
+        /* cleanup */
+      }
       await client.end();
     }
   });
@@ -185,8 +187,14 @@ describe('Scheduling Timezone Bug — Integration (BUG-059)', () => {
         ARRAY['tire_rotation']::TEXT[], ARRAY[]::TEXT[],
         NULL::UUID, NULL::TEXT, NULL::TEXT, 60
       )`,
-      [testTenantId, '+13125559999', 'Test Customer', 'Test 9 PM booking',
-       '2026-04-03T21:00:00-05:00', '2026-04-03T22:00:00-05:00']
+      [
+        testTenantId,
+        '+13125559999',
+        'Test Customer',
+        'Test 9 PM booking',
+        '2026-04-03T21:00:00-05:00',
+        '2026-04-03T22:00:00-05:00',
+      ]
     );
 
     expect(result.rows[0].success).toBe(false);

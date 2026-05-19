@@ -5,17 +5,20 @@
  * and the service layer's human-readable output formatting.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from 'vitest';
 
 // We can't import Deno modules directly, so we test the logic patterns
 // by replicating the interval math helpers and testing them.
 
 // ── Interval math helpers (replicated from service.ts for testing) ───
 
-interface Interval { start: number; end: number }
+interface Interval {
+  start: number;
+  end: number;
+}
 
 function timeToMinutes(t: string): number {
-  const parts = t.split(":");
+  const parts = t.split(':');
   return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
 }
 
@@ -27,9 +30,9 @@ function _dateTimeToMinutes(dt: string): number {
 function minutesToTime(m: number): string {
   const h = Math.floor(m / 60);
   const min = m % 60;
-  const period = h >= 12 ? "PM" : "AM";
+  const period = h >= 12 ? 'PM' : 'AM';
   const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return min === 0 ? `${hour12} ${period}` : `${hour12}:${String(min).padStart(2, "0")} ${period}`;
+  return min === 0 ? `${hour12} ${period}` : `${hour12}:${String(min).padStart(2, '0')} ${period}`;
 }
 
 function mergeIntervals(intervals: Interval[]): Interval[] {
@@ -48,7 +51,7 @@ function mergeIntervals(intervals: Interval[]): Interval[] {
 }
 
 function subtractIntervals(coverage: Interval[], booked: Interval[]): Interval[] {
-  let open = [...coverage.map(c => ({ ...c }))];
+  let open = [...coverage.map((c) => ({ ...c }))];
   for (const b of booked) {
     const next: Interval[] = [];
     for (const o of open) {
@@ -68,38 +71,38 @@ function subtractIntervals(coverage: Interval[], booked: Interval[]): Interval[]
 // TIME CONVERSION — HAPPY PATHS
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("timeToMinutes", () => {
-  it("converts 08:00 to 480", () => expect(timeToMinutes("08:00")).toBe(480));
-  it("converts 13:30 to 810", () => expect(timeToMinutes("13:30")).toBe(810));
-  it("converts 18:00 to 1080", () => expect(timeToMinutes("18:00")).toBe(1080));
-  it("converts 00:00 to 0", () => expect(timeToMinutes("00:00")).toBe(0));
-  it("handles HH:MM:SS format", () => expect(timeToMinutes("08:00:00")).toBe(480));
+describe('timeToMinutes', () => {
+  it('converts 08:00 to 480', () => expect(timeToMinutes('08:00')).toBe(480));
+  it('converts 13:30 to 810', () => expect(timeToMinutes('13:30')).toBe(810));
+  it('converts 18:00 to 1080', () => expect(timeToMinutes('18:00')).toBe(1080));
+  it('converts 00:00 to 0', () => expect(timeToMinutes('00:00')).toBe(0));
+  it('handles HH:MM:SS format', () => expect(timeToMinutes('08:00:00')).toBe(480));
 });
 
-describe("minutesToTime", () => {
-  it("formats 480 as 8 AM", () => expect(minutesToTime(480)).toBe("8 AM"));
-  it("formats 810 as 1:30 PM", () => expect(minutesToTime(810)).toBe("1:30 PM"));
-  it("formats 1080 as 6 PM", () => expect(minutesToTime(1080)).toBe("6 PM"));
-  it("formats 720 as 12 PM (noon)", () => expect(minutesToTime(720)).toBe("12 PM"));
-  it("formats 0 as 12 AM (midnight)", () => expect(minutesToTime(0)).toBe("12 AM"));
-  it("formats 615 as 10:15 AM", () => expect(minutesToTime(615)).toBe("10:15 AM"));
+describe('minutesToTime', () => {
+  it('formats 480 as 8 AM', () => expect(minutesToTime(480)).toBe('8 AM'));
+  it('formats 810 as 1:30 PM', () => expect(minutesToTime(810)).toBe('1:30 PM'));
+  it('formats 1080 as 6 PM', () => expect(minutesToTime(1080)).toBe('6 PM'));
+  it('formats 720 as 12 PM (noon)', () => expect(minutesToTime(720)).toBe('12 PM'));
+  it('formats 0 as 12 AM (midnight)', () => expect(minutesToTime(0)).toBe('12 AM'));
+  it('formats 615 as 10:15 AM', () => expect(minutesToTime(615)).toBe('10:15 AM'));
 });
 
 // ═══════════════════════════════════════════════════════════════════════
 // INTERVAL MERGING — HAPPY + SAD PATHS
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("mergeIntervals", () => {
-  it("happy: merges overlapping shifts into one coverage block", () => {
+describe('mergeIntervals', () => {
+  it('happy: merges overlapping shifts into one coverage block', () => {
     // Employee A: 8-14, Employee B: 10-18 → merged: 8-18
     const result = mergeIntervals([
-      { start: 480, end: 840 },  // 8 AM - 2 PM
+      { start: 480, end: 840 }, // 8 AM - 2 PM
       { start: 600, end: 1080 }, // 10 AM - 6 PM
     ]);
     expect(result).toEqual([{ start: 480, end: 1080 }]); // 8 AM - 6 PM
   });
 
-  it("happy: keeps non-overlapping shifts as separate blocks", () => {
+  it('happy: keeps non-overlapping shifts as separate blocks', () => {
     // Morning: 8-12, Afternoon: 14-18 (2h lunch gap)
     const result = mergeIntervals([
       { start: 480, end: 720 },
@@ -111,19 +114,19 @@ describe("mergeIntervals", () => {
     ]);
   });
 
-  it("happy: merges adjacent (touching) intervals", () => {
+  it('happy: merges adjacent (touching) intervals', () => {
     const result = mergeIntervals([
-      { start: 480, end: 720 },  // 8-12
+      { start: 480, end: 720 }, // 8-12
       { start: 720, end: 1080 }, // 12-18
     ]);
     expect(result).toEqual([{ start: 480, end: 1080 }]); // 8-18
   });
 
-  it("sad: empty input returns empty array", () => {
+  it('sad: empty input returns empty array', () => {
     expect(mergeIntervals([])).toEqual([]);
   });
 
-  it("happy: single interval returns as-is", () => {
+  it('happy: single interval returns as-is', () => {
     const result = mergeIntervals([{ start: 480, end: 1080 }]);
     expect(result).toEqual([{ start: 480, end: 1080 }]);
   });
@@ -133,78 +136,72 @@ describe("mergeIntervals", () => {
 // INTERVAL SUBTRACTION — HAPPY + SAD PATHS
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("subtractIntervals", () => {
-  it("happy: subtracts one appointment from middle of coverage", () => {
+describe('subtractIntervals', () => {
+  it('happy: subtracts one appointment from middle of coverage', () => {
     // Coverage: 8-18, Appointment: 10-11
     // Result: 8-10, 11-18
-    const result = subtractIntervals(
-      [{ start: 480, end: 1080 }],
-      [{ start: 600, end: 660 }]
-    );
+    const result = subtractIntervals([{ start: 480, end: 1080 }], [{ start: 600, end: 660 }]);
     expect(result).toEqual([
       { start: 480, end: 600 },
       { start: 660, end: 1080 },
     ]);
   });
 
-  it("happy: subtracts multiple appointments", () => {
+  it('happy: subtracts multiple appointments', () => {
     // Coverage: 8-18, Appointments: 9-10, 14-15
     const result = subtractIntervals(
       [{ start: 480, end: 1080 }],
       [
-        { start: 540, end: 600 },  // 9-10
-        { start: 840, end: 900 },  // 14-15
+        { start: 540, end: 600 }, // 9-10
+        { start: 840, end: 900 }, // 14-15
       ]
     );
     expect(result).toEqual([
-      { start: 480, end: 540 },   // 8-9
-      { start: 600, end: 840 },   // 10-14
-      { start: 900, end: 1080 },  // 15-18
+      { start: 480, end: 540 }, // 8-9
+      { start: 600, end: 840 }, // 10-14
+      { start: 900, end: 1080 }, // 15-18
     ]);
   });
 
-  it("happy: appointment at start of coverage", () => {
+  it('happy: appointment at start of coverage', () => {
     const result = subtractIntervals(
       [{ start: 480, end: 1080 }],
-      [{ start: 480, end: 540 }]  // 8-9
+      [{ start: 480, end: 540 }] // 8-9
     );
     expect(result).toEqual([{ start: 540, end: 1080 }]); // 9-18
   });
 
-  it("happy: appointment at end of coverage", () => {
+  it('happy: appointment at end of coverage', () => {
     const result = subtractIntervals(
       [{ start: 480, end: 1080 }],
-      [{ start: 1020, end: 1080 }]  // 17-18
+      [{ start: 1020, end: 1080 }] // 17-18
     );
     expect(result).toEqual([{ start: 480, end: 1020 }]); // 8-17
   });
 
-  it("sad: fully booked (appointment covers entire coverage)", () => {
-    const result = subtractIntervals(
-      [{ start: 480, end: 1080 }],
-      [{ start: 480, end: 1080 }]
-    );
+  it('sad: fully booked (appointment covers entire coverage)', () => {
+    const result = subtractIntervals([{ start: 480, end: 1080 }], [{ start: 480, end: 1080 }]);
     expect(result).toEqual([]);
   });
 
-  it("sad: no appointments — full coverage returned", () => {
-    const result = subtractIntervals(
-      [{ start: 480, end: 1080 }],
-      []
-    );
+  it('sad: no appointments — full coverage returned', () => {
+    const result = subtractIntervals([{ start: 480, end: 1080 }], []);
     expect(result).toEqual([{ start: 480, end: 1080 }]);
   });
 
-  it("happy: works with split coverage (lunch gap)", () => {
+  it('happy: works with split coverage (lunch gap)', () => {
     // Coverage: 8-12, 13-18. Appointment: 14-15
     const result = subtractIntervals(
-      [{ start: 480, end: 720 }, { start: 780, end: 1080 }],
-      [{ start: 840, end: 900 }]  // 14-15
+      [
+        { start: 480, end: 720 },
+        { start: 780, end: 1080 },
+      ],
+      [{ start: 840, end: 900 }] // 14-15
     );
     expect(result).toEqual([
-      { start: 480, end: 720 },   // 8-12 (untouched)
-      { start: 780, end: 840 },   // 13-14
-      { start: 900, end: 1080 },  // 15-18
+      { start: 480, end: 720 }, // 8-12 (untouched)
+      { start: 780, end: 840 }, // 13-14
+      { start: 900, end: 1080 }, // 15-18
     ]);
   });
 });
@@ -213,27 +210,27 @@ describe("subtractIntervals", () => {
 // DURATION FILTER — ensuring slots fit the service duration
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("Duration filter for usable slots", () => {
-  it("happy: filters out slots shorter than service duration", () => {
+describe('Duration filter for usable slots', () => {
+  it('happy: filters out slots shorter than service duration', () => {
     const duration = 60; // 1 hour
     const open: Interval[] = [
-      { start: 480, end: 510 },   // 8:00-8:30 (30 min — too short)
-      { start: 600, end: 720 },   // 10:00-12:00 (120 min — fits)
-      { start: 900, end: 1080 },  // 15:00-18:00 (180 min — fits)
+      { start: 480, end: 510 }, // 8:00-8:30 (30 min — too short)
+      { start: 600, end: 720 }, // 10:00-12:00 (120 min — fits)
+      { start: 900, end: 1080 }, // 15:00-18:00 (180 min — fits)
     ];
-    const usable = open.filter(s => (s.end - s.start) >= duration);
+    const usable = open.filter((s) => s.end - s.start >= duration);
     expect(usable).toHaveLength(2);
     expect(usable[0]).toEqual({ start: 600, end: 720 });
     expect(usable[1]).toEqual({ start: 900, end: 1080 });
   });
 
-  it("sad: no slots fit the duration (WHO: caller, WHAT: no openings, HOW: all gaps shorter than service duration)", () => {
+  it('sad: no slots fit the duration (WHO: caller, WHAT: no openings, HOW: all gaps shorter than service duration)', () => {
     const duration = 60;
     const open: Interval[] = [
-      { start: 480, end: 510 },  // 30 min
-      { start: 600, end: 630 },  // 30 min
+      { start: 480, end: 510 }, // 30 min
+      { start: 600, end: 630 }, // 30 min
     ];
-    const usable = open.filter(s => (s.end - s.start) >= duration);
+    const usable = open.filter((s) => s.end - s.start >= duration);
     expect(usable).toHaveLength(0);
   });
 });
@@ -242,26 +239,26 @@ describe("Duration filter for usable slots", () => {
 // SOURCE CODE VERIFICATION
 // ═══════════════════════════════════════════════════════════════════════
 
-describe("get_available_slots wiring", () => {
-  const fs = require("fs");
+describe('get_available_slots wiring', () => {
+  const fs = require('fs');
 
-  it("Fastify route exists for /agent-tools/available-slots", () => {
+  it('Fastify route exists for /agent-tools/available-slots', () => {
     // WHO: LiveKit agent calling the tool layer
     // WHAT: the route handler must exist and accept a service_type + date
     // WHEN: agent runs the get_available_slots tool during a call
     // WHERE: src/routes/agentTools.ts
     // WHY: with Vapi removed this is the only available-slots surface; if the
     //      route is renamed or deleted the agent silently loses the tool
-    const src = fs.readFileSync("src/routes/agentTools.ts", "utf8");
-    expect(src).toContain("/agent-tools/available-slots");
+    const src = fs.readFileSync('src/routes/agentTools.ts', 'utf8');
+    expect(src).toContain('/agent-tools/available-slots');
   });
 
-  it("agent tool definition is registered with the LiveKit session", () => {
+  it('agent tool definition is registered with the LiveKit session', () => {
     // WHO: LiveKit agent registering its tool surface with the LLM
     // WHAT: agent/src/tools.ts must declare get_available_slots
     // WHERE: agent/src/tools.ts
     // WHY: LLM only knows about tools listed here; missing entry = silent loss
-    const src = fs.readFileSync("agent/src/tools.ts", "utf8");
-    expect(src).toContain("get_available_slots");
+    const src = fs.readFileSync('agent/src/tools.ts', 'utf8');
+    expect(src).toContain('get_available_slots');
   });
 });

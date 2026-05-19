@@ -6,8 +6,8 @@ const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 export interface CalendarEventInput {
   summary: string;
   description?: string;
-  start: string;   // ISO datetime
-  end: string;     // ISO datetime
+  start: string; // ISO datetime
+  end: string; // ISO datetime
   location?: string;
   timeZone?: string;
 }
@@ -78,7 +78,9 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
 }
 
 /** Refresh an expired access token */
-export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date: number }> {
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; expiry_date: number }> {
   const client = createOAuth2Client();
   if (!client) throw new Error('Google Calendar not configured');
 

@@ -118,14 +118,14 @@ export interface ScheduleEntry {
   // 20260518130000.
   tenant_id: string;
   employee_id: string;
-  shift_date: string;  // YYYY-MM-DD
+  shift_date: string; // YYYY-MM-DD
   start_time: string | null;
   end_time: string | null;
   is_off: boolean;
 }
 
 export interface EffectiveShift {
-  shift_date: string;  // YYYY-MM-DD
+  shift_date: string; // YYYY-MM-DD
   day_of_week: number;
   start_time: string | null;
   end_time: string | null;

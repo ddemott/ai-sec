@@ -16,7 +16,7 @@ export class MockAdapter implements TelephonyProvider {
 
   sendSMS(request: TelephonySMSRequest): Promise<{ messageSid: string }> {
     console.log(
-      `[Mock Telephony] Sending SMS to ${request.to} for tenant ${request.tenantId}: ${request.body}`,
+      `[Mock Telephony] Sending SMS to ${request.to} for tenant ${request.tenantId}: ${request.body}`
     );
     return Promise.resolve({ messageSid: `mock_sms_${Date.now()}` });
   }
@@ -40,7 +40,10 @@ export class MockAdapter implements TelephonyProvider {
     return `<?xml version="1.0" encoding="UTF-8"?><Response>${instructions}</Response>`;
   }
 
-  generateInstruction(action: 'say' | 'gather' | 'record' | 'hangup', options: Record<string, unknown>): string {
+  generateInstruction(
+    action: 'say' | 'gather' | 'record' | 'hangup',
+    options: Record<string, unknown>
+  ): string {
     return this.wrapResponse(this.createInstruction(action, options));
   }
 }

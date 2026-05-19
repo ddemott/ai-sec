@@ -1,27 +1,27 @@
-'use client'
+'use client';
 
-import React from 'react'
+import React from 'react';
 
 interface EmptyStateProps {
   /** Optional Lucide icon — rendered above the title at 40px when provided */
-  icon?: React.ElementType
+  icon?: React.ElementType;
   /** Required primary message — what's missing */
-  title: string
+  title: string;
   /** Optional secondary message — why it's missing or what to do about it */
-  description?: string
+  description?: string;
   /** Optional CTA — typically an "Add X" button */
-  action?: React.ReactNode
+  action?: React.ReactNode;
   /**
    * Visual density. 'centered' (default) fills the parent vertically and
    * centers — for entire empty views (zero customers, zero appointments).
    * 'compact' is a tighter inline block — for empty sections within
    * larger views (e.g. "No services supported" inside a row).
    */
-  variant?: 'centered' | 'compact'
+  variant?: 'centered' | 'compact';
   /** Optional extra classes on the outer wrapper */
-  className?: string
+  className?: string;
   /** Optional data-testid for E2E hooks */
-  'data-testid'?: string
+  'data-testid'?: string;
 }
 
 /**
@@ -51,9 +51,10 @@ export function EmptyState({
   className,
   'data-testid': dataTestId,
 }: EmptyStateProps) {
-  const wrapperClass = variant === 'centered'
-    ? `flex-1 flex items-center justify-center py-8 ${className ?? ''}`
-    : `text-center py-4 ${className ?? ''}`
+  const wrapperClass =
+    variant === 'centered'
+      ? `flex-1 flex items-center justify-center py-8 ${className ?? ''}`
+      : `text-center py-4 ${className ?? ''}`;
 
   return (
     <div className={wrapperClass} data-testid={dataTestId}>
@@ -79,12 +80,8 @@ export function EmptyState({
             {description}
           </p>
         )}
-        {action && (
-          <div className="mt-3 flex justify-center">
-            {action}
-          </div>
-        )}
+        {action && <div className="mt-3 flex justify-center">{action}</div>}
       </div>
     </div>
-  )
+  );
 }

@@ -81,7 +81,10 @@ describe('paginateSync', () => {
       const fetchPage = vi
         .fn()
         .mockResolvedValueOnce({ items: [{ id: '1' }] as FakeItem[], nextCursor: 'cursor2' })
-        .mockResolvedValueOnce({ items: [{ id: '2' }, { id: '3' }] as FakeItem[], nextCursor: 'cursor3' })
+        .mockResolvedValueOnce({
+          items: [{ id: '2' }, { id: '3' }] as FakeItem[],
+          nextCursor: 'cursor3',
+        })
         .mockResolvedValueOnce({ items: [{ id: '4' }] as FakeItem[], nextCursor: null });
 
       const result = await paginateSync<FakeItem, string>({
@@ -215,7 +218,10 @@ describe('paginateSync', () => {
       //      result + log is preferable to silently skipping pages or hard-throwing
       const fetchPage = vi
         .fn()
-        .mockResolvedValueOnce({ items: [{ id: '1' }, { id: '2' }] as FakeItem[], nextCursor: 'next' })
+        .mockResolvedValueOnce({
+          items: [{ id: '1' }, { id: '2' }] as FakeItem[],
+          nextCursor: 'next',
+        })
         .mockRejectedValueOnce(new Error('upstream 503'));
 
       const result = await paginateSync<FakeItem, string>({
@@ -282,7 +288,9 @@ describe('paginateSync', () => {
         logger,
       });
 
-      expect(logger.errorCalls[0]).toBe('[jobber-sync] tenant=abc — failed to pull client x: Error: boom');
+      expect(logger.errorCalls[0]).toBe(
+        '[jobber-sync] tenant=abc — failed to pull client x: Error: boom'
+      );
     });
   });
 });

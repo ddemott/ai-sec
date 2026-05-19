@@ -26,7 +26,14 @@ export async function getTokensWithRefresh(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
-  return getIntegrationTokens(pool, tenantId, 'hubspot', hubspot.refreshAccessToken, TOKEN_BUFFER_MS.STANDARD, logger);
+  return getIntegrationTokens(
+    pool,
+    tenantId,
+    'hubspot',
+    hubspot.refreshAccessToken,
+    TOKEN_BUFFER_MS.STANDARD,
+    logger
+  );
 }
 
 // -----------------------------------------------------------------------
@@ -43,7 +50,11 @@ export async function syncCustomerToHubSpot(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'customer', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -58,7 +69,13 @@ export async function syncCustomerToHubSpot(
     }
 
     // Read sync_map BEFORE customers — lock order
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'hubspot', 'customer', customerId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'hubspot',
+      'customer',
+      customerId
+    );
 
     const custRes = await client.query(
       `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
@@ -83,17 +100,34 @@ export async function syncCustomerToHubSpot(
       const contact = await hubspot.createContact(tokens.accessToken, properties);
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'hubspot', 'customer', customerId, contact.id,
-        cust.updated_at, contact.properties.lastmodifieddate || new Date().toISOString()
+        client,
+        tenantId,
+        'hubspot',
+        'customer',
+        customerId,
+        contact.id,
+        cust.updated_at,
+        contact.properties.lastmodifieddate || new Date().toISOString()
       );
-      log.info(`${prefix} — customer pushed to HubSpot (hubspotId=${contact.id} name=${cust.name})`);
+      log.info(
+        `${prefix} — customer pushed to HubSpot (hubspotId=${contact.id} name=${cust.name})`
+      );
     } else {
       // Update in HubSpot
       const externalId = syncEntry.external_id;
       await hubspot.updateContact(tokens.accessToken, externalId, properties);
 
-      await syncMapUpdateAfterPush(client, tenantId, 'hubspot', 'customer', customerId, cust.updated_at);
-      log.info(`${prefix} — customer updated in HubSpot (hubspotId=${externalId} name=${cust.name})`);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'hubspot',
+        'customer',
+        customerId,
+        cust.updated_at
+      );
+      log.info(
+        `${prefix} — customer updated in HubSpot (hubspotId=${externalId} name=${cust.name})`
+      );
     }
   } finally {
     client.release();
@@ -110,7 +144,11 @@ export async function syncAppointmentToHubSpot(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -125,7 +163,13 @@ export async function syncAppointmentToHubSpot(
     }
 
     // Read sync_map BEFORE appointments — lock order
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'hubspot', 'appointment', appointmentId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'hubspot',
+      'appointment',
+      appointmentId
+    );
 
     const apptRes = await client.query(
       `SELECT a.*, c.name as customer_name, c.phone as customer_phone, r.name as resource_name
@@ -143,7 +187,14 @@ export async function syncAppointmentToHubSpot(
 
     // Ensure customer is synced to HubSpot first
     const hubspotContactId = await ensureRemoteCustomer(
-      client, pool, tenantId, 'hubspot', appt.customer_id, syncCustomerToHubSpot, logger, prefix
+      client,
+      pool,
+      tenantId,
+      'hubspot',
+      appt.customer_id,
+      syncCustomerToHubSpot,
+      logger,
+      prefix
     );
 
     const title = appt.description
@@ -161,7 +212,12 @@ export async function syncAppointmentToHubSpot(
       hs_meeting_body: bodyParts.join('\n'),
       hs_meeting_start_time: new Date(appt.start_time).toISOString(),
       hs_meeting_end_time: new Date(appt.end_time).toISOString(),
-      hs_meeting_outcome: appt.status === 'canceled' ? 'CANCELED' : appt.status === 'completed' ? 'COMPLETED' : 'SCHEDULED',
+      hs_meeting_outcome:
+        appt.status === 'canceled'
+          ? 'CANCELED'
+          : appt.status === 'completed'
+            ? 'COMPLETED'
+            : 'SCHEDULED',
       hs_timestamp: new Date(appt.start_time).toISOString(),
     };
     if (appt.location) meetingProps.hs_meeting_location = appt.location;
@@ -174,20 +230,36 @@ export async function syncAppointmentToHubSpot(
         try {
           await hubspot.associateMeetingToContact(tokens.accessToken, meeting.id, hubspotContactId);
         } catch (err) {
-          log.warn(`${prefix} — meeting created but association failed (meetingId=${meeting.id} contactId=${hubspotContactId} | ERROR: ${String(err)})`);
+          log.warn(
+            `${prefix} — meeting created but association failed (meetingId=${meeting.id} contactId=${hubspotContactId} | ERROR: ${String(err)})`
+          );
         }
       }
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'hubspot', 'appointment', appointmentId, meeting.id,
+        client,
+        tenantId,
+        'hubspot',
+        'appointment',
+        appointmentId,
+        meeting.id,
         appt.updated_at || new Date().toISOString()
       );
-      log.info(`${prefix} — appointment pushed to HubSpot as meeting (hubspotId=${meeting.id} customer=${appt.customer_name})`);
+      log.info(
+        `${prefix} — appointment pushed to HubSpot as meeting (hubspotId=${meeting.id} customer=${appt.customer_name})`
+      );
     } else {
       const externalId = syncEntry.external_id;
       await hubspot.updateMeeting(tokens.accessToken, externalId, meetingProps);
 
-      await syncMapUpdateAfterPush(client, tenantId, 'hubspot', 'appointment', appointmentId, appt.updated_at);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'hubspot',
+        'appointment',
+        appointmentId,
+        appt.updated_at
+      );
       log.info(`${prefix} — meeting updated in HubSpot (hubspotId=${externalId})`);
     }
   } finally {
@@ -238,7 +310,11 @@ export async function fullSync(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ contactsSynced: number; meetingsSynced: number; errors: number }> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { contactsSynced: 0, meetingsSynced: 0, errors: 0 };
 
@@ -265,11 +341,12 @@ export async function fullSync(
   const errors = contactResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'hubspot');
-  log.info(`${contextLabel} — full sync complete (contacts=${contactsSynced} meetings=${meetingsSynced} errors=${errors})`);
+  log.info(
+    `${contextLabel} — full sync complete (contacts=${contactsSynced} meetings=${meetingsSynced} errors=${errors})`
+  );
   return { contactsSynced, meetingsSynced, errors };
 }
 
 // -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
-

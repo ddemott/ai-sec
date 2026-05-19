@@ -1,11 +1,7 @@
 import React from 'react';
 import { type Appointment } from '../lib/types';
 import { Button } from './ui/Button';
-import {
-  RefreshCw,
-  ChevronRight,
-  Plus
-} from 'lucide-react';
+import { RefreshCw, ChevronRight, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AppointmentListSidebarProps {
@@ -34,17 +30,31 @@ export function AppointmentListSidebar({
   getServiceBaseTimes,
 }: AppointmentListSidebarProps) {
   return (
-    <section className={`w-full md:w-80 flex flex-col ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`} style={{ backgroundColor: 'var(--bg-raised)', borderRight: '1px solid var(--border-soft)' }}>
-      <header className="p-4 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+    <section
+      className={`w-full md:w-80 flex flex-col ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}
+      style={{ backgroundColor: 'var(--bg-raised)', borderRight: '1px solid var(--border-soft)' }}
+    >
+      <header
+        className="p-4 sticky top-0 z-10"
+        style={{
+          borderBottom: '1px solid var(--border-soft)',
+          backgroundColor: 'var(--bg-surface)',
+        }}
+      >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold">{`${bookingLabel}s`}</h2>
           <div className="flex space-x-1">
-              <Button onClick={onStartNew} size="sm" className="p-1.5" data-testid="new-appointment-btn">
-                <Plus className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onRefresh} className="p-1.5">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
+            <Button
+              onClick={onStartNew}
+              size="sm"
+              className="p-1.5"
+              data-testid="new-appointment-btn"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onRefresh} className="p-1.5">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
         {/* Search removed: was non-functional placeholder */}
@@ -66,11 +76,19 @@ export function AppointmentListSidebar({
               borderBottom: '1px solid var(--border-soft)',
               ...(selectedAppointment?.appointment_id === apt.appointment_id
                 ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
-                : {})
+                : {}),
             }}
           >
             <div>
-              <p className="text-sm font-semibold" style={{ color: selectedAppointment?.appointment_id === apt.appointment_id ? 'var(--accent-soft)' : 'var(--text-primary)' }}>
+              <p
+                className="text-sm font-semibold"
+                style={{
+                  color:
+                    selectedAppointment?.appointment_id === apt.appointment_id
+                      ? 'var(--accent-soft)'
+                      : 'var(--text-primary)',
+                }}
+              >
                 {apt.customers?.name || 'Unknown'}
               </p>
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1 truncate max-w-[180px]">
@@ -78,8 +96,8 @@ export function AppointmentListSidebar({
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {(() => {
-                  const { start } = getServiceBaseTimes(apt)
-                  return `${format(start, 'MMM d')} at ${format(start, 'p')}`
+                  const { start } = getServiceBaseTimes(apt);
+                  return `${format(start, 'MMM d')} at ${format(start, 'p')}`;
                 })()}
               </p>
             </div>

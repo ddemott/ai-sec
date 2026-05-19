@@ -313,9 +313,7 @@ describe('expandWeeklyToSchedule — happy paths', () => {
     //       per-day hours, which is why uniform 9-5 patterns can hide it.
     // WHY: a regression that shifted pattern->date assignment by one
     //      day would silently corrupt every owner's schedule.
-    const tuePattern = [
-      { day_of_week: 2, start_time: '10:00:00', end_time: '14:00:00' },
-    ];
+    const tuePattern = [{ day_of_week: 2, start_time: '10:00:00', end_time: '14:00:00' }];
     const { client, inserts } = buildClient();
 
     await expandWeeklyToSchedule(client, {

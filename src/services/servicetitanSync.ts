@@ -1,6 +1,12 @@
 import type { Pool } from 'pg';
 import * as servicetitan from './servicetitanClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, withSyncContext } from './tokenManagement';
+import {
+  type SyncLogger,
+  syncCtx,
+  getIntegrationTokens,
+  TOKEN_BUFFER_MS,
+  withSyncContext,
+} from './tokenManagement';
 import {
   syncMapUpsertOnCreate,
   syncMapUpdateAfterPush,
@@ -29,7 +35,12 @@ export async function getTokensWithRefresh(
   pool: Pool,
   tenantId: string,
   logger?: SyncLogger
-): Promise<{ accessToken: string; refreshToken: string; appKey: string; tenantSid: string } | null> {
+): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  appKey: string;
+  tenantSid: string;
+} | null> {
   const log = logger || { warn: console.warn, error: console.error, info: console.info };
 
   const appKey = process.env.SERVICETITAN_APP_KEY;
@@ -39,8 +50,13 @@ export async function getTokensWithRefresh(
   }
 
   const result = await getIntegrationTokens(
-    pool, tenantId, 'servicetitan', servicetitan.refreshAccessToken,
-    TOKEN_BUFFER_MS.STANDARD, logger, 'settings'
+    pool,
+    tenantId,
+    'servicetitan',
+    servicetitan.refreshAccessToken,
+    TOKEN_BUFFER_MS.STANDARD,
+    logger,
+    'settings'
   );
   if (!result) return null;
 
@@ -67,7 +83,11 @@ export async function syncCustomerToServiceTitan(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'customer', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -83,7 +103,13 @@ export async function syncCustomerToServiceTitan(
     }
 
     // Read sync_map BEFORE customers — lock order
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'servicetitan', 'customer', customerId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'servicetitan',
+      'customer',
+      customerId
+    );
 
     const custRes = await client.query(
       `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
@@ -108,23 +134,47 @@ export async function syncCustomerToServiceTitan(
     if (!syncEntry || action === 'create') {
       // Create in ServiceTitan
       const created = await servicetitan.createCustomer(
-        tokens.accessToken, tokens.appKey, tokens.tenantSid, customerPayload
+        tokens.accessToken,
+        tokens.appKey,
+        tokens.tenantSid,
+        customerPayload
       );
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'servicetitan', 'customer', customerId, String(created.id),
-        cust.updated_at, created.modifiedOn || new Date().toISOString()
+        client,
+        tenantId,
+        'servicetitan',
+        'customer',
+        customerId,
+        String(created.id),
+        cust.updated_at,
+        created.modifiedOn || new Date().toISOString()
       );
-      log.info(`${prefix} — customer pushed to ServiceTitan (servicetitanId=${created.id} name=${cust.name})`);
+      log.info(
+        `${prefix} — customer pushed to ServiceTitan (servicetitanId=${created.id} name=${cust.name})`
+      );
     } else {
       // Update in ServiceTitan
       const externalId = syncEntry.external_id;
       await servicetitan.updateCustomer(
-        tokens.accessToken, tokens.appKey, tokens.tenantSid, externalId, customerPayload
+        tokens.accessToken,
+        tokens.appKey,
+        tokens.tenantSid,
+        externalId,
+        customerPayload
       );
 
-      await syncMapUpdateAfterPush(client, tenantId, 'servicetitan', 'customer', customerId, cust.updated_at);
-      log.info(`${prefix} — customer updated in ServiceTitan (servicetitanId=${externalId} name=${cust.name})`);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'servicetitan',
+        'customer',
+        customerId,
+        cust.updated_at
+      );
+      log.info(
+        `${prefix} — customer updated in ServiceTitan (servicetitanId=${externalId} name=${cust.name})`
+      );
     }
   } finally {
     client.release();
@@ -141,7 +191,11 @@ export async function syncAppointmentToServiceTitan(
   action: 'create' | 'update' | 'delete',
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', action);
 
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
@@ -151,22 +205,48 @@ export async function syncAppointmentToServiceTitan(
   try {
     if (action === 'delete') {
       // Cancel the job in ServiceTitan
-      const syncEntry = await syncMapFindByLocalId(client, tenantId, 'servicetitan', 'appointment', appointmentId);
+      const syncEntry = await syncMapFindByLocalId(
+        client,
+        tenantId,
+        'servicetitan',
+        'appointment',
+        appointmentId
+      );
 
       if (syncEntry) {
         try {
-          await servicetitan.cancelJob(tokens.accessToken, tokens.appKey, tokens.tenantSid, syncEntry.external_id);
+          await servicetitan.cancelJob(
+            tokens.accessToken,
+            tokens.appKey,
+            tokens.tenantSid,
+            syncEntry.external_id
+          );
         } catch (err) {
-          log.warn(`${prefix} — failed to cancel job in ServiceTitan (jobId=${syncEntry.external_id} | ERROR: ${String(err)})`);
+          log.warn(
+            `${prefix} — failed to cancel job in ServiceTitan (jobId=${syncEntry.external_id} | ERROR: ${String(err)})`
+          );
         }
-        await syncMapMarkDeleted(client, tenantId, 'servicetitan', 'appointment', appointmentId, 'canceled');
+        await syncMapMarkDeleted(
+          client,
+          tenantId,
+          'servicetitan',
+          'appointment',
+          appointmentId,
+          'canceled'
+        );
       }
       log.info(`${prefix} — sync map entry updated (canceled)`);
       return;
     }
 
     // Read sync_map BEFORE appointments — lock order
-    const syncEntry = await syncMapFindByLocalId(client, tenantId, 'servicetitan', 'appointment', appointmentId);
+    const syncEntry = await syncMapFindByLocalId(
+      client,
+      tenantId,
+      'servicetitan',
+      'appointment',
+      appointmentId
+    );
 
     const apptRes = await client.query(
       `SELECT a.*, c.name as customer_name, c.phone as customer_phone, r.name as resource_name
@@ -184,9 +264,18 @@ export async function syncAppointmentToServiceTitan(
 
     // Ensure customer is synced to ServiceTitan first
     const servicetitanCustomerIdStr = await ensureRemoteCustomer(
-      client, pool, tenantId, 'servicetitan', appt.customer_id, syncCustomerToServiceTitan, logger, prefix
+      client,
+      pool,
+      tenantId,
+      'servicetitan',
+      appt.customer_id,
+      syncCustomerToServiceTitan,
+      logger,
+      prefix
     );
-    const servicetitanCustomerId = servicetitanCustomerIdStr ? Number(servicetitanCustomerIdStr) : null;
+    const servicetitanCustomerId = servicetitanCustomerIdStr
+      ? Number(servicetitanCustomerIdStr)
+      : null;
 
     const summary = appt.description
       ? `${appt.description} - ${appt.customer_name || 'Customer'}`
@@ -208,16 +297,29 @@ export async function syncAppointmentToServiceTitan(
         return;
       }
       const job = await servicetitan.createJob(
-        tokens.accessToken, tokens.appKey, tokens.tenantSid,
+        tokens.accessToken,
+        tokens.appKey,
+        tokens.tenantSid,
         // Narrowed: customerId is now confirmed defined; TS can see it.
-        { customerId: jobPayload.customerId, summary: jobPayload.summary, scheduledDate: jobPayload.scheduledDate }
+        {
+          customerId: jobPayload.customerId,
+          summary: jobPayload.summary,
+          scheduledDate: jobPayload.scheduledDate,
+        }
       );
 
       await syncMapUpsertOnCreate(
-        client, tenantId, 'servicetitan', 'appointment', appointmentId, String(job.id),
+        client,
+        tenantId,
+        'servicetitan',
+        'appointment',
+        appointmentId,
+        String(job.id),
         appt.updated_at || new Date().toISOString()
       );
-      log.info(`${prefix} — appointment pushed to ServiceTitan as job (servicetitanId=${job.id} customer=${appt.customer_name})`);
+      log.info(
+        `${prefix} — appointment pushed to ServiceTitan as job (servicetitanId=${job.id} customer=${appt.customer_name})`
+      );
     } else {
       const externalId = syncEntry.external_id;
       // updateJob's signature is { summary?, scheduledDate?, status? } — same
@@ -229,10 +331,21 @@ export async function syncAppointmentToServiceTitan(
       if (appt.status === 'canceled') updatePayload.status = 'Canceled';
 
       await servicetitan.updateJob(
-        tokens.accessToken, tokens.appKey, tokens.tenantSid, externalId, updatePayload
+        tokens.accessToken,
+        tokens.appKey,
+        tokens.tenantSid,
+        externalId,
+        updatePayload
       );
 
-      await syncMapUpdateAfterPush(client, tenantId, 'servicetitan', 'appointment', appointmentId, appt.updated_at);
+      await syncMapUpdateAfterPush(
+        client,
+        tenantId,
+        'servicetitan',
+        'appointment',
+        appointmentId,
+        appt.updated_at
+      );
       log.info(`${prefix} — job updated in ServiceTitan (servicetitanId=${externalId})`);
     }
   } finally {
@@ -282,7 +395,11 @@ export async function pullServiceTitanJob(
   jobData: servicetitan.ServiceTitanJob,
   logger?: SyncLogger
 ): Promise<void> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const prefix = ctx(tenantId, 'appointment', 'pull');
 
   const client = await pool.connect();
@@ -294,11 +411,23 @@ export async function pullServiceTitanJob(
       // Lookup the local customer for this job's customerId
       let localCustomerId: string | null = null;
       if (jobData.customerId) {
-        const custSync = await syncMapFindByExternalId(client, tenantId, 'servicetitan', 'customer', String(jobData.customerId));
+        const custSync = await syncMapFindByExternalId(
+          client,
+          tenantId,
+          'servicetitan',
+          'customer',
+          String(jobData.customerId)
+        );
         localCustomerId = custSync?.local_id || null;
       }
 
-      const syncEntry = await syncMapFindByExternalId(client, tenantId, 'servicetitan', 'appointment', stId);
+      const syncEntry = await syncMapFindByExternalId(
+        client,
+        tenantId,
+        'servicetitan',
+        'appointment',
+        stId
+      );
 
       if (!syncEntry) {
         if (!localCustomerId) {
@@ -306,18 +435,37 @@ export async function pullServiceTitanJob(
           return;
         }
 
-        const startTime = jobData.scheduledDate ? new Date(jobData.scheduledDate).toISOString() : new Date().toISOString();
+        const startTime = jobData.scheduledDate
+          ? new Date(jobData.scheduledDate).toISOString()
+          : new Date().toISOString();
         const endTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // default 1hr
 
         const insertRes = await client.query(
           `INSERT INTO appointments (tenant_id, customer_id, start_time, end_time, description, status)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING appointment_id`,
-          [tenantId, localCustomerId, startTime, endTime, jobData.summary || 'ServiceTitan Job', jobData.status === 'Canceled' ? 'canceled' : 'scheduled']
+          [
+            tenantId,
+            localCustomerId,
+            startTime,
+            endTime,
+            jobData.summary || 'ServiceTitan Job',
+            jobData.status === 'Canceled' ? 'canceled' : 'scheduled',
+          ]
         );
         const localId = insertRes.rows[0].appointment_id;
 
-        await syncMapUpsertOnPull(client, tenantId, 'servicetitan', 'appointment', localId, stId, remoteUpdatedAt);
-        log.info(`${prefix} — created local appointment from ServiceTitan job (servicetitanId=${stId} localId=${localId})`);
+        await syncMapUpsertOnPull(
+          client,
+          tenantId,
+          'servicetitan',
+          'appointment',
+          localId,
+          stId,
+          remoteUpdatedAt
+        );
+        log.info(
+          `${prefix} — created local appointment from ServiceTitan job (servicetitanId=${stId} localId=${localId})`
+        );
       } else {
         const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
 
@@ -329,11 +477,25 @@ export async function pullServiceTitanJob(
         await client.query(
           `UPDATE appointments SET description = COALESCE($1, description), status = $2
            WHERE appointment_id = $3 AND tenant_id = $4`,
-          [jobData.summary, jobData.status === 'Canceled' ? 'canceled' : 'scheduled', localId, tenantId]
+          [
+            jobData.summary,
+            jobData.status === 'Canceled' ? 'canceled' : 'scheduled',
+            localId,
+            tenantId,
+          ]
         );
 
-        await syncMapUpdateAfterPull(client, tenantId, 'servicetitan', 'appointment', stId, remoteUpdatedAt);
-        log.info(`${prefix} — updated local appointment from ServiceTitan job (servicetitanId=${stId} localId=${localId})`);
+        await syncMapUpdateAfterPull(
+          client,
+          tenantId,
+          'servicetitan',
+          'appointment',
+          stId,
+          remoteUpdatedAt
+        );
+        log.info(
+          `${prefix} — updated local appointment from ServiceTitan job (servicetitanId=${stId} localId=${localId})`
+        );
       }
     });
   } finally {
@@ -350,7 +512,11 @@ export async function fullSync(
   tenantId: string,
   logger?: SyncLogger
 ): Promise<{ customersSynced: number; appointmentsSynced: number; errors: number }> {
-  const log: SyncLogger = logger || { warn: console.warn, error: console.error, info: console.info };
+  const log: SyncLogger = logger || {
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+  };
   const tokens = await getTokensWithRefresh(pool, tenantId, logger);
   if (!tokens) return { customersSynced: 0, appointmentsSynced: 0, errors: 0 };
 
@@ -359,7 +525,12 @@ export async function fullSync(
   const customerResult = await paginateSync<servicetitan.ServiceTitanCustomer, number>({
     initialCursor: 1,
     fetchPage: async (page) => {
-      const result = await servicetitan.listCustomers(tokens.accessToken, tokens.appKey, tokens.tenantSid, page);
+      const result = await servicetitan.listCustomers(
+        tokens.accessToken,
+        tokens.appKey,
+        tokens.tenantSid,
+        page
+      );
       return {
         items: result.data,
         nextCursor: result.hasMore ? page + 1 : null,
@@ -375,7 +546,12 @@ export async function fullSync(
   const jobResult = await paginateSync<servicetitan.ServiceTitanJob, number>({
     initialCursor: 1,
     fetchPage: async (page) => {
-      const result = await servicetitan.listJobs(tokens.accessToken, tokens.appKey, tokens.tenantSid, page);
+      const result = await servicetitan.listJobs(
+        tokens.accessToken,
+        tokens.appKey,
+        tokens.tenantSid,
+        page
+      );
       return {
         items: result.data,
         nextCursor: result.hasMore ? page + 1 : null,
@@ -393,6 +569,8 @@ export async function fullSync(
   const errors = customerResult.errors + jobResult.errors;
 
   await updateLastSyncAt(pool, tenantId, 'servicetitan');
-  log.info(`${contextLabel} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`);
+  log.info(
+    `${contextLabel} — full sync complete (customers=${customersSynced} appointments=${appointmentsSynced} errors=${errors})`
+  );
   return { customersSynced, appointmentsSynced, errors };
 }

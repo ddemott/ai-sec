@@ -1,4 +1,5 @@
 ## SecretaryHQ Dashboard
+
 ## README.MD
 
 This is the **management UI** for the SecretaryHQ SaaS. It lets owners and admins:
@@ -19,7 +20,7 @@ The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It ca
 - Node.js and npm.
 - A running Supabase project with this repo's migrations applied.
 - Environment variables configured in `.env.local`:
-	- `NEXT_PUBLIC_API_BASE_URL` (defaults to `https://localhost:4001`)
+  - `NEXT_PUBLIC_API_BASE_URL` (defaults to `https://localhost:4001`)
 
 ---
 
@@ -36,6 +37,7 @@ npm run dev
 Then open [http://localhost:4000](http://localhost:4000) to access the dashboard.
 
 You should see:
+
 - A multi-tenant appointment view (list/calendar).
 - Unified CRM with customer details, upcoming/past appointments, AI call history, and cancel flow.
 - Employee management with shift scheduling.

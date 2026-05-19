@@ -103,9 +103,7 @@ describe('ToolsClient.call', () => {
     // WHO: Backend crashed mid-call (DB connection lost, OOM, etc.)
     // WHAT: Client returns a structured failure so the LLM can say
     //        "something's wrong on our end" instead of silently hanging
-    const { fetchImpl } = mockFetch([
-      { status: 500, body: { error: 'Internal Server Error' } },
-    ]);
+    const { fetchImpl } = mockFetch([{ status: 500, body: { error: 'Internal Server Error' } }]);
     const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
 
     const res = await client.call('/agent-tools/service-catalog', {});
@@ -174,9 +172,7 @@ describe('ToolsClient.call', () => {
     // WHO: Backend ever drifts from the envelope contract (bug, different
     //       server somehow responding)
     // WHAT: Client returns a clear message instead of crashing the worker
-    const { fetchImpl } = mockFetch([
-      { status: 200, body: { unexpected: 'shape' } },
-    ]);
+    const { fetchImpl } = mockFetch([{ status: 200, body: { unexpected: 'shape' } }]);
     const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
 
     const res = await client.call('/agent-tools/service-catalog', {});

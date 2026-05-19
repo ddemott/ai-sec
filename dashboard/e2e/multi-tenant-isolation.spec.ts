@@ -46,7 +46,11 @@ function uniqueTag(): string {
  * test can assert on the auth payload's tenant_id (catches a regression
  * where login leaks the wrong tenant_id into the JWT).
  */
-async function loginAs(page: Page, email: string, password: string): Promise<{
+async function loginAs(
+  page: Page,
+  email: string,
+  password: string
+): Promise<{
   token: string;
   tenant_id: string;
   role: string;
@@ -118,9 +122,7 @@ test.beforeAll(async () => {
     [DYNATIRE_ID, SUPER_ADMIN_ID]
   );
   if (r.rowCount === 0) {
-    throw new Error(
-      'No second tenant exists for cross-tenant isolation probe — re-run seed-db.sh'
-    );
+    throw new Error('No second tenant exists for cross-tenant isolation probe — re-run seed-db.sh');
   }
   OTHER_TENANT_ID = r.rows[0].tenant_id;
 });
@@ -163,7 +165,10 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
     expect(ownTenant.status).toBe(200);
     expect(Array.isArray(ownTenant.body)).toBe(true);
     const dynatireNames = (ownTenant.body as Array<{ name?: string }>).map((c) => c.name);
-    expect(dynatireNames, 'DynaTire user must NOT see Bella\'s customer in their own list').not.toContain(`${tag}-other-secret`);
+    expect(
+      dynatireNames,
+      "DynaTire user must NOT see Bella's customer in their own list"
+    ).not.toContain(`${tag}-other-secret`);
 
     // Attack: same user tries ?tenant_id=<Bella> override.
     const cross = await apiGet(page, auth.token, `/customers?tenant_id=${OTHER_TENANT_ID}`);
@@ -184,7 +189,9 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
 // ────────────────────────────────────────────────────────────────────────────
 // 2. body.tenant_id=<other> on POST is rejected (write-injection)
 // ────────────────────────────────────────────────────────────────────────────
-test('isolation: body.tenant_id=<other tenant> on POST /customers/create is rejected', async ({ page }) => {
+test('isolation: body.tenant_id=<other tenant> on POST /customers/create is rejected', async ({
+  page,
+}) => {
   // WHO: malicious DynaTire user trying to inject a customer row under
   //        Bella's tenant_id (ghost-write attack)
   // WHAT: the same tenantMiddleware gate must 403 a cross-tenant body
@@ -225,10 +232,9 @@ test('isolation: body.tenant_id=<other tenant> on POST /customers/create is reje
 
   // Defense-in-depth: even if a row was somehow created, it would not
   // have the injected tag. Verify by name.
-  const byName = await pool.query(
-    `SELECT count(*)::int AS n FROM customers WHERE name = $1`,
-    [`${tag}-injected`]
-  );
+  const byName = await pool.query(`SELECT count(*)::int AS n FROM customers WHERE name = $1`, [
+    `${tag}-injected`,
+  ]);
   expect(byName.rows[0].n, 'injected row must not exist anywhere').toBe(0);
 });
 

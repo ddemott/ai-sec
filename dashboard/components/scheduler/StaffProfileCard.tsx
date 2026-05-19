@@ -80,15 +80,13 @@ export function StaffProfileCard({
   const spaceBelow = viewportHeight - anchorRect.bottom;
   const positionAbove = spaceBelow < cardEstHeight && anchorRect.top > cardEstHeight;
 
-  const top = positionAbove
-    ? anchorRect.top - cardEstHeight - 4
-    : anchorRect.bottom + 4;
+  const top = positionAbove ? anchorRect.top - cardEstHeight - 4 : anchorRect.bottom + 4;
   const left = Math.max(8, anchorRect.left);
 
   // Generate initials for avatar
   const initials = employee.name
     .split(' ')
-    .map(w => w[0])
+    .map((w) => w[0])
     .join('')
     .slice(0, 2)
     .toUpperCase();
@@ -178,11 +176,7 @@ export function StaffProfileCard({
         {skills && skills.length > 0 ? (
           <ul className="flex flex-col gap-0.5" data-testid="staff-card-skills-list">
             {skills.map((skill, i) => (
-              <li
-                key={i}
-                className="text-xs pl-3"
-                style={{ color: 'var(--text-secondary, #aaa)' }}
-              >
+              <li key={i} className="text-xs pl-3" style={{ color: 'var(--text-secondary, #aaa)' }}>
                 {skill}
               </li>
             ))}

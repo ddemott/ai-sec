@@ -21,7 +21,6 @@ async function navigateToTab(page: Page, tabLabel: string) {
 // ─── LOGIN ──────────────────────────────────────────────────────
 
 test.describe.serial('Full Functional Audit', () => {
-
   test('1. Login flow', async ({ page }) => {
     await page.goto('/dashboard');
 
@@ -55,19 +54,19 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Should show greeting
     const greeting = page.locator('text=/Good (morning|afternoon|evening)/');
-    if (!await greeting.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (!(await greeting.isVisible({ timeout: 5000 }).catch(() => false))) {
       logIssue('HOME', 'No greeting visible — dashboard home may not be loading');
     }
 
     // Should show Today's Schedule card
     const scheduleCard = page.locator('text=/Today|Schedule/i').first();
-    if (!await scheduleCard.isVisible({ timeout: 3000 }).catch(() => false)) {
-      logIssue('HOME', 'Today\'s Schedule card not visible');
+    if (!(await scheduleCard.isVisible({ timeout: 3000 }).catch(() => false))) {
+      logIssue('HOME', "Today's Schedule card not visible");
     }
 
     // Check for week view
     const weekView = page.locator('text=/Mon|Tue|Wed|Thu|Fri/').first();
-    if (!await weekView.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (!(await weekView.isVisible({ timeout: 3000 }).catch(() => false))) {
       logIssue('HOME', 'Week view not rendering');
     }
   });
@@ -91,7 +90,7 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Hour header should render
     const hourHeader = page.locator('[data-testid="hour-header"]');
-    if (!await hourHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (!(await hourHeader.isVisible({ timeout: 5000 }).catch(() => false))) {
       logIssue('SCHEDULER', 'Hour header not rendering in staff view');
     }
 
@@ -146,18 +145,20 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Should show customer list or empty state
     const heading = page.locator('text=/Customer|CRM/i').first();
-    if (!await heading.isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (!(await heading.isVisible({ timeout: 10000 }).catch(() => false))) {
       logIssue('CRM', 'Customer view did not load');
     }
 
     // Search box
-    const search = page.locator('input[placeholder*="Search"], input[placeholder*="search"]').first();
+    const search = page
+      .locator('input[placeholder*="Search"], input[placeholder*="search"]')
+      .first();
     if (await search.isVisible({ timeout: 3000 }).catch(() => false)) {
       await search.fill('nonexistent-customer-xyz');
       await page.waitForTimeout(500);
       // Should show "no results" or empty list
       const noResults = page.locator('text=/No customers match|No customers/i');
-      if (!await noResults.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (!(await noResults.isVisible({ timeout: 3000 }).catch(() => false))) {
         logIssue('CRM', 'No "no results" message when searching for nonexistent customer');
       }
       await search.clear();
@@ -167,7 +168,7 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Add customer button
     const addBtn = page.getByRole('button', { name: /Add Customer|New Customer/i }).first();
-    if (!await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (!(await addBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
       logIssue('CRM', 'Add customer button not visible');
     }
   });
@@ -180,13 +181,13 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Should show Voice Calls header
     const heading = page.locator('text=Voice Calls');
-    if (!await heading.isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (!(await heading.isVisible({ timeout: 10000 }).catch(() => false))) {
       logIssue('CALLS', 'Voice Calls view did not load');
     }
 
     // Call History section (includes count, e.g., "Call History (0)")
     const history = page.locator('text=/Call History/');
-    if (!await history.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (!(await history.isVisible({ timeout: 3000 }).catch(() => false))) {
       logIssue('CALLS', 'Call History section not visible');
     }
 
@@ -213,19 +214,23 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Should show service catalog heading
     const services = page.locator('text=/Service Catalog|SERVICE CATALOG/i').first();
-    if (!await services.isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (!(await services.isVisible({ timeout: 10000 }).catch(() => false))) {
       logIssue('SERVICES', 'Service Catalog section did not load');
     }
 
     // Service Wizard link
     const wizard = page.locator('text=/Service Wizard|Setup Wizard/i').first();
-    if (!await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (!(await wizard.isVisible({ timeout: 3000 }).catch(() => false))) {
       logIssue('SERVICES', 'Service Wizard link not visible');
     }
 
     // Verify at least one service card is visible (or empty state)
-    const serviceCard = page.locator('text=/Follow-Up Call|In-Person Meeting|Phone Consultation|No services yet|No services/i').first();
-    if (!await serviceCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+    const serviceCard = page
+      .locator(
+        'text=/Follow-Up Call|In-Person Meeting|Phone Consultation|No services yet|No services/i'
+      )
+      .first();
+    if (!(await serviceCard.isVisible({ timeout: 3000 }).catch(() => false))) {
       logIssue('SERVICES', 'No service cards or empty state visible');
     }
   });
@@ -240,7 +245,7 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Should show Staff heading
     const staff = page.locator('text=/STAFF|Staff/').first();
-    if (!await staff.isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (!(await staff.isVisible({ timeout: 10000 }).catch(() => false))) {
       logIssue('STAFF', 'Staff view did not load');
     }
 
@@ -266,7 +271,7 @@ test.describe.serial('Full Functional Audit', () => {
 
       // Employee selector should show
       const empSelector = page.locator('[data-testid="shift-employee-selector"]');
-      if (!await empSelector.isVisible({ timeout: 3000 }).catch(() => false)) {
+      if (!(await empSelector.isVisible({ timeout: 3000 }).catch(() => false))) {
         logIssue('SHIFTS', 'Employee selector not visible in Shifts view');
       }
     }
@@ -282,7 +287,7 @@ test.describe.serial('Full Functional Audit', () => {
 
     // Should show knowledge base or AI tab
     const heading = page.locator('text=/Knowledge|AI|Persona/i').first();
-    if (!await heading.isVisible({ timeout: 10000 }).catch(() => false)) {
+    if (!(await heading.isVisible({ timeout: 10000 }).catch(() => false))) {
       logIssue('AI', 'Phone Assistant view did not load');
     }
   });
@@ -293,7 +298,10 @@ test.describe.serial('Full Functional Audit', () => {
     await page.goto('/dashboard');
 
     // Find theme selector
-    const themeSelect = page.locator('select').filter({ hasText: /Navy|Dark|Light|Nord/i }).first();
+    const themeSelect = page
+      .locator('select')
+      .filter({ hasText: /Navy|Dark|Light|Nord/i })
+      .first();
     if (await themeSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Switch to a different theme
       await themeSelect.selectOption({ index: 1 });
@@ -312,7 +320,7 @@ test.describe.serial('Full Functional Audit', () => {
     await page.waitForTimeout(2000);
 
     const scheduleHeader = page.locator('text=Schedule').first();
-    if (!await scheduleHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (!(await scheduleHeader.isVisible({ timeout: 5000 }).catch(() => false))) {
       logIssue('NAVIGATION', 'URL param ?tab=schedule did not navigate to Schedule tab');
     }
 
@@ -321,7 +329,7 @@ test.describe.serial('Full Functional Audit', () => {
     await page.waitForTimeout(2000);
 
     const crmHeader = page.locator('text=/Customer|CRM/i').first();
-    if (!await crmHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (!(await crmHeader.isVisible({ timeout: 5000 }).catch(() => false))) {
       logIssue('NAVIGATION', 'URL param ?tab=customers did not navigate to CRM tab');
     }
   });

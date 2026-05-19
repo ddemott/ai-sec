@@ -1,6 +1,6 @@
-'use client'
+'use client';
 
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react';
 
 /**
  * Track the bounding rect of a ref'd element, updating on scroll,
@@ -19,36 +19,33 @@ import { useEffect, useState, type RefObject } from 'react'
  * Passes `null` while `active` is false so menus can use it as a
  * "should I render?" gate too.
  */
-export function useAnchorRect(
-  ref: RefObject<HTMLElement | null>,
-  active: boolean,
-): DOMRect | null {
-  const [rect, setRect] = useState<DOMRect | null>(null)
+export function useAnchorRect(ref: RefObject<HTMLElement | null>, active: boolean): DOMRect | null {
+  const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
     if (!active || !ref.current) {
-      setRect(null)
-      return
+      setRect(null);
+      return;
     }
-    const el = ref.current
-    const update = () => setRect(el.getBoundingClientRect())
-    update()
+    const el = ref.current;
+    const update = () => setRect(el.getBoundingClientRect());
+    update();
 
     // Re-anchor on scroll (capture=true so nested-scroller scrolls
     // also fire) and on viewport resize.
-    window.addEventListener('scroll', update, true)
-    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
     // Catches size changes that don't fire scroll/resize — e.g.
     // sidebar collapse, font load, dynamic content insertion.
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
-    ro?.observe(el)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
 
     return () => {
-      window.removeEventListener('scroll', update, true)
-      window.removeEventListener('resize', update)
-      ro?.disconnect()
-    }
-  }, [ref, active])
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+      ro?.disconnect();
+    };
+  }, [ref, active]);
 
-  return rect
+  return rect;
 }

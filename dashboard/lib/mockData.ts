@@ -6,7 +6,7 @@ const getFixedDate = (daysOut: number, hours: number, minutes: number) => {
   d.setDate(d.getDate() + daysOut);
   d.setHours(hours, minutes, 0, 0);
   return d.toISOString();
-}
+};
 
 export const MOCK_TENANT = {
   tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
@@ -14,8 +14,8 @@ export const MOCK_TENANT = {
   business_type: 'mobile-tire',
   system_prompt: 'You are a professional, helpful secretary for DynaTire...',
   first_message: null,
-  voice_id: 'ba124806-6962-4354-94a0-7607775952f4'
-}
+  voice_id: 'ba124806-6962-4354-94a0-7607775952f4',
+};
 
 export const MOCK_CUSTOMERS: Customer[] = [
   {
@@ -25,7 +25,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     name: 'Bob Smith',
     email: 'bob@example.com',
     address: '123 Main St, New York, NY',
-    metadata: { vehicle: '2022 Honda Civic', notes: 'Prefers morning appointments' }
+    metadata: { vehicle: '2022 Honda Civic', notes: 'Prefers morning appointments' },
   },
   {
     customer_id: '97704486-04d4-40ba-85f8-7a82e47e1611',
@@ -34,9 +34,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     name: 'Alice Johnson',
     email: 'alice@example.com',
     address: '456 Elm St, Brooklyn, NY',
-    metadata: { vehicle: '2021 Tesla Model 3', notes: "Has a slow leak in front left tire" }
-  }
-]
+    metadata: { vehicle: '2021 Tesla Model 3', notes: 'Has a slow leak in front left tire' },
+  },
+];
 
 export const MOCK_APPOINTMENTS: Appointment[] = [
   {
@@ -50,7 +50,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     location: '123 Main St, New York, NY',
     status: 'scheduled',
     customers: { name: 'Bob Smith', phone: '+15551112222' },
-    resources: { name: 'Service Truck 1' }
+    resources: { name: 'Service Truck 1' },
   },
   {
     appointment_id: 'f92d33d3-007e-4508-a5ca-eb1a483c0b07',
@@ -63,15 +63,15 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     location: '456 Elm St, Brooklyn, NY',
     status: 'scheduled',
     customers: { name: 'Alice Johnson', phone: '+15550001111' },
-    resources: { name: 'Service Truck 1' }
-  }
-]
+    resources: { name: 'Service Truck 1' },
+  },
+];
 
 export const MOCK_SUMMARIES = [
   {
     call_summary_id: 's1',
     customer_id: MOCK_CUSTOMERS[0].customer_id,
     summary: 'Bob called to ask about pricing for winter tires.',
-    created_at: new Date(Date.now() - 86400000).toISOString()
-  }
-]
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+];

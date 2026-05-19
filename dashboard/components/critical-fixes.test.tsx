@@ -11,9 +11,15 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -29,7 +35,7 @@ describe('BUG-003: AppointmentView draftEvent state', () => {
     localStorageMock.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => []
+      json: async () => [],
     });
   });
 
@@ -69,7 +75,7 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
     localStorageMock.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => ([
+      json: async () => [
         {
           id: '00000000-0000-0000-0000-000000000001',
           tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
@@ -84,8 +90,8 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
           postal_code: '10001',
           timezone: 'America/New_York',
           metadata: {},
-        }
-      ])
+        },
+      ],
     });
   });
 
@@ -142,9 +148,7 @@ describe('BUG-005: No dev bypass button in production code', () => {
 
     // Should have exactly one submit-type action (the sign in button)
     const buttons = screen.getAllByRole('button');
-    const submitButtons = buttons.filter(
-      btn => btn.textContent?.match(/Sign In|Log In|Login/i)
-    );
+    const submitButtons = buttons.filter((btn) => btn.textContent?.match(/Sign In|Log In|Login/i));
     expect(submitButtons.length).toBe(1);
     // WHO: unauthenticated visitor | WHAT: verifies only one sign-in button exists | WHEN: login page renders | WHERE: LoginView | WHY: extra buttons could confuse users or expose unauthorized access paths
   });
@@ -172,8 +176,7 @@ vi.mock('@/lib/SessionContext', () => ({
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
   SessionProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
-
+}));
 
 function ThrowingComponent({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) {
@@ -211,7 +214,9 @@ describe('BUG-010: ErrorBoundary component', () => {
     expect(screen.getByRole('heading', { name: /Something went wrong/i })).toBeInTheDocument();
     // Raw error text only appears in the dev-details block (vitest runs
     // with NODE_ENV=test, not 'production', so the block is visible).
-    expect(screen.getByTestId('error-boundary-dev-details')).toHaveTextContent(/Test component error/i);
+    expect(screen.getByTestId('error-boundary-dev-details')).toHaveTextContent(
+      /Test component error/i
+    );
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
     // WHO: any user | WHAT: sees error fallback UI | WHEN: child component throws | WHERE: ErrorBoundary | WHY: unhandled crash would show a white screen instead of actionable error message
   });
@@ -271,8 +276,8 @@ describe('BUG-012: LoginView stores JWT token', () => {
         tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         user_id: 'user-123',
         user_name: 'Test User',
-        token: 'eyJhbGciOiJIUzI1NiJ9.test.signature'
-      })
+        token: 'eyJhbGciOiJIUzI1NiJ9.test.signature',
+      }),
     });
 
     const mockLogin = vi.fn();
@@ -280,12 +285,12 @@ describe('BUG-012: LoginView stores JWT token', () => {
 
     // Fill in the form
     fireEvent.change(screen.getByPlaceholderText(/you@business.com/i), {
-      target: { value: 'test@test.com' }
+      target: { value: 'test@test.com' },
     });
     // Find password input
     const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement;
     fireEvent.change(passwordInput, {
-      target: { value: 'password123' }
+      target: { value: 'password123' },
     });
 
     // Submit

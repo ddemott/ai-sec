@@ -81,7 +81,7 @@ async function assertBackendFresh(): Promise<void> {
     throw new Error(
       `[globalSetup] could not reach ${BACKEND_URL}/health to verify backend freshness: ${
         err instanceof Error ? err.message : String(err)
-      }. Start the backend (\`npm start\` from the repo root) and re-run.`,
+      }. Start the backend (\`npm start\` from the repo root) and re-run.`
     );
   }
 
@@ -90,7 +90,7 @@ async function assertBackendFresh(): Promise<void> {
     // warning instead of a hard fail. The watchdog still helps next
     // time around once the backend is updated.
     console.warn(
-      '[globalSetup] /health did not include started_at — backend may be older than the staleness guard. Skipping check.',
+      '[globalSetup] /health did not include started_at — backend may be older than the staleness guard. Skipping check.'
     );
     return;
   }
@@ -114,7 +114,7 @@ async function assertBackendFresh(): Promise<void> {
         '  kill $(lsof -ti :4001) && npm run build && node dist/src/index.js &  (surgical)',
         '',
         'See CLAUDE.md Build Principles → "Backend code changes require BOTH a rebuild AND a restart."',
-      ].join('\n'),
+      ].join('\n')
     );
   }
 }
@@ -127,7 +127,9 @@ export default async function globalSetup() {
     return;
   }
   const script = resolve(__dirname, '..', '..', 'scripts', 'rebuild-db.sh');
-  console.log(`[globalSetup] rebuilding DB from scratch via ${script} — this validates the migration chain too.`);
+  console.log(
+    `[globalSetup] rebuilding DB from scratch via ${script} — this validates the migration chain too.`
+  );
   const result = spawnSync('bash', [script, '--yes'], {
     stdio: 'inherit',
     env: process.env,

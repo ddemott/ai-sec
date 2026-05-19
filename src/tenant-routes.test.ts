@@ -21,7 +21,12 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { registerTenantRoutes } from './routes/tenants';
-import { createMockClient, createMockPool, type MockClient, type MockResponse } from './test-utils-mock';
+import {
+  createMockClient,
+  createMockPool,
+  type MockClient,
+  type MockResponse,
+} from './test-utils-mock';
 
 // Real v4 UUIDs — Zod schemas in the route handler reject pattern fillers.
 const TENANT_ID_A = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -32,7 +37,12 @@ let app: FastifyInstance;
 let mockClient: MockClient;
 let queryResponses: MockResponse[];
 let queries: { text: string; params: unknown[] }[];
-let authStub: { user_id: string; tenant_id: string; email: string; role: 'owner' | 'front_desk' } | null;
+let authStub: {
+  user_id: string;
+  tenant_id: string;
+  email: string;
+  role: 'owner' | 'front_desk';
+} | null;
 
 function buildApp() {
   const handle = createMockClient();

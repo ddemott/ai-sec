@@ -16,7 +16,7 @@ export class CommunicationService {
 
   constructor(
     private configService: TenantConfigService,
-    private consentService?: ConsentService,
+    private consentService?: ConsentService
   ) {
     this.emailService = new EmailService(configService, consentService);
     this.smsService = new SMSService(configService, consentService);
@@ -44,13 +44,13 @@ export class CommunicationService {
     tenantId: string,
     customerEmail: string,
     customerPhone: string | undefined,
-    appointmentDetails: AppointmentData,
+    appointmentDetails: AppointmentData
   ): Promise<{ email?: CommunicationResult; sms?: CommunicationResult }> {
     return this.appointmentService.sendAppointmentConfirmation(
       tenantId,
       customerEmail,
       customerPhone,
-      appointmentDetails,
+      appointmentDetails
     );
   }
 
@@ -62,14 +62,14 @@ export class CommunicationService {
     customerEmail: string,
     customerPhone: string | undefined,
     appointmentDetails: AppointmentData,
-    hoursUntilAppointment: number,
+    hoursUntilAppointment: number
   ): Promise<{ email?: CommunicationResult; sms?: CommunicationResult }> {
     return this.appointmentService.sendAppointmentReminder(
       tenantId,
       customerEmail,
       customerPhone,
       appointmentDetails,
-      hoursUntilAppointment,
+      hoursUntilAppointment
     );
   }
 
@@ -80,13 +80,13 @@ export class CommunicationService {
     tenantId: string,
     customerEmail: string,
     customerPhone: string | undefined,
-    appointmentDetails: AppointmentData & { reason?: string },
+    appointmentDetails: AppointmentData & { reason?: string }
   ): Promise<{ email?: CommunicationResult; sms?: CommunicationResult }> {
     return this.appointmentService.sendAppointmentCancellation(
       tenantId,
       customerEmail,
       customerPhone,
-      appointmentDetails,
+      appointmentDetails
     );
   }
 
@@ -96,12 +96,12 @@ export class CommunicationService {
   async sendAppointmentConfirmationEmail(
     tenantId: string,
     customerEmail: string,
-    appointmentDetails: AppointmentData,
+    appointmentDetails: AppointmentData
   ): Promise<CommunicationResult> {
     return this.appointmentService.sendAppointmentConfirmationEmail(
       tenantId,
       customerEmail,
-      appointmentDetails,
+      appointmentDetails
     );
   }
 
@@ -109,13 +109,13 @@ export class CommunicationService {
     tenantId: string,
     customerEmail: string,
     appointmentDetails: AppointmentData,
-    hoursUntilAppointment: number,
+    hoursUntilAppointment: number
   ): Promise<CommunicationResult> {
     return this.appointmentService.sendAppointmentReminderEmail(
       tenantId,
       customerEmail,
       appointmentDetails,
-      hoursUntilAppointment,
+      hoursUntilAppointment
     );
   }
 
@@ -123,12 +123,12 @@ export class CommunicationService {
     tenantId: string,
     customerEmail: string,
     customerPhone: string | undefined,
-    appointmentDetails: AppointmentData & { reason?: string },
+    appointmentDetails: AppointmentData & { reason?: string }
   ): Promise<CommunicationResult> {
     return this.appointmentService.sendAppointmentCancellationEmail(
       tenantId,
       customerEmail,
-      appointmentDetails,
+      appointmentDetails
     );
   }
 
@@ -137,7 +137,7 @@ export class CommunicationService {
    */
   applyTemplate(
     template: string,
-    data: Record<string, unknown>,
+    data: Record<string, unknown>
   ): Promise<{
     subject?: string;
     text?: string;

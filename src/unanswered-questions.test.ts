@@ -4,9 +4,16 @@
  *
  * Happy + sad paths with 5W diagnostic comments.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { type Client } from "pg";
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { type Client } from 'pg';
+import {
+  getRootClient,
+  clearDB,
+  setupBasicTenant,
+  beginTestTransaction,
+  rollbackTestTransaction,
+  skipIfDbDown,
+} from './test-utils';
 
 let client: Client;
 let tenantId: string;
@@ -21,7 +28,7 @@ beforeAll(async () => {
     tenantId = setup.tenantId;
   } catch {
     dbAvailable = false;
-    console.warn("[unanswered-questions.test] Skipping DB tests - connection failed");
+    console.warn('[unanswered-questions.test] Skipping DB tests - connection failed');
   }
 });
 
@@ -45,7 +52,7 @@ afterEach(async () => {
 // HAPPY PATHS
 // =============================================
 
-describe("Unanswered Questions — Happy Paths", () => {
+describe('Unanswered Questions — Happy Paths', () => {
   it("LOG-QUESTION: When AI can't answer a caller's question, it gets logged with caller context", async () => {
     // WHO: Voice AI during a live call with a DynaTire customer
     // WHAT: Caller asks about trade-in policy, no KB match found — question logged with phone and call ID
@@ -58,7 +65,7 @@ describe("Unanswered Questions — Happy Paths", () => {
     await client.query(
       `INSERT INTO unanswered_questions (tenant_id, question, caller_phone, call_id)
        VALUES ($1, $2, $3, $4)`,
-      [tenantId, "Do you accept trade-ins on old tires?", "+15551234567", "call-abc-123"]
+      [tenantId, 'Do you accept trade-ins on old tires?', '+15551234567', 'call-abc-123']
     );
 
     const res = await client.query(
@@ -68,14 +75,14 @@ describe("Unanswered Questions — Happy Paths", () => {
     );
 
     expect(res.rows).toHaveLength(1);
-    expect(res.rows[0].question).toBe("Do you accept trade-ins on old tires?");
-    expect(res.rows[0].caller_phone).toBe("+15551234567");
-    expect(res.rows[0].call_id).toBe("call-abc-123");
+    expect(res.rows[0].question).toBe('Do you accept trade-ins on old tires?');
+    expect(res.rows[0].caller_phone).toBe('+15551234567');
+    expect(res.rows[0].call_id).toBe('call-abc-123');
     expect(res.rows[0].resolved).toBe(false);
     expect(res.rows[0].owner_notified).toBe(false);
   });
 
-  it("LIST-UNRESOLVED: Dashboard shows only unresolved questions, newest first", async () => {
+  it('LIST-UNRESOLVED: Dashboard shows only unresolved questions, newest first', async () => {
     // WHO: Business owner checking their KB gaps in the dashboard
     // WHAT: Two unresolved + one resolved question — list returns only the 2 unresolved
     // WHEN: Owner clicks the badge on "Phone Assistant" tab
@@ -108,11 +115,11 @@ describe("Unanswered Questions — Happy Paths", () => {
     );
 
     expect(res.rows).toHaveLength(2);
-    expect(res.rows[0].question).toBe("Newest question");
-    expect(res.rows[1].question).toBe("Oldest question");
+    expect(res.rows[0].question).toBe('Newest question');
+    expect(res.rows[1].question).toBe('Oldest question');
   });
 
-  it("RESOLVE-QUESTION: Owner marks a question as resolved after updating KB", async () => {
+  it('RESOLVE-QUESTION: Owner marks a question as resolved after updating KB', async () => {
     // WHO: Business owner who just added a new policy answer to the knowledge base
     // WHAT: Marks the unanswered question as resolved so it disappears from the badge count
     // WHEN: Owner clicks "Resolve" next to the question in the dashboard
@@ -143,7 +150,7 @@ describe("Unanswered Questions — Happy Paths", () => {
     expect(res.rows).toHaveLength(0);
   });
 
-  it("CALLER-MESSAGE: When caller leaves a message, it gets stored alongside the question", async () => {
+  it('CALLER-MESSAGE: When caller leaves a message, it gets stored alongside the question', async () => {
     // WHO: Caller who the AI offered to take a message for
     // WHAT: Caller says "Please tell the owner I need 4 snow tires for a 2024 RAV4"
     // WHEN: During the call, after AI couldn't answer about snow tire availability
@@ -155,7 +162,12 @@ describe("Unanswered Questions — Happy Paths", () => {
     await client.query(
       `INSERT INTO unanswered_questions (tenant_id, question, caller_phone, caller_message)
        VALUES ($1, $2, $3, $4)`,
-      [tenantId, "Do you carry snow tires?", "+15551112222", "Need 4 snow tires for a 2024 RAV4, please call me back"]
+      [
+        tenantId,
+        'Do you carry snow tires?',
+        '+15551112222',
+        'Need 4 snow tires for a 2024 RAV4, please call me back',
+      ]
     );
 
     const res = await client.query(
@@ -163,7 +175,9 @@ describe("Unanswered Questions — Happy Paths", () => {
       [tenantId]
     );
 
-    expect(res.rows[0].caller_message).toBe("Need 4 snow tires for a 2024 RAV4, please call me back");
+    expect(res.rows[0].caller_message).toBe(
+      'Need 4 snow tires for a 2024 RAV4, please call me back'
+    );
   });
 });
 
@@ -171,8 +185,8 @@ describe("Unanswered Questions — Happy Paths", () => {
 // SAD PATHS
 // =============================================
 
-describe("Unanswered Questions — Sad Paths", () => {
-  it("TENANT-ISOLATION: Questions from one tenant are invisible to another tenant", async () => {
+describe('Unanswered Questions — Sad Paths', () => {
+  it('TENANT-ISOLATION: Questions from one tenant are invisible to another tenant', async () => {
     // WHO: Two different business owners on the same platform
     // WHAT: Tenant A's unanswered questions must not leak to Tenant B
     // WHEN: Tenant B queries the unanswered_questions table
@@ -206,9 +220,9 @@ describe("Unanswered Questions — Sad Paths", () => {
     );
 
     expect(resA.rows).toHaveLength(1);
-    expect(resA.rows[0].question).toBe("Tenant A question");
+    expect(resA.rows[0].question).toBe('Tenant A question');
     expect(resB.rows).toHaveLength(1);
-    expect(resB.rows[0].question).toBe("Tenant B question");
+    expect(resB.rows[0].question).toBe('Tenant B question');
   });
 
   it("RESOLVE-WRONG-TENANT: Cannot resolve another tenant's question", async () => {
@@ -246,7 +260,7 @@ describe("Unanswered Questions — Sad Paths", () => {
     expect(checkRes.rows[0].resolved).toBe(false);
   });
 
-  it("NO-PHONE-STILL-LOGS: Question is logged even when caller phone is unknown", async () => {
+  it('NO-PHONE-STILL-LOGS: Question is logged even when caller phone is unknown', async () => {
     // WHO: Anonymous caller whose phone number wasn't captured by Vapi
     // WHAT: Question still gets logged with null caller_phone
     // WHEN: Edge function callerContext.phone is undefined
@@ -267,11 +281,11 @@ describe("Unanswered Questions — Sad Paths", () => {
     );
 
     expect(res.rows).toHaveLength(1);
-    expect(res.rows[0].question).toBe("What brands do you carry?");
+    expect(res.rows[0].question).toBe('What brands do you carry?');
     expect(res.rows[0].caller_phone).toBeNull();
   });
 
-  it("CASCADE-DELETE: Questions are deleted when tenant is deleted", async () => {
+  it('CASCADE-DELETE: Questions are deleted when tenant is deleted', async () => {
     // WHO: Platform admin deleting a tenant that cancelled their subscription
     // WHAT: All unanswered questions for that tenant are cascade-deleted
     // WHEN: DELETE FROM tenants WHERE tenant_id = $1
@@ -306,8 +320,8 @@ describe("Unanswered Questions — Sad Paths", () => {
 // OWNER NOTIFICATION (unit-level, no actual SMS)
 // =============================================
 
-describe("Unanswered Questions — Owner Notification", () => {
-  it("OWNER-PHONE-EXISTS: Tenant with owner_phone set can receive SMS notifications", async () => {
+describe('Unanswered Questions — Owner Notification', () => {
+  it('OWNER-PHONE-EXISTS: Tenant with owner_phone set can receive SMS notifications', async () => {
     // WHO: Business owner who configured their phone number in settings
     // WHAT: owner_phone is stored on the tenants table and queryable
     // WHEN: Edge function needs to send SMS after logging an unanswered question
@@ -316,21 +330,20 @@ describe("Unanswered Questions — Owner Notification", () => {
     //       learns about KB gaps until they check the dashboard
     if (!dbAvailable) return;
 
-    await client.query(
-      `UPDATE tenants SET owner_phone = '+15559998888' WHERE tenant_id = $1`,
-      [tenantId]
-    );
+    await client.query(`UPDATE tenants SET owner_phone = '+15559998888' WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
 
     const res = await client.query(
       `SELECT owner_phone, inbound_phone, name FROM tenants WHERE tenant_id = $1`,
       [tenantId]
     );
 
-    expect(res.rows[0].owner_phone).toBe("+15559998888");
+    expect(res.rows[0].owner_phone).toBe('+15559998888');
     expect(res.rows[0].name).toBeDefined();
   });
 
-  it("NO-OWNER-PHONE: SMS notification gracefully skips when owner_phone is null", async () => {
+  it('NO-OWNER-PHONE: SMS notification gracefully skips when owner_phone is null', async () => {
     // WHO: Business owner who hasn't configured their phone number yet
     // WHAT: owner_phone is NULL — SMS send is skipped, question still logged
     // WHEN: Edge function calls notifyOwnerOfUnansweredQuestion()
@@ -339,10 +352,9 @@ describe("Unanswered Questions — Owner Notification", () => {
     //       the dashboard badge still works as a fallback notification
     if (!dbAvailable) return;
 
-    const res = await client.query(
-      `SELECT owner_phone FROM tenants WHERE tenant_id = $1`,
-      [tenantId]
-    );
+    const res = await client.query(`SELECT owner_phone FROM tenants WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
 
     // Default tenant from setupBasicTenant has no owner_phone
     expect(res.rows[0].owner_phone).toBeNull();

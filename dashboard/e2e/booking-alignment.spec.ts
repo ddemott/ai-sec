@@ -67,14 +67,17 @@ async function switchToDynaTireTenant(page: Page) {
 }
 
 async function getApiToken(page: Page): Promise<string> {
-  const result = await page.evaluate(async ({ email, password }) => {
-    const res = await fetch('https://localhost:4001/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    return await res.json();
-  }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+  const result = await page.evaluate(
+    async ({ email, password }) => {
+      const res = await fetch('https://localhost:4001/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      return await res.json();
+    },
+    { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }
+  );
   if (!result?.token) throw new Error(`Login failed: ${JSON.stringify(result)}`);
   return result.token as string;
 }
@@ -119,7 +122,7 @@ test.beforeAll(async () => {
   const insert = await pool.query(
     `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
      VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture'],
+    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture']
   );
   fixtureCustomerId = insert.rows[0].customer_id;
 });
@@ -136,7 +139,9 @@ test.afterAll(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 1. UI alignment filter — picking a service narrows the Tech dropdown
 // ────────────────────────────────────────────────────────────────────────────
-test('alignment: picking a service narrows the Tech dropdown to mapped staff only', async ({ page }) => {
+test('alignment: picking a service narrows the Tech dropdown to mapped staff only', async ({
+  page,
+}) => {
   // WHO: front-desk operator picking a service in Quick Book
   // WHAT: after selecting "Balancing" (only Mike is mapped to it in seed
   //        data), Carlos must NOT appear in the Tech dropdown but Mike
@@ -151,7 +156,10 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
   await ensureLoggedIn(page);
   await switchToDynaTireTenant(page);
 
-  await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+  await page
+    .getByRole('tab', { name: /^Schedule$/ })
+    .first()
+    .click();
   await page.waitForTimeout(1000);
 
   // Resources sub-tab has Quick Book + the dropdown is the same one used
@@ -178,10 +186,12 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
   expect(techOptionTexts.some((t) => /unassigned/i.test(t))).toBe(true);
   expect(techOptionTexts.some((t) => /\bMike\b/.test(t))).toBe(true);
   // Carlos and Dana are NOT mapped to Balancing → must NOT appear.
-  expect(techOptionTexts.some((t) => /\bCarlos\b/.test(t)),
+  expect(
+    techOptionTexts.some((t) => /\bCarlos\b/.test(t)),
     `Carlos must be filtered out — not in service_employee for Balancing. Got: ${techOptionTexts.join(' | ')}`
   ).toBe(false);
-  expect(techOptionTexts.some((t) => /\bDana\b/.test(t)),
+  expect(
+    techOptionTexts.some((t) => /\bDana\b/.test(t)),
     `Dana must be filtered out — not in service_employee for Balancing. Got: ${techOptionTexts.join(' | ')}`
   ).toBe(false);
 });
@@ -189,7 +199,9 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
 // ────────────────────────────────────────────────────────────────────────────
 // 2. RPC enforcement — direct API call with mismatched (service, employee)
 // ────────────────────────────────────────────────────────────────────────────
-test('alignment: POST /appointments/create rejects an unmapped (service, employee) pair', async ({ page }) => {
+test('alignment: POST /appointments/create rejects an unmapped (service, employee) pair', async ({
+  page,
+}) => {
   // WHO: a determined caller hitting the API directly (curl, Postman,
   //        future client app) — the gap the dashboard UI filter alone
   //        couldn't reach
@@ -215,10 +227,9 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
   expect(truckId, 'Truck resource expected in seed').toBeTruthy();
 
   // Need a customer too — use the first one from the tenant.
-  const cust = await pool.query(
-    'SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1',
-    [DYNATIRE_ID]
-  );
+  const cust = await pool.query('SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1', [
+    DYNATIRE_ID,
+  ]);
   const customerId = cust.rows[0]?.customer_id;
   expect(customerId, 'At least one customer expected in DynaTire seed').toBeTruthy();
 
@@ -234,33 +245,39 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
     [DYNATIRE_ID, start.toISOString()]
   );
 
-  const result = await page.evaluate(async ({ token, payload }) => {
-    const res = await fetch('https://localhost:4001/appointments/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    return { status: res.status, body };
-  }, {
-    token,
-    payload: {
-      tenant_id: DYNATIRE_ID,
-      resource_id: truckId,
-      customer_id: customerId,
-      employee_id: carlosId,
-      service_id: balancingId,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      description: 'e2e-align — should be rejected',
+  const result = await page.evaluate(
+    async ({ token, payload }) => {
+      const res = await fetch('https://localhost:4001/appointments/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json();
+      return { status: res.status, body };
     },
-  });
+    {
+      token,
+      payload: {
+        tenant_id: DYNATIRE_ID,
+        resource_id: truckId,
+        customer_id: customerId,
+        employee_id: carlosId,
+        service_id: balancingId,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        description: 'e2e-align — should be rejected',
+      },
+    }
+  );
 
   // Booking RPC returned an error — surfaced as a 400 by the route.
-  expect(result.status, `expected 400, got ${result.status} body=${JSON.stringify(result.body)}`).toBe(400);
+  expect(
+    result.status,
+    `expected 400, got ${result.status} body=${JSON.stringify(result.body)}`
+  ).toBe(400);
   expect(result.body?.success).toBe(false);
   expect(result.body?.error ?? '').toMatch(/not assigned to perform/i);
 
@@ -275,7 +292,9 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
 // ────────────────────────────────────────────────────────────────────────────
 // 3. Cross-view popover Cancel — Cancel an appointment from the List sub-tab
 // ────────────────────────────────────────────────────────────────────────────
-test('cross-view: appointment popover Cancel works from the List sub-tab and soft-cancels in DB', async ({ page }) => {
+test('cross-view: appointment popover Cancel works from the List sub-tab and soft-cancels in DB', async ({
+  page,
+}) => {
   // WHO: front-desk operator looking at the List sub-tab (not Calendar)
   // WHAT: click an appointment row → popover opens with Cancel button →
   //        click Cancel → confirm → DB row status flips to 'canceled'
@@ -324,14 +343,24 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
        RETURNING appointment_id`,
-      [DYNATIRE_ID, truckId, customerId, start.toISOString(), end.toISOString(), `${tag}-cross-view-cancel`]
+      [
+        DYNATIRE_ID,
+        truckId,
+        customerId,
+        start.toISOString(),
+        end.toISOString(),
+        `${tag}-cross-view-cancel`,
+      ]
     );
     apptId = ins.rows[0].appointment_id;
 
     await ensureLoggedIn(page);
     await switchToDynaTireTenant(page);
 
-    await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+    await page
+      .getByRole('tab', { name: /^Schedule$/ })
+      .first()
+      .click();
     await page.waitForTimeout(1000);
 
     // List sub-tab — a flat list of appointments, easiest to locate by tag.
@@ -355,10 +384,9 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     await page.waitForTimeout(2000);
 
     // DB row is soft-canceled (still exists, status='canceled').
-    const after = await pool.query(
-      `SELECT status FROM appointments WHERE appointment_id = $1`,
-      [apptId]
-    );
+    const after = await pool.query(`SELECT status FROM appointments WHERE appointment_id = $1`, [
+      apptId,
+    ]);
     expect(after.rowCount, 'row must still exist (soft cancel, not hard delete)').toBe(1);
     expect(after.rows[0].status).toBe('canceled');
   } finally {
@@ -371,7 +399,9 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
 // ────────────────────────────────────────────────────────────────────────────
 // 4. Soft-cancel frees the slot for re-booking
 // ────────────────────────────────────────────────────────────────────────────
-test('cancel-frees-slot: a canceled appointment does not block re-booking the same resource+time', async ({ page }) => {
+test('cancel-frees-slot: a canceled appointment does not block re-booking the same resource+time', async ({
+  page,
+}) => {
   // WHO: front-desk operator who canceled a booking and wants to reuse the slot
   // WHAT: book A → cancel A → book B at the same resource+time → B
   //        succeeds (the GiST resource-overlap exclusion treats canceled
@@ -420,45 +450,55 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
     const token = await getApiToken(page);
 
     // Cancel A via the production API path.
-    const cancelRes = await page.evaluate(async ({ token, id }) => {
-      const res = await fetch(`https://localhost:4001/appointments/${id}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a' }),
-      });
-      return { status: res.status, body: await res.json() };
-    }, { token, id: insA.rows[0].appointment_id });
-    expect(cancelRes.status, `cancel must succeed; body=${JSON.stringify(cancelRes.body)}`).toBe(200);
+    const cancelRes = await page.evaluate(
+      async ({ token, id }) => {
+        const res = await fetch(`https://localhost:4001/appointments/${id}/cancel`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a' }),
+        });
+        return { status: res.status, body: await res.json() };
+      },
+      { token, id: insA.rows[0].appointment_id }
+    );
+    expect(cancelRes.status, `cancel must succeed; body=${JSON.stringify(cancelRes.body)}`).toBe(
+      200
+    );
 
     // Book B at the same resource+time via /appointments/create. Without
     // the route's status='scheduled' filter the GiST exclusion would
     // reject the overlap. With it, B's INSERT lands cleanly.
-    const bookRes = await page.evaluate(async ({ token, payload }) => {
-      const res = await fetch('https://localhost:4001/appointments/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      return { status: res.status, body: await res.json() };
-    }, {
-      token,
-      payload: {
-        tenant_id: DYNATIRE_ID,
-        resource_id: truckId,
-        customer_id: customerId,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        description: `${tag}-B`,
+    const bookRes = await page.evaluate(
+      async ({ token, payload }) => {
+        const res = await fetch('https://localhost:4001/appointments/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        return { status: res.status, body: await res.json() };
       },
-    });
+      {
+        token,
+        payload: {
+          tenant_id: DYNATIRE_ID,
+          resource_id: truckId,
+          customer_id: customerId,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          description: `${tag}-B`,
+        },
+      }
+    );
 
-    expect(bookRes.status, `re-booking must succeed; body=${JSON.stringify(bookRes.body)}`).toBe(200);
+    expect(bookRes.status, `re-booking must succeed; body=${JSON.stringify(bookRes.body)}`).toBe(
+      200
+    );
     expect(bookRes.body?.success).toBe(true);
     expect(bookRes.body?.appointment_id).toBeTruthy();
     ids.push(bookRes.body.appointment_id);
@@ -471,8 +511,8 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
       [DYNATIRE_ID, start.toISOString()]
     );
     expect(verify.rowCount).toBe(2);
-    const a = verify.rows.find(r => r.description.endsWith('-A'));
-    const b = verify.rows.find(r => r.description.endsWith('-B'));
+    const a = verify.rows.find((r) => r.description.endsWith('-A'));
+    const b = verify.rows.find((r) => r.description.endsWith('-B'));
     expect(a?.status).toBe('canceled');
     expect(b?.status).toBe('scheduled');
   } finally {

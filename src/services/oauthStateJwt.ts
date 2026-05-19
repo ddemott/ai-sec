@@ -52,7 +52,7 @@ export function signOAuthState(args: {
   return jwt.sign(
     { tenantId: args.tenantId, purpose: args.purpose },
     resolveSecret(args.jwtSecret),
-    { expiresIn: args.expiresIn || DEFAULT_EXPIRES_IN } as jwt.SignOptions,
+    { expiresIn: args.expiresIn || DEFAULT_EXPIRES_IN } as jwt.SignOptions
   );
 }
 

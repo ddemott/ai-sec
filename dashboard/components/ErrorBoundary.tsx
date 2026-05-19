@@ -1,42 +1,43 @@
-'use client'
+'use client';
 
-import React, { Component, type ReactNode } from 'react'
-import { Card } from './ui/Card'
-import { Button } from './ui/Button'
+import React, { Component, type ReactNode } from 'react';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
 
 interface Props {
-  children: ReactNode
-  fallback?: ReactNode
+  children: ReactNode;
+  fallback?: ReactNode;
 }
 
 interface State {
-  hasError: boolean
-  error: Error | null
+  hasError: boolean;
+  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
-    super(props)
-    this.state = { hasError: false, error: null }
+    super(props);
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[ErrorBoundary] Caught error:', error, errorInfo)
+    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback
+      if (this.props.fallback) return this.props.fallback;
 
       // Only show raw error text in development. In production the user
       // sees a friendly generic message while the actual error still
       // reaches telemetry via componentDidCatch's console.error.
-      const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production'
-      const friendlyMessage = "Something unexpected happened. Your work is safe — try again, or refresh the page if this keeps happening."
+      const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+      const friendlyMessage =
+        'Something unexpected happened. Your work is safe — try again, or refresh the page if this keeps happening.';
 
       return (
         <div className="flex items-center justify-center p-8" role="alert">
@@ -51,7 +52,11 @@ export class ErrorBoundary extends Component<Props, State> {
               <pre
                 data-testid="error-boundary-dev-details"
                 className="text-xs mb-4 p-3 rounded overflow-auto"
-                style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-muted)', maxHeight: '120px' }}
+                style={{
+                  backgroundColor: 'var(--bg-raised)',
+                  color: 'var(--text-muted)',
+                  maxHeight: '120px',
+                }}
               >
                 {this.state.error.message}
               </pre>
@@ -68,7 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  if (typeof window !== 'undefined') window.location.reload()
+                  if (typeof window !== 'undefined') window.location.reload();
                 }}
               >
                 Reload page
@@ -76,9 +81,9 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
           </Card>
         </div>
-      )
+      );
     }
 
-    return this.props.children
+    return this.props.children;
   }
 }

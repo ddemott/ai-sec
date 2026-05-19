@@ -1,11 +1,11 @@
-'use client'
+'use client';
 
-import React from 'react'
-import { User, Users, Wand2, X } from 'lucide-react'
+import React from 'react';
+import { User, Users, Wand2, X } from 'lucide-react';
 
 interface WizardModeChooserProps {
-  onChoose: (mode: 'solo' | 'team') => void
-  onClose: () => void
+  onChoose: (mode: 'solo' | 'team') => void;
+  onClose: () => void;
 }
 
 export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps) {
@@ -13,11 +13,18 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div
         className="rounded-2xl shadow-xl border max-w-lg w-full overflow-hidden"
-        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        onClick={e => e.stopPropagation()}
+        style={{
+          backgroundColor: 'var(--surface)',
+          borderColor: 'var(--border)',
+          color: 'var(--text-primary)',
+        }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+        <div
+          className="px-6 py-4 border-b flex items-center justify-between"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <div className="flex items-center gap-2">
             <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <h2 className="text-lg font-bold">How is your business set up?</h2>
@@ -38,10 +45,19 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
             onClick={() => onChoose('solo')}
             className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all group"
             style={{ ['--hover-border' as string]: 'var(--accent-soft)' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.backgroundColor = '' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-soft)';
+              e.currentTarget.style.backgroundColor = 'var(--accent-muted)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '';
+              e.currentTarget.style.backgroundColor = '';
+            }}
           >
-            <div className="w-14 h-14 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform" style={{ backgroundColor: 'var(--accent-muted)' }}>
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"
+              style={{ backgroundColor: 'var(--accent-muted)' }}
+            >
               <User className="w-7 h-7" style={{ color: 'var(--accent-soft)' }} />
             </div>
             <div className="text-center">
@@ -55,8 +71,14 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
           <button
             onClick={() => onChoose('team')}
             className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-gray-200 dark:border-gray-700 transition-all group"
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.backgroundColor = 'var(--accent-muted)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.backgroundColor = '' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-soft)';
+              e.currentTarget.style.backgroundColor = 'var(--accent-muted)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '';
+              e.currentTarget.style.backgroundColor = '';
+            }}
           >
             <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users className="w-7 h-7 text-green-600 dark:text-green-400" />
@@ -71,5 +93,5 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -260,7 +260,12 @@ test('wizard finalize → fresh tenant can immediately book', async ({ request }
     // Customer is the missing piece a real wizard run also requires —
     // the wizard collects services/employees but customers come from
     // the booking surface itself. Mirror that shape here.
-    const customerId = await createCustomerAs(request, tenant.token, tenant.tenantId, 'Walk-In Test');
+    const customerId = await createCustomerAs(
+      request,
+      tenant.token,
+      tenant.tenantId,
+      'Walk-In Test'
+    );
 
     // Pick a slot 7 days from now at 14:00-14:30 UTC (well inside
     // the 08:00-18:00 LOCAL pattern under any reasonable tenant
@@ -298,7 +303,9 @@ test('wizard finalize → fresh tenant can immediately book', async ({ request }
 // Pins the contract that fan-out is load-bearing, not optional.
 // ────────────────────────────────────────────────────────────────────────────
 
-test('skipping expand-weekly leaves tenant with EMPLOYEE_NOT_SCHEDULED on every booking', async ({ request }) => {
+test('skipping expand-weekly leaves tenant with EMPLOYEE_NOT_SCHEDULED on every booking', async ({
+  request,
+}) => {
   // WHO: hypothetical refactor where someone "simplifies" the wizard
   //      by removing the step-6→7 fan-out (or changes the loop body
   //      such that no employee actually gets fanned out).
@@ -327,11 +334,21 @@ test('skipping expand-weekly leaves tenant with EMPLOYEE_NOT_SCHEDULED on every 
 
     await createServiceAs(request, tenant.token, tenant.tenantId, 'Oil Change');
     const resourceId = await createResourceAs(request, tenant.token, tenant.tenantId, 'Bay 2');
-    const employeeId = await createEmployeeAs(request, tenant.token, tenant.tenantId, 'No Schedule');
+    const employeeId = await createEmployeeAs(
+      request,
+      tenant.token,
+      tenant.tenantId,
+      'No Schedule'
+    );
     // Deliberately skip expandWeeklyAs — this is the regression we
     // want to catch.
 
-    const customerId = await createCustomerAs(request, tenant.token, tenant.tenantId, 'Walk-In Sad');
+    const customerId = await createCustomerAs(
+      request,
+      tenant.token,
+      tenant.tenantId,
+      'Walk-In Sad'
+    );
     const bookingDate = isoDateDaysFromNow(7);
     const bookRes = await request.post(`${BACKEND_URL}/appointments/create`, {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` },
@@ -383,7 +400,12 @@ test('expand-weekly default produces ~4 weeks of employee_schedule rows', async 
   let tenant: RegisteredTenant | null = null;
   try {
     tenant = await registerFreshTenant(request);
-    const employeeId = await createEmployeeAs(request, tenant.token, tenant.tenantId, 'Range Check');
+    const employeeId = await createEmployeeAs(
+      request,
+      tenant.token,
+      tenant.tenantId,
+      'Range Check'
+    );
     const result = await expandWeeklyAs(request, tenant.token, tenant.tenantId, employeeId);
 
     // 4 weeks × 7 days/week with a full-7-day pattern == 28 rows.

@@ -84,10 +84,7 @@ describe('getCrmSyncStatus — happy paths', () => {
     // WHY: tenant_integration_settings and entity_sync_map both have
     //      multi-provider rows for the same tenant; filtering only
     //      one of the two by provider would mix counts.
-    const { queries, client } = buildClient([
-      { rows: [{ last_sync_at: null }] },
-      { rows: [] },
-    ]);
+    const { queries, client } = buildClient([{ rows: [{ last_sync_at: null }] }, { rows: [] }]);
 
     await getCrmSyncStatus(client, TENANT_ID, 'hubspot');
 
@@ -105,10 +102,7 @@ describe('getCrmSyncStatus — happy paths', () => {
     //       renders "Never" instead of "Invalid Date".
     // WHY: the dashboard formats this with new Date(...) and prints
     //      "Never synced yet" only when the value is strictly null.
-    const { client } = buildClient([
-      { rows: [] },
-      { rows: [] },
-    ]);
+    const { client } = buildClient([{ rows: [] }, { rows: [] }]);
 
     const result = await getCrmSyncStatus(client, TENANT_ID, 'square');
 
@@ -162,8 +156,8 @@ describe('getCrmSyncStatus — sad paths', () => {
       release: vi.fn(),
     } as unknown as PoolClient;
 
-    await expect(
-      getCrmSyncStatus(failingClient, TENANT_ID, 'jobber')
-    ).rejects.toThrow(/connection terminated/);
+    await expect(getCrmSyncStatus(failingClient, TENANT_ID, 'jobber')).rejects.toThrow(
+      /connection terminated/
+    );
   });
 });

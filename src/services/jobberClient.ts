@@ -99,7 +99,10 @@ export function verifyState(state: string): string | null {
 /** Exchange authorization code for tokens */
 export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
   const config = getConfig();
-  if (!config) throw new Error('Jobber not configured — missing env vars (check JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET, JOBBER_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'Jobber not configured — missing env vars (check JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET, JOBBER_CALLBACK_URL)'
+    );
 
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -119,17 +122,23 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
     });
   } catch (networkErr: unknown) {
     const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-    throw new Error(`Jobber OAuth code exchange failed: network error reaching Jobber token endpoint — ${msg}`);
+    throw new Error(
+      `Jobber OAuth code exchange failed: network error reaching Jobber token endpoint — ${msg}`
+    );
   }
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`Jobber OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`);
+    throw new Error(
+      `Jobber OAuth code exchange failed (${res.status}): ${errorBody}. The user may need to re-authorize from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token || !data.refresh_token) {
-    throw new Error('Jobber OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).');
+    throw new Error(
+      'Jobber OAuth code exchange returned incomplete tokens (missing access_token or refresh_token).'
+    );
   }
 
   return {
@@ -140,9 +149,14 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenSet> {
 }
 
 /** Refresh an expired access token */
-export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date: number }> {
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; expiry_date: number }> {
   const config = getConfig();
-  if (!config) throw new Error('Jobber not configured — missing env vars (check JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET, JOBBER_CALLBACK_URL)');
+  if (!config)
+    throw new Error(
+      'Jobber not configured — missing env vars (check JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET, JOBBER_CALLBACK_URL)'
+    );
 
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -166,12 +180,16 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
 
   if (!res.ok) {
     const errorBody = await res.text();
-    throw new Error(`Jobber token refresh failed (${res.status}): ${errorBody}. The user should reconnect Jobber from the dashboard.`);
+    throw new Error(
+      `Jobber token refresh failed (${res.status}): ${errorBody}. The user should reconnect Jobber from the dashboard.`
+    );
   }
 
   const data = await res.json();
   if (!data.access_token) {
-    throw new Error('Jobber token refresh returned no access_token. The user should reconnect Jobber from the dashboard.');
+    throw new Error(
+      'Jobber token refresh returned no access_token. The user should reconnect Jobber from the dashboard.'
+    );
   }
 
   return {
@@ -209,7 +227,7 @@ export async function graphql<T = any>(
 
   const data: GraphQLResponse<T> = await res.json();
   if (data.errors && data.errors.length > 0) {
-    const messages = data.errors.map(e => e.message).join('; ');
+    const messages = data.errors.map((e) => e.message).join('; ');
     throw new Error(`Jobber GraphQL errors: ${messages}`);
   }
 
@@ -217,11 +235,12 @@ export async function graphql<T = any>(
 }
 
 /** Verify webhook HMAC-SHA256 signature */
-export function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(payload, 'utf8')
-    .digest('hex');
+export function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): boolean {
+  const expected = crypto.createHmac('sha256', secret).update(payload, 'utf8').digest('hex');
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 

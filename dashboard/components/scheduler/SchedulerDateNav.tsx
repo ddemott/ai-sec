@@ -33,7 +33,11 @@ function formatDate(date: Date, timeZone?: string): string {
 }
 
 function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 function startOfDay(date: Date): Date {
@@ -48,7 +52,11 @@ function startOfDay(date: Date): Date {
 // audit theme).
 const TOUCH_TARGET = 'min-w-[48px] min-h-[48px]';
 
-export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate, onDateChange, tenantTimezone }) => {
+export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({
+  selectedDate,
+  onDateChange,
+  tenantTimezone,
+}) => {
   // Two branches: tenant-TZ-aware (preferred) vs the legacy browser-TZ
   // computation. The legacy branch is preserved so a tenant whose config
   // hasn't loaded yet (or whose timezone column is somehow NULL) still
@@ -95,7 +103,13 @@ export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate
 
   return (
     <div className="flex items-center gap-3" data-testid="scheduler-date-nav">
-      <Button variant="ghost" size="sm" onClick={goToPrev} aria-label="Previous day" className={TOUCH_TARGET}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={goToPrev}
+        aria-label="Previous day"
+        className={TOUCH_TARGET}
+      >
         <ChevronLeft className="w-4 h-4" />
       </Button>
 
@@ -135,10 +149,19 @@ export const SchedulerDateNav: React.FC<SchedulerDateNavProps> = ({ selectedDate
         Tomorrow
       </Button>
 
-      <Button variant="ghost" size="sm" onClick={goToNext} aria-label="Next day" className={TOUCH_TARGET}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={goToNext}
+        aria-label="Next day"
+        className={TOUCH_TARGET}
+      >
         <ChevronRight className="w-4 h-4" />
       </Button>
-      <span className="text-sm font-bold text-gray-900 dark:text-gray-100" data-testid="scheduler-date-display">
+      <span
+        className="text-sm font-bold text-gray-900 dark:text-gray-100"
+        data-testid="scheduler-date-display"
+      >
         {formatDate(selectedDate, tenantTimezone)}
       </span>
     </div>

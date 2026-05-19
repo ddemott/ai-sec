@@ -200,7 +200,10 @@ describe('Fix #25: Form label associations', () => {
         label="State"
         id="state-field"
         error="State is required"
-        options={[{ label: 'NY', value: 'NY' }, { label: 'CA', value: 'CA' }]}
+        options={[
+          { label: 'NY', value: 'NY' },
+          { label: 'CA', value: 'CA' },
+        ]}
       />
     );
 
@@ -216,12 +219,7 @@ describe('Fix #25: Form label associations', () => {
     // WHO: Users with valid select state
     // WHAT: Should not have aria-invalid when there's no error
     // WHY: Consistent with Input behavior
-    render(
-      <Select
-        label="Color"
-        options={[{ label: 'Red', value: 'red' }]}
-      />
-    );
+    render(<Select label="Color" options={[{ label: 'Red', value: 'red' }]} />);
 
     const select = screen.getByLabelText('Color');
     expect(select).not.toHaveAttribute('aria-invalid');

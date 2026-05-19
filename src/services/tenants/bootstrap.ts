@@ -54,10 +54,9 @@ export async function createTenantWithOwner(
     await client.query('BEGIN');
 
     if (params.duplicateCheck === 'email') {
-      const existing = await client.query(
-        'SELECT user_id FROM users WHERE email = $1',
-        [params.ownerEmail]
-      );
+      const existing = await client.query('SELECT user_id FROM users WHERE email = $1', [
+        params.ownerEmail,
+      ]);
       if (existing.rows.length > 0) {
         await client.query('ROLLBACK');
         return {

@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import React, { useEffect, useState } from 'react'
-import { type VoiceSession, type VoiceSessionDisplay } from '@/lib/types'
+import React, { useEffect, useState } from 'react';
+import { type VoiceSession, type VoiceSessionDisplay } from '@/lib/types';
 import {
   Phone,
   PhoneIncoming,
@@ -14,28 +14,28 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-} from 'lucide-react'
-import { Api } from '../lib/api'
-import { formatPhone } from '../lib/phone'
-import { useActiveTenantId } from '../lib/SessionContext'
+} from 'lucide-react';
+import { Api } from '../lib/api';
+import { formatPhone } from '../lib/phone';
+import { useActiveTenantId } from '../lib/SessionContext';
 
 function formatDuration(seconds: number | null): string {
-  if (!seconds) return '0:00'
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
+  if (!seconds) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
-  return date.toLocaleDateString()
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+  return date.toLocaleDateString();
 }
 
 function getOutcomeLabel(outcome: string | null): string {
@@ -48,11 +48,11 @@ function getOutcomeLabel(outcome: string | null): string {
     voicemail: 'Voicemail',
     abandoned: 'Abandoned',
     other: 'Other',
-  }
-  return outcome ? labels[outcome] || outcome : 'Unknown'
+  };
+  return outcome ? labels[outcome] || outcome : 'Unknown';
 }
 
-type OutcomeStyle = { backgroundColor: string; color: string }
+type OutcomeStyle = { backgroundColor: string; color: string };
 
 /**
  * Theme-token-driven outcome badge colors. Maps each outcome to the
@@ -75,98 +75,103 @@ function getOutcomeStyle(outcome: string | null): OutcomeStyle {
   switch (outcome) {
     case 'appointment_booked':
     case 'appointment_rescheduled':
-      return { backgroundColor: 'var(--success-bg)', color: 'var(--success)' }
+      return { backgroundColor: 'var(--success-bg)', color: 'var(--success)' };
     case 'appointment_cancelled':
     case 'abandoned':
-      return { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }
+      return { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' };
     case 'transferred':
     case 'voicemail':
-      return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' }
+      return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' };
     default:
-      return { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }
+      return { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' };
   }
 }
 
 export default function VoiceCallsView() {
-  const tenantId = useActiveTenantId()
-  const [activeCalls, setActiveCalls] = useState<VoiceSessionDisplay[]>([])
-  const [callHistory, setCallHistory] = useState<VoiceSession[]>([])
-  const [selectedCall, setSelectedCall] = useState<VoiceSession | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [total, setTotal] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
-  const [outcomeFilter, setOutcomeFilter] = useState<string>('all')
+  const tenantId = useActiveTenantId();
+  const [activeCalls, setActiveCalls] = useState<VoiceSessionDisplay[]>([]);
+  const [callHistory, setCallHistory] = useState<VoiceSession[]>([]);
+  const [selectedCall, setSelectedCall] = useState<VoiceSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
 
   useEffect(() => {
     if (tenantId) {
-      void fetchActiveCalls()
-      void fetchCallHistory()
+      void fetchActiveCalls();
+      void fetchCallHistory();
     }
     // Set up polling for active calls
     const interval = setInterval(() => {
-      if (tenantId) void fetchActiveCalls()
-    }, 10000) // Poll every 10 seconds
-    return () => clearInterval(interval)
+      if (tenantId) void fetchActiveCalls();
+    }, 10000); // Poll every 10 seconds
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId])
+  }, [tenantId]);
 
   async function fetchActiveCalls() {
     try {
-      const data = await Api.voice.getActiveCalls(tenantId)
-      setActiveCalls(data.calls || [])
+      const data = await Api.voice.getActiveCalls(tenantId);
+      setActiveCalls(data.calls || []);
     } catch (err) {
-      console.error('Failed to fetch active calls:', err)
-      setActiveCalls([])
+      console.error('Failed to fetch active calls:', err);
+      setActiveCalls([]);
     }
   }
 
   async function fetchCallHistory(offset = 0) {
-    if (offset === 0) setLoading(true)
-    else setHistoryLoading(true)
+    if (offset === 0) setLoading(true);
+    else setHistoryLoading(true);
 
     try {
-      const data = await Api.voice.getHistory(tenantId, { limit: 20, offset })
+      const data = await Api.voice.getHistory(tenantId, { limit: 20, offset });
       if (offset === 0) {
-        setCallHistory(data.calls || [])
+        setCallHistory(data.calls || []);
         if (!selectedCall && data.calls?.length > 0) {
-          setSelectedCall(data.calls[0])
+          setSelectedCall(data.calls[0]);
         }
       } else {
-        setCallHistory(prev => [...prev, ...(data.calls || [])])
+        setCallHistory((prev) => [...prev, ...(data.calls || [])]);
       }
-      setTotal(data.total || 0)
-      setHasMore(data.has_more || false)
+      setTotal(data.total || 0);
+      setHasMore(data.has_more || false);
     } catch (err) {
-      console.error('Failed to fetch call history:', err)
-      setCallHistory([])
+      console.error('Failed to fetch call history:', err);
+      setCallHistory([]);
     } finally {
-      setLoading(false)
-      setHistoryLoading(false)
+      setLoading(false);
+      setHistoryLoading(false);
     }
   }
 
   function handleRefresh() {
-    void fetchActiveCalls()
-    void fetchCallHistory()
+    void fetchActiveCalls();
+    void fetchCallHistory();
   }
 
   function handleLoadMore() {
     if (!historyLoading && hasMore) {
-      void fetchCallHistory(callHistory.length)
+      void fetchCallHistory(callHistory.length);
     }
   }
 
-  const customerContext = selectedCall?.customer_context
+  const customerContext = selectedCall?.customer_context;
 
   return (
     <div className="flex h-full">
       {/* Left Panel: Call List */}
-      <div className="w-80 border-r flex flex-col" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}>
+      <div
+        className="w-80 border-r flex flex-col"
+        style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}
+      >
         {/* Header */}
         <div className="p-4 border-b" style={{ borderColor: 'var(--border-soft)' }}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>Voice Calls</h2>
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Voice Calls
+            </h2>
             <button
               onClick={handleRefresh}
               className="p-2 rounded-lg transition-colors"
@@ -182,26 +187,32 @@ export default function VoiceCallsView() {
         {activeCalls.length > 0 && (
           <div className="border-b" style={{ borderColor: 'var(--border-soft)' }}>
             <div className="px-4 py-2" style={{ backgroundColor: 'rgba(34,197,94,0.1)' }}>
-              <h3 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--green, #22c55e)' }}>
+              <h3
+                className="text-sm font-medium flex items-center gap-2"
+                style={{ color: 'var(--green, #22c55e)' }}
+              >
                 <Phone className="w-4 h-4 animate-pulse" />
                 Active Calls ({activeCalls.length})
               </h3>
             </div>
             <div className="divide-y">
-              {activeCalls.map(call => (
+              {activeCalls.map((call) => (
                 <div
                   key={call.voice_session_id}
                   className="p-3 hover:brightness-110 cursor-pointer transition-colors"
                   onClick={() => {
                     // Fetch full session details
-                    void Api.voice.getSession(tenantId, call.call_id).then(session => {
-                      setSelectedCall(session)
-                    })
+                    void Api.voice.getSession(tenantId, call.call_id).then((session) => {
+                      setSelectedCall(session);
+                    });
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--success)' }} />
+                      <div
+                        className="w-2 h-2 rounded-full animate-pulse"
+                        style={{ backgroundColor: 'var(--success)' }}
+                      />
                       <span className="font-medium text-[var(--text-primary)]">
                         {call.customer_name || formatPhone(call.caller_phone)}
                       </span>
@@ -211,7 +222,9 @@ export default function VoiceCallsView() {
                     </span>
                   </div>
                   {call.is_known_customer && (
-                    <span className="text-xs ml-4" style={{ color: 'var(--success)' }}>Returning customer</span>
+                    <span className="text-xs ml-4" style={{ color: 'var(--success)' }}>
+                      Returning customer
+                    </span>
                   )}
                 </div>
               ))}
@@ -221,15 +234,22 @@ export default function VoiceCallsView() {
 
         {/* Call History */}
         <div className="flex-1 overflow-y-auto">
-          <div className="px-4 py-2 sticky top-0 flex items-center justify-between gap-2" style={{ backgroundColor: 'var(--bg-raised)' }}>
+          <div
+            className="px-4 py-2 sticky top-0 flex items-center justify-between gap-2"
+            style={{ backgroundColor: 'var(--bg-raised)' }}
+          >
             <h3 className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
               Call History ({total})
             </h3>
             <select
               value={outcomeFilter}
-              onChange={e => setOutcomeFilter(e.target.value)}
+              onChange={(e) => setOutcomeFilter(e.target.value)}
               className="text-xs border rounded px-1.5 py-1"
-              style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)', color: 'var(--text-primary)' }}
+              style={{
+                backgroundColor: 'var(--bg-surface)',
+                borderColor: 'var(--border-soft)',
+                color: 'var(--text-primary)',
+              }}
             >
               <option value="all">All outcomes</option>
               <option value="appointment_booked">Booked</option>
@@ -251,43 +271,54 @@ export default function VoiceCallsView() {
             </div>
           ) : (
             <div className="divide-y">
-              {callHistory.filter(c => outcomeFilter === 'all' || c.outcome === outcomeFilter).map(call => (
-                <div
-                  key={call.voice_session_id}
-                  className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
-                    selectedCall?.voice_session_id === call.voice_session_id ? 'border-l-2' : ''
-                  }`}
-                  style={selectedCall?.voice_session_id === call.voice_session_id ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' } : undefined}
-                  onClick={() => setSelectedCall(call)}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-[var(--text-primary)] text-sm">
-                      {call.customer_name || call.customer_context?.customer?.name || formatPhone(call.caller_phone)}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span>{formatRelativeTime(call.started_at)}</span>
-                    <span>·</span>
-                    <span>{formatDuration(call.duration_seconds)}</span>
-                    {call.outcome && (
-                      <>
-                        <span>·</span>
-                        <span className="px-1.5 py-0.5 rounded text-xs" style={getOutcomeStyle(call.outcome)}>
-                          {getOutcomeLabel(call.outcome)}
+              {callHistory
+                .filter((c) => outcomeFilter === 'all' || c.outcome === outcomeFilter)
+                .map((call) => (
+                  <div
+                    key={call.voice_session_id}
+                    className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
+                      selectedCall?.voice_session_id === call.voice_session_id ? 'border-l-2' : ''
+                    }`}
+                    style={
+                      selectedCall?.voice_session_id === call.voice_session_id
+                        ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' }
+                        : undefined
+                    }
+                    onClick={() => setSelectedCall(call)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-[var(--text-primary)] text-sm">
+                        {call.customer_name ||
+                          call.customer_context?.customer?.name ||
+                          formatPhone(call.caller_phone)}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{formatRelativeTime(call.started_at)}</span>
+                      <span>·</span>
+                      <span>{formatDuration(call.duration_seconds)}</span>
+                      {call.outcome && (
+                        <>
+                          <span>·</span>
+                          <span
+                            className="px-1.5 py-0.5 rounded text-xs"
+                            style={getOutcomeStyle(call.outcome)}
+                          >
+                            {getOutcomeLabel(call.outcome)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {call.customer_context?.is_known_customer && (
+                      <div className="mt-1">
+                        <span className="text-xs" style={{ color: 'var(--accent-soft)' }}>
+                          {call.customer_context.appointment_history.total} appointments
                         </span>
-                      </>
+                      </div>
                     )}
                   </div>
-                  {call.customer_context?.is_known_customer && (
-                    <div className="mt-1">
-                      <span className="text-xs" style={{ color: 'var(--accent-soft)' }}>
-                        {call.customer_context.appointment_history.total} appointments
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
 
               {hasMore && (
                 <div className="p-3">
@@ -297,7 +328,9 @@ export default function VoiceCallsView() {
                     className="w-full py-2 text-sm disabled:text-gray-400"
                     style={{ color: 'var(--accent-soft)' }}
                   >
-                    {historyLoading ? 'Loading...' : `Load more (${callHistory.length} of ${total})`}
+                    {historyLoading
+                      ? 'Loading...'
+                      : `Load more (${callHistory.length} of ${total})`}
                   </button>
                 </div>
               )}
@@ -311,7 +344,10 @@ export default function VoiceCallsView() {
         {selectedCall ? (
           <div className="p-6">
             {/* Call Header */}
-            <div className="rounded-lg shadow-sm p-6 mb-4" style={{ backgroundColor: 'var(--bg-surface)' }}>
+            <div
+              className="rounded-lg shadow-sm p-6 mb-4"
+              style={{ backgroundColor: 'var(--bg-surface)' }}
+            >
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h2 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -321,17 +357,29 @@ export default function VoiceCallsView() {
                 </div>
                 <div className="flex items-center gap-2">
                   {selectedCall.status === 'active' ? (
-                    <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)' }}>
+                    <span
+                      className="px-3 py-1 rounded-full text-sm flex items-center gap-1"
+                      style={{ backgroundColor: 'var(--success-bg)', color: 'var(--success)' }}
+                    >
                       <Phone className="w-4 h-4 animate-pulse" />
                       Active
                     </span>
                   ) : selectedCall.status === 'completed' ? (
-                    <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>
+                    <span
+                      className="px-3 py-1 rounded-full text-sm flex items-center gap-1"
+                      style={{
+                        backgroundColor: 'var(--bg-raised)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
                       <CheckCircle className="w-4 h-4" />
                       Completed
                     </span>
                   ) : (
-                    <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }}>
+                    <span
+                      className="px-3 py-1 rounded-full text-sm flex items-center gap-1"
+                      style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' }}
+                    >
                       <XCircle className="w-4 h-4" />
                       {selectedCall.status}
                     </span>
@@ -342,7 +390,9 @@ export default function VoiceCallsView() {
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">Started</span>
-                  <p className="font-medium">{new Date(selectedCall.started_at).toLocaleString()}</p>
+                  <p className="font-medium">
+                    {new Date(selectedCall.started_at).toLocaleString()}
+                  </p>
                 </div>
                 <div>
                   <span className="text-gray-500">Duration</span>
@@ -351,7 +401,10 @@ export default function VoiceCallsView() {
                 <div>
                   <span className="text-gray-500">Outcome</span>
                   <p className="font-medium">
-                    <span className="px-2 py-1 rounded" style={getOutcomeStyle(selectedCall.outcome)}>
+                    <span
+                      className="px-2 py-1 rounded"
+                      style={getOutcomeStyle(selectedCall.outcome)}
+                    >
                       {getOutcomeLabel(selectedCall.outcome)}
                     </span>
                   </p>
@@ -361,7 +414,10 @@ export default function VoiceCallsView() {
 
             {/* Customer Context */}
             {customerContext && (
-              <div className="rounded-lg shadow-sm p-6 mb-4" style={{ backgroundColor: 'var(--bg-surface)' }}>
+              <div
+                className="rounded-lg shadow-sm p-6 mb-4"
+                style={{ backgroundColor: 'var(--bg-surface)' }}
+              >
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <User className="w-5 h-5" />
                   Customer Context
@@ -380,7 +436,9 @@ export default function VoiceCallsView() {
                       {customerContext.member_since && (
                         <div>
                           <span className="text-gray-500">Customer Since</span>
-                          <p className="font-medium">{new Date(customerContext.member_since).toLocaleDateString()}</p>
+                          <p className="font-medium">
+                            {new Date(customerContext.member_since).toLocaleDateString()}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -393,15 +451,24 @@ export default function VoiceCallsView() {
                       </h4>
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div className="rounded p-3 text-center">
-                          <p className="text-2xl font-bold text-[var(--text-primary)]">{customerContext.appointment_history.total}</p>
+                          <p className="text-2xl font-bold text-[var(--text-primary)]">
+                            {customerContext.appointment_history.total}
+                          </p>
                           <p className="text-gray-500 text-xs">Total</p>
                         </div>
                         <div className="rounded p-3 text-center">
-                          <p className="text-2xl font-bold" style={{ color: 'var(--success)' }}>{customerContext.appointment_history.completed}</p>
+                          <p className="text-2xl font-bold" style={{ color: 'var(--success)' }}>
+                            {customerContext.appointment_history.completed}
+                          </p>
                           <p className="text-gray-500 text-xs">Completed</p>
                         </div>
-                        <div className="rounded p-3 text-center" style={{ backgroundColor: 'var(--danger-bg)' }}>
-                          <p className="text-2xl font-bold" style={{ color: 'var(--danger)' }}>{customerContext.appointment_history.cancelled}</p>
+                        <div
+                          className="rounded p-3 text-center"
+                          style={{ backgroundColor: 'var(--danger-bg)' }}
+                        >
+                          <p className="text-2xl font-bold" style={{ color: 'var(--danger)' }}>
+                            {customerContext.appointment_history.cancelled}
+                          </p>
                           <p className="text-gray-500 text-xs">Cancelled</p>
                         </div>
                       </div>
@@ -411,15 +478,26 @@ export default function VoiceCallsView() {
                         <div className="mt-4">
                           <h5 className="text-sm font-medium text-gray-700 mb-2">Upcoming</h5>
                           <div className="space-y-2">
-                            {customerContext.appointment_history.upcoming_appointments.map(apt => (
-                              <div key={apt.appointment_id} className="rounded p-2 text-sm" style={{ backgroundColor: 'var(--accent-muted)' }}>
-                                <p className="font-medium">
-                                  {new Date(apt.start_time).toLocaleDateString()} at{' '}
-                                  {new Date(apt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                                {apt.description && <p className="text-gray-600">{apt.description}</p>}
-                              </div>
-                            ))}
+                            {customerContext.appointment_history.upcoming_appointments.map(
+                              (apt) => (
+                                <div
+                                  key={apt.appointment_id}
+                                  className="rounded p-2 text-sm"
+                                  style={{ backgroundColor: 'var(--accent-muted)' }}
+                                >
+                                  <p className="font-medium">
+                                    {new Date(apt.start_time).toLocaleDateString()} at{' '}
+                                    {new Date(apt.start_time).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </p>
+                                  {apt.description && (
+                                    <p className="text-gray-600">{apt.description}</p>
+                                  )}
+                                </div>
+                              )
+                            )}
                           </div>
                         </div>
                       )}
@@ -433,8 +511,12 @@ export default function VoiceCallsView() {
                           Notes
                         </h4>
                         <div className="space-y-2">
-                          {customerContext.notes.slice(-5).map(note => (
-                            <div key={note.id} className="rounded p-2 text-sm" style={{ backgroundColor: 'var(--warning-bg)' }}>
+                          {customerContext.notes.slice(-5).map((note) => (
+                            <div
+                              key={note.id}
+                              className="rounded p-2 text-sm"
+                              style={{ backgroundColor: 'var(--warning-bg)' }}
+                            >
                               <p>{note.text}</p>
                               <p className="text-xs text-gray-500 mt-1">
                                 {new Date(note.created_at).toLocaleDateString()} · {note.type}
@@ -450,7 +532,7 @@ export default function VoiceCallsView() {
                       <div className="border-t pt-4">
                         <h4 className="font-medium text-[var(--text-primary)] mb-2">Tags</h4>
                         <div className="flex flex-wrap gap-2">
-                          {customerContext.tags.map(tag => (
+                          {customerContext.tags.map((tag) => (
                             <span key={tag} className="px-2 py-1 rounded text-sm">
                               {tag}
                             </span>
@@ -470,8 +552,13 @@ export default function VoiceCallsView() {
 
             {/* Transcript */}
             {selectedCall.transcript && (
-              <div className="rounded-lg shadow-sm p-6 mb-4" style={{ backgroundColor: 'var(--bg-surface)' }}>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Transcript</h3>
+              <div
+                className="rounded-lg shadow-sm p-6 mb-4"
+                style={{ backgroundColor: 'var(--bg-surface)' }}
+              >
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
+                  Transcript
+                </h3>
                 <div className="rounded p-4 text-sm whitespace-pre-wrap">
                   {selectedCall.transcript}
                 </div>
@@ -480,8 +567,13 @@ export default function VoiceCallsView() {
 
             {/* Summary */}
             {selectedCall.summary && (
-              <div className="rounded-lg shadow-sm p-6" style={{ backgroundColor: 'var(--bg-surface)' }}>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Call Summary</h3>
+              <div
+                className="rounded-lg shadow-sm p-6"
+                style={{ backgroundColor: 'var(--bg-surface)' }}
+              >
+                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
+                  Call Summary
+                </h3>
                 <p className="text-gray-700">{selectedCall.summary}</p>
               </div>
             )}
@@ -496,5 +588,5 @@ export default function VoiceCallsView() {
         )}
       </div>
     </div>
-  )
+  );
 }

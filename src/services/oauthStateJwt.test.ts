@@ -84,9 +84,13 @@ describe('verifyOAuthState', () => {
   it('HAPPY: returns tenantId when purpose matches', () => {
     // WHO: callback handler verifying a fresh state token
     // WHAT: tenantId returned for valid + matching-purpose state
-    const state = signOAuthState({ tenantId: TENANT, purpose: 'jobber-oauth', jwtSecret: TEST_SECRET });
+    const state = signOAuthState({
+      tenantId: TENANT,
+      purpose: 'jobber-oauth',
+      jwtSecret: TEST_SECRET,
+    });
     expect(
-      verifyOAuthState({ state, expectedPurpose: 'jobber-oauth', jwtSecret: TEST_SECRET }),
+      verifyOAuthState({ state, expectedPurpose: 'jobber-oauth', jwtSecret: TEST_SECRET })
     ).toBe(TENANT);
   });
 
@@ -100,9 +104,13 @@ describe('verifyOAuthState', () => {
     // WHERE: verifyOAuthState's purpose check
     // WHY: without this discriminator, any provider's state token would
     //      satisfy any other provider's verify — bypassing CSRF intent
-    const state = signOAuthState({ tenantId: TENANT, purpose: 'jobber-oauth', jwtSecret: TEST_SECRET });
+    const state = signOAuthState({
+      tenantId: TENANT,
+      purpose: 'jobber-oauth',
+      jwtSecret: TEST_SECRET,
+    });
     expect(
-      verifyOAuthState({ state, expectedPurpose: 'hubspot-oauth', jwtSecret: TEST_SECRET }),
+      verifyOAuthState({ state, expectedPurpose: 'hubspot-oauth', jwtSecret: TEST_SECRET })
     ).toBeNull();
   });
 
@@ -112,9 +120,7 @@ describe('verifyOAuthState', () => {
     // WHY: signature verification is the core CSRF protection — a token
     //      signed with the wrong key must NEVER decode to a tenant id
     const state = signOAuthState({ tenantId: TENANT, purpose: 'test', jwtSecret: 'wrong-secret' });
-    expect(
-      verifyOAuthState({ state, expectedPurpose: 'test', jwtSecret: TEST_SECRET }),
-    ).toBeNull();
+    expect(verifyOAuthState({ state, expectedPurpose: 'test', jwtSecret: TEST_SECRET })).toBeNull();
   });
 
   it('SAD: returns null on malformed state', () => {
@@ -123,7 +129,7 @@ describe('verifyOAuthState', () => {
     // WHY: callback handlers expect a single null/non-null sentinel, not
     //       a thrown exception, so they can produce a clean 4xx redirect
     expect(
-      verifyOAuthState({ state: 'not.a.jwt', expectedPurpose: 'test', jwtSecret: TEST_SECRET }),
+      verifyOAuthState({ state: 'not.a.jwt', expectedPurpose: 'test', jwtSecret: TEST_SECRET })
     ).toBeNull();
   });
 
@@ -135,11 +141,9 @@ describe('verifyOAuthState', () => {
     const state = jwt.sign(
       { tenantId: TENANT, purpose: 'test' },
       TEST_SECRET,
-      { expiresIn: '-1s' } as jwt.SignOptions, // already expired
+      { expiresIn: '-1s' } as jwt.SignOptions // already expired
     );
-    expect(
-      verifyOAuthState({ state, expectedPurpose: 'test', jwtSecret: TEST_SECRET }),
-    ).toBeNull();
+    expect(verifyOAuthState({ state, expectedPurpose: 'test', jwtSecret: TEST_SECRET })).toBeNull();
   });
 
   it('SAD: returns null when payload missing purpose field', () => {
@@ -147,9 +151,9 @@ describe('verifyOAuthState', () => {
     // WHAT: undefined !== expectedPurpose → null
     // WHY: defense in depth — even a syntactically valid JWT signed with the
     //      right key must carry the discriminator we expect
-    const state = jwt.sign({ tenantId: TENANT }, TEST_SECRET, { expiresIn: '5m' } as jwt.SignOptions);
-    expect(
-      verifyOAuthState({ state, expectedPurpose: 'test', jwtSecret: TEST_SECRET }),
-    ).toBeNull();
+    const state = jwt.sign({ tenantId: TENANT }, TEST_SECRET, {
+      expiresIn: '5m',
+    } as jwt.SignOptions);
+    expect(verifyOAuthState({ state, expectedPurpose: 'test', jwtSecret: TEST_SECRET })).toBeNull();
   });
 });

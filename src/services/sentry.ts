@@ -54,10 +54,7 @@ export function initSentry(opts: { service?: string } = {}): void {
  * for things that aren't already auto-tagged (tenant_id, call_id,
  * route, customer_id, etc.).
  */
-export function captureException(
-  err: unknown,
-  context?: Record<string, unknown>
-): void {
+export function captureException(err: unknown, context?: Record<string, unknown>): void {
   if (!initialized) return;
   const error = err instanceof Error ? err : new Error(String(err));
   Sentry.withScope((scope) => {

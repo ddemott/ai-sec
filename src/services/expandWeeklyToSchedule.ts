@@ -119,11 +119,19 @@ export async function expandWeeklyToSchedule(
     // Build the VALUES list as ($1,$2,$3,$4,$5,false), ($6,$7,$8,$9,$10,false), …
     // Five placeholders per tuple: tenant_id, employee_id, iso, start, end.
     const valuesSql: string[] = [];
-    const flatParams: (string)[] = [];
+    const flatParams: string[] = [];
     tuples.forEach((t, i) => {
       const base = i * 5;
-      valuesSql.push(`($${base + 1}, $${base + 2}, $${base + 3}::DATE, $${base + 4}::TIME, $${base + 5}::TIME, false)`);
-      flatParams.push(params.tenantId, params.employeeId, t.iso, t.pattern.start_time, t.pattern.end_time);
+      valuesSql.push(
+        `($${base + 1}, $${base + 2}, $${base + 3}::DATE, $${base + 4}::TIME, $${base + 5}::TIME, false)`
+      );
+      flatParams.push(
+        params.tenantId,
+        params.employeeId,
+        t.iso,
+        t.pattern.start_time,
+        t.pattern.end_time
+      );
     });
     const res = await client.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)

@@ -59,11 +59,11 @@ describe('createTenantWithOwner — happy paths', () => {
     //      without owner, or vice versa) creates orphan rows and lets
     //      a half-registered email block retries.
     const { pool, queries } = buildMockPool([
-      { rows: [] },                          // BEGIN
-      { rows: [] },                          // SELECT user_id FROM users (none)
-      { rows: [{ tenant_id: TENANT_ID }] },         // INSERT tenant RETURNING tenant_id
-      { rows: [{ user_id: USER_ID }] },      // INSERT user RETURNING user_id
-      { rows: [] },                          // COMMIT
+      { rows: [] }, // BEGIN
+      { rows: [] }, // SELECT user_id FROM users (none)
+      { rows: [{ tenant_id: TENANT_ID }] }, // INSERT tenant RETURNING tenant_id
+      { rows: [{ user_id: USER_ID }] }, // INSERT user RETURNING user_id
+      { rows: [] }, // COMMIT
     ]);
 
     const result = await createTenantWithOwner(pool, {
@@ -76,7 +76,7 @@ describe('createTenantWithOwner — happy paths', () => {
     });
 
     expect(result).toEqual({ ok: true, tenantId: TENANT_ID, userId: USER_ID });
-    expect(queries.map(q => q.text)).toEqual([
+    expect(queries.map((q) => q.text)).toEqual([
       'BEGIN',
       'SELECT user_id FROM users WHERE email = $1',
       'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id',
@@ -97,11 +97,11 @@ describe('createTenantWithOwner — happy paths', () => {
     //      losing them would force a follow-up edit and break the
     //      "create looks like edit" expectation.
     const { pool, queries } = buildMockPool([
-      { rows: [] },                          // BEGIN
-      { rows: [] },                          // SELECT FROM tenants (none)
-      { rows: [{ tenant_id: TENANT_ID }] },         // INSERT tenant
-      { rows: [{ user_id: USER_ID }] },      // INSERT user RETURNING user_id
-      { rows: [] },                          // COMMIT
+      { rows: [] }, // BEGIN
+      { rows: [] }, // SELECT FROM tenants (none)
+      { rows: [{ tenant_id: TENANT_ID }] }, // INSERT tenant
+      { rows: [{ user_id: USER_ID }] }, // INSERT user RETURNING user_id
+      { rows: [] }, // COMMIT
     ]);
 
     const result = await createTenantWithOwner(pool, {
@@ -135,8 +135,11 @@ describe('createTenantWithOwner — happy paths', () => {
     //      string — null says "we didn't ask", '' says "they left it
     //      blank" — and we want the former here.
     const { pool, queries } = buildMockPool([
-      { rows: [] }, { rows: [] },
-      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] },
+      { rows: [{ user_id: USER_ID }] },
+      { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -161,8 +164,11 @@ describe('createTenantWithOwner — happy paths', () => {
     // WHY: A regression that drops the hash step would silently leak
     //      plaintext credentials into the DB. Worth a direct guard.
     const { pool, queries } = buildMockPool([
-      { rows: [] }, { rows: [] },
-      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] },
+      { rows: [{ user_id: USER_ID }] },
+      { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -197,9 +203,9 @@ describe('createTenantWithOwner — duplicate detection', () => {
     //      untouched. Anything else risks orphan tenants (tenant
     //      created, then user INSERT fails because email is taken).
     const { pool, client, queries } = buildMockPool([
-      { rows: [] },                            // BEGIN
-      { rows: [{ user_id: 'existing-user-id' }] },  // SELECT user — FOUND
-      { rows: [] },                            // ROLLBACK
+      { rows: [] }, // BEGIN
+      { rows: [{ user_id: 'existing-user-id' }] }, // SELECT user — FOUND
+      { rows: [] }, // ROLLBACK
     ]);
 
     const result = await createTenantWithOwner(pool, {
@@ -215,7 +221,7 @@ describe('createTenantWithOwner — duplicate detection', () => {
       ok: false,
       conflictMessage: 'An account with this email already exists',
     });
-    expect(queries.map(q => q.text)).toEqual([
+    expect(queries.map((q) => q.text)).toEqual([
       'BEGIN',
       'SELECT user_id FROM users WHERE email = $1',
       'ROLLBACK',
@@ -261,8 +267,11 @@ describe('createTenantWithOwner — duplicate detection', () => {
     //      picker — "DynaTire" and "Dynatire" look identical to a user
     //      glancing at the dropdown.
     const { pool, queries } = buildMockPool([
-      { rows: [] }, { rows: [] },
-      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] },
+      { rows: [{ user_id: USER_ID }] },
+      { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {
@@ -290,11 +299,12 @@ describe('createTenantWithOwner — error propagation', () => {
     //      swallowed error masks real bugs. The route layer is the
     //      right place for user-facing error formatting, not here.
     const failingClient = {
-      query: vi.fn()
-        .mockResolvedValueOnce({ rows: [] })          // BEGIN
-        .mockResolvedValueOnce({ rows: [] })          // SELECT (no dup)
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [] }) // SELECT (no dup)
         .mockRejectedValueOnce(new Error('not-null violation: business_type'))
-        .mockResolvedValueOnce({ rows: [] }),         // ROLLBACK
+        .mockResolvedValueOnce({ rows: [] }), // ROLLBACK
       release: vi.fn(),
     };
     const pool = { connect: vi.fn(async () => failingClient) } as unknown as Pool;
@@ -310,7 +320,7 @@ describe('createTenantWithOwner — error propagation', () => {
       })
     ).rejects.toThrow(/not-null violation/);
 
-    const queryCalls = failingClient.query.mock.calls.map(c => c[0]);
+    const queryCalls = failingClient.query.mock.calls.map((c) => c[0]);
     expect(queryCalls[0]).toBe('BEGIN');
     expect(queryCalls[queryCalls.length - 1]).toBe('ROLLBACK');
     expect(failingClient.release).toHaveBeenCalled();
@@ -322,8 +332,11 @@ describe('createTenantWithOwner — error propagation', () => {
     // WHY: Pool exhaustion is an outage, not a slowdown. This is the
     //      cheapest test that catches a regression in the finally.
     const { pool, client } = buildMockPool([
-      { rows: [] }, { rows: [] },
-      { rows: [{ tenant_id: TENANT_ID }] }, { rows: [{ user_id: USER_ID }] }, { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ tenant_id: TENANT_ID }] },
+      { rows: [{ user_id: USER_ID }] },
+      { rows: [] },
     ]);
 
     await createTenantWithOwner(pool, {

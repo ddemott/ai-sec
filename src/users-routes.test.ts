@@ -44,7 +44,12 @@ let app: FastifyInstance;
 let mockClient: MockClient;
 let queryResponses: MockResponse[];
 let queries: { text: string; params: unknown[] }[];
-let authStub: { tenant_id: string; user_id: string; email: string; role: 'owner' | 'front_desk' } | null;
+let authStub: {
+  tenant_id: string;
+  user_id: string;
+  email: string;
+  role: 'owner' | 'front_desk';
+} | null;
 
 function buildApp() {
   const handle = createMockClient();
@@ -65,7 +70,11 @@ function buildApp() {
     if (tid) (request as unknown as { tenantId: string }).tenantId = tid;
   });
 
-  registerUserRoutes(fastify, mockPool, withTenantClient as Parameters<typeof registerUserRoutes>[2]);
+  registerUserRoutes(
+    fastify,
+    mockPool,
+    withTenantClient as Parameters<typeof registerUserRoutes>[2]
+  );
   return fastify;
 }
 
@@ -83,7 +92,12 @@ beforeEach(() => {
   queries.length = 0;
   queryResponses.length = 0;
   // Default: authenticated as the tenant owner.
-  authStub = { tenant_id: TENANT_ID, user_id: OWNER_USER_ID, email: 'owner@biz.com', role: 'owner' };
+  authStub = {
+    tenant_id: TENANT_ID,
+    user_id: OWNER_USER_ID,
+    email: 'owner@biz.com',
+    role: 'owner',
+  };
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -104,8 +118,20 @@ describe('GET /users — happy paths', () => {
     //      but should never even be attempted by the UI
     queryResponses.push({
       rows: [
-        { user_id: OWNER_USER_ID, email: 'owner@biz.com', full_name: 'Owner', role: 'owner', created_at: '2026-01-01' },
-        { user_id: OTHER_USER_ID, email: 'desk@biz.com', full_name: 'Desk Staff', role: 'front_desk', created_at: '2026-02-01' },
+        {
+          user_id: OWNER_USER_ID,
+          email: 'owner@biz.com',
+          full_name: 'Owner',
+          role: 'owner',
+          created_at: '2026-01-01',
+        },
+        {
+          user_id: OTHER_USER_ID,
+          email: 'desk@biz.com',
+          full_name: 'Desk Staff',
+          role: 'front_desk',
+          created_at: '2026-02-01',
+        },
       ],
       rowCount: 2,
     });
@@ -117,7 +143,11 @@ describe('GET /users — happy paths', () => {
     expect(body.success).toBe(true);
     expect(body.users).toHaveLength(2);
     expect(body.users[0]).toMatchObject({ user_id: OWNER_USER_ID, role: 'owner', is_self: true });
-    expect(body.users[1]).toMatchObject({ user_id: OTHER_USER_ID, role: 'front_desk', is_self: false });
+    expect(body.users[1]).toMatchObject({
+      user_id: OTHER_USER_ID,
+      role: 'front_desk',
+      is_self: false,
+    });
   });
 });
 
@@ -129,7 +159,12 @@ describe('GET /users — sad paths', () => {
     // WHERE: requireOwner() inside the GET /users handler
     // WHY: front_desk users should not be able to enumerate teammates'
     //      emails — that's a tiny info-leak that compounds with phishing
-    authStub = { tenant_id: TENANT_ID, user_id: OTHER_USER_ID, email: 'desk@biz.com', role: 'front_desk' };
+    authStub = {
+      tenant_id: TENANT_ID,
+      user_id: OTHER_USER_ID,
+      email: 'desk@biz.com',
+      role: 'front_desk',
+    };
 
     const res = await app.inject({ method: 'GET', url: `/users?tenant_id=${TENANT_ID}` });
 
@@ -214,7 +249,12 @@ describe('POST /users/invite — sad paths', () => {
     // WHY: only owners can grow the team — otherwise a compromised
     //      front_desk login could escalate by inviting an owner-level
     //      account it controls
-    authStub = { tenant_id: TENANT_ID, user_id: OTHER_USER_ID, email: 'desk@biz.com', role: 'front_desk' };
+    authStub = {
+      tenant_id: TENANT_ID,
+      user_id: OTHER_USER_ID,
+      email: 'desk@biz.com',
+      role: 'front_desk',
+    };
 
     const res = await app.inject({
       method: 'POST',
@@ -281,7 +321,12 @@ describe('POST /users/invite — sad paths', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/users/invite',
-      payload: { tenant_id: TENANT_ID, email: 'dupe@biz.com', full_name: 'Dupe', role: 'front_desk' },
+      payload: {
+        tenant_id: TENANT_ID,
+        email: 'dupe@biz.com',
+        full_name: 'Dupe',
+        role: 'front_desk',
+      },
     });
 
     expect(res.statusCode).toBe(409);
@@ -346,7 +391,12 @@ describe('PATCH /users/:id/role — sad paths', () => {
     // WHY: pinning this carve-out so a future "tighten the guard" pass
     //      doesn't accidentally lock super-admins out of /users for
     //      no real safety gain
-    authStub = { tenant_id: SUPER_ADMIN_TENANT, user_id: OWNER_USER_ID, email: 'admin@biz.com', role: 'owner' };
+    authStub = {
+      tenant_id: SUPER_ADMIN_TENANT,
+      user_id: OWNER_USER_ID,
+      email: 'admin@biz.com',
+      role: 'owner',
+    };
     queryResponses.push({ rows: [{ user_id: OWNER_USER_ID, role: 'front_desk' }], rowCount: 1 });
 
     const res = await app.inject({
@@ -382,7 +432,12 @@ describe('PATCH /users/:id/role — sad paths', () => {
     // WHY: a front_desk login that could change roles could escalate
     //      itself to owner — that's the privilege boundary this whole
     //      feature exists to enforce
-    authStub = { tenant_id: TENANT_ID, user_id: OTHER_USER_ID, email: 'desk@biz.com', role: 'front_desk' };
+    authStub = {
+      tenant_id: TENANT_ID,
+      user_id: OTHER_USER_ID,
+      email: 'desk@biz.com',
+      role: 'front_desk',
+    };
 
     const res = await app.inject({
       method: 'PATCH',

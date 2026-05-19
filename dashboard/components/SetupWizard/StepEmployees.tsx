@@ -1,29 +1,38 @@
-'use client'
+'use client';
 
-import React from 'react'
-import {
-  Plus,
-  Pencil,
-  Trash2,
-} from 'lucide-react'
-import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
-import { PhoneInput } from '../ui/PhoneInput'
-import { formatPhone } from '../../lib/phone'
-import { useVocabulary } from '@/lib/VocabularyContext'
-import type { Step3Props, WizardEmployee } from './types'
+import React from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { PhoneInput } from '../ui/PhoneInput';
+import { formatPhone } from '../../lib/phone';
+import { useVocabulary } from '@/lib/VocabularyContext';
+import type { Step3Props, WizardEmployee } from './types';
 
 export function Step3Employees({
-  employees, loading, editingEmployee, editingEmployeeId, saving, error,
-  onAdd, onEdit, onDelete, onSave, onCancel, onChange,
+  employees,
+  loading,
+  editingEmployee,
+  editingEmployeeId,
+  saving,
+  error,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onChange,
 }: Step3Props) {
-  const vocab = useVocabulary()
+  const vocab = useVocabulary();
   return (
     <div>
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Who works here?</h3>
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Who works here?
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Add your {vocab.employee_plural.toLowerCase()}. You&apos;ll set their schedules and assign them to services next.
+          Add your {vocab.employee_plural.toLowerCase()}. You&apos;ll set their schedules and assign
+          them to services next.
         </p>
       </div>
 
@@ -45,15 +54,31 @@ export function Step3Employees({
                     <span className="text-xs text-gray-400 dark:text-gray-500">{emp.email}</span>
                   )}
                   {emp.phone && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{formatPhone(emp.phone)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {formatPhone(emp.phone)}
+                    </span>
                   )}
                 </div>
               </div>
               <div className="flex items-center gap-1 ml-2">
-                <button onClick={() => onEdit(emp)} className="p-1.5 text-gray-400 transition-colors" onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-soft)' }} onMouseLeave={e => { e.currentTarget.style.color = '' }} title="Edit">
+                <button
+                  onClick={() => onEdit(emp)}
+                  className="p-1.5 text-gray-400 transition-colors"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--accent-soft)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = '';
+                  }}
+                  title="Edit"
+                >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => onDelete(emp.employee_id)} className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors" title="Delete">
+                <button
+                  onClick={() => onDelete(emp.employee_id)}
+                  className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
+                  title="Delete"
+                >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -68,7 +93,10 @@ export function Step3Employees({
       )}
 
       {editingEmployee ? (
-        <div className="rounded-xl border-2 p-4 space-y-3" style={{ borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }}>
+        <div
+          className="rounded-xl border-2 p-4 space-y-3"
+          style={{ borderColor: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }}
+        >
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {editingEmployeeId ? `Edit ${vocab.employee_label}` : `New ${vocab.employee_label}`}
           </div>
@@ -76,13 +104,13 @@ export function Step3Employees({
             <Input
               label="First Name"
               value={editingEmployee.first_name}
-              onChange={e => onChange({ ...editingEmployee, first_name: e.target.value })}
+              onChange={(e) => onChange({ ...editingEmployee, first_name: e.target.value })}
               placeholder="First name"
             />
             <Input
               label="Last Name"
               value={editingEmployee.last_name}
-              onChange={e => onChange({ ...editingEmployee, last_name: e.target.value })}
+              onChange={(e) => onChange({ ...editingEmployee, last_name: e.target.value })}
               placeholder="Last name"
             />
           </div>
@@ -90,7 +118,7 @@ export function Step3Employees({
             label="Email (optional)"
             type="email"
             value={editingEmployee.email}
-            onChange={e => onChange({ ...editingEmployee, email: e.target.value })}
+            onChange={(e) => onChange({ ...editingEmployee, email: e.target.value })}
             placeholder="email@example.com"
           />
           <PhoneInput
@@ -103,20 +131,28 @@ export function Step3Employees({
             <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
               {saving ? 'Saving...' : editingEmployeeId ? 'Update' : `Add ${vocab.employee_label}`}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              Cancel
+            </Button>
           </div>
         </div>
       ) : (
         <button
           onClick={onAdd}
           className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 transition-colors"
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-soft)'; e.currentTarget.style.color = 'var(--accent-soft)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.color = '' }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-soft)';
+            e.currentTarget.style.color = 'var(--accent-soft)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '';
+            e.currentTarget.style.color = '';
+          }}
         >
           <Plus className="w-4 h-4" />
           Add an {vocab.employee_label.toLowerCase()}
         </button>
       )}
     </div>
-  )
+  );
 }

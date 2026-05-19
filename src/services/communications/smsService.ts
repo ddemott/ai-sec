@@ -9,7 +9,7 @@ export class SMSService {
 
   constructor(
     private configService: TenantConfigService,
-    private consentService?: ConsentService,
+    private consentService?: ConsentService
   ) {
     if (this.isSimulationMode() && !SMSService.simulationNoticeLogged) {
       console.warn('🔕 SMS Service running in simulation mode.');
@@ -36,7 +36,7 @@ export class SMSService {
         const consentCheck = await this.consentService.canReceiveCommunications(
           tenantId,
           undefined, // no email for SMS
-          message.to, // phone number
+          message.to // phone number
         );
 
         if (!consentCheck.canReceiveSMS) {
@@ -83,7 +83,7 @@ export class SMSService {
       });
 
       console.log(
-        `✅ SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`,
+        `✅ SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`
       );
 
       return {
@@ -132,7 +132,7 @@ export class SMSService {
       });
 
       console.log(
-        `✅ System SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`,
+        `✅ System SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`
       );
 
       return {
@@ -166,7 +166,7 @@ export class SMSService {
     tenantId: string,
     to: string,
     template: string,
-    data: Record<string, unknown>,
+    data: Record<string, unknown>
   ): Promise<CommunicationResult> {
     const templateResult = this.applySMSTemplate(template, data);
     return this.sendSMS(tenantId, {

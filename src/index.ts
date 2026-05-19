@@ -196,36 +196,48 @@ app.addHook('onResponse', async (req, reply) => {
 });
 
 // --- Global Error Handler ---
-app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _request: unknown, reply: { status: (code: number) => { send: (body: Record<string, unknown>) => void } }) => {
-  const statusCode = error.statusCode || 500;
-  const code = error.code;
-  if (code === 'TENANT_NOT_FOUND') {
-    return reply.status(404).send({ success: false, error: error.message, code: 'TENANT_NOT_FOUND' });
+app.setErrorHandler(
+  (
+    error: Error & { statusCode?: number; code?: string },
+    _request: unknown,
+    reply: { status: (code: number) => { send: (body: Record<string, unknown>) => void } }
+  ) => {
+    const statusCode = error.statusCode || 500;
+    const code = error.code;
+    if (code === 'TENANT_NOT_FOUND') {
+      return reply
+        .status(404)
+        .send({ success: false, error: error.message, code: 'TENANT_NOT_FOUND' });
+    }
+    app.log.error(
+      {
+        event: 'unhandled_error',
+        error_message: error.message,
+        error_code: code || null,
+        error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+        statusCode,
+        timestamp: new Date().toISOString(),
+      },
+      `unhandled_error: ${error.message}`
+    );
+    errorsTotal.inc({ event: 'unhandled_error' });
+    // Forward unhandled errors to Sentry. logError() in middleware.ts
+    // already captures errors routed through withHandler; the
+    // setErrorHandler path catches everything else (Fastify-internal
+    // errors, plugin throws, etc.). No-op when SENTRY_DSN unset.
+    captureSentry(error, { event: 'unhandled_error', statusCode });
+    return reply
+      .status(statusCode)
+      .send({ success: false, error: error.message || 'Internal server error' });
   }
-  app.log.error({
-    event: 'unhandled_error',
-    error_message: error.message,
-    error_code: code || null,
-    error_stack: error.stack?.split('\n').slice(0, 5).join('\n'),
-    statusCode,
-    timestamp: new Date().toISOString(),
-  }, `unhandled_error: ${error.message}`);
-  errorsTotal.inc({ event: 'unhandled_error' });
-  // Forward unhandled errors to Sentry. logError() in middleware.ts
-  // already captures errors routed through withHandler; the
-  // setErrorHandler path catches everything else (Fastify-internal
-  // errors, plugin throws, etc.). No-op when SENTRY_DSN unset.
-  captureSentry(error, { event: 'unhandled_error', statusCode });
-  return reply.status(statusCode).send({ success: false, error: error.message || 'Internal server error' });
-});
+);
 
 // --- Health & Admin ---
 
 app.get('/', async (_req, reply) => {
   const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'index.html');
   const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
-  const html = fs.readFileSync(htmlPath, 'utf-8')
-    .replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
+  const html = fs.readFileSync(htmlPath, 'utf-8').replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
   return reply.type('text/html').send(html);
 });
 app.get('/demo', async (_req, reply) => {
@@ -253,15 +265,12 @@ app.get('/metrics', async (req, reply) => {
     return reply.status(404).send({ success: false, error: 'Metrics endpoint disabled' });
   }
   const auth = req.headers['authorization'];
-  const provided = typeof auth === 'string' && auth.startsWith('Bearer ')
-    ? auth.slice('Bearer '.length)
-    : null;
+  const provided =
+    typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : null;
   if (provided !== token) {
     return reply.status(401).send({ success: false, error: 'Unauthorized' });
   }
-  return reply
-    .type('text/plain; version=0.0.4; charset=utf-8')
-    .send(metricsRegistry.expose());
+  return reply.type('text/plain; version=0.0.4; charset=utf-8').send(metricsRegistry.expose());
 });
 
 app.post('/admin/purge-soft-reservations', async (_req, reply) => {
@@ -270,12 +279,15 @@ app.post('/admin/purge-soft-reservations', async (_req, reply) => {
     const res = await client.query('SELECT purge_expired_soft_reservations() as deleted_count');
     return reply.send({ success: true, deleted_count: res.rows[0].deleted_count });
   } catch (err) {
-    app.log.error({
-      event: 'purge_soft_reservations_failed',
-      error_message: (err as Error).message,
-      error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
-      timestamp: new Date().toISOString(),
-    }, `purge_soft_reservations_failed: ${(err as Error).message}`);
+    app.log.error(
+      {
+        event: 'purge_soft_reservations_failed',
+        error_message: (err as Error).message,
+        error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
+        timestamp: new Date().toISOString(),
+      },
+      `purge_soft_reservations_failed: ${(err as Error).message}`
+    );
     return reply.status(500).send({ success: false, error: 'Failed to purge soft reservations' });
   } finally {
     client.release();
@@ -301,9 +313,10 @@ registerAnalyticsRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
 registerBillingRoutes(app, pool);
 
-const telnyxProvisioning = (TELNYX_API_KEY && TELNYX_SIP_CONNECTION_ID)
-  ? { client: new TelnyxNumbersClient(TELNYX_API_KEY), sipConnectionId: TELNYX_SIP_CONNECTION_ID }
-  : null;
+const telnyxProvisioning =
+  TELNYX_API_KEY && TELNYX_SIP_CONNECTION_ID
+    ? { client: new TelnyxNumbersClient(TELNYX_API_KEY), sipConnectionId: TELNYX_SIP_CONNECTION_ID }
+    : null;
 registerProvisioningRoutes(app, pool, telnyxProvisioning);
 registerJobberRoutes(app, pool, withTenantClient);
 registerHubSpotRoutes(app, pool, withTenantClient);
@@ -331,13 +344,16 @@ app
     app.log.info(`Server listening on port ${port}`);
   })
   .catch((err) => {
-    app.log.error({
-      event: 'server_startup_failed',
-      error_message: (err as Error).message,
-      error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
-      port,
-      timestamp: new Date().toISOString(),
-    }, `server_startup_failed: ${(err as Error).message}`);
+    app.log.error(
+      {
+        event: 'server_startup_failed',
+        error_message: (err as Error).message,
+        error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
+        port,
+        timestamp: new Date().toISOString(),
+      },
+      `server_startup_failed: ${(err as Error).message}`
+    );
     process.exit(1);
   });
 

@@ -1,17 +1,27 @@
-import React from 'react'
+import React from 'react';
 
 interface SkillMapColumnProps {
-  title: string
-  icon: React.ElementType
-  iconColor: string
-  iconStyle?: React.CSSProperties
-  count: number
-  children: React.ReactNode
+  title: string;
+  icon: React.ElementType;
+  iconColor: string;
+  iconStyle?: React.CSSProperties;
+  count: number;
+  children: React.ReactNode;
 }
 
-export default function SkillMapColumn({ title, icon: Icon, iconColor, iconStyle, count, children }: SkillMapColumnProps) {
+export default function SkillMapColumn({
+  title,
+  icon: Icon,
+  iconColor,
+  iconStyle,
+  count,
+  children,
+}: SkillMapColumnProps) {
   return (
-    <div className="flex-1 flex flex-col min-w-[200px]" data-testid={`column-${title.toLowerCase().replace(/\s/g, '-')}`}>
+    <div
+      className="flex-1 flex flex-col min-w-[200px]"
+      data-testid={`column-${title.toLowerCase().replace(/\s/g, '-')}`}
+    >
       <div className="flex items-center gap-2 mb-3 px-1">
         <div className={`p-1.5 rounded-lg ${iconColor}`} style={iconStyle}>
           <Icon className="w-4 h-4" />
@@ -21,9 +31,7 @@ export default function SkillMapColumn({ title, icon: Icon, iconColor, iconStyle
           {count}
         </span>
       </div>
-      <div className="flex flex-col gap-2">
-        {children}
-      </div>
+      <div className="flex flex-col gap-2">{children}</div>
     </div>
-  )
+  );
 }
