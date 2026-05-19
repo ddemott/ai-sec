@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import type { AppFastifyInstance } from '../types/fastify';
 import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
-import { TelnyxNumbersClient } from '../services/telnyxNumbers';
+import { type TelnyxNumbersClient } from '../services/telnyxNumbers';
 
 const ActivateSchema = z.object({
   tenant_id: z.string().uuid(),

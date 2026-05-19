@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { forceLogout as apiForceLogout } from './api'
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000'

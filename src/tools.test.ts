@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { getRootClient, clearDB, setupBasicTenant, createResource, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 import { z } from "zod";
 
 describe("AI Tools: Modular Integration", () => {

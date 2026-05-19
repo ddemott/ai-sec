@@ -1,5 +1,5 @@
 import { test, expect } from './helpers/test';
-import { Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 /**
  * Full functional audit of SecretaryHQ dashboard.
  * Tests every major feature end-to-end and logs what's broken or incomplete.

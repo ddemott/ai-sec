@@ -33,7 +33,7 @@
  *   - Override-shifts mechanics (scheduling-overrides.test.ts)
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { Client } from "pg";
+import { type Client } from "pg";
 import { getRootClient, clearDB, createTenant, createResource, createEmployee, createScheduleEntry, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 
 let root: Client;

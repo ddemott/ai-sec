@@ -27,7 +27,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
-import { Client, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from './test-utils';
 import {
     registerJwtAuthHook,

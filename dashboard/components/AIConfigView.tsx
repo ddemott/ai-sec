@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { MOCK_TENANT } from '@/lib/mockData'
-import { Tenant } from '@/lib/types'
+import { type Tenant } from '@/lib/types'
 import {
   Settings,
   MessageSquare,

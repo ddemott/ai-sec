@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { Client, Pool } from "pg";
+import { type Client, Pool } from "pg";
 import { PostgresTenantConfigService } from "./services/tenants/index.js";
 import { getRootClient, createTenant, ROOT_DB_URL, skipIfDbDown } from "./test-utils.js";
 

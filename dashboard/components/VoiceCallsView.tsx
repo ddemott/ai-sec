@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { VoiceSession, VoiceSessionDisplay } from '@/lib/types'
+import { type VoiceSession, type VoiceSessionDisplay } from '@/lib/types'
 import {
   Phone,
   PhoneIncoming,

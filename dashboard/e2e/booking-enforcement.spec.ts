@@ -34,7 +34,7 @@
  * https://localhost:4000, Postgres on localhost:5433.
  */
 import { test, expect } from './helpers/test';
-import { Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import {
   PG_URL,

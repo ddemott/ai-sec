@@ -30,7 +30,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { Client, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, clearDB, createTenant, createCustomer, createEmployee, createService, createResource, createAppointment, createUser, skipIfDbDown } from './test-utils';
 import { registerJwtAuthHook, tenantMiddleware, generateToken } from './middleware';
 import { createWithTenantClient } from './database';

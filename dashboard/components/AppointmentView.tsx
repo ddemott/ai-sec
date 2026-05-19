@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Api, SUPER_ADMIN_TENANT_ID } from '../lib/api';
 import { formatPhone } from '../lib/phone';
-import { Appointment } from '../lib/types';
+import { type Appointment } from '../lib/types';
 import { MOCK_APPOINTMENTS } from '../lib/mockData';
 import { toLocalISO, toISOStringWithOffset, formatCustomerAddress, splitFullName } from '../lib/utils';
 import { useStaticData } from '../lib/hooks'
@@ -11,7 +11,7 @@ import { validateAppointmentTimeRange } from '../lib/appointmentValidation';
 import {
   Calendar as BigCalendar,
   dateFnsLocalizer,
-  View as CalendarViewType
+  type View as CalendarViewType
 } from 'react-big-calendar'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 

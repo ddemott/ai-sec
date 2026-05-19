@@ -24,7 +24,7 @@
  * seed data. Each test cleans up after itself in a try/finally.
  */
 import { test, expect } from './helpers/test';
-import { Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
 

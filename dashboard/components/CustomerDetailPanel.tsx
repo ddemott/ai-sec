@@ -25,7 +25,7 @@ import { PhoneInput } from './ui/PhoneInput'
 import { Select } from './ui/Select'
 import { Card } from './ui/Card'
 import { Badge } from './ui/Badge'
-import { Customer } from '@/lib/types'
+import { type Customer } from '@/lib/types'
 
 interface EditForm {
   first_name: string

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 
 describe("CRUD Routes - Database Level", () => {
     let client: Client;

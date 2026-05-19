@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, getApiClient, clearDB, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 
 describe("Critical Bug Fixes (BUG-001, BUG-002, BUG-006)", () => {
     let root: Client;

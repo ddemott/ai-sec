@@ -16,7 +16,7 @@
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
-import { Client } from 'pg';
+import { type Client } from 'pg';
 // Day-of-week conversion utilities (inlined from deleted core/models.ts)
 const DAY_STRING_TO_NUM: Record<string, number> = {
   sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,

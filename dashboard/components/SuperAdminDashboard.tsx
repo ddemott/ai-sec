@@ -176,7 +176,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
     }
 
     try {
-      const res = await Api.tenants.update(form.tenant_id, normalizedForm as unknown as import('../lib/types').TenantFull)
+      const res = await Api.tenants.update(form.tenant_id, normalizedForm as unknown as TenantFull)
 
       if (res.success) {
         setSuccess(true)

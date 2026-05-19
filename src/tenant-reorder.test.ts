@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 
 describe("Tenant reorder (drag-and-drop)", () => {
   let client: Client;

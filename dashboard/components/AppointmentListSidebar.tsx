@@ -1,5 +1,5 @@
 import React from 'react';
-import { Appointment } from '../lib/types';
+import { type Appointment } from '../lib/types';
 import { Button } from './ui/Button';
 import {
   RefreshCw,

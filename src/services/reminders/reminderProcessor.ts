@@ -1,6 +1,6 @@
 import type { Appointment } from '../../types/index.js';
-import { CommunicationService } from '../communications/index.js';
-import { ConsentService } from '../consentService.js';
+import { type CommunicationService } from '../communications/index.js';
+import { type ConsentService } from '../consentService.js';
 import { remindersSentTotal, remindersSkippedTotal } from '../metrics.js';
 
 import type { ReminderRepository } from './reminderRepository.js';

@@ -38,7 +38,7 @@
 import { voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as openai from '@livekit/agents-plugin-openai';
-import * as silero from '@livekit/agents-plugin-silero';
+import type * as silero from '@livekit/agents-plugin-silero';
 import type { JobContext } from '@livekit/agents';
 
 /**

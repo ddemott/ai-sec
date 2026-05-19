@@ -12,7 +12,7 @@
  * Happy + sad paths with 5W diagnostic comments.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { Client } from 'pg';
+import { type Client } from 'pg';
 import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer, skipIfDbDown } from './test-utils';
 
 let client: Client;

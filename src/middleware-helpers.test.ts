@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { Client } from "pg";
+import { type Client } from "pg";
 import type { FastifyReply } from "fastify";
 import type { AppRequest } from "./middleware";
 import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createCustomerFull, skipIfDbDown } from "./test-utils";

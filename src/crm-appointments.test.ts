@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { getRootClient, clearDB, setupBasicTenant, createEmployee, createCustomerFull, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 
 describe("CRM Unified: Customer Appointments Endpoint", () => {
     let client: Client;

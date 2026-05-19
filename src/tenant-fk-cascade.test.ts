@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { Client } from "pg";
+import { type Client } from "pg";
 import { getRootClient, skipIfDbDown } from "./test-utils";
 
 /**

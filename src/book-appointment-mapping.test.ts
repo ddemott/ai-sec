@@ -21,7 +21,7 @@
  *   unchanged from prior commits).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { Client } from 'pg';
+import { type Client } from 'pg';
 import { getRootClient, clearDB, createTenant, createResource, createEmployee, createService, createScheduleEntry, createCustomerFull, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 
 let root: Client;

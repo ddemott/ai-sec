@@ -16,7 +16,7 @@
  *   WHY  — without an EXCLUDE constraint the DB cannot reject the second
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { Client, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import {
     ROOT_DB_URL,
     getRootClient,

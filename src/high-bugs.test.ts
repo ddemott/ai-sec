@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import type { ZodIssue } from "zod";

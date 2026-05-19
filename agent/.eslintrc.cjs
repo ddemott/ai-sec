@@ -52,7 +52,7 @@ module.exports = {
       varsIgnorePattern: '^_',
       ignoreRestSiblings: true,
     }],
-    '@typescript-eslint/consistent-type-imports': ['warn', {
+    '@typescript-eslint/consistent-type-imports': ['error', {
       prefer: 'type-imports',
       fixStyle: 'inline-type-imports',
     }],

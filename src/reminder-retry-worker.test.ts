@@ -21,7 +21,7 @@
  *     IS returned by the pickup query (back-compat for original attempt).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { Client } from 'pg';
+import { type Client } from 'pg';
 import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 import { decideRetry, MAX_RETRIES } from './services/reminders/retryPolicy';
 

@@ -1,8 +1,8 @@
 import twilio from 'twilio';
 import {
-  TelephonyProvider,
-  TelephonyCallRequest,
-  TelephonySMSRequest,
+  type TelephonyProvider,
+  type TelephonyCallRequest,
+  type TelephonySMSRequest,
 } from './TelephonyProvider.interface.js';
 
 export class TwilioAdapter implements TelephonyProvider {

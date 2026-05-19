@@ -1,4 +1,4 @@
-import { Appointment, Customer } from './types';
+import { type Appointment, type Customer } from './types';
 
 // Helper to get a fixed time for tomorrow or day after
 const getFixedDate = (daysOut: number, hours: number, minutes: number) => {

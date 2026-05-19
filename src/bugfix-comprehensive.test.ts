@@ -21,9 +21,11 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { Client } from "pg";
+import { type Client } from "pg";
 import { z } from "zod";
 import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer, createEmployee, createResource, createService, createAppointment, skipIfDbDown } from "./test-utils";
+import type { AppRequest } from "./middleware";
+import type { FastifyReply } from "fastify";
 
 let client: Client;
 let tenantA: string;
@@ -796,8 +798,8 @@ describe("requireAuth middleware", () => {
     // WHERE: requireAuth helper in src/middleware.ts
     // WHY: BUG-003 — confirms authenticated requests pass through the guard
     const { requireAuth } = await import("./middleware");
-    const fakeReq = { auth: { tenant_id: "t1", user_id: "u1", email: "a@b.com" } } as unknown as import("./middleware").AppRequest;
-    const fakeReply = {} as unknown as import("fastify").FastifyReply;
+    const fakeReq = { auth: { tenant_id: "t1", user_id: "u1", email: "a@b.com" } } as unknown as AppRequest;
+    const fakeReply = {} as unknown as FastifyReply;
     expect(requireAuth(fakeReq, fakeReply)).toBe(true);
   });
 
@@ -812,13 +814,13 @@ describe("requireAuth middleware", () => {
     let statusCode: number | undefined;
     let body: unknown;
 
-    const fakeReq = {} as unknown as import("./middleware").AppRequest;
+    const fakeReq = {} as unknown as AppRequest;
     const fakeReply = {
       status(code: number) {
         statusCode = code;
         return { send(b: unknown) { body = b; } };
       },
-    } as unknown as import("fastify").FastifyReply;
+    } as unknown as FastifyReply;
 
     const result = requireAuth(fakeReq, fakeReply);
     expect(result).toBe(false);

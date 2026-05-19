@@ -17,7 +17,7 @@
  * regression set together. Feature-area work should still grep here.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { Pool, PoolClient } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { skipIfDbDown } from './test-utils';
 
 const TEST_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';

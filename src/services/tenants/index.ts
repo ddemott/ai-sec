@@ -13,7 +13,7 @@
  * hot paths off the DB without forcing callers to think about warm-up.
  */
 
-import { Pool, PoolClient } from 'pg';
+import { type Pool, type PoolClient } from 'pg';
 import { getPool } from '../../database/index.js';
 
 /**

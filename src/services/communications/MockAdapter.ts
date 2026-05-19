@@ -1,7 +1,7 @@
 import {
-  TelephonyProvider,
-  TelephonyCallRequest,
-  TelephonySMSRequest,
+  type TelephonyProvider,
+  type TelephonyCallRequest,
+  type TelephonySMSRequest,
 } from './TelephonyProvider.interface.js';
 
 export class MockAdapter implements TelephonyProvider {

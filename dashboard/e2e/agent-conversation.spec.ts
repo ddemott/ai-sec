@@ -27,7 +27,7 @@
  * in `finally`. Independent of other test files; runs in any order.
  */
 import { test, expect } from './helpers/test';
-import { APIRequestContext } from '@playwright/test';
+import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';

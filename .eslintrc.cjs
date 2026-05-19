@@ -81,9 +81,7 @@ module.exports = {
       // single field: `const { foo, ...rest } = obj`.
       ignoreRestSiblings: true,
     }],
-    // Auto-fixable by `eslint --fix`; warn for now so an incremental
-    // sweep doesn't block the lint adoption.
-    '@typescript-eslint/consistent-type-imports': ['warn', {
+    '@typescript-eslint/consistent-type-imports': ['error', {
       prefer: 'type-imports',
       fixStyle: 'inline-type-imports',
     }],

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { getRootClient, clearDB, createTenant, createUser, hashPassword, skipIfDbDown } from "./test-utils";
-import { Client } from "pg";
+import { type Client } from "pg";
 import type { FastifyReply } from "fastify";
 import bcrypt from "bcrypt";
 import type { AppRequest } from "./middleware";
@@ -65,9 +65,10 @@ function findRoute(routes: RouteCapture[], path: string) {
 }
 
 import { createMockClient, createMockPool } from './test-utils-mock';
+import type * as AuthRoutes from './routes/auth';
 
 describe("Auth Routes — Handler-Level", () => {
-  let registerAuthRoutes: typeof import('./routes/auth').registerAuthRoutes;
+  let registerAuthRoutes: typeof AuthRoutes.registerAuthRoutes;
   const generateToken = vi.fn().mockReturnValue(TEST_TOKEN);
 
   beforeAll(async () => {

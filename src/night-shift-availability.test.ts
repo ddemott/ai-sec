@@ -3,7 +3,7 @@
  * Happy + sad paths with 5W diagnostic context.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { Client } from 'pg';
+import { type Client } from 'pg';
 import { getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource, createService, createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 
 describe('Fix #30: Night shifts (cross-midnight)', () => {

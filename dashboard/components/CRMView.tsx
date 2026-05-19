@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Customer } from '@/lib/types'
+import { type Customer } from '@/lib/types'
 import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from '@/lib/mockData'
 import {
   Search,

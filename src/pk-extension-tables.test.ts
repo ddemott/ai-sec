@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { Client } from "pg";
+import { type Client } from "pg";
 import { getRootClient, clearDB, createTenant, createResource, createCustomerFull, createAppointment, skipIfDbDown } from "./test-utils";
 
 // PK naming convention carve-out — 1:1 extension tables.

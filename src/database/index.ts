@@ -7,7 +7,7 @@
  * Pattern: Repository with lazy pool initialization.
  */
 
-import { Pool, PoolClient } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import type {
   ConsentRecord,
   OptOutRecord,

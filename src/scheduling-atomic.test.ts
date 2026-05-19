@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { Client } from "pg";
+import { type Client } from "pg";
 import { getRootClient, clearDB, createTenant, createResource, createEmployee, createService, createScheduleEntry, createCustomerFull, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 
 let root: Client;

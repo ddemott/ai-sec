@@ -1,4 +1,4 @@
-import { TelephonyProvider } from './TelephonyProvider.interface.js';
+import { type TelephonyProvider } from './TelephonyProvider.interface.js';
 import { TwilioAdapter } from './TwilioAdapter.js';
 import { MockAdapter } from './MockAdapter.js';
 
