@@ -167,7 +167,8 @@ test('conversation: unknown caller returns "new caller" prompt', async ({ reques
 
   expect(res.status).toBe(200);
   expect(res.body.success).toBe(true);
-  const result = String(res.body.result ?? '').toLowerCase();
+  const rawResult: unknown = res.body.result;
+  const result = (typeof rawResult === 'string' ? rawResult : '').toLowerCase();
   expect(result).toMatch(/new caller|don't have/i);
 });
 

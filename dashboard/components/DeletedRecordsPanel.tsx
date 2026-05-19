@@ -17,6 +17,14 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function formatFieldValue(value: unknown): string {
+  if (value === null || value === undefined) return '(empty)'
+  if (typeof value === 'object') return JSON.stringify(value)
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value)
+  return '(invalid)'
+}
+
 export function DeletedRecordsPanel({
   table,
   tenantId,
@@ -259,7 +267,7 @@ export function DeletedRecordsPanel({
                           <div key={key} className="flex">
                             <span className="w-32 text-gray-500 flex-shrink-0">{key}:</span>
                             <span className="text-gray-900 dark:text-gray-100">
-                              {value === null ? '(empty)' : typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                              {formatFieldValue(value)}
                             </span>
                           </div>
                         ))}
@@ -323,7 +331,7 @@ export function DeletedRecordsPanel({
                         <div className="flex-1">
                           <div className="font-medium text-sm text-gray-900 dark:text-white">{key}</div>
                           <div className="text-xs text-gray-500">
-                            {value === null ? '(empty)' : typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                            {formatFieldValue(value)}
                           </div>
                         </div>
                       </label>

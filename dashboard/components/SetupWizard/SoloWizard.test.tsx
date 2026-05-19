@@ -197,7 +197,8 @@ describe('SoloWizard — finalize fans weekly availability', () => {
       return url.includes('/shifts/expand-weekly')
     })
     expect(expandCall).toBeDefined()
-    const body = JSON.parse(String((expandCall![1] as RequestInit).body ?? '{}'))
+    const rawBody = (expandCall![1] as RequestInit).body
+    const body = JSON.parse(typeof rawBody === 'string' ? rawBody : '{}')
     expect(body.employee_id).toBe(OWNER_EMPLOYEE_ID)
     expect(body.tenant_id).toBe(TENANT_ID)
   })

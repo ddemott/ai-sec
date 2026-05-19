@@ -10,7 +10,7 @@ let mockResources: Array<{ resource_id: string; name: string; description?: stri
 // Build a fetch mock that supports resources GET/CREATE/UPDATE
 function buildFetchMock() {
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
-    const url = typeof input === 'string' ? input : input.toString()
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
 
     if (url.includes('/resources?tenant_id=')) {
       return mockJsonResponse(mockResources)

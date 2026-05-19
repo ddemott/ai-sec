@@ -105,8 +105,14 @@ function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '(empty)'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'object') return JSON.stringify(value)
-  const str = String(value)
-  return str.length > 100 ? str.substring(0, 100) + '...' : str
+  if (typeof value === 'string') {
+    return value.length > 100 ? value.substring(0, 100) + '...' : value
+  }
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    const str = String(value)
+    return str.length > 100 ? str.substring(0, 100) + '...' : str
+  }
+  return '(invalid)'
 }
 
 export function RecordHistoryModal({

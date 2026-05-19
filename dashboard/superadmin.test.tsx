@@ -47,7 +47,7 @@ function buildFetchMock() {
   ]
 
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
-    const url = typeof input === 'string' ? input : input.toString()
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
 
     if (url.endsWith('/tenants') && (!init || init.method === undefined || init.method === 'GET')) {
       return mockJsonResponse(tenants)
@@ -131,7 +131,7 @@ test('SuperAdminDashboard: can launch new business via modal', async () => {
   })
 
   const lastCall = fetchMock.mock.calls.find((call) =>
-    (typeof call[0] === 'string' ? call[0] : call[0].toString()).includes('/tenants/create')
+    (typeof call[0] === 'string' ? call[0] : call[0] instanceof URL ? call[0].toString() : call[0].url).includes('/tenants/create')
   )
 
   expect(lastCall).toBeDefined()
@@ -186,7 +186,7 @@ import { describe } from 'vitest'
 describe('SuperAdminDashboard sad paths', () => {
   test('shows empty state when tenant list fetch fails', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
-      const url = typeof input === 'string' ? input : input.toString()
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
 
       if (url.endsWith('/tenants') && (!init || !init.method || init.method === 'GET')) {
         return mockJsonResponse({ success: false, error: 'DB unavailable' }, { ok: false, status: 500 })
@@ -213,7 +213,7 @@ describe('SuperAdminDashboard sad paths', () => {
 
   test('shows error when tenant creation fails', async () => {
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
-      const url = typeof input === 'string' ? input : input.toString()
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
 
       if (url.endsWith('/tenants') && (!init || !init.method || init.method === 'GET')) {
         return mockJsonResponse([])
@@ -291,7 +291,7 @@ describe('SuperAdminDashboard sad paths', () => {
 
     // No delete call should have been made
     const deleteCalls = fetchMock.mock.calls.filter((call) => {
-      const url = typeof call[0] === 'string' ? call[0] : call[0].toString()
+      const url = typeof call[0] === 'string' ? call[0] : call[0] instanceof URL ? call[0].toString() : call[0].url
       return url.includes('/tenants/tenant-1') && call[1]?.method === 'DELETE'
     })
     expect(deleteCalls.length).toBe(0)
