@@ -3,10 +3,8 @@
  * Tests email, SMS, and consent functionality with happy + sad paths.
  * Each section includes 5W diagnostic context (WHO, WHAT, WHEN, WHERE, WHY).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CommunicationService } from './index.js';
-import { EmailService } from './emailService.js';
-import { SMSService } from './smsService.js';
 import { ConsentService } from '../consentService.js';
 import type { TenantConfigService, TenantConfig } from '../tenants/index.js';
 import type { DatabaseService } from '../../database/index.js';
@@ -279,7 +277,7 @@ describe('CommunicationService', () => {
           },
         ]);
 
-        const result = await communicationService.sendSMS('test-tenant-123', {
+        const _result = await communicationService.sendSMS('test-tenant-123', {
           to: '123', // Too short
           body: 'Test message',
         });

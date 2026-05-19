@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, clearDB, createTenant, createUser, hashPassword, skipIfDbDown } from "./test-utils";
+import { getRootClient, clearDB, createTenant,  hashPassword, skipIfDbDown } from "./test-utils";
 import { type Client } from "pg";
 import type { FastifyReply } from "fastify";
 import bcrypt from "bcrypt";
@@ -16,8 +16,8 @@ vi.mock('./services/communications/systemEmail', () => ({
 // ═══════════════════════════════════════════════════════════════════════
 
 // Mock bcrypt for route handler tests (the DB-level tests below use real bcrypt)
-const mockBcryptCompare = vi.fn();
-const mockBcryptHash = vi.fn();
+const _mockBcryptCompare = vi.fn();
+const _mockBcryptHash = vi.fn();
 
 type MockReply = FastifyReply & { statusCode: number; body: unknown };
 type RouteHandler = (req: AppRequest, reply: FastifyReply) => Promise<unknown>;

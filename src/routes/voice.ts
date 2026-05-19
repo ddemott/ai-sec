@@ -17,7 +17,6 @@ import type {
   CustomerContext,
   VoiceSession,
   VoiceSessionDisplay,
-  VoiceSessionOutcome,
 } from '../types/voiceCrm';
 
 const StartSessionSchema = z.object({

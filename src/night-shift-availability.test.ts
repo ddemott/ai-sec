@@ -4,12 +4,11 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource, createService, createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import { getRootClient, clearDB, createTenant, createEmployee, createScheduleEntry, createResource,  createCustomer, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 
 describe('Fix #30: Night shifts (cross-midnight)', () => {
   let client: Client;
   let tenantId: string;
-  let resourceId: string;
   let employeeId: string;
   let dbAvailable = false;
   beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
@@ -24,7 +23,7 @@ describe('Fix #30: Night shifts (cross-midnight)', () => {
       }
       await clearDB(client);
       tenantId = await createTenant(client, 'Night Shift Co', 'auto-repair', 'America/Chicago');
-      resourceId = await createResource(client, tenantId, 'Bay 1');
+      await createResource(client, tenantId, 'Bay 1');
       employeeId = await createEmployee(client, tenantId, 'Night Worker', ['repair']);
       dbAvailable = true;
     } catch (err) {

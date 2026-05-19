@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { FastifyReply, FastifyInstance } from "fastify";
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
 import {
   withHandler,
   withPoolClient,

@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, assignEmployeeToService, assignResourceToService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, assignEmployeeToService,  beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { type Client } from "pg";
 
 describe("CRUD Routes - Database Level", () => {
     let client: Client;
     let tenantId: string;
     let resourceId: string;
-    let customerId: string;
     let dbAvailable = true;
     beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
@@ -17,7 +16,6 @@ describe("CRUD Routes - Database Level", () => {
             const setup = await setupBasicTenant(client);
             tenantId = setup.tenantId;
             resourceId = setup.resourceId;
-            customerId = setup.customerId;
         } catch (err) {
             dbAvailable = false;
             console.warn("[crud-routes.test] Skipping DB tests - connection failed", err);

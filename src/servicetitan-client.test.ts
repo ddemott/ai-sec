@@ -13,7 +13,7 @@ import {
   refreshAccessToken,
   apiRequest,
   listCustomers,
-  getCustomer,
+  _getCustomer,
   createCustomer,
   updateCustomer,
   listJobs,

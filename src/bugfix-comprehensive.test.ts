@@ -23,7 +23,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { type Client } from "pg";
 import { z } from "zod";
-import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer, createEmployee, createResource, createService, createAppointment, skipIfDbDown } from "./test-utils";
+import { getRootClient, clearDB,  beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer,  createResource, createService, createAppointment, skipIfDbDown } from "./test-utils";
 import type { AppRequest } from "./middleware";
 import type { FastifyReply } from "fastify";
 

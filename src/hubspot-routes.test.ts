@@ -225,7 +225,7 @@ describe('HubSpot Routes — Happy Paths', () => {
     const webhookBody = [
       { subscriptionType: 'contact.creation', objectId: '12345', portalId: '99999' },
     ];
-    const rawBody = JSON.stringify(webhookBody);
+    const _rawBody = JSON.stringify(webhookBody);
 
     vi.mocked(hubspotClient.verifyWebhookSignature).mockReturnValue(true);
 

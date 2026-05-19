@@ -3,7 +3,7 @@
  * Verifies fire-and-forget pattern, structured logging, and error isolation.
  * Happy + sad paths with 5W diagnostic context.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 
 describe('syncOrchestrator', () => {

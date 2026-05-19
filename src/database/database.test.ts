@@ -17,7 +17,7 @@
  * - WHY: Why this test matters (business/technical reason)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Pool, PoolClient, QueryResult } from 'pg';
 import type {
   ReminderSchedule,
@@ -38,7 +38,7 @@ vi.mock('pg', () => {
 });
 
 // Import after mocking
-import { PostgresDatabaseService, createDatabaseService, getPool, closePool } from './index.js';
+import { PostgresDatabaseService, createDatabaseService } from './index.js';
 
 // ── Test Helpers ────────────────────────────────────────────────────────
 

@@ -111,7 +111,7 @@ describe('Fix #31: Consolidated getAvailableSlots query', () => {
     // WHY: Eliminates N+1 queries (was 3+ queries, now 1)
     if (!dbAvailable) return;
 
-    const svcId = await createService(client, tenantId, 'Oil Change', 30, 39.99);
+    const _svcId = await createService(client, tenantId, 'Oil Change', 30, 39.99);
     const empId = await createEmployee(client, tenantId, 'Mike', ['oil-change']);
     await createScheduleEntry(client, tenantId, empId, TEST_DATE, '08:00', '17:00');
     const custId = await createCustomer(client, tenantId, 'Alice', '+15551234567');

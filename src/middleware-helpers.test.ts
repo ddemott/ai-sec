@@ -6,7 +6,6 @@ import { getRootClient, clearDB, setupBasicTenant, beginTestTransaction, rollbac
 
 let root: Client;
 let tenantId: string;
-let resourceId: string;
 let dbAvailable = false;
 beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
 
@@ -17,7 +16,6 @@ beforeAll(async () => {
         await clearDB(root);
         const setup = await setupBasicTenant(root);
         tenantId = setup.tenantId;
-        resourceId = setup.resourceId;
     } catch {
         dbAvailable = false;
     }

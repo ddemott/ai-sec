@@ -640,7 +640,7 @@ describe('Reminder Types', () => {
       '2h': 2,
     };
 
-    Object.entries(typeToHours).forEach(([type, hours]) => {
+    Object.entries(typeToHours).forEach(([_type, hours]) => {
       expect(hours).toBeGreaterThanOrEqual(0);
       expect(hours).toBeLessThanOrEqual(72);
     });

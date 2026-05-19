@@ -74,7 +74,7 @@ module.exports = {
     '@typescript-eslint/restrict-template-expressions': 'error',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     '@typescript-eslint/no-base-to-string': 'error',
-    '@typescript-eslint/no-unused-vars': ['warn', {
+    '@typescript-eslint/no-unused-vars': ['error', {
       argsIgnorePattern: '^_',
       varsIgnorePattern: '^_',
       // Allow unused destructured siblings — common when extracting a

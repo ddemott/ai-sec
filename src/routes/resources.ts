@@ -2,8 +2,7 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { SUPER_ADMIN_TENANT_ID } from '../constants';
-import { withHandler, logEvent, requireTenantId, withPoolClient, type AppRequest } from '../middleware';
+import { withHandler, logEvent, requireTenantId,  type AppRequest } from '../middleware';
 import { assertRowAffected } from './routeHelpers';
 
 const CreateResourceSchema = z.object({

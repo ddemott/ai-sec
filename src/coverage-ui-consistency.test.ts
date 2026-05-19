@@ -261,7 +261,7 @@ describe("Coverage Backend ↔ Dashboard Consistency", () => {
         //      "your business is open, but this service has no one to do it"
         //      should NOT render as "fully covered."
         if (!dbAvailable) return;
-        const brakesId = await seedService("Brakes");      // unassigned to anyone
+        const _brakesId = await seedService("Brakes");      // unassigned to anyone
         const oilId = await seedService("Oil Change");     // assigned to Mike
         await seedEmployee("Mike", [1, 2, 3, 4, 5], '08:00', '17:00', [oilId]);
 

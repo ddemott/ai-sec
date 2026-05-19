@@ -16,7 +16,7 @@
  * stay closed together. Feature-area work should still grep here.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser, hashPassword, skipIfDbDown } from "./test-utils";
+import { getRootClient, getApiClient, clearDB, setupBasicTenant, createTenant, createResource, createEmployee, createScheduleEntry, createCustomerFull, createUser,  skipIfDbDown } from "./test-utils";
 import { type Client } from "pg";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";

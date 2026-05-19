@@ -612,7 +612,7 @@ describe("QUERIES", () => {
     // WHEN: any sync operation sends a query to the Jobber GraphQL endpoint
     // WHERE: src/services/jobberClient.ts QUERIES export
     // WHY: an empty or whitespace-only query string would cause Jobber to return a GraphQL parse error, silently breaking all sync operations for that resource
-    for (const [key, value] of Object.entries(QUERIES)) {
+    for (const [_key, value] of Object.entries(QUERIES)) {
       expect(typeof value).toBe("string");
       expect(value.trim().length).toBeGreaterThan(0);
     }

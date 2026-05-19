@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createResource, createService, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
+import { getRootClient, clearDB, setupBasicTenant, createTenant,    beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 import { type Client } from "pg";
 
 describe("Vocabulary Wiring: End-to-End", () => {

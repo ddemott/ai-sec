@@ -15,7 +15,7 @@
  * bugs stay closed. Feature-area work should still grep here.
  */
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { getRootClient, clearDB, setupBasicTenant, createTenant, createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
+import { getRootClient, clearDB, setupBasicTenant,  createEmployee, createScheduleEntry, createUser, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from './test-utils';
 import { type Client } from 'pg';
 // Day-of-week conversion utilities (inlined from deleted core/models.ts)
 const DAY_STRING_TO_NUM: Record<string, number> = {

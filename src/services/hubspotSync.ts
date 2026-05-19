@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import * as hubspot from './hubspotClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS, withSyncContext } from './tokenManagement';
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
 import { splitName, joinName } from './nameUtils';
 import {
   syncMapUpsertOnCreate,

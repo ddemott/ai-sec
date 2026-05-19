@@ -11,9 +11,9 @@
  *
  * Happy + sad paths with 5W diagnostic comments.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { type Client } from 'pg';
-import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, createTenant, createCustomer, skipIfDbDown } from './test-utils';
+import { getRootClient, clearDB, beginTestTransaction, rollbackTestTransaction, createTenant,  skipIfDbDown } from './test-utils';
 
 let client: Client;
 let dbAvailable = false;

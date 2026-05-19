@@ -66,7 +66,7 @@ describe('findNextAvailableSlots', () => {
     //        and waste senior-tech time on simple suggestions.
 
     const tenantId = await createTenant(root, 'TireCo', 'mobile_tire', 'America/Chicago');
-    const truck1 = await createResource(root, tenantId, 'Truck 1');
+    const _truck1 = await createResource(root, tenantId, 'Truck 1');
     const carlos = await createEmployee(root, tenantId, 'Carlos', ['flat-repair', 'tire-swap', 'tire-rotation']);
     const mike = await createEmployee(root, tenantId, 'Mike', ['flat-repair', 'tire-swap', 'tire-rotation', 'tire-install', 'balancing']);
 

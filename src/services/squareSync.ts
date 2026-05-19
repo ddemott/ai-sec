@@ -14,7 +14,6 @@ import {
   ensureRemoteCustomer,
   pullRemoteCustomer,
   isAlreadySynced,
-  isRemoteNewer,
   updateLastSyncAt,
 } from './syncMapHelpers';
 import { paginateSync } from './syncPaginate';

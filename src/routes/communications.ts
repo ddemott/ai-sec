@@ -73,7 +73,7 @@ const HistoryQuerySchema = z.object({
 export function registerCommunicationRoutes(
   app: AppFastifyInstance,
   pool: Pool,
-  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+  _withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   const db = createDatabaseService(pool);
   const configService = createTenantConfigService(pool);

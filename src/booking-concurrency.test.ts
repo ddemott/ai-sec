@@ -33,7 +33,6 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
     let setup: Client;
     let pool: Pool;
     let tenantId: string;
-    let resourceId: string;
     let employeeId: string;
     let dbAvailable = false;
 
@@ -52,7 +51,7 @@ describe('book_with_scheduling_atomic: concurrent-booking race', () => {
             }
             await clearDB(setup);
             tenantId = await createTenant(setup, 'Race Test Co', 'auto-repair', 'America/Chicago');
-            resourceId = await createResource(setup, tenantId, 'Bay 1');
+            await createResource(setup, tenantId, 'Bay 1');
             employeeId = await createEmployee(setup, tenantId, 'Alex', ['repair']);
 
             // The pool is the source of true concurrency. Each pool.query()

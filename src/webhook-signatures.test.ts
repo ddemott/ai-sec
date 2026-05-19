@@ -45,7 +45,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 // any plain top-level code; the routes capture process.env.* into module-
 // level constants at first import, so env stamping must run BEFORE imports.
 const {
-    STRIPE_SECRET_KEY,
+    _STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     HUBSPOT_CLIENT_SECRET,
     SQUARE_SIGNATURE_KEY,

@@ -7,8 +7,8 @@
  * Happy + sad paths with 5W diagnostic context.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { FastifyInstance } from 'fastify';
-import type { Pool, PoolClient } from 'pg';
+import type {} from 'fastify';
+import type { Pool } from 'pg';
 
 // ═══════════════════════════════════════════════════════════════
 // 1. Error narrowing: catch (err: unknown) produces correct messages

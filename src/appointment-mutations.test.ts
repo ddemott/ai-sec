@@ -236,7 +236,7 @@ describe("Appointment Update & Cancel", () => {
     it("should allow rebooking the same slot after cancel", async () => {
         if (!dbAvailable) return;
 
-        const { appointmentId, employeeId, serviceId } = await bookAppointment();
+        const { appointmentId, employeeId, _serviceId } = await bookAppointment();
 
         // Cancel
         await client.query(

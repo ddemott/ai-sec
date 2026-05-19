@@ -143,7 +143,7 @@ describe("Calendar Sync — Happy Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'update', silentLogger);
 
     expect(gcal.updateEvent).toHaveBeenCalledOnce();
-    const [accessToken, refreshToken, calendarId, eventId, event] = vi.mocked(gcal.updateEvent).mock.calls[0];
+    const [accessToken, _refreshToken, calendarId, eventId, event] = vi.mocked(gcal.updateEvent).mock.calls[0];
     expect(accessToken).toBe('valid-access-token');
     expect(calendarId).toBe(CALENDAR_ID);
     expect(eventId).toBe(EXTERNAL_EVENT_ID);
@@ -181,7 +181,7 @@ describe("Calendar Sync — Happy Paths", () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'delete', silentLogger);
 
     expect(gcal.deleteEvent).toHaveBeenCalledOnce();
-    const [accessToken, refreshToken, calendarId, eventId] = vi.mocked(gcal.deleteEvent).mock.calls[0];
+    const [accessToken, _refreshToken, calendarId, eventId] = vi.mocked(gcal.deleteEvent).mock.calls[0];
     expect(accessToken).toBe('valid-access-token');
     expect(calendarId).toBe(CALENDAR_ID);
     expect(eventId).toBe(EXTERNAL_EVENT_ID);
@@ -742,7 +742,7 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(outlookCal.updateEvent).toHaveBeenCalledOnce();
     expect(gcal.updateEvent).not.toHaveBeenCalled();
 
-    const [accessToken, refreshToken, calendarId, eventId, event] = vi.mocked(outlookCal.updateEvent).mock.calls[0];
+    const [accessToken, _refreshToken, _calendarId, eventId, event] = vi.mocked(outlookCal.updateEvent).mock.calls[0];
     expect(accessToken).toBe('outlook-access-token');
     expect(eventId).toBe(OUTLOOK_EVENT_ID);
     expect(event.summary).toBe('Oil Change - John Doe');
@@ -772,7 +772,7 @@ describe("Calendar Sync — Outlook Happy Paths", () => {
     expect(outlookCal.deleteEvent).toHaveBeenCalledOnce();
     expect(gcal.deleteEvent).not.toHaveBeenCalled();
 
-    const [accessToken, refreshToken, calendarId, eventId] = vi.mocked(outlookCal.deleteEvent).mock.calls[0];
+    const [accessToken, _refreshToken, _calendarId, eventId] = vi.mocked(outlookCal.deleteEvent).mock.calls[0];
     expect(accessToken).toBe('outlook-access-token');
     expect(eventId).toBe(OUTLOOK_EVENT_ID);
 

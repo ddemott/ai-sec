@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { type Client } from "pg";
-import { getRootClient, clearDB, createTenant, createResource, createEmployee, createService, createScheduleEntry, createCustomerFull, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
+import { getRootClient, clearDB, createTenant, createResource, createEmployee,  createScheduleEntry, createCustomerFull, createAppointment, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 
 let root: Client;
 let dbAvailable = false;
@@ -155,7 +155,7 @@ describe("book_with_scheduling_atomic()", () => {
             // resource, and the assertion `result.resource_name === 'Bay 1'`
             // becomes flaky — auto-seeded "Service Bay 1" matches just as well.
             await root.query("DELETE FROM resources WHERE tenant_id = $1", [tenantId]);
-            const bayId = await createResource(root, tenantId, "Bay 1");
+            const _bayId = await createResource(root, tenantId, "Bay 1");
             const empId = await createEmployee(root, tenantId, "Alice", ["oil-change"]);
             // 2026-04-06 is a Monday. Booking RPCs read only employee_schedule.
             await createScheduleEntry(root, tenantId, empId, '2026-04-06', '08:00', '17:00');

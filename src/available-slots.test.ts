@@ -5,7 +5,7 @@
  * and the service layer's human-readable output formatting.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // We can't import Deno modules directly, so we test the logic patterns
 // by replicating the interval math helpers and testing them.
@@ -19,7 +19,7 @@ function timeToMinutes(t: string): number {
   return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
 }
 
-function dateTimeToMinutes(dt: string): number {
+function _dateTimeToMinutes(dt: string): number {
   const d = new Date(dt);
   return d.getHours() * 60 + d.getMinutes();
 }

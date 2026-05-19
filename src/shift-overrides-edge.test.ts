@@ -263,7 +263,7 @@ describe('Fix #16 + #17: Edge function employee_schedule support', () => {
       // WHY: Customers should only see actually available times
       if (!dbAvailable) return;
 
-      const resourceId = await createResource(client, tenantId, 'Bay 1');
+      const _resourceId = await createResource(client, tenantId, 'Bay 1');
       const monday = getNextDayOfWeek(1);
       const dateStr = toDateStr(monday);
 

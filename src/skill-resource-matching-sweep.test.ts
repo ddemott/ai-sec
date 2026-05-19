@@ -34,7 +34,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { type Client } from "pg";
-import { getRootClient, clearDB, createTenant, createResource, createEmployee, createScheduleEntry, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
+import { getRootClient, clearDB, createTenant,  createEmployee, createScheduleEntry, beginTestTransaction, rollbackTestTransaction, skipIfDbDown } from "./test-utils";
 
 let root: Client;
 let dbAvailable = false;
@@ -413,7 +413,7 @@ describe("Skill + resource matching — error-code matrix", () => {
         if (!dbAvailable) return;
 
         const tenantId = await createTenant(root, "OneTech Shop", "auto-shop");
-        const bayId = await createResourceWithCapabilities(root, tenantId, "Bay 1", []);
+        const _bayId = await createResourceWithCapabilities(root, tenantId, "Bay 1", []);
         const techId = await createEmployee(root, tenantId, "Solo Sam", ["brakes"]);
         await createScheduleEntry(root, tenantId, techId, "2026-04-15", "08:00", "17:00");
 
