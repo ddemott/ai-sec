@@ -54,7 +54,7 @@ export default function ResourceManagerView() {
 
   useEffect(() => {
     if (tenantId) {
-      fetchMappings(tenantId);
+      void fetchMappings(tenantId);
     }
   }, [tenantId]);
 
@@ -80,7 +80,7 @@ export default function ResourceManagerView() {
     try {
       const res = await Api.resources.create(tenantId, newResource);
       if (res.success) {
-        refresh();
+        void refresh();
         setNewResource({ name: '', description: '' });
       } else {
         setError(res.error || 'Failed to create resource');
@@ -102,7 +102,7 @@ export default function ResourceManagerView() {
         is_active: editForm.is_active
       }, tenantId);
       if (res.success) {
-        refresh();
+        void refresh();
         setIsEditModalOpen(false);
       } else {
         setError(res.error || "Failed to update resource");
@@ -126,7 +126,7 @@ export default function ResourceManagerView() {
         try {
           const res = await Api.resources.delete(id, tenantId);
           if (res.success) {
-            refresh();
+            void refresh();
             setIsEditModalOpen(false);
             showToast(`${vocab.resource_label} deleted`, 'success');
           } else {

@@ -44,9 +44,9 @@ export function DeletedRecordsPanel({
   const [copying, setCopying] = useState(false)
 
   useEffect(() => {
-    loadDeletedRecords()
+    void loadDeletedRecords()
     if (table === 'customers') {
-      loadCustomers()
+      void loadCustomers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, tenantId])

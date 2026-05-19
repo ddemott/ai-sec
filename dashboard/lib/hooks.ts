@@ -80,7 +80,7 @@ export function useStaticData(tenantIdOverride?: string | null) {
   }, [tenantId]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
   return {
@@ -121,7 +121,7 @@ function useEntityList<T>(
     }
   }, [tenantId, fetcher]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   return { data, loading, refresh };
 }
@@ -182,7 +182,7 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
     }
   }, [tenantId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const maps = useMemo(
     () => buildMappingMaps(serviceEmployeeRows, serviceResourceRows),

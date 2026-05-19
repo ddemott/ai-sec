@@ -183,7 +183,7 @@ function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply
     const msg = parsed.error.issues
       .map((e) => `${e.path.join('.')}: ${e.message}`)
       .join(', ');
-    fail(reply, `Validation failed: ${msg}`);
+    void fail(reply, `Validation failed: ${msg}`);
     return null;
   }
   return parsed.data;

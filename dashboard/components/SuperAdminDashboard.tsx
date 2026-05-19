@@ -210,7 +210,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
         setSelectedTenant(null)
         setIsDeleteModalOpen(false)
         setDeleteConfirmText('')
-        fetchData()
+        void fetchData()
         notifyTenantsChanged()
       } else {
         setError(res.error || 'Failed to delete business')
@@ -248,7 +248,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                 owner_email: '',
                 owner_pass: ''
             })
-            fetchData()
+            void fetchData()
             notifyTenantsChanged()
         } else {
             setError(res.error || 'Failed to create new business')

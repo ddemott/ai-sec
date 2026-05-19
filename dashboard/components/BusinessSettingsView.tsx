@@ -58,15 +58,15 @@ export default function BusinessSettingsView() {
 
   useEffect(() => {
     if (tenantId) {
-      fetchCalendarSettings()
-      fetchTenantConfig()
+      void fetchCalendarSettings()
+      void fetchTenantConfig()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   useEffect(() => {
     if (isSolo && soloEmployee && tenantId) {
-      fetchShifts(soloEmployee.employee_id)
+      void fetchShifts(soloEmployee.employee_id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSolo, soloEmployee?.employee_id, tenantId])
@@ -104,7 +104,7 @@ export default function BusinessSettingsView() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get('calendarConnected') === 'true') {
-      fetchCalendarSettings()
+      void fetchCalendarSettings()
       const url = new URL(window.location.href)
       url.searchParams.delete('calendarConnected')
       window.history.replaceState({}, '', url.pathname)
@@ -161,7 +161,7 @@ export default function BusinessSettingsView() {
         description: newResource.description.trim() || undefined
       })
       if (res.success) {
-        refreshResources()
+        void refreshResources()
         setNewResource({ name: '', description: '' })
       }
     } catch (err) {
@@ -173,7 +173,7 @@ export default function BusinessSettingsView() {
     try {
       const res = await Api.resources.update(resourceId, { is_active: !currentActive })
       if (res.success) {
-        refreshResources()
+        void refreshResources()
       }
     } catch (err) {
       console.error('Failed to update resource', err)
@@ -196,7 +196,7 @@ export default function BusinessSettingsView() {
       if (res.success) {
         setNewService({ name: '', description: '', duration_minutes: 30 })
         setAddingService(false)
-        refreshResources()
+        void refreshResources()
       } else {
         setServiceError('Failed to create service')
       }
@@ -223,7 +223,7 @@ export default function BusinessSettingsView() {
       })
       if (res.success) {
         setEditingService(null)
-        refreshResources()
+        void refreshResources()
       } else {
         setServiceError('Failed to update service')
       }
@@ -244,7 +244,7 @@ export default function BusinessSettingsView() {
         closeConfirm()
         try {
           await Api.services.delete(id, tenantId)
-          refreshResources()
+          void refreshResources()
         } catch {
           console.error('Failed to delete service')
         }

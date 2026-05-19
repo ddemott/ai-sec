@@ -67,7 +67,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   useEffect(() => {
     if (!isOpen || !tenantId || loading || seedingRef.current || services.length > 0) return
     seedingRef.current = true
-    seedFromTemplate()
+    void seedFromTemplate()
     async function seedFromTemplate() {
       try {
         const [config, templates] = await Promise.all([
@@ -91,7 +91,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   // grid is ephemeral form state — it persists only at finalize.
   useEffect(() => {
     if (step === 2 && tenantId) {
-      ensureOwnerEmployee()
+      void ensureOwnerEmployee()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, tenantId])

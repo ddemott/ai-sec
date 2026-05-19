@@ -32,7 +32,7 @@ export default function AIConfigView() {
 
   useEffect(() => {
     if (tenantId) {
-      fetchConfig()
+      void fetchConfig()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])

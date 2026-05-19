@@ -130,7 +130,7 @@ export async function withPoolClient<T>(pool: Pool, fn: (client: PoolClient) => 
 export function requireTenantId(req: AppRequest, reply: FastifyReply): string | null {
   const tenantId = req.tenantId || (req.body as Record<string, string>)?.tenant_id;
   if (!tenantId) {
-    reply.status(400).send({ error: 'tenant_id is required' });
+    void reply.status(400).send({ error: 'tenant_id is required' });
     return null;
   }
   return tenantId;
@@ -142,7 +142,7 @@ export function requireTenantId(req: AppRequest, reply: FastifyReply): string | 
  */
 export function requireAuth(req: AppRequest, reply: FastifyReply): boolean {
   if (!req.auth) {
-    reply.status(401).send({ success: false, error: 'Authentication required' });
+    void reply.status(401).send({ success: false, error: 'Authentication required' });
     return false;
   }
   return true;
@@ -162,11 +162,11 @@ export function requireAuth(req: AppRequest, reply: FastifyReply): boolean {
  */
 export function requireSuperAdmin(req: AppRequest, reply: FastifyReply): boolean {
   if (!req.auth) {
-    reply.status(401).send({ success: false, error: 'Authentication required' });
+    void reply.status(401).send({ success: false, error: 'Authentication required' });
     return false;
   }
   if (req.auth.tenant_id !== '00000000-0000-0000-0000-000000000000') {
-    reply.status(403).send({ success: false, error: 'Forbidden: super-admin only' });
+    void reply.status(403).send({ success: false, error: 'Forbidden: super-admin only' });
     return false;
   }
   return true;
@@ -248,11 +248,10 @@ export function tenantMiddleware(app: AppFastifyInstance) {
         value: malformed,
         url: request.url,
       }, 'malformed_tenant_id');
-      reply.status(400).send({
+      return reply.status(400).send({
         success: false,
         error: `tenant_id must be a valid UUID (received: ${JSON.stringify(malformed)})`,
       });
-      return reply;
     }
 
     const candidate = queryTenant || bodyTenant;
@@ -268,11 +267,10 @@ export function tenantMiddleware(app: AppFastifyInstance) {
         url: request.url,
         userId: request.auth?.user_id,
       }, 'cross_tenant_override_blocked');
-      reply.status(403).send({
+      return reply.status(403).send({
         success: false,
         error: 'Forbidden: tenant_id does not match authenticated session',
       });
-      return reply;
     }
 
     // Also block divergent query+body tenants in the same request — even
@@ -285,11 +283,10 @@ export function tenantMiddleware(app: AppFastifyInstance) {
         bodyTenant,
         url: request.url,
       }, 'tenant_id_mismatch_query_vs_body');
-      reply.status(400).send({
+      return reply.status(400).send({
         success: false,
         error: 'tenant_id mismatch between query and body',
       });
-      return reply;
     }
 
     const tenantId = candidate || jwtTenant;

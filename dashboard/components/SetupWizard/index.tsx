@@ -83,7 +83,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     if (!isOpen || !tenantId || loading || seedingRef.current) return
     if (services.length > 0 && resources.length > 0) return
     seedingRef.current = true
-    seedFromTemplate()
+    void seedFromTemplate()
     async function seedFromTemplate() {
       try {
         const [config, templates] = await Promise.all([

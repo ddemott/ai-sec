@@ -126,7 +126,7 @@ export function registerJobberRoutes(
     }
 
     // Fire-and-forget — respond immediately, process async
-    reply.status(200).send({ success: true, message: 'Webhook received' });
+    void reply.status(200).send({ success: true, message: 'Webhook received' });
 
     // Fetch full record from Jobber and sync
     try {

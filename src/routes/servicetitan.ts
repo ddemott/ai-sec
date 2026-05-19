@@ -90,7 +90,7 @@ export function registerServiceTitanRoutes(
     const events = Array.isArray(req.body) ? req.body : [req.body];
 
     // Respond immediately
-    reply.status(200).send({ success: true, message: 'Webhook received' });
+    void reply.status(200).send({ success: true, message: 'Webhook received' });
 
     // Process events async
     for (const event of events) {

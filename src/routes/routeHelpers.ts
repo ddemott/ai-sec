@@ -16,7 +16,7 @@ import type { ZodIssue } from 'zod';
  * Replaces the repeated `reply.status(400).send({ success: false, error: 'Validation failed', details })` pattern.
  */
 export function sendValidationError(reply: FastifyReply, issues: ZodIssue[]): void {
-  reply.status(400).send({ success: false, error: 'Validation failed', details: issues });
+  void reply.status(400).send({ success: false, error: 'Validation failed', details: issues });
 }
 
 /**
@@ -24,21 +24,21 @@ export function sendValidationError(reply: FastifyReply, issues: ZodIssue[]): vo
  * Use after zero-row mutations to stop returning success on no-ops.
  */
 export function sendNotFound(reply: FastifyReply, entityName: string): void {
-  reply.status(404).send({ success: false, error: `${entityName} not found` });
+  void reply.status(404).send({ success: false, error: `${entityName} not found` });
 }
 
 /**
  * Send a standard success envelope with optional data payload.
  */
 export function sendSuccess(reply: FastifyReply, data?: Record<string, unknown>): void {
-  reply.send({ success: true, ...data });
+  void reply.send({ success: true, ...data });
 }
 
 /**
  * Send a standard 409 conflict response for duplicate-name / unique-constraint violations.
  */
 export function sendConflict(reply: FastifyReply, message: string): void {
-  reply.status(409).send({ success: false, error: message });
+  void reply.status(409).send({ success: false, error: message });
 }
 
 // ── Mutation Guard ──────────────────────────────────────────────────
@@ -76,7 +76,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export function requireValidUUID(value: string, reply: FastifyReply, paramName: string): boolean {
   if (!UUID_RE.test(value)) {
-    reply.status(400).send({ success: false, error: `Invalid ${paramName} — must be UUID` });
+    void reply.status(400).send({ success: false, error: `Invalid ${paramName} — must be UUID` });
     return false;
   }
   return true;

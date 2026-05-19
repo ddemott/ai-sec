@@ -171,10 +171,10 @@ export function registerAppointmentRoutes(
     if (result.success) {
       logEvent(req, 'appointment_created', { appointmentId: result.appointment_id });
       bookingAttemptsTotal.inc({ outcome: 'success', source: 'api' });
-      syncAppointmentToAll(pool, body.tenant_id, result.appointment_id, 'create', req.log);
+      void syncAppointmentToAll(pool, body.tenant_id, result.appointment_id, 'create', req.log);
       // Fire-and-forget: a reminder schedule miss must never fail the booking.
       // The 4 rows feed the 60s worker tick at src/workers/reminderScheduler.ts.
-      scheduleRemindersForAppointment(withTenantClient, body.tenant_id, result.appointment_id, req.log);
+      void scheduleRemindersForAppointment(withTenantClient, body.tenant_id, result.appointment_id, req.log);
       return reply.send({ success: true, appointment_id: result.appointment_id });
     }
     if (conflict) {
@@ -427,7 +427,7 @@ export function registerAppointmentRoutes(
           if (existing.rows.length === 0) {
             await client.query('ROLLBACK');
             shortCircuited = true;
-            reply.status(404).send({ success: false, error: 'Appointment not found' });
+            void reply.status(404).send({ success: false, error: 'Appointment not found' });
             return;
           }
           effectiveStartTime = body.start_time ?? existing.rows[0].start_time;
@@ -439,7 +439,7 @@ export function registerAppointmentRoutes(
           if (timeValidationError) {
             await client.query('ROLLBACK');
             shortCircuited = true;
-            reply.status(400).send({
+            void reply.status(400).send({
               success: false,
               error: timeValidationError.error,
               error_code: timeValidationError.code,
@@ -512,7 +512,7 @@ export function registerAppointmentRoutes(
     // reminders for the OLD time. Fire-and-forget — a reminder write
     // failure must never fail the update RPC itself.
     if (startTimeChanged) {
-      rescheduleRemindersForAppointment(withTenantClient, body.tenant_id, id, req.log);
+      void rescheduleRemindersForAppointment(withTenantClient, body.tenant_id, id, req.log);
     }
     return reply.send({ success: true });
   }, 'Failed to update appointment'));

@@ -102,7 +102,7 @@ export function registerSquareRoutes(
     }
 
     // Respond immediately
-    reply.status(200).send({ success: true, message: 'Webhook received' });
+    void reply.status(200).send({ success: true, message: 'Webhook received' });
 
     // Process event async
     const event = req.body as { type?: string; merchant_id?: string; data?: { id?: string } } | undefined;

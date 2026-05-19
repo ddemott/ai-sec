@@ -333,7 +333,7 @@ export default function KnowledgeBaseView() {
     }
   }, [tenantId])
 
-  useEffect(() => { fetchDocs() }, [fetchDocs])
+  useEffect(() => { void fetchDocs() }, [fetchDocs])
 
   async function handleSaveAnswer(question: string, answer: string, existingId: string | null, category: string): Promise<string | null> {
     if (!tenantId) return null
@@ -399,7 +399,7 @@ export default function KnowledgeBaseView() {
       const res = await Api.knowledge.ingest(tenantId, file)
       if (res.success) {
         setMessage({ type: 'success', text: `Ingested ${res.chunksIngested} knowledge chunks from ${file.name}.` })
-        fetchDocs()
+        void fetchDocs()
       } else {
         setMessage({ type: 'error', text: res.error || 'Upload failed' })
       }
@@ -418,7 +418,7 @@ export default function KnowledgeBaseView() {
       confirmLabel: 'Delete',
       onConfirm: async () => {
         closeConfirm()
-        doDelete(id)
+        void doDelete(id)
       },
     })
   }

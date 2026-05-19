@@ -59,15 +59,15 @@ export default function CRMView() {
 
   useEffect(() => {
     if (tenantId) {
-      fetchCustomers()
+      void fetchCustomers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
   useEffect(() => {
     if (selectedCustomer) {
-        fetchHistory(selectedCustomer.customer_id)
-        fetchCustomerAppointments(selectedCustomer.customer_id)
+        void fetchHistory(selectedCustomer.customer_id)
+        void fetchCustomerAppointments(selectedCustomer.customer_id)
       const { first, last } = splitFullName(selectedCustomer.name || '')
       const derivedFirst = selectedCustomer.first_name || first || ''
       const derivedLast = selectedCustomer.last_name || last || ''
@@ -153,7 +153,7 @@ export default function CRMView() {
         try {
           const res = await Api.appointments.cancel(appointmentId, tenantId)
           if (res.success && selectedCustomer) {
-            fetchCustomerAppointments(selectedCustomer.customer_id)
+            void fetchCustomerAppointments(selectedCustomer.customer_id)
           }
         } catch (e) {
           console.error(e)
@@ -173,7 +173,7 @@ export default function CRMView() {
           const res = await Api.appointments.reactivate(appointmentId, tenantId)
           if (res.success) {
             showToast('Appointment reactivated.', 'success')
-            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.customer_id)
+            if (selectedCustomer) void fetchCustomerAppointments(selectedCustomer.customer_id)
             return
           }
           // Status-conflict semantics: TIMESLOT_OCCUPIED means the slot was
@@ -184,7 +184,7 @@ export default function CRMView() {
             showToast('That time slot is no longer available. Book a new appointment instead.', 'error')
           } else if (res.error_code === 'NOT_CANCELED') {
             showToast('This appointment is already active.', 'info')
-            if (selectedCustomer) fetchCustomerAppointments(selectedCustomer.customer_id)
+            if (selectedCustomer) void fetchCustomerAppointments(selectedCustomer.customer_id)
           } else {
             showToast(res.error || 'Failed to reactivate appointment.', 'error')
           }
@@ -269,7 +269,7 @@ export default function CRMView() {
       })
       if (res.success) {
           setIsCreating(false)
-          fetchCustomers()
+          void fetchCustomers()
       }
     } catch (e) {
         console.error(e)
@@ -289,7 +289,7 @@ export default function CRMView() {
           const res = await Api.customers.delete(selectedCustomer.customer_id)
           if (res.success) {
             setSelectedCustomer(null)
-            fetchCustomers()
+            void fetchCustomers()
           }
         } catch (e) {
           console.error(e)

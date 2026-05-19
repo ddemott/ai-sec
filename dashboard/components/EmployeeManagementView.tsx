@@ -54,7 +54,7 @@ export default function EmployeeManagementView() {
   const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   useEffect(() => {
-    if (tenantId) fetchMappings()
+    if (tenantId) void fetchMappings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
@@ -79,7 +79,7 @@ export default function EmployeeManagementView() {
       })
       if (res.success) {
         setNewEmployee({ first_name: '', last_name: '' })
-        refresh()
+        void refresh()
       }
     } catch (err) {
       console.error("Failed to create employee", err)
@@ -101,7 +101,7 @@ export default function EmployeeManagementView() {
         tenant_id: tenantId || undefined
       })
       if (res.success) {
-        refresh()
+        void refresh()
         setIsEditModalOpen(false)
       }
     } catch {
@@ -122,7 +122,7 @@ export default function EmployeeManagementView() {
         try {
           const res = await Api.employees.delete(id, tenantId)
           if (res.success) {
-            refresh()
+            void refresh()
             setIsEditModalOpen(false)
             showToast(`${vocab.employee_label} removed`, 'success')
           } else {

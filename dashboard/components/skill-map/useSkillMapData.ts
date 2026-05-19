@@ -70,7 +70,7 @@ export function useSkillMapData(
   }, [tenantId])
 
   useEffect(() => {
-    fetchMappings()
+    void fetchMappings()
   }, [fetchMappings])
 
   const { employeeNodes, skillNodes, resourceNodes, connections, coverageBySkill, brokenChains } = useMemo(() => {

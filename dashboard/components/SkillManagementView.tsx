@@ -38,7 +38,7 @@ export default function SkillManagementView() {
       const res = await Api.skills.create(tenantId, newSkill)
       if (res.success) {
         setNewSkill({ name: '', description: '' })
-        refresh()
+        void refresh()
       } else {
         setError(res.error || "Failed to create skill")
       }
@@ -59,7 +59,7 @@ export default function SkillManagementView() {
         closeConfirm()
         try {
           await Api.skills.delete(name, tenantId)
-          refresh()
+          void refresh()
           showToast('Skill removed', 'success')
         } catch {
           showToast('Delete failed', 'error')

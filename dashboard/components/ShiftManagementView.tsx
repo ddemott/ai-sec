@@ -105,7 +105,7 @@ export default function ShiftManagementView() {
   // Fetch scheduled shifts when employee or week changes
   useEffect(() => {
     if (!selectedEmployeeId || !tenantId) { setScheduledShifts([]); return }
-    fetchShifts()
+    void fetchShifts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployeeId, tenantId, weekStart])
 
@@ -200,7 +200,7 @@ export default function ShiftManagementView() {
         is_off: modalForm.is_off,
       })
       setIsModalOpen(false)
-      fetchShifts()
+      void fetchShifts()
     } catch {
       showToast('Failed to save schedule', 'error')
     }
@@ -210,7 +210,7 @@ export default function ShiftManagementView() {
     if (!tenantId || !selectedEmployeeId) return
     try {
       await Api.shifts.schedule.remove(selectedEmployeeId, dateStr, tenantId)
-      fetchShifts()
+      void fetchShifts()
     } catch {
       showToast('Failed to remove schedule', 'error')
     }
@@ -224,7 +224,7 @@ export default function ShiftManagementView() {
         shift_date: dateStr,
         is_off: true,
       })
-      fetchShifts()
+      void fetchShifts()
     } catch {
       showToast('Failed to clear schedule', 'error')
     }
@@ -382,7 +382,7 @@ export default function ShiftManagementView() {
                               </span>
                             )}
                             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); if (shift.is_override) { handleDelete(day.dateStr) } else { handleClearDay(day.dateStr) } } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); confirmAction({ title: 'Delete Shift', message: `Remove this shift for ${day.label}?`, confirmLabel: 'Delete', onConfirm: () => { closeConfirm(); if (shift.is_override) { void handleDelete(day.dateStr) } else { void handleClearDay(day.dateStr) } } }) }} className="p-1 rounded-md hover:bg-white/20 transition-colors" title="Delete shift"><Trash2 className="w-3.5 h-3.5 text-white" /></button>
                             </div>
                           </div>
                         )}
@@ -418,7 +418,7 @@ export default function ShiftManagementView() {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDate ? `Schedule for ${editingDate}` : 'Schedule'} disableBackdropClose
         footer={<div className="flex gap-2">
           {editingDate && shiftForDate(editingDate) && !shiftForDate(editingDate)?.is_off && (
-            <Button variant="ghost" onClick={() => { if (editingExistsAsOverride && editingDate) { handleDelete(editingDate) } else if (editingDate) { handleClearDay(editingDate) } setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
+            <Button variant="ghost" onClick={() => { if (editingExistsAsOverride && editingDate) { void handleDelete(editingDate) } else if (editingDate) { void handleClearDay(editingDate) } setIsModalOpen(false); }} style={{ color: '#ef4444' }}>Delete</Button>
           )}
           <div className="flex-1" />
           <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>

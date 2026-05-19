@@ -62,7 +62,7 @@ module.exports = {
     // (27 floating promises, 15 require-await, etc.) without blocking
     // CI. Promote to 'error' per family once the count hits zero — same
     // play as the no-explicit-any cleanup.
-    '@typescript-eslint/no-floating-promises': 'warn',
+    '@typescript-eslint/no-floating-promises': 'error',
     '@typescript-eslint/no-misused-promises': ['warn', {
       // Allow void-returning async handlers in places that expect
       // void callbacks (e.g., Fastify route handlers — handled via

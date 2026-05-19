@@ -65,7 +65,7 @@ export default function ServiceAssignmentView() {
   const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm()
 
   useEffect(() => {
-    if (tenantId) fetchMappings()
+    if (tenantId) void fetchMappings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
@@ -109,8 +109,8 @@ export default function ServiceAssignmentView() {
       setWizardData({ name: '', description: '', duration_minutes: 30 })
       setSelectedResourceIds([])
       setSelectedEmployeeIds([])
-      refresh()
-      fetchMappings()
+      void refresh()
+      void fetchMappings()
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : String(err))
     }
@@ -126,7 +126,7 @@ export default function ServiceAssignmentView() {
         duration_minutes: roundUpTo15(editForm.duration_minutes),
       })
       if (res.success) {
-        refresh()
+        void refresh()
         setIsEditModalOpen(false)
       } else {
         setActionError(res.error || "Update failed")
@@ -150,7 +150,7 @@ export default function ServiceAssignmentView() {
         try {
           const res = await Api.services.delete(id, tenantId)
           if (res.success) {
-            refresh()
+            void refresh()
             setIsEditModalOpen(false)
             showToast('Service removed', 'success')
           } else {

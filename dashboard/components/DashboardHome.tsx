@@ -59,7 +59,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   useEffect(() => {
     if (!tenantId) return
-    loadData()
+    void loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
@@ -132,7 +132,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
 
   function handleCloseWizard() {
     transitions.closeToIdle()
-    loadData() // refresh counts after wizard completes
+    void loadData() // refresh counts after wizard completes
     // Signal the persistent setup-progress pill to refetch — if the
     // user actually finished the wizard, the pill should vanish on
     // the same tick instead of waiting for a navigation/reload.
@@ -470,7 +470,7 @@ function WeekView({ tenantId, employees, vocab, onNavigate }: {
 
   useEffect(() => {
     if (!tenantId) return
-    loadWeekData()
+    void loadWeekData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 

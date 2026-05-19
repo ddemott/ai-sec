@@ -126,8 +126,8 @@ export default function SchedulerView() {
   } = useSchedulerData(tenantId, selectedDate, employees, resources);
 
   const handleRefresh = useCallback(() => {
-    refreshScheduler();
-    refreshStaticData();
+    void refreshScheduler();
+    void refreshStaticData();
   }, [refreshScheduler, refreshStaticData]);
 
   const [apptPopover, setApptPopover] = useState<{ appointment: SchedulerAppointment; anchorRect: DOMRect } | null>(null);
@@ -174,8 +174,8 @@ export default function SchedulerView() {
       const res = await Api.appointments.reactivate(appointmentId, tenantId);
       if (res.success) {
         showToast('Appointment restored', 'success');
-        refreshScheduler();
-        refreshStaticData();
+        void refreshScheduler();
+        void refreshStaticData();
       } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
         showToast('That time slot is no longer available. Book a new appointment instead.', 'error');
       } else {
@@ -203,8 +203,8 @@ export default function SchedulerView() {
               onClick: () => { void undoCancel(appointmentId); },
             });
             setApptPopover(null);
-            refreshScheduler();
-            refreshStaticData();
+            void refreshScheduler();
+            void refreshStaticData();
           } else {
             showToast(res.error || 'Failed to cancel appointment', 'error');
           }
@@ -216,7 +216,7 @@ export default function SchedulerView() {
   }, [tenantId, refreshScheduler, refreshStaticData, confirmAction, closeConfirm, undoCancel]);
 
   const handleQuickBooked = useCallback(() => {
-    refreshScheduler();
+    void refreshScheduler();
   }, [refreshScheduler]);
 
   // Soft-cancel from the hover-trash icon on an appointment block.
@@ -241,7 +241,7 @@ export default function SchedulerView() {
               label: 'Undo',
               onClick: () => { void undoCancel(appointmentId); },
             });
-            refreshScheduler();
+            void refreshScheduler();
           } else {
             showToast(res.error || 'Failed to cancel appointment', 'error');
           }
@@ -271,14 +271,14 @@ export default function SchedulerView() {
       });
       if (res.success) {
         showToast(`Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, 'success');
-        refreshScheduler();
+        void refreshScheduler();
       } else {
         showToast(res.error || 'Could not move appointment', 'error');
-        refreshScheduler();
+        void refreshScheduler();
       }
     } catch {
       showToast('Connection error — appointment not moved', 'error');
-      refreshScheduler();
+      void refreshScheduler();
     }
   }, [tenantId, appointments, refreshScheduler]);
 

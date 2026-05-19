@@ -22,7 +22,7 @@ import { skipIfDbDown } from './test-utils'
 function buildTestApp() {
   const app = Fastify({ logger: false })
 
-  app.register(cors, {
+  void app.register(cors, {
     origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   })

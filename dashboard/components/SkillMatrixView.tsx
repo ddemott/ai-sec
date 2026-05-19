@@ -29,7 +29,7 @@ export default function SkillMatrixView() {
 
   useEffect(() => {
     if (tenantId) {
-      fetchMappings()
+      void fetchMappings()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])

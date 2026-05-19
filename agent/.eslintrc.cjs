@@ -40,7 +40,7 @@ module.exports = {
     '@typescript-eslint/no-unsafe-argument': 'warn',
 
     // Same warn-then-promote model as the backend config — see comment there.
-    '@typescript-eslint/no-floating-promises': 'warn',
+    '@typescript-eslint/no-floating-promises': 'error',
     '@typescript-eslint/no-misused-promises': ['warn', { checksVoidReturn: false }],
     '@typescript-eslint/await-thenable': 'warn',
     '@typescript-eslint/require-await': 'warn',

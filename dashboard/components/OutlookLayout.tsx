@@ -164,7 +164,7 @@ export function OutlookLayout({
 
   useEffect(() => {
     if (isAdmin) {
-      Api.tenants.list().then(data => {
+      void Api.tenants.list().then(data => {
         setAllTenants(Array.isArray(data) ? data : [])
       })
     }

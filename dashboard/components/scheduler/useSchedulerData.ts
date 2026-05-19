@@ -68,7 +68,7 @@ export function useSchedulerData(tenantId: string | null, selectedDate: Date, em
   }, [tenantId, dateStr, selectedDate]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
   const appointmentsByEmployee = useMemo(() => {

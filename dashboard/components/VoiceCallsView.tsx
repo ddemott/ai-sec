@@ -100,12 +100,12 @@ export default function VoiceCallsView() {
 
   useEffect(() => {
     if (tenantId) {
-      fetchActiveCalls()
-      fetchCallHistory()
+      void fetchActiveCalls()
+      void fetchCallHistory()
     }
     // Set up polling for active calls
     const interval = setInterval(() => {
-      if (tenantId) fetchActiveCalls()
+      if (tenantId) void fetchActiveCalls()
     }, 10000) // Poll every 10 seconds
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,13 +147,13 @@ export default function VoiceCallsView() {
   }
 
   function handleRefresh() {
-    fetchActiveCalls()
-    fetchCallHistory()
+    void fetchActiveCalls()
+    void fetchCallHistory()
   }
 
   function handleLoadMore() {
     if (!historyLoading && hasMore) {
-      fetchCallHistory(callHistory.length)
+      void fetchCallHistory(callHistory.length)
     }
   }
 
@@ -194,7 +194,7 @@ export default function VoiceCallsView() {
                   className="p-3 hover:brightness-110 cursor-pointer transition-colors"
                   onClick={() => {
                     // Fetch full session details
-                    Api.voice.getSession(tenantId, call.call_id).then(session => {
+                    void Api.voice.getSession(tenantId, call.call_id).then(session => {
                       setSelectedCall(session)
                     })
                   }}

@@ -272,8 +272,8 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
   }, [shiftsByEmployee]);
 
   const handleRefresh = useCallback(() => {
-    refreshScheduler();
-    refreshStaticData();
+    void refreshScheduler();
+    void refreshStaticData();
   }, [refreshScheduler, refreshStaticData]);
 
   // --- Skill color map (Item #5) ---
@@ -416,7 +416,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
       const res = await Api.appointments.reactivate(appointmentId, tenantId);
       if (res.success) {
         showToast('Appointment restored', 'success');
-        refreshScheduler();
+        void refreshScheduler();
       } else if (res.error_code === 'TIMESLOT_OCCUPIED') {
         showToast('That time slot is no longer available. Book a new appointment instead.', 'error');
       } else {
@@ -445,7 +445,7 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
                 onClick: () => { void undoApptCancel(appointmentId); },
               });
               setApptPopover(null);
-              refreshScheduler();
+              void refreshScheduler();
             } else {
               showToast(res.error || 'Failed to cancel appointment', 'error');
             }
@@ -475,14 +475,14 @@ export default function NewSchedulerView({ tenantId: tenantIdProp, viewTabs, act
       });
       if (res.success) {
         showToast(`Moved to ${new Date(newStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, 'success');
-        refreshScheduler();
+        void refreshScheduler();
       } else {
         showToast(res.error || 'Could not move appointment', 'error');
-        refreshScheduler(); // snap visual back to DB state
+        void refreshScheduler(); // snap visual back to DB state
       }
     } catch {
       showToast('Connection error — appointment not moved', 'error');
-      refreshScheduler();
+      void refreshScheduler();
     }
   }, [tenantId, appointments, refreshScheduler]);
 

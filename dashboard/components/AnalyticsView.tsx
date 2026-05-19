@@ -47,7 +47,7 @@ export default function AnalyticsView() {
 
   useEffect(() => {
     if (!tenantId) return
-    loadData()
+    void loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 

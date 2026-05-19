@@ -55,9 +55,9 @@ export default function SettingsView() {
 
   useEffect(() => {
     if (isSuperAdmin) {
-      fetchTemplates()
+      void fetchTemplates()
     } else if (tenantId) {
-      fetchCalendarSettings()
+      void fetchCalendarSettings()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuperAdmin, tenantId])
@@ -67,7 +67,7 @@ export default function SettingsView() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get('calendarConnected') === 'true') {
-      fetchCalendarSettings()
+      void fetchCalendarSettings()
       // Clean up URL
       const url = new URL(window.location.href)
       url.searchParams.delete('calendarConnected')
@@ -145,7 +145,7 @@ export default function SettingsView() {
           description: newResource.description.trim() || undefined
       })
       if (res.success) {
-        refreshResources()
+        void refreshResources()
         setNewResource({ name: '', description: '' })
       }
     } catch (e) {
@@ -157,7 +157,7 @@ export default function SettingsView() {
     try {
       const res = await Api.resources.update(resourceId, { is_active: !currentActive })
       if (res.success) {
-        refreshResources()
+        void refreshResources()
       }
     } catch (e) {
       console.error('Failed to update resource', e)

@@ -87,8 +87,8 @@ export function useSetupProgress(tenantId: string | null): SetupProgress {
   }, [tenantId])
 
   useEffect(() => {
-    load()
-    function handleChange() { load() }
+    void load()
+    function handleChange() { void load() }
     window.addEventListener('setup-progress-changed', handleChange)
     return () => window.removeEventListener('setup-progress-changed', handleChange)
   }, [load])

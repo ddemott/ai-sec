@@ -116,7 +116,7 @@ export default function BusinessTypeSection({ tenantId, onChanged }: BusinessTyp
       confirmVariant: 'warning',
       onConfirm: () => {
         closeConfirm()
-        applyTemplate(template)
+        void applyTemplate(template)
       },
     })
   }

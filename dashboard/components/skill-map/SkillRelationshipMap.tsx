@@ -49,7 +49,7 @@ export default function SkillRelationshipMap() {
 
   function handleFixed() {
     setFixingChain(null)
-    refresh()
+    void refresh()
   }
 
   function handleNodeClick(nodeId: string) {
@@ -57,7 +57,7 @@ export default function SkillRelationshipMap() {
       if (nodeId === linking.fromNodeId) {
         cancelLinking()
       } else if (validLinkTargets.has(nodeId)) {
-        completeLinking(nodeId)
+        void completeLinking(nodeId)
       }
     } else {
       selectNode(nodeId)

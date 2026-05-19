@@ -117,22 +117,22 @@ app.addHook('onRequest', async (request, reply) => {
   }
 });
 
-app.register(helmet, {
+void app.register(helmet, {
   contentSecurityPolicy: false, // CSP managed by frontend framework
 });
 
-app.register(cors, {
+void app.register(cors, {
   origin: process.env.CORS_ORIGIN || true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 });
 
-app.register(rateLimit, {
+void app.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute',
   allowList: ['127.0.0.1', '::1'],
 });
 
-app.register(multipart, {
+void app.register(multipart, {
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
@@ -226,12 +226,12 @@ app.get('/', async (_req, reply) => {
   const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
   const html = fs.readFileSync(htmlPath, 'utf-8')
     .replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
-  reply.type('text/html').send(html);
+  return reply.type('text/html').send(html);
 });
 app.get('/demo', async (_req, reply) => {
   const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'secretaryhq-demo.html');
   const html = fs.readFileSync(htmlPath, 'utf-8');
-  reply.type('text/html').send(html);
+  return reply.type('text/html').send(html);
 });
 // Process-startup timestamp, captured once at module load. Exposed via
 // /health so E2E globalSetup can detect a backend that's older than

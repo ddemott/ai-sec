@@ -135,7 +135,7 @@ export function RecordHistoryModal({
 
   useEffect(() => {
     if (isOpen && recordId) {
-      loadHistory()
+      void loadHistory()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, recordId, table, tenantId])

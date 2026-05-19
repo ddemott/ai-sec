@@ -178,7 +178,7 @@ export default defineAgent({
     callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
 
     // 6. Greeting. Kept short — the LLM will warm up from here.
-    session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
+    void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
       allowInterruptions: true,
     });
   },

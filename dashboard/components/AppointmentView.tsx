@@ -161,7 +161,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
   const findCustomerById = (id: string) => customers.find(c => c.customer_id === id)
 
   useEffect(() => {
-    fetchAppointments()
+    void fetchAppointments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId])
 
@@ -362,7 +362,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           setIsCreating(false)
           setDraftEvent(null)
           setSaving(false)
-          fetchAppointments(res.appointment_id)
+          void fetchAppointments(res.appointment_id)
         } else if (res.error_code === 'TIMESLOT_OCCUPIED' && res.conflict) {
           // Overlap with an existing appointment — show the conflict modal
           // with the existing booking's details. Inline error stays empty
@@ -410,7 +410,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
           const res = await Api.appointments.cancel(appointmentId, tenantId)
           if (res.success) {
               setSelectedAppointment(null)
-              fetchAppointments()
+              void fetchAppointments()
               showToast('Appointment canceled', 'success', {
                 label: 'Undo',
                 onClick: () => {
@@ -419,7 +419,7 @@ function AppointmentViewInner({ onSelectSlot, initialEditAppointmentId, onInitia
                       const r = await Api.appointments.reactivate(appointmentId, tenantId)
                       if (r.success) {
                         showToast('Appointment restored', 'success')
-                        fetchAppointments()
+                        void fetchAppointments()
                       } else if (r.error_code === 'TIMESLOT_OCCUPIED') {
                         showToast('That time slot is no longer available. Book a new appointment instead.', 'error')
                       } else {

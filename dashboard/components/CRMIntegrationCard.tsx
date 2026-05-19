@@ -38,7 +38,7 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
   }, [tenantId, provider])
 
   useEffect(() => {
-    if (tenantId) fetchSettings()
+    if (tenantId) void fetchSettings()
   }, [tenantId, fetchSettings])
 
   // Check for OAuth callback success
@@ -46,7 +46,7 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get(provider.connectedParam) === 'true') {
-      fetchSettings()
+      void fetchSettings()
       const url = new URL(window.location.href)
       url.searchParams.delete(provider.connectedParam)
       window.history.replaceState({}, '', url.toString())
