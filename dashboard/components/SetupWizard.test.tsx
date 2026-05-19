@@ -1467,6 +1467,7 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
         });
       }
       if (url.includes('/provisioning/activate')) {
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- THE POINT of this sad-path is to exercise the non-Error rejection branch in the production component
         return Promise.reject('string error without Error wrapper');
       }
       return Promise.resolve({ ok: true, json: async () => [] });

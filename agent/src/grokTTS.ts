@@ -19,8 +19,10 @@ const GROK_TTS_URL = 'https://api.x.ai/v1/tts';
 const GROK_TTS_SAMPLE_RATE = 24_000;
 const GROK_TTS_CHANNELS = 1;
 
-export type GrokVoice = 'eve' | 'ara' | 'rex' | 'sal' | 'leo' | (string & {});
-// Any string works for custom cloned voices from xAI console (voice_id)
+// The `string & Record<never, never>` intersection keeps autocomplete on the
+// known voice names while still accepting arbitrary strings (custom cloned
+// voices from xAI console). `string & {}` triggers @typescript-eslint/ban-types.
+export type GrokVoice = 'eve' | 'ara' | 'rex' | 'sal' | 'leo' | (string & Record<never, never>);
 
 export interface GrokTTSOptions {
   apiKey: string;
