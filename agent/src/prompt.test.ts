@@ -72,6 +72,23 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('NO_AVAILABILITY');
   });
 
+  it('HAPPY: infrastructure-error guidance is documented (no raw technical text to callers)', () => {
+    // WHY: 2026-05-21 — domain error codes had a translation table but
+    //        INFRASTRUCTURE failures (a backend 500 / tool timeout) did not.
+    //        The LLM would receive raw "Backend returned 500" / "timed out"
+    //        text with no instruction and could read it aloud or improvise.
+    //        This pins the technical-glitch section so a future prompt edit
+    //        can't silently drop graceful recovery and re-expose callers to
+    //        raw error strings (or dead air).
+    const prompt = buildSystemPrompt(BASE_CTX);
+    // The section names the technical signatures it must NOT speak aloud...
+    expect(prompt).toContain('Backend returned 500');
+    expect(prompt).toContain('timed out');
+    // ...and instructs graceful, in-character recovery instead.
+    expect(prompt).toContain('NEVER read the technical error text aloud');
+    expect(prompt.toLowerCase()).toContain('take your name and number');
+  });
+
   it('HAPPY: mentions all 10 tools by name so the LLM knows its toolkit', () => {
     // WHY: If a tool name drifts here vs. the tool registry, the LLM
     //        may invoke the wrong name and the router 404s. Listing
