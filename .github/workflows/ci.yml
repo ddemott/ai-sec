@@ -115,3 +115,34 @@ jobs:
 
       - name: Run dashboard tests
         run: npm test
+
+  agent:
+    name: Agent (typecheck + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: agent/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # The agent worker (prompt, toolsClient, tools, sessionContext, tenant
+      # config, fallback) had ZERO CI coverage before 2026-05-21 — its tsc +
+      # vitest suite ran only locally. A prompt or tool-contract regression
+      # (e.g. dropping the infrastructure-error guidance) could ship unseen.
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Run agent tests
+        run: npm test
