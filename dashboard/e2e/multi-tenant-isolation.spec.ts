@@ -10,10 +10,14 @@
  * order in src/index.ts changes), the unit tests would still pass.
  *
  * These tests log in as a real tenant user, get a real JWT, then try
- * the two highest-risk leak shapes the May-6 probe found:
- *   1. ?tenant_id=<other> query override on a GET — must 403
- *   2. body.tenant_id=<other> on a POST — must 403
- *   3. GET /tenants as a non-super-admin — must 403
+ * the highest-risk leak shapes:
+ *   1. ?tenant_id=<other> query override on a GET — must 403 (May-6)
+ *   2. body.tenant_id=<other> on a POST — must 403 (May-6)
+ *   3. GET /tenants as a non-super-admin — must 403 (May-6)
+ *   4. NO Authorization header + ?tenant_id=<uuid> — must 401, read AND
+ *      write, at the real HTTP layer (May-21 anonymous-tenant hole; the
+ *      unit Probe 8 stubs auth, this proves the running stack fails closed)
+ * Plus a /ready readiness smoke (deep DB+pool probe shipped May-21).
  *
  * Each test is fully self-contained per the test-isolation memory:
  * creates its own per-tenant data in setup, asserts, deletes in
@@ -290,4 +294,100 @@ test('isolation: super-admin CAN read across tenants (positive control)', async 
   // Cross-tenant query override is allowed for super-admin.
   const cross = await apiGet(page, auth.token, `/customers?tenant_id=${OTHER_TENANT_ID}`);
   expect(cross.status, 'super-admin cross-tenant query is permitted').toBe(200);
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 5. Anonymous (no JWT) access with a supplied tenant_id is rejected (May-21)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Fetch with NO Authorization header — simulates an unauthenticated attacker. */
+async function apiAnon(
+  page: Page,
+  method: 'GET' | 'POST',
+  path: string,
+  body?: Record<string, unknown>
+): Promise<{ status: number; raw: string }> {
+  return await page.evaluate(
+    async ({ url, method, path, body }) => {
+      const res = await fetch(`${url}${path}`, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: res.status, raw: await res.text() };
+    },
+    { url: BACKEND_URL, method, path, body }
+  );
+}
+
+test('isolation: anonymous GET ?tenant_id=<other> with no token is rejected 401 and leaks nothing', async ({
+  page,
+}) => {
+  // WHO: an unauthenticated caller — no Authorization header at all
+  // WHAT: GET /customers?tenant_id=<other> hoping the server trusts the
+  //       query tenant_id without a JWT to validate it against
+  // WHEN: 2026-05-21 — found that this returned that tenant's data (200)
+  //       because the cross-tenant guard only fired when a jwtTenant existed
+  // WHERE: src/middleware.ts tenantMiddleware auth gate (real running stack)
+  // WHY: strictly worse than the authed override (cases 1-2) — no
+  //       credentials needed at all. Must fail closed (401) at runtime, not
+  //       just in the auth-stubbed unit probe.
+  const res = await apiAnon(page, 'GET', `/customers?tenant_id=${OTHER_TENANT_ID}`);
+  expect(res.status, 'anonymous tenant read must be 401').toBe(401);
+  // Body must carry no tenant data — only the auth error.
+  expect(res.raw).not.toContain(OTHER_TENANT_ID);
+  expect(res.raw.toLowerCase()).toContain('authentication required');
+});
+
+test('isolation: anonymous POST with body.tenant_id and no token is rejected 401 (no write)', async ({
+  page,
+}) => {
+  // WHO: unauthenticated caller attempting a cross-tenant write
+  // WHAT: POST /customers/create with body.tenant_id=<other>, no token
+  // WHEN: 2026-05-21 — the write/delete paths rode the same hole
+  // WHERE: tenantMiddleware auth gate, before the handler runs
+  // WHY: an anonymous write is worse than a read — must be blocked before
+  //       any INSERT. Verify both the 401 and that no row landed.
+  const before = await pool.query('SELECT COUNT(*) FROM customers WHERE tenant_id = $1', [
+    OTHER_TENANT_ID,
+  ]);
+  const res = await apiAnon(page, 'POST', '/customers/create', {
+    tenant_id: OTHER_TENANT_ID,
+    name: 'e2e-anon-injected',
+    phone: '+15550000123',
+  });
+  expect(res.status, 'anonymous tenant write must be 401').toBe(401);
+  const after = await pool.query('SELECT COUNT(*) FROM customers WHERE tenant_id = $1', [
+    OTHER_TENANT_ID,
+  ]);
+  expect(after.rows[0].count, 'no customer row created under the other tenant').toBe(
+    before.rows[0].count
+  );
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 6. /ready readiness probe (deep DB + pool stats) — shipped 2026-05-21
+// ────────────────────────────────────────────────────────────────────────────
+test('readiness: GET /ready returns 200 with db:ok and pool stats on a healthy stack', async ({
+  page,
+}) => {
+  // WHO: a monitor / load balancer / on-call engineer
+  // WHAT: GET /ready (public, no auth) pings the DB and reports pool
+  //       saturation; 200 + {db:ok, pool:{...}} when the stack is healthy
+  // WHEN: every scrape — the signal we page on (503 / sustained waiting>0)
+  // WHERE: src/index.ts /ready handler against the real running backend
+  // WHY: /health is shallow liveness; /ready is the only end-to-end proof
+  //       the process can actually reach Postgres. A regression that breaks
+  //       the DB ping or the pool-stats shape would silence alerting.
+  const res = await apiAnon(page, 'GET', '/ready');
+  expect(res.status, '/ready must be public + 200 on a healthy stack').toBe(200);
+  const body = JSON.parse(res.raw) as {
+    status: string;
+    db: string;
+    pool: { total: number; idle: number; waiting: number };
+  };
+  expect(body.status).toBe('ready');
+  expect(body.db).toBe('ok');
+  expect(body.pool).toBeDefined();
+  expect(typeof body.pool.waiting).toBe('number');
 });

@@ -378,3 +378,26 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
     ]);
   }
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// JSON content-type parser — real registration must not hang on bad JSON
+// ────────────────────────────────────────────────────────────────────────────
+test('content-parser: malformed JSON body returns 400 quickly (no hang)', async ({ request }) => {
+  // WHO: any client sending Content-Type: application/json with a bad body
+  // WHAT: the production parser (src/jsonContentTypeParser.ts, wired in
+  //       index.ts) must done(Error) → Fastify 400, NOT a sync return
+  // WHEN: 2026-05-21 regression guard — a require-await lint sweep once
+  //       stripped `async` and made the parser sync-return, hanging EVERY
+  //       JSON POST. The route-test harness uses a different async parser,
+  //       so only an E2E against the real registration proves it's wired.
+  // WHERE: src/index.ts addContentTypeParser('application/json', ...)
+  // WHY: a hang would manifest as this test timing out; a 400 within the
+  //       default timeout proves the done()-callback path is live.
+  const res = await request.post(`${BACKEND_URL}/login`, {
+    data: '{ this is : not valid json',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  // Fastify maps a content-type parser error to 400. The key assertions are
+  // (a) we get a definitive 4xx and (b) the request returned at all (no hang).
+  expect(res.status(), 'malformed JSON must be rejected, not hang').toBe(400);
+});
