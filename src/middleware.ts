@@ -57,6 +57,15 @@ type RouteHandler = (req: AppRequest, reply: FastifyReply) => Promise<unknown>;
  *     return reply.send(data);
  *   }, 'Failed to fetch customers'));
  */
+// Postgres SQLSTATE class-22 "data exception" codes that mean the CLIENT
+// supplied a malformed value (→ 400), not a server fault (→ 500):
+//   22P02 invalid_text_representation (bad uuid / enum / int text — the
+//         common case: a non-UUID path param)
+//   22003 numeric_value_out_of_range
+//   22007 invalid_datetime_format
+//   22008 datetime_field_overflow
+const PG_CLIENT_DATA_SQLSTATES = new Set(['22P02', '22003', '22007', '22008']);
+
 export function withHandler(handler: RouteHandler, errorMessage: string): RouteHandler {
   return async (req: AppRequest, reply: FastifyReply) => {
     try {
@@ -83,6 +92,23 @@ export function withHandler(handler: RouteHandler, errorMessage: string): RouteH
       if (err instanceof Error && (err as unknown as { statusCode?: number }).statusCode) {
         const status = (err as unknown as { statusCode: number }).statusCode;
         return reply.status(status).send({ success: false, error: err.message });
+      }
+
+      // Postgres data-exception (SQLSTATE class 22): the CLIENT sent a
+      // malformed value — e.g. a non-UUID `:id` param hits a uuid column and
+      // Postgres throws 22P02. That is a 400 (bad request), not a 500, and it
+      // must NOT increment errors_total — otherwise client garbage (scanners,
+      // buggy callers) pollutes the 5xx / rate(errors_total) alerting that
+      // real incidents depend on. Logged at warn for visibility without the
+      // error counter. Message is generic so no pg internals leak. (2026-05-21)
+      const pgCode = (err as { code?: string }).code;
+      if (typeof pgCode === 'string' && PG_CLIENT_DATA_SQLSTATES.has(pgCode)) {
+        logWarning(req, 'invalid_request_parameter', {
+          pg_code: pgCode,
+          route: req.url,
+          method: req.method,
+        });
+        return reply.status(400).send({ success: false, error: 'Invalid request parameter' });
       }
 
       // Unknown error: log and return 500. Route through logError (not a

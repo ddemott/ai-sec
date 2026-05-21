@@ -206,6 +206,56 @@ describe('withHandler — sad paths', () => {
 
     expect(errorsTotalFor('unhandled_route_error')).toBe(before + 1);
   });
+
+  it('maps a Postgres class-22 data error (22P02) to 400 and does NOT increment errors_total', async () => {
+    // WHO: a client sending a malformed value — e.g. GET /records/.../not-a-uuid/...
+    // WHAT: Postgres throws 22P02; withHandler must return 400 (bad request),
+    //       not 500, and must NOT tick errors_total
+    // WHEN: 2026-05-21 — confirmed live that bad-UUID :id params returned 500;
+    //       worse, the logError change made them pollute rate(errors_total)
+    // WHERE: withHandler PG_CLIENT_DATA_SQLSTATES branch
+    // WHY: a bad input is a client error, not a server incident — misreporting
+    //      it as 500 wrongs the status AND fires false 5xx/error-rate alerts
+    const before = errorsTotalFor('unhandled_route_error');
+    const pgErr = new Error('invalid input syntax for type uuid: "not-a-uuid"') as Error & {
+      code?: string;
+    };
+    pgErr.code = '22P02';
+    const wrapped = withHandler(async () => {
+      throw pgErr;
+    }, 'Failed to get record history');
+    const req = createMockRequest();
+    const reply = createMockReply();
+
+    await wrapped(req, reply);
+
+    expect(reply.statusCode).toBe(400);
+    expect(reply.body).toEqual({ success: false, error: 'Invalid request parameter' });
+    // Client error → counter MUST stay flat (no alert pollution).
+    expect(errorsTotalFor('unhandled_route_error')).toBe(before);
+    // Logged at warn for visibility, not error.
+    expect(req.log.warn).toHaveBeenCalled();
+  });
+
+  it('does NOT map a non-class-22 pg error (e.g. 23505) to 400 — still 500 + errors_total', async () => {
+    // WHY: guard against over-broadening. A unique-violation / constraint /
+    //      connection error is NOT client-malformed-input; it must remain a
+    //      500 that fires alerting. Only the data-exception class is a 400.
+    const before = errorsTotalFor('unhandled_route_error');
+    const pgErr = new Error('duplicate key value violates unique constraint') as Error & {
+      code?: string;
+    };
+    pgErr.code = '23505';
+    const wrapped = withHandler(async () => {
+      throw pgErr;
+    }, 'Could not save');
+    const reply = createMockReply();
+
+    await wrapped(createMockRequest(), reply);
+
+    expect(reply.statusCode).toBe(500);
+    expect(errorsTotalFor('unhandled_route_error')).toBe(before + 1);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════
