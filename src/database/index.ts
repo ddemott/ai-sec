@@ -44,6 +44,15 @@ const POOL_TIMEOUT_OPTIONS =
 export function getPool(): Pool {
   if (!_pool) {
     const isLocal = process.env.DATABASE_URL?.includes('localhost') || !process.env.DATABASE_URL;
+    // connectionTimeoutMillis bounds the CLIENT-side pool checkout wait.
+    // POOL_TIMEOUT_OPTIONS above are Postgres server-side GUCs (statement /
+    // lock / idle-in-txn) — they do NOT cap how long pool.connect() blocks
+    // when all `max` clients are checked out. Without this, a request that
+    // can't get a slot under high call concurrency waits forever (silent
+    // hang). 5s = the request budget for a voice agent: fail fast and shed
+    // load rather than build an unbounded queue. A rejected checkout
+    // surfaces as an error → Fastify error handler → errors_total, so
+    // saturation is visible instead of invisible. (2026-05-21)
     _pool = isLocal
       ? new Pool({
           user: 'postgres',
@@ -52,12 +61,14 @@ export function getPool(): Pool {
           password: 'postgres',
           port: 5433,
           max: 10,
+          connectionTimeoutMillis: 5000,
           options: POOL_TIMEOUT_OPTIONS,
         })
       : new Pool({
           connectionString: process.env.DATABASE_URL,
           ssl: { rejectUnauthorized: false },
           max: 10,
+          connectionTimeoutMillis: 5000,
           options: POOL_TIMEOUT_OPTIONS,
         });
   }

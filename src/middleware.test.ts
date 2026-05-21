@@ -25,6 +25,12 @@ import {
   AppError,
   type AppRequest,
 } from './middleware';
+import { errorsTotal } from './services/metrics';
+
+/** Read the current errors_total value for a given event label (0 if unseen). */
+function errorsTotalFor(event: string): number {
+  return errorsTotal.snapshot().find((s) => s.labels.event === event)?.value ?? 0;
+}
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -172,10 +178,33 @@ describe('withHandler — sad paths', () => {
 
     expect(reply.statusCode).toBe(500);
     expect(reply.body).toEqual({ success: false, error: 'Could not fetch data' });
+    // 2026-05-21: unknown errors now route through logError (not a raw
+    // req.log.error), which stamps the structured shape AND increments
+    // errors_total. The route-specific message rides along as `context`.
     expect(req.log.error).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: 'tenant-123', route: '/test', method: 'GET' }),
-      'Could not fetch data'
+      expect.objectContaining({
+        event: 'unhandled_route_error',
+        error_message: 'DB crashed',
+        route: '/test',
+        method: 'GET',
+        tenantId: 'tenant-123',
+        context: 'Could not fetch data',
+      }),
+      expect.stringContaining('unhandled_route_error')
     );
+  });
+
+  it('increments errors_total{event="unhandled_route_error"} on an unhandled error (WHO: ops/alerting | WHAT: counter ticks so rate(errors_total) alerts fire | WHEN: any unhandled route error incl. pool-checkout timeout under load | WHERE: withHandler catch → logError | WHY: 2026-05-21 — pre-fix the raw req.log.error did NOT increment the counter, so pool exhaustion was invisible to alerting exactly when it mattered)', async () => {
+    const before = errorsTotalFor('unhandled_route_error');
+
+    // Simulates the connectionTimeoutMillis rejection shape — the "many
+    // callers" saturation error we hardened the pool against.
+    const wrapped = withHandler(async () => {
+      throw new Error('Connection terminated due to connection timeout');
+    }, 'Could not fetch data');
+    await wrapped(createMockRequest(), createMockReply());
+
+    expect(errorsTotalFor('unhandled_route_error')).toBe(before + 1);
   });
 });
 

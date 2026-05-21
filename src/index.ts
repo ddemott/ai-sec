@@ -185,7 +185,7 @@ app.addHook('onRequest', subscriptionGate(pool));
 // cardinality grows once-per-id and the cap kicks in within minutes.
 // Skip /health (constant traffic from k8s/Railway, no signal) and
 // /metrics itself (recursive scrape contamination).
-const METRICS_SKIP_PATTERNS = new Set(['/health', '/metrics']);
+const METRICS_SKIP_PATTERNS = new Set(['/health', '/ready', '/metrics']);
 app.addHook('onResponse', async (req, reply) => {
   const routePattern = (req as unknown as { routerPath?: string }).routerPath ?? req.url;
   if (METRICS_SKIP_PATTERNS.has(routePattern)) return;
@@ -267,7 +267,45 @@ app.get('/demo', async (_req, reply) => {
 // "Backend code changes require BOTH a rebuild AND a restart" Build
 // Principle in CLAUDE.md.
 const PROCESS_STARTED_AT = new Date().toISOString();
+// Liveness: process is up. Intentionally shallow + synchronous — does NOT
+// touch the DB, so a transient DB blip can't restart-loop the container, and
+// E2E globalSetup's stale-binary check keeps its {status, started_at} shape.
 app.get('/health', () => ({ status: 'ok', started_at: PROCESS_STARTED_AT }));
+
+// Readiness: can this instance actually serve requests? Pings the DB and
+// reports pool saturation. A monitoring/alerting signal — curl/scrape it and
+// page on 503 or sustained waiting>0. NOT an automatic traffic gate unless
+// Railway's healthcheck path is repointed here. connectionTimeoutMillis (5s,
+// see database/index.ts) bounds the worst-case response under pool
+// exhaustion, so this endpoint always answers instead of hanging. (2026-05-21)
+app.get('/ready', async (_req, reply) => {
+  const startedAt = Date.now();
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('SELECT 1');
+    return reply.status(200).send({
+      status: 'ready',
+      db: 'ok',
+      latency_ms: Date.now() - startedAt,
+      // waiting > 0 sustained = pool saturation (the "many callers" signal)
+      pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount },
+    });
+  } catch (err) {
+    app.log.error(
+      { event: 'readiness_check_failed', error_message: (err as Error).message },
+      'readiness_check_failed'
+    );
+    return reply.status(503).send({
+      status: 'not_ready',
+      db: 'error',
+      latency_ms: Date.now() - startedAt,
+      pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount },
+    });
+  } finally {
+    client?.release();
+  }
+});
 
 // --- Prometheus-format metrics scrape endpoint ---
 // Strict opt-in: refuses ALL requests when METRICS_TOKEN is unset, so a

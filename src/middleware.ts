@@ -85,16 +85,12 @@ export function withHandler(handler: RouteHandler, errorMessage: string): RouteH
         return reply.status(status).send({ success: false, error: err.message });
       }
 
-      // Unknown error: log and return 500
-      req.log.error(
-        {
-          err,
-          tenantId: req.tenantId,
-          route: req.url,
-          method: req.method,
-        },
-        errorMessage
-      );
+      // Unknown error: log and return 500. Route through logError (not a
+      // raw req.log.error) so it increments errors_total{event=...} and
+      // hits Sentry — otherwise unhandled route errors, including pool-
+      // checkout timeouts under load, are invisible to rate(errors_total)
+      // alerting, which is exactly when we need them. (2026-05-21)
+      logError(req, 'unhandled_route_error', err, { context: errorMessage });
 
       return reply.status(500).send({ success: false, error: errorMessage });
     }
@@ -196,6 +192,7 @@ export function requireSuperAdmin(req: AppRequest, reply: FastifyReply): boolean
 /** Routes that don't require a tenant_id */
 const TENANT_EXEMPT_ROUTES = [
   '/health',
+  '/ready',
   '/login',
   '/register',
   '/',
@@ -488,6 +485,7 @@ function verifyToken(token: string): JwtPayload | null {
 /** Routes that bypass JWT verification entirely (no Bearer token expected). */
 const PUBLIC_ROUTES = [
   '/health',
+  '/ready',
   '/login',
   '/forgot-password',
   '/reset-password',
