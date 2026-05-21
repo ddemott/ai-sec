@@ -41,6 +41,10 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 - [x] **Pool fail-fast** — added `connectionTimeoutMillis: 5000`; pool-checkout under exhaustion now errors fast instead of hanging forever (the "many callers" failure mode).
 - [x] **Alerting visibility** — `withHandler` unhandled errors now route through `logError` → `errors_total` ticks (pre-fix pool-exhaustion errors were invisible to `rate(errors_total)` alerting).
 - [x] **Threadpool** — `GET /` + `/demo` no longer `fs.readFileSync` per request.
+- [x] **Gap 3 — client-error 500s → 400** `withHandler` now maps Postgres class-22 data exceptions (`22P02`/`22003`/`22007`/`22008` — e.g. a non-UUID `:id`) to 400 and does NOT tick `errors_total`. Confirmed live: `GET /records/customers/not-a-uuid/history` 500→400. Unit tests added (incl. a guard that non-class-22 errors stay 500). Fixes the ~12 unvalidated `:id` routes in one place + stops client garbage polluting 5xx/error-rate alerts.
+- [x] **Gap 1A — agent graceful recovery** `agent/src/prompt.ts` "Technical glitches" section: never speak raw error text (`500`/`timed out`/`backend`), recover in-character, never stall silently. Regression test pins it. (Wording is a placeholder for Dale to tune.)
+- [x] **Gap 2 — agent CI job** `agent/` (tsc + 99 tests) now runs in CI — was previously ungated entirely.
+- [x] **Testability extractions** `jsonContentTypeParser` (+ 400-on-bad-JSON fix) and `readinessHandler` extracted to modules with unit tests (incl. the `/ready` 503 DB-down branch). E2E added: anonymous-tenant 401, `/ready`, malformed-JSON.
 
 **Open — needs Dale / Railway (config, can't be done from here):**
 - [ ] **IN FLIGHT (user)** Set `METRICS_TOKEN` on Railway backend (Prometheus `/metrics` returns 404 until set — currently no metrics scrape in prod).
@@ -48,9 +52,22 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 - [ ] **IN FLIGHT (user)** (Optional) Repoint Railway healthcheck → `/ready` if you want deploy promotion gated on DB reachability (note: Railway healthcheck gates promotion, not per-request traffic).
 - [ ] **Alert rules** — once `METRICS_TOKEN`/`BETTER_STACK_TOKEN` are live, wire alerts on `rate(errors_total[5m])`, `booking_attempts_total{outcome="failure"}`, http 5xx rate, p95 `http_request_duration_ms`, and sustained `/ready` `waiting>0`. Route to a channel Dale watches.
 
-**Open — code, queued (not built inline to avoid scope creep):**
+**Open — LOAD TESTING (deferred — not a current concern, Dale 2026-05-21):**
 - [ ] **Load-test the booking path** to find the concurrent-call ceiling before pool exhaustion / latency cliff. Pool `max=10`, single agent worker per tenant — ceiling currently unknown. Define expected concurrency, size pool + LiveKit accordingly.
-- [ ] **Pre-deploy CI gate** — make `src/multi-tenant-isolation.test.ts` + an auth smoke (anonymous protected route → 401, authed → 200) a required gate before deploy, so the class of bug found 2026-05-21 is caught by CI, not in prod.
+- [ ] **Pool-exhaustion integration test** — spin an isolated `Pool({max:1, connectionTimeoutMillis})`, hold the only client, fire another checkout, assert it rejects fast AND `errors_total` ticks via `withHandler`→`logError`. Proves the fail-fast + alerting path end-to-end (today's unit test only throws a *synthetic* error, not a real timed-out checkout). **This is load-testing scope — defer with the booking load test above.**
+
+**Gap 2 — CI / deploy gate (prioritized; agent job already DONE above):**
+- [ ] **P0 — Gate Railway deploy on CI green.** Today Railway auto-deploys on push to `main` *independently* of GitHub Actions — a red CI run does NOT stop the deploy. Fix via Railway "Wait for CI" / check-suite gating, or branch-protect `main` + deploy from a CI step. **Needs Dale (Railway dashboard + GitHub branch protection).** Highest priority — without it every other CI improvement is advisory only.
+- [ ] **P1 — Add E2E (Playwright) job to CI.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
+- [ ] **P2 — Repoint Railway `healthcheckPath` → `/ready`.** `railway.json` currently `/health` (shallow); `/ready` would gate deploy *promotion* on DB reachability. Behavior change (could block promotion during a DB blip) — Dale's call.
+
+**Gap 1 — agent resilience (1A done; remainder):**
+- [ ] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** `agent/src/index.ts` ~143-181 (`fetchTenantConfig`→`buildTools`→`session.start`→greeting) is outside the fallback try/catch; an unexpected throw there propagates out of `entry`, the LiveKit job dies, and the caller hits dead air. Catch → fallback message. Low risk, real dead-air path.
+- [ ] **P3 — (B) idempotent-read retry** in `toolsClient` — one retry on a transient 5xx for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Backed out 2026-05-21 (not approved); revisit.
+- [ ] **P3 — (C) latency filler** — speak a short "one sec while I check that" before known-slow tool calls to cut the up-to-8s silence window. Pairs with reconsidering `toolsClient` `timeoutMs` (8s is long for voice).
+
+**Gap 3 — follow-through (core fix done above):**
+- [ ] **P3 — Audit the ~12 `:id` routes** for any place that still leaks a raw value or 500 on bad input despite the class-22 mapper (e.g. routes not wrapped in `withHandler`, or non-pg validation). The mapper is the safety net; explicit `requireValidUUID` at the route door is the belt.
 
 ---
 
