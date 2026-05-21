@@ -239,16 +239,26 @@ app.setErrorHandler(
 
 // --- Health & Admin ---
 
+// Static landing/demo HTML read once at module load, not per-request.
+// These routes are public + unauthenticated, so a per-request
+// fs.readFileSync would block the event loop on every hit. The
+// {{DASHBOARD_URL}} token stays substituted per-request (cheap string op).
+const LANDING_HTML = fs.readFileSync(
+  path.resolve(__dirname, '..', '..', 'public', 'index.html'),
+  'utf-8'
+);
+const DEMO_HTML = fs.readFileSync(
+  path.resolve(__dirname, '..', '..', 'public', 'secretaryhq-demo.html'),
+  'utf-8'
+);
+
 app.get('/', async (_req, reply) => {
-  const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'index.html');
   const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
-  const html = fs.readFileSync(htmlPath, 'utf-8').replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
+  const html = LANDING_HTML.replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
   return reply.type('text/html').send(html);
 });
 app.get('/demo', async (_req, reply) => {
-  const htmlPath = path.resolve(__dirname, '..', '..', 'public', 'secretaryhq-demo.html');
-  const html = fs.readFileSync(htmlPath, 'utf-8');
-  return reply.type('text/html').send(html);
+  return reply.type('text/html').send(DEMO_HTML);
 });
 // Process-startup timestamp, captured once at module load. Exposed via
 // /health so E2E globalSetup can detect a backend that's older than
