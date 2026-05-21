@@ -41,7 +41,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation in two layers: (1) any non-public, non-tenant-exempt request with no authenticated session (`req.auth`) is rejected 401 before any tenant resolution — a user-supplied `tenant_id` is a selector within the JWT's permitted tenants, never a substitute for auth (added 2026-05-21 after an anonymous `?tenant_id=<uuid>` was found to return that tenant's data read+write+delete with zero auth; the 2026-05-06 guard only fired when a jwtTenant already existed); (2) for authenticated callers, any user-supplied `tenant_id` (query or body) not matching the JWT's is rejected 403 unless super-admin (added 2026-05-06). `requireTenantId` trusts only the middleware-validated `req.tenantId` (no body fallback). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
-- `/supabase/migrations` — 122 SQL migrations.
+- `/supabase/migrations` — 126 SQL migrations.
 - `/scripts` — `qa-live-test.py`, `verify-claude-md.ts` drift detector
 
 ## Development
