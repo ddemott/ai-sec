@@ -144,10 +144,19 @@ export function Step1Services({
             type="number"
             step={15}
             min={15}
-            value={String(editingService.duration_minutes)}
-            onChange={(e) =>
-              onChange({ ...editingService, duration_minutes: parseInt(e.target.value) || 0 })
-            }
+            // Show empty (not "0") when the value is 0, so the field can be
+            // cleared and retyped. Pre-fix, `parseInt(value) || 0` forced the
+            // field to "0" the instant it was emptied — you couldn't clear "3"
+            // to type "30". 0 is treated as "unset" (saveService rejects it
+            // anyway via the `< 1` guard), so rendering it as empty is correct.
+            value={editingService.duration_minutes === 0 ? '' : String(editingService.duration_minutes)}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              // Never propagate NaN — saveService()'s `< 1` guard treats NaN as
+              // valid (NaN < 1 is false), which would let an empty field through.
+              // Empty/invalid → 0, which renders as empty above and save rejects.
+              onChange({ ...editingService, duration_minutes: Number.isNaN(n) ? 0 : n });
+            }}
           />
           <p className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>
             Scheduled in 15-minute slots — non-multiples are rounded up on save.
