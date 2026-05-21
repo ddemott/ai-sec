@@ -163,26 +163,52 @@ export default defineAgent({
       customPrompt: tenantConfig.systemPrompt,
     });
 
-    // 5. Start the voice session
-    const session = new voice.AgentSession({
-      vad: ctx.proc.userData.vad as silero.VAD,
-      stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
-      llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-      tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
-    });
+    // 5. Start the voice session. Wrapped in try/catch → runFallback: a
+    //    throw here (LiveKit session.start, a plugin constructor, an STT/LLM/
+    //    TTS upstream that rejects at init) would otherwise propagate out of
+    //    `entry`, kill the job, and leave the caller in dead air. The fallback
+    //    speaks a short message so the call degrades to "sorry" instead of
+    //    silence. (2026-05-21 — closes the gap-1 outer-throw dead-air path.)
+    try {
+      const session = new voice.AgentSession({
+        vad: ctx.proc.userData.vad as silero.VAD,
+        stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
+        llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
+        tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
+      });
 
-    const agent = new voice.Agent({
-      instructions,
-      tools,
-    });
+      const agent = new voice.Agent({
+        instructions,
+        tools,
+      });
 
-    await session.start({ agent, room: ctx.room });
-    callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
+      await session.start({ agent, room: ctx.room });
+      callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
 
-    // 6. Greeting. Kept short — the LLM will warm up from here.
-    void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
-      allowInterruptions: true,
-    });
+      // 6. Greeting. Kept short — the LLM will warm up from here.
+      void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
+        allowInterruptions: true,
+      });
+    } catch (err) {
+      callLog.error(
+        {
+          event: 'fallback_triggered',
+          reason: 'session_start_failed',
+          tenant_id: sessionCtx.tenantId,
+          room: ctx.room.name,
+          error_message: err instanceof Error ? err.message : String(err),
+        },
+        'voice session failed to start — running fallback so the caller is not left in dead air'
+      );
+      captureSentry(err instanceof Error ? err : new Error(String(err)), {
+        event: 'fallback_triggered',
+        reason: 'session_start_failed',
+        tenant_id: sessionCtx.tenantId,
+        room: ctx.room.name,
+      });
+      await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
+      return;
+    }
   },
 });
 
