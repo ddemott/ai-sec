@@ -143,14 +143,19 @@ app.addContentTypeParser(
   'application/json',
   { parseAs: 'buffer' },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify content parser types require raw request access
-  (req: any, rawBody: Buffer) => {
+  (req: any, rawBody: Buffer, done: (err: Error | null, body?: unknown) => void) => {
     // Store raw body for webhook signature verification
     req.rawBody = rawBody;
-    // Parse JSON normally
+    // Parse JSON via the done callback. A content-type parser MUST be either
+    // async (returns a promise) or call done(); a plain sync `return` leaves
+    // Fastify waiting on done() forever, hanging every JSON-body POST. The
+    // `async` keyword was stripped here by a require-await lint sweep
+    // (eb65fd7, 2026-05-19) which incorrectly assumed sync-return works for
+    // parsers as it does for route handlers — it does not.
     try {
-      return JSON.parse(rawBody.toString('utf8'));
+      done(null, JSON.parse(rawBody.toString('utf8')));
     } catch {
-      throw new Error('Invalid JSON');
+      done(new Error('Invalid JSON'));
     }
   }
 );
