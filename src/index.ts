@@ -11,6 +11,8 @@ import rateLimit from '@fastify/rate-limit';
 import { collectStartupWarnings } from './services/envWarnings';
 import multipart from '@fastify/multipart';
 import { getPool, closePool, createWithTenantClient } from './database';
+import { jsonContentTypeParser } from './jsonContentTypeParser';
+import { runReadinessCheck } from './readinessHandler';
 import { buildLogger } from './services/logger';
 import {
   registry as metricsRegistry,
@@ -138,27 +140,10 @@ void app.register(multipart, {
 
 // --- Raw Body Preservation for Stripe Webhooks ---
 // Stripe signature verification requires the raw request body.
-// This content-type parser preserves the raw buffer for webhook routes.
-app.addContentTypeParser(
-  'application/json',
-  { parseAs: 'buffer' },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify content parser types require raw request access
-  (req: any, rawBody: Buffer, done: (err: Error | null, body?: unknown) => void) => {
-    // Store raw body for webhook signature verification
-    req.rawBody = rawBody;
-    // Parse JSON via the done callback. A content-type parser MUST be either
-    // async (returns a promise) or call done(); a plain sync `return` leaves
-    // Fastify waiting on done() forever, hanging every JSON-body POST. The
-    // `async` keyword was stripped here by a require-await lint sweep
-    // (eb65fd7, 2026-05-19) which incorrectly assumed sync-return works for
-    // parsers as it does for route handlers — it does not.
-    try {
-      done(null, JSON.parse(rawBody.toString('utf8')));
-    } catch {
-      done(new Error('Invalid JSON'));
-    }
-  }
-);
+// This content-type parser preserves the raw buffer for webhook routes and
+// parses JSON via done(). See src/jsonContentTypeParser.ts for the why
+// (and the unit test that pins the done()-callback contract).
+app.addContentTypeParser('application/json', { parseAs: 'buffer' }, jsonContentTypeParser);
 
 // --- Database Pool ---
 // Single shared pool (see src/database/index.ts) — same instance is used by
@@ -278,34 +263,7 @@ app.get('/health', () => ({ status: 'ok', started_at: PROCESS_STARTED_AT }));
 // Railway's healthcheck path is repointed here. connectionTimeoutMillis (5s,
 // see database/index.ts) bounds the worst-case response under pool
 // exhaustion, so this endpoint always answers instead of hanging. (2026-05-21)
-app.get('/ready', async (_req, reply) => {
-  const startedAt = Date.now();
-  let client;
-  try {
-    client = await pool.connect();
-    await client.query('SELECT 1');
-    return reply.status(200).send({
-      status: 'ready',
-      db: 'ok',
-      latency_ms: Date.now() - startedAt,
-      // waiting > 0 sustained = pool saturation (the "many callers" signal)
-      pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount },
-    });
-  } catch (err) {
-    app.log.error(
-      { event: 'readiness_check_failed', error_message: (err as Error).message },
-      'readiness_check_failed'
-    );
-    return reply.status(503).send({
-      status: 'not_ready',
-      db: 'error',
-      latency_ms: Date.now() - startedAt,
-      pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount },
-    });
-  } finally {
-    client?.release();
-  }
-});
+app.get('/ready', (_req, reply) => runReadinessCheck(pool, app.log, reply));
 
 // --- Prometheus-format metrics scrape endpoint ---
 // Strict opt-in: refuses ALL requests when METRICS_TOKEN is unset, so a
