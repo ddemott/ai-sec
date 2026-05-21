@@ -282,18 +282,19 @@ describe('POST /shifts/overrides/:employeeId/:shiftDate/update — sad paths', (
     expect(res.json()).toMatchObject({ success: false, error: 'Override not found' });
   });
 
-  it('SAD: rejects update payload missing tenant context with 400', async () => {
-    // WHO: misconfigured client posting without tenant context in JWT or query
-    // WHAT: requireTenantId returns 400 → no DB query
-    // WHY: same scoping argument as create — tenant_id is required to
-    //      prevent cross-tenant updates via guessed composite keys
+  it('SAD: rejects update payload with no auth context (401)', async () => {
+    // WHO: unauthenticated client posting without tenant context
+    // WHAT: 2026-05-21 — no auth → 401 (authentication is the real failure),
+    //       not the old misleading 400. Still no DB query runs.
+    // WHY: same scoping argument as create — without an authenticated
+    //      session a guessed composite key must not reach a cross-tenant UPDATE
     const res = await app.inject({
       method: 'POST',
       url: `/shifts/overrides/${EMPLOYEE_ID}/${SHIFT_DATE}/update`,
       payload: { is_off: true },
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
     expect(queries).toHaveLength(0);
   });
 });

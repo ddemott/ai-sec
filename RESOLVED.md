@@ -4,6 +4,34 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-21 — Unauthenticated cross-tenant data access via `?tenant_id=` (CVE-class) + threadpool fix
+
+**Two findings, fixed together; kept in separate commits.**
+
+### Security: anonymous tenant-data access (read + write + delete)
+
+While verifying that login worked end-to-end, an unauthenticated probe surfaced a serious hole:
+
+```
+GET /services?tenant_id=<any-tenant-uuid>     # no Authorization header → HTTP 200 + that tenant's data
+DELETE /services/<id>/delete?tenant_id=<uuid>  # no auth → reached handler (404 on fake id, would delete a real one)
+POST /services/create  {tenant_id:<uuid>,...}  # no auth → reached handler
+```
+
+**Cause chain:** (1) `registerJwtAuthHook` lets a request with no `Authorization: Bearer` header proceed anonymously (by design — handlers self-gate). (2) `tenantMiddleware` resolved the request tenant as `candidate || jwtTenant`, where `candidate` is the user-supplied `?tenant_id=`/body value; the 2026-05-06 cross-tenant override guard only fired when a `jwtTenant` already existed, so for an anonymous request it was skipped and the attacker-supplied tenant was trusted. (3) `requireTenantId` also fell back to `req.body.tenant_id` directly. (4) `withTenantClient` set RLS scope to the attacker-chosen tenant and returned its rows. RLS faithfully scoped to whatever tenant was set — RLS was never authentication, and there was no JWT to bound it. The 2026-05-06 isolation probe only tested an *authenticated* user overriding to another tenant; it never tested the *no-token-at-all* case, so this stayed open.
+
+**Fix (`src/middleware.ts`):**
+- `tenantMiddleware` now rejects any non-public, non-tenant-exempt request with no `req.auth` → **401**, *before* any tenant resolution can trust a user-supplied `tenant_id`. Public routes (login, password reset, demo, metrics, OAuth callbacks, HMAC-signed webhooks) and secret-authed `/agent-tools/*` (tenant-exempt, returns earlier) are unaffected.
+- `requireTenantId` no longer falls back to `req.body.tenant_id` (trusts only the middleware-validated `req.tenantId`) and returns **401** ("Authentication required") when there is no authenticated session, rather than the misleading **400**.
+
+**Verification:** live re-probe of GET/POST/DELETE anonymously → all **401**; authed own-tenant → 200; authed cross-tenant override → 403 (existing guard intact); public `/health` → 200. Added Probe 8 (5 cases: GET/POST/DELETE anonymous + body-injection + positive control) to `src/multi-tenant-isolation.test.ts` (now 39 probes). Full backend suite updated — 23 tests across 7 files had been pinning the old behavior (the misleading 400, the removed body fallback, and one test — `middleware.test.ts > "permits anonymous requests … to fall through"` — that literally encoded the hole); all rewritten to assert the correct fail-closed behavior, not weakened. Documented in `docs/SECURITY.md`.
+
+### Perf: per-request `fs.readFileSync` on public routes
+
+`GET /` and `GET /demo` re-read their HTML from disk on every request (blocking the event loop; spammable on unauthenticated routes). Moved the reads to module load (`LANDING_HTML` / `DEMO_HTML` constants); `{{DASHBOARD_URL}}` token still substituted per-request. `/demo` dropped from a per-request fs read to ~0.6ms.
+
+---
+
 ## 2026-05-17 — Production migration apply: prod brought from 86 → 122 migrations
 
 Closes the long-standing **IN FLIGHT (prod-apply)** TODO item. Pre-apply, the production Supabase DB was 9 days behind `main` (latest applied was `20260508000001`, latest in repo was `20260514000000`). The TODO listed 4 dated groups (~9 files) but a `schema_migrations` diff against the filesystem showed **36 pending**, not 9 — the gap included the 26-file May-12 PK rename sweep and 3 May-9 RLS/error fixes that had never been called out separately.

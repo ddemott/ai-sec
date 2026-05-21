@@ -515,16 +515,18 @@ describe('Version History Routes — Sad Paths (5 Ws Coverage)', () => {
     );
   });
 
-  it('18. GET history returns 400 without tenant_id (authorization)', async () => {
+  it('18. GET history returns 401 when unauthenticated (no tenant context)', async () => {
     const res = await app.inject({
       method: 'GET',
       url: `/records/customers/${RECORD_ID}/history`,
     });
 
-    expect(res.statusCode).toBe(400);
+    // 2026-05-21: no auth context → 401 (authentication is the real failure),
+    // not the old misleading 400.
+    expect(res.statusCode).toBe(401);
     const body = res.json();
 
-    // Missing tenant_id should return a clear error
+    // Should still return a clear error
     expect(body.error || body.message).toBeDefined();
   });
 

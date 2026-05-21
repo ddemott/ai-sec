@@ -108,14 +108,30 @@ describe('Middleware Helpers', () => {
       expect(result).toBe('abc-123');
     });
 
-    it('returns tenantId from req.body.tenant_id', async () => {
+    it('does NOT fall back to req.body.tenant_id (only the middleware-validated req.tenantId is trusted)', async () => {
+      // 2026-05-21: the old body fallback let a route resolve a tenant
+      // straight from the request body, bypassing tenantMiddleware's
+      // JWT-vs-candidate validation — the same class of bug as the
+      // anonymous-tenant hole. requireTenantId must trust ONLY req.tenantId.
+      // auth is present here so we isolate the "body ignored" behavior from
+      // the unauthenticated-401 branch.
       const { requireTenantId } = await import('./middleware');
 
-      const req = { body: { tenant_id: 'def-456' } } as unknown as AppRequest;
-      const reply = { status: () => ({ send: () => {} }) } as unknown as FastifyReply;
+      const req = {
+        auth: { tenant_id: 'def-456', user_id: 'u', email: 'e' },
+        body: { tenant_id: 'def-456' },
+      } as unknown as AppRequest;
+      let sentStatus = 0;
+      const reply = {
+        status: (code: number) => {
+          sentStatus = code;
+          return { send: () => {} };
+        },
+      } as unknown as FastifyReply;
 
       const result = requireTenantId(req, reply);
-      expect(result).toBe('def-456');
+      expect(result).toBeNull(); // body.tenant_id is no longer read
+      expect(sentStatus).toBe(400); // authed but no validated tenant → 400
     });
 
     it('prefers req.tenantId over body', async () => {
@@ -131,7 +147,10 @@ describe('Middleware Helpers', () => {
       expect(result).toBe('from-query');
     });
 
-    it('returns null and sends 400 when no tenantId', async () => {
+    it('returns null and sends 401 when no tenantId AND no auth (unauthenticated)', async () => {
+      // 2026-05-21: with no authenticated session the real failure is
+      // authentication, not a missing field — say 401, not the misleading
+      // 400 the route used to return.
       const { requireTenantId } = await import('./middleware');
 
       let sentStatus = 0;
@@ -150,8 +169,37 @@ describe('Middleware Helpers', () => {
 
       const result = requireTenantId(req, reply);
       expect(result).toBeNull();
+      expect(sentStatus).toBe(401);
+      expect(sentBody).toEqual({ success: false, error: 'Authentication required' });
+    });
+
+    it('returns null and sends 400 when authed but no validated tenant', async () => {
+      // The 400 path still exists — but only for an authenticated caller
+      // whose request somehow carries no validated tenant. That is a genuine
+      // bad-request, distinct from the unauthenticated 401 above.
+      const { requireTenantId } = await import('./middleware');
+
+      let sentStatus = 0;
+      let sentBody: { error: string } | null = null;
+      const req = {
+        auth: { tenant_id: 'x', user_id: 'u', email: 'e' },
+        body: {},
+      } as unknown as AppRequest;
+      const reply = {
+        status: (code: number) => {
+          sentStatus = code;
+          return {
+            send: (body: { error: string }) => {
+              sentBody = body;
+            },
+          };
+        },
+      } as unknown as FastifyReply;
+
+      const result = requireTenantId(req, reply);
+      expect(result).toBeNull();
       expect(sentStatus).toBe(400);
-      expect(sentBody).toEqual({ error: 'tenant_id is required' });
+      expect(sentBody).toEqual({ success: false, error: 'tenant_id is required' });
     });
   });
 
@@ -160,7 +208,11 @@ describe('Middleware Helpers', () => {
       const { requireTenantId } = await import('./middleware');
 
       let sentBody: { error: string } | null = null;
-      const req = {} as unknown as AppRequest; // no tenantId, no body
+      // Authed-but-no-tenant so we exercise the 400 message branch (the
+      // unauthenticated branch returns the 401 'Authentication required').
+      const req = {
+        auth: { tenant_id: 'x', user_id: 'u', email: 'e' },
+      } as unknown as AppRequest;
       const reply = {
         status: () => ({
           send: (body: { error: string }) => {
@@ -175,7 +227,7 @@ describe('Middleware Helpers', () => {
       expect(sentBody!.error).toContain('tenant_id');
     });
 
-    it('handles undefined body gracefully', async () => {
+    it('handles undefined body gracefully (no crash; 401 unauthenticated)', async () => {
       const { requireTenantId } = await import('./middleware');
 
       let sentStatus = 0;
@@ -189,7 +241,7 @@ describe('Middleware Helpers', () => {
 
       const result = requireTenantId(req, reply);
       expect(result).toBeNull();
-      expect(sentStatus).toBe(400);
+      expect(sentStatus).toBe(401); // no auth context → authentication required
     });
   });
 

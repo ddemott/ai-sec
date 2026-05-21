@@ -356,8 +356,9 @@ describe('mappings — auth/tenant-context guards', () => {
 
     const res = await app.inject({ method: 'GET', url: '/mappings/service-resource' });
 
-    // requireTenantId returns 400 with a specific message via AppError
-    expect(res.statusCode).toBe(400);
+    // 2026-05-21: no auth context → 401 (authentication is the real failure),
+    // not the old misleading 400. Gate still fires before any DB query.
+    expect(res.statusCode).toBe(401);
     const dataQueries = handle.queries.filter(
       (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET')
     );

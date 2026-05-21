@@ -558,7 +558,7 @@ describe('Voice Routes — Sad Paths', () => {
     expect(body.error).toBe('Validation failed');
   });
 
-  it('15. POST /voice/session/start returns 400 on missing tenant_id', async () => {
+  it('15. POST /voice/session/start returns 401 when unauthenticated (no tenant context)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/voice/session/start',
@@ -568,7 +568,9 @@ describe('Voice Routes — Sad Paths', () => {
       },
     });
 
-    expect(res.statusCode).toBe(400);
+    // 2026-05-21: no auth context → 401 (authentication is the real failure),
+    // not the old misleading 400.
+    expect(res.statusCode).toBe(401);
   });
 
   it('16. POST /voice/session/end returns 400 on invalid outcome', async () => {
@@ -701,13 +703,14 @@ describe('Voice Routes — Sad Paths', () => {
     expect(body.error).toBe('Validation failed');
   });
 
-  it('24. GET /voice/active returns 400 on missing tenant_id', async () => {
+  it('24. GET /voice/active returns 401 when unauthenticated (no tenant context)', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/voice/active',
     });
 
-    expect(res.statusCode).toBe(400);
+    // 2026-05-21: no auth context → 401, not the old misleading 400.
+    expect(res.statusCode).toBe(401);
   });
 
   it('25. GET /voice/history respects max limit of 200', async () => {

@@ -223,15 +223,29 @@ describe('requireTenantId', () => {
     expect(result).toBe('tid-123');
   });
 
-  it('falls back to body.tenant_id (WHO: cross-tenant admin | WHAT: tenant_id from request body | WHERE: requireTenantId fallback | WHY: admin routes pass tenant_id in body, not middleware)', () => {
-    const req = createMockRequest({ body: { tenant_id: 'body-tid' } });
+  it('does NOT fall back to body.tenant_id (WHO: attacker/admin | WHAT: body tenant_id must be ignored | WHERE: requireTenantId | WHY: 2026-05-21 — reading body directly bypasses tenantMiddleware JWT validation, the anonymous-tenant hole vector)', () => {
+    // auth present → isolates the "body ignored" behavior from the 401 branch.
+    const req = createMockRequest({
+      auth: { tenant_id: 'x', user_id: 'u', email: 'e' },
+      body: { tenant_id: 'body-tid' },
+    });
     const reply = createMockReply();
     const result = requireTenantId(req, reply);
-    expect(result).toBe('body-tid');
+    expect(result).toBeNull();
+    expect(reply.statusCode).toBe(400);
   });
 
-  it('returns null and sends 400 when missing (WHO: misconfigured client | WHAT: no tenant_id anywhere → 400 error | WHERE: requireTenantId | WHY: prevents null tenant queries that bypass RLS)', () => {
+  it('returns null and sends 401 when missing AND unauthenticated (WHO: anonymous caller | WHAT: no auth, no tenant → 401 | WHERE: requireTenantId | WHY: 2026-05-21 — the real failure is authentication, not a missing field)', () => {
     const req = createMockRequest();
+    const reply = createMockReply();
+    const result = requireTenantId(req, reply);
+    expect(result).toBeNull();
+    expect(reply.statusCode).toBe(401);
+    expect(reply.body.error).toContain('Authentication required');
+  });
+
+  it('returns null and sends 400 when authed but no tenant (WHO: authed misconfigured client | WHAT: genuine bad request | WHERE: requireTenantId | WHY: distinct from the unauthenticated 401)', () => {
+    const req = createMockRequest({ auth: { tenant_id: 'x', user_id: 'u', email: 'e' } });
     const reply = createMockReply();
     const result = requireTenantId(req, reply);
     expect(result).toBeNull();
@@ -349,16 +363,24 @@ describe('tenantMiddleware', () => {
   const FAKE_JWT_TENANT = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 
   it('extracts tenant_id from query params (WHO: dashboard API call | WHAT: query.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: dashboard passes tenant_id as query param)', async () => {
+    // Super-admin auth so the distinct query tenant is a legal override (a
+    // non-admin would 403 on query≠jwt) AND the 2026-05-21 auth gate passes.
     const hook = setupMiddleware();
-    const req = createMockRequest({ query: { tenant_id: FAKE_QUERY_TENANT } });
-    await hook(req, {});
+    const req = createMockRequest({
+      auth: { tenant_id: SUPER_ADMIN_TENANT_ID, user_id: 'u', email: 'e' },
+      query: { tenant_id: FAKE_QUERY_TENANT },
+    });
+    await hook(req, createMockReply());
     expect(req.tenantId).toBe(FAKE_QUERY_TENANT);
   });
 
   it('extracts tenant_id from body (WHO: POST route | WHAT: body.tenant_id → req.tenantId | WHERE: tenantMiddleware preHandler | WHY: some mutations send tenant_id in body)', async () => {
     const hook = setupMiddleware();
-    const req = createMockRequest({ body: { tenant_id: FAKE_BODY_TENANT } });
-    await hook(req, {});
+    const req = createMockRequest({
+      auth: { tenant_id: SUPER_ADMIN_TENANT_ID, user_id: 'u', email: 'e' },
+      body: { tenant_id: FAKE_BODY_TENANT },
+    });
+    await hook(req, createMockReply());
     expect(req.tenantId).toBe(FAKE_BODY_TENANT);
   });
 
@@ -549,19 +571,55 @@ describe('tenantMiddleware', () => {
     expect(reply.body.error).toContain('tenant_id mismatch');
   });
 
-  it('permits anonymous requests with no JWT to fall through (downstream requireAuth handles)', async () => {
+  it('REJECTS anonymous requests with no JWT on tenant-scoped routes (401)', async () => {
     // WHO: an unauthenticated request that hits a tenant-scoped route
-    // WHAT: no JWT means no JWT-vs-candidate comparison; gate doesn't
-    //       fire; the downstream requireAuth() / route guard takes over
-    // WHY: the JWT auth hook may have skipped (no Bearer header). The
-    //      tenant gate should not 403 anonymous traffic — instead let the
-    //      route's own auth check produce the appropriate error
+    // WHAT: supplies ?tenant_id=<uuid> with NO Authorization header
+    // WHEN: 2026-05-21 — found that the old behavior let this fall through:
+    //       candidate||jwtTenant resolved the attacker-supplied tenant, the
+    //       route returned its data (read/write/delete) with zero auth.
+    // WHERE: src/middleware.ts tenantMiddleware auth gate
+    // WHY: a user-supplied tenant_id is a selector within the session's
+    //      permitted tenants, never a substitute for authentication. With no
+    //      JWT there is nothing to validate it against — fail closed (401)
+    //      before any tenant resolution can trust it. The route must NEVER
+    //      see req.tenantId set from an unauthenticated request.
     const hook = setupMiddleware();
     const reply = createMockReply();
     const req = createMockRequest({ query: { tenant_id: FAKE_QUERY_TENANT } });
     await hook(req, reply);
-    expect(reply.statusCode).toBe(200); // gate didn't fire
-    expect(req.tenantId).toBe(FAKE_QUERY_TENANT);
+    expect(reply.statusCode).toBe(401);
+    expect(req.tenantId).toBeUndefined();
+  });
+
+  // Regression guard for the PUBLIC_ROUTES vs TENANT_EXEMPT_ROUTES divergence
+  // that made the 2026-05-21 hole subtle: the two lists are NOT identical, and
+  // a route can legitimately be in one but not the other. A future contributor
+  // who adds a public route to only one list could re-open unauthenticated
+  // access. These cases pin the intended divergence behaviorally so such a
+  // change trips a test instead of shipping silently.
+  it('public-but-NOT-tenant-exempt routes (e.g. /forgot-password) pass the auth gate without a JWT', async () => {
+    // WHY: /forgot-password, /reset-password, /demo, /metrics are JWT-public
+    //      but intentionally NOT tenant-exempt — they flow through
+    //      tenantMiddleware and must not be 401'd by the auth gate. Removing
+    //      one from PUBLIC_ROUTES would 401 it (broken password reset).
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({ url: '/forgot-password', method: 'POST' });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(200); // gate did not fire
+    expect(req.tenantId).toBeUndefined(); // no tenant resolved, none needed
+  });
+
+  it('tenant-exempt routes (e.g. /agent-tools/*) short-circuit before the auth gate', async () => {
+    // WHY: /agent-tools/* authenticates via x-agent-secret, not JWT, and is
+    //      tenant-exempt — it must return BEFORE the auth gate so the
+    //      secret-authed LiveKit agent isn't 401'd. Pin that exempt wins.
+    const hook = setupMiddleware();
+    const reply = createMockReply();
+    const req = createMockRequest({ url: '/agent-tools/book-appointment', method: 'POST' });
+    await hook(req, reply);
+    expect(reply.statusCode).toBe(200); // exempt → returned early, no 401
+    expect(req.tenantId).toBeUndefined();
   });
 });
 

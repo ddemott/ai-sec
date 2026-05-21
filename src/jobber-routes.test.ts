@@ -545,77 +545,74 @@ describe('Jobber Routes — Sad Paths', () => {
 // =============================================
 
 describe('Jobber Routes — Edge Cases', () => {
-  it('GET /jobber/auth returns 400 when tenant_id is missing', async () => {
-    // WHO: Dashboard integration card — API call made without tenant context (bug in frontend)
-    // WHAT: Request has no tenant_id query param, tenantMiddleware doesn't inject tenantId
-    // WHEN: GET /jobber/auth (missing tenant_id)
-    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth tenant_id guard
-    // WHY: Without this guard, getAuthUrl would receive undefined tenant — the state JWT would have no tenant claim, making the callback unable to store tokens for the right tenant
+  it('GET /jobber/auth returns 401 when unauthenticated', async () => {
+    // WHO: Dashboard integration card — API call made with no auth context
+    // WHAT: 2026-05-21 — no JWT → 401 (authentication is the real failure),
+    //       not the old misleading 400. The route never runs getAuthUrl.
+    // WHERE: src/middleware.ts tenantMiddleware auth gate
+    // WHY: a user-supplied tenant_id is no substitute for authentication;
+    //      OAuth init is dashboard-authenticated in production
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/auth',
-      // No tenant_id param
+      // No auth header, no tenant_id param
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
     const body = res.json();
-    expect(body.error).toContain('tenant_id');
+    expect(body.error).toContain('Authentication required');
   });
 
-  it('GET /jobber/settings returns 400 when tenant_id is missing', async () => {
-    // WHO: Dashboard integration card — settings fetch without tenant context (frontend bug or direct API call)
-    // WHAT: Request has no tenant_id, route guard rejects before DB query
-    // WHEN: GET /jobber/settings (missing tenant_id)
-    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/settings tenant_id guard
-    // WHY: Without this guard, the DB query would run without RLS context — potentially leaking another tenant's Jobber connection status
+  it('GET /jobber/settings returns 401 when unauthenticated', async () => {
+    // WHO: Dashboard integration card — settings fetch with no auth context
+    // WHAT: 2026-05-21 — no JWT → 401 before any DB query (was misleading 400)
+    // WHERE: src/middleware.ts tenantMiddleware auth gate
+    // WHY: without an authenticated session the query must not run at all
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/settings',
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 
-  it('POST /jobber/settings/disconnect returns 400 when tenant_id is missing', async () => {
-    // WHO: Dashboard integration card — disconnect request without tenant context
-    // WHAT: Request has no tenant_id, route guard rejects before DELETE queries
-    // WHEN: POST /jobber/settings/disconnect (missing tenant_id)
-    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/settings/disconnect tenant_id guard
-    // WHY: Without this guard, the DELETE would run without tenant scoping — potentially disconnecting another tenant's Jobber integration
+  it('POST /jobber/settings/disconnect returns 401 when unauthenticated', async () => {
+    // WHO: Dashboard integration card — disconnect request with no auth context
+    // WHAT: 2026-05-21 — no JWT → 401 before any DELETE (was misleading 400)
+    // WHERE: src/middleware.ts tenantMiddleware auth gate
+    // WHY: an unauthenticated DELETE must never reach a cross-tenant disconnect
     const res = await app.inject({
       method: 'POST',
       url: '/jobber/settings/disconnect',
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 
-  it('POST /jobber/sync returns 400 when tenant_id is missing', async () => {
-    // WHO: Dashboard integration card — "Sync Now" clicked without tenant context
-    // WHAT: Request has no tenant_id, route guard rejects before triggering fullSync
-    // WHEN: POST /jobber/sync (missing tenant_id)
-    // WHERE: src/routes/jobber.ts registerJobberRoutes — POST /jobber/sync tenant_id guard
-    // WHY: Without this guard, fullSync would run with undefined tenant — syncing data into no tenant or the wrong tenant, corrupting multi-tenant isolation
+  it('POST /jobber/sync returns 401 when unauthenticated', async () => {
+    // WHO: Dashboard integration card — "Sync Now" clicked with no auth context
+    // WHAT: 2026-05-21 — no JWT → 401 before triggering fullSync (was 400)
+    // WHERE: src/middleware.ts tenantMiddleware auth gate
+    // WHY: fullSync must never run without an authenticated tenant context
     const res = await app.inject({
       method: 'POST',
       url: '/jobber/sync',
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 
-  it('GET /jobber/sync/status returns 400 when tenant_id is missing', async () => {
-    // WHO: Dashboard integration card — sync status poll without tenant context
-    // WHAT: Request has no tenant_id, route guard rejects before DB aggregation query
-    // WHEN: GET /jobber/sync/status (missing tenant_id)
-    // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/sync/status tenant_id guard
-    // WHY: Without this guard, the aggregation query would return cross-tenant sync counts — leaking how many records other tenants have synced
+  it('GET /jobber/sync/status returns 401 when unauthenticated', async () => {
+    // WHO: Dashboard integration card — sync status poll with no auth context
+    // WHAT: 2026-05-21 — no JWT → 401 before the aggregation query (was 400)
+    // WHERE: src/middleware.ts tenantMiddleware auth gate
+    // WHY: an unauthenticated caller must not learn any tenant's sync counts
     const res = await app.inject({
       method: 'GET',
       url: '/jobber/sync/status',
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 
   it('GET /jobber/auth returns 500 when getAuthUrl returns null', async () => {

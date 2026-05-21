@@ -137,9 +137,19 @@ export async function withPoolClient<T>(
  *   if (!tenantId) return;
  */
 export function requireTenantId(req: AppRequest, reply: FastifyReply): string | null {
-  const tenantId = req.tenantId || (req.body as Record<string, string>)?.tenant_id;
+  // Only trust req.tenantId — it is set by tenantMiddleware, which validates a
+  // user-supplied tenant_id against the JWT (matches or super-admin). Reading
+  // req.body.tenant_id directly here would bypass that validation, the same
+  // class of bug as the 2026-05-21 anonymous-tenant hole (see tenantMiddleware).
+  const tenantId = req.tenantId;
   if (!tenantId) {
-    void reply.status(400).send({ error: 'tenant_id is required' });
+    // No authenticated session → the real failure is authentication, not a
+    // missing field; say so (401) instead of the misleading 400.
+    if (!req.auth) {
+      void reply.status(401).send({ success: false, error: 'Authentication required' });
+    } else {
+      void reply.status(400).send({ success: false, error: 'tenant_id is required' });
+    }
     return null;
   }
   return tenantId;
@@ -241,6 +251,32 @@ export function tenantMiddleware(app: AppFastifyInstance) {
   app.addHook('preHandler', async (request: AppRequest, reply) => {
     if (request.method === 'OPTIONS') return;
     if (isTenantExempt(request.url)) return;
+
+    // Tenant-scoped routes require an authenticated session. A user-supplied
+    // tenant_id (query or body) is only ever a *selector* within the tenants
+    // the JWT permits — never a substitute for authentication. Without a JWT
+    // there is nothing to validate the supplied tenant_id against, so the
+    // request must be rejected here, before any tenant resolution trusts it.
+    //
+    // Origin: 2026-05-21 — an anonymous request with `?tenant_id=<uuid>` (no
+    // Authorization header) resolved that tenant below and returned its data
+    // (read + write + delete) with zero auth. RLS faithfully scoped to the
+    // attacker-chosen tenant; RLS was never authentication. The 2026-05-06
+    // cross-tenant override guard only fired when a jwtTenant already existed,
+    // so it missed the unauthenticated case entirely. Public routes that
+    // legitimately need no tenant (login, password reset, demo, metrics,
+    // OAuth callbacks, HMAC-signed webhooks) are allowed through; everything
+    // else fails closed.
+    const urlPath = request.url.split('?')[0];
+    const isPublic =
+      PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/');
+    if (!isPublic && !request.auth) {
+      request.log.warn(
+        { event: 'unauthenticated_tenant_route', url: request.url, ip: request.ip },
+        'unauthenticated_tenant_route'
+      );
+      return reply.status(401).send({ success: false, error: 'Authentication required' });
+    }
 
     const SUPER_ADMIN = '00000000-0000-0000-0000-000000000000';
     const queryTenant = (request.query as Record<string, string>)?.tenant_id;

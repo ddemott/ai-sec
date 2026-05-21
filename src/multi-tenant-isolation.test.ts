@@ -960,3 +960,110 @@ describe('Probe 7: malformed tenant_id sanitization', () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Probe 8: UNAUTHENTICATED tenant-route access via attacker-supplied
+// tenant_id (2026-05-21)
+//
+// The 2026-05-06 cross-tenant override guard (Probe 1) only fired when a
+// jwtTenant already existed — it answered "can an authenticated tenant-A
+// user reach tenant B?". It never answered "can a caller with NO token at
+// all reach ANY tenant?". The answer, found 2026-05-21, was YES: a request
+// with no Authorization header and `?tenant_id=<uuid>` (or a body
+// tenant_id) had `candidate || jwtTenant` resolve to the attacker-supplied
+// candidate, requireTenantId accepted it, withTenantClient scoped RLS to
+// it, and the route returned that tenant's data — read AND write AND
+// delete — with zero authentication.
+//
+// Fix: tenantMiddleware now rejects any non-public, non-exempt request that
+// carries no req.auth (401), before any tenant resolution can trust the
+// supplied tenant_id. requireTenantId no longer falls back to body.tenant_id.
+//
+// 5W for sad-path failures:
+//   WHO   — an unauthenticated caller (no JWT at all)
+//   WHAT  — supplies tenant_id via query or body to read/write/delete data
+//   WHEN  — every request to a tenant-scoped route with no Authorization
+//   WHERE — src/middleware.ts tenantMiddleware auth gate + requireTenantId
+//   WHY   — anonymous access to any tenant's data is a full breach; this is
+//           strictly worse than Probe 1 (no credentials needed at all)
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('Probe 8: unauthenticated tenant-route access must be rejected', () => {
+  it('SAD: GET /services?tenant_id=<A> with NO auth header must 401 and leak nothing', async () => {
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/services?tenant_id=${A.id}`,
+    });
+    expect(res.statusCode).toBe(401);
+    // Body must not contain any tenant data — only the auth error.
+    expect(res.body).not.toContain('A-Service');
+    expect(res.body).not.toContain(A.id);
+  });
+
+  it('SAD: GET /customers?tenant_id=<B> with NO auth header must 401', async () => {
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/customers?tenant_id=${B.id}`,
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toContain('B-Secret-Customer');
+  });
+
+  it('SAD: DELETE /services/:b-id/delete with NO auth header must 401 and leave B intact', async () => {
+    // WHY: the write/delete path rode the same hole — an anonymous DELETE
+    //      with a real id would have destroyed another tenant's row. Assert
+    //      the gate blocks it BEFORE the handler runs, and B's row survives.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/services/${B.serviceId}/delete?tenant_id=${B.id}`,
+    });
+    expect(res.statusCode).toBe(401);
+    const check = await setup.query('SELECT is_deleted FROM services WHERE service_id = $1', [
+      B.serviceId,
+    ]);
+    expect(check.rows[0].is_deleted).toBe(false);
+  });
+
+  it('SAD: POST /services/create with body.tenant_id=<B> and NO auth must 401 and insert nothing', async () => {
+    // WHY: body-supplied tenant_id was the second injection surface (the
+    //      requireTenantId body fallback). An anonymous POST must not create
+    //      a row under any tenant.
+    if (!dbAvailable) return;
+    const beforeCount = await setup.query('SELECT COUNT(*) FROM services WHERE tenant_id = $1', [
+      B.id,
+    ]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/services/create',
+      headers: { 'content-type': 'application/json' },
+      payload: { tenant_id: B.id, name: 'Anon-Injected-Service', duration_minutes: 30 },
+    });
+    expect(res.statusCode).toBe(401);
+    const afterCount = await setup.query('SELECT COUNT(*) FROM services WHERE tenant_id = $1', [
+      B.id,
+    ]);
+    expect(afterCount.rows[0].count).toBe(beforeCount.rows[0].count);
+    const check = await setup.query(
+      "SELECT service_id FROM services WHERE name = 'Anon-Injected-Service'"
+    );
+    expect(check.rows).toHaveLength(0);
+  });
+
+  it('HAPPY: same route WITH a valid A token still returns A data (gate is auth-shaped, not blanket)', async () => {
+    // WHY: positive control — the fix must reject only the *unauthenticated*
+    //      case. A legitimate authenticated request on its own tenant must
+    //      still succeed, proving the gate keys on auth presence, not on the
+    //      mere presence of a tenant_id query param.
+    if (!dbAvailable) return;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/services?tenant_id=${A.id}`,
+      headers: { authorization: `Bearer ${A.token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().find((r) => r.name === 'A-Service')).toBeTruthy();
+  });
+});

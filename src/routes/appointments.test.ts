@@ -655,7 +655,10 @@ describe('GET /appointments', () => {
 
     const res = await app.inject({ method: 'GET', url: '/appointments' });
 
-    expect(res.statusCode).toBe(400);
+    // 2026-05-21: no auth context → 401 (authentication is the real failure),
+    // not the old misleading 400. Load-bearing assertion unchanged: the gate
+    // fires BEFORE any DB query runs.
+    expect(res.statusCode).toBe(401);
     const dataQueries = handle.queries.filter(
       (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET')
     );
@@ -743,8 +746,9 @@ describe('DELETE /appointments/:id', () => {
       url: `/appointments/${APPOINTMENT_ID}`,
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: 'tenant_id is required' });
+    // 2026-05-21: unauthenticated → 401 before any DB activity or sync.
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ error: 'Authentication required' });
     // Critical: zero DB activity AND no sync dispatch. requireTenantId
     // must short-circuit BEFORE the route reaches the DELETE or the
     // fire-and-forget syncAppointmentToAll call.
@@ -832,8 +836,9 @@ describe('POST /appointments/:id/cancel', () => {
       url: `/appointments/${APPOINTMENT_ID}/cancel`,
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: 'tenant_id is required' });
+    // 2026-05-21: unauthenticated → 401 before the cancel UPDATE or sync.
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ error: 'Authentication required' });
     const dataQueries = handle.queries.filter(
       (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET')
     );
@@ -1076,8 +1081,9 @@ describe('POST /appointments/:id/reactivate', () => {
       url: `/appointments/${APPOINTMENT_ID}/reactivate`,
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: 'tenant_id is required' });
+    // 2026-05-21: unauthenticated → 401 before any SELECT/UPDATE/sync.
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ error: 'Authentication required' });
     const dataQueries = handle.queries.filter(
       (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET')
     );
