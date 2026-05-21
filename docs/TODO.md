@@ -1,11 +1,13 @@
 # TODO
 
-**Status at a Glance** (as of 2026-05-19)
+**Status at a Glance** (as of 2026-05-21)
 
+- **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
+- **CI**: green again after a ~3-day red streak (stale migration-count drift, fixed `cd185dd`). Agent package now gated in CI. Tests: backend 1,930 · dashboard 700 · agent 99 · E2E green.
 - **Voice / Telnyx**: `+1-630-937-9478` unreachable from PSTN. LERG ticket open. Zero inbound CDRs. Blocks all live voice validation and DynaTire beta.
-- **Env vars**: `DASHBOARD_URL` + `SENTRY_DSN` not yet set on Railway (user action).
+- **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0: Railway deploy is NOT gated on CI** (deploys on push regardless of result).
 - **Browser validation**: Role gating + invite flow needs real-browser testing.
-- **UX audit pass 2 (2026-05-19)**: `ux-review-notes.md` at repo root catalogs trust/consistency/empty-state findings across ~30 dashboard components. **Triaged 2026-05-20** into P0–P3 clusters (see UX audit pass 2 section); fixes not yet started. File still untracked.
+- **UX audit pass 2 (2026-05-19)**: `ux-review-notes.md` at repo root catalogs findings across ~30 dashboard components. **Triaged 2026-05-20** into P0–P3 clusters. Cluster-B defect 1 (service-duration field) fixed 2026-05-21; rest open.
 
 Everything else complete or tracked below.
 
@@ -115,9 +117,9 @@ Source: `ux-review-notes.md` at repo root — ~60 findings across ~30 dashboard 
   - `AnalyticsView.tsx` — keep summaries neutral, no implicit scoring
   - (related medium) `AppointmentDetailPanel.tsx` — alignment-blocked message reads as warning banner; make factual
 - [ ] **Cluster B — verified defects** (3 sites, independent fixes)
-  - `SetupWizard/StepServices.tsx:149` — `parseInt(e.target.value) || 0` silently collapses a cleared/invalid duration to `0`. Keep raw input state separate; validate before save.
-  - `SuperAdminDashboard.tsx` — business-search input has no state/filter/empty-search logic (false affordance in a busy admin view). Wire it to tenant filtering w/ no-match state, or remove until real.
-  - `SetupWizard/index.tsx:101` — template seeding is a sequential `await Api.services.create` loop; mid-loop failure (catch at :116 only `console.warn`s) leaves setup half-seeded with no UI status or retry. Surface seeding status + reconcile/retry the starter-data path.
+  - [x] `SetupWizard/StepServices.tsx` — DONE 2026-05-21. Duration field now uses a raw-text display state; clearing leaves it empty (was forced to `0`), empty propagates `0` (saveService's `< 1` guard rejects it), never NaN. +3-test regression spec `StepServices.test.tsx`. (Note: it was an input-UX bug, not silent data loss — `saveService` already rejected `0`.)
+  - [ ] `SuperAdminDashboard.tsx` — business-search input is uncontrolled/dead. **Design note (found 2026-05-21):** the tenant list is drag-reorderable (`dragIndex`/`hasReordered`, reorder mutates the full `tenants` array). Naive filtering corrupts reorder index math — so wire search to filter the *displayed* rows AND **disable drag while a search is active** + add a filtered-no-match state. Not a plain input wire-up.
+  - [ ] `SetupWizard/index.tsx:101` — template seeding is a sequential `await Api.services.create` loop; mid-loop failure (catch at :116 only `console.warn`s) leaves setup half-seeded with no UI status or retry. Needs retry-UX design (per-item status + reconcile/retry the starter-data path) — focused work, not a one-liner.
 
 ### P1 — a11y + shared-primitive consistency (cluster fixes)
 

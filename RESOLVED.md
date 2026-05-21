@@ -30,6 +30,20 @@ POST /services/create  {tenant_id:<uuid>,...}  # no auth → reached handler
 
 `GET /` and `GET /demo` re-read their HTML from disk on every request (blocking the event loop; spammable on unauthenticated routes). Moved the reads to module load (`LANDING_HTML` / `DEMO_HTML` constants); `{{DASHBOARD_URL}}` token still substituted per-request. `/demo` dropped from a per-request fs read to ~0.6ms.
 
+### Production hardening + gap fixes (same day, 12 commits total `2461f08..cd185dd`, CI green, live in prod)
+
+- **Deep `/ready`** — DB ping + pool saturation stats (`total/idle/waiting`), 503 when DB unreachable. `/health` stays shallow liveness. A monitoring signal, not a traffic gate.
+- **Pool fail-fast** — `connectionTimeoutMillis=5000`: a checkout that can't get a slot under load now errors fast (→ `errors_total`) instead of hanging forever. The server-side GUCs (`statement/lock/idle-txn`) don't cap client checkout; this does.
+- **Alerting visibility** — `withHandler`'s unhandled-error branch routes through `logError` so unknown route errors (incl. pool-checkout timeouts) increment `errors_total` and reach Sentry; previously a raw `req.log.error` did neither.
+- **Gap 3 — bad client input → 400, not 500** — `withHandler` maps Postgres class-22 data exceptions (`22P02` etc., e.g. a non-UUID `:id`) to 400 and does NOT tick `errors_total`. Fixes ~12 unvalidated `:id` routes in one place + stops client garbage polluting 5xx/error-rate alerts. Verified live (`GET /records/customers/not-a-uuid/history` 500→400).
+- **Gap 1A — agent graceful recovery** — `agent/src/prompt.ts` "Technical glitches" section: the LLM never speaks raw error text (`500`/`timed out`/`backend`), recovers in-character, never stalls silently on a backend tool failure. (Exact wording is owner-tunable.)
+- **Gap 1 — agent dead-air guard** — the agent `entry` session-build/start/greeting is wrapped in try/catch → `runFallback`; a `session.start`/plugin-init throw now degrades to a "sorry" message instead of a silent job crash.
+- **Testability extractions** — `jsonContentTypeParser` (+ bad-JSON now 400, was 500) and `readinessHandler` extracted to unit-tested modules; the route-test harness used a *different* parser, so the real one had never been covered (it's the one that once hung every JSON POST).
+- **CI** — added an `agent` job (tsc + 99 tests; previously ungated entirely). E2E coverage added (anonymous-tenant 401, `/ready`, malformed-JSON). Fixed the `verify:claude-md` drift (migration count 122→126) that had main CI red ~3 days — first all-green 3-job run.
+- **UX Cluster-B defect 1** — `SetupWizard/StepServices` duration field is clearable again (was forced to `0` by `parseInt||0`); 0 renders empty, save still rejects it. +regression spec.
+
+**Still open (TODO → Production hardening):** P0 gate Railway deploy on CI green, P1 E2E-in-CI (needs Actions secrets), P2 healthcheck→`/ready`, Railway `METRICS_TOKEN`/`BETTER_STACK_TOKEN` + alert rules, gap-1 B/C, UX Cluster-B 2/3.
+
 ---
 
 ## 2026-05-17 — Production migration apply: prod brought from 86 → 122 migrations
