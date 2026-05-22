@@ -69,6 +69,10 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 }) => {
   const vocab = useVocabulary();
   const [customerId, setCustomerId] = useState('');
+  // Local copy of the customer list so an inline-created walk-in appears in
+  // the combobox immediately, without waiting for the parent's `customers`
+  // prop to refetch. Seeded from props and re-synced when they change.
+  const [localCustomers, setLocalCustomers] = useState<QuickBookCustomer[]>(customers);
   const [serviceId, setServiceId] = useState('');
   const [resourceId, setResourceId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
@@ -149,6 +153,13 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   const noEligibleEmployees = hasServicePicked && eligibleEmployees.length === 0;
   const noEligibleResources = hasServicePicked && eligibleResources.length === 0;
   const alignmentBlocked = noEligibleEmployees || noEligibleResources;
+
+  // Keep the local list in sync when the parent supplies a fresh customers
+  // prop (e.g. after onBooked → reload). Inline-created customers added to
+  // localCustomers survive until the next prop change replaces the array.
+  useEffect(() => {
+    setLocalCustomers(customers);
+  }, [customers]);
 
   useEffect(() => {
     if (isOpen && prefill) {
@@ -257,9 +268,9 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           )}
         </div>
 
-        {/* Customer search */}
+        {/* Customer search + inline walk-in creation */}
         <CustomerCombobox
-          customers={customers.map((c) => ({
+          customers={localCustomers.map((c) => ({
             customer_id: c.customer_id,
             name: c.name ?? null,
             phone: c.phone ?? null,
@@ -268,6 +279,26 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           onChange={setCustomerId}
           selectTestId="quick-book-customer"
           searchTestId="quick-book-customer-search"
+          onCreateCustomer={async (draft) => {
+            // Create the walk-in, then add to the local list so the new
+            // option is selectable without leaving the panel. Returning the
+            // CustomerOption lets the combobox select it via onChange.
+            // `notes` maps to metadata.notes (the column the record stores +
+            // the detail panel reads) rather than a top-level field the
+            // backend would silently drop.
+            const { notes, ...rest } = draft;
+            const res = await Api.customers.create(tenantId, {
+              ...rest,
+              metadata: notes ? { notes } : undefined,
+            });
+            const c = res?.customer;
+            if (!c) return null;
+            setLocalCustomers((prev) => [
+              { customer_id: c.customer_id, name: c.name, phone: c.phone },
+              ...prev,
+            ]);
+            return { customer_id: c.customer_id, name: c.name, phone: c.phone };
+          }}
         />
 
         {/* Service */}

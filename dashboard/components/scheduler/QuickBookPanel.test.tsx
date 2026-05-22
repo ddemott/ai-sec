@@ -6,6 +6,7 @@ import '@testing-library/jest-dom';
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
     appointments: { create: vi.fn() },
+    customers: { create: vi.fn() },
     mappings: {
       listServiceEmployee: vi.fn(),
       listServiceResource: vi.fn(),
@@ -46,6 +47,7 @@ const services = [
 
 beforeEach(() => {
   mockApi.appointments.create.mockReset().mockResolvedValue({ success: true });
+  mockApi.customers.create.mockReset();
   // Tire Mount → only Mike + only Bay 1 are valid.
   mockApi.mappings.listServiceEmployee
     .mockReset()
@@ -257,5 +259,91 @@ describe('QuickBookPanel — conflict modal wiring (slice 2, 2026-05-08)', () =>
       expect(screen.getByText('Employee is not on shift during this time')).toBeInTheDocument()
     );
     expect(screen.queryByText('That time is already booked')).not.toBeInTheDocument();
+  });
+});
+
+describe('QuickBookPanel — walk-in creation (modal)', () => {
+  test('creating a walk-in calls customers.create with split name + auto-selects the new customer', async () => {
+    // WHO: front-desk operator with a walk-in not yet in the system
+    // WHAT: the walk-in modal creates the record via Api.customers.create
+    //        (split first/last name, E.164 phone) and the combobox selects
+    //        it — no leaving the panel to the Customers tab and back
+    // WHEN: the operator clicks "New customer", fills first/last + phone, Add & select
+    // WHERE: QuickBookPanel onCreateCustomer wiring → CustomerCombobox → CustomerCreateModal
+    // WHY: pre-fix, a walk-in could not be booked at all from Quick Book and
+    //       the first attempt at the fix used a single "Full name" field that
+    //       couldn't populate the split name columns. This pins the whole
+    //       create→append→select flow with the split name the record stores;
+    //       it fails if the API isn't called with the tenant + split draft,
+    //       or if the new customer isn't selected after.
+    mockApi.customers.create.mockResolvedValue({
+      customer: { customer_id: 'cust-new', name: 'Wendy Walkin', phone: '+16305559999' },
+    });
+
+    renderPanel();
+    await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
+
+    // Open the modal and fill it.
+    fireEvent.click(screen.getByTestId('customer-create-open'));
+    fireEvent.change(screen.getByTestId('customer-create-first-name'), {
+      target: { value: 'Wendy' },
+    });
+    fireEvent.change(screen.getByTestId('customer-create-last-name'), {
+      target: { value: 'Walkin' },
+    });
+    fireEvent.change(screen.getByLabelText('Phone Number'), {
+      target: { value: '6305559999' },
+    });
+    fireEvent.click(screen.getByTestId('customer-create-save'));
+
+    // API called with tenant + the split draft + derived full name + E.164 phone.
+    await waitFor(() =>
+      expect(mockApi.customers.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          first_name: 'Wendy',
+          last_name: 'Walkin',
+          name: 'Wendy Walkin',
+          phone: '+16305559999',
+        })
+      )
+    );
+
+    // Modal closed and the new customer is now the selected option.
+    await waitFor(() =>
+      expect(screen.queryByTestId('customer-create-form')).not.toBeInTheDocument()
+    );
+    const select = screen.getByTestId<HTMLSelectElement>('quick-book-customer');
+    expect(select.value).toBe('cust-new');
+    expect(Array.from(select.options).some((o) => o.text.includes('Wendy Walkin'))).toBe(true);
+  });
+
+  test('failed customer create surfaces an error and does not select a phantom customer', async () => {
+    // WHO: operator when the create POST fails (e.g. duplicate phone, server 500)
+    // WHAT: the modal shows an error and no customer is selected
+    // WHEN: Api.customers.create resolves without a `customer` (treated as failure)
+    // WHERE: QuickBookPanel onCreateCustomer returns null → CustomerCreateModal failure branch
+    // WHY: selecting a customer_id that was never persisted would let the
+    //       operator book against a non-existent customer; the failure must
+    //       block selection and keep the modal open for a retry
+    mockApi.customers.create.mockResolvedValue({ success: false, error: 'Duplicate phone' });
+
+    renderPanel();
+    await waitFor(() => expect(mockApi.mappings.listServiceEmployee).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByTestId('customer-create-open'));
+    fireEvent.change(screen.getByTestId('customer-create-first-name'), {
+      target: { value: 'Wendy' },
+    });
+    fireEvent.change(screen.getByLabelText('Phone Number'), {
+      target: { value: '6305559999' },
+    });
+    fireEvent.click(screen.getByTestId('customer-create-save'));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // Modal stays open; no selection happened (select still on its empty prompt).
+    expect(screen.getByTestId('customer-create-form')).toBeInTheDocument();
+    const select = screen.getByTestId<HTMLSelectElement>('quick-book-customer');
+    expect(select.value).toBe('');
   });
 });

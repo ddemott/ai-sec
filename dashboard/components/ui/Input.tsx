@@ -25,7 +25,12 @@ function handleFocusScrollIntoView(e: React.FocusEvent<HTMLInputElement>) {
   // viewport settle. 250ms covers most iOS Safari keyboard
   // animations.
   setTimeout(() => {
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Guard: scrollIntoView is absent in jsdom (test env) and on a few
+    // older browsers — calling it unconditionally throws when the deferred
+    // timer fires (e.g. after a modal autofocuses an input then closes).
+    if (typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
   }, 250);
 }
 
