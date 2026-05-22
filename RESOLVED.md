@@ -41,6 +41,7 @@ POST /services/create  {tenant_id:<uuid>,...}  # no auth → reached handler
 - **Testability extractions** — `jsonContentTypeParser` (+ bad-JSON now 400, was 500) and `readinessHandler` extracted to unit-tested modules; the route-test harness used a *different* parser, so the real one had never been covered (it's the one that once hung every JSON POST).
 - **CI** — added an `agent` job (tsc + 99 tests; previously ungated entirely). E2E coverage added (anonymous-tenant 401, `/ready`, malformed-JSON). Fixed the `verify:claude-md` drift (migration count 122→126) that had main CI red ~3 days — first all-green 3-job run.
 - **UX Cluster-B defect 1** — `SetupWizard/StepServices` duration field is clearable again (was forced to `0` by `parseInt||0`); 0 renders empty, save still rejects it. +regression spec.
+- **UX Cluster-B defect 2** — `SuperAdminDashboard` business-search input was uncontrolled/dead; now filters the sidebar cards by name with a no-match message, and disables drag-reorder while filtering (new `draggable` prop on `TenantCard` — reorder is full-array-index based, so a filtered subset would corrupt order). +3 tests.
 
 **Still open (TODO → Production hardening):** P0 gate Railway deploy on CI green, P1 E2E-in-CI (needs Actions secrets), P2 healthcheck→`/ready`, Railway `METRICS_TOKEN`/`BETTER_STACK_TOKEN` + alert rules, gap-1 B/C, UX Cluster-B 2/3.
 
