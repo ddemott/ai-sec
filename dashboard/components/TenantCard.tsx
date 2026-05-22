@@ -8,6 +8,12 @@ interface TenantCardProps {
   isSelected: boolean;
   isDragging: boolean;
   index: number;
+  /**
+   * Whether this card can be drag-reordered. Defaults true. Disabled while a
+   * search filter is active: reorder math operates on the FULL tenants array
+   * by index, so dragging within a filtered subset would corrupt the order.
+   */
+  draggable?: boolean;
   onSelect: () => void;
   onDragStart: (index: number) => void;
   onDragOver: (e: React.DragEvent, index: number) => void;
@@ -19,6 +25,7 @@ export function TenantCard({
   isSelected,
   isDragging,
   index,
+  draggable = true,
   onSelect,
   onDragStart,
   onDragOver,
@@ -26,10 +33,10 @@ export function TenantCard({
 }: TenantCardProps) {
   return (
     <div
-      draggable
-      onDragStart={() => onDragStart(index)}
-      onDragOver={(e) => onDragOver(e, index)}
-      onDragEnd={onDragEnd}
+      draggable={draggable}
+      onDragStart={draggable ? () => onDragStart(index) : undefined}
+      onDragOver={draggable ? (e) => onDragOver(e, index) : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
       onClick={onSelect}
       data-testid={`tenant-card-${tenant.tenant_id}`}
       className={`p-4 border-b cursor-pointer transition flex justify-between items-center

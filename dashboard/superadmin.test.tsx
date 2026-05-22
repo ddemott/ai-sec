@@ -298,3 +298,63 @@ describe('SuperAdminDashboard sad paths', () => {
     // WHO: super-admin | WHAT: attempt delete with wrong name | WHEN: confirmation text does not match | WHERE: SuperAdminDashboard delete modal | WHY: mistyped confirmation must block deletion to prevent accidental permanent data loss
   })
 })
+
+// ── Business-list search (Cluster-B defect 2, 2026-05-21) ──────────────────
+function buildTwoTenantFetch() {
+  const tenants = [
+    { tenant_id: 'tenant-1', name: 'DynaTire PoC', business_type: 'mobile-tire', timezone: 'America/Los_Angeles', voice_id: null, system_prompt: null, first_message: null, owner_phone: null },
+    { tenant_id: 'tenant-2', name: 'Bella Hair Studio', business_type: 'salon', timezone: 'America/Chicago', voice_id: null, system_prompt: null, first_message: null, owner_phone: null },
+  ]
+  return vi.fn<typeof fetch>(async (input) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    if (url.endsWith('/tenants')) return mockJsonResponse(tenants)
+    if (url.endsWith('/templates')) return mockJsonResponse([])
+    return mockJsonResponse({})
+  })
+}
+
+test('search: filters the business list by name', async () => {
+  // WHO: super-admin scanning a long business list | WHAT: typing narrows
+  // the cards | WHERE: SuperAdminDashboard search input | WHY: pre-fix the
+  // input was uncontrolled/dead (a false affordance).
+  vi.spyOn(globalThis, 'fetch').mockImplementation(buildTwoTenantFetch())
+  render(<SuperAdminDashboard />)
+  await screen.findAllByText(/DynaTire PoC/i)
+
+  const box = screen.getByLabelText('Search businesses')
+  fireEvent.change(box, { target: { value: 'bella' } })
+
+  // Assert on sidebar CARDS (the selected tenant's name also shows in the
+  // detail pane, so a global text query would be misleading).
+  expect(screen.queryByTestId('tenant-card-tenant-2')).toBeTruthy() // Bella
+  expect(screen.queryByTestId('tenant-card-tenant-1')).toBeNull() // DynaTire filtered out
+})
+
+test('search: shows a no-match message when nothing matches', async () => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(buildTwoTenantFetch())
+  render(<SuperAdminDashboard />)
+  await screen.findAllByText(/DynaTire PoC/i)
+
+  fireEvent.change(screen.getByLabelText('Search businesses'), { target: { value: 'zzz-no-such' } })
+
+  expect(screen.getByText(/No businesses match/i)).toBeTruthy()
+  // No sidebar cards rendered (detail pane may still show the prior selection).
+  expect(screen.queryByTestId('tenant-card-tenant-1')).toBeNull()
+  expect(screen.queryByTestId('tenant-card-tenant-2')).toBeNull()
+})
+
+test('search: disables drag-reorder while a filter is active', async () => {
+  // WHY: reorder math is by full-array index; dragging a filtered subset
+  // would corrupt the saved order. Cards must not be draggable while filtering.
+  vi.spyOn(globalThis, 'fetch').mockImplementation(buildTwoTenantFetch())
+  render(<SuperAdminDashboard />)
+  await screen.findAllByText(/DynaTire PoC/i)
+
+  // Unfiltered: cards are draggable.
+  expect(screen.getByTestId('tenant-card-tenant-1').getAttribute('draggable')).toBe('true')
+
+  fireEvent.change(screen.getByLabelText('Search businesses'), { target: { value: 'bella' } })
+
+  // Filtered: the visible card is NOT draggable.
+  expect(screen.getByTestId('tenant-card-tenant-2').getAttribute('draggable')).toBe('false')
+})

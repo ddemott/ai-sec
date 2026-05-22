@@ -47,6 +47,10 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
   const [hasReordered, setHasReordered] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
+  // Business-list search. Filters the displayed cards by name; drag-reorder is
+  // disabled while a filter is active (reorder math is by full-array index).
+  const [search, setSearch] = useState('');
+
   // Delete confirmation state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -324,7 +328,10 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search businesses..."
+              aria-label="Search businesses"
               className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none transition-colors duration-200"
               style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }}
             />
@@ -357,22 +364,41 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {tenants.map((t, idx) => (
-            <TenantCard
-              key={t.tenant_id}
-              tenant={t}
-              isSelected={selectedTenant?.tenant_id === t.tenant_id}
-              isDragging={dragIndex === idx}
-              index={idx}
-              onSelect={() => {
-                setSelectedTenant(t);
-                if (onSelectTenant) onSelectTenant(t.tenant_id, t.name);
-              }}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-            />
-          ))}
+          {(() => {
+            const q = search.trim().toLowerCase();
+            const isFiltering = q.length > 0;
+            // When not filtering, this IS `tenants` (same indices → drag math
+            // stays valid). When filtering, drag is disabled so index is moot.
+            const visible = isFiltering
+              ? tenants.filter((t) => t.name.toLowerCase().includes(q))
+              : tenants;
+
+            if (isFiltering && visible.length === 0) {
+              return (
+                <div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  No businesses match “{search.trim()}”.
+                </div>
+              );
+            }
+
+            return visible.map((t, idx) => (
+              <TenantCard
+                key={t.tenant_id}
+                tenant={t}
+                isSelected={selectedTenant?.tenant_id === t.tenant_id}
+                isDragging={dragIndex === idx}
+                index={idx}
+                draggable={!isFiltering}
+                onSelect={() => {
+                  setSelectedTenant(t);
+                  if (onSelectTenant) onSelectTenant(t.tenant_id, t.name);
+                }}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+              />
+            ));
+          })()}
         </div>
       </section>
 
