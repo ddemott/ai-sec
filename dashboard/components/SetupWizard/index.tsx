@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronRight, ChevronLeft, Check, X, Wand2 } from 'lucide-react';
 import { Api } from '../../lib/api';
 import { useStaticData } from '../../lib/hooks';
@@ -45,6 +45,10 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   const vocab = useVocabulary();
   const STEP_LABELS = getStepLabels(vocab);
   const [step, setStep] = useState<WizardStep>(1);
+  // Surfaced when auto-seeding the starter services/resource fails. Pre-fix
+  // the failure was swallowed (console.warn only), leaving setup half-seeded
+  // with no signal or recovery. Drives the retry banner in the body.
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   const crud = useWizardCrud(tenantId, step, refresh);
 
@@ -61,6 +65,11 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   }, [isOpen]);
 
   const seedingRef = useRef(false);
+  // The starter services we committed to seeding, captured ONCE when the
+  // catalog was empty. Reconciling against this (not the live `services`)
+  // means a retry after a partial failure finishes the original set without
+  // topping-up a user who already has their own services.
+  const seedTargetRef = useRef<string[]>([]);
 
   // Reset on open
   useEffect(() => {
@@ -68,6 +77,7 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
       setStep(1);
       crud.resetAll();
       seedingRef.current = false;
+      setSeedError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -84,42 +94,54 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   // default named by the vocabulary ("Main Location" for generic
   // templates, "<vocab.resource_label> 1" otherwise). Owners with
   // multi-station shops keep using "Add a <resource>" as before.
+  // Seed missing starter data. Reconcile (not all-or-nothing): creates only
+  // the services in seedTargetRef not yet present + a default resource if none
+  // exists, then refreshes. Safe to call repeatedly — that's what makes the
+  // retry below able to finish a partial seed. On failure it sets seedError
+  // (was previously a silent console.warn) so the body can offer a Retry.
+  const runSeed = useCallback(async () => {
+    if (!tenantId) return;
+    seedingRef.current = true;
+    setSeedError(null);
+    try {
+      const [config, templates] = await Promise.all([
+        Api.tenants.getConfig(tenantId),
+        Api.templates.listFull(),
+      ]);
+      const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
+
+      // Capture the target set ONCE, only when the catalog is empty — so a
+      // user who already has services never gets template ones added.
+      if (services.length === 0 && seedTargetRef.current.length === 0) {
+        seedTargetRef.current = tpl?.example_services ?? [];
+      }
+      const missing = seedTargetRef.current.filter((name) => !services.some((s) => s.name === name));
+      for (const name of missing) {
+        await Api.services.create(tenantId, { name, duration_minutes: 30 });
+      }
+
+      if (resources.length === 0) {
+        const defaultName =
+          vocab.resource_label === 'Resource' ? 'Main Location' : `${vocab.resource_label} 1`;
+        await Api.resources.create(tenantId, {
+          name: defaultName,
+          description: 'Auto-created — rename or add more in this step',
+        });
+      }
+
+      await refresh();
+    } catch (err) {
+      setSeedError(err instanceof Error ? err.message : 'Failed to set up starter data');
+    }
+  }, [tenantId, services, resources, vocab, refresh]);
+
+  // Auto-seed on open when nothing exists yet. seedingRef gates it to one
+  // auto-run; the Retry button calls runSeed() directly to bypass the gate.
   useEffect(() => {
     if (!isOpen || !tenantId || loading || seedingRef.current) return;
     if (services.length > 0 && resources.length > 0) return;
-    seedingRef.current = true;
-    void seedFromTemplate();
-    async function seedFromTemplate() {
-      try {
-        const [config, templates] = await Promise.all([
-          Api.tenants.getConfig(tenantId),
-          Api.templates.listFull(),
-        ]);
-        const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
-
-        if (services.length === 0 && tpl?.example_services?.length) {
-          for (const name of tpl.example_services) {
-            await Api.services.create(tenantId, { name, duration_minutes: 30 });
-          }
-        }
-
-        if (resources.length === 0) {
-          const defaultName =
-            vocab.resource_label === 'Resource' ? 'Main Location' : `${vocab.resource_label} 1`;
-          await Api.resources.create(tenantId, {
-            name: defaultName,
-            description: 'Auto-created — rename or add more in this step',
-          });
-        }
-
-        await refresh();
-      } catch (err) {
-        // Non-critical — user can still add services and resources manually
-        console.warn('Auto-seed from template failed:', err);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tenantId, loading, services.length, resources.length]);
+    void runSeed();
+  }, [isOpen, tenantId, loading, services.length, resources.length, runSeed]);
 
   const activeServices: WizardService[] = services
     .filter((s) => !(s as { is_deleted?: boolean }).is_deleted)
@@ -266,6 +288,20 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
+          {seedError && (
+            <div
+              role="alert"
+              className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2"
+            >
+              <span className="text-xs text-amber-800 dark:text-amber-300">
+                Couldn’t finish setting up your starter {vocab.resource_plural.toLowerCase()} and
+                services. You can add them manually below, or retry.
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => void runSeed()}>
+                Retry
+              </Button>
+            </div>
+          )}
           <WizardStepContent
             step={step}
             services={activeServices}
