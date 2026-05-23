@@ -84,21 +84,20 @@ describe('LoginView copy', () => {
 });
 
 describe('LoginView affordances', () => {
-  test('HAPPY: contact link gives credential-less prospects a real exit', () => {
+  test('HAPPY: signup link gives credential-less prospects a real exit', () => {
     // WHO: Prospect who bookmarked /dashboard directly or followed a
     //       stale link without ever seeing the landing page
-    // WHAT: A visible contact CTA prevents a dead end
-    // WHY: The previous "Start your free trial" link pointed at
-    //       /?trial=true with no signup flow behind it — the user
-    //       would land back on marketing copy. UX audit #8
-    //       (2026-05-18): rephrased to a mailto until self-serve
-    //       signup lands. Test pins both the new text AND the new
-    //       href so a regression that re-introduces the dead route
-    //       fails loudly here.
+    // WHAT: A visible "Create an account" CTA routes them to self-serve signup
+    // WHY: The "Start your free trial" link once pointed at /?trial=true
+    //       with no signup flow behind it (dead end → marketing copy); UX
+    //       audit #8 (2026-05-18) swapped it for a mailto placeholder until
+    //       signup landed. Self-serve signup now exists at /register, so the
+    //       CTA points there. Test pins both the new text AND the /register
+    //       href so a regression back to a dead route/mailto fails loudly.
     render(<LoginView onLoginSuccess={vi.fn()} />);
-    const link = screen.getByRole('link', { name: /contact us for a demo/i });
+    const link = screen.getByRole('link', { name: /create an account/i });
     expect(link).toBeInTheDocument();
-    expect(link.getAttribute('href')).toMatch(/^mailto:/);
+    expect(link.getAttribute('href')).toBe('/register');
   });
 
   test('HAPPY: forgot-password link is preserved', () => {
