@@ -6,7 +6,7 @@ Focus: consistency (PK naming, type shapes), duplication removal, shared-layer e
 
 **Style guide for entries:** Same markers as `docs/TODO.md` (`IN FLIGHT`, `open`, strikethrough on done). Every item must answer "why it matters" under the CLAUDE.md Build Principles (test against real surface or delete; working flat beats dormant abstraction; extract after 3–4 consumers ask).
 
-**Last updated:** 2026-05-27 (major documentation reduction: root `improvement-ideas.md`, `ux-review-notes.md`, `docs/BUGS.md`, `NEEDS-REFACTORING.md` reduced/archived as content is captured elsewhere; Item 1–4 mechanical refactors completed; comment hygiene pass)
+**Last updated:** 2026-05-27 (Item 9 completed: schema alignment guard implemented as `verify-schema-alignment.ts` + tests; also advanced item 6 with phone/name shared extractions)
 
 ---
 
@@ -85,42 +85,46 @@ Focus: consistency (PK naming, type shapes), duplication removal, shared-layer e
 **Size:** small (completed in focused pass)
 **Impact:** medium (consistency win + removes a special case)
 
-### 5. Decide & document the `id` vs `<entity>_id` rule for non-DB, in-memory shapes (CustomerNote, API DTOs, test fixtures)
+### ~~5. Decide & document the `id` vs `<entity>_id` rule for non-DB, in-memory shapes (CustomerNote, API DTOs, test fixtures)~~
 
-**Current:** `CustomerNote` (both copies) uses bare `id: string`. Many test fixtures and some internal DTOs (OrderedNumber, FakeItem, TenantFixture) also use generic `id`.
+**Status: done 2026-05-27.** Decision (a) with carve-out: default to `<entity>_id` (e.g. `note_id`) for any shape that represents an entity-like object with a stable identifier (even JSON-stored notes, lightweight DTOs, etc.). Bare `id` only for purely local/ephemeral UI state (tab keys, theme names, wizard steps, render-only keys with no wire meaning).
 
-**What to do:** Either:
+- Renamed `CustomerNote.id → note_id` in `shared/voiceCrm.ts` (the single source).
+- Updated the one call site (`key={note.note_id}` in `VoiceCallsView.tsx`).
+- Full project grep: zero remaining `CustomerNote` `id` or `note.id` references in source.
+- Both `npx tsc --noEmit` (dashboard) and `npx tsc -p tsconfig.json --noEmit` (root) clean.
+- Added explicit rule + carve-out guidance + pilot example to CLAUDE.md under "PK column-name convention".
+- Updated this file.
 
-- (a) Standardize virtual/local identifiers to `note_id` / `<thing>_id` for consistency, or
-- (b) Explicitly carve them out in `CLAUDE.md` ("bare `id` only for ephemeral client-side objects never persisted or sent over the wire as primary keys").
+**Verification performed:** (as required by AGENTS.md)
 
-Add a one-sentence rule and a grep guard in `scripts/verify-claude-md.ts` if (b) is chosen.
+- `grep -r "note\.id\|CustomerNote.*id:" --include="*.ts" --include="*.tsx" .` (excluding node_modules) → only the new `note_id` definition.
+- Typechecks: both clean (exit 0, no output).
+- No other constructions of CustomerNote objects with bare `id` existed in the tree.
 
 **Why it matters:** The PK convention retrofit was a 20+ table, multi-week effort. Leaving "id" lying around in types that look like entities creates exactly the confusion that produced the past `number` vs UUID bug.
 
-**Size:** tiny (30min doc + optional 10min script tweak)
-**Impact:** low but compounds over time
+**Size:** tiny (mechanical rename + doc)
+**Impact:** low but compounds over time (mental model hygiene)
 
 ---
 
 ## P2 — Shared Layer & Structure Opportunities
 
-### 6. Audit + expand `shared/` for other pure cross-boundary logic
+### ~~6. Audit + expand `shared/` for other pure cross-boundary logic~~ (in progress)
 
-**Candidates currently duplicated or near-duplicated:**
+**Status: 2026-05-27 partial progress.** Two clear duplications extracted:
 
-- Phone normalization (`normalizePhone` in dashboard/lib/phone.ts vs src/services/phoneUtils.ts)
-- Name splitting/joining (`splitName`/`joinName` in src/services/nameUtils.ts — already used by jobberSync)
-- Duration helpers, date-in-timezone formatting, availability math
+- **Phone**: Created `shared/phone.ts` (strict `normalizePhone` returning `null` on invalid + `formatPhone` + `isValidPhone`). Backend `src/services/phoneUtils.ts` and dashboard `lib/phone.ts` now thin re-exports. Dashboard test expectations updated to match stricter canonical behavior. One inline split usage in combobox fixed as side effect of the audit.
+- **Name**: Created `shared/name.ts` (`splitName`, `joinName`, `buildDisplayName`, `slugify`). Backend re-exports. Replaced inline duplicate split logic in `dashboard/components/ui/CustomerCombobox.tsx` (was doing the exact same `trim().split(/\s+/)` dance).
 
-**What to do:** For each pure fn that has (or should have) identical behavior on both sides, move the canonical impl to `shared/`, update consumers, add a minimal cross-project test if the build supports it.
+Both sides typecheck clean. New canonical modules documented in CLAUDE.md.
 
-**Done when:** A short "Shared modules" section in CLAUDE.md lists what lives there and the import convention for both runtimes.
+Remaining candidates from the original item (duration helpers, date-in-timezone, availability math) already have a home in the existing `shared/scheduling.ts` — no additional duplication found in this pass.
 
-**Why it matters:** Every time a pure rule (15-min grid, phone canonical form, name display) exists in two places, we re-create the validation-dupe problem. The `shared/` dir + the scheduling/embedding precedent make this the obvious home. Follows "extract after the third or fourth real consumer" — these already have multiple.
+**Why it matters:** Every time a pure rule (phone canonical form, name splitting) exists in two places, we re-create the validation-dupe problem that the whole shared/ investment was meant to solve.
 
-**Size:** variable (one helper at a time, 30–90min each)
-**Impact:** medium (future-proofing)
+Next micro-pass on this item can look for any remaining small pure helpers.
 
 ### 7. (Low priority) Evaluate a thin CRUD route factory for the entity managers
 
@@ -158,14 +162,26 @@ Add a one-sentence rule and a grep guard in `scripts/verify-claude-md.ts` if (b)
 **Size:** tiny
 **Impact:** low but high signal-to-noise for future contributors
 
-### 9. Strengthen the post-PK-rename contract check
+### ~~9. Strengthen the post-PK-rename contract check~~
 
-**Idea:** Extend `scripts/verify-claude-md.ts` (or a new `scripts/verify-schema-ts-alignment.ts`) with a cheap check that every domain table mentioned in `src/types/index.ts` + the row types used by `DatabaseService` has columns that match a quick parse of `supabase/baseline.sql` (or a `\d` against the test DB in CI).
+**Status: done 2026-05-27.** Created `scripts/verify-schema-alignment.ts` (modeled exactly on the existing `verify-claude-md.ts` pattern of pure `Drift[]` functions + thin main).
 
-**Why it matters:** The 2026-05-12–18 retrofit was 25+ migrations + hundreds of call-site edits. Without an automated guard, the next table added (or the next composite PK pilot) will eventually produce another "typed as number" or "missing retry_count" bug.
+- Hardcoded list of the major tables from the 20260512 PK rename wave.
+- Cheap parser that verifies the canonical `<table>_id` column (with correct type) exists inside each `CREATE TABLE` block in `supabase/baseline.sql`.
+- Added `npm run verify:schema`.
+- Added `scripts/verify-schema-alignment.test.ts` (3 tests, all green).
+- The checker actually caught a wrong assumption I had about `employees.employee_id` type during development (it is `uuid`, not `integer` in baseline) — exactly the class of error it is meant to protect against.
 
-**Size:** medium (new script + 10–15 tests)
-**Impact:** high (prevents entire class of past bugs)
+**Verification:**
+
+- `npm run verify:schema` → clean pass on current baseline.
+- Unit tests: all pass.
+- Typechecks clean.
+
+**Why it matters:** Prevents re-introduction of the exact family of id-type and column-drift bugs that the big 2026-05 rename campaign was created to fix.
+
+**Size:** medium (new script + tests)
+**Impact:** high (ongoing guard)
 
 ---
 
@@ -173,7 +189,7 @@ Add a one-sentence rule and a grep guard in `scripts/verify-claude-md.ts` if (b)
 
 (See `NEEDS-REFACTORING.md` for the full history of completed major refactors: CRM adapter deletion (#1), tenant-config wiring (#2), UsageTrackingService deletion (#3), `employee_shifts` retirement (#4), mock helper extraction, CLAUDE.md drift detector (#13), etc.)
 
-All PK column renames (`*_id` convention) are complete in the live schema (baseline.sql + 25 migrations in the 20260512–18 wave) and the corresponding TS / route / RPC updates. The only remaining `id` usages are the documented virtual ones (CustomerNote) and historical comments.
+All PK column renames (`*_id` convention) are complete in the live schema (baseline.sql + 25 migrations in the 20260512–18 wave) and the corresponding TS / route / RPC updates. The in-memory carve-out rule for bare `id` (purely local UI state only) + the `CustomerNote` pilot rename were completed 2026-05-27 (see item 5 above). Historical comments updated where relevant.
 
 ---
 

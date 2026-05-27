@@ -12,6 +12,7 @@
     "test": "vitest run src/ scripts/ --fileParallelism=false",
     "test:ci": "DATABASE_URL=postgres://postgres:postgres@localhost:5433/test_db vitest run src/ scripts/ --fileParallelism=false",
     "verify:claude-md": "npx tsx scripts/verify-claude-md.ts",
+    "verify:schema": "npx tsx scripts/verify-schema-alignment.ts",
     "bootstrap": "bash scripts/bootstrap.sh",
     "db:migrate": "bash scripts/setup-db.sh",
     "db:seed": "bash scripts/seed-db.sh",

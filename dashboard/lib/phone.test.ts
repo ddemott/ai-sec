@@ -40,14 +40,14 @@ describe('formatPhone', () => {
 });
 
 describe('normalizePhone', () => {
-  it('returns empty string for null/undefined', () => {
-    expect(normalizePhone(null)).toBe('');
-    expect(normalizePhone(undefined)).toBe('');
-    expect(normalizePhone('')).toBe('');
+  it('returns null for null/undefined/empty (strict mode)', () => {
+    expect(normalizePhone(null)).toBeNull();
+    expect(normalizePhone(undefined)).toBeNull();
+    expect(normalizePhone('')).toBeNull();
   });
 
-  it('returns empty string when no digits present', () => {
-    expect(normalizePhone('abc')).toBe('');
+  it('returns null when no digits present', () => {
+    expect(normalizePhone('abc')).toBeNull();
   });
 
   it('normalizes a 10-digit US number to E.164', () => {
@@ -68,7 +68,7 @@ describe('normalizePhone', () => {
     expect(normalizePhone('442071234567')).toBe('+442071234567');
   });
 
-  it('handles short numbers by prefixing +', () => {
-    expect(normalizePhone('12345')).toBe('+12345');
+  it('returns null for too-short numbers (< 10 digits)', () => {
+    expect(normalizePhone('12345')).toBeNull();
   });
 });

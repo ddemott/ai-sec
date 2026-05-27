@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, UserPlus } from 'lucide-react';
 import { formatPhone } from '../../lib/phone';
+import { splitName } from '../../../shared/name';
 import { CustomerCreateModal, type CustomerCreateDraft } from './CustomerCreateModal';
 
 export interface CustomerOption {
@@ -88,12 +89,9 @@ export function CustomerCombobox({
     });
   }, [customers, searchTerm]);
 
-  // Split the search term into a first/last seed for the walk-in modal:
-  // first word → first name, the rest → last name. So "Mary Jane Smith"
-  // seeds first="Mary", last="Jane Smith".
-  const seedParts = searchTerm.trim().split(/\s+/).filter(Boolean);
-  const seedFirstName = seedParts[0] ?? '';
-  const seedLastName = seedParts.slice(1).join(' ');
+  // Split the search term into a first/last seed for the walk-in modal
+  // using the canonical shared implementation (consistent with backend CRM sync).
+  const { firstName: seedFirstName, lastName: seedLastName } = splitName(searchTerm);
 
   return (
     <div>

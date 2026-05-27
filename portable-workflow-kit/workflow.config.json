@@ -13,7 +13,7 @@
       "build": "npm run build && cd dashboard && npm run build",
       "lint": "npm run lint",
       "formatCheck": "npm run format:check",
-      "docDriftCheck": "npm run verify:claude-md || true",
+      "docDriftCheck": "npm run verify:claude-md; npm run verify:schema || true",
       "e2e": "cd dashboard && npx playwright test --grep",
       "focusedTestScan": "grep -r --include=\"*.test.*\" --include=\"*.spec.*\" -E \"(\\.only\\(|\\.skip\\()\" src/ dashboard/ --exclude-dir=node_modules 2>/dev/null || true",
       "notes": "Full-stack TypeScript SaaS (Next.js + Node/Fastify backend). All the TS + Vitest + Playwright tooling applies."
@@ -49,7 +49,7 @@
     "build": "npm run build && cd dashboard && npm run build",
     "lint": "npm run lint",
     "formatCheck": "npm run format:check",
-    "docDriftCheck": "npm run verify:claude-md || true",
+    "docDriftCheck": "npm run verify:claude-md; npm run verify:schema || true",
     "e2e": "cd dashboard && npx playwright test --grep",
     "focusedTestScan": "grep -r --include=\"*.test.*\" --include=\"*.spec.*\" -E \"(\\.only\\(|\\.skip\\()\" src/ dashboard/ --exclude-dir=node_modules 2>/dev/null || true"
   },
@@ -62,8 +62,11 @@
 
   "scripts": {
     "createBranch": "bash scripts/create-feature-branch.sh",
+    "prepareCommit": "bash scripts/prepare-commit.sh",
     "setupHooks": "bash scripts/setup-hooks.sh",
-    "removeHooks": "bash scripts/remove-hooks.sh"
+    "removeHooks": "bash scripts/remove-hooks.sh",
+    "checks": "bash -c 'source scripts/config-reader.sh && eval \"$(get_command checks)\"'",
+    "prePr": "npm run checks && npm run prepare-commit"
   },
 
   "documentation": {

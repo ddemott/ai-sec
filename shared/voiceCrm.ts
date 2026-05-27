@@ -40,7 +40,7 @@ export interface AppointmentHistory {
 }
 
 export interface CustomerNote {
-  id: string;
+  note_id: string;
   text: string;
   type: 'general' | 'call' | 'preference' | 'important';
   call_id?: string;

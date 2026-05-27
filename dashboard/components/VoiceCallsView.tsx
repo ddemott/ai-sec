@@ -513,7 +513,7 @@ export default function VoiceCallsView() {
                         <div className="space-y-2">
                           {customerContext.notes.slice(-5).map((note) => (
                             <div
-                              key={note.id}
+                              key={note.note_id}
                               className="rounded p-2 text-sm"
                               style={{ backgroundColor: 'var(--warning-bg)' }}
                             >
