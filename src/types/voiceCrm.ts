@@ -11,6 +11,13 @@
 
 export * from '../../shared/voiceCrm';
 
+import type {
+  CustomerNote,
+  VoiceSession,
+  VoiceSessionDisplay,
+  VoiceSessionOutcome,
+} from '../../shared/voiceCrm';
+
 /**
  * Request to start a voice session (backend/API only).
  */
@@ -27,7 +34,7 @@ export interface EndVoiceSessionRequest {
   tenant_id: string;
   call_id: string;
   duration_seconds?: number;
-  outcome?: import('../../shared/voiceCrm').VoiceSessionOutcome;
+  outcome?: VoiceSessionOutcome;
   transcript?: string;
   summary?: string;
   appointment_id?: string;
@@ -39,7 +46,7 @@ export interface EndVoiceSessionRequest {
 export interface AddCustomerNoteRequest {
   customer_id: string;
   note: string;
-  note_type?: import('../../shared/voiceCrm').CustomerNote['type'];
+  note_type?: CustomerNote['type'];
   call_id?: string;
 }
 
@@ -47,7 +54,7 @@ export interface AddCustomerNoteRequest {
  * Active calls list for dashboard (backend response wrapper).
  */
 export interface ActiveCallsResponse {
-  calls: import('../../shared/voiceCrm').VoiceSessionDisplay[];
+  calls: VoiceSessionDisplay[];
   total: number;
 }
 
@@ -55,7 +62,7 @@ export interface ActiveCallsResponse {
  * Call history response (backend response wrapper).
  */
 export interface CallHistoryResponse {
-  calls: import('../../shared/voiceCrm').VoiceSession[];
+  calls: VoiceSession[];
   total: number;
   has_more: boolean;
 }
