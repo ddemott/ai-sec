@@ -10,7 +10,7 @@
  * Zod validation, `ON CONFLICT DO UPDATE` semantics on create, the
  * 404-on-missing-row path on update + delete.
  *
- * Origin: NEEDS-REFACTORING / TODO "Add tests for destructive flows" —
+ * Origin: historical major refactor (see RESOLVED.md) "Add tests for destructive flows" —
  * the verify-first found that the override CRUD routes had route-handler
  * tests via `crud-routes.test.ts` only at the architectural-rule level;
  * the per-handler shape and validation paths weren't pinned directly.

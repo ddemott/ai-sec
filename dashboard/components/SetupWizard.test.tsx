@@ -508,7 +508,7 @@ describe('SetupWizard: Step 4 Shifts', () => {
     //       server call. The user toggles days locally and the whole
     //       pattern is sent to /shifts/expand-weekly when they cross
     //       into step 7.
-    // WHY: post-rip-out of employee_shifts (NEEDS-REFACTORING #4
+    // WHY: post-rip-out of employee_shifts (historical major refactor; see RESOLVED.md, originally tracked as NEEDS-REFACTORING #4)
     //       Phase 2), there's no backend representation of the wizard's
     //       weekly grid until finalize. This test pins the new
     //       ephemeral contract so a regression that re-introduces a

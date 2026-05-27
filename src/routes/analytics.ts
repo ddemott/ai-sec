@@ -36,7 +36,7 @@ export function registerAnalyticsRoutes(
   );
 
   // GET /coverage/staffing was removed 2026-04-30 along with the
-  // employee_shifts table (NEEDS-REFACTORING #4 Phase 2). It joined on
+  // employee_shifts table (historical major refactor; see RESOLVED.md, originally tracked as NEEDS-REFACTORING #4 Phase 2). It joined on
   // weekly patterns to answer "for this day-of-week, who works?" — a
   // question that no longer has a stable answer now that the platform
   // only stores date-specific schedule entries. The dashboard never

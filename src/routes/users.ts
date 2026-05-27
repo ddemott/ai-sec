@@ -149,12 +149,10 @@ export function registerUserRoutes(
       } catch (err: unknown) {
         // Postgres unique violation on (tenant_id, email) → 409
         if (err instanceof Error && (err as { code?: string }).code === '23505') {
-          return reply
-            .status(409)
-            .send({
-              success: false,
-              error: 'A user with that email already exists for this business',
-            });
+          return reply.status(409).send({
+            success: false,
+            error: 'A user with that email already exists for this business',
+          });
         }
         throw err;
       }

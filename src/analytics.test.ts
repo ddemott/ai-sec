@@ -89,7 +89,7 @@ beforeEach(() => {
 // =============================================
 //
 // /coverage/staffing was deleted with the employee_shifts rip-out
-// (NEEDS-REFACTORING #4 Phase 2). Its tests went with it. /coverage
+// (historical major refactor; see RESOLVED.md, originally tracked as NEEDS-REFACTORING #4 Phase 2). Its tests went with it. /coverage
 // itself still works against employee_schedule via check_coverage_gaps.
 
 describe('GET /coverage', () => {

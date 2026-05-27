@@ -84,7 +84,7 @@ describe('runReadinessCheck', () => {
       },
       waiting: 3, // saturated
     });
-    
+
     const reply = mockReply();
 
     await runReadinessCheck(pool, logger, reply);
@@ -115,8 +115,9 @@ describe('runReadinessCheck', () => {
     await runReadinessCheck(pool, silentLogger, reply);
 
     expect(reply.statusCode).toBe(503);
-    expect(release, 'client MUST be released even when the probe query fails').toHaveBeenCalledTimes(
-      1
-    );
+    expect(
+      release,
+      'client MUST be released even when the probe query fails'
+    ).toHaveBeenCalledTimes(1);
   });
 });

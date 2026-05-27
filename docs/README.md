@@ -1,16 +1,28 @@
 # Documentation Index
 
-This folder contains all technical and operational documentation for SecretaryHQ.
+This folder contains the project's technical and operational documentation.
+
+## Documentation Principles (How We Stay Sane)
+
+- **Single sources of truth**:
+  - Active work, bugs, UX tasks, and near-term priorities → `docs/TODO.md` (the main living list).
+  - Mechanical / type / duplication / convention refactors → `REFACTORING_TODO.md` (narrow scope).
+  - Raw UX audit findings → `ux-review-notes.md` (archived / reduced; actionable findings live in `docs/TODO.md`).
+- **Curated vs generator noise**: The root `improvement-ideas.md` is retired generator output (see its own header). Curated ideas live in `docs/IMPROVEMENT_IDEAS.md`.
+- **Historical vs living**: Big completed work and session journals go to `RESOLVED.md` or `docs/sessions/`. `CLAUDE.md` is deliberately kept lean and points at the docs/ folder for details.
+- **Succinctness over completeness**: When in doubt, link instead of duplicate. Long idea entries are acceptable only while they are active proposals.
 
 ## Core Documentation
 
 | File | Purpose |
 |------|---------|
 | [README.md](../README.md) | Main project overview (start here) |
+| [CLAUDE.md](../CLAUDE.md) | Current-state reference for agents & humans (points to docs/ for depth) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical architecture and stack |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | How to run, deploy, and configure the system |
 | [SECURITY.md](SECURITY.md) | Security model, RLS, auth, and hardening |
-| [TODO.md](TODO.md) | Current work items and status (single source of truth) |
+| [TODO.md](TODO.md) | Current work items and status (**single source of truth for active tasks**) |
+| [REFACTORING_TODO.md](../REFACTORING_TODO.md) | Mechanical, structural, and convention-enforcement refactors only |
 
 ## Onboarding & Operations
 
@@ -33,24 +45,24 @@ This folder contains all technical and operational documentation for SecretaryHQ
 
 | File | Purpose |
 |------|---------|
-| [FRAMEWORK_MIGRATIONS.md](FRAMEWORK_MIGRATIONS.md) | Voice AI migration history (Vapi → LiveKit) |
+| [FRAMEWORK_MIGRATIONS.md](FRAMEWORK_MIGRATIONS.md) | Voice AI migration history (Vapi → LiveKit, etc.) |
 | [TEST_COVERAGE.md](TEST_COVERAGE.md) | Test coverage status and gaps |
-| [IMPROVEMENT_IDEAS.md](IMPROVEMENT_IDEAS.md) | Curated list of improvement ideas |
+| [IMPROVEMENT_IDEAS.md](IMPROVEMENT_IDEAS.md) | Curated list of improvement ideas (see principles above) |
 | [BUGS.md](BUGS.md) | Known bugs and workarounds |
 
 ## Archived / Historical
 
 | File | Purpose |
 |------|---------|
-| [CURRENT_STATUS_ARCHIVED_2026-05-15.md](CURRENT_STATUS_ARCHIVED_2026-05-15.md) | Detailed historical session notes and status (archived) |
+| [CURRENT_STATUS_ARCHIVED_2026-05-15.md](CURRENT_STATUS_ARCHIVED_2026-05-15.md) | Detailed historical session notes (archived) |
+| [sessions/](sessions/) | Per-session notes (historical) |
 
 ## Other
 
 - `diagrams/` — Visual diagram assets
 - `mockups/` — UI mockups
-- `sessions/` — Detailed session notes (historical)
 - `secretaryhq-demo.html` — Standalone demo page
 
 ---
 
-**Last updated:** 2026-05-15
+**Last updated:** 2026-05-27 (major documentation reduction pass: root `improvement-ideas.md`, `ux-review-notes.md`, `docs/BUGS.md`, and `NEEDS-REFACTORING.md` heavily reduced or archived as content is captured in `docs/TODO.md` / `RESOLVED.md`)

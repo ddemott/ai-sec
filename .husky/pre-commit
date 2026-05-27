@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run our improved staged-files pre-commit logic
+bash scripts/example-pre-commit-hook.sh

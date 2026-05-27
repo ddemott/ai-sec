@@ -183,7 +183,7 @@ export interface DatabaseService {
   updateConsentRecord(id: number, data: Partial<ConsentRecord>): Promise<ConsentRecord | null>;
 
   // Opt-out operations
-  createOptOutRecord(data: Omit<OptOutRecord, 'optOutRecordId'>): Promise<OptOutRecord>;
+  createOptOutRecord(data: Omit<OptOutRecord, 'opt_out_record_id'>): Promise<OptOutRecord>;
   getOptOutRecordsByTenant(tenantId: string): Promise<OptOutRecord[]>;
 }
 
@@ -500,32 +500,22 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Opt-Out Operations ─────────────────────────────────────────────
 
-  async createOptOutRecord(data: Omit<OptOutRecord, 'optOutRecordId'>): Promise<OptOutRecord> {
-    return this.withTenantClient(data.tenantId, async (client) => {
+  async createOptOutRecord(data: Omit<OptOutRecord, 'opt_out_record_id'>): Promise<OptOutRecord> {
+    return this.withTenantClient(data.tenant_id, async (client) => {
       const result = await client.query(
         `INSERT INTO opt_out_records
          (tenant_id, customer_email, customer_phone, opt_out_type, opt_out_date,
           opt_out_method, original_consent_record_id, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING
-           opt_out_record_id as "optOutRecordId",
-           tenant_id as "tenantId",
-           customer_email as "customerEmail",
-           customer_phone as "customerPhone",
-           opt_out_type as "optOutType",
-           opt_out_date as "optOutDate",
-           opt_out_method as "optOutMethod",
-           original_consent_record_id as "originalConsentRecordId",
-           notes,
-           created_at as "createdAt"`,
+         RETURNING *`,
         [
-          data.tenantId,
-          data.customerEmail || null,
-          data.customerPhone || null,
-          data.optOutType,
-          data.optOutDate,
-          data.optOutMethod,
-          data.originalConsentRecordId || null,
+          data.tenant_id,
+          data.customer_email || null,
+          data.customer_phone || null,
+          data.opt_out_type,
+          data.opt_out_date,
+          data.opt_out_method,
+          data.original_consent_record_id || null,
           data.notes || null,
         ]
       );
@@ -536,18 +526,7 @@ export class PostgresDatabaseService implements DatabaseService {
   async getOptOutRecordsByTenant(tenantId: string): Promise<OptOutRecord[]> {
     return this.withTenantClient(tenantId, async (client) => {
       const result = await client.query(
-        `SELECT
-           opt_out_record_id as "optOutRecordId",
-           tenant_id as "tenantId",
-           customer_email as "customerEmail",
-           customer_phone as "customerPhone",
-           opt_out_type as "optOutType",
-           opt_out_date as "optOutDate",
-           opt_out_method as "optOutMethod",
-           original_consent_record_id as "originalConsentRecordId",
-           notes,
-           created_at as "createdAt"
-         FROM opt_out_records WHERE tenant_id = $1 ORDER BY opt_out_date DESC`,
+        `SELECT * FROM opt_out_records WHERE tenant_id = $1 ORDER BY opt_out_date DESC`,
         [tenantId]
       );
       return result.rows;

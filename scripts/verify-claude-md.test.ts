@@ -1,5 +1,5 @@
 /**
- * Tests for the CLAUDE.md drift detector (NEEDS-REFACTORING #13).
+ * Tests for the CLAUDE.md drift detector (historical major refactor; originally tracked as NEEDS-REFACTORING #13).
  * Each pure check tested in isolation with happy + sad paths and 5W comments.
  *
  * Filesystem and git are injected so these tests don't read CLAUDE.md or shell
@@ -34,7 +34,7 @@ describe('checkCount', () => {
     // WHO: maintainer who deliberately removed a count from the doc
     // WHAT: pattern matches nothing in content → returns []
     // WHEN: claim was removed because it rotted too often
-    // WHY: NEEDS-REFACTORING #13 Option B says trimming claims is also valid;
+    // WHY: historical major refactor (originally tracked as NEEDS-REFACTORING #13) Option B says trimming claims is also valid;
     //      the script must not punish you for taking that path
     const drifts = checkCount({
       content: 'No mention of templates here.',

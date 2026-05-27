@@ -12,7 +12,7 @@
  * This file covers the route handler surface — auth gates, payload
  * validation, the BEGIN/COMMIT shape, and the response envelope.
  *
- * Origin: NEEDS-REFACTORING / TODO "Add tests for destructive flows" —
+ * Origin: historical major refactor (see RESOLVED.md) "Add tests for destructive flows" —
  * the verify-first found that DELETE /tenants/:id and POST /tenants/reorder
  * had no route-handler-level coverage despite the dashboard side
  * exercising them via superadmin.test.tsx.

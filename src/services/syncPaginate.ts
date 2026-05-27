@@ -8,15 +8,10 @@
  * shape is identical: fetch page → iterate items → catch per-item errors and
  * keep going → break on page-fetch error → terminate when no nextCursor.
  *
- * NEEDS-REFACTORING #10 was tracked as "extract shared CRM sync structure."
- * The verify-first pass found that the broader push/pull skeletons across the
- * 4 providers carry too many provider-specific quirks (GraphQL response
- * unwrapping + userErrors for Jobber, meeting↔contact association for
- * HubSpot, cancel-on-delete for Square, extra appKey/tenantSid token fields
- * for ServiceTitan) to extract cleanly without re-creating the strategy
- * pattern that NEEDS-REFACTORING #1 rejected. The pagination loop, by
- * contrast, is pure mechanism with no provider quirks — the only variation
- * is the per-page fetch call, which slots cleanly into a closure.
+ * Historical major refactor (originally tracked as NEEDS-REFACTORING #10):
+ * The pagination helper was extracted because the loop shape was identical
+ * across providers, while the broader push/pull skeletons had too many
+ * quirks to safely abstract (see RESOLVED.md for details).
  */
 
 import type { SyncLogger } from './tokenManagement';

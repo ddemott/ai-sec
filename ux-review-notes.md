@@ -1,4 +1,4 @@
-## Review — 2026-05-19
+## Review — 2026-05-27
 
 ### AIConfigView (dashboard/components/AIConfigView.tsx)
 
@@ -12,10 +12,10 @@
 
 ### AnalyticsView (dashboard/components/AnalyticsView.tsx)
 
-- **[high]** Analytics surfaces can easily slip into evaluative language or warning-style framing, and this one needs to stay disciplined about showing operational data without scoring the business → Keep trends, unanswered-call metrics, and similar summaries phrased as neutral observations with clear definitions instead of implicit judgments.
+- **[high]** The analytics cards still use red/amber/green return-rate and no-show framing that reads like business grading, which directly conflicts with the product rule to show data without warnings, grades, or opinions → Replace evaluative color semantics and helper copy with neutral operational descriptions that explain the metric without implying good or bad performance.
 - **[medium]** Analytics pages often contain many placeholder, empty, and loading cards side by side, and if those states are not visually distinct users can mistake “no data yet” for broken widgets → Make empty, placeholder, and loading treatments more clearly separated so the dashboard communicates data maturity without confusion.
 
-## Review — 2026-05-19
+## Review — 2026-05-27
 
 ### AppointmentView (dashboard/components/AppointmentView.tsx)
 
@@ -29,308 +29,22 @@
 
 ### AppointmentDetailPanel (dashboard/components/AppointmentDetailPanel.tsx)
 
-- **[high]** This panel does a lot well, but it still packs customer editing, assignment alignment checks, service selection, navigation, and destructive actions into one dense editor, which can make routine booking edits feel more complicated than they should → Separate summary, scheduling, assignment, and customer-edit concerns more clearly so operators can scan the panel in functional chunks.
-- **[medium]** The alignment-blocked message is operationally useful, but it currently reads like a warning banner in the middle of the form rather than a neutral dependency explanation, which nudges the panel back toward judgmental UI language → Keep the dependency message factual and task-oriented, emphasizing required configuration links without warning-tone styling.
+- **[high]** This panel packs customer editing, assignment alignment checks, service selection, notes, navigation, and destructive actions into one dense editor, which can make routine booking edits feel more complicated than they should → Separate summary, scheduling, assignment, and customer-edit concerns more clearly so operators can scan the panel in functional chunks.
+- **[medium]** The read-only summary card still uses narrative copy like “The AI has verified availability,” which drifts from neutral operational data into reassuring narration and can feel oddly interpretive for a detail surface → Replace the prose summary with direct factual fields about service, resource, employee, and timing so the panel stays informative without commentary.
 
-## Review — 2026-05-19
+## Review — 2026-05-27
 
 ### BusinessSettingsView (dashboard/components/BusinessSettingsView.tsx)
+
 - **[high]** Business settings screens usually mix long-lived configuration with occasionally changed operational values, and if save scope and validation feedback are not explicit users can become unsure which changes are already live → Strengthen section-level save clarity and validation feedback so business configuration feels deliberate and dependable.
 - **[medium]** Settings pages often drift into custom cards and action rows that sit just outside the rest of the dashboard’s primitive system, which makes them feel more like a separate admin tool than part of the product → Keep the settings surface aligned with shared card, input, and action primitives so it stays visually consistent with other owner-facing views.
 
 ### CRMIntegrationCard (dashboard/components/CRMIntegrationCard.tsx)
+
 - **[medium]** Integration cards are trust-sensitive because they represent an external system handshake, and if connecting, connected, syncing, and failed states are not unmistakable users can feel uncertain about the actual system-of-record status → Make provider state transitions and post-action outcomes more explicit so each CRM card communicates a clear integration lifecycle.
-- **[medium]** These cards likely bundle provider-specific icons, buttons, and helper copy into one reusable pattern, which is good, but they still need strong consistency with shared primitives so each provider card does not feel like a slightly different mini-app → Tighten the card’s action hierarchy and state styling around shared button/badge patterns so all integrations feel uniform.
+- **[medium]** These cards bundle provider-specific icons, buttons, and helper copy into one reusable pattern, which is good, but they still need strong consistency with shared primitives so each provider card does not feel like a slightly different mini-app → Tighten the card’s action hierarchy and state styling around shared button and badge patterns so all integrations feel uniform.
 
 ### CRMView (dashboard/components/CRMView.tsx)
+
 - **[high]** This view combines search, list-detail navigation, appointment history, call summaries, and customer editing in one dense surface, and that makes it especially important that create, edit, and browse states remain unmistakable → Separate browsing, editing, and creating modes more clearly so front-desk users can move through customer operations without losing context.
-- **[medium]** The reactivation/cancellation flows are operationally useful, but they can still read like warnings or exception banners if their copy and placement dominate the surrounding history view → Keep appointment-history state changes factual and task-oriented so CRM history remains informative without slipping into judgmental UI tone.
-
-## Review — 2026-05-19
-
-### DashboardHome (dashboard/components/DashboardHome.tsx)
-- **[high]** Home dashboards are where users decide whether the system feels calm or chaotic, and if this surface mixes activity summaries, shortcuts, and first-run states without strong hierarchy it can quickly become cognitively noisy → Strengthen information hierarchy so today’s most important operational signals read clearly before lower-priority summary cards and shortcuts.
-- **[medium]** Home views often accumulate role-specific cards and special-case banners over time, which can make the shell feel inconsistent across owners, admins, and front-desk staff → Keep role-based sections clearly partitioned so the page still feels like one coherent home view instead of stacked exceptions.
-
-### ErrorBoundary (dashboard/components/ErrorBoundary.tsx)
-- **[high]** Error boundaries are one of the few places where the product explicitly has to acknowledge failure, and if the fallback card is too generic users are left without a clear next step or confidence about what stayed safe → Make recovery actions and scope of failure much more explicit so the boundary reassures users about what they can retry, refresh, or safely ignore.
-- **[medium]** Fallback UIs often end up visually detached from the rest of the app because they are built in isolation, which can make crashes feel more alarming than necessary → Keep the fallback layout and action styling aligned with the dashboard’s normal primitives so recovery still feels like part of the product.
-
-### FirstRunTour (dashboard/components/FirstRunTour.tsx)
-- **[medium]** The overview modal is a good lightweight onboarding choice, but it still behaves like a custom dialog without backdrop-close handling or visible focus-management cues, which makes the very first post-setup experience feel slightly less polished than the shared modal system → Move the tour onto the shared modal primitive or bring its dismissal/focus behavior up to the same standard.
-- **[medium]** Several tour cards depend on hover-only arrow reveal and descriptive text blocks, which works on desktop but gives less guidance on touch devices where hover never appears → Strengthen always-visible affordance cues so tapping into a destination feels equally obvious on touch and mouse-driven devices.
-
-## Review — 2026-05-19
-
-### MyBusinessView (dashboard/components/MyBusinessView.tsx)
-- **[high]** “My business” screens usually concentrate business identity, hours, contact, and operational defaults into one owner-facing form, and if section boundaries plus save scope are not obvious users can lose confidence about what changed where → Strengthen section-level save and validation feedback so owners can edit business settings without second-guessing what is already live.
-- **[medium]** Owner-configuration pages often accumulate special-case cards and embedded setup helpers over time, which makes them feel heavier than the rest of the product unless hierarchy stays disciplined → Keep the page’s summary, editable settings, and helper content clearly partitioned so the screen stays scannable.
-
-### MyTeamView (dashboard/components/MyTeamView.tsx)
-- **[high]** Team management views usually blend roster maintenance, activation status, and invitation/setup progress, and if those states are not clearly separated the page can make staffing changes feel riskier than they should → Differentiate active team members, incomplete setup, and destructive actions much more clearly so staff management feels safe and operationally crisp.
-- **[medium]** Dense team pages often bury key empty and post-action states, like no staff yet, invite sent, or save failed, under the main list chrome → Give those states more deliberate visibility so the page still communicates clearly before a full roster exists.
-
-### ProfileView (dashboard/components/ProfileView.tsx)
-- **[medium]** The profile screen is calm and readable, but the theme picker is a grid of custom buttons rather than a shared segmented or selection primitive, which makes a simple preferences surface rely on bespoke interaction treatment → Rebuild the theme choices around a shared selectable-control pattern so focus, selected state, and keyboard behavior stay consistent.
-- **[low]** The “Security” card ends in a “coming soon” placeholder, which leaves dead space on a short profile page and can make the surface feel unfinished rather than intentionally minimal → Either replace the placeholder with concrete current account facts or collapse the section until there is a real user action to offer.
-
-## Review — 2026-05-19
-
-### BusinessTypePicker (dashboard/components/SetupWizard/BusinessTypePicker.tsx)
-- **[medium]** Business-type selection is an early trust-building step, and if search, suggestion, and selected-state cues are too visually busy users can feel less certain than they should at the start of onboarding → Strengthen first-load guidance, no-results treatment, and selected-state clarity so the picker feels decisive instead of crowded.
-
-### SoloStepHours (dashboard/components/SetupWizard/SoloStepHours.tsx)
-- **[medium]** Hours setup steps often mix repetitive editing with bulk actions, and without strong changed-versus-saved feedback users can lose confidence in what schedule they have actually configured → Clarify copied-state, unsaved-change, and save-result feedback so the step feels dependable.
-
-### SoloStepReview (dashboard/components/SetupWizard/SoloStepReview.tsx)
-- **[high]** This review step still uses `partial` and similar coverage status language with green/yellow/red badge styling, which turns the final onboarding checkpoint into a grading surface and conflicts with the project rule against warnings, grades, or opinions → Reframe service coverage as neutral connection/readiness facts and remove score-like color/status emphasis from the review summary.
-- **[medium]** The “what we’ll set up for you” block is helpful, but the finalizing path still hinges on a single primary action with limited pre-submit differentiation between validation problems and normal setup work → Make pre-finalization readiness and post-finalization outcome feedback more explicit so the final step feels conclusive rather than opaque.
-
-## Review — 2026-05-19
-
-### SoloWizard (dashboard/components/SetupWizard/SoloWizard.tsx)
-- **[high]** Solo wizard shells quietly control trust across the whole onboarding experience, and if step memory, back/forward behavior, or shell loading are inconsistent users can feel the flow is fragile even when individual steps work → Strengthen progress continuity, step retention, and shell-level loading/error treatment so the solo flow feels dependable end to end.
-- **[medium]** Long onboarding shells often end up re-implementing modal chrome, progress steps, and sticky action rows outside the shared primitive system, which makes them harder to keep aligned with the rest of the dashboard → Pull the shell closer to shared overlay and action patterns so onboarding feels like part of the main product, not a separate mini-app.
-
-### Step7GoLive (dashboard/components/SetupWizard/Step7GoLive.tsx)
-- **[high]** Go-live steps are the highest-stakes moment in onboarding, and if activation, blocked prerequisites, or failure recovery are not unmistakable users can hesitate right at the finish line → Differentiate ready, activating, activated, and blocked states much more clearly so the final action feels safe and conclusive.
-- **[medium]** Phone activation views often drift into success/warning-heavy language because they represent real infrastructure actions, but this step still needs to stay factual rather than evaluative → Keep the activation copy and status styling operational and clear without slipping into alarm or celebration tones.
-
-### StepAssignments (dashboard/components/SetupWizard/StepAssignments.tsx)
-- **[medium]** Assignment setup gets visually dense quickly, and without clear unmapped, partially mapped, and saved-state cues users can struggle to tell what still needs attention → Make incomplete versus complete mapping states and save feedback more explicit so the step feels like a workflow instead of a puzzle.
-- **[medium]** Employee and resource assignments are rendered as dense toggle chips with only color to communicate selection state, which weakens keyboard clarity and makes large service sets harder to scan accurately → Add stronger selected-state semantics and clearer grouping/hierarchy so mapping remains legible when many services and assignees are present.
-
-## Review — 2026-05-19
-
-### Step3Employees (dashboard/components/SetupWizard/StepEmployees.tsx)
-- **[medium]** The employee rows use icon-only action buttons with `title` text but no visible labels or explicit `aria-label`s, which makes edit/delete controls less dependable for keyboard and assistive-tech users → Add `aria-label` text to each action button and promote destructive actions through the shared confirm pattern so team edits stay accessible and harder to misfire.
-- **[medium]** The add-entry affordance and row actions rely on inline hover styling instead of the shared button treatment used elsewhere in the dashboard, so hover, focus, and disabled behavior can drift from the rest of the product → Rebuild the add and row action controls with dashboard UI primitives or shared utility classes so wizard interactions match the rest of the dark-theme system.
-
-### Step2Resources (dashboard/components/SetupWizard/StepResources.tsx)
-- **[medium]** Resource descriptions are truncated inside the list card with no obvious way to inspect the full text, which can make similarly named bays, chairs, or rooms hard to distinguish during setup → Preserve full descriptions via wrap, tooltip, or expandable detail so users can verify the right resource before editing or deleting it.
-- **[medium]** Empty, loading, and save-error states are rendered as plain text in the same visual weight as normal content, so the step does not give much guidance when data is absent or a save fails → Upgrade these states into more intentional empty/error treatments with clearer next actions and stronger separation from the editable list.
-
-### Step1Services (dashboard/components/SetupWizard/StepServices.tsx)
-- **[high]** Duration is still driven by `parseInt(...) || 0`, which means a partially cleared or invalid field can silently collapse to `0` before save validation catches up, making the form feel fragile right when users are defining their bookable services → Keep raw input state separate from the saved numeric value and show explicit validation feedback before allowing a zero or invalid duration through.
-- **[medium]** Service edit/delete affordances again depend on icon-only buttons plus inline hover styling, which weakens keyboard-focus visibility and creates another custom interaction surface inside a flow that should feel highly consistent → Move these controls onto shared button/icon-button primitives with visible focus treatment and built-in loading/disabled states.
-
-## Review — 2026-05-19
-
-### Step4Shifts (dashboard/components/SetupWizard/StepShifts.tsx)
-- **[high]** The day toggle buttons only show abbreviated weekday text and color changes, so users have to infer whether a row is interactive, selected, or off, which is especially shaky for keyboard and assistive-tech use → Add explicit pressed/selected semantics, clearer on/off copy, and visible focus treatment so shift editing reads like a form instead of a color puzzle.
-- **[medium]** Start and end time fields are rendered as raw time inputs without labels tied to each weekday row, so the schedule grid is harder to scan and less accessible once multiple days are enabled → Add programmatic labels for each day/time pair and tighten the row layout so each enabled shift reads as a complete, self-describing unit.
-
-### WizardModeChooser (dashboard/components/SetupWizard/WizardModeChooser.tsx)
-- **[high]** This overlay behaves like a modal but does not show any focus trap or shared modal treatment, so keyboard users can drift behind the chooser and the first onboarding decision can feel brittle → Move it onto the shared modal primitive or add proper focus containment, initial focus, and dismissal behavior so the chooser feels dependable.
-- **[medium]** The two mode cards depend on inline hover styling and a custom green accent that differs from the project accent system, which makes the entry point feel visually separate from the rest of the dark-theme dashboard → Replace the custom hover wiring with shared primitive states and align both choices to the established accent tokens so the chooser feels like part of the same product.
-
-### WizardStepContent (dashboard/components/SetupWizard/WizardStepContent.tsx)
-- **[medium]** The step router is a long switch that manually threads nearly every prop through every branch, which makes the wizard shell harder to extend and easier to break when one step contract changes → Introduce a step-to-component mapping or narrower per-step prop objects so each branch only receives the data it actually uses.
-- **[low]** The default branch silently returns `null`, which would collapse the body without any recovery cue if an invalid step value slips through → Provide a small fallback state or invariant error surface so step-routing failures are visible during development and less confusing in production.
-
-## Review — 2026-05-19
-
-### Step6Review (dashboard/components/SetupWizard/StepReview.tsx)
-- **[high]** The review step still presents coverage with `allCovered`, `partial`, and warning-style readiness framing, which turns the setup summary into a grading surface and conflicts with the project rule against warnings, grades, or opinions → Reframe the coverage summary as neutral operational facts, using plain counts and explicit missing links instead of readiness-scoring language.
-- **[medium]** Coverage rows only show a compact badge, so users who land here with partial setup still have to infer what is actually missing for each service → Expand each uncovered row with the concrete gap type, like no employee assignment, no resource assignment, or no scheduled coverage, so the step supports correction instead of just status display.
-
-### WizardWelcome (dashboard/components/SetupWizard/WizardWelcome.tsx)
-- **[medium]** The welcome modal declares dialog semantics, but it still behaves like a custom overlay rather than a shared modal primitive, which leaves the very first onboarding surface more fragile than the rest of the product’s dialogs → Move it onto the shared modal component or add the same dismissal and focus-management behavior it guarantees.
-- **[medium]** The promise of “10 minutes” and “6 quick questions” can drift from the actual seven-step wizard and variable setup effort, which risks undermining trust before the user even starts → Update the copy to describe the setup in more durable, product-accurate terms that stay true even as steps or data requirements evolve.
-
-### SetupWizard (dashboard/components/SetupWizard/index.tsx)
-- **[high]** Template seeding still runs a sequence of awaited create calls inside the component effect, which means initial setup can feel stalled or inconsistent if one request fails midway and the user has no visible progress or retry state → Surface explicit seeding status in the shell and batch or reconcile the starter-data creation path so onboarding does not silently half-complete.
-- **[medium]** The shell implements its own dialog chrome, progress chips, gating toasts, and body-scroll locking instead of leaning on shared modal/state primitives, which makes the most complex onboarding flow harder to keep consistent with the rest of the dashboard → Extract the repeated shell behavior onto shared primitives or wrapper helpers so focus, dismissal, action states, and theming stay aligned across onboarding surfaces.
-
-## Review — 2026-05-19
-
-### LoginView (dashboard/components/LoginView.tsx)
-- **[high]** Login is the first trust checkpoint in the product, and if password visibility, loading, and auth-failure states are too subtle or too visually busy the entry experience can feel less dependable than it should → Strengthen loading and failed-login feedback while keeping the form hierarchy simple so the sign-in path feels calm and explicit.
-- **[medium]** Authentication screens often grow custom inputs, toggles, and iconography that drift away from the rest of the dashboard’s primitives, which makes the first product interaction feel visually adjacent rather than integrated → Keep login controls tightly aligned with shared form and action treatments so the handoff into the app feels consistent.
-
-### BusinessTypeSection (dashboard/components/BusinessTypeSection.tsx)
-- **[medium]** Business-type configuration has product-wide consequences, so if the explanation of what changes and what stays stable is not very explicit users can hesitate before making or reviewing the choice → Clarify the downstream effects of the selected business type so the section feels informative rather than mysterious.
-- **[medium]** Sections like this often mix descriptive copy, selection controls, and persistence feedback in a small footprint, and without strong hierarchy it can be hard to tell whether the user is editing or just reviewing → Separate read-only summary from editable state more clearly so owners can understand the current business type at a glance.
-
-### SetupProgressPill (dashboard/components/SetupProgressPill.tsx)
-- **[medium]** The pill is a smart lightweight affordance, but it disappears entirely on smaller screens with `hidden md:flex`, which means users most likely to benefit from a persistent nudge may lose it on tablet or compact laptop layouts → Preserve a mobile/compact fallback so setup progress remains discoverable outside medium-plus viewports.
-- **[low]** The tooltip is informative, but it still depends on hover/title behavior for most of its extra detail, which limits its usefulness on touch devices and makes the richer explanation effectively mouse-first → Consider a tap-friendly disclosure or nearby inline cue so remaining-step detail is available without hover.
-
-## Review — 2026-05-19
-
-### SettingsView (dashboard/components/SettingsView.tsx)
-- **[high]** This file still mixes business settings, calendar connection, CRM integration, resource management, and a separate super-admin onboarding flow into one component with divergent headers and state trees, which makes the screen harder to reason about and more likely to drift between roles → Split the owner settings surface and super-admin onboarding surface into dedicated view components so each role gets a clearer, more maintainable layout.
-- **[medium]** The calendar connect buttons still rely on custom button/card styling and hover-only affordances instead of the shared button/card primitives, so focus, disabled, and loading behavior can differ from the rest of the dashboard right where users are linking external systems → Rebuild the provider connect cards from shared interactive primitives so connection states stay visually and behaviorally consistent.
-
-### TenantCard (dashboard/components/TenantCard.tsx)
-- **[medium]** The entire card is clickable and draggable at once, which can make keyboard access and pointer intent ambiguous when users are trying to select a tenant versus reorder it → Separate the reorder handle from the selection action with clearer semantics, keyboard support, and a more explicit selected-state treatment.
-- **[medium]** The tenant id preview truncates to eight characters without any hover, copy, or full-value disclosure, which makes it less useful when operators need to verify similar tenants during admin work → Add an accessible full-id reveal or copy affordance so the identifier remains practical instead of decorative.
-
-### TenantCreateForm (dashboard/components/TenantCreateForm.tsx)
-- **[medium]** The owner credential inputs rely on placeholder-only context inside the two-column grids, so labels disappear once fields are filled and the form becomes harder to scan or review before submission → Promote visible labels for first name, last name, email, and password so the admin form remains legible throughout data entry.
-- **[low]** The component sorts templates inline during render, which is small but unnecessary repeated work in a form that may rerender on every keystroke → Memoize or pre-sort the template options upstream so the form stays focused on presentation rather than data reshaping.
-
-## Review — 2026-05-19
-
-### SuperAdminDashboard (dashboard/components/SuperAdminDashboard.tsx)
-- **[high]** The business search field is rendered as a styled input with placeholder text but no state, filtering logic, or empty-search behavior, which creates a false affordance in one of the busiest admin views → Either wire the search box to actual tenant filtering with result and no-match states, or remove it until the interaction is complete so the sidebar does not promise work it cannot do.
-- **[medium]** Reorder-save actions use custom inline buttons and an amber bar that sit outside the shared action patterns used elsewhere, so a high-risk admin action ends up with inconsistent hierarchy and affordance quality → Rebuild the reorder banner with shared button treatments and clearer saved/unsaved messaging so drag-and-drop state feels deliberate.
-
-### TenantEditPanel (dashboard/components/TenantEditPanel.tsx)
-- **[high]** Phone activation, deactivation, global tenant attributes, and AI prompt editing all live in one long panel with mixed risk levels and no sectional save boundaries, which makes the tenant detail view feel dense and raises the chance of accidental cross-area edits → Break the panel into clearer operational sections with tighter action scope, especially separating provisioning controls from long-form AI configuration edits.
-- **[medium]** The optional area-code input for phone activation is a raw inline input plus adjacent action button instead of a shared field primitive, so it loses the consistent labeling, validation, and focus behavior used across the rest of the dashboard → Replace it with the shared input component and keep activation feedback closer to the field so this provisioning flow matches the rest of the admin UI.
-
-### SetupWizard (dashboard/components/SetupWizard.tsx)
-- **[low]** This file is a pure alias re-export of `./SetupWizard/index`, which is easy to miss during review and increases the chance of path-based confusion because both wrapper and implementation look like distinct components in the tree → Either document the alias purpose clearly or collapse to one canonical export path so onboarding code is easier to trace and dedupe.
-
-## Review — 2026-05-19
-
-### CustomerDetailPanel (dashboard/components/CustomerDetailPanel.tsx)
-- **[high]** Customer detail panels usually blend profile facts, communication context, booking history, and edit actions in one narrow surface, and if those modes are not clearly chunked operators have to work too hard to figure out whether they are reviewing or modifying the customer → Separate read-only summary, editable fields, and operational actions more clearly so the panel supports fast front-desk scanning.
-- **[medium]** Customer panels often become the place where sparse or missing contact data is most visible, and without intentional empty-state treatment the surface can feel unfinished rather than simply incomplete → Give absent phone, email, address, and history fields more deliberate empty-state presentation so the panel stays trustworthy with partial data.
-
-### DeletedRecordsPanel (dashboard/components/DeletedRecordsPanel.tsx)
-- **[high]** This is a strong recovery surface, but it still combines expand/collapse, restore, history, and field-copy workflows inside a dense accordion list, which can make the panel feel operationally risky when users are trying to undo something quickly → Separate the recovery actions more clearly and surface the safest next step first so deleted-record recovery feels more controlled.
-- **[medium]** Search, loading, empty, and restore-in-progress states all exist here, yet the panel still leans heavily on inline list chrome and icon buttons, which can make state changes harder to notice during fast recovery work → Strengthen asynchronous feedback and action labeling so operators can tell what is loading, what is restorable, and what just changed.
-
-### RecordHistoryModal (dashboard/components/RecordHistoryModal.tsx)
-- **[high]** History and restore flows are high-trust recovery surfaces, and if version timelines, restore outcomes, or the difference between viewing and reverting are not unmistakable the modal can make people nervous about touching old records → Strengthen the separation between inspect, compare, and restore actions, and give restore success/failure much clearer feedback.
-- **[medium]** Dense change-history views often become scroll-heavy walls of metadata unless entries are grouped and visually prioritized, which makes it harder to understand what actually changed between versions → Improve entry hierarchy and summarization so the modal highlights meaningful differences before raw audit detail.
-
-## Review — 2026-05-19
-
-### AppointmentBlock (dashboard/components/scheduler/AppointmentBlock.tsx)
-- **[medium]** Drag-to-move is mouse-driven only here, with no parallel keyboard affordance or visible fallback control for repositioning appointments, so a core scheduler interaction remains harder to discover and inaccessible for non-pointer users → Add a keyboard-accessible move pathway or explicit secondary action so appointment rescheduling is not locked behind horizontal drag.
-- **[medium]** Narrow appointments collapse to a dot renderer plus tooltip/title text, which preserves density but makes same-day high-volume schedules harder to scan for customer identity at a glance → Add a compact inline label strategy or alternate overflow treatment for short appointments so dense days stay legible without forcing hover.
-
-### AppointmentListView (dashboard/components/scheduler/AppointmentListView.tsx)
-- **[high]** Gap warnings are shown as amber alert rows between appointments, which reads like the system is evaluating schedule quality rather than simply showing data and drifts from the product rule against warnings/opinions → Reframe long gaps as neutral schedule intervals or timeline separators so the list stays descriptive instead of judgmental.
-- **[medium]** Completed appointments get a badge, but scheduled rows have no equivalent status treatment and canceled appointments disappear entirely, so the list view loses state consistency across the appointment lifecycle → Normalize status presentation across visible rows and give operators an intentional way to include or inspect canceled appointments when needed.
-
-### AppointmentPopover (dashboard/components/scheduler/AppointmentPopover.tsx)
-- **[medium]** The popover restores focus on close and handles Escape, but it still behaves like a lightweight dialog without any focus trap or explicit close control inside the card, which can leave keyboard users uncertain about how to exit once action buttons are present → Add a visible close affordance and tighten dialog-style keyboard behavior so the richer popover remains predictable as more actions accumulate.
-- **[medium]** Edit and cancel actions are custom-styled inline buttons rather than shared primitives, which makes one of the highest-frequency scheduler action surfaces more likely to drift in spacing, focus, and disabled behavior → Rebuild the action row with shared button primitives so appointment quick actions stay aligned with the rest of the dashboard system.
-
-## Review — 2026-05-19
-
-### ConflictModal (dashboard/components/scheduler/ConflictModal.tsx)
-- **[medium]** The conflict modal gives useful context, but the suggested alternatives are rendered as a flat list of buttons with dense inline metadata, which becomes harder to scan when several near-identical slots are returned → Group or visually separate time, employee, and resource details more clearly so operators can compare fallback slots quickly under booking pressure.
-- **[medium]** The primary action text is always “Pick another time,” even when next-available suggestions are already on screen, so the footer does not fully acknowledge the richer recovery path the modal provides → Adjust the footer copy and hierarchy when alternatives exist so the escape path and the suggestion path feel coordinated instead of parallel.
-
-### EmployeeDayFocusPanel (dashboard/components/scheduler/EmployeeDayFocusPanel.tsx)
-- **[high]** The utilization number is color-graded with green/yellow/gray thresholds, which turns a factual staffing summary into an implicit performance signal and conflicts with the product rule against warnings, grades, or opinions → Present booked hours and shift coverage as neutral operational data, and remove threshold-based color judgment from the panel.
-- **[medium]** The slide-in panel does not show any explicit dialog or landmark semantics, so keyboard and assistive-tech users get a visually obvious focus surface without equivalent structural cues → Add an appropriate complementary/dialog role, labeled heading association, and clearer focus entry behavior so the panel is as navigable as it is visible.
-
-### SchedulerDateNav (dashboard/components/scheduler/SchedulerDateNav.tsx)
-- **[medium]** The navigation combines five 48px targets plus a long-form date label in one row, which is likely to wrap awkwardly or compress the label on narrower laptop widths and smaller tablets → Add a responsive stacked or wrapped layout that preserves clear date context without forcing the controls and title to compete for horizontal space.
-- **[low]** Yesterday/Today/Tomorrow are strong shortcuts, but there is still no obvious direct jump to a broader date picker from this control alone, so operators working beyond a ±1 day window may still have to hunt elsewhere in the scheduler shell → Pair the shortcut chips with a more explicit longer-range date affordance nearby so quick jumps and arbitrary jumps feel like one navigation system.
-
-## Review — 2026-05-19
-
-### NewSchedulerView (dashboard/components/scheduler/NewSchedulerView.tsx)
-- **[high]** The new scheduler shell concentrates multiple dense subviews, overlays, and booking interactions into one orchestrating surface, which raises the risk that loading, selection, and overlay state changes feel fragile when operators are moving quickly → Strengthen shell-level empty/loading/error continuity and keep cross-panel state transitions visibly coordinated so the scheduler feels dependable under rapid interaction.
-- **[medium]** As the hub for multiple scheduler modes, this component is likely carrying a lot of routing and orchestration responsibility itself rather than delegating to smaller shells, which makes consistency drift more likely across subviews → Keep the top-level scheduler focused on mode switching and shared state, and push presentation-specific behavior down into narrower view components.
-
-### QuickBookPanel (dashboard/components/scheduler/QuickBookPanel.tsx)
-- **[high]** Quick-book flows are high-pressure by nature, and this panel appears to pack multiple dependent booking fields into a tight side panel without much room for progressive explanation or recovery, which can make validation and dependency changes feel abrupt → Strengthen inline state transitions for employee/service/resource dependencies, loading, and submit failure so fast booking feels reliable rather than brittle.
-- **[medium]** As another slide-in scheduler surface, this panel risks duplicating custom close, spacing, and action-row behavior instead of inheriting a shared drawer/modal pattern → Align it with the same shell conventions used by other scheduler overlays so operators do not have to relearn panel behavior across booking tasks.
-
-### ResourceColumnsView (dashboard/components/scheduler/ResourceColumnsView.tsx)
-- **[high]** Coverage bars classify empty hourly slots as `gap`, which again turns a neutral resource calendar into evaluative language and conflicts with the product rule against warnings or opinions → Rename and restyle empty resource time as neutral availability or open time so the view reports state without implying a problem.
-- **[medium]** The view uses a wide horizontal matrix with a fixed label column and per-hour columns, which is efficient on desktop but likely to become cumbersome on smaller laptops or tablets when many resources are configured → Add a responsive fallback, like condensed labels or alternate stacked presentation, so resource scheduling remains usable before the table spills into constant side-scrolling.
-
-## Review — 2026-05-19
-
-### StaffProfileCard (dashboard/components/scheduler/StaffProfileCard.tsx)
-- **[medium]** This popover acts like a focused detail panel with an actionable staffing control, but it has no explicit dialog semantics or visible close affordance beyond outside click and Escape, which makes keyboard use less self-explanatory once the card is open → Add a visible close control and appropriate dialog/label semantics so the card remains predictable as an actionable overlay.
-- **[medium]** The compact “Today” summary is useful, but it still needs clearer context about how booked work relates to scheduled time so the card answers an operational question instead of just showing small stats → Add a clearer relationship between booked time and shift span so the profile card tells a more useful story at a glance.
-
-### StaffSwimLaneView (dashboard/components/scheduler/StaffSwimLaneView.tsx)
-- **[medium]** Shift creation, move, resize, delete, and appointment dragging all share the same horizontal row surface, which gives power users a lot of control but also creates a crowded interaction model where affordances can be hard to discover or easy to mis-trigger → Separate the visual cues for shift editing versus appointment editing more clearly so operators can tell at a glance which layer they are manipulating.
-- **[medium]** Destructive shift deletion is hidden behind a hover-only inline action inside each shift block, which is difficult for touch users and easy to miss in a dense lane layout → Surface a more durable delete affordance or route deletion through a clearer contextual action pattern that works beyond hover.
-
-### TimeGrid (dashboard/components/scheduler/TimeGrid.tsx)
-- **[medium]** The scheduler’s background grid is doing a lot of heavy lifting for orientation, and when paired with draggable overlays it needs especially strong contrast and hierarchy to prevent visual mush across long day views → Differentiate hour boundaries, sub-hour marks, and interactive overlays more clearly so the grid remains readable once appointments, shifts, and creation previews stack on top.
-- **[low]** Time grids with fixed horizontal cadence can become cognitively expensive when operators need to work outside the standard day window or compare dense peak periods → Pair the grid with clearer surrounding controls for changing visible range and give stronger contextual cues for what portion of the day is currently in frame.
-
-## Review — 2026-05-19
-
-### SkillRelationshipMap (dashboard/components/skill-map/SkillRelationshipMap.tsx)
-- **[high]** The footer still summarizes coverage with `full`, `partial`, and `uncovered` counts plus warning/danger color language, which turns a structural relationship map into an evaluative grading surface and conflicts with the project rule against warnings or opinions → Reframe the footer and broken-chain language as neutral connection state, like fully linked, partially linked, and missing links, without score-like emphasis.
-- **[medium]** Linking mode, broken-chain fixing, node selection, and disconnect-on-line-click all coexist in one canvas, which gives the map power but also creates a lot of interaction modes to remember at once → Make the current mode and next valid action more explicit near the cursor or selection state so operators do not have to mentally track which click will select, connect, fix, or disconnect.
-- **[medium]** The three-column map plus connection layer is visually compelling on wide screens, but it is likely to become cramped and scroll-heavy on narrower laptops when the node lists grow → Add a more deliberate responsive fallback or progressive disclosure strategy so the map remains readable before it turns into a dense horizontally scrolling diagram.
-
-### SkillMapNode (dashboard/components/skill-map/SkillMapNode.tsx)
-- **[medium]** Coverage still renders through score-like node states, which introduces grading semantics directly inside each node and keeps the map drifting toward judgment instead of neutral relationship data → Replace coverage wording and badge styling with neutral connection-state language that describes linkage without scoring it.
-- **[medium]** Each node can be selected, linked, fixed, and connected through small inline affordances in a compact card, which gives expert users power but creates a fairly dense action model for first-time operators → Separate primary node selection from secondary link/fix actions more clearly so the next available action is easier to read at a glance.
-
-### SkillMapConnections (dashboard/components/skill-map/SkillMapConnections.tsx)
-- **[medium]** The connection layer is visually central to the map, but when many lines overlap the relationships can quickly become hard to trace without stronger hover or selection emphasis → Increase selected-path contrast and de-emphasize unrelated lines more aggressively so the active relationship remains readable in dense graphs.
-- **[low]** SVG-style connection layers can be beautiful on large canvases but tend to lose clarity on smaller screens or at high density if line routing is too literal → Add more deliberate overlap handling or responsive simplification so the connection layer remains interpretable before it becomes decorative noise.
-
-## Review — 2026-05-19
-
-### ServiceAssignmentView (dashboard/components/ServiceAssignmentView.tsx)
-- **[high]** Assignment screens are all about clarity of responsibility, and when service-to-staff mapping gets dense without strong incomplete-versus-complete cues operators can lose track of what is actually bookable → Make unmapped, partially mapped, and fully mapped states much more explicit so the view supports confident scheduling setup rather than visual guesswork.
-- **[medium]** This kind of matrix-heavy editor often ends up re-implementing custom row controls and badges instead of leaning on the shared dashboard primitives, which makes consistency drift likely across selection, hover, and save feedback → Normalize the interaction patterns around shared checkbox, button, and badge treatments so assignment editing feels like part of the same system as the rest of the dashboard.
-
-### SkillAssignmentsView (dashboard/components/SkillAssignmentsView.tsx)
-- **[high]** Assignment views that coordinate employees, skills, and resources tend to become visually dense very quickly, and if incomplete-versus-complete mappings are not unmistakable the screen turns into another puzzle instead of a scheduling control surface → Strengthen row-level completion cues and post-toggle feedback so operators can tell immediately which assignments are still missing.
-- **[medium]** This view likely shares a lot of interaction language with other matrix-style mapping screens, and if it uses bespoke pills, toggles, or row actions it will drift from the increasingly consistent admin surfaces around it → Align the assignment interactions with shared primitives and the matrix conventions already used elsewhere in the dashboard.
-
-### SkillMatrixView (dashboard/components/SkillMatrixView.tsx)
-- **[high]** The matrix lets operators toggle mappings instantly across a wide table, but the current feedback model is binary and terse, which can make accidental clicks or failed updates feel riskier than they should in a high-density grid → Add stronger per-cell pending, saved, and error feedback so operators can trust rapid mapping changes without rescanning the whole row.
-- **[medium]** The all, people, and places filter pills are custom-styled buttons rather than shared segmented controls or button primitives, which makes another dense operational surface rely on bespoke interaction patterns → Rebuild the filter controls from shared primitives so focus, selected state, and keyboard behavior stay consistent with the rest of the dashboard.
-- **[medium]** The footer tip says toggling a cell “instantly updates the AI’s scheduling logic,” which is useful but phrased more like persuasive reassurance than neutral product state → Keep the helper copy factual and specific about what changes, without leaning into marketing-style reassurance.
-
-## Review — 2026-05-19
-
-### KnowledgeBaseView (dashboard/components/KnowledgeBaseView.tsx)
-- **[medium]** Knowledge-base screens usually mix search, category context, and document-detail editing, and if sparse-data and no-results states are not sharply distinguished the surface can feel either empty or broken depending on how the user arrived there → Differentiate first-use empty state, filtered-no-results state, and loading state much more clearly so the view stays trustworthy as the document set grows.
-- **[medium]** Content-management views often accumulate custom sidebar/detail behavior that drifts from the dashboard’s other list-detail panes unless the shell is kept disciplined → Keep the document list and detail treatment aligned with the same pane conventions used elsewhere so the knowledge base feels operational rather than bespoke.
-
-### OutlookLayout (dashboard/components/OutlookLayout.tsx)
-- **[medium]** Layout shells that manage panes, resizing, tenant-switch controls, and profile menus can easily become invisible infrastructure, and when their responsive transitions are not obvious users can lose track of where detail content or admin context went on smaller viewports → Make pane-collapse and active-detail transitions more explicit so the shell preserves orientation as the viewport changes.
-- **[medium]** This custom shell also spans primary navigation, advanced navigation, admin tenant switching, live badges, and account menus, so it risks drifting from other list-detail layouts in spacing and keyboard traversal if not kept tightly disciplined → Normalize its interaction and spacing rules against the rest of the dashboard’s shell patterns so it feels like a coherent app frame instead of an accumulation of special cases.
-
-### ResourceManagerView (dashboard/components/ResourceManagerView.tsx)
-- **[high]** This view asks users to understand both resource inventory and service-to-resource support mappings in the same surface, but unsupported versus partially configured states can still blur together once many cards are present → Make mapping completeness much more explicit at the card level so operators can immediately see which resources are actually ready for booking.
-- **[medium]** Resource cards open an edit modal on click while also functioning as summary tiles, which makes the interaction a little implicit and can be easy to miss for users who treat cards as read-only summaries → Add a clearer edit affordance or secondary action so the path from browsing resources to modifying one feels more intentional.
-
-## Review — 2026-05-19
-
-### EmployeeManagementView (dashboard/components/EmployeeManagementView.tsx)
-- **[high]** Employee management views usually blend roster creation, status toggles, and detail editing in one surface, and if active, inactive, and partially configured staff states are not clearly separated the page can make staffing changes feel riskier than they should → Differentiate roster state, setup completeness, and destructive actions much more clearly so managing staff feels crisp and low-anxiety.
-- **[medium]** Team-roster pages often bury key empty and post-action states, like no staff yet, save failed, or invite/setup incomplete, under the main list chrome → Give those states more deliberate visibility so the page still communicates clearly before a full team exists.
-
-### TeamAccessView (dashboard/components/TeamAccessView.tsx)
-- **[high]** Access-management screens carry high consequence, and if role changes, invite states, and permission boundaries are not visually separated with strong confirmation and outcome feedback the surface can feel risky to use → Strengthen the distinction between current access, pending invites, and destructive permission changes so operators can manage staff access without second-guessing the result.
-- **[medium]** Team access workflows often include multiple async states like loading members, sending invites, and updating roles, and if those states are shown with plain inline text or subtle transitions the page can feel uncertain during changes → Add clearer loading, empty, and post-action success/error treatments around the key access-management flows.
-
-### VoiceCallsView (dashboard/components/VoiceCallsView.tsx)
-- **[medium]** Call-history views pack status, transcript context, and session metadata into one place, and if filtering and sparse-data states are not handled deliberately the screen can quickly feel noisy or empty in the wrong ways → Clarify empty, loading, and filtered-no-results states so operators can tell whether there were no calls, no matches, or data is still arriving.
-- **[medium]** Voice-session detail surfaces invite custom chips, panels, and transcript affordances that can drift from the rest of the dashboard if not grounded in shared primitives → Keep transcript/session cards, badges, and action controls aligned with shared UI primitives so phone-assistant reporting feels consistent with the other operational views.
-
-## Review — 2026-05-19
-
-### SchedulerView (dashboard/components/SchedulerView.tsx)
-- **[high]** This older scheduler shell likely sits between multiple scheduler modes and legacy/new subviews, and that kind of transitional orchestration can easily produce confusing loading, mode-switch, and empty-state handoffs → Make the boundaries between scheduler modes, selected date context, and shell-level loading states much more explicit so operators always know which planner they are looking at.
-- **[medium]** Views that act as scheduler hubs tend to accrete custom toggles and layout chrome over time, which increases the risk of overlap with `NewSchedulerView` and other newer surfaces → Tighten the shell’s responsibilities and align its controls with the newer scheduler patterns so the experience feels like one scheduler system rather than parallel generations.
-
-### ShiftManagementView (dashboard/components/ShiftManagementView.tsx)
-- **[high]** Shift editing combines schedule creation, copying, and overrides, and if unsaved changes, copied schedules, and actual persisted state are not unmistakable the screen can make staffing edits feel hazardous → Strengthen changed-versus-saved feedback, especially around bulk copy actions and override edits, so operators can trust what will actually affect availability.
-- **[medium]** Dense weekly/time-grid staffing views often bury the most important recovery states, like no employees selected, no shifts configured, or failed save/apply actions, under the main editor chrome → Give those operationally important states more intentional empty/error treatment so the screen remains readable even before a full schedule exists.
-
-### SkillManagementView (dashboard/components/SkillManagementView.tsx)
-- **[medium]** Skill library screens mix creation, deletion, and categorization in one place, and if the empty state and destructive path are not clearly differentiated the view can feel more fragile than it needs to for routine taxonomy work → Make creation, no-skills, and delete-confirm states more distinct so maintaining the skill list feels safe and straightforward.
-- **[medium]** The surface relies on hover-revealed icon-only delete controls, which weakens discoverability and keyboard clarity when the list grows → Prefer shared button treatments with explicit labels or stronger accessible names so skill maintenance remains easy to scan and operate.
-
-## Review — 2026-05-19
-
-### SkillMapColumn (dashboard/components/skill-map/SkillMapColumn.tsx)
-- **[low]** The column component is a structural wrapper in a dense visual map, so if title, icon, and section hierarchy are too subtle it becomes harder to understand where selection and linking actions belong once the canvas fills up → Strengthen the column heading hierarchy and section framing so the three map lanes stay distinct under heavy content.
-- **[medium]** Small structural wrappers like this are easy places for spacing and responsive drift to accumulate across the map, especially when the rest of the surface is highly interactive → Keep the column shell tightly aligned with the dashboard’s shared spacing and responsive rules so the map does not feel like a standalone mini-app.
-
-### SkillMapFixPanel (dashboard/components/skill-map/SkillMapFixPanel.tsx)
-- **[high]** Fix panels are decision-heavy recovery surfaces, and while this one is compact, it still presents several possible employee/resource repairs without much rationale for why one fix is preferable to another → Clarify why each suggested fix resolves the broken chain and distinguish the most direct repair path from secondary options.
-- **[medium]** The close control is a tiny bare `✕` text button inside an otherwise structured action panel, which weakens discoverability and accessible affordance in a moment where users may already feel lost → Replace it with a more standard icon-button treatment and clearer panel-level dismissal semantics so the recovery flow feels as polished as the rest of the map.
+- **[medium]** The reactivation and cancellation flows are operationally useful, but they can still read like warnings or exception banners if their copy and placement dominate the surrounding history view → Keep appointment-history state changes factual and task-oriented so CRM history remains informative without slipping into judgmental UI tone.

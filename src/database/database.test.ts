@@ -95,13 +95,13 @@ const sampleConsentRecord: Omit<ConsentRecord, 'consent_record_id'> = {
   ip_address: '192.168.1.1',
 };
 
-const sampleOptOutRecord: Omit<OptOutRecord, 'optOutRecordId'> = {
-  tenantId: 1,
-  customerEmail: 'customer@example.com',
-  customerPhone: '+15551234567',
-  optOutType: 'both',
-  optOutDate: '2026-04-14T10:00:00.000Z',
-  optOutMethod: 'stop',
+const sampleOptOutRecord: Omit<OptOutRecord, 'opt_out_record_id'> = {
+  tenant_id: '1',
+  customer_email: 'customer@example.com',
+  customer_phone: '+15551234567',
+  opt_out_type: 'both',
+  opt_out_date: '2026-04-14T10:00:00.000Z',
+  opt_out_method: 'stop',
   notes: 'Customer texted STOP',
 };
 
@@ -408,8 +408,8 @@ describe('PostgresDatabaseService', () => {
         const result = await service.createOptOutRecord(sampleOptOutRecord);
 
         expect(result.id).toBe(1);
-        expect(result.optOutType).toBe('both');
-        expect(result.optOutMethod).toBe('stop');
+        expect(result.opt_out_type).toBe('both');
+        expect(result.opt_out_method).toBe('stop');
       });
 
       it('retrieves opt-out records for a tenant', async () => {

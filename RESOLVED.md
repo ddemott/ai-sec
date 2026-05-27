@@ -4,6 +4,18 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026 Early Reviews (March–April) — Bug & UX Cleanup (Historical)
+
+During March–April 2026 code reviews, 72 bugs and 47 UX/a11y issues were tracked in `docs/BUGS.md`.
+
+**Outcome:** All resolved (71 fixed, 2 not-a-bug, 47 UX issues resolved).
+
+The detailed log has been archived for reference. See `docs/sessions/` or the original `docs/BUGS.md` (now a pointer) for the full historical record.
+
+This work established many of the consistency, accessibility, and empty-state patterns still used in the dashboard.
+
+---
+
 ## 2026-05-21 — Unauthenticated cross-tenant data access via `?tenant_id=` (CVE-class) + threadpool fix
 
 **Two findings, fixed together; kept in separate commits.**
@@ -43,6 +55,7 @@ POST /services/create  {tenant_id:<uuid>,...}  # no auth → reached handler
 - **UX Cluster-B defect 1** — `SetupWizard/StepServices` duration field is clearable again (was forced to `0` by `parseInt||0`); 0 renders empty, save still rejects it. +regression spec.
 - **UX Cluster-B defect 2** — `SuperAdminDashboard` business-search input was uncontrolled/dead; now filters the sidebar cards by name with a no-match message, and disables drag-reorder while filtering (new `draggable` prop on `TenantCard` — reorder is full-array-index based, so a filtered subset would corrupt order). +3 tests.
 - **UX Cluster-B defect 3** — `SetupWizard` template-seed failure was a silent `console.warn` that left setup half-seeded with no recovery. Now: seed logic hoisted to a `runSeed` callback that **reconciles by name-diff** (creates only missing starter services, captured once in `seedTargetRef` so a user's own services aren't topped-up) → a partial-failure retry can finish (the old `services.length === 0` gate made retry impossible). Failure surfaces a Retry banner in the wizard body. +2 tests (failure surfaces banner; retry re-invokes + clears). All three Cluster-B defects now closed.
+- **Mechanical refactor hygiene (REFACTORING_TODO #1)** — Eliminated duplication of voice CRM context types (`CustomerNote`, `VoiceSession*`, `CustomerContext`, `AppointmentSummary`/`History`, `formatContextForAI`) that lived in both `src/types/voiceCrm.ts` and `dashboard/lib/types.ts`. Single source moved to new `shared/voiceCrm.ts` (cross-runtime, no deps). Backend wrapper + dashboard re-exports preserve all public APIs. Both `tsc --noEmit` clean; zero stragglers per grep. CLAUDE.md + README.md + REFACTORING_TODO.md updated. Demonstrates the "extract after 3–4 consumers" + "shared/ for pure cross-boundary logic" principle in action.
 
 **Still open (TODO → Production hardening):** P0 gate Railway deploy on CI green, P1 E2E-in-CI (needs Actions secrets), P2 healthcheck→`/ready`, Railway `METRICS_TOKEN`/`BETTER_STACK_TOKEN` + alert rules, gap-1 B/C, UX Cluster-B 2/3.
 

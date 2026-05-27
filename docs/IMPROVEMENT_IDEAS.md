@@ -1,8 +1,12 @@
 # Improvement Ideas — Curated Backlog
 
-> Curated review-phase backlog: ~160 refactoring tasks across 10 review phases, dated 2026-04-10/11. Each phase reviews one area (Developer Experience, Architecture, UI/UX Patterns, Code Patterns, Backend Consistency, etc.). Capitalized task titles. No `Self-Review` footers — this file is organized for review, not chronologically.
+> **See `docs/README.md` → Documentation Principles** for how this file fits into the overall model.
 >
-> The automated daily-journal feed (`improvement-ideas.md` at the repo root) was retired 2026-05-07 — generator firehose with 98/99 untriaged proposals, redundant against this curated backlog + `NEEDS-REFACTORING.md` + `docs/TODO.md`.
+> This is the main curated backlog of improvement ideas. Many items from the 2026-04 reviews are now stale ("decay").
+>
+> **Maintenance note (2026-05-27):** This file should be periodically reviewed. Stale proposals that have not been promoted to `docs/TODO.md` or `REFACTORING_TODO.md` after 6+ months should be pruned or archived.
+
+> The daily generator feed at the repo root (`improvement-ideas.md`) was retired 2026-05-07.
 
 ---
 
@@ -3129,3 +3133,24 @@
 **What's working:** The live docs/ target check remains necessary, and this cycle revisited the insight layer from a sharper failure-visibility angle instead of duplicating the earlier no-selection and stat-card notes.
 **What I changed in HEARTBEAT.md:** No changes needed
 **Why:** The process is still producing distinct, bounded follow-ups as long as I keep validating the active files and choosing a genuinely narrower angle within a broader area.
+
+## Ideas — 2026-05-27 (UI/UX patterns reviewed)
+
+### Task: Remove evaluative status framing from AnalyticsView metrics
+**Status:** proposed
+**Files to change:** `dashboard/components/AnalyticsView.tsx`
+**What to do:**
+1. Audit every analytics card, badge, helper sentence, and color mapping in `AnalyticsView.tsx` for wording or styling that implies performance judgment, including red/amber/green return-rate, no-show, and missed-call treatments.
+2. Replace those mappings with neutral descriptive states that simply report the metric and timeframe, for example “Return customer rate, last 30 days” instead of “Strong/weak return rate” cues.
+3. Keep emphasis only for information hierarchy, not judgment: use the existing dark-theme tokens for primary metric, secondary context, and muted empty-state text without warning/success semantics unless the state is an actual system error.
+4. Update any placeholder or empty-state copy in the same view so “no data yet” reads as a factual absence of observations, not an alert.
+5. Add or update dashboard tests that lock the copy/styling intent in place, especially around the previously color-graded cards.
+**Done when:**
+- [ ] AnalyticsView no longer uses business-grading language or warning/success color semantics for ordinary KPI values
+- [ ] Empty and placeholder states in AnalyticsView read as neutral factual states
+- [ ] Existing dashboard tests pass, and coverage protects the non-evaluative metric presentation
+**Why it matters:** Brings a prominent dashboard surface back into alignment with the product philosophy, reducing accidental “scorecard” UX drift.
+**Tradeoff:** Small UI copy and styling cleanup, but it needs care so the page stays readable after removing familiar warning/success color cues.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Less than an hour of focused cleanup removes one of the clearest philosophy violations on a high-traffic screen, so the return is strong.

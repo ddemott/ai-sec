@@ -13,9 +13,9 @@
  * `googleapis` SDK while Outlook uses raw `fetch`; the CRM clients each have
  * their own provider quirks. Parameterizing over those defeats the
  * abstraction (same disposition as the broader CRM sync skeleton in
- * NEEDS-REFACTORING #10's broader extraction).
+ * historical major refactor (see RESOLVED.md; originally tracked as NEEDS-REFACTORING #10's broader extraction).
  *
- * Origin: NEEDS-REFACTORING / TODO "Unify calendar token refresh" — the
+ * Origin: historical major refactor (see RESOLVED.md) "Unify calendar token refresh" — the
  * verify-first found that the truly shared code was the state JWT, not the
  * token refresh.
  */

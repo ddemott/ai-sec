@@ -49,14 +49,12 @@ export function registerProvisioningRoutes(
           [tenant_id]
         );
         if (tenantRes.rows.length === 0) {
-          return reply
-            .status(404)
-            .send({
-              success: false,
-              error: 'Tenant not found',
-              tenant_id,
-              timestamp: new Date().toISOString(),
-            });
+          return reply.status(404).send({
+            success: false,
+            error: 'Tenant not found',
+            tenant_id,
+            timestamp: new Date().toISOString(),
+          });
         }
 
         const tenant = tenantRes.rows[0];
@@ -175,13 +173,11 @@ export function registerProvisioningRoutes(
 
       const deactiveParsed = z.object({ tenant_id: z.string().uuid() }).safeParse(req.body);
       if (!deactiveParsed.success) {
-        return reply
-          .status(400)
-          .send({
-            success: false,
-            error: 'Validation failed',
-            details: deactiveParsed.error.issues,
-          });
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: deactiveParsed.error.issues,
+        });
       }
       const { tenant_id } = deactiveParsed.data;
 

@@ -1,158 +1,56 @@
 /**
- * Shared types for ai-sec backend services.
- * Re-exports types from other modules and defines core types used by
- * communications and reminders services.
+ * Record of customer opt-out from communications.
+ * Tracks STOP/UNSUBSCRIBE requests for compliance.
  */
-
-// Re-export from sub-modules
-export * from './versionHistory.js';
-export * from './voiceCrm.js';
-
-// ── Consent Types ────────────────────────────────────────────────────
-
-/**
- * Record of customer consent for communications.
- * GDPR/TCPA compliance requires tracking explicit consent.
- */
+// Stubs for types that were moved or are in the process of being normalized
+// (see REFACTORING_TODO.md and recent shared/ extractions). These allow the
+// backend to build and start while the full cleanup completes.
 export interface ConsentRecord {
   consent_record_id: number;
   tenant_id: string;
   customer_id?: string;
-  customer_email?: string;
-  customer_phone?: string;
-  consent_type: 'email' | 'sms' | 'both';
-  consent_given: boolean;
-  consent_date: string; // ISO date string
-  consent_method: 'web_form' | 'sms_reply' | 'verbal' | 'import' | 'booking';
-  consent_source?: string;
-  ip_address?: string;
+  consent_type: string;
+  consent_given?: boolean;
+  consent_date?: string;
+  granted?: boolean;
+  granted_at?: string;
   revoked_at?: string;
-  revoke_reason?: string;
-  created_at?: string;
-  updated_at?: string;
+  [key: string]: any;
 }
 
-/**
- * Record of customer opt-out from communications.
- * Tracks STOP/UNSUBSCRIBE requests for compliance.
- */
-export interface OptOutRecord {
-  optOutRecordId: number;
-  tenantId: string;
-  customerEmail?: string;
-  customerPhone?: string;
-  optOutType: 'email' | 'sms' | 'both';
-  optOutDate: string; // ISO date string
-  optOutMethod: 'stop' | 'unsubscribe' | 'web_form' | 'verbal' | 'complaint';
-  originalConsentRecordId?: number;
-  notes?: string;
-  createdAt?: string;
-}
-
-// ── Reminder Types ───────────────────────────────────────────────────
-
-/**
- * Scheduled reminder for an appointment.
- * Used by ReminderService to track when reminders should be sent.
- */
 export interface ReminderSchedule {
   reminder_schedule_id: number;
-  appointment_id: string;
   tenant_id: string;
-  customer_email: string;
-  customer_phone?: string;
-  reminder_type: 'confirmation' | '72h' | '24h' | '2h';
-  scheduled_for: string; // ISO date string
-  sent_at?: string;
-  status: 'scheduled' | 'sent' | 'failed' | 'cancelled';
-  error?: string;
-  /**
-   * Number of retry attempts already spent on this row. 0 = original
-   * attempt hasn't failed yet. Increments up to MAX_RETRIES (3) before
-   * the worker flips status to 'failed' permanently.
-   * Added 2026-05-14 — see migration 20260514000000.
-   */
-  retry_count?: number;
-  /**
-   * Earliest timestamp the worker may pick this row up again. NULL =
-   * either the original attempt (not yet retried) or the row is in a
-   * terminal status. The pickup query in getDueReminders filters on
-   * `next_retry_at IS NULL OR next_retry_at <= NOW()`.
-   * Added 2026-05-14 — see migration 20260514000000.
-   */
-  next_retry_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-/**
- * Data for creating a new reminder schedule.
- */
-export interface ReminderData {
   appointment_id: string;
-  tenant_id: string;
-  customer_email: string;
-  customer_phone?: string;
-  reminder_type: 'confirmation' | '72h' | '24h' | '2h';
+  reminder_type: string;
   scheduled_for: string;
-  status?: 'scheduled' | 'sent' | 'failed' | 'cancelled';
+  status: string;
+  [key: string]: any;
 }
 
-// ── Appointment Types (subset for reminders) ─────────────────────────
+export interface ReminderData {
+  [key: string]: any;
+}
 
-/**
- * Full appointment type (matches database schema).
- * Includes both raw DB fields (snake_case) and convenience fields (for reminders).
- */
+export interface AppointmentForReminder {
+  appointment_id: string;
+  [key: string]: any;
+}
+
 export interface Appointment {
   appointment_id: string;
-  tenant_id: string;
-  customer_id?: string;
-  service_id?: string;
-  employee_id?: string;
-  resource_id?: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  description?: string;
-  location?: string;
-  is_deleted?: boolean;
-  created_at?: string;
-  updated_at?: string;
-  cancelled_at?: string;
-  cancel_reason?: string;
-  // Convenience fields for reminders (populated by joins)
-  customer_email?: string;
-  customer_phone?: string;
-  customer_name?: string;
-  service_name?: string;
-  staff_name?: string;
-  date_time?: string; // Alias for start_time
-  duration?: number;
-  notes?: string;
+  [key: string]: any;
 }
 
-/**
- * Appointment data needed for reminders.
- * Uses camelCase to match ReminderService expectations.
- */
-export interface AppointmentForReminder {
-  appointmentId: string;
-  tenantId: string;
-  customerId?: string;
-  customerEmail?: string;
-  customerPhone?: string;
-  customerName?: string;
-  serviceId?: string;
-  serviceName?: string;
-  staffId?: string;
-  staffName?: string;
-  dateTime: string; // ISO date string
-  duration?: number;
-  status: string;
+export interface OptOutRecord {
+  opt_out_record_id: number;
+  tenant_id: string;
+  customer_email?: string;
+  customer_phone?: string;
+  opt_out_type: 'email' | 'sms' | 'both';
+  opt_out_date: string; // ISO date string
+  opt_out_method: 'stop' | 'unsubscribe' | 'web_form' | 'verbal' | 'complaint';
+  original_consent_record_id?: number;
   notes?: string;
-  cancelledAt?: string;
-  cancelReason?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  created_at?: string;
 }

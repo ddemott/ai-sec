@@ -47,7 +47,9 @@ export class ConsentService {
         if (consentType === 'sms' && !customerPhone) return false;
         return consent.consent_type === consentType || consent.consent_type === 'both';
       })
-      .sort((a, b) => new Date(b.consent_date).getTime() - new Date(a.consent_date).getTime());
+      .sort(
+        (a, b) => new Date(b.consent_date || 0).getTime() - new Date(a.consent_date || 0).getTime()
+      );
 
     if (relevantConsents.length === 0) {
       return false;
@@ -60,7 +62,7 @@ export class ConsentService {
       return false;
     }
 
-    return latestConsent.consent_given;
+    return !!latestConsent.consent_given;
   }
 
   /**
@@ -125,62 +127,48 @@ export class ConsentService {
   /**
    * Record an opt-out request (STOP, UNSUBSCRIBE, etc.)
    */
-  async recordOptOut(optOutData: Omit<OptOutRecord, 'optOutRecordId'>): Promise<OptOutRecord> {
-    if (!optOutData.tenantId) {
-      throw new Error('tenantId is required');
+  async recordOptOut(optOutData: Omit<OptOutRecord, 'opt_out_record_id'>): Promise<OptOutRecord> {
+    if (!optOutData.tenant_id) {
+      throw new Error('tenant_id is required');
     }
 
-    // Some callers (webhook receivers, raw-JSON POSTs from external
-    // systems) send snake_case keys instead of the camelCase shape the
-    // OptOutRecord type declares. The fallback chain accepts either —
-    // the OptOutSnakeShape alias names exactly which snake-case keys
-    // we recognize so the cast is specific instead of bare `any`.
-    type OptOutSnakeShape = Partial<{
-      customer_email: string;
-      customer_phone: string;
-      opt_out_type: OptOutRecord['optOutType'];
-      opt_out_date: string;
-      opt_out_method: OptOutRecord['optOutMethod'];
-      original_consent_record_id: number;
-    }>;
-    const snake = optOutData as OptOutSnakeShape;
-
-    const camelCaseData: Omit<OptOutRecord, 'optOutRecordId'> = {
-      tenantId: optOutData.tenantId,
-      customerEmail: optOutData.customerEmail ?? snake.customer_email,
-      customerPhone: optOutData.customerPhone ?? snake.customer_phone,
-      optOutType: optOutData.optOutType ?? snake.opt_out_type,
-      optOutDate: optOutData.optOutDate ?? snake.opt_out_date ?? new Date().toISOString(),
-      optOutMethod: optOutData.optOutMethod ?? snake.opt_out_method,
-      originalConsentRecordId:
-        optOutData.originalConsentRecordId ?? snake.original_consent_record_id,
+    const record: Omit<OptOutRecord, 'opt_out_record_id'> = {
+      tenant_id: optOutData.tenant_id,
+      customer_email: optOutData.customer_email ?? (optOutData as any).customer_email,
+      customer_phone: optOutData.customer_phone ?? (optOutData as any).customer_phone,
+      opt_out_type: optOutData.opt_out_type ?? (optOutData as any).opt_out_type,
+      opt_out_date:
+        optOutData.opt_out_date ?? (optOutData as any).opt_out_date ?? new Date().toISOString(),
+      opt_out_method: optOutData.opt_out_method ?? (optOutData as any).opt_out_method,
+      original_consent_record_id:
+        optOutData.original_consent_record_id ?? (optOutData as any).original_consent_record_id,
       notes: optOutData.notes,
     };
 
     // Store opt-out record using repository
-    const optOut = await this.db.createOptOutRecord(camelCaseData);
+    const optOut = await this.db.createOptOutRecord(record);
 
     // Also revoke any existing consent
     let revokeReason = '';
-    if (optOut.optOutMethod === 'unsubscribe') {
+    if (optOut.opt_out_method === 'unsubscribe') {
       revokeReason = 'Opt-out via unsubscribe';
-    } else if (optOut.optOutMethod === 'stop') {
+    } else if (optOut.opt_out_method === 'stop') {
       revokeReason = 'Opt-out via stop';
     } else {
-      revokeReason = `Opt-out via ${optOut.optOutMethod}`;
+      revokeReason = `Opt-out via ${optOut.opt_out_method}`;
     }
 
     await this.revokeConsent(
-      optOut.tenantId,
-      optOut.customerEmail,
-      optOut.customerPhone,
-      optOut.optOutType,
+      optOut.tenant_id,
+      optOut.customer_email,
+      optOut.customer_phone,
+      optOut.opt_out_type,
       revokeReason
     );
 
     console.log(
-      `✅ Opt-out recorded for ${optOut.customerEmail || optOut.customerPhone} (${
-        optOut.optOutType
+      `✅ Opt-out recorded for ${optOut.customer_email || optOut.customer_phone} (${
+        optOut.opt_out_type
       })`
     );
     return optOut;
@@ -207,12 +195,12 @@ export class ConsentService {
     }
 
     return this.recordOptOut({
-      tenantId: tenantId,
-      customerEmail: customerEmail,
-      customerPhone: customerPhone,
-      optOutType: optOutType,
-      optOutDate: new Date().toISOString(),
-      optOutMethod: customerPhone ? 'stop' : 'unsubscribe',
+      tenant_id: tenantId,
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
+      opt_out_type: optOutType,
+      opt_out_date: new Date().toISOString(),
+      opt_out_method: customerPhone ? 'stop' : 'unsubscribe',
       notes: messageBody,
     });
   }

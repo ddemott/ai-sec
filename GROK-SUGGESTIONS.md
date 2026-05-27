@@ -10,7 +10,7 @@
 
 ## Reconciliation key
 
-- `[tracked]` — already in `docs/TODO.md` Phase 13 or `NEEDS-REFACTORING.md`. No new entry created.
+- `[tracked]` — already in `docs/TODO.md` or `REFACTORING_TODO.md`. No new entry created.
 - `[lifted → TODO.md]` — moved into `docs/TODO.md` under "Pre-launch hardening".
 - `[shipped]` — already done; checkbox can stay checked.
 - `[partial]` — partly tracked; the additive piece was lifted, the rest cross-references existing work.
@@ -31,7 +31,7 @@
 - Resolve the dormant CRM adapter layer (migrate or delete). [done 2026-05-02 — deleted, NEEDS-REFACTORING #1]
 - Clean up UsageTrackingService (implement or remove). [done 2026-05-04 — deleted, NEEDS-REFACTORING #3]
 - Finish documentation sweeps (remove remaining stale Vapi references).
-- Address top items from NEEDS-REFACTORING.md.
+- Address top items from REFACTORING_TODO.md (mechanical) or docs/TODO.md.
 
 ### Phase 3: Polish & Beta Testing (2–3 weeks)
 

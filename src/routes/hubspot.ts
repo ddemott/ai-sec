@@ -125,12 +125,10 @@ export function registerHubSpotRoutes(
     const requestAge = Date.now() - timestampMs;
     if (requestAge > 5 * 60 * 1000 || requestAge < -30_000) {
       // Reject requests older than 5 minutes or more than 30s in the future (clock skew tolerance)
-      return reply
-        .status(401)
-        .send({
-          success: false,
-          error: 'Request timestamp too old or too far in the future (replay protection)',
-        });
+      return reply.status(401).send({
+        success: false,
+        error: 'Request timestamp too old or too far in the future (replay protection)',
+      });
     }
 
     const config = {

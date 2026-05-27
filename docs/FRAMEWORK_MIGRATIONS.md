@@ -1,8 +1,8 @@
 # Framework Migrations
 
-Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `NEEDS-REFACTORING.md`.
+Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `REFACTORING_TODO.md` (mechanical) or `docs/TODO.md` (general).
 
-**Last updated:** 2026-05-05 (no new migrations since 2026-05-03 — date bumped to reflect doc audit; runFallback OpenAI-TTS dead-air guard from commit `6488dc4` is unchanged)
+**Last updated:** 2026-05-27 (pointers refreshed during documentation unification pass; content otherwise stable)
 
 ---
 
@@ -40,7 +40,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 ## Related docs
 
-- `NEEDS-REFACTORING.md` — code-cleanup backlog, including Phase 4 TTS work
-- `docs/TODO.md` — full task list
+- `REFACTORING_TODO.md` — current mechanical / convention refactors
+- `docs/TODO.md` — full active task list
 - `docs/ARCHITECTURE.md` — system architecture
 - `CLAUDE.md` — project overview, includes migration callout

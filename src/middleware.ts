@@ -291,8 +291,7 @@ export function tenantMiddleware(app: AppFastifyInstance) {
     // OAuth callbacks, HMAC-signed webhooks) are allowed through; everything
     // else fails closed.
     const urlPath = request.url.split('?')[0];
-    const isPublic =
-      PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/');
+    const isPublic = PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/');
     if (!isPublic && !request.auth) {
       request.log.warn(
         { event: 'unauthenticated_tenant_route', url: request.url, ip: request.ip },

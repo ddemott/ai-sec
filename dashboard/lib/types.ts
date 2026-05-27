@@ -297,98 +297,23 @@ export interface KnowledgeEntry {
   created_at: string;
 }
 
-// --- VOICE CRM TYPES ---
+// --- VOICE CRM TYPES (single source of truth) ---
+// Re-exported from shared/voiceCrm.ts (the cross-runtime canonical definitions).
+// This eliminates the previous duplication between src/types/voiceCrm.ts
+// and this file. formatContextForAI lives only in the shared module
+// (used by the voice agent for prompt building).
 
-export interface CustomerNote {
-  id: string;
-  text: string;
-  type: 'general' | 'call' | 'preference' | 'important';
-  call_id?: string;
-  created_at: string;
-}
-
-export interface AppointmentSummary {
-  appointment_id: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  description: string | null;
-  resource_name: string | null;
-  employee_name: string | null;
-}
-
-export interface AppointmentHistory {
-  total: number;
-  completed: number;
-  cancelled: number;
-  last_appointment: AppointmentSummary | null;
-  upcoming_appointments: AppointmentSummary[];
-}
-
-export interface CustomerContext {
-  is_known_customer: boolean;
-  customer: {
-    customer_id: string;
-    name: string | null;
-    phone: string;
-    email: string | null;
-    address: string | null;
-    created_at: string;
-  } | null;
-  appointment_history: AppointmentHistory;
-  notes: CustomerNote[];
-  preferences: Record<string, unknown>;
-  tags: string[];
-  member_since?: string;
-  session_id?: string;
-}
-
-export type VoiceSessionStatus = 'active' | 'completed' | 'failed' | 'transferred';
-
-export type VoiceSessionOutcome =
-  | 'appointment_booked'
-  | 'appointment_rescheduled'
-  | 'appointment_cancelled'
-  | 'info_provided'
-  | 'transferred'
-  | 'voicemail'
-  | 'abandoned'
-  | 'other';
-
-export interface VoiceSession {
-  voice_session_id: string;
-  tenant_id: string;
-  call_id: string;
-  caller_phone: string;
-  customer_id: string | null;
-  customer_context: CustomerContext;
-  status: VoiceSessionStatus;
-  started_at: string;
-  ended_at: string | null;
-  duration_seconds: number | null;
-  transcript: string | null;
-  summary: string | null;
-  outcome: VoiceSessionOutcome | null;
-  appointment_id: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-  // Joined fields
-  customer_name?: string | null;
-}
-
-export interface VoiceSessionDisplay {
-  voice_session_id: string;
-  call_id: string;
-  caller_phone: string;
-  customer_name: string | null;
-  customer_id: string | null;
-  status: VoiceSessionStatus;
-  started_at: string;
-  duration_seconds: number | null;
-  outcome: VoiceSessionOutcome | null;
-  is_known_customer: boolean;
-}
+export type {
+  CustomerInfo,
+  AppointmentSummary,
+  AppointmentHistory,
+  CustomerNote,
+  CustomerContext,
+  VoiceSessionStatus,
+  VoiceSessionOutcome,
+  VoiceSession,
+  VoiceSessionDisplay,
+} from '../../shared/voiceCrm';
 
 // --- VERSION HISTORY TYPES ---
 

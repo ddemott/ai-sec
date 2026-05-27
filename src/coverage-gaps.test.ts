@@ -177,7 +177,7 @@ describe('Coverage Gaps', () => {
   // The two tests previously here exercised the old employee_shifts
   // weekly-CRUD frontend pattern (split a day into two ranges,
   // delete-and-recreate to replace an overlap). Both the table and
-  // the routes are gone (NEEDS-REFACTORING #4 Phase 2). Date-specific
+  // the routes are gone (historical major refactor; see RESOLVED.md, originally tracked as NEEDS-REFACTORING #4 Phase 2). Date-specific
   // schedule overlap is enforced at the employee_schedule UNIQUE
   // (tenant, employee, shift_date) constraint and tested via the
   // /shifts/overrides endpoints.

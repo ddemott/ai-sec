@@ -508,7 +508,7 @@ describe('ConsentService', () => {
         );
 
         expect(optOut).toBeDefined();
-        expect(optOut?.optOutType).toBe('sms');
+        expect(optOut?.opt_out_type).toBe('sms');
         // WHO: customer via SMS | WHAT: STOP command processing
         // WHEN: customer texts STOP | WHERE: processOptOutCommand
         // WHY: TCPA requires honoring STOP requests within 24h
@@ -524,7 +524,7 @@ describe('ConsentService', () => {
         );
 
         expect(optOut).toBeDefined();
-        expect(optOut?.optOutType).toBe('email');
+        expect(optOut?.opt_out_type).toBe('email');
         // WHO: customer via email | WHAT: unsubscribe processing
         // WHEN: customer clicks unsubscribe | WHERE: processOptOutCommand
         // WHY: CAN-SPAM requires honoring unsubscribe within 10 days

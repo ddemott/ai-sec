@@ -264,7 +264,7 @@ describe('Tenant isolation on DELETE/UPDATE queries', () => {
 
 describe('DELETE routes return 404 for missing entities', () => {
   // BUG-034 was about the now-deleted /shifts/:id DELETE route + the
-  // employee_shifts table. Both removed in NEEDS-REFACTORING #4
+  // employee_shifts table. Both removed in historical major refactor (see RESOLVED.md; originally tracked as NEEDS-REFACTORING #4)
   // Phase 2; the BUG-034 shift cases are obsolete. Skill cases remain.
 
   // --- Sad path: skill not found ---
@@ -978,7 +978,7 @@ describe('Source code correctness checks', () => {
     // WHAT: all OAuth callback and webhook routes must be in PUBLIC_ROUTES (skip JWT auth)
     // WHEN: OAuth redirect after user authorizes, or CRM sends webhook event
     // WHERE: src/middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
-    //        Moved from src/index.ts during NEEDS-REFACTORING #11 cleanup.
+    //        Moved from src/index.ts during historical major refactor (see RESOLVED.md; originally tracked as NEEDS-REFACTORING #11).
     // WHY: OAuth callbacks and webhooks come from external services without JWT — blocking them breaks all integrations
     const src = fs.readFileSync('src/middleware.ts', 'utf8');
     for (const route of [

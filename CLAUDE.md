@@ -38,6 +38,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `/src/database/index.ts` — Canonical pool (lazy singleton w/ deadlock-prevention timeouts: `statement_timeout=30000`, `lock_timeout=10000`, `idle_in_transaction_session_timeout=60000`, `max=10`, `connectionTimeoutMillis=5000`). The first three are Postgres server-side GUCs (`options` string); `connectionTimeoutMillis` is the client-side checkout cap — added 2026-05-21 so a request that can't get a pool slot under load fails fast (→ error → `errors_total`) instead of hanging forever. `createWithTenantClient(pool)` returns the per-request RLS-scoped helper injected into routes.
 - `/src/workers/reminderScheduler.ts` — 60s tick, batches up to 100. Runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`.
 - `/src/templates/` — 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). No HIPAA verticals.
+- `/shared` — Pure cross-runtime TypeScript modules (no Node/Next/framework deps) intended to be consumed from both the Fastify backend (`../shared/...` from `src/`) and the Next.js dashboard (`../../shared/...` from `dashboard/lib/`). Residents: `getEmbedding.ts`, `normalizeForEmbedding.ts`, `scheduling.ts`, `voiceCrm.ts` (2026-05), and `appointmentValidation.ts` (2026-05, 15-min increment + duration rules — eliminates duplication between backend and dashboard form validation).
 - `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation in two layers: (1) any non-public, non-tenant-exempt request with no authenticated session (`req.auth`) is rejected 401 before any tenant resolution — a user-supplied `tenant_id` is a selector within the JWT's permitted tenants, never a substitute for auth (added 2026-05-21 after an anonymous `?tenant_id=<uuid>` was found to return that tenant's data read+write+delete with zero auth; the 2026-05-06 guard only fired when a jwtTenant already existed); (2) for authenticated callers, any user-supplied `tenant_id` (query or body) not matching the JWT's is rejected 403 unless super-admin (added 2026-05-06). `requireTenantId` trusts only the middleware-validated `req.tenantId` (no body fallback). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (10 tools), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
@@ -46,16 +47,33 @@ Items below capture hidden context — things you can't grep for. Everything els
 
 ## Development
 
+**Primary reference for this project**: See `docs/DEVELOPMENT_WORKFLOW.md`.
+
+**For a reusable, project-agnostic version** that can be copied and adapted to other codebases, see the files at the root:
+
+- `PORTABLE_DEVELOPMENT_WORKFLOW.md`
+- `workflow.config.json`
+
+These two files are designed so another project can read them and implement the exact same development, testing, documentation, and commit processes.
+
+Quick commands:
+
 - Bootstrap: `npm run bootstrap` (deps + DB + migrations + seed + tests)
 - Migrate: `npm run db:migrate [-- "postgres://..."]`
 - Seed: `npm run db:seed [-- "postgres://..."]`
-- Rebuild from scratch: `npm run db:rebuild [-- --yes]` (DROP SCHEMA public + apply all migrations + seed). End-to-end validation of the migration chain. Refuses non-localhost URLs unless `--force`; refuses without confirmation unless `--yes`. Use before a branch cut, after a migration-heavy PR, or whenever the local DB has gotten weird.
+- Rebuild from scratch: `npm run db:rebuild [-- --yes]` (DROP SCHEMA public + apply all migrations + seed). End-to-end validation of the migration chain. Refuses non-localhost URLs unless `--force`; refuses without confirmation unless `--yes`.
 - Start: `npm start` (Dashboard https://localhost:4000, Backend https://localhost:4001)
 - Test: `npm test` (backend), `cd dashboard && npm test`, `cd dashboard && npx playwright test` (e2e)
-- Logins (all `/ password`):
-  - `admin@secretaryhq.com` — platform super-admin on tenant `00000000-0000-0000-0000-000000000000`
-  - `daledemott@gmail.com` — DeMott LLC owner on tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0` (Dale's real business; intentionally separate from his super-admin identity so platform rights don't bleed into business workspace)
-  - `admin@dynatire.com` — DynaTire (PoC) owner on tenant `f234e471-0e60-4163-86c9-93cfd9338e3a`
+- Quality gates: `npm run checks` (format + lint + typecheck), `npm run pre-pr`
+- Heavy pre-commit automation: `npm run prepare-commit` (runs checks + tests + drift detector + more)
+- Create feature branch (recommended): `npm run create-branch feat/my-work` or `bash scripts/create-feature-branch.sh feat/my-work`
+- Verify docs drift: `npm run verify:claude-md`
+
+Logins (all `/ password`):
+
+- `admin@secretaryhq.com` — platform super-admin on tenant `00000000-0000-0000-0000-000000000000`
+- `daledemott@gmail.com` — DeMott LLC owner on tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0` (Dale's real business; intentionally separate from his super-admin identity so platform rights don't bleed into business workspace)
+- `admin@dynatire.com` — DynaTire (PoC) owner on tenant `f234e471-0e60-4163-86c9-93cfd9338e3a`
 - Docker DB on port 5433
 
 ## Database Key Details
@@ -73,7 +91,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `check_availability_with_tz()` — timezone-aware availability lookup
 - `check_coverage_gaps()` — coverage analysis powering the dashboard bars
 - `search_tenant_docs()` — cosine similarity over pgvector embeddings
-- **ID convention** — domain entity tables (`tenants`, `customers`, `appointments`, `employees`, `resources`, `services`, `skills`, `users`, `voice_sessions`, `record_versions`) use `UUID PRIMARY KEY DEFAULT gen_random_uuid()`. Append-only audit / event tables (`reminder_schedules`, `consent_records`, `opt_out_records`, similar) use `SERIAL PRIMARY KEY` for the row's own id, but `UUID` for every FK column pointing at a domain entity. Mental rule: if an id is referenced from outside its own table, it's UUID; if it's only ever an internal sequence number, it's SERIAL. TS types must match — `string` for UUID columns, `number` for SERIAL. Polymorphic assignment uses `p_assignment_id` UUID. Origin of the rule: 2026-05-11 found `ReminderSchedule.appointment_id` typed `number` against a UUID FK column — every INSERT would have crashed against real Postgres, but 24 mocked unit tests hid it.
+- **ID convention** — domain entity tables (`tenants`, `customers`, `appointments`, `employees`, `resources`, `services`, `skills`, `users`, `voice_sessions`, `record_versions`) use `UUID PRIMARY KEY DEFAULT gen_random_uuid()`. Append-only audit / event tables (`reminder_schedules`, `consent_records`, `opt_out_records`, similar) use `SERIAL PRIMARY KEY` for the row's own id, but `UUID` for every FK column pointing at a domain entity. Mental rule: if an id is referenced from outside its own table, it's UUID; if it's only ever an internal sequence number, it's SERIAL. TS types must match — `string` for UUID columns, `number` for SERIAL. Polymorphic assignment uses `p_assignment_id` UUID. Origin of the rule: 2026-05-11 found `ReminderSchedule.appointment_id` typed `number` against a UUID FK column — every INSERT would have crashed against real Postgres, but 24 mocked unit tests hid it. This class of type/DB shape drift continues to be actively hunted (e.g. May 2026 removal of a stale duplicate `ReminderSchedule` definition inside `src/services/reminders/types.ts` that was missing the retry columns; and normalization of the last camelCase holdout `OptOutRecord` to snake_case).
 - **PK column-name convention** — every single-column PK is named `<table_singular>_id`, never bare `id`. So `customers.customer_id`, `appointments.appointment_id`, `reminder_schedules.reminder_schedule_id`. The benefit is JOIN symmetry: `appointments.customer_id = customers.customer_id` lets you write `JOIN customers USING (customer_id)`, and a `SELECT *` across joined tables produces unambiguous column names (no aliasing needed). Sub-rules: (a) junction tables (`service_employee`, `service_resource`) keep composite PKs `(left_id, right_id)` — no surrogate `<junction>_id` added; the composite IS the identity. (a2) 1:1 extension tables (`tenant_calendar_settings`, `appointment_sync_map`) reuse the parent's PK as their own (`<parent>_id UUID PRIMARY KEY REFERENCES <parent>(<parent>_id) ON DELETE CASCADE`) — same "relationship IS the identity" reasoning, and the PK-as-FK enforces "at most one row per parent" at the PK level. (b) When a FK is _role-based_ and can't share its target's PK name (e.g. `audit_log.created_by_user_id` vs `audit_log.edited_by_user_id` both pointing at `users.user_id`), the FK is named `<role>_<table>_id`, keeping the `_<table>_id` suffix so the column name still tells you the referenced table. Symmetric `USING` is available only on the unambiguous columns; the role-based ones use explicit `ON`. (c) Abbreviations are forbidden — `voice_session_id` not `vs_id`, `reminder_schedule_id` not `rs_id`. Self-derivability beats brevity. Origin: 2026-05-11 conversation locking the standard down after the reminder-bug surface area review surfaced the asymmetric `<table>.id` vs `<other>.<table>_id` shape across the schema. Migrations to apply this rule land table-by-table as pilot work proves the pattern; each migration is `ALTER TABLE <name> RENAME COLUMN id TO <name_singular>_id`.
 - **Composite / natural keys preferred when the natural key is short and stable.** When designing a table — new or being retrofitted — ask first: "what would make a row natural-keyed?" If the answer is 1-2 stable columns (e.g. `(tenant_id, slug)` for `business_templates`, `(service_id, employee_id)` for junctions), use that composite as the PK directly — no surrogate UUID. The key carries meaning the surrogate doesn't: it tells the reader what makes a row unique, and the schema enforces it at the PK level rather than a separate UNIQUE constraint. Use a surrogate `<table>_id UUID` only when (a) the natural key is 3+ columns, (b) any part of it is mutable, or (c) the row needs a portable identifier in URLs / external systems. **Retrofit cadence:** one table per day, same pilot pattern as the 2026-04→05 PK rename. Each retrofit lands as its own migration (drop surrogate, switch PK to composite, rewrite every FK, update TS types, run full e2e), CI-green per commit before moving to the next. Origin: 2026-05-18 — Dale's reflection that scattered surrogate UUIDs across the schema lost the natural-uniqueness intent. Every NEW table from this point on must justify its surrogate UUID before adding one; every EXISTING surrogate-PK table is on the retrofit queue.
 

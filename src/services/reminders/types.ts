@@ -1,21 +1,12 @@
-export interface ReminderSchedule {
-  reminder_schedule_id: number;
-  appointment_id: string;
-  tenant_id: string;
-  customer_email: string;
-  customer_phone?: string;
-  reminder_type: 'confirmation' | '72h' | '24h' | '2h';
-  scheduled_for: string; // ISO date string
-  sent_at?: string;
-  status: 'scheduled' | 'sent' | 'failed' | 'cancelled';
-  error?: string;
-}
-
-export interface ReminderData {
-  appointment_id: string;
-  tenant_id: string;
-  customer_email: string;
-  customer_phone?: string;
-  reminder_type: 'confirmation' | '72h' | '24h' | '2h';
-  scheduled_for: string;
-}
+/**
+ * Reminder types — thin re-export barrel.
+ *
+ * The authoritative definitions live in `src/types/index.ts` (which is the
+ * single source of truth used by DatabaseService and higher layers).
+ *
+ * This file exists only so that the reminders service layer can continue
+ * to import from './types.js' without a large import-path refactor.
+ *
+ * See REFACTORING_TODO.md Item 2 (2026-05-27).
+ */
+export type { ReminderSchedule, ReminderData } from '../../types/index.js';

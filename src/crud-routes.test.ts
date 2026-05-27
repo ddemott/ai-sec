@@ -414,7 +414,7 @@ describe('CRUD Routes - Database Level', () => {
 
   // ── Shifts: REMOVED 2026-04-30 ──────────────────────────────────────
   // The CRUD tests for the old /shifts routes + employee_shifts table
-  // were deleted with the table itself (NEEDS-REFACTORING #4 Phase 2).
+  // were deleted with the table itself (historical major refactor; see RESOLVED.md, originally tracked as NEEDS-REFACTORING #4 Phase 2).
   // Date-specific schedule CRUD tests live alongside the
   // /shifts/overrides routes; coverage of the booking-time invariants
   // moved into scheduling-atomic.test.ts and shift-overrides-edge.test.ts.

@@ -10,8 +10,7 @@
  * For real-DB integration tests, use `src/test-utils.ts` instead — that file
  * speaks to a real Postgres on port 5433 and handles savepoints / TRUNCATE.
  *
- * Origin: NEEDS-REFACTORING #1 of the 2026-05-04 cleanup pass (surfaced by
- * the verify-first on the deferred part of NEEDS-REFACTORING #11).
+ * Origin: historical major refactor (see RESOLVED.md; originally tracked under NEEDS-REFACTORING #1 and #11).
  */
 
 import { vi, type Mock } from 'vitest';

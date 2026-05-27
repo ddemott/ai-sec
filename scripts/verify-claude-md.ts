@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Drift detector for CLAUDE.md (NEEDS-REFACTORING #13).
+ * Drift detector for CLAUDE.md (historical major refactor; originally tracked as NEEDS-REFACTORING #13).
  *
  * Verifies that hand-maintained claims in CLAUDE.md still match reality:
  *  - Numeric counts (route modules, SQL migrations, industry templates)

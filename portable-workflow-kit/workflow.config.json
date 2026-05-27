@@ -1,0 +1,62 @@
+{
+  "name": "Reusable Development Workflow Configuration",
+  "version": "1.1.0",
+  "description": "Parameters to adapt the portable development workflow to any project. Copy this file into your repo and customize the values.",
+
+  "branching": {
+    "mainBranch": "main",
+    "allowedPrefixes": ["feat/", "fix/", "test/", "refactor/", "docs/", "chore/"],
+    "requireIssueForNonTrivialWork": true
+  },
+
+  "commands": {
+    "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
+    "unitTests": "npm test",
+    "build": "npm run build && cd dashboard && npm run build",
+    "docDriftCheck": "npm run verify:claude-md",
+    "e2eCommand": "cd dashboard && npx playwright test --grep",
+    "prepareCommit": "bash scripts/prepare-commit.sh"
+  },
+
+  "scripts": {
+    "createBranch": "bash scripts/create-feature-branch.sh",
+    "setupHooks": "bash scripts/setup-hooks.sh",
+    "removeHooks": "bash scripts/remove-hooks.sh"
+  },
+
+  "documentation": {
+    "filesThatMustBeUpdated": [
+      "CLAUDE.md",
+      "README.md",
+      "docs/TODO.md",
+      "RESOLVED.md"
+    ],
+    "driftDetectorScript": "npm run verify:claude-md"
+  },
+
+  "testing": {
+    "require5WComments": true,
+    "runRelevantE2E": true,
+    "e2eFramework": "playwright",
+    "unitFramework": "vitest"
+  },
+
+  "hooks": {
+    "useHusky": true,
+    "preCommit": "staged-files-only",
+    "prePush": "full-checks-plus-unit-tests"
+  },
+
+  "commitProcess": {
+    "useCommitCodeSkill": true,
+    "enforceExplicitApproval": true,
+    "conventionalCommits": true
+  },
+
+  "checklist": {
+    "localChecklistFile": "BRANCH_CHECKLIST.md",
+    "prTemplate": ".github/pull_request_template.md"
+  },
+
+  "notes": "This config is meant to be read by humans and scripts. Adapt the command values to match your project's tooling."
+}

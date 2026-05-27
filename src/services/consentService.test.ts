@@ -238,11 +238,11 @@ describe('ConsentService', () => {
       const service = new ConsentService(mockDb as unknown as DatabaseService);
 
       const result = await service.recordOptOut({
-        tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-        customerPhone: '+15551234567',
-        optOutType: 'sms',
-        optOutDate: new Date().toISOString(),
-        optOutMethod: 'stop',
+        tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+        customer_phone: '+15551234567',
+        opt_out_type: 'sms',
+        opt_out_date: new Date().toISOString(),
+        opt_out_method: 'stop',
       });
 
       expect(result).toBeDefined();
@@ -261,11 +261,11 @@ describe('ConsentService', () => {
       // a snake_case-flavored payload to verify the service normalizes/handles
       // both shapes. The dual cast documents the intentional shape mismatch.
       await service.recordOptOut({
-        tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+        tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
         customer_phone: '+15551234567',
         opt_out_type: 'sms',
         opt_out_method: 'stop',
-      } as unknown);
+      });
 
       expect(mockDb.createOptOutRecord).toHaveBeenCalled();
     });
@@ -284,7 +284,7 @@ describe('ConsentService', () => {
       expect(result).toBeDefined();
       expect(mockDb.createOptOutRecord).toHaveBeenCalled();
       const call = mockDb.createOptOutRecord.mock.calls[0][0];
-      expect(call.optOutType).toBe('sms');
+      expect(call.opt_out_type).toBe('sms');
     });
 
     it('should process UNSUBSCRIBE command for email', async () => {
@@ -303,7 +303,7 @@ describe('ConsentService', () => {
 
       expect(result).toBeDefined();
       const call = mockDb.createOptOutRecord.mock.calls[0][0];
-      expect(call.optOutType).toBe('email');
+      expect(call.opt_out_type).toBe('email');
     });
 
     it('should handle case-insensitive commands', async () => {
@@ -382,8 +382,8 @@ describe('ConsentService', () => {
       const { ConsentService } = await import('./consentService');
       const mockDb = createMockDb();
       const mockRecords = [
-        { id: 1, optOutType: 'email' },
-        { id: 2, optOutType: 'sms' },
+        { id: 1, opt_out_type: 'email' },
+        { id: 2, opt_out_type: 'sms' },
       ];
       mockDb.getOptOutRecordsByTenant.mockResolvedValue(mockRecords);
 

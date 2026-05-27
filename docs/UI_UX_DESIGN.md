@@ -1,5 +1,5 @@
 # SecretaryHQ Dashboard — UI/UX Design Brief
-**Last updated:** March 24, 2026 — Incorporates decisions from full-day design session with Dale.
+**Last updated:** 2026-05-27 (pointers & cross-references refreshed during documentation unification; core content from March 2026 design session)
 
 > **Role of this file (vs. `DESIGN_HANDOFF.md`):** this is the **living** design brief — update it as design philosophy evolves, new components ship, or interaction patterns get established. For the **frozen** record of the original 2026-03-24 design session decisions, see [`DESIGN_HANDOFF.md`](DESIGN_HANDOFF.md).
 
