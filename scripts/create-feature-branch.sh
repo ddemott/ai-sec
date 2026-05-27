@@ -55,7 +55,15 @@ echo ""
 echo "==> Running initial automated quality gates (this may take a minute)..."
 echo ""
 
-# Run automated checks
+# Source the config reader so we can show the active projectType
+if [ -f "scripts/config-reader.sh" ]; then
+    # shellcheck source=scripts/config-reader.sh
+    source scripts/config-reader.sh 2>/dev/null || true
+    PTYPE="$(get_project_type 2>/dev/null || echo 'node-fullstack')"
+    echo "    Active projectType: $PTYPE (from workflow.config.json)"
+fi
+
+# Run automated checks (these are still the concrete ones for this repo)
 npm run verify:claude-md 2>&1 | tail -5 || true
 echo ""
 

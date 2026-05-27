@@ -1,21 +1,63 @@
 {
   "name": "Reusable Development Workflow Configuration",
-  "version": "1.0.0",
-  "description": "Parameters to adapt the portable development workflow to any project. Copy this file into your repo and customize the values.",
+  "version": "1.2.0",
+  "description": "Single source of truth for branching, quality gates, testing, docs hygiene, and commit automation. Set projectType and customize the active 'commands' block. Scripts read this file to stay type-appropriate.",
+
+  "projectType": "node-fullstack",
+  "_projectTypeGuidance": "The single most important field. Choose the closest match. Scripts (prepare-commit, hooks, etc.) read this and the matching profile to avoid running irrelevant tools (e.g. no eslint for pure Python). After choosing, copy the desired profile into the top-level 'commands' object and customize the strings for your exact tooling. Supported starters: node-fullstack, python, generic.",
+
+  "projectTypeProfiles": {
+    "node-fullstack": {
+      "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
+      "unitTests": "npm test",
+      "build": "npm run build && cd dashboard && npm run build",
+      "lint": "npm run lint",
+      "formatCheck": "npm run format:check",
+      "docDriftCheck": "npm run verify:claude-md",
+      "e2e": "cd dashboard && npx playwright test --grep",
+      "focusedTestScan": "grep -r --include=\"*.test.*\" --include=\"*.spec.*\" -E \"(\\.only\\(|\\.skip\\()\" src/ dashboard/ --exclude-dir=node_modules 2>/dev/null || true",
+      "notes": "Full TypeScript SaaS (Next.js dashboard + Fastify/Node backend). ESLint + tsc + Vitest + Playwright are all relevant."
+    },
+    "python": {
+      "checks": "ruff check . && black --check .",
+      "unitTests": "pytest -q --tb=line",
+      "build": "python -m py_compile $(find . -name '*.py' | head -20) 2>/dev/null || echo '(no build or use mypy/pyright)'",
+      "lint": "ruff check .",
+      "formatCheck": "black --check .",
+      "docDriftCheck": "echo 'TODO: add your doc-drift or schema-drift command here (or leave empty string)'",
+      "e2e": "echo 'No E2E configured (or: pytest --e2e or playwright for Python)'",
+      "focusedTestScan": "grep -rnE 'pytest.mark.(skip|xfail|only|focus)|@pytest.mark.skip|def test_.*_only' --include='*test*.py' --include='*spec*.py' . --exclude-dir=.venv --exclude-dir=__pycache__ 2>/dev/null || true",
+      "notes": "Python (FastAPI/Django/Flask/etc.). ruff + black + pytest. No npm, no tsc, no ESLint. Adapt as needed for your stack (mypy, pyright, etc.)."
+    },
+    "generic": {
+      "checks": "echo 'Define your project-specific checks command here (lint + typecheck equivalent)'",
+      "unitTests": "echo 'Define your test command (pytest, go test, cargo test, etc.)'",
+      "build": "echo 'Define your build command (or leave as no-op for interpreted languages)'",
+      "lint": "echo 'Define lint command (ruff, golangci-lint, etc.) or empty'",
+      "formatCheck": "echo 'Define format check (black --check, gofmt, etc.) or empty'",
+      "docDriftCheck": "echo 'Define doc/schema drift detector or leave empty'",
+      "e2e": "echo 'Define E2E command or leave empty'",
+      "focusedTestScan": "echo 'Define grep for focused/skip tests appropriate to your language, or empty'",
+      "notes": "Language-agnostic or mixed projects. Everything is a placeholder — replace the strings in the 'commands' block below."
+    }
+  },
+
+  "commands": {
+    "_comment": "ACTIVE commands for the current projectType. These are what the automation scripts actually execute. Populate by copying the matching block from projectTypeProfiles and editing the values for your exact binaries/paths.",
+    "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
+    "unitTests": "npm test",
+    "build": "npm run build && cd dashboard && npm run build",
+    "lint": "npm run lint",
+    "formatCheck": "npm run format:check",
+    "docDriftCheck": "npm run verify:claude-md",
+    "e2e": "cd dashboard && npx playwright test --grep",
+    "focusedTestScan": "grep -r --include=\"*.test.*\" --include=\"*.spec.*\" -E \"(\\.only\\(|\\.skip\\()\" src/ dashboard/ --exclude-dir=node_modules 2>/dev/null || true"
+  },
 
   "branching": {
     "mainBranch": "main",
     "allowedPrefixes": ["feat/", "fix/", "test/", "refactor/", "docs/", "chore/"],
     "requireIssueForNonTrivialWork": true
-  },
-
-  "commands": {
-    "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
-    "unitTests": "npm test",
-    "build": "npm run build && cd dashboard && npm run build",
-    "docDriftCheck": "npm run verify:claude-md",
-    "e2eCommand": "cd dashboard && npx playwright test --grep",
-    "prepareCommit": "bash scripts/prepare-commit.sh"
   },
 
   "scripts": {
@@ -53,5 +95,5 @@
     "prTemplate": ".github/pull_request_template.md"
   },
 
-  "notes": "This config is meant to be read by humans and scripts. Adapt the command values to match your project's tooling."
+  "notes": "This config is the contract between humans and the automation scripts. Change projectType, copy the right profile into 'commands', customize the strings, and the prepare-commit / hook scripts will adapt. For non-Node projects you will also customize package.json scripts or replace the 'npm run' invocations with direct calls."
 }

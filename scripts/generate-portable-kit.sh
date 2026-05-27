@@ -13,6 +13,8 @@
 #   ./scripts/generate-portable-kit.sh --tag --bump patch
 #   ./scripts/generate-portable-kit.sh --zip --tag --bump minor --tag-prefix "my-workflow/v"
 #   ./scripts/generate-portable-kit.sh --output ./my-export
+#   ./scripts/generate-portable-kit.sh --project-type python --zip   # ready-to-hand to a Python team
+#   ./scripts/generate-portable-kit.sh --project-type node-fullstack --tag --bump patch
 #
 # Output:
 #   By default creates: dist/portable-workflow-kit/
@@ -29,6 +31,7 @@ CUSTOM_OUTPUT=""
 CREATE_TAG=false
 BUMP_TYPE=""
 TAG_PREFIX="workflow-kit/v"
+PROJECT_TYPE=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -53,15 +56,20 @@ while [[ $# -gt 0 ]]; do
             TAG_PREFIX="$2"
             shift 2
             ;;
+        --project-type)
+            PROJECT_TYPE="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--zip] [--tag] [--bump <patch|minor|major>] [--tag-prefix <prefix>] [--output <path>]"
+            echo "Usage: $0 [--zip] [--tag] [--bump <patch|minor|major>] [--tag-prefix <prefix>] [--output <path>] [--project-type <node-fullstack|python|generic>]"
             echo ""
-            echo "  --zip          Create a zip archive of the kit"
-            echo "  --tag          Create a git tag"
-            echo "  --bump         Bump version in workflow.config.json before tagging (patch|minor|major)"
-            echo "  --tag-prefix   Custom prefix for the git tag (default: workflow-kit/v)"
-            echo "  --output       Custom output directory"
+            echo "  --zip            Create a zip archive of the kit"
+            echo "  --tag            Create a git tag"
+            echo "  --bump           Bump version in workflow.config.json before tagging (patch|minor|major)"
+            echo "  --tag-prefix     Custom prefix for the git tag (default: workflow-kit/v)"
+            echo "  --output         Custom output directory"
+            echo "  --project-type   Pre-populate the kit for a specific project type (node-fullstack | python | generic). Makes the generated kit immediately usable for non-Node projects without irrelevant lint commands."
             exit 1
             ;;
     esac
@@ -140,6 +148,53 @@ fi
 
 echo "    ✓ Files copied"
 
+# --- Project-type specialization (the key enabler for easy transfer to Python etc.) ---
+if [ -n "$PROJECT_TYPE" ]; then
+    echo "==> Specializing kit for projectType: $PROJECT_TYPE"
+
+    KIT_CONFIG="$OUTPUT_DIR/workflow.config.json"
+
+    # Use python (nearly universal) to safely rewrite the emitted config:
+    # - Set top-level "projectType"
+    # - Copy the chosen profile's commands into the active "commands" block
+    python3 - "$KIT_CONFIG" "$PROJECT_TYPE" <<'PYEOF'
+import json, sys
+cfg_path, ptype = sys.argv[1], sys.argv[2]
+
+with open(cfg_path) as f:
+    cfg = json.load(f)
+
+profiles = cfg.get("projectTypeProfiles", {})
+if ptype not in profiles:
+    print(f"WARNING: Unknown projectType '{ptype}'. Valid: {list(profiles.keys())}. Leaving config generic.", file=sys.stderr)
+    ptype = "generic"
+
+cfg["projectType"] = ptype
+
+# Replace the active commands with the chosen profile (deep copy of values)
+profile = profiles.get(ptype, {})
+if "commands" not in cfg:
+    cfg["commands"] = {}
+for k, v in profile.items():
+    if k != "notes":
+        cfg["commands"][k] = v
+
+# Also update the human-facing notes in documentation section if present
+if "documentation" in cfg and "notes" not in cfg["documentation"]:
+    cfg["documentation"]["notes"] = f"Pre-populated for projectType '{ptype}'. Review and tweak the 'commands' values."
+
+with open(cfg_path, "w") as f:
+    json.dump(cfg, f, indent=2)
+
+print(f"    ✓ workflow.config.json specialized for {ptype} (commands block populated from profile)")
+PYEOF
+
+    # Light touch-ups to the emitted kit README so the recipient sees the type immediately
+    sed -i "s|for your tooling and standards|for a **${PROJECT_TYPE}** project (customize commands in workflow.config.json)|" "$OUTPUT_DIR/README.md" 2>/dev/null || true
+
+    echo "    ✓ Kit README and config adapted for ${PROJECT_TYPE}"
+fi
+
 # Optional: Create a zip archive
 if [ "$CREATE_ZIP" = true ]; then
     ZIP_PATH="$REPO_ROOT/dist/$ZIP_NAME"
@@ -171,8 +226,17 @@ echo "To share with another project, give them:"
 echo "  - The contents of: $OUTPUT_DIR"
 echo "  - Or point them to: ADOPTING_THE_WORKFLOW.md"
 echo ""
-echo "They should read ADOPTING_THE_WORKFLOW.md and customize workflow.config.json."
+echo "They should:"
+echo "  1. Read ADOPTING_THE_WORKFLOW.md"
+echo "  2. Verify (or tweak) the projectType + commands in workflow.config.json"
+echo "  3. Run the setup steps"
+echo ""
+if [ -n "$PROJECT_TYPE" ]; then
+    echo "This kit was pre-specialized for projectType='${PROJECT_TYPE}'."
+    echo "The automation scripts will now only run the relevant commands for that type (no blind eslint on Python, etc.)."
+fi
 echo ""
 if [ "$CREATE_TAG" = false ]; then
     echo "Tip: Use --tag to create a git tag, and --bump patch|minor|major to auto-increment the version."
+    echo "Tip: Use --project-type python|node-fullstack|generic when generating for a non-SaaS recipient."
 fi

@@ -62,22 +62,76 @@ Copy the entire `portable-workflow-kit/` directory into your project.
 
 Recommended location: project root.
 
-### 2. Customize `workflow.config.json`
+### 2. Understand Project Types (Critical for Easy Transfer)
 
-This is the most important file.
+**This is the single most important field for making the rules travel cleanly.**
 
-Open it and update the values under these sections:
+In `workflow.config.json` (the one inside the kit you just copied), set:
 
-- `branching` – main branch name and allowed prefixes
-- `commands` – replace with your actual commands for:
-  - `checks`
-  - `unitTests`
-  - `build`
-  - `docDriftCheck`
-  - etc.
-- `documentation.filesThatMustBeUpdated` – list the docs your project cares about
-- `testing` – your test frameworks and rules
-- `commitProcess` – whether you want Conventional Commits, etc.
+```json
+"projectType": "python"     // or "node-fullstack", "generic"
+```
+
+The automation scripts (`prepare-commit`, the Husky pre-commit/pre-push hooks, etc.) **read this value** plus the `commands` block and the `projectTypeProfiles` library.
+
+**What this buys you**:
+
+- A Python recipient running `npm run prepare-commit` (or the direct script) will **only** execute `ruff`, `black`, `pytest`, etc. — never `eslint`, `tsc`, or `vitest`.
+- The pre-commit hook will not try to run TypeScript tooling on `.py` files.
+- The focused-test scan (`commands.focusedTestScan`) uses language-appropriate patterns.
+- You hand them one folder + this document and the governance "just works" for their stack.
+
+**Supported starter profiles** (see `projectTypeProfiles` in the config):
+
+- `node-fullstack` — TypeScript SaaS (Next.js + backend). The original full-fat profile.
+- `python` — ruff + black + pytest (FastAPI, Django, CLIs, data projects, etc.).
+- `generic` — Empty placeholders. You fill in the `commands` block yourself.
+
+**How to adopt for a Python project (concrete example)**:
+
+1. Generate (or copy) the kit with `--project-type python` (recommended):
+
+   ```bash
+   npm run generate-kit -- --project-type python --zip
+   ```
+
+   The emitted `workflow.config.json` will already have `projectType: "python"` and the `commands` block pre-filled with sensible ruff/pytest strings.
+
+2. Or manually: open the kit's `workflow.config.json`, set `"projectType": "python"`, then copy the entire `python` object from `projectTypeProfiles` into the top-level `commands` key and tweak the exact flags/paths for your repo.
+
+3. The scripts now do the right thing automatically. No further editing of `prepare-commit.sh` or hooks is required.
+
+The same pattern works for Go, Rust, or a mixed monorepo. The config is the contract; the scripts are now interpreters of that contract.
+
+### 3. Customize `workflow.config.json` (The Only File Most People Touch)
+
+This is the **single source of truth**. Everything else (scripts, hooks, docs) reads it.
+
+Typical flow for any project:
+
+1. Set `projectType` (see previous section).
+2. Copy the matching block out of `projectTypeProfiles` into the top-level `commands` object.
+3. Edit the 6–8 command strings to match your exact binaries, monorepo layout, or CI nuances.
+4. Update `documentation.filesThatMustBeUpdated` to the real list of files that must stay current in your repo.
+5. (Optional) tweak `branching`, `testing`, `hooks` policy, etc.
+
+Example diff for a Python team that uses ruff + pytest + mypy:
+
+```json
+"commands": {
+  "checks": "ruff check . && black --check . && mypy .",
+  "unitTests": "pytest -q --tb=line",
+  "build": "python -m py_compile $(git ls-files '*.py') 2>/dev/null || true",
+  "lint": "ruff check .",
+  "formatCheck": "black --check .",
+  "docDriftCheck": "python scripts/check_doc_drift.py || true",
+  ...
+}
+```
+
+The `prepare-commit` script, pre-commit hook, and pre-push hook will now execute **exactly** those strings (or skip them gracefully if you left an `echo "..."` placeholder).
+
+You almost never need to edit the `.sh` files themselves after the first adoption.
 
 ### 3. Install Supporting Scripts
 
@@ -95,9 +149,9 @@ Make them executable:
 chmod +x scripts/*.sh
 ```
 
-### 4. Add npm Scripts
+### 4. Add npm / Task Runner Scripts (Optional but Recommended)
 
-Add these entries to your `package.json`:
+If your project uses npm (or pnpm, yarn, etc.), wire the workflow into `package.json`:
 
 ```json
 "scripts": {
@@ -105,12 +159,22 @@ Add these entries to your `package.json`:
   "prepare-commit": "bash scripts/prepare-commit.sh",
   "setup-hooks": "bash scripts/setup-hooks.sh",
   "remove-hooks": "bash scripts/remove-hooks.sh",
-  "checks": "npm run format:check && npm run lint && npx tsc --noEmit",
-  "pre-pr": "npm run checks && npm test"
+  "checks": "bash -c 'source scripts/config-reader.sh && eval \"$(get_command checks)\"'",
+  "pre-pr": "npm run checks && npm run prepare-commit"
 }
 ```
 
-Adjust the `checks` and `pre-pr` commands to match your project.
+**For pure Python / Go / Rust projects** (no package.json or you prefer direct calls):
+
+- You can invoke the scripts directly:
+  ```bash
+  bash scripts/create-feature-branch.sh feat/my-change
+  bash scripts/prepare-commit.sh
+  ```
+- The scripts are completely self-contained once `workflow.config.json` is correct.
+- Many teams still add a `pyproject.toml` `[tool.poe.tasks]` or a `Makefile` with the same names for muscle-memory consistency across the company.
+
+The important contract is: `prepare-commit` and the hooks must ultimately call the values from the config. The portable scripts already do this.
 
 ### 5. Set Up Git Hooks (Automatic)
 

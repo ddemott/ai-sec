@@ -2,11 +2,11 @@
 
 This document defines the repeatable process for this specific project (SecretaryHQ).
 
-For a **project-agnostic, reusable version** that can be adapted to other repositories, see:
+For a **project-agnostic, reusable version** (including support for Python, Go, and other stacks via the `projectType` field), see:
 
-**`PORTABLE_DEVELOPMENT_WORKFLOW.md`** (at the repo root) + **`workflow.config.json`**
+**`ADOPTING_THE_WORKFLOW.md`** + the `portable-workflow-kit/` folder (or a generated copy from `npm run generate-kit -- --project-type python`).
 
-That pair of files is designed so you can point another project at them and say: "Read this and implement the same processes."
+The authoritative machine-readable contract for this repo lives in the root `workflow.config.json` (projectType + the active `commands` block). The portable kit + adoption guide is what you hand to other teams so they get identical governance adapted to their tooling.
 
 ---
 
@@ -15,6 +15,7 @@ That pair of files is designed so you can point another project at them and say:
 This document is now a thin wrapper that points to the portable system while capturing any SecretaryHQ-specific nuances.
 
 The goal is simple:
+
 - Always work on a feature branch.
 - Lint, typecheck, and test as you go.
 - Update documentation as part of the work.
@@ -26,14 +27,14 @@ The goal is simple:
 - All work happens on short-lived feature branches.
 - Branch naming convention (use these prefixes):
 
-  | Prefix     | Use Case                              | Example                              |
-  |------------|---------------------------------------|--------------------------------------|
-  | `feat/`    | New feature or significant enhancement | `feat/e2e-coverage-gaps`            |
-  | `fix/`     | Bug fix                               | `fix/consent-optout-normalization`  |
-  | `test/`    | Adding or improving tests             | `test/owner-config-booking-flow`    |
-  | `refactor/`| Code improvement without behavior change | `refactor/reminder-types-cleanup` |
-  | `docs/`    | Documentation only                    | `docs/development-workflow`         |
-  | `chore/`   | Tooling, dependencies, minor cleanup  | `chore/update-eslint-rules`         |
+  | Prefix      | Use Case                                 | Example                            |
+  | ----------- | ---------------------------------------- | ---------------------------------- |
+  | `feat/`     | New feature or significant enhancement   | `feat/e2e-coverage-gaps`           |
+  | `fix/`      | Bug fix                                  | `fix/consent-optout-normalization` |
+  | `test/`     | Adding or improving tests                | `test/owner-config-booking-flow`   |
+  | `refactor/` | Code improvement without behavior change | `refactor/reminder-types-cleanup`  |
+  | `docs/`     | Documentation only                       | `docs/development-workflow`        |
+  | `chore/`    | Tooling, dependencies, minor cleanup     | `chore/update-eslint-rules`        |
 
 - Keep branches focused. One logical change per branch.
 - Delete branches after they are merged and the PR is closed.
@@ -70,6 +71,7 @@ npm run create-branch feat/your-descriptive-name
 ## 3. Development Standards (While Coding)
 
 ### Code Quality
+
 - Follow existing patterns in the file/module you are changing.
 - All new or changed code must pass:
   - TypeScript (`npx tsc --noEmit` root + dashboard)
@@ -78,6 +80,7 @@ npm run create-branch feat/your-descriptive-name
 - Backend code changes **require both** `npm run build` **and** a restart to take effect (see CLAUDE.md "Build Principles").
 
 ### Testing
+
 - **Unit / integration tests** (Vitest): Required for almost all logic.
 - **E2E (Playwright)**: Required for user-facing flows, especially anything involving the dashboard UI, booking, auth, or configuration that affects real users.
   - Do **not** run the entire E2E suite for every small change. Use `--grep` to run only relevant tests:
@@ -90,6 +93,7 @@ npm run create-branch feat/your-descriptive-name
 **Rule of thumb**: If a user or the voice agent could experience different behavior, there should be a test (unit, E2E, or live QA) that would catch the regression.
 
 ### Documentation
+
 - Update the relevant `*.md` file(s) as part of the same work, not as an afterthought.
 - Critical files that frequently need updates:
   - `CLAUDE.md` (especially Key Directories, Development, and Build Principles)
@@ -129,6 +133,7 @@ Refs: #123 or related work
 Common types: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `build`, `ci`.
 
 Good examples from history:
+
 - `feat(auth): self-serve signup UI wired to existing /register`
 - `fix(wizard): surface + retry failed starter-data seeding`
 - `docs: Cluster-B defect 3 done + dashboard count 705`
@@ -146,6 +151,7 @@ npm run prepare-commit
 ```
 
 This command automatically runs:
+
 - Quality checks (format, lint, typecheck)
 - Full unit test suite
 - CLAUDE.md drift detector
@@ -206,6 +212,7 @@ Use them for developer happiness. Rely on the later layers for quality.
 ## 8. Solo Developer Reality Check
 
 This process is designed to be **lightweight but non-negotiable** for a solo developer. The enforcement comes from:
+
 - The `commit-code` skill
 - CI gates
 - The `verify:claude-md` drift detector

@@ -2,7 +2,14 @@
 
 **Goal**: Give any project (solo or team) a repeatable, high-quality process for branching, coding, testing, documenting, and committing — with as much automation as possible.
 
-This document + the accompanying `workflow.config.json` file lets you adopt the same system used in the [SecretaryHQ](https://github.com/your-org/ai-sec) project.
+**Project-type aware** (v1.2+): Set `projectType` in `workflow.config.json` ("python", "node-fullstack", etc.). The scripts automatically run only the relevant commands (ruff + pytest for Python, eslint + tsc + vitest for TS SaaS, etc.).
+
+The recommended hand-off artifact is now:
+
+- `ADOPTING_THE_WORKFLOW.md`
+- A generated `portable-workflow-kit/` (via `npm run generate-kit -- --project-type <type>`)
+
+This document + `workflow.config.json` are still useful reference, but `ADOPTING_THE_WORKFLOW.md` + the kit is the easiest way to transfer the rules.
 
 ## 1. Core Philosophy
 

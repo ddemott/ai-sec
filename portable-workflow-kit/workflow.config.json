@@ -1,21 +1,63 @@
 {
   "name": "Reusable Development Workflow Configuration",
-  "version": "1.1.0",
-  "description": "Parameters to adapt the portable development workflow to any project. Copy this file into your repo and customize the values.",
+  "version": "1.2.0",
+  "description": "Single source of truth for branching, quality gates, testing, docs hygiene, and commit automation. Set projectType and customize the active 'commands' block. Scripts read this file to stay type-appropriate.",
+
+  "projectType": "node-fullstack",
+  "_projectTypeGuidance": "THE most important field for portability. Scripts (prepare-commit, hooks, etc.) read this + the matching profile so they never blindly run 'eslint' or 'tsc' on a Python project. After picking a type, copy its profile into the top-level 'commands' object and edit the concrete command strings for your repo. Starters: node-fullstack, python, generic.",
+
+  "projectTypeProfiles": {
+    "node-fullstack": {
+      "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
+      "unitTests": "npm test",
+      "build": "npm run build && cd dashboard && npm run build",
+      "lint": "npm run lint",
+      "formatCheck": "npm run format:check",
+      "docDriftCheck": "npm run verify:claude-md || true",
+      "e2e": "cd dashboard && npx playwright test --grep",
+      "focusedTestScan": "grep -r --include=\"*.test.*\" --include=\"*.spec.*\" -E \"(\\.only\\(|\\.skip\\()\" src/ dashboard/ --exclude-dir=node_modules 2>/dev/null || true",
+      "notes": "Full-stack TypeScript SaaS (Next.js + Node/Fastify backend). All the TS + Vitest + Playwright tooling applies."
+    },
+    "python": {
+      "checks": "ruff check . && black --check .",
+      "unitTests": "pytest -q --tb=line",
+      "build": "python -m py_compile $(find . -name '*.py' 2>/dev/null | head -30) 2>/dev/null || echo '(no build step or replace with mypy)'",
+      "lint": "ruff check .",
+      "formatCheck": "black --check .",
+      "docDriftCheck": "echo 'Define your doc/schema drift detector here (or empty string for none)'",
+      "e2e": "echo 'No E2E configured (replace with pytest-playwright or similar if you have browser tests)'",
+      "focusedTestScan": "grep -rnE 'pytest.mark.(skip|xfail|only|focus)|@pytest.mark.skip|def test_.*_only' --include='*test*.py' --include='*spec*.py' . --exclude-dir=.venv --exclude-dir=__pycache__ 2>/dev/null || true",
+      "notes": "Pure Python (FastAPI, Django, Flask, CLI tools, etc.). ruff + black + pytest are the expected tools. No npm, no TypeScript."
+    },
+    "generic": {
+      "checks": "echo 'Replace with: your lint + typecheck + format equivalent (one command)'",
+      "unitTests": "echo 'Replace with your test runner (pytest, go test, cargo test, etc.)'",
+      "build": "echo 'Replace with your build (go build, cargo build, or empty for dynamic languages)'",
+      "lint": "echo 'Replace with ruff/golangci-lint/eslint/etc. or empty'",
+      "formatCheck": "echo 'Replace with black --check / gofmt / prettier or empty'",
+      "docDriftCheck": "echo 'Your doc drift or schema drift detector (or empty)'",
+      "e2e": "echo 'Your E2E command or empty'",
+      "focusedTestScan": "echo 'Grep expression for focused/skip tests in your language, or empty to skip'",
+      "notes": "Starting point for anything else (Go, Rust, mixed, mobile, etc.). You must fill in the 'commands' block below."
+    }
+  },
+
+  "commands": {
+    "_comment": "These are the LIVE commands the automation will execute. Copy the block for your projectType from projectTypeProfiles and customize the exact strings (paths, flags, subdirectories). Empty or 'echo ...' values are safe — scripts treat them gracefully.",
+    "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
+    "unitTests": "npm test",
+    "build": "npm run build && cd dashboard && npm run build",
+    "lint": "npm run lint",
+    "formatCheck": "npm run format:check",
+    "docDriftCheck": "npm run verify:claude-md || true",
+    "e2e": "cd dashboard && npx playwright test --grep",
+    "focusedTestScan": "grep -r --include=\"*.test.*\" --include=\"*.spec.*\" -E \"(\\.only\\(|\\.skip\\()\" src/ dashboard/ --exclude-dir=node_modules 2>/dev/null || true"
+  },
 
   "branching": {
     "mainBranch": "main",
     "allowedPrefixes": ["feat/", "fix/", "test/", "refactor/", "docs/", "chore/"],
     "requireIssueForNonTrivialWork": true
-  },
-
-  "commands": {
-    "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
-    "unitTests": "npm test",
-    "build": "npm run build && cd dashboard && npm run build",
-    "docDriftCheck": "npm run verify:claude-md",
-    "e2eCommand": "cd dashboard && npx playwright test --grep",
-    "prepareCommit": "bash scripts/prepare-commit.sh"
   },
 
   "scripts": {
@@ -25,20 +67,15 @@
   },
 
   "documentation": {
-    "filesThatMustBeUpdated": [
-      "CLAUDE.md",
-      "README.md",
-      "docs/TODO.md",
-      "RESOLVED.md"
-    ],
-    "driftDetectorScript": "npm run verify:claude-md"
+    "filesThatMustBeUpdated": ["README.md", "CONTRIBUTING.md", "docs/TODO.md"],
+    "driftDetectorScript": "echo 'Point this at your doc-drift detector (e.g. npm run verify:claude-md) or leave the echo above'"
   },
 
   "testing": {
     "require5WComments": true,
     "runRelevantE2E": true,
-    "e2eFramework": "playwright",
-    "unitFramework": "vitest"
+    "e2eFramework": "playwright-or-pytest",
+    "unitFramework": "vitest-or-pytest"
   },
 
   "hooks": {
@@ -58,5 +95,5 @@
     "prTemplate": ".github/pull_request_template.md"
   },
 
-  "notes": "This config is meant to be read by humans and scripts. Adapt the command values to match your project's tooling."
+  "notes": "Edit projectType, copy the matching profile into the 'commands' section, customize the command strings for your actual tools, and the portable scripts will adapt automatically. This is how the same governance travels cleanly to Python, Go, or any other project without forcing Node-only rituals."
 }

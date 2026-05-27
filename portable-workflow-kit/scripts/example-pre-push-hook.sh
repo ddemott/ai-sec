@@ -2,42 +2,54 @@
 #
 # scripts/example-pre-push-hook.sh
 #
-# Example pre-push hook.
-# This runs BEFORE `git push` is allowed.
+# Stronger pre-push hook. Project-type aware.
 #
-# Called automatically via .husky/pre-push (managed by Husky).
-#
-# It is intentionally stricter than the pre-commit hook.
-# Recommended checks before pushing to a remote:
-#   - Full lint + format + typecheck
-#   - Relevant unit tests
-#
-# Heavy E2E can still be run selectively via the developer.
+# Runs the full "checks" + "unitTests" commands from workflow.config.json.
+# A Python project will run whatever its "checks" and "unitTests" are
+# (e.g. ruff + black + pytest). Never hardcodes npm or tsc.
 
 set -euo pipefail
 
-echo "==> Running pre-push checks..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/config-reader.sh
+source "$SCRIPT_DIR/config-reader.sh"
 
-echo "  - Running quality checks (checks)..."
-npm run checks || {
-  echo ""
-  echo "Pre-push checks failed."
-  echo "Fix the issues above before pushing."
-  exit 1
-}
+PTYPE="$(get_project_type)"
 
-echo "  - Running unit tests..."
-npm test || {
-  echo ""
-  echo "Some unit tests are failing."
-  echo "Please fix them before pushing."
-  exit 1
-}
+echo "==> Running pre-push checks (projectType: $PTYPE)..."
 
-echo "✅ Pre-push checks passed."
+CHECKS_CMD="$(get_command checks)"
+if is_real_command "$CHECKS_CMD"; then
+    echo "  - Running quality checks..."
+    if eval "$CHECKS_CMD"; then
+        echo "    ✅ Quality checks passed"
+    else
+        echo "    ❌ Quality checks failed. Fix before pushing."
+        exit 1
+    fi
+else
+    echo "  - Quality checks (skipped — not defined for this projectType)"
+fi
+
+UNIT_CMD="$(get_command unitTests)"
+if is_real_command "$UNIT_CMD"; then
+    echo "  - Running unit tests..."
+    if eval "$UNIT_CMD"; then
+        echo "    ✅ Unit tests passed"
+    else
+        echo "    ❌ Some unit tests are failing. Fix before pushing."
+        exit 1
+    fi
+else
+    echo "  - Unit tests (skipped — not defined for this projectType)"
+fi
+
+echo "✅ Pre-push checks passed for projectType '$PTYPE'."
 echo ""
-echo "Reminder: Consider running relevant E2E tests before opening a PR:"
-echo "  cd dashboard && npx playwright test --grep \"<your-pattern>\""
+E2E_CMD="$(get_command e2e)"
+if is_real_command "$E2E_CMD"; then
+    echo "Reminder: Consider running relevant E2E/integration tests before opening a PR:"
+    echo "  $E2E_CMD \"<your-pattern>\""
+fi
 echo ""
-
 exit 0
