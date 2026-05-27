@@ -242,142 +242,69 @@ See also the compact summary table of all PK-rename pilots added in the May 12�
 
 ## 2026-05-12 — PK naming convention conversion, Part 2: **non-domain cleanup (9 pilots, 9 migrations)**
 
-Continuation of the same-day PK-rename sprint into the nine leaf tables left out of pilots 1–16. The original sprint's after-state said *"complete for every domain entity table"* — these nine (audit log, call summaries/transcripts, sync mapping, password reset / phone OTP tokens, KB-gap log, feedback log, soft reservations) had been excluded as "non-domain". By the strict reading of CLAUDE.md's rule (*every single-column PK is named `<table_singular>_id`, never bare `id`*), they still violated the convention. This sprint resolves that.
+Continuation of the sprint into the nine leaf tables. These still violated the `<table_singular>_id` convention even though they were "non-domain."
 
-**Pilots in order:**
+**Pilots summary (Part 2):**
 
-- `e570197` — **Pilot 17: `user_feedback.id → user_feedback_id`.** Migration `20260512000017`. Terminal in the schema, not versioned/audited, no RPCs. Only consumer is `src/routes/analytics.ts` which INSERTs with explicit columns and reads `SELECT *`. Latent bug surfaced + fixed: analytics.ts had two stale JOIN clauses left over from pilots 9 + 16 — `LEFT JOIN users u ON u.id = f.user_id` and `LEFT JOIN tenants t ON t.id = f.tenant_id`. The `/feedback` routes have no unit-test coverage so the sweep missed them; both would have errored at runtime.
-- `766e07b` — **Pilot 18: `soft_reservations.id → soft_reservation_id`.** Migration `20260512000018`. Pure rename — `purge_expired_soft_reservations()` RPC operates on `expires_at`, not the PK. Three consumers (src/index.ts, medium-bugs.test.ts, test-utils.ts) only call the RPC by name or list the table in teardowns.
-- `a8d1379` — **Pilot 19: `audit_log.id → audit_log_id`.** Migration `20260512000019`. `audit_log` is the *destination* of `fn_audit_trigger` — the trigger INSERTs with explicit column lists that never name the PK, so no trigger update. Latent bug surfaced + fixed: `dashboard/e2e/tenant-delete-cascade.spec.ts:102` had `SELECT 1 FROM tenants WHERE id = $1` from pilot-16's sweep — Playwright e2e doesn't run in the unit-test CI gate so the stale ref slipped through.
-- `0fca817` — **Pilot 20: `unanswered_questions.id → unanswered_question_id`.** Migration `20260512000020`. Route + test sweep. Backend-compat aliasing: `src/routes/knowledge.ts` GET keeps `SELECT unanswered_question_id AS id` so the API response shape stays unchanged (dashboard reads `.length` only, no per-item PK reference); PATCH switches `WHERE`/`RETURNING` to the new column directly. Test INSERTs use `RETURNING unanswered_question_id AS id` so existing `.rows[0].id` reads stay valid.
-- `f92a566` — **Pilot 21: `phone_verifications.id → phone_verification_id`.** Migration `20260512000021`. `/verify-phone-code` keeps `phone_verification_id AS id` so the inline TS row-type `{id: string}` stays valid; two UPDATEs switch directly. Two Playwright specs (`agent-conversation.spec.ts`, `auth-flows.spec.ts`) use the same backward-compat alias on their pre-insert helpers + switch verification/cleanup queries directly.
-- `dda9ddd` — **Pilot 22: `password_resets.id → password_reset_id`.** Migration `20260512000022`. `/reset-password` keeps `password_reset_id AS id` so the destructuring `const { id: resetId } = r.rows[0]` stays valid; UPDATE WHERE switches directly. `auth.test.ts` string-match assertion updated. E2E spec swept (UPDATE + sub-SELECT + RETURNING). **Two latent bugs surfaced + fixed**, both leftover from pilot 9's `users.id` rename: (a) `src/routes/users.ts /users/invite` had `INSERT INTO users … RETURNING id` against a table whose PK is now `user_id`. The unit test mocked `{user_id: …}` so it passed, but real Postgres would have raised `column "id" does not exist` on every owner invite. (b) `dashboard/e2e/auth-flows.spec.ts` teardown had `DELETE FROM users WHERE id = $1`.
-- `34d5387` — **Pilot 23: `call_transcripts.id → call_transcript_id`.** Migration `20260512000023`. `link_orphaned_transcripts()` RPC recreated — its CTE had `RETURNING ct.id` (just counted, not consumed), so `CREATE OR REPLACE` swapping the column name preserves behavior exactly. No code touches the PK.
-- `9bb65e1` — **Pilot 24: `call_summaries.id → call_summary_id`.** Migration `20260512000024`. Pure rename — no RPCs, no views, no PK references in code. The pkey index is auto-updated by Postgres on `RENAME COLUMN`. Five backend consumers all use call_id or explicit non-PK column lists.
-- (this commit) — **Pilot 25 (final): `entity_sync_map.id → entity_sync_map_id`.** Migration `20260512000025`. Largest surface (20 backend files), zero PK references — all CRM sync code operates on the `(tenant_id, provider, entity_type, local_id, external_id)` unique key, never the surrogate. **Three latent bugs surfaced + fixed**, all from prior pilots: (a + b) `syncMapHelpers.ts:325 + 371` had `UPDATE customers ... WHERE id = $...` from pilot-15 residue — would have failed every CRM pull-merge against real Postgres; (c) `jobberSync.ts:303` had `INSERT INTO appointments ... RETURNING id` from pilot-14 residue — would have failed every Jobber-sourced appointment create.
+| Pilot | Commit | Table | Notes / Latent Bugs |
+|-------|--------|-------|---------------------|
+| 17 | e570197 | user_feedback | Terminal table. Surfaced stale JOINs in analytics.ts |
+| 18 | 766e07b | soft_reservations | Pure rename |
+| 19 | a8d1379 | audit_log | Surfaced stale id ref in tenant-delete-cascade e2e spec |
+| 20 | 0fca817 | unanswered_questions | Backend-compat alias kept on GET |
+| 21 | f92a566 | phone_verifications | Backward-compat alias on API + e2e |
+| 22 | dda9ddd | password_resets | Two latent bugs from pilot 9 (users.id) surfaced in invite + e2e teardown |
+| 23 | 34d5387 | call_transcripts | Pure rename + RPC recreation |
+| 24 | 9bb65e1 | call_summaries | Pure rename |
+| 25 | (this commit) | entity_sync_map | Largest surface (20 files). Three latent bugs from prior pilots fixed in syncMapHelpers + jobberSync |
 
-**After-state (Part 2):** backend 1,781 / dashboard 620 — still green. Zero TS errors. Drift detector clean. **Every single-column PK in the public schema now follows the `<table_singular>_id` convention** — `SELECT tc.table_name, kcu.column_name FROM information_schema.table_constraints tc JOIN key_column_usage kcu USING (constraint_name) WHERE constraint_type = 'PRIMARY KEY' AND table_schema = 'public' AND column_name = 'id'` returns zero rows.
-
-**Remaining (decision-pending):** two tables — `tenant_calendar_settings` (composite (tenant_id) PK, already flagged in Part 1) and `appointment_sync_map` (single-column PK on `appointment_id`, also the FK to appointments). Both are 1:1 extension tables that re-use a parent's PK rather than carrying a surrogate; the strict reading of the rule says they should add a surrogate `*_id` UUID, but the practical reading says they're indistinguishable from junction tables and the FK column already uniquely identifies a row. Worth raising as a single decision rather than two.
-
-**Outstanding for prod-apply:** all 26 PK-rename migrations (`20260512000000–25`) + the older `20260511000000_employees_services_tenant_fk_cascade.sql` are forward-only and must land in order on production Supabase.
-
----
-
-## 2026-05-12 — PK rename code-residue + test-mock sweep (pilots 26 + 27)
+All green. Every single-column PK in the public schema now follows the convention.
 
 Two follow-on pilots after Part 2 closed the schema-rename work itself. No migrations — pure code/test sweep — but they fixed real production bugs that the unit-test CI gate hadn't been catching.
 
 **Pilot 26 — code-residue sweep** (`ad72daa`):
 
-After the 25 schema-rename pilots, a comprehensive scan found ~50 stale `WHERE id` / `RETURNING id` / `JOIN ... .id` references that the unit-CI gate had missed. Three reasons:
+## 2026-05-12 — PK rename code-residue + test-mock sweep (pilots 26 + 27)
 
-1. **Playwright e2e specs aren't in the unit-CI gate.** `dashboard/e2e/*.spec.ts` runs separately, so stale SQL strings in those specs sat unexercised. Sweep touched 12 spec files: `agent-conversation`, `appointment-cancel-restore`, `auth-flows`, `booking-alignment`, `booking-enforcement`, `calendar-sync`, `helpers/fixtures`, `multi-tenant-isolation`, `reminder-on-create`, `setup-wizard-to-booking`, `tenant-delete-cascade`, `workflows`. Patterns: tenants × 4, users × 8, appointments × ~24, customers × ~20, employees/resources/services SELECTs × ~13. INSERTs use `RETURNING <table>_id AS id` backward-compat alias so existing `.rows[0].id` reads stay valid; SELECTs/UPDATEs/DELETEs switch directly.
+Two follow-on sweeps after the schema renames (no new migrations).
 
-2. **Multi-line SQL strings escaped the per-pilot single-line perl one-liners.** `INSERT INTO appointments\n VALUES (...) RETURNING id` was a multi-line template-literal pattern none of the pilot sweeps had caught.
+**Pilot 26 — code-residue sweep:** ~50 stale `WHERE id` / `RETURNING id` references found across the codebase. Reasons: Playwright e2e specs aren't in unit CI gate; multi-line SQL strings; a few production routes had stale SELECT projections. Touched 12 e2e spec files + many backend services/routes. Used `RETURNING ..._id AS id` backward-compat alias where needed.
 
-3. **A few production routes had stale `SELECT id, …` lists** where the WHERE clause was correctly renamed but the SELECT projection wasn't. Fixed: `src/database/index.ts:343` (`getAppointmentById` JOIN), `src/routes/tenants.ts` GET `/tenants/:id/config`, `src/routes/provisioning.ts` POST `/provisioning/activate`, `src/routes/billing.ts` Stripe checkout, `src/routes/reminders.ts` PATCH `/reminders/:id/cancel`. The reminders one was a multi-line `UPDATE reminder_schedules ... WHERE id = $1` from pilot 3's residue.
+**Pilot 27 — test-mock alignment:** Fixed real production bugs that mocked tests had hidden (mostly from earlier pilots).
 
-After-state verification: zero stale `id` refs against renamed tables in `src/`, `dashboard/`, `agent/`. Backend 1,781 / dashboard 620 still green.
+Both pilots: backend + dashboard green. Significant latent bug surface area cleaned up.
 
-**Pilot 27 — test-mock alignment + 1 hidden production bug** (`70cfda2`):
+| Pilot | Commit | Tables | Key Notes / Latent Bugs |
+|-------|--------|--------|-------------------------|
+| 1+2 | 40c57d5 | record_versions, tenant_skills | Recipe template set; view + 2 RPCs recreated |
+| 3 | 29c27c1 | reminder_schedules | First SERIAL PK pilot |
+| 4 | a89fd50 | consent_records | SERIAL PK |
+| 5 | cb88e6c | opt_out_records | Same shape as pilot 4 |
+| 6 | df44c50 | voice_sessions | Terminal table; RPC recreated |
+| 7+8 | 6607873 | tenant_docs, tenant_integration_settings | No inbound FKs; tenant_calendar_settings deferred (composite PK) |
+| 9 | c02ac5c | users | High entanglement (auth, JWT, polymorphic assignment_id) |
+| 10 | 4e65bb1 | services | Major RPC entanglement; surfaced `auto_version_trigger` latent bug (fixed + SECURITY DEFINER + cascade guard restored). 14 dashboard components |
+| 10 (fix) | e4f173c | — | Missed `BusinessSettingsView.test.tsx` Service-shape type (CI red) |
+| 11 | d682ecf | resources | 3 RPCs; surfaced `fn_audit_trigger` latent bug. 25 dashboard files |
+| 12 | b8287b9 | employees | 5 RPCs; night-shift test caught `check_availability_with_tz`. Kept `employee_id::text AS id` alias for polymorphic UNION |
+| 13 | 010c6dc | employee_schedule | Smallest pilot; 2 RPCs |
+| 14 | 389245e | appointments | Largest blast radius. 4 RPCs (table-qualified RETURNING to avoid ambiguity). Surfaced stale `services.id` in appointments.ts |
+| 15 | 1dacf9b | customers | 4 RPCs. Surfaced stale `resources.id` in jobberSync |
+| 16 | f486f6b | tenants | Sprint complete. 3 RPCs + trigger guards. Surfaced 3 latent bugs (notify_n8n, create_default_resources, database/index tenant existence check) |
 
-Test mocks were the last blind spot. A test that mocks `{rows: [{id: '...'}]}` passes even when the real query now returns `{<table>_id: '...'}` — the mock provides the field name the code reads, regardless of what the DB actually returns. So mocked tests can hide column-name bugs indefinitely.
+**Trigger evolution:** Both `auto_version_trigger` and `fn_audit_trigger` now use CASE ON TG_TABLE_NAME for every versioned/audited table (required because each has its own renamed PK column).
 
-Comprehensive audit:
+**Standing authorization:** After the first two pilots, the user granted standing autonomous-commit approval (continue without re-asking as long as CI is green on first push). One pause only (pilot 10 dashboard tsc miss).
 
-- **One real production bug found**: `src/routes/agentTools.ts` GET `/agent-tools/service-catalog` had bare `SELECT id, name, subtitle, … FROM services`. `services.id` was renamed to `service_id` in pilot 10; the route would have errored at runtime (`column "id" does not exist`) on every LLM `get_service_catalog` tool call. Aliased to `service_id AS id` so the LLM response shape stays unchanged.
+**Recipe (locked by repetition):** (1) Migration RENAME, (2) recreate affected RPCs, (3) extend triggers if needed, (4) code sweep with perl one-liner, (5) tests with `RETURNING ... AS id` backward-compat alias, (6) dashboard types + tsc sweep, (7) docs + drift detector, (8) one commit.
 
-- **8 test-mock alignments** so mocks match what real-DB queries return (mocks were misleading but didn't cause test failures because the code reads what the mock provides):
-  - `src/auth.test.ts` × 3 mocks — switched from `{id: …}` to `{user_id: …}` to match `SELECT user_id FROM users` and `INSERT users RETURNING user_id` in `bootstrap.ts` / `auth.ts /forgot-password`.
-  - `src/shift-overrides-routes.test.ts` × 1 — switched to `{employee_schedule_id: …}` to match `DELETE FROM employee_schedule … RETURNING employee_schedule_id`.
-  - `src/routes/appointments.test.ts` × 4 — switched to `{appointment_id: …}` for GET (`a.*`) + DELETE + cancel. GET test assertion now reads `body[0].appointment_id` (the real wire field) instead of `body[0].id` which would be undefined against real DB.
-  - `src/services/tenants/bootstrap.test.ts` × 1 — comment-string drift updated.
+**Latent bugs surfaced during the sweep (real production issues that mocked tests had hidden):** See individual pilots above + detailed notes in the original May 12–13 entries.
 
-Verified clean: all sync test mocks (`hubspot-sync.test.ts`, `square-sync.test.ts`, `jobber-sync.test.ts`, `servicetitan-sync.test.ts`) are correct because the routes use `RETURNING customer_id AS id` / `appointment_id AS id` aliases, so `{id: …}` mocks match. Same for most agentTools mocks (routes alias `customer_id AS id` / `employee_id::text AS id` / `resource_id AS id`).
+**After-state:** backend 1,781 / dashboard 620 / agent 85 — all green. Zero TS errors. Drift detector clean. The sprint is **complete** for every domain entity table.
 
-**Pre-existing broken code surfaced but out of scope** — `src/services/tenants/index.ts` async methods (`getTenantConfigAsync`, `getTenantConfigsAsync`, `updateTenantConfigAsync`) reference columns that have **never existed** in the schema (`business_name`, `owner_email`, `phone`, `sms_enabled`, `email_enabled`). Called transitively by `emailService.getBusinessName` / `getNotificationPreferences` and the reminder worker — would error every time the cache misses. CLAUDE.md already flags this whole service as "dormant; delete by default" per Build Principles. Tracked for follow-on cleanup.
+**Remaining decision:** `tenant_calendar_settings` (composite PK) — tracked in `docs/TODO.md`.
 
-**After-state:** backend 1,781 / dashboard 620 — all green. Zero TS errors. Drift detector clean. Working tree clean against `main`.
-
----
-
-## 2026-05-12 — PK naming convention conversion: **sprint complete (16 pilots, 17 migrations)**
-
-Sixteen consecutive table renames closing the asymmetric-PK pattern (`<table>.id` vs `<other>.<table>_id`) across the **entire** domain entity surface of the schema. The ID convention was ratified in `CLAUDE.md` on 2026-05-11: PK column is always `<table_singular>_id`, never bare `id`. The payoff is JOIN symmetry — `appointments.customer_id = customers.customer_id` lets queries use `USING (customer_id)`, `customers.customer_id = call_summaries.customer_id` becomes USING-friendly, and `SELECT *` across joined tables produces unambiguous column names with no aliasing. Each pilot was a focused commit, CI-green on first try (with one follow-up CI fix-up for a missed local test-file type in the services pilot).
-
-Migration count 90 → 107.
-
-**Pilots in order:**
-
-- `40c57d5` — **Pilots 1 + 2 (bundled): `record_versions.id → record_version_id` + `tenant_skills.id → tenant_skill_id`.** Migrations `20260512000000` + `20260512000001`. record_versions had 2 RPCs (`create_record_version`, `get_record_history`) + 1 view (`recent_record_changes`) requiring recreation; tenant_skills was a plain ALTER TABLE. Set the rename recipe template the remaining pilots followed.
-- `29c27c1` — **Pilot 3: `reminder_schedules.id → reminder_schedule_id`.** Migration `20260512000002`. First SERIAL-PK pilot — proved the convention works against integer PKs as well as UUIDs.
-- `a89fd50` — **Pilot 4: `consent_records.id → consent_record_id`.** Migration `20260512000003`. SERIAL PK; only the consent service consumes it.
-- `cb88e6c` — **Pilot 5: `opt_out_records.id → opt_out_record_id`.** Migration `20260512000004`. Same shape as pilot 4.
-- `df44c50` — **Pilot 6: `voice_sessions.id → voice_session_id`.** Migration `20260512000005`. Terminal in the schema (no inbound FKs); `start_voice_session` RPC's `RETURNING id INTO v_session_id` recreated with the new column.
-- `6607873` — **Pilots 7 + 8 (bundled): `tenant_docs.id` + `tenant_integration_settings.id`.** Migration `20260512000006`. No-inbound-FK config tables; sweep surface identical. `tenant_calendar_settings` deferred — its current schema has a composite (tenant_id) PK with no surrogate id column; need to decide whether to add one before renaming.
-- `c02ac5c` — **Pilot 9: `users.id → user_id`.** Migration `20260512000007`. Touched auth + JWT payload + every authenticated request, plus the polymorphic `book_appointment_atomic` `assignment_id` lookup which checks users-or-employees by id. Dashboard `User.id → user_id` swept across components.
-- `4e65bb1` — **Pilot 10: `services.id → service_id` (+ audit trigger fix).** Migrations `20260512000008` + `20260512000009` + `20260512000010`. First UUID-PK with significant booking-RPC entanglement: `book_appointment_atomic` + `check_coverage_gaps` recreated. **Surfaced the `auto_version_trigger` latent bug** — the trigger fires on 6 versioned tables and originally read `OLD.id`/`NEW.id` directly. After the voice_sessions rename earlier in the day the trigger was technically broken for voice_sessions inserts but not exercised in test paths; the services rename surfaced it broadly. Trigger rewritten as PK-aware CASE on `TG_TABLE_NAME`. Migration `20260512000010` restored two behaviors the first rewrite dropped: `SECURITY DEFINER` (required to insert into record_versions despite RLS) and the cascade-delete guard that skips versioning when the parent tenant is being deleted. 14 dashboard components touched (Service.id → service_id + 5 local Service-shape types).
-- `e4f173c` — **Follow-up CI fix on pilot 10.** Pilot 10's commit message claimed all local Service-shape types were aligned, but a local `Service`-shape type inside `BusinessSettingsView.test.tsx:30` mockServices declaration was missed. CI dashboard tsc turned red on first push; this fix-up landed before the next pilot started. Pure type-alignment — 1 line.
-- `d682ecf` — **Pilot 11: `resources.id → resource_id` (+ fn_audit_trigger fix).** Migration `20260512000011`. Most-entangled pilot to date: 3 RPCs recreated (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`). **Surfaced a second latent trigger bug** — `fn_audit_trigger` (which fires on appointments / customers / resources, NOT services or voice_sessions) was missed by the services pilot's `auto_version_trigger` rewrite because it's a separate trigger. After the resources rename, `fn_audit_trigger` would have produced NULL `record_id` rows in audit_log on every resources mutation. Same CASE-on-TG_TABLE_NAME pattern applied. Sweep: 11 backend source files, 13 test files (with `RETURNING resource_id as id` backward-compat alias to keep existing `.rows[0].id` reads stable), `supabase/seed.sql` (also fixed services.id leftover from the services pilot), 25 dashboard components/types, 4 dashboard test fixtures, polymorphic `SkillMatrixView` + `SkillRelationshipMap` mapped at boundary (their entities are shared between employees and resources via a `{id, name, type?}` shape).
-- `b8287b9` — **Pilot 12: `employees.id → employee_id`.** Migration `20260512000012`. 4 RPCs recreated (`book_appointment_atomic`, `book_with_scheduling_atomic`, `get_customer_context_for_call`, `check_coverage_gaps`) plus a 5th (`check_availability_with_tz`) caught only when the night-shift test suite went red post-migration — easy to miss because it lives in a separate migration (`20260430000002`) from the other booking RPCs. `auto_version_trigger` CASE extended; `fn_audit_trigger` verified NOT installed on employees so no change needed there. `get_effective_shifts` / `get_effective_shifts_bulk` not touched — they reference `employee_schedule.employee_id` (an FK column, already correctly named), not `employees.id`. Backend kept `employee_id::text AS id` aliasing on the GET /employees endpoint so the polymorphic employees+users UNION shape stays intact — dashboard untouched.
-- `010c6dc` — **Pilot 13: `employee_schedule.id → employee_schedule_id`.** Migration `20260512000013`. Smallest pilot of the sprint: 2 RPCs recreated (`get_effective_shifts`, `get_effective_shifts_bulk`) — both keep their `override_id` output-column alias as the public contract; only the internal `es.id → es.employee_schedule_id` switch in the SELECT. No trigger CASE extension needed (employee_schedule is neither versioned nor audited). `check_coverage_gaps` + `check_availability_with_tz` JOIN the table but never reference the PK column. Sweep: `src/routes/shifts.ts` + `src/test-utils.ts` + `dashboard/lib/types.ts` (`ScheduleEntry.id → employee_schedule_id`) + 4 dashboard E2E spec files + `helpers/fixtures.ts` (`RETURNING employee_schedule_id AS id` backward-compat alias for callers reading `.id`).
-- `389245e` — **Pilot 14: `appointments.id → appointment_id`.** Migration `20260512000014`. Largest blast-radius pilot to date. **4 RPCs recreated**: `book_appointment_atomic` + `book_with_scheduling_atomic` with **`RETURNING appointments.appointment_id INTO …`** (table-qualified to disambiguate from the RPC's `RETURNS TABLE(success, appointment_id, error_message)` OUT param — plpgsql raises `column reference "appointment_id" is ambiguous` otherwise), `get_customer_context_for_call` (`a.id → a.appointment_id` in SELECT; JSONB output key `'id'` preserved as agent-consumer contract), `update_appointment_customer` 9-arg overload (caught during test sweep — also had stale `WHERE id` patterns). **Both audit/version triggers extended**: `auto_version_trigger` + `fn_audit_trigger` CASE add `'appointments' → 'appointment_id'`. **Latent bug surfaced + fixed**: `src/routes/appointments.ts:145` had stale `FROM services WHERE id` from pilot-10 residue. Sweep: 8 backend services (calendarSync, hubspotSync, jobberSync, squareSync, servicetitanSync, conflictLookup, reminders/scheduleForAppointment, database/index.ts) + routes (appointments, customers, reminders, agentTools) + 19 backend test files (perl one-liner sweep: `\ba\.id\b → a.appointment_id`, `RETURNING id → RETURNING appointment_id AS id`) + 14 dashboard component files + 5 dashboard test files + `mockData.ts`.
-- `1dacf9b` — **Pilot 15: `customers.id → customer_id`.** Migration `20260512000015`. Second-most-entangled pilot. **4 RPCs recreated**: `book_appointment_atomic` (SELECT id INTO + RETURNING id INTO → both `customer_id`), `book_with_scheduling_atomic` (table-qualified `customers.customer_id` for INSERT RETURNING + lookup), `get_customer_context_for_call` (`v_customer.id → v_customer.customer_id`; JSONB `'id'` output key preserved), `update_appointment_customer` 9-arg (UPDATE customers WHERE id). **Both triggers extended**: `auto_version_trigger` + `fn_audit_trigger` add `'customers' → 'customer_id'`. **Latent bug fixed**: `src/services/jobberSync.ts:285` had stale `SELECT id FROM resources` from pilot-11 residue. Backend sweep: 12 service/route files swept (`c.id = a.customer_id → c.customer_id = a.customer_id`, etc), `INSERT INTO customers ... RETURNING customer_id AS id` for callers consuming `.id`. Dashboard sweep: `Customer.id → customer_id` (types.ts) + 5 component files (CustomerCombobox.CustomerOption + QuickBookPanel.QuickBookCustomer + AppointmentDetailPanel inline type + CRMView, DeletedRecordsPanel, AppointmentView, SchedulerView, mockData) + 3 dashboard tests + 18 backend test files.
-- `f486f6b` — **Pilot 16 (final): `tenants.id → tenant_id`.** Migration `20260512000016`. The sprint promise lands: `tenants.tenant_id = <other>.tenant_id` works as `USING (tenant_id)` for every inbound FK (20+ tables). **3 RPCs recreated**: `book_appointment_atomic` + `book_with_scheduling_atomic` + `check_availability_with_tz` switch `FROM tenants t WHERE t.id` → `WHERE t.tenant_id` in the tenant-timezone lookup. **Both trigger cascade-delete guards updated**: `auto_version_trigger` + `fn_audit_trigger` switch `SELECT 1 FROM tenants WHERE id = v_tenant_id` → `WHERE tenant_id = v_tenant_id` (the CASE TG_TABLE_NAME mapping needs no `tenants` branch — tenants is the parent, not a versioned child). **Two trigger fixes surfaced and fixed**: `notify_n8n_on_appointment` had `FROM tenants WHERE id = NEW.tenant_id` + a stale `NEW.id` JSONB payload field (from pilot-14 residue — should have been `NEW.appointment_id`); `create_default_resources` had `INSERT INTO resources VALUES (NEW.id, …)` referencing the renamed-away `NEW.id` (caught when test_db tenant inserts raised `record "new" has no field "id"`). **Latent bug fixed**: `src/database/index.ts:122` `SELECT id FROM tenants WHERE tenant_id = $1` — earlier sweep updated the WHERE clause but missed the SELECT column, breaking the tenant existence check `withTenantClient` runs at the start of every route. Backend sweep: 12 service/route files (tenants, provisioning, agentTools, users, billing, vocabulary, analytics, availabilitySearch, tenants/index.ts, tenants/bootstrap.ts, database/index.ts, middleware.ts) + 18 test files. Dashboard sweep: `Tenant.id → tenant_id` (types.ts; TenantFull inherits) + 5 component files (AIConfigView, SuperAdminDashboard, TenantCard, TenantEditPanel, OutlookLayout — carefully preserved `Tab.id` and `THEMES[i].id` usages which are different local types) + `MOCK_TENANT.id → tenant_id` + `superadmin.test.tsx` fixture.
-
-**Trigger evolution** — both versioning + audit triggers now CASE on TG_TABLE_NAME for every versioned/audited table:
-
-```sql
--- auto_version_trigger (fires on customers/appointments/employees/services/resources/voice_sessions)
-v_pk_column := CASE TG_TABLE_NAME
-  WHEN 'voice_sessions' THEN 'voice_session_id'
-  WHEN 'services'       THEN 'service_id'
-  WHEN 'resources'      THEN 'resource_id'
-  WHEN 'employees'      THEN 'employee_id'
-  WHEN 'appointments'   THEN 'appointment_id'
-  WHEN 'customers'      THEN 'customer_id'
-  ELSE 'id'
-END;
-
--- fn_audit_trigger (fires on appointments/customers/resources)
-v_pk_column := CASE TG_TABLE_NAME
-  WHEN 'resources'      THEN 'resource_id'
-  WHEN 'appointments'   THEN 'appointment_id'
-  WHEN 'customers'      THEN 'customer_id'
-  ELSE 'id'
-END;
-```
-
-With every domain entity now renamed, the cascade-delete guards in both triggers reference `tenants.tenant_id` directly. The CASE-on-TG_TABLE_NAME pattern is still load-bearing because the trigger fires polymorphically across multiple tables and each has its own renamed PK column — collapsing to a `'<TG_TABLE_NAME>_id'` template would require strict naming discipline (no exceptions) and isn't worth doing for clarity.
-
-**Standing authorization** — after the first two pilots (manually approved per-commit), the user granted standing autonomous-commit authorization: continue through pilots without re-asking as long as each pilot's commit lands cleanly with CI green on first try. Saved as `feedback_pk_rename_standing_auth.md`. Triggered exactly one pause (services pilot's CI red on the dashboard tsc miss); pilots 11–16 all shipped under autonomous flow.
-
-**Recipe locked in by repetition** — every pilot followed the same shape: (1) migration starts `ALTER TABLE … RENAME COLUMN id TO <name_singular>_id`, then DROP-and-CREATE each RPC whose `RETURNS TABLE` includes the column (or CREATE OR REPLACE when only the body changes); (2) extend the trigger CASE if the table is versioned/audited; (3) sweep production code by `perl -i -pe` one-liner for `WHERE id` / `JOIN … = … .id` / `RETURNING id` patterns; (4) sweep tests with the backward-compat `RETURNING <col>_id AS id` alias so existing `.rows[0].id` reads stay valid; (5) sweep dashboard `Foo.id → Foo.<name_singular>_id` in `lib/types.ts` and run tsc to find every consumer; (6) doc-update CLAUDE.md + README.md + docs/CURRENT_STATUS.md + docs/TODO.md migration counts + per-pilot entry; (7) drift-detect green; (8) backend tests against real Postgres green; (9) dashboard tests green; (10) one commit, push, wait for CI, next pilot.
-
-**Latent bugs surfaced in passing** — running the sweep against real Postgres caught code that had been broken since earlier pilots but never exercised:
-- Pilot 10 (services) surfaced `auto_version_trigger`'s `OLD.id`/`NEW.id` hardcoding — broken for voice_sessions since pilot 6 but never tested with a real DB versioning trigger fire.
-- Pilot 11 (resources) surfaced the same `fn_audit_trigger` bug — separate trigger, separate fix.
-- Pilot 14 (appointments) surfaced stale `FROM services WHERE id` in `appointments.ts:145` from pilot-10 residue, plus the ambiguous `RETURNING appointment_id` (RPC OUT param collides with table column — table-qualify with `RETURNING appointments.appointment_id INTO …`).
-- Pilot 15 (customers) surfaced stale `SELECT id FROM resources` in `jobberSync.ts:285` from pilot-11 residue.
-- Pilot 16 (tenants) surfaced: (a) `notify_n8n_on_appointment` trigger with stale `NEW.id` from pilot-14 residue; (b) `create_default_resources` trigger fires BEFORE inserts and references the renamed-away `NEW.id`; (c) `database/index.ts:122` `SELECT id FROM tenants WHERE tenant_id = $1` — the WHERE was renamed by the sweep but the SELECT column missed, breaking the tenant existence check `withTenantClient` runs at the start of EVERY route.
-
-**After-state:** backend 1,781 / dashboard 620 / agent 85 — all green. Zero TS errors across backend / dashboard / agent. Drift detector clean. Working tree clean post-pilot-16. The sprint is **complete** for every domain entity table.
-
-**Remaining (decision-pending):** `tenant_calendar_settings` has a composite (tenant_id) PK with no surrogate `id` column. Either (a) add a surrogate `tenant_calendar_setting_id` UUID PK before renaming, or (b) leave alone since there's nothing to rename. Tracked in `docs/TODO.md`; not a sprint deliverable.
-
-**Outstanding for next session:** all 17 PK-rename migrations (20260512000000–16) + the older `20260511000000_employees_services_tenant_fk_cascade.sql` still need to land on production Supabase. The renames are **forward-only** and must land in order on prod before any application code deployed against prod expects the renamed columns. CI on every pilot's commit was green against a fresh-migrated `test_db`, so the migration sequence is known-good.
-
----
-
-## 2026-05-11 — E2E coverage sprint: 5 P1/P2 items + real schema bug fix
-
-Seven commits across this date and 2026-05-10, all on `origin/main`. Closes the largest single-session block of P1/P2 E2E coverage to date, AND surfaces a real data-integrity bug that the audits would have caught at beta scale.
-
-**Commits in order:**
-
-- `1fb8b11` — **feat(appointments): restore canceled appointments via `/reactivate`.** New `POST /appointments/:id/reactivate` route flips canceled → scheduled. Returns 409 + `TIMESLOT_OCCUPIED` + conflict block when the slot was rebooked while canceled (mirrors `/appointments/create`'s shape so dashboard reuses `ConflictModal` pattern); 400 `NOT_CANCELED` guards against duplicate `sync('create')` on already-scheduled rows. Dashboard surface: customer-history rows for canceled appointments are now clickable (the only UI surface where canceled rows are reachable — calendar / list / scheduler still filter them). Click → `ConfirmModal` → API → toast. +5 backend route tests + 3 dashboard component tests + 3 E2E (`appointment-cancel-restore.spec.ts`).
-- `492b4cf` — **test(e2e): scheduler grid real-time refresh after Quick Book.** Pins `SchedulerView.handleQuickBooked → useSchedulerData.refresh → setAppointments → AppointmentBlock render` wiring without a page reload. Captures appointment_id from the live POST response via `page.waitForResponse`. +1 E2E.
+**Outstanding:** All 17 PK-rename migrations still need to land on production Supabase (forward-only, must be applied in order).
 - `04a96b4` — **fix(e2e): stabilize two latent flakes.** `workflows.spec.ts` smoke asserted on seed-customer names visible in TODAY's calendar view (empty on weekends since DynaTire seeds Mon-Fri shifts only); replaced with unconditional `scheduler-date-display` check. `quick-book-shift-overrides` booking test used `today` for the booking date (failing legitimately on weekends) plus a broken `/shifts/overrides` URL that hit the dashboard's catch-all (HTML response) instead of the backend (port 4001) — `res.json()` threw, helper silently returned null, auto-assign landed on a non-scheduled employee. Fixed by walking to the next weekday, using the absolute backend URL, and skipping the service selection (orthogonal to the test's shift-coverage contract). Test also lacked cleanup — it had been "passing by failing" pre-fix; added try/finally with capture-from-response → DELETE.
 - `07103cc` — **test(e2e): mobile-responsiveness audit on iPhone 14 + Pixel 7 viewports.** `mobile-responsive.spec.ts` (4 tests) drives the three daily-use flows (today's schedule, Quick Book, customer lookup) at 390×844 and 412×915 via `page.setViewportSize`. Asserts mobile bottom nav (`md:hidden`) surfaces the primary tabs, critical inputs/controls render visible, page never overflows its viewport horizontally. Audit found no regressions — `OutlookLayout`'s mobile nav + Tailwind responsive classes work cleanly at both widths.
 - `ae7dd12` — **feat(schema): close tenant-delete cascade gap on employees + services.** **Surfaced a real data-integrity bug** while writing E2E coverage for the `DELETE /tenants/:id` cascade: `employees.tenant_id` and `services.tenant_id` were declared `NOT NULL UUID` but lacked the `REFERENCES tenants(id) ON DELETE CASCADE` constraint that every other tenant-scoped table has. (Initial-schema migration declared the FK; a later column-rename or table-recreate appears to have dropped it without restoring it.) Local DB had accumulated 77 orphan employee rows + 8 orphan service rows from past test runs. Migration `20260511000000_employees_services_tenant_fk_cascade.sql`: DELETE orphans whose tenant_id no longer exists → ADD CONSTRAINT FK CASCADE on both. Pre-fix, tenant offboarding silently leaked rows — would have been a GDPR posture issue at beta scale. **Production Supabase still needs this applied.** Plus `tenant-delete-cascade.spec.ts` (3 tests: full cascade across 11 tables, cross-tenant isolation, owner-403 authz gate). Migration count 89 → 90.
