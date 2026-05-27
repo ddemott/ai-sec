@@ -171,6 +171,7 @@ If your project uses npm (or pnpm, yarn, etc.), wire the workflow into `package.
   bash scripts/create-feature-branch.sh feat/my-change
   bash scripts/prepare-commit.sh
   ```
+- **One active PR at a time**: Before starting a new feature branch, the previous one must be pushed → merged to main → deleted (local + remote). This is enforced in both `prepare-commit` and the `BRANCH_CHECKLIST.md`.
 - The scripts are completely self-contained once `workflow.config.json` is correct.
 - Many teams still add a `pyproject.toml` `[tool.poe.tasks]` or a `Makefile` with the same names for muscle-memory consistency across the company.
 

@@ -8,6 +8,12 @@ instead of `eslint` + `vitest`. Always consult your project's `workflow.config.j
 
 ## When Starting a Branch
 
+**Critical hygiene rule:** Work on ONE PR at a time.
+
+- [ ] **The previous feature branch has been fully closed out**:
+  - [ ] Previous work pushed to its remote
+  - [ ] Merged into your main branch
+  - [ ] Old feature branch deleted (both locally and remotely)
 - [ ] Branch created using `npm run create-branch <type>/<name>` (or the script directly)
 - [ ] Branch name follows convention (`feat/`, `fix/`, `test/`, `refactor/`, `docs/`, `chore/`)
 - [ ] GitHub Issue created (or existing issue linked) if the work is non-trivial

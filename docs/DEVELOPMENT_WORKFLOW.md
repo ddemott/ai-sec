@@ -162,7 +162,28 @@ After it finishes, review the output, fix anything it found, then proceed with t
 
 See the skill at `.claude/skills/commit-code/SKILL.md` for the exact expectations.
 
+## Branch & PR Hygiene (Critical Rule)
+
+**Work on one active PR at a time.**
+
+Before you create a new feature branch or open a new PR, the previous feature branch **must** have been:
+- Pushed to its remote
+- Merged into `main`
+- Deleted (both locally and on the remote)
+
+This rule prevents painful rebase conflicts and context loss when multiple long-lived branches exist in parallel.
+
+The rule is enforced in:
+- Output of `npm run prepare-commit`
+- The `BRANCH_CHECKLIST.md` (required checkbox when starting a new branch)
+
+When the rule set is updated in this repository, the equivalent changes are mirrored in the pixel-agents project (and vice versa) to keep the two codebases in sync on process.
+
 ## 7. Pull Request Process
+
+See the dedicated **Branch & PR Hygiene (Critical Rule)** section above for the mandatory one-active-PR rule (previous branch must be pushed → merged → deleted before starting another).
+
+This rule prevents painful rebase conflicts and context switching that happens when multiple long-lived branches exist.
 
 1. Push your feature branch.
 2. Open a PR against `main`.

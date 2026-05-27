@@ -8,6 +8,12 @@ Use this checklist when starting and finishing work on a feature branch.
 
 ## When Starting a Branch
 
+**Critical hygiene rule (added 2026-05-27): Work on ONE PR at a time.**
+
+- [ ] **The previous feature branch has been fully closed out**:
+  - [ ] Previous work pushed to its remote branch
+  - [ ] Previous branch merged into `main`
+  - [ ] Previous feature branch deleted (both locally and on remote)
 - [ ] Branch created using `npm run create-branch <type>/<name>` (or the script directly)
 - [ ] Branch name follows convention (`feat/`, `fix/`, `test/`, `refactor/`, `docs/`, `chore/`)
 - [ ] GitHub Issue created (or existing issue linked) if the work is non-trivial
@@ -60,6 +66,9 @@ Use this checklist when starting and finishing work on a feature branch.
 ## Before Committing / Pushing
 
 - [x] Ran and validated the new project-type-aware prepare-commit workflow end-to-end (Item A in session)
+- [ ] **Branch hygiene confirmed**:
+  - Only working on one active feature branch / PR at a time
+  - Previous branch (if any) was pushed → merged to main → deleted before starting this one
 - [ ] Use the `commit-code` process (tell your agent "commit" or "commit code")
 - [ ] Commit message follows Conventional Commits style
 - [ ] Pushed to the feature branch

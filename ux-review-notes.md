@@ -52,13 +52,16 @@
 ## Review — 2026-05-27
 
 ### DashboardHome (dashboard/components/DashboardHome.tsx)
+
 - **[high]** Home dashboards are where users decide whether the system feels calm or chaotic, and if this surface mixes activity summaries, shortcuts, and first-run states without strong hierarchy it can quickly become cognitively noisy → Strengthen information hierarchy so today’s most important operational signals read clearly before lower-priority summary cards and shortcuts.
 - **[medium]** Home views often accumulate role-specific cards and special-case banners over time, which can make the shell feel inconsistent across owners, admins, and front-desk staff → Keep role-based sections clearly partitioned so the page still feels like one coherent home view instead of stacked exceptions.
 
 ### ErrorBoundary (dashboard/components/ErrorBoundary.tsx)
+
 - **[high]** Error boundaries are one of the few places where the product explicitly has to acknowledge failure, and if the fallback card is too generic users are left without a clear next step or confidence about what stayed safe → Make recovery actions and scope of failure much more explicit so the boundary reassures users about what they can retry, refresh, or safely ignore.
 - **[medium]** Fallback UIs often end up visually detached from the rest of the app because they are built in isolation, which can make crashes feel more alarming than necessary → Keep the fallback layout and action styling aligned with the dashboard’s normal primitives so recovery still feels like part of the product.
 
 ### FirstRunTour (dashboard/components/FirstRunTour.tsx)
+
 - **[medium]** The overview modal is a good lightweight onboarding choice, but it still behaves like a custom dialog without backdrop-close handling or stronger focus-management cues, which makes the very first post-setup experience feel slightly less polished than the shared modal system → Move the tour onto the shared modal primitive or bring its dismissal and focus behavior up to the same standard.
 - **[medium]** Several tour cards depend on hover-only arrow reveal and descriptive text blocks, which works on desktop but gives less guidance on touch devices where hover never appears → Strengthen always-visible affordance cues so tapping into a destination feels equally obvious on touch and mouse-driven devices.

@@ -119,6 +119,10 @@ else
 fi
 echo "  - Update documentation (as listed in workflow.config.json under documentation.filesThatMustBeUpdated)"
 echo "  - Fill out BRANCH_CHECKLIST.md"
+echo "  - **Branch hygiene (ONE PR AT A TIME RULE)**:"
+echo "      - Only one active feature branch / PR in flight"
+echo "      - Previous branch (if any) was pushed → merged → deleted (local + remote)"
+echo "      This prevents painful rebase conflicts later."
 echo "  - Write a good commit message (the commit-code skill will help draft one)"
 echo "  - Get explicit approval from the commit-code process before committing"
 echo ""
