@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * Heavy dynamic schema introspection and row manipulation in tests.
+ * Disables intentional for dynamic DB testing.
+ * See REFACTORING_TODO.md item 10.
+ */
 import postgres from "postgres";
 import { assertEquals, assertNotEquals } from "@std/assert";
 

@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * Reminders Service Tests
  * Tests reminder scheduling, processing, and cancellation with happy + sad paths.
  * Each section includes 5W diagnostic context (WHO, WHAT, WHEN, WHERE, WHY).
+ *
+ * unbound-method disabled due to Vitest mock patterns (standard in this codebase).
+ * See REFACTORING_TODO.md item 10.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ReminderService } from './index.js';

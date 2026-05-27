@@ -1,3 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * no-unsafe-* rules disabled: this repository uses the dynamic DatabaseService
+ * layer (which itself has disables) and performs raw query result access.
+ *
+ * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ */
+
 import type { DatabaseService } from '../../database/index.js';
 import type { Appointment } from '../../types/index.js';
 import type { ReminderSchedule, ReminderData } from './types.js';

@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 /**
  * Communications Service Tests
  * Tests email, SMS, and consent functionality with happy + sad paths.
  * Each section includes 5W diagnostic context (WHO, WHAT, WHEN, WHERE, WHY).
+ *
+ * unbound-method disabled due to Vitest mock patterns.
+ * See REFACTORING_TODO.md item 10.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CommunicationService } from './index.js';

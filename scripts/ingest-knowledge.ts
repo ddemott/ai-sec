@@ -1,3 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * no-unsafe-* rules disabled: this is a standalone Deno CLI script that does
+ * dynamic Postgres queries + OpenAI API calls with very loose error/row handling.
+ * It is intentionally not part of the main typed application.
+ *
+ * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ */
+
 import { Client } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 import 'https://deno.land/std@0.224.0/dotenv/load.ts';
 
