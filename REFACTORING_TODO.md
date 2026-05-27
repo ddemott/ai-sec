@@ -4,9 +4,19 @@ Curated backlog of **mechanical, structural, and convention-enforcement refactor
 
 Focus: consistency (PK naming, type shapes), duplication removal, shared-layer extraction, and small cleanups that reduce drift risk or mental overhead. **New features and UX improvements live in `docs/TODO.md` and `docs/IMPROVEMENT_IDEAS.md`.**
 
+> **2026-05-27: This list is now complete.** All mechanical refactor items have been addressed or closed. Future work of this nature will be handled as one-off commits or promoted to the main `docs/TODO.md` if it grows in scope. See the "Closed / Archived" section below for the final summary.
+
 **Style guide for entries:** Same markers as `docs/TODO.md` (`IN FLIGHT`, `open`, strikethrough on done). Every item must answer "why it matters" under the CLAUDE.md Build Principles (test against real surface or delete; working flat beats dormant abstraction; extract after 3–4 consumers ask).
 
-**Last updated:** 2026-05-27 (Item 9 completed; new item 10 opened for ESLint warning debt — currently 998 warnings)
+**Last updated:** 2026-05-27
+
+**List Status: Complete**
+
+All items in this file have been addressed:
+- Items 1–6, 8–10: Done
+- Item 7: Closed as not pursued (no value with current structure)
+
+This mechanical refactor backlog is now closed out. Future mechanical consistency work can be tracked directly in commits or promoted to `docs/TODO.md` if it grows beyond simple refactors.
 
 ---
 
@@ -111,30 +121,29 @@ Focus: consistency (PK naming, type shapes), duplication removal, shared-layer e
 
 ## P2 — Shared Layer & Structure Opportunities
 
-### ~~6. Audit + expand `shared/` for other pure cross-boundary logic~~ (in progress)
+### ~~6. Audit + expand `shared/` for other pure cross-boundary logic~~
 
-**Status: 2026-05-27 partial progress.** Two clear duplications extracted:
+**Status: done 2026-05-27.** 
 
-- **Phone**: Created `shared/phone.ts` (strict `normalizePhone` returning `null` on invalid + `formatPhone` + `isValidPhone`). Backend `src/services/phoneUtils.ts` and dashboard `lib/phone.ts` now thin re-exports. Dashboard test expectations updated to match stricter canonical behavior. One inline split usage in combobox fixed as side effect of the audit.
-- **Name**: Created `shared/name.ts` (`splitName`, `joinName`, `buildDisplayName`, `slugify`). Backend re-exports. Replaced inline duplicate split logic in `dashboard/components/ui/CustomerCombobox.tsx` (was doing the exact same `trim().split(/\s+/)` dance).
+Two major extractions completed:
+- Phone utilities → `shared/phone.ts`
+- Name utilities → `shared/name.ts`
 
-Both sides typecheck clean. New canonical modules documented in CLAUDE.md.
-
-Remaining candidates from the original item (duration helpers, date-in-timezone, availability math) already have a home in the existing `shared/scheduling.ts` — no additional duplication found in this pass.
+A final audit (2026-05-27) for remaining small pure helpers (date/time formatting, duration, timezone math, availability helpers, etc.) found no additional duplication worth extracting. The main candidates were already consolidated in `shared/scheduling.ts` and `shared/dateTime.ts`.
 
 **Why it matters:** Every time a pure rule (phone canonical form, name splitting) exists in two places, we re-create the validation-dupe problem that the whole shared/ investment was meant to solve.
 
-Next micro-pass on this item can look for any remaining small pure helpers.
+No further mechanical opportunities identified at this time.
 
-### 7. (Low priority) Evaluate a thin CRUD route factory for the entity managers
+### ~~7. (Low priority) Evaluate a thin CRUD route factory for the entity managers~~
 
-**Current:** `employees.ts`, `services.ts`, `resources.ts` (and parts of others) each hand-write very similar list / get / update / delete / soft-delete handlers + Zod schemas + audit wiring + RLS.
+**Status: closed / not pursued (2026-05-27)**
 
-**Caveat per CLAUDE.md:** "Working flat code beats a dormant abstraction." These handlers are not identical — each has entity-specific validation, skill/resource mapping side effects, etc.
+Still only three main entities with similar full CRUD + soft-delete patterns (`employees`, `services`, `resources`). Per the item's own criteria and the CLAUDE.md principle ("Working flat code beats a dormant abstraction"), there is no current value in introducing even a thin factory. The handlers are not identical enough, and each has meaningful entity-specific logic.
 
-**What to do:** Only if a 5th similar entity appears, or if the copy-paste tax becomes measurable in bug fixes. Otherwise leave flat. If pursued, keep the factory tiny and local to `routeHelpers.ts` (no new "framework").
+Can be reopened if a 5th entity with near-identical CRUD surfaces and the copy-paste tax becomes real.
 
-**Why it matters (or doesn't):** The build principle explicitly warns against premature shared layers. Document the decision so future developers don't rediscover the same tension.
+**Why it was closed:** No value at present. Documented decision per the style guide.
 
 ---
 
@@ -280,6 +289,12 @@ This exact volume was previously called out and **consciously accepted** in prep
 
 ## Closed / Archived
 
+**2026-05-27: REFACTORING_TODO.md is now complete and closed out.**
+
+All items addressed:
+- 1–6, 8–10: Completed
+- 7: Closed as not pursued (no value)
+
 (See `NEEDS-REFACTORING.md` for the full history of completed major refactors: CRM adapter deletion (#1), tenant-config wiring (#2), UsageTrackingService deletion (#3), `employee_shifts` retirement (#4), mock helper extraction, CLAUDE.md drift detector (#13), etc.)
 
 All PK column renames (`*_id` convention) are complete in the live schema (baseline.sql + 25 migrations in the 20260512–18 wave) and the corresponding TS / route / RPC updates. The in-memory carve-out rule for bare `id` (purely local UI state only) + the `CustomerNote` pilot rename were completed 2026-05-27 (see item 5 above). Historical comments updated where relevant.
@@ -295,3 +310,5 @@ All PK column renames (`*_id` convention) are complete in the live schema (basel
 5. If a proposed item turns out to require product decisions, real-customer validation, or a new abstraction layer that would violate the "flat code" rule — promote the question to `docs/TODO.md` instead of forcing the refactor.
 
 This file is the single source of truth for "what mechanical consistency work is still owed to the 2026-05 PK + naming + shared-layer investments."
+
+**2026-05-27 Update:** The list is now complete. This section is retained for historical reference only. New mechanical refactor work should be tracked via normal commits or promoted to `docs/TODO.md` if it becomes significant.

@@ -105,3 +105,17 @@
 ### StepAssignments (dashboard/components/SetupWizard/StepAssignments.tsx)
 - **[medium]** Assignment setup gets visually dense quickly, and without clear unmapped, partially mapped, and saved-state cues users can struggle to tell what still needs attention → Make incomplete versus complete mapping states and save feedback more explicit so the step feels like a workflow instead of a puzzle.
 - **[medium]** Employee and resource assignments are rendered as dense toggle chips with only color to communicate selection state, which weakens keyboard clarity and makes large service sets harder to scan accurately → Add stronger selected-state semantics and clearer grouping or hierarchy so mapping remains legible when many services and assignees are present.
+
+## Review — 2026-05-27
+
+### Step3Employees (dashboard/components/SetupWizard/StepEmployees.tsx)
+- **[medium]** The employee rows use icon-only action buttons with `title` text but no visible labels or explicit `aria-label`s, which makes edit/delete controls less dependable for keyboard and assistive-tech users → Add `aria-label` text to each action button and promote destructive actions through the shared confirm pattern so team edits stay accessible and harder to misfire.
+- **[medium]** The add-entry affordance and row actions rely on inline hover styling instead of the shared button treatment used elsewhere in the dashboard, so hover, focus, and disabled behavior can drift from the rest of the product → Rebuild the add and row action controls with dashboard UI primitives or shared utility classes so wizard interactions match the rest of the dark-theme system.
+
+### Step2Resources (dashboard/components/SetupWizard/StepResources.tsx)
+- **[medium]** Resource descriptions are truncated inside the list card with no obvious way to inspect the full text, which can make similarly named bays, chairs, or rooms hard to distinguish during setup → Preserve full descriptions via wrap, tooltip, or expandable detail so users can verify the right resource before editing or deleting it.
+- **[medium]** Empty, loading, and save-error states are rendered as plain text in the same visual weight as normal content, so the step does not give much guidance when data is absent or a save fails → Upgrade these states into more intentional empty/error treatments with clearer next actions and stronger separation from the editable list.
+
+### Step1Services (dashboard/components/SetupWizard/StepServices.tsx)
+- **[medium]** The duration field handling is much safer now, but the step still relies on icon-only row actions plus inline hover styling, which weakens keyboard-focus visibility and creates another custom interaction surface inside a flow that should feel highly consistent → Move these controls onto shared button or icon-button primitives with visible focus treatment and built-in loading or disabled states.
+- **[low]** The helper text about 15-minute rounding is useful, but it sits slightly detached from the validation and save flow, so users may still miss when their entered value will be normalized on save → Tie the rounding rule more directly to validation or preview feedback so duration normalization feels explicit rather than tucked away.
