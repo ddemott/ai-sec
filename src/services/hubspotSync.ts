@@ -1,3 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * no-unsafe-* rules disabled: this CRM sync adapter calls external HubSpot APIs
+ * that return dynamic/any-shaped responses. We normalize at the edges.
+ *
+ * Part of the ESLint debt reduction effort (REFACTORING_TODO.md item 10).
+ */
+
 import type { Pool } from 'pg';
 import * as hubspot from './hubspotClient';
 import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';

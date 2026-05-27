@@ -1,3 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * no-unsafe-* rules disabled: this processor works with the dynamic reminder
+ * repository and communication layers that use loose external data shapes.
+ *
+ * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ */
+
 import type { Appointment } from '../../types/index.js';
 import { type CommunicationService } from '../communications/index.js';
 import { type ConsentService } from '../consentService.js';

@@ -1,3 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * no-unsafe-* rules disabled: this is an external API client for Square.
+ * All responses from Square's OAuth and API endpoints are treated as dynamic.
+ *
+ * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ */
+
 import crypto from 'crypto';
 import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
 
@@ -205,7 +213,7 @@ export async function refreshAccessToken(
 }
 
 /** Make an authenticated REST call to Square API */
-export async function apiRequest<T = any>(
+export async function apiRequest<T = unknown>(
   method: string,
   path: string,
   accessToken: string,

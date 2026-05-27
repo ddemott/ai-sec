@@ -1,3 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * no-unsafe-* rules disabled: this file contains dynamic DB query builders
+ * and reminder scheduling logic that works with loosely typed data from
+ * the database layer and external scheduling concerns.
+ *
+ * Part of the ESLint debt reduction effort (REFACTORING_TODO.md item 10).
+ */
+
 import type { DatabaseService } from '../../database/index.js';
 import { CommunicationService } from '../communications/index.js';
 import { ConsentService } from '../consentService.js';

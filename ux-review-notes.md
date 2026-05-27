@@ -52,13 +52,56 @@
 ## Review — 2026-05-27
 
 ### DashboardHome (dashboard/components/DashboardHome.tsx)
+
 - **[high]** Home dashboards are where users decide whether the system feels calm or chaotic, and if this surface mixes activity summaries, shortcuts, and first-run states without strong hierarchy it can quickly become cognitively noisy → Strengthen information hierarchy so today’s most important operational signals read clearly before lower-priority summary cards and shortcuts.
 - **[medium]** Home views often accumulate role-specific cards and special-case banners over time, which can make the shell feel inconsistent across owners, admins, and front-desk staff → Keep role-based sections clearly partitioned so the page still feels like one coherent home view instead of stacked exceptions.
 
 ### ErrorBoundary (dashboard/components/ErrorBoundary.tsx)
+
 - **[high]** Error boundaries are one of the few places where the product explicitly has to acknowledge failure, and if the fallback card is too generic users are left without a clear next step or confidence about what stayed safe → Make recovery actions and scope of failure much more explicit so the boundary reassures users about what they can retry, refresh, or safely ignore.
 - **[medium]** Fallback UIs often end up visually detached from the rest of the app because they are built in isolation, which can make crashes feel more alarming than necessary → Keep the fallback layout and action styling aligned with the dashboard’s normal primitives so recovery still feels like part of the product.
 
 ### FirstRunTour (dashboard/components/FirstRunTour.tsx)
+
 - **[medium]** The overview modal is a good lightweight onboarding choice, but it still behaves like a custom dialog without backdrop-close handling or stronger focus-management cues, which makes the very first post-setup experience feel slightly less polished than the shared modal system → Move the tour onto the shared modal primitive or bring its dismissal and focus behavior up to the same standard.
 - **[medium]** Several tour cards depend on hover-only arrow reveal and descriptive text blocks, which works on desktop but gives less guidance on touch devices where hover never appears → Strengthen always-visible affordance cues so tapping into a destination feels equally obvious on touch and mouse-driven devices.
+
+## Review — 2026-05-27
+
+### BusinessTypeSection (dashboard/components/BusinessTypeSection.tsx)
+- **[medium]** Business-type configuration has product-wide consequences, so if the explanation of what changes and what stays stable is not very explicit users can hesitate before making or reviewing the choice → Clarify the downstream effects of the selected business type so the section feels informative rather than mysterious.
+- **[medium]** Sections like this often mix descriptive copy, selection controls, and persistence feedback in a small footprint, and without strong hierarchy it can be hard to tell whether the user is editing or just reviewing → Separate read-only summary from editable state more clearly so owners can understand the current business type at a glance.
+
+### LoginView (dashboard/components/LoginView.tsx)
+- **[high]** Login is the first trust checkpoint in the product, and if password visibility, loading, and auth-failure states are too subtle or too visually busy the entry experience can feel less dependable than it should → Strengthen loading and failed-login feedback while keeping the form hierarchy simple so the sign-in path feels calm and explicit.
+- **[medium]** Authentication screens often grow custom inputs, toggles, and iconography that drift away from the rest of the dashboard’s primitives, which makes the first product interaction feel visually adjacent rather than integrated → Keep login controls tightly aligned with shared form and action treatments so the handoff into the app feels consistent.
+
+### SetupProgressPill (dashboard/components/SetupProgressPill.tsx)
+- **[medium]** The pill has better tooltip and URL-state behavior now, but it still disappears entirely on smaller screens with `hidden md:flex`, which means users most likely to benefit from a persistent setup nudge may lose it on tablet or compact laptop layouts → Preserve a compact-screen fallback so setup progress remains discoverable outside medium-plus viewports.
+- **[low]** The richer tooltip is a real improvement, but it still depends on native hover/title behavior for most of its detail, which limits usefulness on touch devices and keeps the extra context mouse-first → Consider a tap-friendly disclosure or nearby inline cue so remaining-step detail is available without hover.
+
+## Review — 2026-05-27
+
+### BusinessTypePicker (dashboard/components/SetupWizard/BusinessTypePicker.tsx)
+- **[medium]** Business-type selection is an early trust-building step, and if search, suggestion, and selected-state cues are too visually busy users can feel less certain than they should at the start of onboarding → Strengthen first-load guidance, no-results treatment, and selected-state clarity so the picker feels decisive instead of crowded.
+
+### SoloStepHours (dashboard/components/SetupWizard/SoloStepHours.tsx)
+- **[medium]** Hours setup steps often mix repetitive editing with bulk actions, and without strong changed-versus-saved feedback users can lose confidence in what schedule they have actually configured → Clarify copied-state, unsaved-change, and save-result feedback so the step feels dependable.
+
+### SoloStepReview (dashboard/components/SetupWizard/SoloStepReview.tsx)
+- **[high]** The finalized coverage summary still renders `full`, `partial`, and `uncovered` with green, yellow, and red pill styling, which turns the completion state into a grading surface and directly conflicts with the product rule against warnings, grades, or opinions → Reframe the final service summary as neutral connection or readiness facts and remove score-like color/status emphasis from the completion state.
+- **[medium]** The “what we’ll set up for you” block is helpful, but the finalizing flow still hinges on a single primary action with limited pre-submit differentiation between missing setup and normal completion work → Make pre-finalization readiness and post-finalization outcome feedback more explicit so the last step feels conclusive rather than opaque.
+
+## Review — 2026-05-27
+
+### SoloWizard (dashboard/components/SetupWizard/SoloWizard.tsx)
+- **[high]** Solo wizard shells quietly control trust across the whole onboarding experience, and if step memory, back/forward behavior, or shell loading are inconsistent users can feel the flow is fragile even when individual steps work → Strengthen progress continuity, step retention, and shell-level loading/error treatment so the solo flow feels dependable end to end.
+- **[medium]** Long onboarding shells often end up re-implementing modal chrome, progress steps, and sticky action rows outside the shared primitive system, which makes them harder to keep aligned with the rest of the dashboard → Pull the shell closer to shared overlay and action patterns so onboarding feels like part of the main product, not a separate mini-app.
+
+### Step7GoLive (dashboard/components/SetupWizard/Step7GoLive.tsx)
+- **[high]** Go-live steps are the highest-stakes moment in onboarding, and if activation, blocked prerequisites, or failure recovery are not unmistakable users can hesitate right at the finish line → Differentiate ready, activating, activated, and blocked states much more clearly so the final action feels safe and conclusive.
+- **[medium]** Phone activation views often drift into success or warning-heavy language because they represent real infrastructure actions, but this step still needs to stay factual rather than evaluative → Keep the activation copy and status styling operational and clear without slipping into alarm or celebration tones.
+
+### StepAssignments (dashboard/components/SetupWizard/StepAssignments.tsx)
+- **[medium]** Assignment setup gets visually dense quickly, and without clear unmapped, partially mapped, and saved-state cues users can struggle to tell what still needs attention → Make incomplete versus complete mapping states and save feedback more explicit so the step feels like a workflow instead of a puzzle.
+- **[medium]** Employee and resource assignments are rendered as dense toggle chips with only color to communicate selection state, which weakens keyboard clarity and makes large service sets harder to scan accurately → Add stronger selected-state semantics and clearer grouping or hierarchy so mapping remains legible when many services and assignees are present.

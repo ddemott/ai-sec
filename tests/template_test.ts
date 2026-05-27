@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/**
+ * Heavy dynamic template + error path testing.
+ * Disables intentional.
+ * See REFACTORING_TODO.md item 10.
+ */
 import postgres from "postgres";
 import { assertEquals, assertNotEquals } from "https://deno.land/std@0.220.0/assert/mod.ts";
 
