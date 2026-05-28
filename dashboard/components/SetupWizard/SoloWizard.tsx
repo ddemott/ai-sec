@@ -87,7 +87,14 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
         const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
         if (!tpl?.example_services?.length) return;
         for (const name of tpl.example_services) {
-          const result = await Api.services.create(tenantId, { name, duration_minutes: 30 });
+          // Server-tagged so a future business_type change can wipe these
+          // template defaults without touching anything the owner typed.
+          // See migration 20260528000000_is_auto_seeded_flag.sql.
+          const result = await Api.services.create(tenantId, {
+            name,
+            duration_minutes: 30,
+            is_auto_seeded: true,
+          });
           const newId = result?.service?.service_id;
           if (newId) autoSeededServiceIdsRef.current.add(String(newId));
         }
@@ -262,10 +269,12 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
     setFinalizing(true);
     setError(null);
     try {
-      // 1. Create default resource
+      // 1. Create default resource. Tagged auto-seeded so a later
+      // business_type change rolls it back along with the services.
       const resResult = await Api.resources.create(tenantId, {
         name: resourceName,
         description: 'Auto-created during solo setup',
+        is_auto_seeded: true,
       });
       const resourceId =
         resResult.success && resResult.resource ? resResult.resource.resource_id : null;
@@ -466,6 +475,15 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
           ) : finalized ? (
             <Button
               onClick={() => {
+                // Promote auto-seeded rows to user-owned so a later
+                // business_type change (post-launch, from Settings)
+                // doesn't wipe the catalog the owner just signed off
+                // on. Best-effort: a failure here doesn't block the
+                // close — worst case rows stay flagged and only a
+                // business_type change exposes the gap.
+                if (tenantId) {
+                  Api.tenants.finalizeSetup(tenantId).catch(() => undefined);
+                }
                 // Arm the first-run tour — same trigger as the team wizard.
                 markFirstRunTourPending(tenantId);
                 onClose();

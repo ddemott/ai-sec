@@ -130,10 +130,16 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       }
       const missing = seedTargetRef.current.filter((name) => !services.some((s) => s.name === name));
       for (const name of missing) {
-        // Track each created id so a later "Change business type"
-        // (onBackToPicker) can roll back auto-seeded rows without
-        // touching anything the user typed themselves.
-        const result = await Api.services.create(tenantId, { name, duration_minutes: 30 });
+        // is_auto_seeded persists the "I am a template default" tag in
+        // the DB so a business_type change handled server-side (POST
+        // /tenants/:id/update-config) can roll these back even after a
+        // page reload. The in-session autoSeededServiceIdsRef below
+        // still tracks ids for the same-session re-pick rollback path.
+        const result = await Api.services.create(tenantId, {
+          name,
+          duration_minutes: 30,
+          is_auto_seeded: true,
+        });
         const newId = result?.service?.service_id;
         if (newId) autoSeededServiceIdsRef.current.add(String(newId));
       }
@@ -144,6 +150,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
         const result = await Api.resources.create(tenantId, {
           name: defaultName,
           description: 'Auto-created — rename or add more in this step',
+          is_auto_seeded: true,
         });
         const newId = result?.resource?.resource_id;
         if (newId) autoSeededResourceIdsRef.current.add(String(newId));
@@ -442,6 +449,13 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
                 variant="success"
                 size="sm"
                 onClick={() => {
+                  // Promote auto-seeded rows to user-owned so a later
+                  // business_type change (post-launch, from Settings)
+                  // doesn't wipe the catalog the owner just signed off
+                  // on. Best-effort: a failure here doesn't block close.
+                  if (tenantId) {
+                    Api.tenants.finalizeSetup(tenantId).catch(() => undefined);
+                  }
                   // Arm the first-run tour for this tenant. DashboardHome
                   // picks up the flag on its next mount and shows the
                   // overview modal. Only fires on the step-7 Done path —

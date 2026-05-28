@@ -339,6 +339,82 @@
 ## Review — 2026-05-27
 
 ### SkillMatrixView (dashboard/components/SkillMatrixView.tsx)
+
 - **[high]** The matrix lets operators toggle mappings instantly across a wide table, but the current feedback model is still binary and terse, which can make accidental clicks or failed updates feel riskier than they should in a high-density grid → Add stronger per-cell pending, saved, and error feedback so operators can trust rapid mapping changes without rescanning the whole row.
 - **[medium]** The All, People, and Places filter pills are still custom-styled buttons rather than shared segmented controls or button primitives, which makes another dense operational surface rely on bespoke interaction patterns → Rebuild the filter controls from shared primitives so focus, selected state, and keyboard behavior stay consistent with the rest of the dashboard.
 - **[medium]** The footer tip still says toggling a cell “instantly updates the AI’s scheduling logic,” which is useful but phrased more like reassuring persuasion than neutral product state → Keep the helper copy factual and specific about what changes, without leaning into marketing-style reassurance.
+
+## Review — 2026-05-27
+
+### CustomerDetailPanel (dashboard/components/CustomerDetailPanel.tsx)
+
+- **[high]** The panel does a lot well, but it still packs profile facts, notes, appointment history, call summaries, editing, creation, and destructive actions into one long surface, which makes routine front-desk work harder to scan than it needs to be → Separate read-only summary, editable contact data, booking history, and call history into clearer chunks so operators can move through the panel without losing context.
+- **[medium]** Empty-state handling is present, but several fields still fall back to quiet prose like “No email provided” or “No address on file” inside dense content blocks, which can make sparse customers feel like second-class cases rather than normal partial records → Give absent contact/history fields more deliberate empty-state presentation so the panel stays trustworthy with incomplete data.
+
+### DeletedRecordsPanel (dashboard/components/DeletedRecordsPanel.tsx)
+
+- **[high]** This is a strong recovery surface, but it still combines expand/collapse, restore, history, and field-copy workflows inside a dense accordion list, which can make the panel feel operationally risky when users are trying to undo something quickly → Separate the recovery actions more clearly and surface the safest next step first so deleted-record recovery feels more controlled.
+- **[medium]** Search, loading, empty, and restore-in-progress states all exist here, yet the panel still leans heavily on inline list chrome and icon buttons, which can make state changes harder to notice during fast recovery work → Strengthen asynchronous feedback and action labeling so operators can tell what is loading, what is restorable, and what just changed.
+
+### RecordHistoryModal (dashboard/components/RecordHistoryModal.tsx)
+
+- **[high]** History and restore flows are high-trust recovery surfaces, and if version timelines, restore outcomes, or the difference between viewing and reverting are not unmistakable the modal can make people nervous about touching old records → Strengthen the separation between inspect, compare, and restore actions, and give restore success or failure much clearer feedback.
+- **[medium]** Dense change-history views still become scroll-heavy walls of metadata and timeline rows, which makes it hard to understand what materially changed between versions before drilling into field-by-field detail → Improve entry hierarchy and summarization so the modal highlights meaningful differences before raw audit detail.
+
+## Review — 2026-05-27
+
+### EmployeeManagementView (dashboard/components/EmployeeManagementView.tsx)
+
+- **[high]** Employee management views usually blend roster creation, status toggles, and detail editing in one surface, and if active, inactive, and partially configured staff states are not clearly separated the page can make staffing changes feel riskier than they should → Differentiate roster state, setup completeness, and destructive actions much more clearly so managing staff feels crisp and low-anxiety.
+- **[medium]** Team-roster pages often bury key empty and post-action states, like no staff yet, save failed, or setup incomplete, under the main list chrome → Give those states more deliberate visibility so the page still communicates clearly before a full team exists.
+
+### TeamAccessView (dashboard/components/TeamAccessView.tsx)
+
+- **[high]** Access-management screens carry high consequence, and if role changes, invite states, and permission boundaries are not visually separated with strong confirmation and outcome feedback the surface can feel risky to use → Strengthen the distinction between current access, pending invites, and destructive permission changes so operators can manage staff access without second-guessing the result.
+- **[medium]** Team access workflows often include multiple async states like loading members, sending invites, and updating roles, and if those states are shown with plain inline text or subtle transitions the page can feel uncertain during changes → Add clearer loading, empty, and post-action success or error treatments around the key access-management flows.
+
+### VoiceCallsView (dashboard/components/VoiceCallsView.tsx)
+
+- **[medium]** Call-history views pack status, transcript context, and session metadata into one place, and if filtering and sparse-data states are not handled deliberately the screen can quickly feel noisy or empty in the wrong ways → Clarify empty, loading, and filtered-no-results states so operators can tell whether there were no calls, no matches, or data is still arriving.
+- **[medium]** Voice-session detail surfaces invite custom chips, panels, and transcript affordances that can drift from the rest of the dashboard if not grounded in shared primitives → Keep transcript and session cards, badges, and action controls aligned with shared UI primitives so phone-assistant reporting feels consistent with the other operational views.
+
+## Review — 2026-05-27
+
+### SchedulerView (dashboard/components/SchedulerView.tsx)
+
+- **[high]** This older scheduler shell still sits between multiple scheduler modes and legacy or newer subviews, and that kind of transitional orchestration can easily produce confusing loading, mode-switch, and empty-state handoffs → Make the boundaries between scheduler modes, selected date context, and shell-level loading states much more explicit so operators always know which planner they are looking at.
+- **[medium]** Views that act as scheduler hubs tend to accrete custom toggles and layout chrome over time, which increases the risk of overlap with `NewSchedulerView` and other newer surfaces → Tighten the shell’s responsibilities and align its controls with the newer scheduler patterns so the experience feels like one scheduler system rather than parallel generations.
+
+### ShiftManagementView (dashboard/components/ShiftManagementView.tsx)
+
+- **[high]** Shift editing still combines schedule creation, copying, and overrides, and if unsaved changes, copied schedules, and actual persisted state are not unmistakable the screen can make staffing edits feel hazardous → Strengthen changed-versus-saved feedback, especially around bulk copy actions and override edits, so operators can trust what will actually affect availability.
+- **[medium]** Dense weekly or time-grid staffing views often bury the most important recovery states, like no employees selected, no shifts configured, or failed save/apply actions, under the main editor chrome → Give those operationally important states more intentional empty or error treatment so the screen remains readable even before a full schedule exists.
+
+### SkillManagementView (dashboard/components/SkillManagementView.tsx)
+
+- **[medium]** Skill library screens mix creation, deletion, and categorization in one place, and if the empty state and destructive path are not clearly differentiated the view can feel more fragile than it needs to for routine taxonomy work → Make creation, no-skills, and delete-confirm states more distinct so maintaining the skill list feels safe and straightforward.
+- **[medium]** The delete control is still hover-revealed and icon-only, which weakens discoverability and keyboard clarity once the skills grid grows → Prefer a more durable button treatment or stronger accessible labeling so skill maintenance remains easy to scan and operate without relying on hover.
+
+## Review — 2026-05-28
+
+### ServiceAssignmentView (dashboard/components/ServiceAssignmentView.tsx)
+
+- **[high]** Assignment screens are all about clarity of responsibility, and when service-to-staff mapping gets dense without strong incomplete-versus-complete cues operators can lose track of what is actually bookable → Make unmapped, partially mapped, and fully mapped states much more explicit so the view supports confident scheduling setup rather than visual guesswork.
+- **[medium]** This kind of matrix-heavy editor often ends up re-implementing custom row controls and badges instead of leaning on the shared dashboard primitives, which makes consistency drift likely across selection, hover, and save feedback → Normalize the interaction patterns around shared checkbox, button, and badge treatments so assignment editing feels like part of the same system as the rest of the dashboard.
+
+### SkillAssignmentsView (dashboard/components/SkillAssignmentsView.tsx)
+
+- **[medium]** The consolidated Grid/Map shell is a nice simplification, but it still drops users straight into two very different mental models with only a tiny top-right toggle, which can make the transition between bulk editing and relationship debugging feel more abrupt than it should → Add stronger view framing so operators understand when they are editing assignments versus diagnosing broken chains.
+- **[medium]** The toggle buttons use custom styling and URL mirroring logic directly in the shell, which works, but it means a high-traffic mode switch is still carried by bespoke controls instead of a shared segmented-control pattern → Move the view switch onto a shared selection primitive so focus, selected state, and keyboard behavior stay consistent with the rest of the dashboard.
+
+## Review — 2026-05-28
+
+### SkillMapColumn (dashboard/components/skill-map/SkillMapColumn.tsx)
+
+- **[low]** The column component is a structural wrapper in a dense visual map, so if title, icon, and section hierarchy are too subtle it becomes harder to understand where selection and linking actions belong once the canvas fills up → Strengthen the column heading hierarchy and section framing so the three map lanes stay distinct under heavy content.
+- **[medium]** Small structural wrappers like this are easy places for spacing and responsive drift to accumulate across the map, especially when the rest of the surface is highly interactive → Keep the column shell tightly aligned with the dashboard’s shared spacing and responsive rules so the map does not feel like a standalone mini-app.
+
+### SkillMapFixPanel (dashboard/components/skill-map/SkillMapFixPanel.tsx)
+
+- **[high]** Fix panels are decision-heavy recovery surfaces, and while this one is compact, it still presents several possible employee or resource repairs without much rationale for why one fix is preferable to another → Clarify why each suggested fix resolves the broken chain and distinguish the most direct repair path from secondary options.
+- **[medium]** The close control is still a tiny bare `✕` text button inside an otherwise structured action panel, which weakens discoverability and accessible affordance in a moment where users may already feel lost → Replace it with a more standard icon-button treatment and clearer panel-level dismissal semantics so the recovery flow feels as polished as the rest of the map.

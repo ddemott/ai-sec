@@ -14,6 +14,9 @@ const CreateResourceSchema = z.object({
   tenant_id: z.string().uuid().optional(),
   name: z.string().min(1).max(200),
   description: z.string().max(500).optional().nullable(),
+  // See services.ts CreateServiceSchema — same purpose: lets a
+  // business_type change roll back just the wizard's defaults.
+  is_auto_seeded: z.boolean().optional(),
 });
 
 const UpdateResourceSchema = z.object({
@@ -60,8 +63,8 @@ export function registerResourceRoutes(
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
-          'INSERT INTO resources (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING *',
-          [tenantId, body.name, body.description || null]
+          'INSERT INTO resources (tenant_id, name, description, is_auto_seeded) VALUES ($1, $2, $3, $4) RETURNING *',
+          [tenantId, body.name, body.description || null, body.is_auto_seeded === true]
         );
       });
 
@@ -106,6 +109,11 @@ export function registerResourceRoutes(
         if (fields.length === 0) {
           throw Object.assign(new Error('No updatable fields provided'), { statusCode: 400 });
         }
+        // Any edit promotes an auto-seeded row to "owned by user" so a
+        // later business_type change doesn't wipe a row the owner
+        // customized. Matches the same rule on services.ts. 2026-05-28.
+        fields.push('is_auto_seeded');
+        values.push(false);
         const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
         values.push(id);
         values.push(tenantId);

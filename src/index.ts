@@ -314,7 +314,7 @@ app.post('/admin/purge-soft-reservations', async (_req, reply) => {
 // --- Register Route Modules ---
 
 registerAuthRoutes(app, pool, generateToken);
-registerTenantRoutes(app, pool);
+registerTenantRoutes(app, pool, withTenantClient);
 registerAppointmentRoutes(app, pool, withTenantClient);
 registerCustomerRoutes(app, pool, withTenantClient);
 registerEmployeeRoutes(app, pool, withTenantClient);

@@ -3154,3 +3154,71 @@
 **Size:** small (< 1hr)
 **Impact:** high
 **Effort vs Gain:** Less than an hour of focused cleanup removes one of the clearest philosophy violations on a high-traffic screen, so the return is strong.
+
+## Ideas — 2026-05-28 (Code patterns reviewed)
+
+### Task: Extract shared service-assignment mapping state into a dedicated dashboard hook
+**Status:** proposed
+**Files to change:** `dashboard/components/ServiceAssignmentView.tsx:L39-L221`, `dashboard/components/SkillMatrixView.tsx:L12-L121`, `dashboard/components/skill-map/useSkillMapData.ts:L54-L88`, new `dashboard/lib/useServiceMappings.ts`
+**What to do:**
+1. Create a focused `useServiceMappings(tenantId)` hook that owns the shared fetch lifecycle for `listServiceEmployee` and `listServiceResource`, plus typed helpers for assign, unassign, and refresh.
+2. Move the duplicated `empMappings` and `resMappings` state, initial fetch, and API error fallback out of `ServiceAssignmentView`, `SkillMatrixView`, and `useSkillMapData` into that hook.
+3. Expose narrow mutation helpers such as `toggleEmployeeMapping`, `toggleResourceMapping`, `assignEmployee`, `assignResource`, `unassignEmployee`, and `unassignResource` so each surface keeps only its local UI concerns.
+4. Keep optimistic updates inside the hook, using functional state updates so rapid toggles do not depend on stale closure copies of the mapping arrays.
+5. Add focused tests for the new hook covering initial load, successful assign/unassign, failed assign/unassign rollback, and manual refresh.
+**Done when:**
+- [ ] ServiceAssignmentView no longer declares its own mapping fetch + toggle implementation inline
+- [ ] SkillMatrixView no longer declares its own mapping fetch + toggle implementation inline
+- [ ] useSkillMapData consumes the shared mapping hook instead of issuing a second mapping fetch path
+- [ ] Mapping mutations use functional state updates and have test coverage for success and failure paths
+- [ ] All existing tests pass, new tests cover the shared hook behavior
+**Why it matters:** These three surfaces are all operating on the same two mapping tables, and centralizing the data contract will remove drift, reduce duplicate error handling, and make assignment bugs easier to fix once.
+**Tradeoff:** This is a medium extraction because the hook has to support three different interaction styles, and careless abstraction could make simple UI flows harder to read.
+**Size:** medium (1-3hr)
+**Impact:** high
+**Effort vs Gain:** Roughly 2-3 hours of careful extraction removes three parallel mapping implementations from a high-traffic workflow, which is a strong maintainability return.
+
+### Task: Move skill-map graph derivation into a pure assignment graph builder
+**Status:** proposed
+**Files to change:** `dashboard/components/skill-map/useSkillMapData.ts:L90-L209`, `dashboard/components/skill-map/SkillRelationshipMap.tsx:L28-L67`, new `dashboard/components/skill-map/buildAssignmentGraph.ts`, new `dashboard/components/skill-map/buildAssignmentGraph.test.ts`
+**What to do:**
+1. Extract the node construction, connection dedupe, coverage calculation, and broken-chain marking logic from the large `useMemo` inside `useSkillMapData` into a pure `buildAssignmentGraph()` helper.
+2. Keep the hook responsible for selection, linking mode, and mutation wiring only, with the pure builder returning `employeeNodes`, `skillNodes`, `resourceNodes`, `connections`, `coverageBySkill`, and `brokenChains`.
+3. Add table-driven tests for the builder that cover fully linked services, employee-only links, resource-only links, duplicate mapping rows, and mappings that reference missing entities.
+4. Leave the product language untouched for now, this task is only about separating deterministic graph derivation from hook orchestration.
+**Done when:**
+- [ ] useSkillMapData no longer contains the full graph-construction algorithm inline
+- [ ] Graph derivation lives in a pure helper with direct unit tests
+- [ ] Duplicate and missing-entity mapping cases are explicitly covered by tests
+- [ ] SkillRelationshipMap behavior remains unchanged aside from consuming the refactored hook output
+- [ ] All existing tests pass, new tests cover the graph builder
+**Why it matters:** The relationship map has a real algorithm hiding inside a hook, and pulling it into a pure builder makes the logic easier to reason about, safer to change, and much easier to test without React state setup.
+**Tradeoff:** The code will gain one more file and one more import boundary, so the helper needs clear naming to avoid feeling abstract for abstraction's sake.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** About 1-2 hours of extraction buys much better testability for the map's core logic, which is worthwhile even if the user-facing behavior stays the same.
+
+### Task: Add focused tests for assignment-view URL persistence and shared mapping mutations
+**Status:** proposed
+**Files to change:** `dashboard/components/SkillAssignmentsView.tsx:L31-L82`, `dashboard/components/SkillMatrixView.tsx:L79-L121`, `dashboard/components/ServiceAssignmentView.tsx:L99-L221`, new `dashboard/components/SkillAssignmentsView.test.tsx`, new hook test file if task 1 lands first
+**What to do:**
+1. Add a component test for `SkillAssignmentsView` that verifies `?view=map` boots into the map view and switching back to grid removes the `view` query param.
+2. Add tests that pin the current assignment-mutation contract in the grid and catalog surfaces, including successful employee/resource toggles and visible error handling when a mapping API call fails.
+3. If the shared mapping hook from task 1 lands first, move most mutation assertions into hook tests and keep the component tests focused on visible state changes and URL behavior.
+4. Keep the suite narrow, this is not a full end-to-end scheduler test, just coverage for the assignment surfaces' highest-risk state transitions.
+**Done when:**
+- [ ] SkillAssignmentsView is tested for initial `view=map` hydration and grid-reset URL cleanup
+- [ ] Assignment mutation failures are covered in either component tests or shared-hook tests
+- [ ] At least one employee mapping and one resource mapping success path are covered by tests
+- [ ] All existing tests pass, new tests protect the assignment-surface state contract
+**Why it matters:** These surfaces combine URL state and rapid mutation flows, and right now the contract is mostly implicit, which makes regressions in a critical setup workflow easy to miss.
+**Tradeoff:** The tests will need mocking around routing and API calls, so they should stay tightly focused on the contract instead of trying to simulate the whole management flow.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Moderate setup work, but it locks down the exact state transitions most likely to regress during future assignment refactors.
+
+## Self-Review — 2026-05-28
+**Cycles since last self-review:** 0
+**What's working:** The heartbeat still gives enough structure to find concrete work quickly, and the UX review instructions correctly let me skip wasted rereads once full component coverage was confirmed.
+**What I changed in HEARTBEAT.md:** Updated Continuous Improvement and Self-Review to use `docs/IMPROVEMENT_IDEAS.md` instead of the retired repo-root `improvement-ideas.md`, and added a post-completion quick-check rule for UX Review once all component files are covered.
+**Why:** The old improvement output path is explicitly retired, so keeping the heartbeat pointed there was wasting cycles and conflicting with the repo's own docs model. The UX review is also effectively complete, so future runs should only verify whether new component files appeared instead of pretending the backlog is still open-ended.

@@ -638,6 +638,15 @@ export const Api = {
     create: (data: Record<string, unknown>) =>
       apiMutate<{ tenant_id: string }>(`/tenants/create`, 'POST', data),
     reorder: (order: string[]) => apiMutate(`/tenants/reorder`, 'POST', { order }),
+    // Wizard Done — promotes every is_auto_seeded row to user-owned so a
+    // post-launch business_type change in Settings doesn't wipe them.
+    // See routes/tenants.ts /finalize-setup.
+    finalizeSetup: (id: string) =>
+      apiMutate<{ services: number; resources: number }>(
+        `/tenants/${id}/finalize-setup`,
+        'POST',
+        {}
+      ),
   },
 
   templates: {
