@@ -87,6 +87,10 @@ export function ToastContainer() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const dismissAll = useCallback(() => {
+    setToasts([]);
+  }, []);
+
   const addToast = useCallback((message: string, type: ToastType, action?: ToastAction) => {
     const id = ++toastId;
     setToasts((prev) => {
@@ -121,6 +125,18 @@ export function ToastContainer() {
       aria-atomic="true"
       role="status"
     >
+      {toasts.length > 2 && (
+        <div className="flex justify-end">
+          <button
+            onClick={dismissAll}
+            className="text-xs px-2.5 py-1 rounded-md transition-colors"
+            style={{ backgroundColor: 'rgba(0,0,0,0.35)', color: 'rgba(255,255,255,0.85)' }}
+            aria-label="Dismiss all notifications"
+          >
+            Dismiss all
+          </button>
+        </div>
+      )}
       {toasts.map((toast) => {
         const Icon = ICONS[toast.type];
         return (
