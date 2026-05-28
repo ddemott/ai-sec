@@ -550,8 +550,8 @@ const LANDING_HTML = `
           <div class="hero-stat-l">starts at / month</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-n">7<span>-layer</span></div>
-          <div class="hero-stat-l">booking validation</div>
+          <div class="hero-stat-n">&lt;2<span> rings</span></div>
+          <div class="hero-stat-l">to pick up</div>
         </div>
       </div>
     </div>
@@ -688,7 +688,7 @@ const LANDING_HTML = `
         <div class="step-num">03</div>
         <div class="step-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div>
         <div class="step-h">Your number goes live</div>
-        <p class="step-p">Pick an area code. We provision a real phone number and a trained AI voice agent automatically. Call it immediately — no waiting, no manual setup.</p>
+        <p class="step-p">Pick an area code. We set up a real phone number and your AI receptionist automatically. Call it immediately — no waiting, no manual setup.</p>
       </div>
     </div>
   </div>
@@ -704,8 +704,8 @@ const LANDING_HTML = `
 
       <div class="feat-card reveal">
         <div class="feat-icon blue"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg></div>
-        <div class="feat-h">Natural Voice AI</div>
-        <p class="feat-p">Powered by Deepgram speech recognition and a real-time voice model — not a phone tree. Callers hear a natural conversation, not a robot. Available in multiple voice personas to match your brand.</p>
+        <div class="feat-h">Sounds Like a Real Person</div>
+        <p class="feat-p">No menus. No &quot;press 1 for service.&quot; Callers can interrupt, ask questions, change their minds — the conversation just flows. Pick the voice that fits your brand.</p>
         <span class="feat-tag blue">Live calls</span>
       </div>
 
@@ -713,21 +713,19 @@ const LANDING_HTML = `
         <div class="feat-icon green"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
         <div class="feat-h">Smart Booking</div>
         <p class="feat-p">Checks employee schedules, required skills, and resource availability before confirming anything. Never double-books a bay, station, or technician.</p>
-        <span class="feat-tag green">Race-safe</span>
+        <span class="feat-tag green">No double-books</span>
       </div>
 
       <div class="feat-card wide reveal reveal-delay-1">
         <div class="feat-icon blue"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
-        <div class="feat-h">7-Layer Booking Validation</div>
-        <p class="feat-p">Every booking request clears seven independent checks before it's confirmed. No double-books, no phantom slots, no employee assigned to two jobs at once.</p>
+        <div class="feat-h">Every Booking, Double-Checked</div>
+        <p class="feat-p">Before the AI confirms anything, it checks every booking against your real schedule. No double-books, no wrong technician, no &quot;sorry, we&apos;re actually closed.&quot;</p>
         <div class="val-layers">
-          <div class="val-layer"><div class="val-layer-dot green"></div>Business is open at the requested time</div>
-          <div class="val-layer"><div class="val-layer-dot green"></div>Employee is scheduled and available</div>
-          <div class="val-layer"><div class="val-layer-dot green"></div>Employee has the required skills for the service</div>
-          <div class="val-layer"><div class="val-layer-dot green"></div>Required resources / bays are free</div>
-          <div class="val-layer"><div class="val-layer-dot blue"></div>No overlapping appointments (race-safe GiST constraint)</div>
-          <div class="val-layer"><div class="val-layer-dot blue"></div>Requested time is not in the past</div>
-          <div class="val-layer"><div class="val-layer-dot blue"></div>Service exists and duration matches</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Only books during your open hours</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Only when someone&apos;s on the schedule</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Only with staff trained for that service</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Only when the bay or station is free</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Never two appointments in the same slot</div>
         </div>
       </div>
 
@@ -748,7 +746,7 @@ const LANDING_HTML = `
       <div class="feat-card reveal">
         <div class="feat-icon blue"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
         <div class="feat-h">Visual Schedule</div>
-        <p class="feat-p">Your team's day at a glance. Staff swim-lanes, shift coverage bars, drag-to-reschedule, and a Quick Book button — all in the dashboard without touching a spreadsheet.</p>
+        <p class="feat-p">Your team&apos;s day at a glance. One row per person, color-coded shifts, drag-to-reschedule, and a Quick Book button — all in the dashboard without touching a spreadsheet.</p>
         <span class="feat-tag blue">Dashboard</span>
       </div>
 
@@ -756,7 +754,7 @@ const LANDING_HTML = `
         <div class="feat-icon green"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
         <div class="feat-h">Knowledge Base</div>
         <p class="feat-p">Upload your policies, service descriptions, and FAQs. The AI answers caller questions directly from your documents — pricing, hours, what to bring, what to expect.</p>
-        <span class="feat-tag green">RAG-powered</span>
+        <span class="feat-tag green">Answers from your docs</span>
       </div>
 
     </div>
@@ -812,7 +810,7 @@ const LANDING_HTML = `
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Unlimited stations</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Growth</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Advanced analytics &amp; business trends</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom AI vocabulary</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom words &amp; phrases for your trade</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Priority support</li>
         </ul>
         <a href="/register" class="price-btn outline">Start free trial</a>
@@ -824,11 +822,11 @@ const LANDING_HTML = `
         <hr class="price-divider">
         <ul class="price-features">
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Professional</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Multiple locations / tenants</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>White-label dashboard</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom AI voice &amp; persona</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Multiple locations / businesses</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Your branding on the dashboard</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom AI voice &amp; personality</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Dedicated account support</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom integrations &amp; SLA</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom integrations &amp; uptime guarantee</li>
         </ul>
         <a href="mailto:daledemott@gmail.com" class="price-btn outline" style="border-color:rgba(245,158,11,0.3);color:var(--amber)">Talk to us</a>
       </div>
