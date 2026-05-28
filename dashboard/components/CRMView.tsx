@@ -472,7 +472,7 @@ export default function CRMView() {
                   action={
                     <Button
                       variant="primary"
-                      size="sm"
+                      size="md"
                       onClick={() => {
                         setIsCreating(true);
                         setSelectedCustomer(null);

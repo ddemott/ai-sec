@@ -206,6 +206,7 @@ export default function DashboardPage() {
       activeTab={activeTab}
       setActiveTab={handleSetActiveTab}
       onLogout={logout}
+      onShowShortcuts={() => setShortcutsHelpOpen(true)}
       userName={userName}
       role={role}
       isAdmin={isAdmin}

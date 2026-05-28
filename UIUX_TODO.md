@@ -78,7 +78,7 @@
 ### Dashboard Home
 
 - [ ] **[P2][M]** Replace "This Week" 7-column mini-calendar with "next 3 days" row — 7 compressed 80px columns with truncated content is dense but low-utility; 3 wider columns with readable text gives more value — `dashboard/components/DashboardHome.tsx:466-475` — _source: /ux-expert simplification review_
-- [ ] **[P2][S]** Shrink greeting section — "Good morning, Dale" + full date occupies the highest F-pattern position on a screen opened 40×/day; reduce to first name + day only, or shift appointment count to lead — `dashboard/components/DashboardHome.tsx:215-225` — _source: /ux-expert simplification review_
+- [x] **[P2][S]** Shrink greeting section — first name only + short date (no year, short month) — DONE 2026-05-28
 
 ### Knowledge Base
 
@@ -107,14 +107,14 @@
 
 ### UI Polish
 
-- [ ] **[P2][S]** Add "Keyboard shortcuts" item to profile dropdown — `?` key trigger is completely undiscoverable without it — `dashboard/components/OutlookLayout.tsx:530-565` — _source: audit #10_
+- [x] **[P2][S]** Add "Keyboard shortcuts" item to profile dropdown — wired via `onShowShortcuts` prop to existing `shortcutsHelpOpen` state in dashboard/page.tsx — DONE 2026-05-28
 - [ ] **[P2][M]** Add color swatches to theme selector — 8 themes listed by name only; picking requires trial and error — `dashboard/components/OutlookLayout.tsx:330-350` — _source: audit #H5_
 - [ ] **[P2]** Dense-view chunking: `SettingsView` (split owner vs super-admin), `TenantEditPanel` (provisioning vs AI-config), `CRMView`, `AppointmentView`, `CustomerDetailPanel`, `ShiftManagementView` changed-vs-saved — sequence with C1+C2 — _source: docs/TODO.md:142_
 
 ### Landing Page
 
-- [ ] **[P2][S]** Add annual pricing toggle — monthly-only pricing feels less committed; "Save 20% annually" toggle increases perceived value — `dashboard/app/page.tsx:764-835` — _source: landing review #6_
-- [ ] **[P2][S]** Remove duplicate "Smart Booking" feature card — it and "Every Booking, Double-Checked" say the same thing; the wide checklist card is better; cut the standalone one — `dashboard/app/page.tsx:712-716` — _source: landing review #10_
+- [x] **[P2][S]** Add annual pricing toggle — Monthly/Annual toggle; annual prices 20% off (Solo $103, Growth $223, Pro $359); JS swaps price-num spans; annual note shown — DONE 2026-05-28
+- [x] **[P2][S]** Remove duplicate "Smart Booking" feature card — feat-tile removed; "Every Booking, Double-Checked" wide card remains — DONE 2026-05-28
 - [ ] **[P2][S]** Rename "Built for" bar — "Auto Shops / Hair Salons" mimics a "trusted by" logo bar but isn't; rename to "Works great for:" — `dashboard/app/page.tsx:601-614` — _source: landing review #9_
 - [ ] **[P2][S]** Fix footer Privacy / Terms / Contact links — all link to `#`; remove or build placeholder pages; Privacy and Terms carry legal weight — `dashboard/app/page.tsx:895-897` — _source: landing review #11_
 
@@ -123,7 +123,7 @@
 ## P3 — Low / Backlog
 
 - [x] **[P1][S]** iPad: shift delete button bumped to min-h-[44px] — DONE 2026-05-28
-- [ ] **[P2][S]** iPad: "Add customer" button in CRMView empty state uses `size="sm"` (40px) — just below 44px minimum; change to `size="md"` — `dashboard/components/CRMView.tsx` — _source: iPad review of completed items_
+- [x] **[P2][S]** iPad: "Add customer" button in CRMView empty state → `size="md"` (44px touch target) — DONE 2026-05-28
 - [ ] **[P3][S]** KB: add "show unanswered only" toggle — owners finishing remaining questions must open every accordion to find them; toggle or sort unanswered categories to top — `dashboard/components/KnowledgeBaseView.tsx` — _source: KB review #16_
 - [ ] **[P3][S]** Add empty-state context to Calls tab — explain calls appear once AI is live — `dashboard/components/VoiceCallsView.tsx` — _source: audit #F5_
 - [ ] **[P3][M]** Migrate `FirstRunTour` to shared Modal primitive — no Escape handling or focus trap — `dashboard/components/FirstRunTour.tsx` — _source: audit #DS4_

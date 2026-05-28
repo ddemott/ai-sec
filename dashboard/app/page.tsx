@@ -408,6 +408,11 @@ nav {
 .price-btn.filled:hover { background: var(--blue-lt); box-shadow: 0 0 50px rgba(59,130,246,0.4); }
 .trial-note { text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 24px; }
 .trial-note span { color: var(--text); font-weight: 500; }
+.price-toggle-wrap { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:32px; }
+.billing-opt { background:none; border:1px solid transparent; cursor:pointer; font-size:14px; color:var(--text-muted); padding:7px 20px; border-radius:8px; transition:all 0.2s; font-family:var(--ff-body); }
+.billing-opt.active { color:var(--text); background:var(--bg3); border-color:var(--border-md); }
+.billing-save { font-size:11px; font-weight:700; color:var(--green); background:rgba(34,197,94,0.12); border-radius:20px; padding:2px 7px; letter-spacing:0.5px; margin-left:4px; }
+.price-annual-note { text-align:center; font-size:12px; color:var(--text-muted); margin-top:8px; display:none; }
 
 /* ── INDUSTRIES ── */
 .biz-grid { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -634,14 +639,6 @@ const LANDING_HTML = `
       </div>
 
       <div class="feat-tile">
-        <div class="feat-tile-icon green">
-          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        </div>
-        <div class="feat-tile-h">Smart Bookings</div>
-        <p class="feat-tile-p">Checks staff availability, skills, and resources in real time. Confirms with a text message.</p>
-      </div>
-
-      <div class="feat-tile">
         <div class="feat-tile-icon amber">
           <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         </div>
@@ -826,10 +823,14 @@ const LANDING_HTML = `
     <div class="section-eyebrow reveal">Simple pricing</div>
     <h2 class="section-h2 reveal reveal-delay-1">PAY FOR WHAT<br>YOU NEED</h2>
     <p class="section-sub reveal reveal-delay-2">Phone number included on every plan. 14-day free trial. No credit card required. No setup fee. No per-call charges. Ever.</p>
+    <div class="price-toggle-wrap reveal">
+      <button class="billing-opt active" id="billing-monthly" onclick="setBilling('monthly')">Monthly</button>
+      <button class="billing-opt" id="billing-annual" onclick="setBilling('annual')">Annual <span class="billing-save">Save 20%</span></button>
+    </div>
     <div class="pricing-grid">
       <div class="price-card reveal">
         <div class="price-name">Solo</div>
-        <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num">129</span><span class="price-period">/mo</span></div>
+        <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num" data-monthly="129" data-annual="103">129</span><span class="price-period">/mo</span></div>
         <p class="price-desc">The solo operator's secret weapon. Captures every call, books every job.</p>
         <hr class="price-divider">
         <ul class="price-features">
@@ -844,7 +845,7 @@ const LANDING_HTML = `
       </div>
       <div class="price-card featured reveal reveal-delay-1">
         <div class="price-name">Growth</div>
-        <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num">279</span><span class="price-period">/mo</span></div>
+        <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num" data-monthly="279" data-annual="223">279</span><span class="price-period">/mo</span></div>
         <p class="price-desc">Your full front desk. Staff matching, visual schedule, calendar sync, and FAQ library — all included.</p>
         <hr class="price-divider">
         <ul class="price-features">
@@ -860,7 +861,7 @@ const LANDING_HTML = `
       </div>
       <div class="price-card reveal reveal-delay-2">
         <div class="price-name">Professional</div>
-        <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num">449</span><span class="price-period">/mo</span></div>
+        <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num" data-monthly="449" data-annual="359">449</span><span class="price-period">/mo</span></div>
         <p class="price-desc">High-volume teams. Unlimited staff, detailed reports, and custom words for your trade.</p>
         <hr class="price-divider">
         <ul class="price-features">
@@ -890,6 +891,7 @@ const LANDING_HTML = `
         <a href="mailto:sales@secretaryhq.com" class="price-btn outline" style="border-color:rgba(245,158,11,0.3);color:var(--amber)">Talk to us</a>
       </div>
     </div>
+    <p class="price-annual-note" id="price-annual-note">Monthly equivalent — billed as one annual payment.</p>
     <p class="trial-note reveal">All plans include a <span>14-day free trial</span>. No credit card required. No setup fee. No per-call charges. Cancel anytime.</p>
   </div>
 </section>
@@ -1014,6 +1016,20 @@ document.querySelectorAll('.nav-mobile-menu a').forEach(a => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeMobileMenu();
 });
+
+// Annual/monthly pricing toggle
+function setBilling(mode) {
+  const isAnnual = mode === 'annual';
+  const monthlyBtn = document.getElementById('billing-monthly');
+  const annualBtn = document.getElementById('billing-annual');
+  if (monthlyBtn) monthlyBtn.classList.toggle('active', !isAnnual);
+  if (annualBtn) annualBtn.classList.toggle('active', isAnnual);
+  document.querySelectorAll('.price-num[data-monthly]').forEach(function(el) {
+    el.textContent = isAnnual ? el.dataset.annual : el.dataset.monthly;
+  });
+  const note = document.getElementById('price-annual-note');
+  if (note) note.style.display = isAnnual ? 'block' : 'none';
+}
 </script>
 `;
 

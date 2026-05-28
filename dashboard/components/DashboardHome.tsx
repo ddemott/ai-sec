@@ -221,14 +221,13 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display">
-            {greeting}, {userName || 'there'}
+            {greeting}, {(userName || 'there').split(' ')[0]}
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
-              month: 'long',
+              month: 'short',
               day: 'numeric',
-              year: 'numeric',
             })}
           </p>
         </div>

@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Phone,
   UserCog,
+  Keyboard,
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
@@ -42,6 +43,7 @@ interface LayoutProps {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
   onLogout?: () => void;
+  onShowShortcuts?: () => void;
   userName?: string | null;
   role?: UserRole;
   isAdmin?: boolean;
@@ -84,6 +86,7 @@ export function OutlookLayout({
   activeTab,
   setActiveTab,
   onLogout,
+  onShowShortcuts,
   userName,
   role = 'owner',
   isAdmin,
@@ -590,6 +593,19 @@ export function OutlookLayout({
                 <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
                 Business Settings
               </button>
+              {onShowShortcuts && (
+                <button
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    onShowShortcuts();
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <Keyboard className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                  Keyboard shortcuts
+                </button>
+              )}
             </div>
             {/* Logout */}
             {onLogout && (
