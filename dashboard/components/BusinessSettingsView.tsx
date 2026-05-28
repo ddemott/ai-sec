@@ -328,7 +328,7 @@ export default function BusinessSettingsView() {
                       }}
                     >
                       <div
-                        className="text-[10px] font-bold uppercase tracking-widest"
+                        className="text-xs font-bold uppercase tracking-widest"
                         style={{ color: 'var(--text-muted)' }}
                       >
                         {dayName}
@@ -340,11 +340,11 @@ export default function BusinessSettingsView() {
                         {dayNum}
                       </div>
                       {isOff ? (
-                        <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                        <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                           Off
                         </div>
                       ) : (
-                        <div className="text-[10px] mt-1" style={{ color: 'var(--accent-soft)' }}>
+                        <div className="text-xs mt-1" style={{ color: 'var(--accent-soft)' }}>
                           {shift.start_time && formatTime(shift.start_time)}
                           <br />
                           {shift.end_time && formatTime(shift.end_time)}

@@ -444,7 +444,7 @@ export default function SchedulerView() {
                     on the wrapping `role="group"` carries the full
                     context for screen readers. */}
                 <span
-                  className="text-[10px] font-bold tabular-nums px-1 select-none whitespace-nowrap"
+                  className="text-xs font-bold tabular-nums px-1 select-none whitespace-nowrap"
                   style={{ color: 'var(--text-muted)' }}
                   aria-hidden="true"
                 >

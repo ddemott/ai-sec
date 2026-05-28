@@ -418,3 +418,10 @@
 
 - **[high]** Fix panels are decision-heavy recovery surfaces, and while this one is compact, it still presents several possible employee or resource repairs without much rationale for why one fix is preferable to another → Clarify why each suggested fix resolves the broken chain and distinguish the most direct repair path from secondary options.
 - **[medium]** The close control is still a tiny bare `✕` text button inside an otherwise structured action panel, which weakens discoverability and accessible affordance in a moment where users may already feel lost → Replace it with a more standard icon-button treatment and clearer panel-level dismissal semantics so the recovery flow feels as polished as the rest of the map.
+
+## Review — 2026-05-28
+
+### Step7CallerQuestions (dashboard/components/SetupWizard/Step7CallerQuestions.tsx)
+- **[high]** The intro text says answers “save automatically as you type,” but the implementation actually saves on blur, which creates a trust gap right in an autosave-heavy onboarding step → Change the copy to match the real save trigger or switch the behavior to true debounced autosave so users are not misled about when their answers persist.
+- **[medium]** The per-question labels are visual only and are not programmatically tied to their textareas with `htmlFor`/`id`, which weakens accessibility on a form that is otherwise simple to navigate → Add stable ids and associated labels for each question so screen-reader and click-to-focus behavior work reliably.
+- **[medium]** Saved/error state is shown in small inline text at the far right of each prompt, which can be easy to miss when users move quickly through several answers → Strengthen save-state visibility and differentiate unsaved, saving, saved, and failed states more clearly so the autosave workflow feels dependable instead of ambient.

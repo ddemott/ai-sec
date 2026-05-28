@@ -58,7 +58,7 @@ export default function ProfileView() {
                 </div>
                 {isAdmin && (
                   <div
-                    className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
+                    className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
                     style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
                   >
                     <Shield className="w-3 h-3" />
@@ -107,7 +107,7 @@ export default function ProfileView() {
                       {t.name}
                     </span>
                   </div>
-                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {t.description}
                   </div>
                 </button>

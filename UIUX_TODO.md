@@ -10,8 +10,8 @@
 
 ### Onboarding & Wizard
 
-- [ ] **[P0][M]** Add "What do callers ask?" step to setup wizard — between Step 6 Review and Step 7 Go Live; show 5–8 starter questions (hours, location, top service + price, cancellation, walk-ins); skip option available; saves to `policy-questionnaire` RAG table; full 40-question screen stays in Phone Assistant tab — `dashboard/components/SetupWizard/index.tsx` `dashboard/components/SetupWizard/SoloWizard.tsx` `dashboard/lib/policyQuestions.ts` — _source: KB placement advice_
-- [ ] **[P0][M]** Add "AI Receptionist live/not live" status card on Home — owners have no signal whether phone is active after completing wizard — `dashboard/components/DashboardHome.tsx:141` `dashboard/components/SetupWizard/Step7GoLive.tsx` — _source: audit #1_
+- [x] **[P0][M]** Add "What do callers ask?" step to setup wizard — `Step7CallerQuestions.tsx` inserted as step 7 (team) / step 3 (solo); 7 starter questions auto-save on blur to `policy-questionnaire`; old GoLive → step 8; SoloStep → 4 steps — DONE 2026-05-28
+- [x] **[P0][M]** Add "AI Receptionist live/not live" status card on Home — DONE 2026-05-28 (`2d5f58a`)
 - [x] **[P0][S]** `SetupProgressPill` hidden on mobile — removed `hidden` class; pill now visible on all screen sizes — DONE 2026-05-28
 
 ### Navigation & IA
@@ -33,7 +33,7 @@
 
 ### WCAG Accessibility
 
-- [ ] **[P0][L]** Replace all `text-[10px]` informational text with `text-xs` (12px) — WCAG 2.1 AA minimum; 10px fails at normal browser zoom — `dashboard/components/DashboardHome.tsx:426,685,707,716` `dashboard/components/ShiftManagementView.tsx:347,472` `dashboard/components/ServiceAssignmentView.tsx:390,437` `dashboard/components/BusinessTypeSection.tsx:162,231` `dashboard/components/scheduler/NewSchedulerView.tsx` — _source: audit #2_
+- [x] **[P0][L]** Replace all `text-[10px]` with `text-xs` (12px) — WCAG 2.1 AA minimum. 45 replacements across 25 files (25 files + 5 from `e9c65be` = all audit-listed files clean) — DONE 2026-05-28
 
 ---
 
@@ -98,7 +98,7 @@
 - [ ] **[P2][M]** Cluster C — migrate custom overlays onto shared Modal primitive (Escape, focus trap, backdrop close): `WizardModeChooser`, `WizardWelcome`, `FirstRunTour`, `SetupWizard/index`, `AppointmentPopover`, `StaffProfileCard`, `EmployeeDayFocusPanel`, `SkillMapFixPanel` — _source: docs/TODO.md Cluster C_
 - [ ] **[P2]** Cluster D — accessible action controls: replace icon-only / hover-only buttons with `aria-label` + visible focus; route destructive actions through shared confirm: `StepEmployees`, `StepServices`, `StepResources`, `SkillManagementView`, `ResourceManagerView`, `AppointmentBlock` — _source: docs/TODO.md Cluster D_
 - [ ] **[P2]** Cluster E — empty/loading/no-results distinctness: `AppointmentListSidebar`, `VoiceCallsView`, `Step2Resources`, `EmployeeManagementView`, `MyTeamView`, `CustomerDetailPanel`, `DeletedRecordsPanel` — _source: docs/TODO.md Cluster E_
-- [ ] **[P2][S]** Add "Dismiss all" to error toast stack when > 2 stacked — `dashboard/components/ui/Toast.tsx` — _source: audit #H4_
+- [x] **[P2][S]** Add "Dismiss all" to error toast stack when > 2 stacked — DONE 2026-05-28 (`a619314`)
 - [ ] **[P2]** Responsive fallbacks for wide matrices/maps: `SchedulerDateNav`, `ResourceColumnsView`, `SkillRelationshipMap` — _source: docs/TODO.md:143_
 
 ### Analytics

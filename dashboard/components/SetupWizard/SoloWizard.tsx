@@ -10,18 +10,20 @@ import { Button } from '../ui/Button';
 import { Step1Services } from './StepServices';
 import { SoloStepHours } from './SoloStepHours';
 import { SoloStepReview } from './SoloStepReview';
+import { Step7CallerQuestions } from './Step7CallerQuestions';
 import type { ServiceForm, WizardShift, WizardService, SetupWizardProps } from './types';
 import type { CoverageItem } from '../../lib/types';
 import { EMPTY_SERVICE } from './types';
 import { markFirstRunTourPending } from '../FirstRunTour';
 
-type SoloStep = 1 | 2 | 3;
+type SoloStep = 1 | 2 | 3 | 4;
 
 // Verb/outcome labels — see SetupWizard/index.tsx getStepLabels() for the rationale.
 const STEP_LABELS: Record<SoloStep, string> = {
   1: 'What you offer',
   2: 'When you work',
-  3: 'Look it over',
+  3: 'Teach Your AI',
+  4: 'Look it over',
 };
 
 export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWizardProps) {
@@ -357,7 +359,7 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
           className="px-6 py-3 flex gap-2 shrink-0 border-b"
           style={{ borderColor: 'var(--border)' }}
         >
-          {([1, 2, 3] as SoloStep[]).map((s) => (
+          {([1, 2, 3, 4] as SoloStep[]).map((s) => (
             <button
               key={s}
               onClick={() => !finalized && s <= step && setStep(s)}
@@ -426,7 +428,9 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
             />
           )}
 
-          {step === 3 && (
+          {step === 3 && <Step7CallerQuestions tenantId={tenantId} />}
+
+          {step === 4 && (
             <SoloStepReview
               services={services}
               shifts={shifts}
@@ -465,7 +469,7 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
             <div />
           )}
 
-          {step < 3 ? (
+          {step < 4 ? (
             <Button
               onClick={() => setStep((step + 1) as SoloStep)}
               disabled={step === 1 && services.length === 0}

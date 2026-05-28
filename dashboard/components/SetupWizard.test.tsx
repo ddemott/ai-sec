@@ -68,21 +68,22 @@ describe('SetupWizard: Shell', () => {
   test('shows step 1 by default', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
     expect(screen.getByText('What services do you offer?')).toBeInTheDocument();
-    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 8')).toBeInTheDocument();
   });
 
-  test('displays all 7 step labels in progress bar', () => {
+  test('displays all 8 step labels in progress bar', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
     // Verb-form chip labels (see SetupWizard/index.tsx getStepLabels()).
     // The footer button still reads "Go Live" (imperative), which is what
     // the getAllByText assertion below covers — it appears at least once
-    // (footer) plus the step-7 chip "You're live" is distinct.
+    // (footer) plus the step-8 chip "You're live" is distinct.
     expect(screen.getByText('What you offer')).toBeInTheDocument();
     expect(screen.getByText('Where it happens')).toBeInTheDocument();
     expect(screen.getByText('Who works here')).toBeInTheDocument();
     expect(screen.getByText('When they work')).toBeInTheDocument();
     expect(screen.getByText('Who does what')).toBeInTheDocument();
     expect(screen.getByText('Look it over')).toBeInTheDocument();
+    expect(screen.getByText('Teach Your AI')).toBeInTheDocument();
     expect(screen.getByText("You're live")).toBeInTheDocument();
   });
 
@@ -98,7 +99,7 @@ describe('SetupWizard: Navigation', () => {
   test('navigates to step 2 when Next is clicked', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
     fireEvent.click(screen.getByText('Next'));
-    expect(screen.getByText('Step 2 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 8')).toBeInTheDocument();
     expect(screen.getByText('Where does work happen?')).toBeInTheDocument();
   });
 
@@ -113,30 +114,30 @@ describe('SetupWizard: Navigation', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Back'));
-    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 8')).toBeInTheDocument();
     expect(screen.getByText('What services do you offer?')).toBeInTheDocument();
   });
 
-  test('shows Go Live button on step 6 and Done on step 7', () => {
+  test('shows Go Live button on step 7 and Done on step 8', () => {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       fireEvent.click(screen.getByText('Next'));
     }
-    expect(screen.getByText('Step 6 of 7')).toBeInTheDocument();
-    // Footer button is the imperative "Go Live" (action). The step-7 chip
+    expect(screen.getByText('Step 7 of 8')).toBeInTheDocument();
+    // Footer button is the imperative "Go Live" (action). The step-8 chip
     // uses the outcome label "You're live" — distinct strings now, so a
     // simple getByText for "Go Live" matches only the footer button.
     fireEvent.click(screen.getByText('Go Live'));
     expect(screen.getByText('Done')).toBeInTheDocument();
     expect(screen.queryByText('Next')).toBeNull();
-    // Step-7 chip is the verb-form "You're live" label.
+    // Step-8 chip is the verb-form "You're live" label.
     expect(screen.getByText("You're live")).toBeInTheDocument();
   });
 
   test('Done button calls onClose', () => {
     const onClose = vi.fn();
     render(<SetupWizard isOpen={true} onClose={onClose} />);
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       const nextBtn = screen.queryByText('Next');
       if (nextBtn) {
         fireEvent.click(nextBtn);
@@ -154,10 +155,10 @@ describe('SetupWizard: Navigation', () => {
     // Go to step 3
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
-    expect(screen.getByText('Step 3 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 3 of 8')).toBeInTheDocument();
     // Click step 1 chip in progress bar (verb-form label)
     fireEvent.click(screen.getByText('What you offer'));
-    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 8')).toBeInTheDocument();
   });
 });
 
@@ -252,12 +253,12 @@ describe('SetupWizard: Step 1 Services', () => {
     // Navigate to step 3
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
-    expect(screen.getByText('Step 3 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 3 of 8')).toBeInTheDocument();
 
     // Close and reopen
     rerender(<SetupWizard isOpen={false} onClose={() => {}} />);
     rerender(<SetupWizard isOpen={true} onClose={() => {}} />);
-    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 8')).toBeInTheDocument();
   });
 });
 
@@ -507,7 +508,7 @@ describe('SetupWizard: Step 4 Shifts', () => {
     //       ephemeral form state — no shifts are pre-loaded from any
     //       server call. The user toggles days locally and the whole
     //       pattern is sent to /shifts/expand-weekly when they cross
-    //       into step 7.
+    //       into step 8.
     // WHY: post-rip-out of employee_shifts (historical major refactor; see RESOLVED.md, originally tracked as NEEDS-REFACTORING #4)
     //       Phase 2), there's no backend representation of the wizard's
     //       weekly grid until finalize. This test pins the new
@@ -804,13 +805,13 @@ describe('SetupWizard: Step 6 Review', () => {
   });
 });
 
-// --- Step 7: Go Live ---
+// --- Step 8: Go Live ---
 
-describe('SetupWizard: Step 7 Go Live', () => {
+describe('SetupWizard: Step 8 Go Live', () => {
   function goToStep7() {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
-    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'));
-    // Step 6 → click "Go Live" footer button
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByText('Next'));
+    // Step 7 → click "Go Live" footer button
     const goLiveBtns = screen.getAllByText('Go Live');
     fireEvent.click(goLiveBtns[goLiveBtns.length - 1]);
   }
@@ -822,19 +823,19 @@ describe('SetupWizard: Step 7 Go Live', () => {
         'Activate your AI phone line. Once active, callers will reach your AI receptionist who can book appointments, answer questions, and manage your schedule.'
       )
     ).toBeInTheDocument();
-    expect(screen.getByText('Step 7 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 8 of 8')).toBeInTheDocument();
   });
 
-  test('fans weekly availability into employee_schedule on transition to step 7', async () => {
+  test('fans weekly availability into employee_schedule on transition to step 8', async () => {
     // WHO: owner who finished setting weekly hours in step 4 and is
-    //      progressing through Review → Go Live.
-    // WHAT: transitioning into step 7 must POST /shifts/expand-weekly
+    //      progressing through Review → Teach Your AI → Go Live.
+    // WHAT: transitioning into step 8 must POST /shifts/expand-weekly
     //      once per active employee. Without this the booking RPCs
     //      (which only read employee_schedule) reject every request
     //      from the just-onboarded tenant with EMPLOYEE_NOT_SCHEDULED.
     // WHERE: dashboard/components/SetupWizard/index.tsx goNext() —
-    //      the if (next === 7) hook that calls Api.shifts.expandWeekly.
-    // WHEN: on the click that advances from step 6 (Review) to step 7.
+    //      the if (next === 8) hook that calls Api.shifts.expandWeekly.
+    // WHEN: on the click that advances from step 7 (Teach Your AI) to step 8.
     // WHY: this is the bridge between weekly-pattern onboarding and
     //      date-specific booking storage. Pre-fix, owners hit a
     //      silent failure mode after completing the wizard.
@@ -848,21 +849,21 @@ describe('SetupWizard: Step 7 Go Live', () => {
       expect(screen.getByText('Add a service')).toBeInTheDocument();
     });
 
-    // Step 1 → 6 via Next, awaiting between clicks so each async
+    // Step 1 → 7 via Next, awaiting between clicks so each async
     // goNext settles before the next click reads stale state.
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       fireEvent.click(screen.getByText('Next'));
       // Tick the microtask queue
       await Promise.resolve();
     }
 
-    // Step 6 → 7 via the footer "Go Live" button. The fan-out fires
-    // here (next === 7 branch in goNext).
+    // Step 7 → 8 via the footer "Go Live" button. The fan-out fires
+    // here (next === 8 branch in goNext).
     const goLiveBtns = screen.getAllByText('Go Live');
     fireEvent.click(goLiveBtns[goLiveBtns.length - 1]);
 
     await waitFor(() => {
-      expect(screen.getByText('Step 7 of 7')).toBeInTheDocument();
+      expect(screen.getByText('Step 8 of 8')).toBeInTheDocument();
     });
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -1361,7 +1362,7 @@ describe('SetupWizard: Sad Paths — Validation (Empty Form Submissions)', () =>
 describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
   function goToStep7() {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
-    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'));
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByText('Next'));
     const goLiveBtns = screen.getAllByText('Go Live');
     fireEvent.click(goLiveBtns[goLiveBtns.length - 1]);
   }
@@ -1621,17 +1622,17 @@ describe('SetupWizard: Sad Paths — Navigation After Error', () => {
 
     // Navigate forward to step 4
     for (let i = 0; i < 3; i++) fireEvent.click(screen.getByText('Next'));
-    expect(screen.getByText('Step 4 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 4 of 8')).toBeInTheDocument();
 
     // Navigate back to step 2
     fireEvent.click(screen.getByText('Back'));
     fireEvent.click(screen.getByText('Back'));
-    expect(screen.getByText('Step 2 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 8')).toBeInTheDocument();
 
     // Navigate forward again
     fireEvent.click(screen.getByText('Next'));
     fireEvent.click(screen.getByText('Next'));
-    expect(screen.getByText('Step 4 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Step 4 of 8')).toBeInTheDocument();
     expect(screen.getByText('When does everyone work?')).toBeInTheDocument();
   });
 });

@@ -35,7 +35,8 @@ function getStepLabels(_vocab: {
     4: 'When they work',
     5: 'Who does what',
     6: 'Look it over',
-    7: "You're live",
+    7: 'Teach Your AI',
+    8: "You're live",
   };
 }
 
@@ -210,18 +211,18 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   };
 
   const goNext = async () => {
-    const next = Math.min(step + 1, 7) as WizardStep;
+    const next = Math.min(step + 1, 8) as WizardStep;
     if (!canAdvanceTo(next)) {
       showToast('Complete this step before continuing', 'warning');
       return;
     }
-    // On the way into step 7 (Go Live), fan each employee's weekly
+    // On the way into step 8 (Go Live), fan each employee's weekly
     // availability into 4 weeks of date-specific employee_schedule
     // rows. Booking RPCs read only employee_schedule, so without this
     // a tenant could activate the phone and still have every booking
     // attempt return EMPLOYEE_NOT_SCHEDULED. Errors are non-fatal —
     // we log and continue so a flaky network doesn't strand the user.
-    if (next === 7 && tenantId) {
+    if (next === 8 && tenantId) {
       // Group the in-memory shift form-state by employee so each
       // employee's pattern is fanned independently.
       for (const emp of activeEmployees) {
@@ -315,7 +316,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
         {/* Progress bar */}
         <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
-            {([1, 2, 3, 4, 5, 6, 7] as WizardStep[]).map((s) => (
+            {([1, 2, 3, 4, 5, 6, 7, 8] as WizardStep[]).map((s) => (
               <button
                 key={s}
                 onClick={() => goToStep(s)}
@@ -364,6 +365,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
           )}
           <WizardStepContent
             step={step}
+            tenantId={tenantId}
             services={activeServices}
             editingService={crud.editingService}
             editingServiceId={crud.editingServiceId}
@@ -415,7 +417,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
         {/* Footer */}
         <footer className="px-6 py-4 bg-gray-50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="text-xs text-gray-400">Step {step} of 7</div>
+            <div className="text-xs text-gray-400">Step {step} of 8</div>
             {/* Step 1 owns the "go back to the picker" affordance — any
                 later step uses the regular Back button to walk the
                 intra-wizard step strip first. Hidden when the parent
@@ -439,9 +441,9 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
                 Back
               </Button>
             )}
-            {step < 7 ? (
+            {step < 8 ? (
               <Button variant="primary" size="sm" onClick={goNext}>
-                {step === 6 ? 'Go Live' : 'Next'}
+                {step === 7 ? 'Go Live' : 'Next'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (

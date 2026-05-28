@@ -74,7 +74,7 @@ export function EmptyState({
         </p>
         {description && (
           <p
-            className={variant === 'centered' ? 'text-xs mt-1' : 'text-[10px] mt-0.5'}
+            className={variant === 'centered' ? 'text-xs mt-1' : 'text-xs mt-0.5'}
             style={{ color: 'var(--text-muted)' }}
           >
             {description}

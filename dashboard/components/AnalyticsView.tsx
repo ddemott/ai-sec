@@ -415,7 +415,7 @@ function MetricCard({
           {title}
         </span>
       </div>
-      <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
         {subtitle}
       </p>
       {placeholder ? (

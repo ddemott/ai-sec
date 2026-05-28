@@ -93,7 +93,7 @@ export default function SkillManagementView() {
           <div className="flex-1 w-full space-y-4">
             <div className="space-y-1">
               <label
-                className="text-[10px] font-bold uppercase tracking-widest ml-1"
+                className="text-xs font-bold uppercase tracking-widest ml-1"
                 style={{ color: 'var(--text-muted)' }}
               >
                 Skill Name (Slug)
@@ -107,7 +107,7 @@ export default function SkillManagementView() {
             </div>
             <div className="space-y-1">
               <label
-                className="text-[10px] font-bold uppercase tracking-widest ml-1"
+                className="text-xs font-bold uppercase tracking-widest ml-1"
                 style={{ color: 'var(--text-muted)' }}
               >
                 Description

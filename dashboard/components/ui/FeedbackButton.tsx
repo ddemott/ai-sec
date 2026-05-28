@@ -66,7 +66,7 @@ export function FeedbackButton({ page, context }: FeedbackButtonProps) {
       >
         <div>
           <p className="text-sm font-bold">Send Feedback</p>
-          <p className="text-[10px] opacity-70 truncate max-w-[200px]">{page}</p>
+          <p className="text-xs opacity-70 truncate max-w-[200px]">{page}</p>
         </div>
         <button
           onClick={() => setIsOpen(false)}

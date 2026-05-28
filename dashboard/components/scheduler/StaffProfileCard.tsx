@@ -164,7 +164,7 @@ export function StaffProfileCard({
       {/* Skills */}
       <div className="px-4 pt-3 pb-4">
         <div
-          className="text-[10px] font-semibold tracking-wider uppercase mb-1.5"
+          className="text-xs font-semibold tracking-wider uppercase mb-1.5"
           style={{
             color: 'var(--text-muted, #888)',
             fontFamily: 'var(--font-body, "DM Sans", sans-serif)',

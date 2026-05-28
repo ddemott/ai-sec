@@ -110,7 +110,7 @@ export default function SkillMapFixPanel({
 
       {chain.missingEmployees && eligibleEmployees.length > 0 && (
         <div className="mb-2">
-          <p className="text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wider">
+          <p className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">
             Assign staff:
           </p>
           <div className="flex flex-wrap gap-1">
@@ -121,7 +121,7 @@ export default function SkillMapFixPanel({
                 variant="secondary"
                 disabled={saving}
                 onClick={() => assignEmployee(emp)}
-                className="text-[10px] py-0.5 px-2"
+                className="text-xs py-0.5 px-2"
               >
                 + {emp.name}
               </Button>
@@ -132,7 +132,7 @@ export default function SkillMapFixPanel({
 
       {chain.missingResources && eligibleResources.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wider">
+          <p className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">
             Assign resource:
           </p>
           <div className="flex flex-wrap gap-1">
@@ -143,7 +143,7 @@ export default function SkillMapFixPanel({
                 variant="secondary"
                 disabled={saving}
                 onClick={() => assignResource(res)}
-                className="text-[10px] py-0.5 px-2"
+                className="text-xs py-0.5 px-2"
               >
                 + {res.name}
               </Button>
@@ -153,10 +153,10 @@ export default function SkillMapFixPanel({
       )}
 
       {eligibleEmployees.length === 0 && chain.missingEmployees && (
-        <p className="text-[10px] text-gray-400 italic">No available employees to assign.</p>
+        <p className="text-xs text-gray-400 italic">No available employees to assign.</p>
       )}
       {eligibleResources.length === 0 && chain.missingResources && (
-        <p className="text-[10px] text-gray-400 italic">No available resources to assign.</p>
+        <p className="text-xs text-gray-400 italic">No available resources to assign.</p>
       )}
     </div>
   );

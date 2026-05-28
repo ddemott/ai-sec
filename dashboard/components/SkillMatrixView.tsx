@@ -213,7 +213,7 @@ export default function SkillMatrixView() {
               {(services || []).map((service) => (
                 <th
                   key={service.service_id}
-                  className="p-4 text-center text-[10px] font-bold uppercase tracking-widest border-l min-w-[150px]"
+                  className="p-4 text-center text-xs font-bold uppercase tracking-widest border-l min-w-[150px]"
                   style={{ color: 'var(--text-muted)', borderColor: 'var(--border-soft)' }}
                 >
                   {service.name}
@@ -248,7 +248,7 @@ export default function SkillMatrixView() {
                     </div>
                     <div>
                       <div className="font-bold text-sm leading-none mb-1">{entity.name}</div>
-                      <div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">
+                      <div className="text-xs text-gray-400 uppercase font-bold tracking-tighter">
                         {entity.type === 'employee' ? vocab.employee_label : vocab.resource_label}
                       </div>
                     </div>

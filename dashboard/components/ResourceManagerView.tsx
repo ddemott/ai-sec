@@ -276,7 +276,7 @@ export default function ResourceManagerView() {
                   .map((m) => {
                     const s = (services || []).find((s) => s.service_id === m.service_id);
                     return s ? (
-                      <Badge key={s.service_id} variant="primary" className="text-[10px] uppercase">
+                      <Badge key={s.service_id} variant="primary" className="text-xs uppercase">
                         {s.name}
                       </Badge>
                     ) : null;

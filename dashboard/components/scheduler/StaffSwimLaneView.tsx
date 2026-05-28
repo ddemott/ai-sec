@@ -404,7 +404,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                 >
                   {/* Time label */}
                   <span
-                    className={`absolute left-2 top-1 text-[10px] font-semibold pointer-events-none ${
+                    className={`absolute left-2 top-1 text-xs font-semibold pointer-events-none ${
                       isDragging
                         ? 'text-green-800 dark:text-green-200'
                         : 'text-green-700/80 dark:text-green-400/60'
@@ -420,7 +420,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                   {onShiftDelete && !isDragging && (
                     <button
                       aria-label="Delete shift"
-                      className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-3 z-20 min-h-[44px] flex items-center"
+                      className="absolute right-1 top-1 text-xs font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-3 z-20 min-h-[44px] flex items-center"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();

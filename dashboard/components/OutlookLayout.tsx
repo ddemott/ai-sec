@@ -252,7 +252,7 @@ export function OutlookLayout({
           >
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+              <span className="text-xs font-bold uppercase tracking-widest opacity-80">
                 Admin Mode
               </span>
               <span className="mx-2 opacity-30">|</span>
@@ -275,7 +275,7 @@ export function OutlookLayout({
               all-businesses grid, which IS the super-admin landing). */}
             <button
               onClick={() => setActiveTab('all-businesses')}
-              className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full transition-all inline-flex items-center gap-1.5"
+              className="text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full transition-all inline-flex items-center gap-1.5"
               style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
               aria-label="Exit admin mode — return to the businesses grid"
             >
@@ -367,7 +367,7 @@ export function OutlookLayout({
               />
               {tab.id === 'ai-insights' && unansweredCount > 0 && (
                 <span
-                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none"
+                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-xs font-bold leading-none"
                   style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
                   title={`${unansweredCount} unanswered question${unansweredCount > 1 ? 's' : ''} from callers`}
                 >
@@ -376,7 +376,7 @@ export function OutlookLayout({
               )}
               {tab.id === 'calls' && activeCallCount > 0 && (
                 <span
-                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none animate-pulse"
+                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-xs font-bold leading-none animate-pulse"
                   style={{
                     backgroundColor: 'var(--danger, #dc2626)',
                     color: 'var(--primary-text)',
@@ -476,7 +476,7 @@ export function OutlookLayout({
             }}
           >
             <div
-              className="p-2 border-b text-[10px] font-bold uppercase tracking-widest"
+              className="p-2 border-b text-xs font-bold uppercase tracking-widest"
               style={{
                 backgroundColor: 'var(--bg-surface)',
                 borderColor: 'var(--border-soft)',
@@ -524,7 +524,7 @@ export function OutlookLayout({
                   }}
                 >
                   <span className="text-sm font-bold">{t.name}</span>
-                  <span className="text-[10px] opacity-50 uppercase tracking-tighter">
+                  <span className="text-xs opacity-50 uppercase tracking-tighter">
                     {t.business_type}
                   </span>
                 </button>
@@ -555,7 +555,7 @@ export function OutlookLayout({
               <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
                 {userName || 'User'}
               </div>
-              <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                 Signed in
               </div>
             </div>

@@ -6,6 +6,7 @@ import { Step4Shifts } from './StepShifts';
 import { Step5Assignments } from './StepAssignments';
 import { Step6Review } from './StepReview';
 import { Step7GoLive } from './Step7GoLive';
+import { Step7CallerQuestions } from './Step7CallerQuestions';
 import type {
   WizardStep,
   ServiceForm,
@@ -21,6 +22,7 @@ import type {
 
 interface WizardStepContentProps {
   step: WizardStep;
+  tenantId: string | null;
 
   // Step 1 — Services
   services: WizardService[];
@@ -91,6 +93,7 @@ interface WizardStepContentProps {
 
 export function WizardStepContent({
   step,
+  tenantId,
   services,
   editingService,
   editingServiceId,
@@ -229,6 +232,8 @@ export function WizardStepContent({
         />
       );
     case 7:
+      return <Step7CallerQuestions tenantId={tenantId} />;
+    case 8:
       return <Step7GoLive phoneStatus={phoneStatus} inboundPhone={inboundPhone} />;
     default:
       return null;

@@ -128,7 +128,7 @@ export function AppointmentPopover({
             {appointment.description || 'Appointment'}
           </div>
           <span
-            className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ml-2"
+            className="text-xs font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ml-2"
             style={{ background: statusColor, color: '#fff', opacity: 0.9 }}
           >
             {statusLabel}

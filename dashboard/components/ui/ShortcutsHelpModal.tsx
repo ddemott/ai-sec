@@ -58,7 +58,7 @@ export function ShortcutsHelpModal({ isOpen, onClose, shortcuts }: ShortcutsHelp
           return (
             <section key={s.id}>
               <h3
-                className="text-[10px] font-bold uppercase tracking-widest mb-2"
+                className="text-xs font-bold uppercase tracking-widest mb-2"
                 style={{ color: 'var(--text-muted)' }}
               >
                 {s.label}
@@ -84,7 +84,7 @@ export function ShortcutsHelpModal({ isOpen, onClose, shortcuts }: ShortcutsHelp
         >
           Shortcuts are suppressed while typing in inputs. Press{' '}
           <kbd
-            className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+            className="px-1.5 py-0.5 rounded text-xs font-bold"
             style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--border)' }}
           >
             ?

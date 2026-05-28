@@ -140,7 +140,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
                     <div className="text-xs font-bold text-gray-900 dark:text-gray-100">
                       {formatTimeFromISO(appt.start_time)}
                     </div>
-                    <div className="text-[10px] text-gray-400">
+                    <div className="text-xs text-gray-400">
                       {formatTimeFromISO(appt.end_time)}
                     </div>
                   </div>

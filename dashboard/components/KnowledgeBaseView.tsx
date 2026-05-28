@@ -616,7 +616,7 @@ export default function KnowledgeBaseView() {
             <t.icon className="w-4 h-4" />
             {t.label}
             {t.badge && (
-              <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+              <Badge variant="secondary" className="text-xs py-0 px-1.5">
                 {t.badge}
               </Badge>
             )}
@@ -809,7 +809,7 @@ export default function KnowledgeBaseView() {
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <div
-                                className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"
+                                className="text-xs font-bold uppercase tracking-widest flex items-center gap-1"
                                 style={{ color: 'var(--warning)' }}
                               >
                                 <FileText className="w-3 h-3" />
@@ -848,7 +848,7 @@ export default function KnowledgeBaseView() {
                             {doc.content}
                           </p>
                           <div className="mt-auto pt-4">
-                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                               {new Date(doc.created_at).toLocaleDateString()}
                             </span>
                           </div>

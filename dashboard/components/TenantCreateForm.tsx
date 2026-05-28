@@ -43,7 +43,7 @@ export function TenantCreateForm({ newBusiness, templates, onChange }: TenantCre
         ]}
       />
       <div className="pt-4 border-t space-y-4" style={{ borderColor: 'var(--border-soft)' }}>
-        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
           Initial Owner Credentials
         </h4>
         <div className="grid grid-cols-2 gap-3">

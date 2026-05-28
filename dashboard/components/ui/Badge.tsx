@@ -20,7 +20,7 @@ export const Badge: React.FC<BadgeProps> = ({ children, variant = 'primary', cla
 
   return (
     <span
-      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest inline-block ${className}`}
+      className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-widest inline-block ${className}`}
       style={variantStyles[variant]}
     >
       {children}

@@ -498,7 +498,7 @@ export function AppointmentDetailPanel({
                           style={{ borderTop: '1px solid var(--border-soft)' }}
                         >
                           <p
-                            className="text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center"
+                            className="text-xs font-bold uppercase tracking-widest mb-1 flex items-center"
                             style={{ color: 'var(--text-muted)' }}
                           >
                             <StickyNote className="w-3 h-3 mr-1" /> Customer Notes

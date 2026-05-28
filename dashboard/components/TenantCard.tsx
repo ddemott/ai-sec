@@ -71,7 +71,7 @@ export function TenantCard({
             <Badge variant="secondary" className="mr-2">
               {tenant.business_type}
             </Badge>
-            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono truncate max-w-[100px]">
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate max-w-[100px]">
               {tenant.tenant_id.slice(0, 8)}
             </span>
           </div>

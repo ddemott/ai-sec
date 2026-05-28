@@ -24,7 +24,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       {label && (
         <label
           htmlFor={autoId}
-          className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block"
+          className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block"
         >
           {label}
         </label>

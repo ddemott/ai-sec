@@ -1,6 +1,6 @@
 /**
  * SoloWizard tests — focused on the integration points that are easy
- * to break: transitioning between the three steps, finalize calling
+ * to break: transitioning between the four steps, finalize calling
  * the right API sequence, and (most importantly) the new
  * Api.shifts.expandWeekly bridge that fixes the post-onboarding
  * "EMPLOYEE_NOT_SCHEDULED" bug.
@@ -97,7 +97,7 @@ function setupFetchMock() {
         return Promise.resolve({ ok: true, json: async () => [] });
       }
 
-      // Step 3 — finalize sequence:
+      // Step 4 — finalize sequence:
       if (path.includes('/resources/create') && init?.method === 'POST') {
         return Promise.resolve({
           ok: true,
@@ -141,8 +141,8 @@ beforeEach(() => {
 
 describe('SoloWizard — finalize fans weekly availability', () => {
   test('handleFinalize calls Api.shifts.expandWeekly for the owner employee', async () => {
-    // WHO: solo-business owner finishing the 3-step solo wizard.
-    // WHAT: clicking "Complete Setup" on step 3 must trigger a POST
+    // WHO: solo-business owner finishing the 4-step solo wizard.
+    // WHAT: clicking "Complete Setup" on step 4 must trigger a POST
     //       to /shifts/expand-weekly with the owner's employee id —
     //       this is the bridge that makes booking RPCs honor the
     //       weekly availability the owner just set.
@@ -150,7 +150,7 @@ describe('SoloWizard — finalize fans weekly availability', () => {
     //       handleFinalize, between the service-mapping loop and the
     //       coverage refresh.
     // WHEN: every solo onboarding completion. The team-wizard
-    //       counterpart fires at goNext step-6→7 and is covered in
+    //       counterpart fires at goNext step-7→8 and is covered in
     //       SetupWizard.test.tsx.
     // WHY: pre-fix bug — owners completed onboarding with a green
     //       checkmark, then every booking attempt failed with
@@ -172,7 +172,10 @@ describe('SoloWizard — finalize fans weekly availability', () => {
       expect(screen.getByText('When are you available?')).toBeInTheDocument();
     });
 
-    // Step 2 → 3.
+    // Step 2 → 3 (Teach Your AI).
+    fireEvent.click(screen.getByText('Next'));
+
+    // Step 3 → 4 (Review/Finalize).
     fireEvent.click(screen.getByText('Next'));
     await waitFor(() => {
       expect(screen.getByText('Complete Setup')).toBeInTheDocument();
@@ -237,11 +240,12 @@ describe('SoloWizard — finalize fans weekly availability', () => {
     fireEvent.click(screen.getByText('Next'));
     await waitFor(() => expect(screen.getByText('When are you available?')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByText('Next'));
     await waitFor(() => expect(screen.getByText('Complete Setup')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Complete Setup'));
 
-    // Wizard should still be on step 3 (NOT show "You're all set!")
+    // Wizard should still be on step 4 (NOT show "You're all set!")
     // because the throw aborted finalize before setFinalized(true).
     await waitFor(() => {
       // Wait for the finalize attempt to settle. The button label

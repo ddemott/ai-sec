@@ -59,7 +59,7 @@ export default function SkillAssignmentsView() {
         style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-surface)' }}
       >
         <span
-          className="text-[10px] uppercase tracking-widest font-bold mr-2"
+          className="text-xs uppercase tracking-widest font-bold mr-2"
           style={{ color: 'var(--text-muted)' }}
         >
           View

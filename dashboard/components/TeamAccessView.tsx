@@ -157,7 +157,7 @@ export default function TeamAccessView() {
                       {u.full_name || u.email}
                       {u.is_self && (
                         <span
-                          className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                          className="ml-2 text-xs uppercase tracking-wider px-1.5 py-0.5 rounded"
                           style={{
                             backgroundColor: 'var(--accent-muted)',
                             color: 'var(--accent-soft)',
