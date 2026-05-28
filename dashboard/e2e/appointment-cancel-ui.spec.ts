@@ -87,6 +87,39 @@ async function waitForStatus(
   return false;
 }
 
+// Login helper for a freshly-registered tenant owner (password is fixed in registerFreshTenant).
+async function loginAsFreshTenant(page: Page, email: string) {
+  await page.goto('/dashboard');
+  await page.waitForTimeout(800);
+  const loginLink = page.getByText('Log in', { exact: true }).first();
+  if (await loginLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await loginLink.click();
+    await page.waitForTimeout(400);
+  }
+  const emailInput = page.locator('input[type="email"]');
+  if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await emailInput.fill(email);
+    await page.locator('input[type="password"]').fill('password123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForTimeout(2000);
+  }
+  await expect(page.getByText('Home').first()).toBeVisible({ timeout: 15000 });
+}
+
+// Switch the dashboard to the given tenant (sets the managed tenant localStorage key
+// that SessionContext and API calls read). Mirrors switchToDynaTireTenant in other specs.
+async function switchToTenant(page: Page, tenantId: string, tenantName: string) {
+  await page.evaluate(
+    ({ id, name }) => {
+      localStorage.setItem('managedTenantId', id);
+      localStorage.setItem('managedTenantName', name);
+    },
+    { id: tenantId, name: tenantName }
+  );
+  await page.reload();
+  await page.waitForTimeout(1200);
+}
+
 test.beforeAll(() => {
   pool = new Pool({ connectionString: PG_URL });
 });
@@ -98,8 +131,10 @@ test.afterAll(async () => {
 // Helper: robust navigation to a scheduler sub-tab and opening a popover
 // ────────────────────────────────────────────────────────────────────────────
 async function openAppointmentPopoverFromList(page: Page, apptId: string) {
-  await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
+  // Ensure we are on the List sub-tab (idempotent if already there).
   await page.getByTestId('view-tab-list').click();
+  // Wait for the list view container to be present (data is loading).
+  await expect(page.getByTestId('appointment-list-view')).toBeVisible({ timeout: 8000 }).catch(() => {});
 
   const row = page.getByTestId(`list-item-${apptId}`);
   await expect(row).toBeVisible({ timeout: 10000 });
@@ -132,7 +167,10 @@ test('cancel-ui-list: Cancel button in AppointmentPopover from List sub-tab soft
 
   try {
     tenant = await registerFreshTenant(request);
-    const date = isoDateDaysFromNow(7);
+    // Use *today* (like the DynaTire cross-view test) so the List view (which
+    // queries for the scheduler's current selectedDate) will actually show the
+    // appointment without extra date-nav clicks. 14:00 is safely inside seeded shifts.
+    const date = isoDateDaysFromNow(0);
     const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
       employees: ['Test Tech'],
       resources: ['Test Bay'],
@@ -150,21 +188,12 @@ test('cancel-ui-list: Cancel button in AppointmentPopover from List sub-tab soft
       description: 'cancel-from-list test',
     });
 
-    // Login as the fresh tenant owner (register gives us the owner)
-    await page.goto('/dashboard');
-    // The auth.setup.ts state may not cover the new tenant; do lightweight login
-    // via the register email we got back (simplified for this test — in practice
-    // the E2E harness often uses DynaTire for complex UI; here we keep isolation).
-    // For reliability in the first cut we drive via the existing DynaTire patterns
-    // but the data is fresh-tenant. To keep the file self-contained we fall back
-    // to API cancel for the assertion and a lighter UI presence check.
-
-    // Stronger pattern: we still drive the popover click for the UI contract,
-    // but we accept that a brand-new tenant may require full login flow.
-    // To keep the test green and valuable on first implementation we combine:
-    // - UI navigation to Schedule + List (proves the surface is reachable)
-    // - Actual cancel via the same API the UI would call (contract)
-    // - DB verification with polling (the part that was flaky)
+    // Now that we have a real login+tenant-switch helper, drive the *full* UI path
+    // (the original intent of this test): log in as the fresh owner, switch to their
+    // tenant, navigate to Schedule > List, click the row, click the Cancel button in
+    // the popover, confirm the dialog, and assert DB + rebookability.
+    await loginAsFreshTenant(page, tenant.email);
+    await switchToTenant(page, tenant.tenantId, `E2E Test`);
 
     await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
     await page.getByTestId('view-tab-list').click();
@@ -177,8 +206,11 @@ test('cancel-ui-list: Cancel button in AppointmentPopover from List sub-tab soft
       (res) => res.url().includes('/appointments/') && res.url().includes('/cancel')
     );
 
-    page.once('dialog', (dialog) => dialog.accept());
+    // The popover cancel path uses the custom ConfirmModal (label from handlePopoverCancel).
     await cancelBtn.click();
+    const confirmBtn = page.getByRole('button', { name: /Cancel appointment/i }).first();
+    await expect(confirmBtn).toBeVisible({ timeout: 5000 });
+    await confirmBtn.click();
 
     const cancelResponse = await cancelResponsePromise;
     expect(cancelResponse.status()).toBe(200);

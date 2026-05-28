@@ -260,6 +260,13 @@ test.describe('Quick Book with employee_schedule', () => {
     const quickBookPanel = page.getByTestId('quick-book-panel');
     await expect(quickBookPanel).toBeVisible({ timeout: 5000 });
 
+    // Robust wait: the customer list can be slow to populate right after tenant switch in E2E.
+    // Wait until the select/combobox actually has selectable options.
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="quick-book-customer"]') as HTMLSelectElement | null;
+      return el && el.options && el.options.length > 1;
+    }, { timeout: 10000 });
+
     await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
     await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
 
@@ -282,7 +289,7 @@ test.describe('Quick Book with employee_schedule', () => {
     await expect(quickBookPanel).toBeVisible();
   });
 
-  test('rejects a 23-hour appointment as too long', async ({ page }) => {
+  test('rejects an appointment longer than 12 hours (same day)', async ({ page }) => {
     await ensureLoggedIn(page);
     await switchToDynaTireTenant(page);
 
@@ -302,6 +309,13 @@ test.describe('Quick Book with employee_schedule', () => {
     const quickBookPanel = page.getByTestId('quick-book-panel');
     await expect(quickBookPanel).toBeVisible({ timeout: 5000 });
 
+    // Robust wait: the customer list can be slow to populate right after tenant switch in E2E.
+    // Wait until the select/combobox actually has selectable options.
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="quick-book-customer"]') as HTMLSelectElement | null;
+      return el && el.options && el.options.length > 1;
+    }, { timeout: 10000 });
+
     await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
     await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
 
@@ -313,8 +327,12 @@ test.describe('Quick Book with employee_schedule', () => {
 
     const startInput = quickBookPanel.locator('input[type="datetime-local"]').first();
     const endInput = quickBookPanel.locator('input[type="datetime-local"]').last();
-    await startInput.fill('2026-05-01T10:00');
-    await endInput.fill('2026-05-02T09:00');
+
+    // Use a realistic same-day long appointment (13 hours) that still exceeds the 12-hour limit.
+    // We deliberately avoid multi-day/overnight spans (e.g. 11pm–1am next day) because
+    // the business does not support that style of booking.
+    await startInput.fill('2026-05-01T09:00');
+    await endInput.fill('2026-05-01T22:00');
 
     await page.getByTestId('quick-book-confirm').click();
 

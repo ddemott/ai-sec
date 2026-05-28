@@ -15,8 +15,8 @@
  *     (QuickBookPanel + appointments route)
  *
  * The CRMView → CustomerDetailPanel edit path sends a top-level `notes` field
- * via Api.customers.update, but the backend CustomerUpdateSchema only accepts
- * `metadata`. This test will surface whether that path actually works.
+ * via Api.customers.update. Backend folds it into metadata.notes (the canonical
+ * location also used by booking + voice agent). This test pins the contract.
  *
  * SCOPE FOR V1 (this file)
  * - API-driven happy path for note persistence (the contract that matters most)
@@ -72,7 +72,7 @@ async function updateCustomerNotesViaApi(
   notes: string
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   // This is the exact shape the frontend (CRMView.handleSave) currently sends.
-  // The backend CustomerUpdateSchema does not declare a top-level "notes" field.
+  // Backend now explicitly accepts top-level "notes" (folded into metadata.notes).
   const res = await req.put(`${BACKEND_URL}/customers/${customerId}`, {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     data: {

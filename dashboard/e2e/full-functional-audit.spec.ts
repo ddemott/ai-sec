@@ -85,13 +85,18 @@ test.describe.serial('Full Functional Audit', () => {
     const staffTab = page.locator('[data-testid="view-tab-staff"]');
     if (await staffTab.isVisible({ timeout: 3000 }).catch(() => false)) {
       await staffTab.click();
-      await page.waitForTimeout(500);
     }
 
-    // Hour header should render
-    const hourHeader = page.locator('[data-testid="hour-header"]');
-    if (!(await hourHeader.isVisible({ timeout: 5000 }).catch(() => false))) {
-      logIssue('SCHEDULER', 'Hour header not rendering in staff view');
+    // Wait for the staff scheduler to be meaningfully loaded (employee names panel is a strong signal)
+    // before checking the hour header. This avoids false positives during initial data fetch.
+    const staffNames = page.locator('[data-testid="staff-names-panel"]');
+    if (await staffNames.isVisible({ timeout: 15000 }).catch(() => false)) {
+      const hourHeader = page.locator('[data-testid="hour-header"]');
+      if (!(await hourHeader.isVisible({ timeout: 5000 }).catch(() => false))) {
+        logIssue('SCHEDULER', 'Hour header not rendering in staff view');
+      }
+    } else {
+      logIssue('SCHEDULER', 'Staff scheduler view did not load');
     }
 
     // Zoom controls
@@ -241,18 +246,17 @@ test.describe.serial('Full Functional Audit', () => {
     await page.goto('/dashboard');
     await navigateToTab(page, 'My Team');
 
-    await page.waitForTimeout(1000);
-
-    // Should show Staff heading
-    const staff = page.locator('text=/STAFF|Staff/').first();
-    if (!(await staff.isVisible({ timeout: 10000 }).catch(() => false))) {
-      logIssue('STAFF', 'Staff view did not load');
-    }
+    // Give My Team plenty of time to mount its FolderTabBar + content (DynaTire is fully configured)
+    await page.waitForTimeout(1500);
 
     const teamTabs = page.getByRole('tablist', { name: /Team sections/i });
+    if (!(await teamTabs.isVisible({ timeout: 15000 }).catch(() => false))) {
+      logIssue('STAFF', 'Staff / My Team view did not load');
+    }
 
-    // Check sub-tabs: Staff, Shifts, Skill Matrix, Skill Map
-    for (const sub of [/Staff|Employees/i, /Shifts/i, /Skill Matrix/i, /Skill Map/i]) {
+    // Current labels (post B1 rename): Employees, Working Days (shifts), Service Assignments (matrix+map toggle), Logins.
+    // The old "Shifts / Skill Matrix / Skill Map" names are no longer top-level tabs.
+    for (const sub of [/Employees|Staff/i, /Working Days|Shifts/i, /Service Assignments|Skill/i]) {
       const subTab = teamTabs.getByRole('tab', { name: sub }).first();
       if (await subTab.isVisible({ timeout: 2000 }).catch(() => false)) {
         await subTab.click();

@@ -56,6 +56,13 @@ const ExpandWeeklySchema = z.object({
   employee_id: z.string().uuid(),
   pattern: z.array(WeeklyPatternRowSchema),
   weeks_ahead: z.number().int().min(1).max(52).optional(),
+  // Optional anchor date (YYYY-MM-DD). If omitted, server uses "today" (UTC).
+  // Tests use this for deterministic day-of-week math and to guarantee
+  // the booking date falls inside the expanded coverage window.
+  start_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export function registerShiftRoutes(
@@ -288,7 +295,10 @@ export function registerShiftRoutes(
           .status(400)
           .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
       }
-      const { tenant_id, employee_id, pattern, weeks_ahead } = parsed.data;
+      const { tenant_id, employee_id, pattern, weeks_ahead, start_date } = parsed.data;
+
+      // Parse optional start_date (YYYY-MM-DD) into a Date (UTC midnight).
+      const startDate = start_date ? new Date(`${start_date}T00:00:00Z`) : undefined;
 
       const result = await withTenantClient(tenant_id, (client) =>
         expandWeeklyToSchedule(client, {
@@ -296,6 +306,7 @@ export function registerShiftRoutes(
           employeeId: employee_id,
           pattern,
           weeksAhead: weeks_ahead,
+          startDate,
         })
       );
 

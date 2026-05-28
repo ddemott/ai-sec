@@ -361,11 +361,17 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
       .getByRole('tab', { name: /^Schedule$/ })
       .first()
       .click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(800);
 
     // List sub-tab — a flat list of appointments, easiest to locate by tag.
     await page.getByTestId('view-tab-list').click();
-    await page.waitForTimeout(1000);
+    // Trigger an explicit refresh so a just-inserted row (manual SQL) is guaranteed
+    // to be in the current useSchedulerData response for the selected date.
+    const refreshBtn = page.getByRole('button', { name: /Refresh/i }).first();
+    if (await refreshBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await refreshBtn.click();
+    }
+    await page.waitForTimeout(600);
 
     // Find the row by appointment id (List view exposes
     // data-testid="list-item-${id}"). More reliable than text matching
@@ -378,10 +384,20 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     const cancelBtn = page.getByTestId('appointment-popover-cancel');
     await expect(cancelBtn).toBeVisible({ timeout: 5000 });
 
-    // Confirm the native confirm() dialog.
-    page.once('dialog', (dialog) => dialog.accept());
+    // The popover cancel path now uses the custom ConfirmModal (not native window.confirm).
+    // Click the danger button inside the modal (label matches handlePopoverCancel).
+    const cancelResponsePromise = page.waitForResponse(
+      (res) => res.url().includes('/appointments/') && res.url().includes('/cancel')
+    );
     await cancelBtn.click();
-    await page.waitForTimeout(2000);
+
+    // The app opens its own ConfirmModal with this exact label.
+    const confirmBtn = page.getByRole('button', { name: /Cancel appointment/i }).first();
+    await expect(confirmBtn).toBeVisible({ timeout: 5000 });
+    await confirmBtn.click();
+
+    await cancelResponsePromise;
+    await page.waitForTimeout(400); // brief settle for DB visibility in the subsequent SELECT
 
     // DB row is soft-canceled (still exists, status='canceled').
     const after = await pool.query(`SELECT status FROM appointments WHERE appointment_id = $1`, [

@@ -54,6 +54,19 @@ async function landOnDynatireDashboard(page: Page) {
     .first()
     .click();
   await page.waitForTimeout(800);
+
+  // DynaTire can sometimes have the wizard welcome dialog auto-open or left open
+  // depending on run order / previous tests. Dismiss it so the rename verification
+  // tests can reliably click the main tabs (My Team, etc.).
+  const welcomeDialog = page.getByRole('dialog', { name: /welcome/i });
+  if (await welcomeDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await page
+      .getByRole('button', { name: /set up later|Close wizard|I'll set up later/i })
+      .first()
+      .click()
+      .catch(() => {});
+    await page.waitForTimeout(500);
+  }
 }
 
 test.describe('UI rename — A1 + B2', () => {
@@ -78,9 +91,10 @@ test.describe('UI rename — A1 + B2', () => {
       .getByRole('tab', { name: /^My Team$/ })
       .first()
       .click();
-    await page.waitForTimeout(500);
 
-    await expect(page.getByRole('tab', { name: /Working Days/ }).first()).toBeVisible();
+    // Wait properly for the sub-tabs to render (short fixed waits are flaky after tenant switch / rebuild)
+    await expect(page.getByRole('tab', { name: /Working Days/ }).first()).toBeVisible({ timeout: 10000 });
+
     // Old sub-tab label should not appear — the parent "My Team" no longer
     // contains "Shifts" anywhere.
     await expect(page.getByRole('tab', { name: /^Shifts$/ })).toHaveCount(0);
@@ -126,7 +140,7 @@ test.describe('UI rename — A1 + B2', () => {
 });
 
 test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
-  test('Setup Assistant opens welcome → "Let\'s go" advances to mode chooser', async ({ page }) => {
+  test('Setup Assistant from My Business goes directly to mode chooser (no welcome)', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
     await page
@@ -136,22 +150,12 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
     await page.waitForTimeout(500);
 
     // The Setup Assistant button lives in the FolderTabBar right slot.
+    // When launched from My Business it intentionally skips the welcome
+    // screen and goes straight to the mode chooser (see MyBusinessView).
     await page.getByRole('button', { name: /Setup Assistant/i }).click();
     await page.waitForTimeout(500);
 
-    // D1 (2026-05-17): the wizard now opens with a scope-setting welcome
-    // screen ahead of the mode chooser, not the mode chooser directly.
-    await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible();
-    await expect(page.getByText(/10 minutes from going live/i)).toBeVisible();
-    // Mode chooser is gated until the user clicks "Let's go" — assert
-    // it is NOT yet visible so a regression that double-stacks the
-    // modals (or removes the welcome) would fail loudly.
-    await expect(page.getByText('How is your business set up?')).toHaveCount(0);
-
-    await page.getByRole('button', { name: /Let's go/i }).click();
-    await page.waitForTimeout(300);
-
-    // WizardModeChooser welcome copy + two mode cards now visible.
+    // Mode chooser visible immediately (no welcome gate from this launch point).
     await expect(page.getByText('How is your business set up?')).toBeVisible();
     await expect(page.getByText('Just me')).toBeVisible();
     await expect(page.getByText('I have a team')).toBeVisible();
@@ -164,13 +168,9 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
       .click();
   });
 
-  test('Setup Assistant → welcome "show me around" exits cleanly (no chooser appears)', async ({
-    page,
-  }) => {
-    // WHY (D1): the explicit "I'll set up later, just show me around" exit
-    // must close the entire wizard — it cannot silently advance to the
-    // mode chooser or trap the user in another modal. DynaTire is already
-    // fully configured so this is non-destructive (no writes possible).
+  test('Setup Assistant from My Business can be closed cleanly', async ({ page }) => {
+    // When launched from My Business the chooser appears directly.
+    // Closing it must exit cleanly with no leftover modals.
     await landOnDynatireDashboard(page);
 
     await page
@@ -182,12 +182,13 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
     await page.getByRole('button', { name: /Setup Assistant/i }).click();
     await page.waitForTimeout(500);
 
-    await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible();
+    await expect(page.getByText('How is your business set up?')).toBeVisible();
 
-    await page.getByRole('button', { name: /set up later/i }).click();
-    await page.waitForTimeout(300);
+    await page
+      .getByRole('button', { name: /Close wizard/i })
+      .first()
+      .click();
 
-    await expect(page.getByRole('dialog', { name: /welcome/i })).toHaveCount(0);
     await expect(page.getByText('How is your business set up?')).toHaveCount(0);
   });
 });

@@ -48,6 +48,18 @@ function bookingOutcomeFromError(errMessage: string | null | undefined): string 
   return 'other_error';
 }
 
+/** Map RPC error message to the stable error_code the dashboard + tests expect. */
+function mapErrorMessageToCode(errMessage: string | null | undefined): string | undefined {
+  if (!errMessage) return undefined;
+  const m = errMessage.toLowerCase();
+  if (m.includes('not on shift') || m.includes('not_scheduled')) return 'EMPLOYEE_NOT_SCHEDULED';
+  if (m.includes('skill')) return 'NO_SKILLED_EMPLOYEE';
+  if (m.includes('availability') || m.includes('no availability')) return 'NO_AVAILABILITY';
+  if (m.includes('past')) return 'PAST_TIME';
+  if (m.includes('15-minute') || m.includes('increment')) return 'INCREMENT_VIOLATION';
+  return undefined;
+}
+
 const AppointmentCreateSchema = z.object({
   tenant_id: z.string().uuid(),
   resource_id: z.string().uuid(),
@@ -219,7 +231,10 @@ export function registerAppointmentRoutes(
         outcome: bookingOutcomeFromError(result.error_message),
         source: 'api',
       });
-      return reply.status(400).send({ success: false, error: result.error_message });
+      const errorCode = mapErrorMessageToCode(result.error_message);
+      const responseBody: any = { success: false, error: result.error_message };
+      if (errorCode) responseBody.error_code = errorCode;
+      return reply.status(400).send(responseBody);
     }, 'Failed to create appointment')
   );
 

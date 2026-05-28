@@ -553,6 +553,8 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     await page.getByTestId('quick-book-confirm').click();
 
     // Modal renders with the existing appointment's details.
+    // Increased timeout + explicit dialog role wait for reliability after tenant switch + DB state.
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('That time is already booked')).toBeVisible({ timeout: 5000 });
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Mike Rivera');

@@ -13,6 +13,7 @@ Focus: consistency (PK naming, type shapes), duplication removal, shared-layer e
 **List Status: Complete**
 
 All items in this file have been addressed:
+
 - Items 1–6, 8–10: Done
 - Item 7: Closed as not pursued (no value with current structure)
 
@@ -123,9 +124,10 @@ This mechanical refactor backlog is now closed out. Future mechanical consistenc
 
 ### ~~6. Audit + expand `shared/` for other pure cross-boundary logic~~
 
-**Status: done 2026-05-27.** 
+**Status: done 2026-05-27.**
 
 Two major extractions completed:
+
 - Phone utilities → `shared/phone.ts`
 - Name utilities → `shared/name.ts`
 
@@ -209,35 +211,36 @@ Can be reopened if a 5th entity with near-identical CRUD surfaces and the copy-p
 
 **Grouped report** (generated via `eslint --format json`, grouped by file + rule, top 25 shown):
 
-| Count | File | Rule |
-|-------|------|------|
-| 90 | `src/services/reminders/index.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 48 | `src/services/reminders/index.ts` | `@typescript-eslint/no-unsafe-assignment` |
-| 40 | `src/services/reminders/reminders.test.ts` | `@typescript-eslint/unbound-method` |
-| 37 | `src/services/jobberSync.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 32 | `tests/schema_test.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 32 | `tests/template_test.ts` | `@typescript-eslint/no-unsafe-call` |
-| 30 | `src/services/hubspotSync.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 30 | `tests/schema_test.ts` | `@typescript-eslint/no-unsafe-call` |
-| 29 | `src/database/index.ts` | `@typescript-eslint/no-unsafe-return` |
-| 25 | `tests/template_test.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 22 | `src/services/tokenManagement.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 21 | `src/services/jobberSync.ts` | `@typescript-eslint/no-unsafe-assignment` |
-| 20 | `src/services/communications/communications.test.ts` | `@typescript-eslint/unbound-method` |
-| 20 | `src/services/reminders/reminderRepository.ts` | `@typescript-eslint/no-unsafe-assignment` |
-| 20 | `src/services/servicetitanSync.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 18 | `src/services/reminders/index.ts` | `@typescript-eslint/no-unsafe-argument` |
-| 17 | `scripts/ingest-knowledge.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 16 | `src/services/squareSync.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 14 | `scripts/ingest-knowledge.ts` | `@typescript-eslint/no-unsafe-call` |
-| 12 | `src/services/reminders/reminderProcessor.ts` | `@typescript-eslint/no-unsafe-assignment` |
-| 10 | `scripts/ingest-knowledge.ts` | `@typescript-eslint/no-unsafe-assignment` |
-| 10 | `src/services/jobberSync.ts` | `@typescript-eslint/no-unsafe-argument` |
-| 10 | `src/services/reminders/reminderProcessor.ts` | `@typescript-eslint/no-unsafe-argument` |
-| 10 | `src/services/squareClient.ts` | `@typescript-eslint/no-unsafe-member-access` |
-| 10 | `src/services/tokenManagement.ts` | `@typescript-eslint/no-unsafe-assignment` |
+| Count | File                                                 | Rule                                         |
+| ----- | ---------------------------------------------------- | -------------------------------------------- |
+| 90    | `src/services/reminders/index.ts`                    | `@typescript-eslint/no-unsafe-member-access` |
+| 48    | `src/services/reminders/index.ts`                    | `@typescript-eslint/no-unsafe-assignment`    |
+| 40    | `src/services/reminders/reminders.test.ts`           | `@typescript-eslint/unbound-method`          |
+| 37    | `src/services/jobberSync.ts`                         | `@typescript-eslint/no-unsafe-member-access` |
+| 32    | `tests/schema_test.ts`                               | `@typescript-eslint/no-unsafe-member-access` |
+| 32    | `tests/template_test.ts`                             | `@typescript-eslint/no-unsafe-call`          |
+| 30    | `src/services/hubspotSync.ts`                        | `@typescript-eslint/no-unsafe-member-access` |
+| 30    | `tests/schema_test.ts`                               | `@typescript-eslint/no-unsafe-call`          |
+| 29    | `src/database/index.ts`                              | `@typescript-eslint/no-unsafe-return`        |
+| 25    | `tests/template_test.ts`                             | `@typescript-eslint/no-unsafe-member-access` |
+| 22    | `src/services/tokenManagement.ts`                    | `@typescript-eslint/no-unsafe-member-access` |
+| 21    | `src/services/jobberSync.ts`                         | `@typescript-eslint/no-unsafe-assignment`    |
+| 20    | `src/services/communications/communications.test.ts` | `@typescript-eslint/unbound-method`          |
+| 20    | `src/services/reminders/reminderRepository.ts`       | `@typescript-eslint/no-unsafe-assignment`    |
+| 20    | `src/services/servicetitanSync.ts`                   | `@typescript-eslint/no-unsafe-member-access` |
+| 18    | `src/services/reminders/index.ts`                    | `@typescript-eslint/no-unsafe-argument`      |
+| 17    | `scripts/ingest-knowledge.ts`                        | `@typescript-eslint/no-unsafe-member-access` |
+| 16    | `src/services/squareSync.ts`                         | `@typescript-eslint/no-unsafe-member-access` |
+| 14    | `scripts/ingest-knowledge.ts`                        | `@typescript-eslint/no-unsafe-call`          |
+| 12    | `src/services/reminders/reminderProcessor.ts`        | `@typescript-eslint/no-unsafe-assignment`    |
+| 10    | `scripts/ingest-knowledge.ts`                        | `@typescript-eslint/no-unsafe-assignment`    |
+| 10    | `src/services/jobberSync.ts`                         | `@typescript-eslint/no-unsafe-argument`      |
+| 10    | `src/services/reminders/reminderProcessor.ts`        | `@typescript-eslint/no-unsafe-argument`      |
+| 10    | `src/services/squareClient.ts`                       | `@typescript-eslint/no-unsafe-member-access` |
+| 10    | `src/services/tokenManagement.ts`                    | `@typescript-eslint/no-unsafe-assignment`    |
 
 **Progress — 2026-05-27 tranche ("Reminders + CRM Sync Adapters" group):**
+
 - Added file-level `eslint-disable` blocks (with justification) to the highest-concentration non-test files from the report.
 - Files suppressed in this group:
   - `src/services/reminders/index.ts`
@@ -250,6 +253,7 @@ Can be reopened if a 5th entity with near-identical CRUD surfaces and the copy-p
 - Both root `tsc --noEmit` and `cd dashboard && npx tsc --noEmit` clean.
 
 **Progress — 2026-05-27 tranche 2 ("Core dynamic infrastructure" group):**
+
 - Added file-level `eslint-disable` blocks to the next major cluster of intentionally loose files.
 - Files suppressed:
   - `scripts/ingest-knowledge.ts`
@@ -263,6 +267,7 @@ Can be reopened if a 5th entity with near-identical CRUD surfaces and the copy-p
 - Typechecks remain clean.
 
 **Key observations from the report:**
+
 - Single worst file: `src/services/reminders/index.ts` (90 + 48 + 18 = 156 warnings).
 - Heavy concentration in CRM sync adapters (`jobberSync`, `hubspotSync`, `servicetitanSync`, `squareSync`).
 - Test files contribute a lot via `unbound-method` (reminders.test, communications.test).
@@ -273,6 +278,7 @@ This exact volume was previously called out and **consciously accepted** in prep
 `eslint --fix` produced zero reduction (these warnings are not auto-fixable).
 
 **Mechanical next steps (what can be done without new architecture):**
+
 - [x] Group remaining warnings by file + rule and publish a short triage in this item. (Done 2026-05-27 — full report above.)
 - [x] Suppress first high-volume group: Reminders service + CRM sync adapters (jobber, hubspot, servicetitan, square). (Done 2026-05-27)
 - [x] Suppress second group: Core dynamic infrastructure (ingest-knowledge.ts, database/index.ts, tokenManagement, squareClient, remaining reminder repository/processor). (Done 2026-05-27)
@@ -292,6 +298,7 @@ This exact volume was previously called out and **consciously accepted** in prep
 **2026-05-27: REFACTORING_TODO.md is now complete and closed out.**
 
 All items addressed:
+
 - 1–6, 8–10: Completed
 - 7: Closed as not pursued (no value)
 

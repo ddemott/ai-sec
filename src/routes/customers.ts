@@ -32,6 +32,8 @@ const CustomerCreateSchema = z.object({
   postal_code: z.string().max(20).optional().nullable(),
   timezone: z.string().max(50).optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
+  // Optional convenience (folded into metadata by handler, like update path).
+  notes: z.string().max(2000).optional().nullable(),
 });
 
 const CustomerUpdateSchema = z.object({
@@ -47,6 +49,11 @@ const CustomerUpdateSchema = z.object({
   postal_code: z.string().max(20).optional().nullable(),
   timezone: z.string().max(50).optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
+  // Top-level convenience field used by CRMView (Internal Notes textarea)
+  // and E2E tests. Folded into metadata.notes by the handler below so the
+  // value ends up in the canonical customers.metadata.notes location used
+  // by the booking path and the voice agent context.
+  notes: z.string().max(2000).optional().nullable(),
 });
 
 export function registerCustomerRoutes(
@@ -94,6 +101,12 @@ export function registerCustomerRoutes(
       }
       const body = parsed.data;
 
+      // Fold optional top-level notes into metadata for the canonical storage location.
+      const createMetadata =
+        body.notes !== undefined
+          ? { ...(body.metadata || {}), notes: body.notes }
+          : body.metadata || {};
+
       const res = await withTenantClient(body.tenant_id, async (client) => {
         return client.query(
           `INSERT INTO customers (
@@ -110,7 +123,7 @@ export function registerCustomerRoutes(
             body.city || null,
             body.state || null,
             body.postal_code || null,
-            body.metadata || {},
+            createMetadata,
             body.first_name || null,
             body.last_name || null,
             body.timezone || 'America/New_York',
@@ -140,25 +153,65 @@ export function registerCustomerRoutes(
       if (!tenantId) return;
 
       const res = await withTenantClient(tenantId, async (client) => {
+        // Read current row first so we can support partial patches (e.g. the
+        // E2E test helper that sends only {tenant_id, notes}) and the real
+        // UI path that sends a mix of current field values + top-level notes.
+        // Without this, omitting fields would null them out (data corruption).
+        const currentQ = await client.query(
+          `SELECT name, phone, email, first_name, last_name, address, address_line2,
+                  city, state, postal_code, metadata, timezone
+             FROM customers
+            WHERE customer_id = $1 AND tenant_id = $2`,
+          [id, tenantId]
+        );
+        if (currentQ.rowCount === 0) {
+          return { rowCount: 0 } as any;
+        }
+        const cur = currentQ.rows[0];
+
+        // Merge notes convenience field into metadata (preserve other keys).
+        let finalMetadata: Record<string, unknown> =
+          body.metadata !== undefined
+            ? (body.metadata as Record<string, unknown>)
+            : cur.metadata || {};
+        if (body.notes !== undefined) {
+          finalMetadata = { ...finalMetadata, notes: body.notes };
+        }
+
+        // Use COALESCE-style preservation for omitted scalar fields (partial update safety).
+        const finalName = body.name !== undefined ? body.name : cur.name;
+        const finalPhone = body.phone !== undefined ? body.phone : cur.phone;
+        const finalEmail = body.email !== undefined ? body.email : cur.email;
+        const finalFirst = body.first_name !== undefined ? body.first_name : cur.first_name;
+        const finalLast = body.last_name !== undefined ? body.last_name : cur.last_name;
+        const finalAddr = body.address !== undefined ? body.address : cur.address;
+        const finalAddr2 =
+          body.address_line2 !== undefined ? body.address_line2 : cur.address_line2;
+        const finalCity = body.city !== undefined ? body.city : cur.city;
+        const finalState = body.state !== undefined ? body.state : cur.state;
+        const finalPostal = body.postal_code !== undefined ? body.postal_code : cur.postal_code;
+        const finalTz =
+          body.timezone !== undefined ? body.timezone : cur.timezone || 'America/New_York';
+
         return client.query(
           `UPDATE customers SET
-           first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
-           address = $6, address_line2 = $7, city = $8, state = $9,
-           postal_code = $10, metadata = $11, timezone = $12
-         WHERE customer_id = $13 AND tenant_id = $14 RETURNING customer_id`,
+             first_name = $1, last_name = $2, name = $3, phone = $4, email = $5,
+             address = $6, address_line2 = $7, city = $8, state = $9,
+             postal_code = $10, metadata = $11, timezone = $12
+           WHERE customer_id = $13 AND tenant_id = $14 RETURNING customer_id`,
           [
-            body.first_name || null,
-            body.last_name || null,
-            body.name || null,
-            body.phone,
-            body.email,
-            body.address,
-            body.address_line2 || null,
-            body.city || null,
-            body.state || null,
-            body.postal_code || null,
-            body.metadata || {},
-            body.timezone || 'America/New_York',
+            finalFirst || null,
+            finalLast || null,
+            finalName || null,
+            finalPhone,
+            finalEmail,
+            finalAddr,
+            finalAddr2 || null,
+            finalCity || null,
+            finalState || null,
+            finalPostal || null,
+            finalMetadata,
+            finalTz,
             id,
             tenantId,
           ]

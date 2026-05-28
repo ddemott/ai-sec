@@ -114,10 +114,9 @@ async function expandWeeklyShifts(
   token: string,
   tenantId: string,
   employeeId: string,
-  startDate: string // YYYY-MM-DD
+  startDate: string // YYYY-MM-DD anchor (e.g. a Monday)
 ) {
-  // The wizard and the Working Days "Copy week" button both call this.
-  // It is the load-bearing piece that populates employee_schedule.
+  // Current contract supports optional start_date for deterministic expansion.
   const res = await req.post(`${BACKEND_URL}/shifts/expand-weekly`, {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     data: {
@@ -125,14 +124,14 @@ async function expandWeeklyShifts(
       employee_id: employeeId,
       start_date: startDate,
       weeks_ahead: 4,
-      // Simple Mon-Fri 09:00-17:00 pattern for the test
-      weekly_pattern: {
-        monday: { start: '09:00', end: '17:00' },
-        tuesday: { start: '09:00', end: '17:00' },
-        wednesday: { start: '09:00', end: '17:00' },
-        thursday: { start: '09:00', end: '17:00' },
-        friday: { start: '09:00', end: '17:00' },
-      },
+      // Mon-Fri 09:00-17:00 (day_of_week 1-5)
+      pattern: [
+        { day_of_week: 1, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 2, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 3, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 4, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 5, start_time: '09:00', end_time: '17:00' },
+      ],
     },
   });
   expect(res.status(), 'expand-weekly').toBe(200);
@@ -173,8 +172,11 @@ test('owner-config-happy: fresh tenant configures employee + shifts + service, t
 
   try {
     tenant = await registerFreshTenant(request);
-    const today = new Date();
-    const startDate = today.toISOString().slice(0, 10);
+
+    // Use a controlled Monday as the anchor so day-of-week math and coverage
+    // are deterministic regardless of when the test runs.
+    // 2026-06-01 is a Monday.
+    const startDate = '2026-06-01';
 
     // 1. Create employee (the thing the owner actually cares about)
     const empId = await createEmployeeViaApi(request, tenant.token, tenant.tenantId, 'New', 'Tech');
@@ -186,12 +188,9 @@ test('owner-config-happy: fresh tenant configures employee + shifts + service, t
     const svcId = await createServiceViaApi(request, tenant.token, tenant.tenantId, 'New Test Service');
     const resId = await createResourceViaApi(request, tenant.token, tenant.tenantId, 'New Bay');
 
-    // 4. Book against the newly created employee + resource (no service mapping for simplicity)
-    const futureDate = new Date(today);
-    futureDate.setDate(futureDate.getDate() + 3);
-    const dateStr = futureDate.toISOString().slice(0, 10);
-    const startTime = `${dateStr}T10:00:00.000Z`;
-    const endTime = `${dateStr}T10:30:00.000Z`;
+    // 4. Book on the first Monday (covered 09:00-17:00) — guaranteed to be in the expanded window.
+    const startTime = '2026-06-01T10:00:00.000Z';
+    const endTime = '2026-06-01T10:30:00.000Z';
 
     // We need a customer too
     const custRes = await request.post(`${BACKEND_URL}/customers/create`, {
