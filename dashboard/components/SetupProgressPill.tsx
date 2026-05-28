@@ -74,7 +74,7 @@ export function SetupProgressPill() {
           : `Setup ${done} of ${total} done. Click to open the setup assistant.`
       }
       title={tooltipBody}
-      className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium"
+      className="flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium"
       style={{
         backgroundColor: 'var(--accent-muted)',
         color: 'var(--accent-soft)',

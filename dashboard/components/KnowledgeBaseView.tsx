@@ -149,6 +149,7 @@ function PolicyCategory({
   questions,
   savedAnswers,
   onSave,
+  defaultOpen = false,
 }: {
   category: string;
   questions: typeof POLICY_QUESTIONS;
@@ -159,8 +160,9 @@ function PolicyCategory({
     existingId: string | null,
     category: string
   ) => Promise<string | null>;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const answeredCount = questions.filter((q) => savedAnswers.has(q.question)).length;
 
   return (
@@ -571,7 +573,7 @@ export default function KnowledgeBaseView() {
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-display">Knowledge Base</h1>
+            <h1 className="text-3xl font-display">What Your AI Knows</h1>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Teach the AI about your business so it can answer caller questions.
             </p>
@@ -587,14 +589,14 @@ export default function KnowledgeBaseView() {
         {[
           {
             key: 'questionnaire' as Tab,
-            label: 'Policy Questionnaire',
+            label: 'Teach Your AI',
             icon: MessageSquare,
             badge: `${totalAnswered}/${totalQuestions}`,
           },
           { key: 'documents' as Tab, label: 'Upload Documents', icon: Upload },
           {
             key: 'entries' as Tab,
-            label: 'All Entries',
+            label: 'Review Everything',
             icon: FileText,
             badge: String(docs.length),
           },
@@ -661,18 +663,41 @@ export default function KnowledgeBaseView() {
             {/* ── Questionnaire Tab ── */}
             {tab === 'questionnaire' && (
               <div className="space-y-3 max-w-3xl pb-8">
+                {/* "Start here" banner for 0-entry users — gives a clear
+                    entry point instead of staring at 9 collapsed rows.
+                    2026-05-28 UX fix. */}
+                {totalAnswered === 0 && (
+                  <div
+                    className="flex items-start gap-3 p-4 rounded-xl border mb-2"
+                    style={{
+                      backgroundColor: 'var(--accent-muted)',
+                      borderColor: 'var(--accent)',
+                    }}
+                  >
+                    <MessageSquare className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--accent-soft)' }} />
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--accent-soft)' }}>
+                        Start here — answer a few questions about your business
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        Your AI uses these answers to respond to callers. Each answer auto-saves as you type. Start with Business Hours below.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
                   Answer these questions about your business. The AI will use your answers to
                   respond to callers. Answers auto-save as you type. Add business-specific Q&amp;A
                   in the Custom Questions section at the bottom.
                 </p>
-                {POLICY_CATEGORIES.map((cat) => (
+                {POLICY_CATEGORIES.map((cat, idx) => (
                   <PolicyCategory
                     key={cat}
                     category={cat}
                     questions={POLICY_QUESTIONS.filter((q) => q.category === cat)}
                     savedAnswers={savedAnswers}
                     onSave={handleSaveAnswer}
+                    defaultOpen={idx === 0}
                   />
                 ))}
                 <CustomQuestionsSection

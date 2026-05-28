@@ -535,8 +535,8 @@ const LANDING_HTML = `
           Start free — 14 days
           <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
-        <a href="https://ai-sec-production.up.railway.app/demo" class="hero-link">
-          Try the interactive demo
+        <a href="tel:+16309379478" class="hero-link">
+          Call (630) 937-9478 — try it live
         </a>
       </div>
 
@@ -828,7 +828,7 @@ const LANDING_HTML = `
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Dedicated account support</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom integrations &amp; uptime guarantee</li>
         </ul>
-        <a href="mailto:daledemott@gmail.com" class="price-btn outline" style="border-color:rgba(245,158,11,0.3);color:var(--amber)">Talk to us</a>
+        <a href="mailto:sales@secretaryhq.com" class="price-btn outline" style="border-color:rgba(245,158,11,0.3);color:var(--amber)">Talk to us</a>
       </div>
     </div>
     <p class="trial-note reveal">All plans include a <span>14-day free trial</span>. No credit card required. No setup fee. No per-call charges. Cancel anytime.</p>

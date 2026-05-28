@@ -474,33 +474,8 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         <WeekView tenantId={tenantId} employees={employees} vocab={vocab} onNavigate={onNavigate} />
       </Card>
 
-      {/* QUICK ACTIONS — 1 col on phones, 2 on tablets (cards need space
-          for icon + label + description without truncating), 3 on
-          desktop. The previous md:grid-cols-3 was cramped at 768-900px. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        <QuickAction
-          icon={Calendar}
-          label={`View Schedule`}
-          description={`Open the full scheduler`}
-          onClick={() => onNavigate?.('schedule')}
-        />
-        <QuickAction
-          icon={Users}
-          label={employees.length <= 1 ? 'My Business' : 'My Team'}
-          description={
-            employees.length <= 1
-              ? 'Services and availability'
-              : `${vocab.employee_plural}, working days, and skills`
-          }
-          onClick={() => onNavigate?.(employees.length <= 1 ? 'my-business' : 'my-team')}
-        />
-        <QuickAction
-          icon={Wrench}
-          label="My Business"
-          description={`Services, ${vocab.resource_plural.toLowerCase()}, assignments`}
-          onClick={() => onNavigate?.('my-business')}
-        />
-      </div>
+      {/* Quick Action cards removed 2026-05-28 — duplicated the nav bar
+          already visible 600px above with zero new information. */}
 
       {/* Quick Book panel — mounted here (not in SchedulerView) so the
           New Booking button at the top of Home opens it directly. Same

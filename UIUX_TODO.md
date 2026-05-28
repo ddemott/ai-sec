@@ -12,23 +12,23 @@
 
 - [ ] **[P0][M]** Add "What do callers ask?" step to setup wizard — between Step 6 Review and Step 7 Go Live; show 5–8 starter questions (hours, location, top service + price, cancellation, walk-ins); skip option available; saves to `policy-questionnaire` RAG table; full 40-question screen stays in Phone Assistant tab — `dashboard/components/SetupWizard/index.tsx` `dashboard/components/SetupWizard/SoloWizard.tsx` `dashboard/lib/policyQuestions.ts` — _source: KB placement advice_
 - [ ] **[P0][M]** Add "AI Receptionist live/not live" status card on Home — owners have no signal whether phone is active after completing wizard — `dashboard/components/DashboardHome.tsx:141` `dashboard/components/SetupWizard/Step7GoLive.tsx` — _source: audit #1_
-- [ ] **[P0][S]** `SetupProgressPill` hidden on mobile (`hidden md:flex`) — new owners on phones have zero path back to wizard; add compact chip above mobile nav — `dashboard/components/SetupProgressPill.tsx` `dashboard/components/OutlookLayout.tsx:411` — _source: audit #3_
+- [x] **[P0][S]** `SetupProgressPill` hidden on mobile — removed `hidden` class; pill now visible on all screen sizes — DONE 2026-05-28
 
 ### Navigation & IA
 
 - [ ] **[P0][L]** Merge "My Business" + "My Team" + "Business Settings" into one "Setup" tab — three separate destinations for the same user question ("where do I configure my business?") is the single biggest confusion source for new owners — `dashboard/components/OutlookLayout.tsx` `dashboard/components/MyBusinessView.tsx` `dashboard/components/MyTeamView.tsx` `dashboard/components/BusinessSettingsView.tsx` — _source: /ux-expert simplification review_
-- [ ] **[P0][S]** Remove the 4 Quick Action cards from Home — "View Schedule / My Business / My Team" cards duplicate the nav bar 600px above; adds visual noise with zero new information — `dashboard/components/DashboardHome.tsx:481-510` — _source: /ux-expert simplification review_
+- [x] **[P0][S]** Remove the 4 Quick Action cards from Home — duplicate nav, removed — DONE 2026-05-28
 
 ### Knowledge Base (before KB work starts)
 
-- [ ] **[P0][S]** Rename "Policy Questionnaire" tab → "Teach Your AI" — "policy" is HR compliance language; a bakery owner doesn't have a policy; they have answers callers ask — `dashboard/components/KnowledgeBaseView.tsx:589` — _source: KB review #1_
-- [ ] **[P0][S]** Rename "Knowledge Base" page heading → "What Your AI Knows" — developer jargon; no tire shop owner says "knowledge base" — `dashboard/components/KnowledgeBaseView.tsx:574` — _source: KB review #5_
-- [ ] **[P0][S]** KB: questionnaire tab should default open + show "Start here" for 0-entry users — "Upload Documents" requires a file; questionnaire requires nothing; questionnaire is the right first step — `dashboard/components/KnowledgeBaseView.tsx:395,582-623` — _source: KB review #2_
+- [x] **[P0][S]** Rename "Policy Questionnaire" → "Teach Your AI" — DONE 2026-05-28
+- [x] **[P0][S]** Rename "Knowledge Base" heading → "What Your AI Knows" + "All Entries" → "Review Everything" — DONE 2026-05-28
+- [x] **[P0][S]** KB: first accordion open by default + "Start here" banner for 0-entry users — DONE 2026-05-28
 
 ### Landing Page (before any customer sees it)
 
-- [ ] **[P0][S]** Landing demo link is a hardcoded Railway URL — will 404 if backend down; replace with phone number CTA or remove until demo is stable — `dashboard/app/page.tsx:538` — _source: landing review #1_
-- [ ] **[P0][S]** Enterprise plan contact links to `daledemott@gmail.com` — personal Gmail on a $1,200+/mo plan destroys credibility; change to `sales@secretaryhq.com` — `dashboard/app/page.tsx:831` — _source: landing review #2_
+- [x] **[P0][S]** Landing demo link → replaced with "Call (630) 937-9478 — try it live" `tel:` link — DONE 2026-05-28
+- [x] **[P0][S]** Enterprise Gmail → `sales@secretaryhq.com` — DONE 2026-05-28
 - [ ] **[P0][M]** Mobile nav disappears at 900px — no hamburger; phones/tablets have no way to reach Pricing, Features, How It Works — add hamburger or anchor links — `dashboard/app/page.tsx:472-473` — _source: landing review #3_
 
 ### WCAG Accessibility
