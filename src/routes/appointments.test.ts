@@ -297,6 +297,7 @@ describe('POST /appointments/create', () => {
     expect(res.json()).toEqual({
       success: false,
       error: 'Employee is not on shift during this time',
+      error_code: 'EMPLOYEE_NOT_SCHEDULED',
     });
     // Critical: only 1 RPC query, no follow-up conflict lookup.
     const dataQueries = handle.queries.filter(
