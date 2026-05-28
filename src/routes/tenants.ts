@@ -187,14 +187,28 @@ export function registerTenantRoutes(
       const result = await withTenantClient(id, async (client) => {
         await client.query('BEGIN');
         try {
-          const priorRes = await client.query<{ business_type: string | null }>(
-            'SELECT business_type FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+          const priorRes = await client.query<{
+            business_type: string | null;
+            system_prompt: string | null;
+            voice_id: string | null;
+            first_message: string | null;
+          }>(
+            'SELECT business_type, system_prompt, voice_id, first_message FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
-          const priorBusinessType = priorRes.rows[0]?.business_type ?? null;
+          const prior = priorRes.rows[0];
+          const priorBusinessType = prior?.business_type ?? null;
+
+          // Partial-update safety: body fields not present (undefined) keep
+          // the existing DB value; explicit null clears the field intentionally.
+          const finalSystemPrompt = body.system_prompt !== undefined ? body.system_prompt : (prior?.system_prompt ?? null);
+          const finalVoiceId = body.voice_id !== undefined ? body.voice_id : (prior?.voice_id ?? null);
+          const finalBusinessType = body.business_type !== undefined ? body.business_type : priorBusinessType;
+          const finalFirstMessage = body.first_message !== undefined ? body.first_message : (prior?.first_message ?? null);
+
           const updRes = await client.query(
             'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE tenant_id = $5 RETURNING tenant_id',
-            [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
+            [finalSystemPrompt, finalVoiceId, finalBusinessType, finalFirstMessage, id]
           );
 
           let cleanedServices = 0;

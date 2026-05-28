@@ -350,7 +350,7 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(res.json()).toEqual({ success: true });
     // Pin tx boundaries + correct cleanup order.
     expect(queries[0].text).toBe('BEGIN');
-    expect(queries[1].text).toContain('SELECT business_type FROM tenants');
+    expect(queries[1].text).toContain('SELECT business_type, system_prompt, voice_id, first_message FROM tenants');
     expect(queries[1].text).toContain('FOR UPDATE');
     expect(queries[2].text).toContain('UPDATE tenants SET');
     expect(queries[3].text).toContain('DELETE FROM services');
@@ -461,5 +461,43 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
 
     expect(res.statusCode).toBe(403);
     expect(queries).toHaveLength(0); // no DB calls — guard fired first
+  });
+
+  it('HAPPY: partial body preserves omitted fields (partial-update safety)', async () => {
+    // WHO: AI config view sending only voice_id (a common single-field update)
+    // WHAT: UPDATE params use prior DB values for any field absent from body
+    // WHEN: body has voice_id but no system_prompt / business_type / first_message
+    // WHERE: src/routes/tenants.ts → partial-update merge logic
+    // WHY: before the fix, omitted fields were passed as undefined → null,
+    //      silently zeroing out system_prompt + first_message on every
+    //      partial save. Regression test pins the merge behaviour.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [{
+        business_type: 'auto_shop',
+        system_prompt: 'You are a helpful assistant.',
+        voice_id: 'old-voice',
+        first_message: 'Hello!',
+      }],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE — prior values
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE tenants
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { voice_id: 'ara' }, // only voice_id; everything else omitted
+    });
+
+    expect(res.statusCode).toBe(200);
+    // The UPDATE query params: [system_prompt, voice_id, business_type, first_message, tenant_id]
+    // Omitted fields must use prior values, not undefined/null.
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery).toBeDefined();
+    expect(updateQuery!.params[0]).toBe('You are a helpful assistant.'); // system_prompt preserved
+    expect(updateQuery!.params[1]).toBe('ara');                           // voice_id from body
+    expect(updateQuery!.params[2]).toBe('auto_shop');                     // business_type preserved
+    expect(updateQuery!.params[3]).toBe('Hello!');                        // first_message preserved
   });
 });
