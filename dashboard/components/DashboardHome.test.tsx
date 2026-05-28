@@ -75,6 +75,9 @@ beforeEach(() => {
   mockApi.templates.listFull.mockReset().mockResolvedValue([]);
   mockApi.mappings.listServiceEmployee.mockReset().mockResolvedValue([]);
   mockApi.mappings.listServiceResource.mockReset().mockResolvedValue([]);
+  // Reset getConfig to baseline: has timezone but no inbound_phone.
+  // Individual tests override inbound_phone to test status card states.
+  mockApi.tenants.getConfig.mockReset().mockResolvedValue({ timezone: 'America/Chicago', inbound_phone: null });
 });
 
 describe('DashboardHome — load error visibility', () => {
@@ -317,5 +320,44 @@ describe('DashboardHome — wizard welcome → mode chooser staging (D1, 2026-05
 
     await screen.findByText(/how is your business set up/i);
     expect(screen.queryByRole('dialog', { name: /welcome/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('DashboardHome — AI Receptionist status card', () => {
+  test('HAPPY: inbound_phone set → shows active state with formatted number', async () => {
+    // WHO: owner who completed setup + has phone provisioned
+    // WHAT: status card shows green "Active on" + formatted number
+    // WHEN: loadData resolves with inbound_phone in tenant config
+    // WHERE: DashboardHome, between wizard section and Today's Schedule
+    // WHY: owners had no signal whether AI was live after finishing wizard
+    mockApi.tenants.getConfig.mockResolvedValue({
+      timezone: 'America/Chicago',
+      inbound_phone: '+16309379478',
+    });
+    render(<DashboardHome />);
+    await waitFor(() => {
+      expect(screen.getByText('AI Receptionist')).toBeInTheDocument();
+      expect(screen.getByText(/active on/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /configure/i })).not.toBeInTheDocument();
+  });
+
+  test('SAD: no inbound_phone → shows not-configured state with configure link', async () => {
+    // WHO: owner who completed setup but hasn't provisioned a phone number
+    // WHAT: status card shows "No phone number configured yet" + Configure button
+    // WHEN: loadData resolves with inbound_phone: null
+    // WHERE: DashboardHome status card
+    // WHY: owner needs a clear call-to-action to activate the AI
+    mockApi.tenants.getConfig.mockResolvedValue({ timezone: 'America/Chicago', inbound_phone: null });
+    const onNavigate = vi.fn();
+    render(<DashboardHome onNavigate={onNavigate} />);
+    await waitFor(() => {
+      expect(screen.getByText('AI Receptionist')).toBeInTheDocument();
+      expect(screen.getByText(/no phone number configured yet/i)).toBeInTheDocument();
+    });
+    const configureBtn = screen.getByRole('button', { name: /configure/i });
+    expect(configureBtn).toBeInTheDocument();
+    fireEvent.click(configureBtn);
+    expect(onNavigate).toHaveBeenCalledWith('ai-insights');
   });
 });

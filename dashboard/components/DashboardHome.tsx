@@ -11,8 +11,10 @@ import {
   ArrowRight,
   AlertCircle,
   Plus,
+  Phone,
 } from 'lucide-react';
 import { Api } from '../lib/api';
+import { formatPhone } from '../lib/phone';
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext';
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext';
 import { Card } from './ui/Card';
@@ -84,6 +86,8 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   // pattern left owners unsure whether they had no bookings, or the app
   // had lost its connection — a trust-eroding ambiguity.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // undefined = not yet fetched, null = fetched but not configured, string = active phone
+  const [tenantPhone, setTenantPhone] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -107,9 +111,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       Api.services.list(tenantId),
       Api.resources.list(tenantId),
       Api.customers.list(tenantId),
+      Api.tenants.getConfig(tenantId),
     ]);
 
-    const [apptsR, empsR, svcsR, resR, custR] = results;
+    const [apptsR, empsR, svcsR, resR, custR, configR] = results;
 
     setAppointments(
       apptsR.status === 'fulfilled' && Array.isArray(apptsR.value) ? apptsR.value : []
@@ -122,6 +127,9 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     setServices(svcsR.status === 'fulfilled' && Array.isArray(svcsR.value) ? svcsR.value : []);
     setResources(resR.status === 'fulfilled' && Array.isArray(resR.value) ? resR.value : []);
     setCustomers(custR.status === 'fulfilled' && Array.isArray(custR.value) ? custR.value : []);
+    if (configR.status === 'fulfilled') {
+      setTenantPhone((configR.value as { inbound_phone?: string | null })?.inbound_phone ?? null);
+    }
 
     const anyFailed = results.some((r) => r.status === 'rejected');
     if (anyFailed) {
@@ -336,6 +344,57 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
           onClose={handleCloseWizard}
           onBackToPicker={transitions.backToPicker}
         />
+      )}
+
+      {/* AI RECEPTIONIST STATUS — visible once setup is complete so owners
+          always know whether the phone line is active. Fetched alongside
+          the rest of loadData(); undefined means still loading (hidden),
+          null means configured but no phone number set. */}
+      {!needsSetup && tenantPhone !== undefined && (
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border"
+          style={{
+            borderColor: tenantPhone ? 'var(--border-soft)' : 'var(--border-soft)',
+            backgroundColor: 'var(--bg-raised)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="p-2 rounded-lg shrink-0"
+              style={{
+                backgroundColor: tenantPhone
+                  ? 'color-mix(in srgb, var(--green, #22c55e) 15%, transparent)'
+                  : 'var(--bg-surface)',
+              }}
+            >
+              <Phone
+                className="w-4 h-4"
+                style={{ color: tenantPhone ? 'var(--green, #22c55e)' : 'var(--text-muted)' }}
+                aria-hidden="true"
+              />
+            </div>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                AI Receptionist
+              </div>
+              <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {tenantPhone
+                  ? `Active on ${formatPhone(tenantPhone)}`
+                  : 'No phone number configured yet'}
+              </div>
+            </div>
+          </div>
+          {!tenantPhone && onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('ai-insights')}
+              className="text-xs flex items-center gap-1 shrink-0 hover:underline"
+              style={{ color: 'var(--accent-soft)' }}
+            >
+              Configure <ArrowRight className="w-3 h-3" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       )}
 
       {/* TODAY'S SCHEDULE — the whole header row is a click target
