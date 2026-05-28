@@ -4,6 +4,27 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import SettingsView from './components/SettingsView'
 import { mockJsonResponse } from './lib/test-utils'
 
+// vi.mock must be at module top level (Vitest hoists it before tests run).
+// Was previously nested inside a test body — generated a Vitest warning and
+// made the mock behaviour unpredictable across the three test cases.
+vi.mock('@/lib/SessionContext', () => ({
+  useSessionContext: () => ({
+    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    userName: 'Test User',
+    isAdmin: false,
+    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+    managedTenantName: 'DynaTire',
+    loading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    selectManagedTenant: vi.fn(),
+    tenantsVersion: 0,
+    notifyTenantsChanged: vi.fn(),
+  }),
+  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
+
 // Simple in-memory resources store for mocking
 let mockResources: Array<{ resource_id: string; name: string; description?: string | null; is_active?: boolean }> = []
 
@@ -62,26 +83,6 @@ test('SettingsView (owner): shows resources list and creation form', async () =>
   await screen.findByText(/Resources & Capacity Units/i)
 
   // Existing resource from mock should appear
-
-// Mock SessionContext for useActiveTenantId
-vi.mock('@/lib/SessionContext', () => ({
-  useSessionContext: () => ({
-    tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-    userName: 'Test User',
-    isAdmin: false,
-    managedTenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-    managedTenantName: 'DynaTire',
-    loading: false,
-    login: vi.fn(),
-    logout: vi.fn(),
-    selectManagedTenant: vi.fn(),
-    tenantsVersion: 0,
-    notifyTenantsChanged: vi.fn(),
-  }),
-  useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
-
   await screen.findByText(/Resource 1/i)
   // WHO: business owner | WHAT: views resources list and creation form | WHEN: initial settings page load | WHERE: SettingsView | WHY: owners must see existing resources and the form to add new ones for capacity management
 })
