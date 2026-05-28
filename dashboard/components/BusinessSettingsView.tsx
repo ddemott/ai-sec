@@ -8,13 +8,10 @@ import {
   ExternalLink,
   Unlink,
   CheckCircle2,
-  Scissors,
   Clock,
-  Pencil,
-  Trash2,
+  ArrowRight,
 } from 'lucide-react';
 import { Api } from '../lib/api';
-import { roundUpTo15 } from '../lib/duration';
 import { CRMIntegrationCard } from './CRMIntegrationCard';
 import BusinessTypeSection from './BusinessTypeSection';
 import { useStaticData } from '../lib/hooks';
@@ -24,7 +21,7 @@ import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
-import type { Service, EffectiveShift } from '../lib/types';
+import type { EffectiveShift } from '../lib/types';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { useConfirm } from '../lib/useConfirm';
 
@@ -43,14 +40,7 @@ export default function BusinessSettingsView() {
 
   const [teamSize, setTeamSize] = useState<number | null>(null);
   const [newResource, setNewResource] = useState({ name: '', description: '' });
-
-  // Service editing
-  const [editingService, setEditingService] = useState<Service | null>(null);
-  const [newService, setNewService] = useState({ name: '', description: '', duration_minutes: 30 });
-  const [addingService, setAddingService] = useState(false);
-  const [savingService, setSavingService] = useState(false);
-  const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
-  const [serviceError, setServiceError] = useState<string | null>(null);
+  const { state: confirmState, close: closeConfirm } = useConfirm();
 
   // Availability
   const [shifts, setShifts] = useState<EffectiveShift[]>([]);
@@ -190,78 +180,6 @@ export default function BusinessSettingsView() {
     }
   }
 
-  async function handleAddService() {
-    if (!tenantId || !newService.name.trim()) {
-      setServiceError('Service name is required');
-      return;
-    }
-    setSavingService(true);
-    setServiceError(null);
-    try {
-      const res = await Api.services.create(tenantId, {
-        name: newService.name.trim(),
-        description: newService.description.trim() || undefined,
-        duration_minutes: roundUpTo15(newService.duration_minutes),
-      });
-      if (res.success) {
-        setNewService({ name: '', description: '', duration_minutes: 30 });
-        setAddingService(false);
-        void refreshResources();
-      } else {
-        setServiceError('Failed to create service');
-      }
-    } catch {
-      setServiceError('Connection error');
-    } finally {
-      setSavingService(false);
-    }
-  }
-
-  async function handleUpdateService() {
-    if (!editingService || !tenantId) return;
-    if (!editingService.name.trim()) {
-      setServiceError('Service name is required');
-      return;
-    }
-    setSavingService(true);
-    setServiceError(null);
-    try {
-      const res = await Api.services.update(editingService.service_id, tenantId, {
-        name: editingService.name.trim(),
-        description: editingService.description?.trim() || undefined,
-        duration_minutes: roundUpTo15(editingService.duration_minutes),
-      });
-      if (res.success) {
-        setEditingService(null);
-        void refreshResources();
-      } else {
-        setServiceError('Failed to update service');
-      }
-    } catch {
-      setServiceError('Connection error');
-    } finally {
-      setSavingService(false);
-    }
-  }
-
-  function handleDeleteService(id: string, name: string) {
-    if (!tenantId) return;
-    confirm({
-      title: 'Remove Service',
-      message: `Remove "${name}" from your services? Existing appointments using this service will not be affected.`,
-      confirmLabel: 'Remove',
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          await Api.services.delete(id, tenantId);
-          void refreshResources();
-        } catch {
-          console.error('Failed to delete service');
-        }
-      },
-    });
-  }
-
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   function formatTime(t: string) {
@@ -314,205 +232,35 @@ export default function BusinessSettingsView() {
             click can't nuke a custom persona — applying is now guarded. */}
         <BusinessTypeSection tenantId={tenantId} onChanged={refreshVocabulary} />
 
-        {/* ─── MY SERVICES (solo mode) ─── */}
+        {/* ─── SERVICES pointer (solo mode) ─── Services were managed
+            here previously but caused duplication with My Business →
+            Services, which is the canonical editor (supports price,
+            skill + resource assignments). Replaced with a pointer.
+            2026-05-28 P1 dedup fix. */}
         {isSolo && (
-          <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center">
-                <div
-                  className="p-2 rounded-lg mr-4"
-                  style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
-                >
-                  <Scissors className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold">My Services</h2>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    What you offer and how long each takes.
-                  </p>
-                </div>
+          <button
+            type="button"
+            className="w-full flex items-center justify-between p-5 rounded-xl border text-left transition-colors"
+            style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+            onClick={() => {
+              const el = document.querySelector('[data-tab-id="my-business"]') as HTMLElement;
+              el?.click();
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
+          >
+            <div>
+              <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                My Services
               </div>
-              {!addingService && !editingService && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={PlusCircle}
-                  onClick={() => {
-                    setAddingService(true);
-                    setServiceError(null);
-                  }}
-                >
-                  Add
-                </Button>
-              )}
+              <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                {services.length > 0
+                  ? `${services.length} service${services.length !== 1 ? 's' : ''} — tap to add, edit, or remove`
+                  : 'No services yet — tap to add what you offer'}
+              </div>
             </div>
-
-            {serviceError && (
-              <div className="mb-4 text-sm" style={{ color: 'var(--danger)' }}>
-                {serviceError}
-              </div>
-            )}
-
-            {/* Add service form */}
-            {addingService && (
-              <div
-                className="mb-4 p-4 rounded-xl border"
-                style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--bg-surface)' }}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                  <Input
-                    placeholder="Service name"
-                    value={newService.name}
-                    onChange={(e) => setNewService((s) => ({ ...s, name: e.target.value }))}
-                    className="md:col-span-2"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Minutes"
-                    step={15}
-                    min={15}
-                    value={String(newService.duration_minutes)}
-                    onChange={(e) =>
-                      setNewService((s) => ({
-                        ...s,
-                        duration_minutes: parseInt(e.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
-                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
-                  Scheduled in 15-minute slots — non-multiples are rounded up on save.
-                </p>
-                <Input
-                  placeholder="Description (optional)"
-                  value={newService.description}
-                  onChange={(e) => setNewService((s) => ({ ...s, description: e.target.value }))}
-                  className="mb-3"
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" isLoading={savingService} onClick={handleAddService}>
-                    Add Service
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setAddingService(false);
-                      setServiceError(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Edit service form */}
-            {editingService && (
-              <div
-                className="mb-4 p-4 rounded-xl border"
-                style={{ borderColor: 'var(--accent)', backgroundColor: 'var(--bg-surface)' }}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                  <Input
-                    placeholder="Service name"
-                    value={editingService.name}
-                    onChange={(e) =>
-                      setEditingService((s) => (s ? { ...s, name: e.target.value } : s))
-                    }
-                    className="md:col-span-2"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Minutes"
-                    step={15}
-                    min={15}
-                    value={String(editingService.duration_minutes)}
-                    onChange={(e) =>
-                      setEditingService((s) =>
-                        s ? { ...s, duration_minutes: parseInt(e.target.value) || 0 } : s
-                      )
-                    }
-                  />
-                </div>
-                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
-                  Scheduled in 15-minute slots — non-multiples are rounded up on save.
-                </p>
-                <Input
-                  placeholder="Description (optional)"
-                  value={editingService.description || ''}
-                  onChange={(e) =>
-                    setEditingService((s) => (s ? { ...s, description: e.target.value } : s))
-                  }
-                  className="mb-3"
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" isLoading={savingService} onClick={handleUpdateService}>
-                    Save
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditingService(null);
-                      setServiceError(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Service list */}
-            <div
-              className="border rounded-xl overflow-hidden"
-              style={{ borderColor: 'var(--border-soft)' }}
-            >
-              {services.length === 0 ? (
-                <div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  No services yet. Add what you offer so clients can book.
-                </div>
-              ) : (
-                services.map((s) => (
-                  <div
-                    key={s.service_id}
-                    className="px-4 py-3 border-t first:border-t-0 flex items-center justify-between text-sm"
-                    style={{ borderColor: 'var(--border-soft)' }}
-                  >
-                    <div>
-                      <div className="font-semibold">{s.name}</div>
-                      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        {s.duration_minutes} min{s.description ? ` · ${s.description}` : ''}
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setEditingService(s);
-                          setAddingService(false);
-                          setServiceError(null);
-                        }}
-                        className="p-1.5 rounded-md transition-colors"
-                        style={{ color: 'var(--text-secondary)' }}
-                        title="Edit"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteService(s.service_id, s.name)}
-                        className="p-1.5 rounded-md transition-colors"
-                        style={{ color: 'var(--red)' }}
-                        title="Remove"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
+            <ArrowRight className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+          </button>
         )}
 
         {/* ─── MY AVAILABILITY (solo mode) ─── */}

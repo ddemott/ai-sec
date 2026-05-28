@@ -359,15 +359,18 @@ describe('BusinessSettingsView', () => {
       // WHY: solo users see personalized wording
     });
 
-    test('shows My Services section in solo mode', async () => {
+    test('shows My Services pointer card in solo mode', async () => {
+      // WHO: solo practitioners | WHAT: services pointer card shown
+      // WHEN: team_size = 1 | WHERE: My Services button card
+      // WHY: services were duplicated between Business Settings and My
+      //      Business → Services (the canonical editor); replaced with a
+      //      pointer so there is one source of truth. 2026-05-28 P1 dedup.
       render(<BusinessSettingsView />);
       await waitFor(() => {
         expect(screen.getByText('My Services')).toBeInTheDocument();
-        expect(screen.getByText('What you offer and how long each takes.')).toBeInTheDocument();
+        // Shows service count from live data
+        expect(screen.getByText(/1 service — tap to add, edit, or remove/i)).toBeInTheDocument();
       });
-      // WHO: solo practitioners | WHAT: services section
-      // WHEN: team_size = 1 | WHERE: services card
-      // WHY: solo mode shows simplified service management
     });
 
     test('shows My Availability section in solo mode', async () => {
@@ -394,115 +397,16 @@ describe('BusinessSettingsView', () => {
       // WHY: solo users see personalized wording
     });
 
-    test('displays existing services list', async () => {
+    test('pointer card shows 0-service empty message', async () => {
+      // WHO: new solo user with no services yet
+      // WHAT: pointer card shows "No services yet" copy
+      // WHEN: services list is empty | WHERE: My Services button
+      // WHY: pointer card still gives useful context before redirecting
+      mockServices = [];
       render(<BusinessSettingsView />);
       await waitFor(() => {
-        expect(screen.getByText('Haircut')).toBeInTheDocument();
-        expect(screen.getByText('30 min · Standard cut')).toBeInTheDocument();
+        expect(screen.getByText(/No services yet — tap to add what you offer/i)).toBeInTheDocument();
       });
-      // WHO: solo users | WHAT: service list
-      // WHEN: services exist | WHERE: My Services card
-      // WHY: show what services are offered
-    });
-
-    test('opens add service form when Add is clicked', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Add')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Add'));
-
-      expect(screen.getByPlaceholderText('Service name')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Minutes')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Description (optional)')).toBeInTheDocument();
-      // WHO: solo users | WHAT: add service form
-      // WHEN: clicking Add | WHERE: My Services section
-      // WHY: create new service offerings
-    });
-
-    test('creates new service when form is submitted', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Add')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Add'));
-      fireEvent.change(screen.getByPlaceholderText('Service name'), {
-        target: { value: 'Beard Trim' },
-      });
-      fireEvent.change(screen.getByPlaceholderText('Minutes'), { target: { value: '15' } });
-      fireEvent.click(screen.getByText('Add Service'));
-
-      await waitFor(() => {
-        expect(mockCreateService).toHaveBeenCalledWith('test-tenant-123', {
-          name: 'Beard Trim',
-          description: undefined,
-          duration_minutes: 15,
-        });
-        expect(mockRefreshResources).toHaveBeenCalled();
-      });
-      // WHO: solo users | WHAT: service creation
-      // WHEN: submitting service form | WHERE: add form
-      // WHY: expand service offerings
-    });
-
-    test('opens edit form when clicking edit button', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Haircut')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTitle('Edit'));
-
-      expect(screen.getByDisplayValue('Haircut')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('30')).toBeInTheDocument();
-      // WHO: solo users | WHAT: edit service form
-      // WHEN: clicking edit | WHERE: service row
-      // WHY: modify existing services
-    });
-
-    test('updates service when save is clicked', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Haircut')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTitle('Edit'));
-      fireEvent.change(screen.getByDisplayValue('Haircut'), {
-        target: { value: 'Premium Haircut' },
-      });
-      fireEvent.click(screen.getByText('Save'));
-
-      await waitFor(() => {
-        expect(mockUpdateService).toHaveBeenCalledWith(
-          'svc-1',
-          'test-tenant-123',
-          expect.objectContaining({
-            name: 'Premium Haircut',
-          })
-        );
-      });
-      // WHO: solo users | WHAT: service update
-      // WHEN: saving edit | WHERE: edit form
-      // WHY: modify service details
-    });
-
-    test('cancels edit when cancel is clicked', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Haircut')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTitle('Edit'));
-      expect(screen.getByDisplayValue('Haircut')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByText('Cancel'));
-
-      expect(screen.queryByDisplayValue('Haircut')).not.toBeInTheDocument();
-      // WHO: users | WHAT: cancel edit
-      // WHEN: clicking cancel | WHERE: edit form
-      // WHY: discard changes
     });
   });
 
@@ -528,73 +432,10 @@ describe('BusinessSettingsView', () => {
       // WHY: default to team mode on error
     });
 
-    test('shows service name required error when adding empty service', async () => {
-      mockGetConfig.mockResolvedValue({ team_size: 1 });
-      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-      mockServices = [];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Add')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Add'));
-      fireEvent.click(screen.getByText('Add Service'));
-
-      expect(screen.getByText('Service name is required')).toBeInTheDocument();
-      expect(mockCreateService).not.toHaveBeenCalled();
-      // WHO: users | WHAT: validation error
-      // WHEN: submitting empty form | WHERE: add service form
-      // WHY: prevent empty service names
-    });
-
-    test('shows error when service creation fails', async () => {
-      mockGetConfig.mockResolvedValue({ team_size: 1 });
-      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-      mockServices = [];
-      mockCreateService.mockResolvedValue({ success: false });
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Add')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Add'));
-      fireEvent.change(screen.getByPlaceholderText('Service name'), { target: { value: 'Test' } });
-      fireEvent.click(screen.getByText('Add Service'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Failed to create service')).toBeInTheDocument();
-      });
-      // WHO: users | WHAT: API error display
-      // WHEN: creation fails | WHERE: add form
-      // WHY: inform user of failure
-    });
-
-    test('shows connection error when service creation throws', async () => {
-      mockGetConfig.mockResolvedValue({ team_size: 1 });
-      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-      mockServices = [];
-      mockCreateService.mockRejectedValue(new Error('Network error'));
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Add')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Add'));
-      fireEvent.change(screen.getByPlaceholderText('Service name'), { target: { value: 'Test' } });
-      fireEvent.click(screen.getByText('Add Service'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Connection error')).toBeInTheDocument();
-      });
-      // WHO: users | WHAT: network error display
-      // WHEN: API throws | WHERE: add form
-      // WHY: distinguish network vs API errors
-    });
-
     test('shows empty services message when no services exist', async () => {
+      // WHO: new solo users | WHAT: pointer card empty state
+      // WHEN: no services | WHERE: My Services pointer card
+      // WHY: pointer still gives actionable guidance before navigating
       mockGetConfig.mockResolvedValue({ team_size: 1 });
       mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
       mockServices = [];
@@ -602,11 +443,11 @@ describe('BusinessSettingsView', () => {
       render(<BusinessSettingsView />);
       await waitFor(() => {
         expect(
-          screen.getByText('No services yet. Add what you offer so clients can book.')
+          screen.getByText(/No services yet — tap to add what you offer/i)
         ).toBeInTheDocument();
       });
-      // WHO: new solo users | WHAT: empty state
-      // WHEN: no services | WHERE: services list
+      // Old: 'No services yet. Add what you offer so clients can book.'
+      // New: pointer card copy — 2026-05-28 dedup (editor moved to My Business)
       // WHY: guide user to add services
     });
 
@@ -741,56 +582,22 @@ describe('BusinessSettingsView', () => {
       });
     });
 
-    test('clears service error when canceling add form', async () => {
+    test('pointer card shows plural service count correctly', async () => {
+      // WHO: solo user with multiple services
+      // WHAT: pointer card count says "2 services" (plural)
+      // WHEN: services.length > 1 | WHERE: My Services pointer
+      // WHY: verify plural copy path — same button, different count label
       mockGetConfig.mockResolvedValue({ team_size: 1 });
       mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-      mockServices = [];
+      mockServices = [
+        { service_id: 'svc-1', name: 'Haircut', duration_minutes: 30 },
+        { service_id: 'svc-2', name: 'Beard Trim', duration_minutes: 15 },
+      ];
 
       render(<BusinessSettingsView />);
       await waitFor(() => {
-        fireEvent.click(screen.getByText('Add'));
+        expect(screen.getByText(/2 services — tap to add, edit, or remove/i)).toBeInTheDocument();
       });
-
-      // Trigger validation error
-      fireEvent.click(screen.getByText('Add Service'));
-      expect(screen.getByText('Service name is required')).toBeInTheDocument();
-
-      // Cancel should clear error
-      fireEvent.click(screen.getByText('Cancel'));
-      expect(screen.queryByText('Service name is required')).not.toBeInTheDocument();
-    });
-
-    test('handles service without description', async () => {
-      mockGetConfig.mockResolvedValue({ team_size: 1 });
-      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-      mockServices = [{ service_id: 'svc-1', name: 'Quick Trim', duration_minutes: 15 }];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Quick Trim')).toBeInTheDocument();
-        expect(screen.getByText('15 min')).toBeInTheDocument();
-      });
-    });
-
-    test('switches from add mode to edit mode when edit is clicked', async () => {
-      mockGetConfig.mockResolvedValue({ team_size: 1 });
-      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-      mockServices = [{ service_id: 'svc-1', name: 'Haircut', duration_minutes: 30 }];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        fireEvent.click(screen.getByText('Add'));
-      });
-
-      // Should be in add mode
-      expect(screen.getByText('Add Service')).toBeInTheDocument();
-
-      // Click edit
-      fireEvent.click(screen.getByTitle('Edit'));
-
-      // Should now be in edit mode, not add mode
-      expect(screen.queryByText('Add Service')).not.toBeInTheDocument();
-      expect(screen.getByText('Save')).toBeInTheDocument();
     });
   });
 });
