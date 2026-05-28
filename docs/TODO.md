@@ -1,6 +1,6 @@
 # TODO
 
-**Status at a Glance** (as of 2026-05-27 — E2E run + mechanical type hygiene pass)
+**Status at a Glance** (as of 2026-05-28 — UX pass + solo-mode dedup shipped)
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green again after a ~3-day red streak (stale migration-count drift, fixed `cd185dd`). Agent package now gated in CI. Tests: backend 1,930 · dashboard 720 · agent 99. E2E: 100 passed / 3 known flaky (see "E2E Known Issues" section below) as of 2026-05-27 run. New coverage added 2026-05-27: customer-notes.spec.ts (Gap 1), appointment-cancel-ui.spec.ts (Gap 2, hardened multi-surface cancel including the former flaky List popover path), owner-config-to-booking.spec.ts (Gap 3).
@@ -107,7 +107,7 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
 
 - [ ] **BLOCKER (Dale)** Dale needs to go over the scheduling and how the coloring, grading, etc. work in the live UI so he can guide the system on how to deal with grading. Cluster A below is **on hold** until then — a first attempt (wizard review + skill-map de-grade) was built and reverted 2026-05-20 (`git reset --hard 0f7f1d0`) because the right neutral treatment depends on how each surface actually works. Do not re-apply the de-grade slices unprompted. See memory `feedback-no-coverage-grading`.
 - [ ] **Cluster A — neutral-language / no-grading** (8 surfaces) — *blocked on the Dale review above.* Violates the explicit product rule "no percentages, no warnings, no opinions" (`docs/DESIGN_HANDOFF.md:284`, `docs/UI_UX_DESIGN.md:30`). Same fix shape everywhere: rename grading tokens → neutral connection/availability state, drop green/yellow/red threshold colors, factual copy.
-  - `SoloStepReview.tsx` + `StepReview.tsx` — `allCovered`/`partial` + green/yellow/red readiness badges
+  - ~~`SoloStepReview.tsx`~~ DONE 2026-05-28 (`b140f98`) — coverage pills replaced with neutral language. + `StepReview.tsx` — still open — `allCovered`/`partial` + green/yellow/red readiness badges
   - `skill-map/SkillRelationshipMap.tsx` + `SkillMapNode.tsx` — footer `full`/`partial`/`uncovered` + warning/danger colors
   - `scheduler/ResourceColumnsView.tsx` — empty slots classed as `gap`
   - `scheduler/AppointmentListView.tsx` — long gaps as amber alert rows
@@ -127,9 +127,9 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
 
 ### P2 — copy / trust polish
 
-- [ ] `SetupWizard/WizardWelcome.tsx` — "10 minutes / 6 quick questions" copy drifts from the actual 7-step wizard; reword to durable, accurate terms.
+- [x] `SetupWizard/WizardWelcome.tsx` — DONE 2026-05-28 (`c804025`). Removed inaccurate "10 minutes / 6 quick questions" copy.
 - [ ] `SkillMatrixView.tsx` footer + `Step7GoLive.tsx` — drop persuasive/reassurance phrasing; state what changes factually.
-- [ ] `SetupProgressPill.tsx` — `hidden md:flex` drops the pill on tablet/compact; add a compact fallback.
+- [x] `SetupProgressPill.tsx` — DONE 2026-05-28 (`bdd549e`). Removed `hidden` class; pill visible on all screen sizes.
 - [ ] `ProfileView.tsx` — "Security" card "coming soon" placeholder; replace with real account facts or collapse.
 
 ### P2.5 — Wizard Phase B: full draft commit model

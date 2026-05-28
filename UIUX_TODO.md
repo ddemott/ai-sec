@@ -58,8 +58,8 @@
 ### Navigation & IA
 
 - [ ] **[P1][S]** Move "Logins" (now "Team Access") sub-tab out of My Team → Settings/Profile — label renamed but tab still in My Team; full move deferred until IA merge — `dashboard/components/MyTeamView.tsx:79` `dashboard/components/TeamAccessView.tsx`
-- [ ] **[P1][M]** Remove duplicate services section from Business Settings — services appear in BOTH My Business and Business Settings; same data, two surfaces creates doubt; keep only in My Business — `dashboard/components/BusinessSettingsView.tsx` `dashboard/components/MyBusinessView.tsx` — _source: /ux-expert simplification review_
-- [ ] **[P1][M]** Solo operator "Working Days" uses a full team timeline — a baker/solo stylist should see a simple 7-row Mon–Sun form, not a scrollable timeline with zoom controls; add solo/small-team simplified path — `dashboard/components/ShiftManagementView.tsx` — _source: /ux-expert simplification review_
+- [x] **[P1][M]** Remove duplicate services section from Business Settings — replaced with pointer card navigating to My Business → Services — DONE 2026-05-28 (`2179825`)
+- [x] **[P1][M]** Solo operator "Working Days" uses a full team timeline — `SoloScheduleView` added: Mon–Sun grid with TimeInput pickers, writes via `expandWeekly` — DONE 2026-05-28 (`2179825`)
 
 ### Landing Page Copy
 
