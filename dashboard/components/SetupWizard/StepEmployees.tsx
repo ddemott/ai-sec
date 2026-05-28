@@ -7,6 +7,8 @@ import { Input } from '../ui/Input';
 import { PhoneInput } from '../ui/PhoneInput';
 import { formatPhone } from '../../lib/phone';
 import { useVocabulary } from '@/lib/VocabularyContext';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { useConfirm } from '../../lib/useConfirm';
 import type { Step3Props, WizardEmployee } from './types';
 
 export function Step3Employees({
@@ -24,6 +26,17 @@ export function Step3Employees({
   onChange,
 }: Step3Props) {
   const vocab = useVocabulary();
+  const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
+
+  function handleDelete(emp: WizardEmployee) {
+    confirm({
+      title: `Remove ${vocab.employee_label}?`,
+      message: `Remove "${emp.first_name || emp.name}"? This won't affect existing appointments.`,
+      confirmLabel: 'Remove',
+      onConfirm: () => { closeConfirm(); onDelete(emp.employee_id); },
+    });
+  }
+
   return (
     <div>
       <div className="mb-4">
@@ -63,21 +76,17 @@ export function Step3Employees({
               <div className="flex items-center gap-1 ml-2">
                 <button
                   onClick={() => onEdit(emp)}
+                  aria-label={`Edit ${emp.first_name || emp.name}`}
                   className="p-1.5 text-gray-400 transition-colors"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--accent-soft)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '';
-                  }}
-                  title="Edit"
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-soft)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = ''; }}
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => onDelete(emp.employee_id)}
+                  onClick={() => handleDelete(emp)}
+                  aria-label={`Remove ${emp.first_name || emp.name}`}
                   className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
-                  title="Delete"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -153,6 +162,7 @@ export function Step3Employees({
           Add an {vocab.employee_label.toLowerCase()}
         </button>
       )}
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

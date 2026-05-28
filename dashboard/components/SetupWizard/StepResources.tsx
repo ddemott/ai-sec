@@ -5,6 +5,8 @@ import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useVocabulary } from '@/lib/VocabularyContext';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { useConfirm } from '../../lib/useConfirm';
 import type { Step2Props, WizardResource } from './types';
 
 export function Step2Resources({
@@ -22,6 +24,17 @@ export function Step2Resources({
   onChange,
 }: Step2Props) {
   const vocab = useVocabulary();
+  const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
+
+  function handleDelete(res: WizardResource) {
+    confirm({
+      title: `Remove ${vocab.resource_label}?`,
+      message: `Remove "${res.name}"? This won't affect existing appointments.`,
+      confirmLabel: 'Remove',
+      onConfirm: () => { closeConfirm(); onDelete(res.resource_id); },
+    });
+  }
+
   return (
     <div>
       <div className="mb-4">
@@ -58,21 +71,17 @@ export function Step2Resources({
               <div className="flex items-center gap-1 ml-2">
                 <button
                   onClick={() => onEdit(res)}
+                  aria-label={`Edit ${res.name}`}
                   className="p-1.5 text-gray-400 transition-colors"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--accent-soft)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '';
-                  }}
-                  title="Edit"
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-soft)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = ''; }}
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => onDelete(res.resource_id)}
+                  onClick={() => handleDelete(res)}
+                  aria-label={`Remove ${res.name}`}
                   className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
-                  title="Delete"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -139,6 +148,7 @@ export function Step2Resources({
           Add a {vocab.resource_label.toLowerCase()}
         </button>
       )}
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

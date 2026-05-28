@@ -158,7 +158,8 @@ export default function SkillManagementView() {
               </div>
               <button
                 onClick={() => handleDeleteSkill(skill.name)}
-                className="opacity-0 group-hover:opacity-100 p-2 hover:[color:var(--danger)] transition-all"
+                aria-label={`Remove skill ${skill.name}`}
+                className="opacity-40 hover:opacity-100 focus:opacity-100 p-2 hover:[color:var(--danger)] transition-all"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 <Trash2 className="w-4 h-4" />

@@ -5,6 +5,8 @@ import { Plus, Pencil, Trash2, Clock } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useVocabulary } from '../../lib/VocabularyContext';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { useConfirm } from '../../lib/useConfirm';
 import type { Step1Props, WizardService } from './types';
 
 /**
@@ -35,6 +37,17 @@ export function Step1Services({
   onChange,
 }: Step1Props) {
   const vocab = useVocabulary();
+  const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
+
+  function handleDelete(svc: WizardService) {
+    confirm({
+      title: 'Remove service?',
+      message: `Remove "${svc.name}"? This won't affect existing appointments.`,
+      confirmLabel: 'Remove',
+      onConfirm: () => { closeConfirm(); onDelete(svc.service_id); },
+    });
+  }
+
   return (
     <div>
       <div className="mb-4">
@@ -75,30 +88,19 @@ export function Step1Services({
               <div className="flex items-center gap-1 ml-2 shrink-0">
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit(svc);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onEdit(svc); }}
+                  aria-label={`Edit ${svc.name}`}
                   className="p-1.5 text-gray-400 transition-colors"
-                  style={{}}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--accent-soft)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '';
-                  }}
-                  title="Edit"
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-soft)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = ''; }}
                 >
                   <Pencil className="w-3.5 h-3.5 pointer-events-none" />
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(svc.service_id);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(svc); }}
+                  aria-label={`Remove ${svc.name}`}
                   className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
-                  title="Delete"
                 >
                   <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
                 </button>
@@ -188,6 +190,7 @@ export function Step1Services({
           Add a service
         </button>
       )}
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

@@ -1575,11 +1575,15 @@ describe('SetupWizard: Sad Paths — Service Deletion Failure', () => {
       expect(screen.getByText('Oil Change')).toBeInTheDocument();
     });
 
-    // Click the delete button (trash icon)
-    const deleteBtn = screen.getByTitle('Delete');
+    // Click the delete button (trash icon) — now opens a confirm dialog
+    const deleteBtn = screen.getByRole('button', { name: /remove oil change/i });
     fireEvent.click(deleteBtn);
 
-    // Wizard should not crash — service should still be visible
+    // Confirm the deletion in the dialog
+    const confirmBtn = await screen.findByRole('button', { name: /^remove$/i });
+    fireEvent.click(confirmBtn);
+
+    // Wizard should not crash — service should still be visible after failed delete
     await waitFor(() => {
       expect(screen.getByText('Oil Change')).toBeInTheDocument();
     });
