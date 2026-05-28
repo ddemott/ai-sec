@@ -471,31 +471,53 @@ footer {
 /* ── HAMBURGER ── */
 .hamburger {
   display: none; flex-direction: column; justify-content: center;
-  gap: 5px; width: 40px; height: 40px; cursor: pointer;
-  background: transparent; border: none; padding: 6px;
-  border-radius: 8px; transition: background 0.2s; margin-left: 12px;
+  gap: 5px;
+  /* 44px minimum touch target — iOS HIG / WCAG 2.5.5 */
+  width: 44px; height: 44px; cursor: pointer;
+  background: transparent; border: none; padding: 8px;
+  border-radius: 8px; transition: background 0.2s; margin-left: 8px;
+  /* Prevents accidental text selection on double-tap on iPad */
+  -webkit-user-select: none; user-select: none;
+  touch-action: manipulation;
 }
-.hamburger:hover { background: rgba(255,255,255,0.08); }
+.hamburger:hover, .hamburger:focus-visible { background: rgba(255,255,255,0.08); outline: none; }
 .hamburger span {
   display: block; height: 2px; border-radius: 2px;
   background: var(--text); transition: all 0.25s;
 }
+/* Backdrop — lets iPad users dismiss by tapping outside */
+.nav-mobile-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 98;
+  background: transparent;
+}
+.nav-mobile-backdrop.open { display: block; }
 .nav-mobile-menu {
   display: none; flex-direction: column;
-  background: rgba(8,8,8,0.97); border-top: 1px solid var(--border);
-  padding: 16px 24px 24px; gap: 0;
+  /* Sits above backdrop (z-98) but below nav (z-100) */
+  position: fixed; top: 64px; left: 0; right: 0; z-index: 99;
+  background: rgba(8,8,8,0.97); backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  padding: 16px 24px 32px; gap: 0;
+  /* iOS Safari scroll isolation — prevents underlying page from
+     scrolling through the open menu on iPad */
+  overscroll-behavior: contain;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
 }
 .nav-mobile-menu.open { display: flex; }
+/* Larger tap targets (44px min height) on each nav link */
 .nav-mobile-menu a {
-  padding: 12px 0; color: var(--text-muted); text-decoration: none;
-  font-size: 15px; border-bottom: 1px solid var(--border);
-  transition: color 0.2s;
+  padding: 14px 0; color: var(--text-muted); text-decoration: none;
+  font-size: 16px; border-bottom: 1px solid var(--border);
+  transition: color 0.2s; min-height: 44px; display: flex; align-items: center;
 }
 .nav-mobile-menu a:last-child { border-bottom: none; }
-.nav-mobile-menu a:hover { color: var(--text); }
+.nav-mobile-menu a:hover, .nav-mobile-menu a:active { color: var(--text); }
 .nav-mobile-cta {
-  display: flex; gap: 10px; padding-top: 16px; flex-wrap: wrap;
+  display: flex; gap: 10px; padding-top: 20px; flex-wrap: wrap;
 }
+.nav-mobile-cta a { min-height: 44px; display: inline-flex; align-items: center; }
 
 @media (max-width: 900px) {
   nav { padding: 0 24px; }
@@ -542,6 +564,7 @@ const LANDING_HTML = `
     </button>
   </div>
 </nav>
+<div class="nav-mobile-backdrop" id="mobile-backdrop" aria-hidden="true"></div>
 <div class="nav-mobile-menu" id="mobile-menu" role="navigation" aria-label="Mobile navigation">
   <a href="#how" onclick="closeMobileMenu()">How It Works</a>
   <a href="#features" onclick="closeMobileMenu()">Features</a>
@@ -949,37 +972,54 @@ const observer = new IntersectionObserver((entries) => {
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-// Hamburger menu toggle
+// Hamburger menu toggle — iPad-ready:
+//   • 44px touch targets on button + links
+//   • Backdrop lets users dismiss by tapping outside (iPad pattern)
+//   • body overflow:hidden prevents scroll-through on iOS Safari
+//   • touch-action:manipulation on button prevents 300ms tap delay
 const hamburgerBtn = document.getElementById('hamburger-btn');
 const mobileMenu = document.getElementById('mobile-menu');
-if (hamburgerBtn && mobileMenu) {
-  hamburgerBtn.addEventListener('click', () => {
-    const isOpen = mobileMenu.classList.toggle('open');
-    hamburgerBtn.setAttribute('aria-expanded', String(isOpen));
-    // Animate hamburger → X
-    const spans = hamburgerBtn.querySelectorAll('span');
-    if (isOpen) {
-      spans[0].style.transform = 'translateY(7px) rotate(45deg)';
-      spans[1].style.opacity = '0';
-      spans[2].style.transform = 'translateY(-7px) rotate(-45deg)';
-    } else {
-      spans[0].style.transform = '';
-      spans[1].style.opacity = '';
-      spans[2].style.transform = '';
-    }
-  });
+const mobileBackdrop = document.getElementById('mobile-backdrop');
+
+function openMobileMenu() {
+  if (!hamburgerBtn || !mobileMenu || !mobileBackdrop) return;
+  mobileMenu.classList.add('open');
+  mobileBackdrop.classList.add('open');
+  hamburgerBtn.setAttribute('aria-expanded', 'true');
+  document.body.style.overflow = 'hidden';
+  const spans = hamburgerBtn.querySelectorAll('span');
+  spans[0].style.transform = 'translateY(7px) rotate(45deg)';
+  spans[1].style.opacity = '0';
+  spans[2].style.transform = 'translateY(-7px) rotate(-45deg)';
 }
 function closeMobileMenu() {
-  if (mobileMenu) mobileMenu.classList.remove('open');
-  if (hamburgerBtn) {
-    hamburgerBtn.setAttribute('aria-expanded', 'false');
-    const spans = hamburgerBtn.querySelectorAll('span');
-    spans[0].style.transform = ''; spans[1].style.opacity = ''; spans[2].style.transform = '';
-  }
+  if (!hamburgerBtn || !mobileMenu || !mobileBackdrop) return;
+  mobileMenu.classList.remove('open');
+  mobileBackdrop.classList.remove('open');
+  hamburgerBtn.setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
+  const spans = hamburgerBtn.querySelectorAll('span');
+  spans[0].style.transform = ''; spans[1].style.opacity = ''; spans[2].style.transform = '';
 }
-// Close on anchor click (smooth scroll already handled by html { scroll-behavior: smooth })
-document.querySelectorAll('.nav-mobile-menu a[href^="#"]').forEach(a => {
+
+if (hamburgerBtn) {
+  hamburgerBtn.addEventListener('click', () => {
+    const isOpen = mobileMenu && mobileMenu.classList.contains('open');
+    isOpen ? closeMobileMenu() : openMobileMenu();
+  });
+}
+// Backdrop tap closes menu (iPad: tap-outside-to-dismiss)
+if (mobileBackdrop) {
+  mobileBackdrop.addEventListener('click', closeMobileMenu);
+  mobileBackdrop.addEventListener('touchend', closeMobileMenu, { passive: true });
+}
+// Close on any anchor click so scroll starts then menu disappears cleanly
+document.querySelectorAll('.nav-mobile-menu a').forEach(a => {
   a.addEventListener('click', closeMobileMenu);
+});
+// Escape key closes menu (keyboard + iPad hardware keyboard)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMobileMenu();
 });
 </script>
 `;
