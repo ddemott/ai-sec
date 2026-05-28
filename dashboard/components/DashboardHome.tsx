@@ -423,7 +423,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                       })}
                     </div>
                     {endTime && (
-                      <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         to{' '}
                         {endTime.toLocaleTimeString('en-US', {
                           hour: 'numeric',
@@ -657,7 +657,7 @@ function WeekView({
           >
             <div className="flex items-baseline justify-between mb-1.5">
               <span
-                className="text-[10px] font-bold uppercase tracking-widest"
+                className="text-xs font-bold uppercase tracking-widest"
                 style={{ color: 'var(--text-muted)' }}
               >
                 {dayName}
@@ -679,7 +679,7 @@ function WeekView({
                   : `${vocab.booking_label.toLowerCase()}s`}
               </div>
             ) : (
-              <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>
+              <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
                 No bookings
               </div>
             )}
@@ -688,14 +688,14 @@ function WeekView({
             {day.appts.slice(0, 2).map((a, i) => (
               <div
                 key={i}
-                className="text-[10px] truncate"
+                className="text-xs truncate"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {a.time} {a.desc}
               </div>
             ))}
             {day.count > 2 && (
-              <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 +{day.count - 2} more
               </div>
             )}
@@ -706,14 +706,14 @@ function WeekView({
                 {workingStaff.slice(0, 2).map((s, i) => (
                   <div
                     key={i}
-                    className="text-[10px] truncate"
+                    className="text-xs truncate"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     {s.name} {formatShiftTime(s.start)}–{formatShiftTime(s.end)}
                   </div>
                 ))}
                 {workingStaff.length > 2 && (
-                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     +{workingStaff.length - 2} more
                   </div>
                 )}

@@ -159,7 +159,7 @@ export default function BusinessTypeSection({ tenantId, onChanged }: BusinessTyp
           </div>
           {currentCategory && (
             <div
-              className="text-[10px] uppercase tracking-wider mt-0.5"
+              className="text-xs uppercase tracking-wider mt-0.5"
               style={{ color: 'var(--text-muted)' }}
             >
               {currentCategory}
@@ -228,7 +228,7 @@ export default function BusinessTypeSection({ tenantId, onChanged }: BusinessTyp
                       </div>
                       {isActive && (
                         <span
-                          className="text-[10px] flex items-center gap-1 mt-1"
+                          className="text-xs flex items-center gap-1 mt-1"
                           style={{ color: 'var(--accent-soft)' }}
                         >
                           <Check className="w-3 h-3" /> Current

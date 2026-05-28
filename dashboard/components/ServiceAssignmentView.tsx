@@ -387,7 +387,7 @@ export default function ServiceAssignmentView() {
               />
               <div>
                 <label
-                  className="block text-[10px] font-bold uppercase mb-1 ml-1 tracking-widest"
+                  className="block text-xs font-bold uppercase mb-1 ml-1 tracking-widest"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   Description
@@ -434,7 +434,7 @@ export default function ServiceAssignmentView() {
             <div className="space-y-6">
               <div>
                 <p
-                  className="text-[10px] font-bold uppercase mb-3 ml-1"
+                  className="text-xs font-bold uppercase mb-3 ml-1"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   Authorized {vocab.resource_plural}
@@ -476,7 +476,7 @@ export default function ServiceAssignmentView() {
               </div>
               <div>
                 <p
-                  className="text-[10px] font-bold uppercase mb-3 ml-1"
+                  className="text-xs font-bold uppercase mb-3 ml-1"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   Qualified {vocab.employee_plural}

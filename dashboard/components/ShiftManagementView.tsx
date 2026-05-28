@@ -532,7 +532,7 @@ export default function ShiftManagementView() {
         {/* Employee selector */}
         <div className="mb-4" data-testid="shift-employee-selector">
           <label
-            className="text-[10px] font-bold uppercase tracking-widest mb-2 block"
+            className="text-xs font-bold uppercase tracking-widest mb-2 block"
             style={{ color: 'var(--text-muted)' }}
           >
             Select {vocab.employee_label}
@@ -657,7 +657,7 @@ export default function ShiftManagementView() {
             {/* Header */}
             <div className="flex shrink-0" style={{ borderBottom: '1px solid var(--border-soft)' }}>
               <div
-                className="shrink-0 flex items-center px-3 text-[10px] font-bold uppercase tracking-widest"
+                className="shrink-0 flex items-center px-3 text-xs font-bold uppercase tracking-widest"
                 style={{
                   width: DAY_LABEL_WIDTH,
                   height: HEADER_HEIGHT,
@@ -672,7 +672,7 @@ export default function ShiftManagementView() {
                   {HOURS.map((h) => (
                     <div
                       key={h}
-                      className="text-center text-[10px] font-bold shrink-0 flex items-center justify-center select-none"
+                      className="text-center text-xs font-bold shrink-0 flex items-center justify-center select-none"
                       style={{
                         width: colW,
                         height: HEADER_HEIGHT,
@@ -821,7 +821,7 @@ export default function ShiftManagementView() {
                             style={{ zIndex: 2 }}
                           >
                             <span
-                              className="text-[10px] font-bold px-2 py-0.5 rounded"
+                              className="text-xs font-bold px-2 py-0.5 rounded"
                               style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444' }}
                             >
                               OFF
@@ -836,7 +836,7 @@ export default function ShiftManagementView() {
                             onClick={() => openEditor(day.dateStr)}
                           >
                             <span
-                              className="text-[10px] italic"
+                              className="text-xs italic"
                               style={{ color: 'var(--text-muted)' }}
                             >
                               Click to schedule

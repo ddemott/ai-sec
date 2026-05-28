@@ -1018,7 +1018,7 @@ export default function NewSchedulerView({
                   return (
                     <div
                       key={h}
-                      className="text-[10px] font-bold shrink-0 flex items-center justify-start select-none pl-1"
+                      className="text-xs font-bold shrink-0 flex items-center justify-start select-none pl-1"
                       style={{
                         width: colW,
                         height: HEADER_HEIGHT,
@@ -1400,7 +1400,7 @@ function SkillBars({
             {/* Label at left edge — hide if bar is too narrow */}
             {barWidth > 50 && (
               <span
-                className="text-[10px] font-bold px-1.5 leading-tight block truncate"
+                className="text-xs font-bold px-1.5 leading-tight block truncate"
                 style={{
                   color: '#fff',
                   fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
@@ -1564,7 +1564,7 @@ function AppointmentBlockNew({
       </span>
       {width > 60 && (
         <span
-          className={`block truncate leading-tight text-[10px] opacity-80${showDragHandle ? ' pl-3' : ''}`}
+          className={`block truncate leading-tight text-xs opacity-80${showDragHandle ? ' pl-3' : ''}`}
         >
           {serviceName}
         </span>
