@@ -267,13 +267,26 @@ export default function VoiceCallsView() {
           ) : callHistory.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-500">
               <PhoneOff className="w-8 h-8 mb-2" />
-              <p className="text-sm">No call history</p>
+              <p className="text-sm font-medium">No call history yet</p>
+              <p className="text-xs mt-1 text-center px-4" style={{ color: 'var(--text-muted)' }}>
+                Calls appear here once your AI phone line is active
+              </p>
             </div>
           ) : (
             <div className="divide-y">
-              {callHistory
-                .filter((c) => outcomeFilter === 'all' || c.outcome === outcomeFilter)
-                .map((call) => (
+              {(() => {
+                const filtered = callHistory.filter(
+                  (c) => outcomeFilter === 'all' || c.outcome === outcomeFilter
+                );
+                if (filtered.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                      <PhoneOff className="w-8 h-8 mb-2 opacity-40" />
+                      <p className="text-sm">No calls matching this filter</p>
+                    </div>
+                  );
+                }
+                return filtered.map((call) => (
                   <div
                     key={call.voice_session_id}
                     className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
@@ -318,7 +331,8 @@ export default function VoiceCallsView() {
                       </div>
                     )}
                   </div>
-                ))}
+                ));
+              })()}
 
               {hasMore && (
                 <div className="p-3">

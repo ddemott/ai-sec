@@ -97,7 +97,7 @@
 
 - [ ] **[P2][M]** Cluster C — migrate custom overlays onto shared Modal primitive (Escape, focus trap, backdrop close): `WizardModeChooser`, `WizardWelcome`, `FirstRunTour`, `SetupWizard/index`, `AppointmentPopover`, `StaffProfileCard`, `EmployeeDayFocusPanel`, `SkillMapFixPanel` — _source: docs/TODO.md Cluster C_
 - [ ] **[P2]** Cluster D — accessible action controls: replace icon-only / hover-only buttons with `aria-label` + visible focus; route destructive actions through shared confirm: `StepEmployees`, `StepServices`, `StepResources`, `SkillManagementView`, `ResourceManagerView`, `AppointmentBlock` — _source: docs/TODO.md Cluster D_
-- [ ] **[P2]** Cluster E — empty/loading/no-results distinctness: `AppointmentListSidebar`, `VoiceCallsView`, `Step2Resources`, `EmployeeManagementView`, `MyTeamView`, `CustomerDetailPanel`, `DeletedRecordsPanel` — _source: docs/TODO.md Cluster E_
+- [x] **[P2]** Cluster E — empty/loading/no-results distinctness — Done 2026-05-28: AppointmentListSidebar empty state added; VoiceCallsView "No call history yet" + AI-live context + filter no-results; StepResources spinner replaces "Loading..." text; DeletedRecordsPanel "no matches for X" vs "no deleted records" split with Clear search button. EmployeeManagementView/MyTeamView/CustomerDetailPanel already adequate.
 - [x] **[P2][S]** Add "Dismiss all" to error toast stack when > 2 stacked — DONE 2026-05-28 (`a619314`)
 - [ ] **[P2]** Responsive fallbacks for wide matrices/maps: `SchedulerDateNav`, `ResourceColumnsView`, `SkillRelationshipMap` — _source: docs/TODO.md:143_
 

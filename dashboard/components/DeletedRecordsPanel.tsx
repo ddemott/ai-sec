@@ -214,7 +214,20 @@ export function DeletedRecordsPanel({
         ) : filteredRecords.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Trash2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>No deleted records</p>
+            {searchTerm ? (
+              <>
+                <p className="font-medium">No matches for &ldquo;{searchTerm}&rdquo;</p>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="text-xs mt-2 hover:underline"
+                  style={{ color: 'var(--accent-soft)' }}
+                >
+                  Clear search
+                </button>
+              </>
+            ) : (
+              <p>No deleted records</p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

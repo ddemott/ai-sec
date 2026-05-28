@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useVocabulary } from '@/lib/VocabularyContext';
@@ -34,7 +34,10 @@ export function Step2Resources({
       </div>
 
       {loading ? (
-        <p className="text-sm text-gray-400">Loading...</p>
+        <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading…
+        </div>
       ) : (
         <div className="space-y-2 mb-4">
           {resources.map((res: WizardResource) => (

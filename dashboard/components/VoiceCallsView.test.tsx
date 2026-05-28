@@ -231,7 +231,7 @@ describe('VoiceCallsView', () => {
       mockCallHistory.mockResolvedValue({ calls: [], total: 0, has_more: false });
       render(<VoiceCallsView />);
       await waitFor(() => {
-        expect(screen.getByText('No call history')).toBeInTheDocument();
+        expect(screen.getByText('No call history yet')).toBeInTheDocument();
       });
       // WHO: new tenants | WHAT: empty state display
       // WHEN: no calls recorded | WHERE: call list

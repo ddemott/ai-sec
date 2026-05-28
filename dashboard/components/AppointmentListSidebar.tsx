@@ -66,6 +66,20 @@ export function AppointmentListSidebar({
             Showing sample data. Log in to see real appointments.
           </div>
         )}
+        {appointments.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <ChevronRight
+              className="w-8 h-8 mb-3 opacity-20"
+              style={{ color: 'var(--text-muted)' }}
+            />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              No {bookingLabel.toLowerCase()}s
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              Book one to get started
+            </p>
+          </div>
+        )}
         {appointments.map((apt) => (
           <div
             key={apt.appointment_id}
