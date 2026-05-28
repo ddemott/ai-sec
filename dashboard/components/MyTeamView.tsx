@@ -76,8 +76,8 @@ export default function MyTeamView() {
     { id: 'shifts', label: 'Working Days' },
     // B1: "Service Assignments" now contains both Grid (was: Service
     // Assignments) and Map (was: Skill Map) views via an in-tab toggle.
-    { id: 'skills', label: 'Service Assignments' },
-    { id: 'logins', label: 'Logins' },
+    { id: 'skills', label: 'Who Can Do What' },
+    { id: 'logins', label: 'Team Access' },
   ];
 
   return (

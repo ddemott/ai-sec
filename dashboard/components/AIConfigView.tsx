@@ -94,9 +94,9 @@ export default function AIConfigView() {
             <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl md:text-3xl font-display">AI Persona Tuning</h1>
+            <h1 className="text-xl md:text-3xl font-display">Voice Settings</h1>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Customize how your AI assistant talks. To change your industry template, go to
+              Customize how your AI sounds and what it says. To change your business type, go to
               Business Settings.
             </p>
           </div>

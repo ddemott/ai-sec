@@ -258,7 +258,7 @@ describe('DashboardHome — wizard welcome → mode chooser staging (D1, 2026-05
     render(<DashboardHome />);
 
     await screen.findByRole('dialog', { name: /welcome/i });
-    expect(screen.getByText(/10 minutes from going live/i)).toBeInTheDocument();
+    expect(screen.getByText(/a few quick steps/i)).toBeInTheDocument();
     expect(screen.queryByText(/how is your business set up/i)).not.toBeInTheDocument();
   });
 

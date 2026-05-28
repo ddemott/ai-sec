@@ -41,31 +41,31 @@
 
 ### Knowledge Base — Quick Wins
 
-- [ ] **[P1][S]** KB: open first accordion ("Business Hours & Location") by default — all 9 start collapsed; new user sees nothing; first 6 questions (hours, location, parking, walk-ins) take 2 minutes — `dashboard/components/KnowledgeBaseView.tsx:163` — _source: KB review #3_
-- [ ] **[P1][S]** KB: add progress bar to questionnaire — `5/40` badge is buried in tab strip; add "5 of 40 answered — the more you fill in, the better your AI sounds" below description — `dashboard/components/KnowledgeBaseView.tsx:559,663-668` — _source: KB review #4_
-- [ ] **[P1][S]** KB: "Ingested X chunks" → plain English — "Successfully processed menu.pdf — your AI can now answer questions from this document" — `dashboard/components/KnowledgeBaseView.tsx:507` — _source: KB review #6_
-- [ ] **[P1][S]** KB: rename "All Entries" tab → "Review Everything" or hide by default — data-management label; it's an admin/debug view, not an owner-facing authoring tool — `dashboard/components/KnowledgeBaseView.tsx:597` — _source: KB review #7_
-- [ ] **[P1][S]** KB: delete button on entries is hover-only (opacity-0) — invisible on iPad; change to opacity-40 always — `dashboard/components/KnowledgeBaseView.tsx:774-778` — _source: KB review #8_
-- [ ] **[P1][S]** KB: upload helper text says "split into chunks and embedded for semantic search" — replace with "When a caller asks a question, the AI searches your documents for the answer and reads it back to them" — `dashboard/components/KnowledgeBaseView.tsx:723-727` — _source: KB review #9_
-- [ ] **[P1][S]** KB: 10-char minimum blocks valid short answers — "Yes", "No.", "Cash only." never save; drop minimum to 2 chars — `dashboard/components/KnowledgeBaseView.tsx:79` — _source: KB review #11_
+- [x] **[P1][S]** KB: open first accordion by default — DONE 2026-05-28
+- [x] **[P1][S]** KB: add progress bar to questionnaire — DONE 2026-05-28
+- [x] **[P1][S]** KB: "Ingested X chunks" → plain English success message — DONE 2026-05-28
+- [x] **[P1][S]** KB: rename "All Entries" → "Review Everything" — DONE 2026-05-28
+- [x] **[P1][S]** KB: delete button opacity-40 always visible + min 44px touch target — DONE 2026-05-28
+- [x] **[P1][S]** KB: upload helper text jargon replaced with plain English — DONE 2026-05-28
+- [x] **[P1][S]** KB: 10-char minimum → 2 chars — DONE 2026-05-28
 
 ### Terminology Renames (cheap, high clarity)
 
-- [ ] **[P1][S]** Rename "AI Persona Tuning" → "Voice Settings" — highest-jargon label in the product; no service business owner uses this phrase — `dashboard/components/AIConfigView.tsx:97` — _source: /ux-expert simplification review_
-- [ ] **[P1][M]** Rename "Service Assignments" → "Who Can Do What" — means nothing to a salon or auto-shop owner; also add simplified toggle path for small shops before showing the full matrix — `dashboard/components/MyTeamView.tsx:79` `dashboard/components/SkillAssignmentsView.tsx` `dashboard/components/SkillMatrixView.tsx` — _source: /ux-expert simplification review_
-- [ ] **[P1][S]** Update WizardWelcome copy — "10 minutes / 6 quick questions" is wrong (wizard is 7 steps, more than 6 questions); reword to durable accurate terms — `dashboard/components/SetupWizard/WizardWelcome.tsx` — _source: docs/TODO.md:130_
+- [x] **[P1][S]** Rename "AI Persona Tuning" → "Voice Settings" — DONE 2026-05-28
+- [x] **[P1][S]** Rename "Service Assignments" → "Who Can Do What" + "Logins" → "Team Access" in sub-tab labels — DONE 2026-05-28
+- [x] **[P1][S]** Update WizardWelcome copy — removed inaccurate "10 minutes / 6 quick questions" — DONE 2026-05-28
 
 ### Navigation & IA
 
-- [ ] **[P1][S]** Move "Logins" sub-tab out of My Team → Settings/Profile — team access management is admin config, not operational; it confuses owners who expect scheduling tools there — `dashboard/components/MyTeamView.tsx:79` `dashboard/components/TeamAccessView.tsx` — _source: /ux-expert simplification review_
+- [ ] **[P1][S]** Move "Logins" (now "Team Access") sub-tab out of My Team → Settings/Profile — label renamed but tab still in My Team; full move deferred until IA merge — `dashboard/components/MyTeamView.tsx:79` `dashboard/components/TeamAccessView.tsx`
 - [ ] **[P1][M]** Remove duplicate services section from Business Settings — services appear in BOTH My Business and Business Settings; same data, two surfaces creates doubt; keep only in My Business — `dashboard/components/BusinessSettingsView.tsx` `dashboard/components/MyBusinessView.tsx` — _source: /ux-expert simplification review_
 - [ ] **[P1][M]** Solo operator "Working Days" uses a full team timeline — a baker/solo stylist should see a simple 7-row Mon–Sun form, not a scrollable timeline with zoom controls; add solo/small-team simplified path — `dashboard/components/ShiftManagementView.tsx` — _source: /ux-expert simplification review_
 
 ### Landing Page Copy
 
-- [ ] **[P1][S]** Unify CTA phrasing — 3 variants across the page: "Start free — 14 days" / "Start free trial" / "Get started — it's free"; pick one and use it everywhere; recommendation: "Start free trial" — `dashboard/app/page.tsx:509,535,784,800,816,884` — _source: landing review #4_
-- [ ] **[P1][S]** Remove or replace hero stats row — "30+ business types / $129 / < 2 rings" are specs not social proof; a stat bar without real user counts is a negative signal for informed visitors — `dashboard/app/page.tsx:543-556` — _source: landing review #5_
-- [ ] **[P1][S]** Add context to demo link — "Try the interactive demo (no account needed)" removes hesitation about what clicking leads to — `dashboard/app/page.tsx:538` — _source: landing review #7_
+- [x] **[P1][S]** Unify CTA phrasing → "Start free trial" everywhere — DONE 2026-05-28
+- [x] **[P1][S]** Replace hero stats pricing ($129) with "14 days free trial" — DONE 2026-05-28
+- [x] **[P1][S]** Demo link replaced with live phone number CTA — DONE 2026-05-28
 
 ### Blocked
 
@@ -122,7 +122,7 @@
 
 ## P3 — Low / Backlog
 
-- [ ] **[P1][S]** iPad: shift delete button `px-1.5 py-0.5` resolves to ~26px tall — below 44px iOS touch target; was made visible (opacity-40) but still too small to reliably tap; increase to `min-h-[44px] px-3` — `dashboard/components/scheduler/StaffSwimLaneView.tsx:419` — _source: iPad review of completed items_
+- [x] **[P1][S]** iPad: shift delete button bumped to min-h-[44px] — DONE 2026-05-28
 - [ ] **[P2][S]** iPad: "Add customer" button in CRMView empty state uses `size="sm"` (40px) — just below 44px minimum; change to `size="md"` — `dashboard/components/CRMView.tsx` — _source: iPad review of completed items_
 - [ ] **[P3][S]** KB: add "show unanswered only" toggle — owners finishing remaining questions must open every accordion to find them; toggle or sort unanswered categories to top — `dashboard/components/KnowledgeBaseView.tsx` — _source: KB review #16_
 - [ ] **[P3][S]** Add empty-state context to Calls tab — explain calls appear once AI is live — `dashboard/components/VoiceCallsView.tsx` — _source: audit #F5_

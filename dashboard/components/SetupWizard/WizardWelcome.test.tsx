@@ -15,18 +15,21 @@ import React from 'react';
 import { WizardWelcome } from './WizardWelcome';
 
 describe('WizardWelcome', () => {
-  test('HAPPY: renders the scope-setting headline + 10-minute copy', async () => {
+  test('HAPPY: renders the scope-setting headline and reassurance copy', async () => {
     // WHO: First-time tenant just landed on the dashboard with nothing set up
-    // WHAT: Welcome dialog renders with headline + "10 minutes from going live"
-    //       copy and explicit "stop and come back any time" reassurance
+    // WHAT: Welcome dialog renders with headline + reassurance copy that
+    //       they can stop any time.
     // WHY:  The 2026-05-16 UX audit found new users dropped at the mode
     //       chooser because they didn't know how long the wizard takes or
     //       whether they could pause. Welcome screen sets both expectations
     //       before the binary solo/team fork.
+    //       2026-05-28: copy updated — "10 minutes / 6 quick questions"
+    //       was inaccurate (wizard is 7 steps); replaced with durable
+    //       language that won't drift as steps change.
     render(<WizardWelcome onContinue={vi.fn()} onDismiss={vi.fn()} />);
 
     expect(screen.getByRole('dialog', { name: /welcome/i })).toBeInTheDocument();
-    expect(screen.getByText(/10 minutes from going live/i)).toBeInTheDocument();
+    expect(screen.getByText(/a few quick steps/i)).toBeInTheDocument();
     expect(screen.getByText(/stop and come back any time/i)).toBeInTheDocument();
   });
 

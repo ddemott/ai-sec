@@ -598,7 +598,7 @@ const LANDING_HTML = `
 
       <div class="hero-actions reveal reveal-delay-2">
         <a href="/register" class="btn-hero">
-          Start free — 14 days
+          Start free trial
           <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
         <a href="tel:+16309379478" class="hero-link">
@@ -612,8 +612,8 @@ const LANDING_HTML = `
           <div class="hero-stat-l">business types</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-n"><span>\$</span>129</div>
-          <div class="hero-stat-l">starts at / month</div>
+          <div class="hero-stat-n">14<span> days</span></div>
+          <div class="hero-stat-l">free trial</div>
         </div>
         <div class="hero-stat">
           <div class="hero-stat-n">&lt;2<span> rings</span></div>
@@ -947,7 +947,7 @@ const LANDING_HTML = `
   <h2 class="cta-band-h reveal">YOUR NEXT CALL<br>IS ABOUT TO<br><span style="color:var(--blue-lt)">GET ANSWERED.</span></h2>
   <p class="cta-band-sub reveal reveal-delay-1">Sign up in two minutes. Finish the quick setup. Call your new number and hear your AI secretary pick up. It&apos;s that fast.</p>
   <div class="cta-band-actions reveal reveal-delay-2">
-    <a href="/register" class="btn-hero">Get started — it's free<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+    <a href="/register" class="btn-hero">Start free trial<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
     <div class="cta-number">
       <span class="cta-number-label">Try it live →</span>
       <span style="color:var(--blue-lt)">(630) 937-9478</span>

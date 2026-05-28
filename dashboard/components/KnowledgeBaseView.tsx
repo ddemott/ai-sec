@@ -76,7 +76,7 @@ function PolicyQuestionField({
     setStatus('idle');
 
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (newVal.trim().length < 10) return;
+    if (newVal.trim().length < 2) return;
 
     timerRef.current = setTimeout(async () => {
       setStatus('saving');
@@ -505,7 +505,7 @@ export default function KnowledgeBaseView() {
       if (res.success) {
         setMessage({
           type: 'success',
-          text: `Ingested ${res.chunksIngested} knowledge chunks from ${file.name}.`,
+          text: `Successfully processed ${file.name} — your AI can now answer questions from this document.`,
         });
         void fetchDocs();
       } else {
@@ -685,6 +685,34 @@ export default function KnowledgeBaseView() {
                     </div>
                   </div>
                 )}
+                {/* Progress bar — more motivating than the tiny tab badge */}
+                {totalQuestions > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        {totalAnswered} of {totalQuestions} answered
+                        {totalAnswered === totalQuestions && ' — fully trained!'}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {Math.round((totalAnswered / totalQuestions) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full rounded-full h-1.5" style={{ backgroundColor: 'var(--bg-raised)' }}>
+                      <div
+                        className="h-1.5 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.round((totalAnswered / totalQuestions) * 100)}%`,
+                          backgroundColor: 'var(--accent-soft)',
+                        }}
+                      />
+                    </div>
+                    {totalAnswered < totalQuestions && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                        The more you fill in, the better your AI sounds to callers.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
                   Answer these questions about your business. The AI will use your answers to
                   respond to callers. Answers auto-save as you type. Add business-specific Q&amp;A
@@ -746,9 +774,9 @@ export default function KnowledgeBaseView() {
                   )}
                 </div>
                 <p className="text-xs mt-4" style={{ color: 'var(--text-muted)' }}>
-                  Upload your employee handbook, warranty policy, price sheet, or any document you
-                  want the AI to reference. Documents are split into chunks and embedded for
-                  semantic search.
+                  Upload your price sheet, service menu, warranty policy, or any document about
+                  your business. When a caller asks a question, the AI searches your documents
+                  for the answer and reads it back to them.
                 </p>
               </div>
             )}
@@ -797,8 +825,9 @@ export default function KnowledgeBaseView() {
                             </div>
                             <button
                               onClick={() => handleDelete(doc.tenant_doc_id)}
-                              className="opacity-0 group-hover:opacity-100 p-1 transition-all hover:[color:var(--danger)]"
+                              className="opacity-40 hover:opacity-100 focus:opacity-100 p-1 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
                               style={{ color: 'var(--text-muted)' }}
+                              aria-label="Delete entry"
                               title="Delete"
                             >
                               <Trash2 className="w-4 h-4" />

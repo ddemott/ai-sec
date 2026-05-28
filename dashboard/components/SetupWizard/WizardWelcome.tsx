@@ -48,9 +48,9 @@ export function WizardWelcome({ onContinue, onDismiss }: WizardWelcomeProps) {
 
         <div className="p-6 space-y-5">
           <p className="text-base" style={{ color: 'var(--text-primary)' }}>
-            Your AI receptionist is about{' '}
-            <span className="font-semibold">10 minutes from going live</span>. We&apos;ll ask 6
-            quick questions, and you can stop and come back any time.
+            Let&apos;s get your AI receptionist set up. We&apos;ll walk you through{' '}
+            <span className="font-semibold">a few quick steps</span> — add your services,
+            set your hours, and you can stop and come back any time.
           </p>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2">

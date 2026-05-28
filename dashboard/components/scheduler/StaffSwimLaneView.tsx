@@ -420,7 +420,7 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                   {onShiftDelete && !isDragging && (
                     <button
                       aria-label="Delete shift"
-                      className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
+                      className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-3 z-20 min-h-[44px] flex items-center"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
