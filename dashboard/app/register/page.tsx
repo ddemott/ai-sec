@@ -30,17 +30,21 @@ export default function RegisterPage() {
   // Populate the business-type picker from the public templates endpoint —
   // same source TenantCreateForm uses, so the values match what the backend
   // expects. Failure is non-fatal: the field falls back to a free-text input.
+  //
+  // Intentionally do NOT pre-select the first template. A defaulted business
+  // type silently locks in a stranger's choice (whichever sorted first —
+  // "Answering & Scheduling Service") and looked like a filled-in field to
+  // Dale in the 2026-05-28 walkthrough. The empty value forces the owner to
+  // pick deliberately.
   useEffect(() => {
     Api.templates
       .list()
       .then((t) => {
         setTemplates(t);
-        if (t.length && !businessType) setBusinessType(t[0].business_type);
       })
       .catch(() => {
         /* leave templates empty → free-text fallback below */
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -151,7 +155,7 @@ export default function RegisterPage() {
                   onChange={(e) => setBusinessName(e.target.value)}
                   className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
                   style={inputStyle}
-                  placeholder="DynaTire Mobile Service"
+                  placeholder="Your business name"
                 />
               </div>
             </div>
@@ -175,6 +179,9 @@ export default function RegisterPage() {
                     className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm appearance-none"
                     style={inputStyle}
                   >
+                    <option value="" disabled>
+                      Select your business type…
+                    </option>
                     {[...templates]
                       .sort((a, b) => a.display_name.localeCompare(b.display_name))
                       .map((t) => (
@@ -217,7 +224,7 @@ export default function RegisterPage() {
                   autoComplete="name"
                   className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
                   style={inputStyle}
-                  placeholder="Dale Demott"
+                  placeholder="Your full name"
                 />
               </div>
             </div>

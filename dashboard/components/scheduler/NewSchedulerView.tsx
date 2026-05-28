@@ -1018,7 +1018,7 @@ export default function NewSchedulerView({
                   return (
                     <div
                       key={h}
-                      className="text-center text-[10px] font-bold shrink-0 flex items-center justify-center select-none"
+                      className="text-[10px] font-bold shrink-0 flex items-center justify-start select-none pl-1"
                       style={{
                         width: colW,
                         height: HEADER_HEIGHT,
@@ -1038,6 +1038,14 @@ export default function NewSchedulerView({
                       }}
                       data-testid={`hour-cell-${h}`}
                     >
+                      {/* Label anchors LEFT of its column so an "8am – 5pm" shift
+                          bar (which renders at left = 8 * colW) visually starts AT
+                          the "8am" text. Center-aligned labels appear half a
+                          column to the right of the bar, making the bar look
+                          off-by-one-hour. Standard convention — Google
+                          Calendar / Outlook anchor hour text to column boundary.
+                          2026-05-28 — Dale: "hours and markings aren't in
+                          alignment". */}
                       {formatHour(h)}
                     </div>
                   );
