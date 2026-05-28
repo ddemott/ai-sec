@@ -29,7 +29,7 @@
 
 - [x] **[P0][S]** Landing demo link → replaced with "Call (630) 937-9478 — try it live" `tel:` link — DONE 2026-05-28
 - [x] **[P0][S]** Enterprise Gmail → `sales@secretaryhq.com` — DONE 2026-05-28
-- [ ] **[P0][M]** Mobile nav disappears at 900px — no hamburger; phones/tablets have no way to reach Pricing, Features, How It Works — add hamburger or anchor links — `dashboard/app/page.tsx:472-473` — _source: landing review #3_
+- [x] **[P0][M]** Mobile nav hamburger added to landing page — hamburger button with CSS animate-to-X; dropdown reveals How It Works / Features / Pricing / Industries + CTAs; closes on anchor click — DONE 2026-05-28
 
 ### WCAG Accessibility
 

@@ -468,9 +468,39 @@ footer {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
 
+/* ── HAMBURGER ── */
+.hamburger {
+  display: none; flex-direction: column; justify-content: center;
+  gap: 5px; width: 40px; height: 40px; cursor: pointer;
+  background: transparent; border: none; padding: 6px;
+  border-radius: 8px; transition: background 0.2s; margin-left: 12px;
+}
+.hamburger:hover { background: rgba(255,255,255,0.08); }
+.hamburger span {
+  display: block; height: 2px; border-radius: 2px;
+  background: var(--text); transition: all 0.25s;
+}
+.nav-mobile-menu {
+  display: none; flex-direction: column;
+  background: rgba(8,8,8,0.97); border-top: 1px solid var(--border);
+  padding: 16px 24px 24px; gap: 0;
+}
+.nav-mobile-menu.open { display: flex; }
+.nav-mobile-menu a {
+  padding: 12px 0; color: var(--text-muted); text-decoration: none;
+  font-size: 15px; border-bottom: 1px solid var(--border);
+  transition: color 0.2s;
+}
+.nav-mobile-menu a:last-child { border-bottom: none; }
+.nav-mobile-menu a:hover { color: var(--text); }
+.nav-mobile-cta {
+  display: flex; gap: 10px; padding-top: 16px; flex-wrap: wrap;
+}
+
 @media (max-width: 900px) {
   nav { padding: 0 24px; }
   .nav-links { display: none; }
+  .hamburger { display: flex; }
   .hero { padding: 100px 24px 60px; }
   .hero-inner { grid-template-columns: 1fr; gap: 48px; }
   .feat-grid-hero { grid-template-columns: 1fr 1fr; }
@@ -491,7 +521,7 @@ const LANDING_HTML = `
 <div class="grid-bg"></div>
 
 <!-- NAV -->
-<nav>
+<nav id="main-nav">
   <a href="#" class="nav-logo">
     <div class="nav-logo-icon">
       <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
@@ -507,8 +537,21 @@ const LANDING_HTML = `
   <div class="nav-cta">
     <a href="/dashboard" class="btn-login">Log in</a>
     <a href="/register" class="btn-primary">Start free trial</a>
+    <button class="hamburger" id="hamburger-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+      <span></span><span></span><span></span>
+    </button>
   </div>
 </nav>
+<div class="nav-mobile-menu" id="mobile-menu" role="navigation" aria-label="Mobile navigation">
+  <a href="#how" onclick="closeMobileMenu()">How It Works</a>
+  <a href="#features" onclick="closeMobileMenu()">Features</a>
+  <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
+  <a href="#industries" onclick="closeMobileMenu()">Industries</a>
+  <div class="nav-mobile-cta">
+    <a href="/dashboard" class="btn-login">Log in</a>
+    <a href="/register" class="btn-primary">Start free trial</a>
+  </div>
+</div>
 
 <!-- HERO -->
 <section class="hero">
@@ -905,6 +948,39 @@ const observer = new IntersectionObserver((entries) => {
   entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Hamburger menu toggle
+const hamburgerBtn = document.getElementById('hamburger-btn');
+const mobileMenu = document.getElementById('mobile-menu');
+if (hamburgerBtn && mobileMenu) {
+  hamburgerBtn.addEventListener('click', () => {
+    const isOpen = mobileMenu.classList.toggle('open');
+    hamburgerBtn.setAttribute('aria-expanded', String(isOpen));
+    // Animate hamburger → X
+    const spans = hamburgerBtn.querySelectorAll('span');
+    if (isOpen) {
+      spans[0].style.transform = 'translateY(7px) rotate(45deg)';
+      spans[1].style.opacity = '0';
+      spans[2].style.transform = 'translateY(-7px) rotate(-45deg)';
+    } else {
+      spans[0].style.transform = '';
+      spans[1].style.opacity = '';
+      spans[2].style.transform = '';
+    }
+  });
+}
+function closeMobileMenu() {
+  if (mobileMenu) mobileMenu.classList.remove('open');
+  if (hamburgerBtn) {
+    hamburgerBtn.setAttribute('aria-expanded', 'false');
+    const spans = hamburgerBtn.querySelectorAll('span');
+    spans[0].style.transform = ''; spans[1].style.opacity = ''; spans[2].style.transform = '';
+  }
+}
+// Close on anchor click (smooth scroll already handled by html { scroll-behavior: smooth })
+document.querySelectorAll('.nav-mobile-menu a[href^="#"]').forEach(a => {
+  a.addEventListener('click', closeMobileMenu);
+});
 </script>
 `;
 
