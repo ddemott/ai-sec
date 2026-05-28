@@ -122,6 +122,8 @@
 
 ## P3 — Low / Backlog
 
+- [ ] **[P1][S]** iPad: shift delete button `px-1.5 py-0.5` resolves to ~26px tall — below 44px iOS touch target; was made visible (opacity-40) but still too small to reliably tap; increase to `min-h-[44px] px-3` — `dashboard/components/scheduler/StaffSwimLaneView.tsx:419` — _source: iPad review of completed items_
+- [ ] **[P2][S]** iPad: "Add customer" button in CRMView empty state uses `size="sm"` (40px) — just below 44px minimum; change to `size="md"` — `dashboard/components/CRMView.tsx` — _source: iPad review of completed items_
 - [ ] **[P3][S]** KB: add "show unanswered only" toggle — owners finishing remaining questions must open every accordion to find them; toggle or sort unanswered categories to top — `dashboard/components/KnowledgeBaseView.tsx` — _source: KB review #16_
 - [ ] **[P3][S]** Add empty-state context to Calls tab — explain calls appear once AI is live — `dashboard/components/VoiceCallsView.tsx` — _source: audit #F5_
 - [ ] **[P3][M]** Migrate `FirstRunTour` to shared Modal primitive — no Escape handling or focus trap — `dashboard/components/FirstRunTour.tsx` — _source: audit #DS4_
