@@ -6,7 +6,7 @@ import { Input } from '../ui/Input';
 import { CustomerCombobox } from '../ui/CustomerCombobox';
 import { Api } from '../../lib/api';
 import { useVocabulary } from '@/lib/VocabularyContext';
-import { useServiceMappings } from '../../lib/hooks';
+import { useServiceMappings, useTenantTimezone } from '../../lib/hooks';
 import { filterEmployeesByService, filterResourcesByService } from '../../lib/availability';
 import { validateAppointmentTimeRange } from '../../lib/appointmentValidation';
 import { ConflictModal, type BookingConflict, type AvailableAlternative } from './ConflictModal';
@@ -68,6 +68,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
   onBooked,
 }) => {
   const vocab = useVocabulary();
+  const tenantTimezone = useTenantTimezone();
   const [customerId, setCustomerId] = useState('');
   // Local copy of the customer list so an inline-created walk-in appears in
   // the combobox immediately, without waiting for the parent's `customers`
@@ -246,10 +247,11 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
   return (
     <div
-      className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-[#1a1a1a] shadow-2xl border-l border-gray-200 dark:border-gray-800 z-30 flex flex-col animate-in slide-in-from-right duration-200"
+      className="fixed inset-y-0 right-0 w-full sm:w-96 shadow-2xl border-l z-30 flex flex-col animate-in slide-in-from-right duration-200"
+      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
       data-testid="quick-book-panel"
     >
-      <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+      <header className="px-4 py-3 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4" style={{ color: 'var(--warning)' }} />
           <h3 className="font-bold text-gray-900 dark:text-gray-100">Quick Book</h3>
@@ -359,6 +361,14 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
         {/* Time — step="900" enforces 15-minute increments at the form
             level (browser arrow keys + reportValidity); the JS validator
             and the DB CHECK constraint are the safety nets behind it. */}
+        {/* Timezone hint — front-desk staff in a different local zone
+            would create bookings relative to their clock without this.
+            2026-05-28 UX audit #F2. */}
+        {tenantTimezone && (
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Times are in {tenantTimezone}
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Input
             type="datetime-local"

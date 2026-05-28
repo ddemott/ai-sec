@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecretaryHQ UX Audit — 2026-05-28</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --p0: #dc2626; --p1: #ea580c; --p2: #ca8a04; --p3: #6b7280;
+    --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+    --text: #0f172a; --muted: #64748b;
+    --s: effort-s; --radius: 8px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  h2 { font-size: 20px; font-weight: 700; margin: 48px 0 16px; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin-bottom: 12px; color: var(--text); }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; color: #fff; letter-spacing: .4px; text-transform: uppercase; }
+  .p0 { background: var(--p0); } .p1 { background: var(--p1); } .p2 { background: var(--p2); } .p3 { background: var(--p3); }
+  .es { background: #16a34a; } .em { background: #0284c7; } .el { background: #7c3aed; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .finding-num { font-size: 13px; font-weight: 700; color: var(--muted); }
+  .finding-title { font-size: 17px; font-weight: 700; flex: 1; }
+  .file-ref { font-size: 12px; font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #334155; display: inline-block; margin: 2px 2px 2px 0; }
+  .rationale { color: #475569; font-size: 14px; line-height: 1.6; margin-top: 10px; }
+  .wireframes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .wireframe-label { font-size: 12px; font-weight: 600; color: var(--muted); text-align: center; margin-top: 6px; }
+  svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 2px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: #f8fafc; }
+  .category-section { margin-bottom: 32px; }
+  .finding-row { padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .finding-row:last-child { border-bottom: none; }
+  @media (max-width: 600px) { .wireframes { grid-template-columns: 1fr; } .wrap { padding: 20px 16px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>SecretaryHQ — UX / UI Audit</h1>
+<p class="meta">Generated 2026-05-28T08:53 &nbsp;|&nbsp; Dashboard: Next.js 14 App Router + Tailwind &nbsp;|&nbsp; Auditor: /ux-audit skill</p>
+
+<!-- ══════════════════════════════════════════════════════
+     1. EXECUTIVE SUMMARY
+══════════════════════════════════════════════════════ -->
+<h2>1. Executive Summary</h2>
+<div class="card">
+<p>SecretaryHQ has a strong structural foundation: a clear tab hierarchy, consistent dark-theme design tokens, role-based access control, and excellent keyboard-shortcut coverage. The most critical gaps are concentrated in the first-run experience and the scheduler — two surfaces where new users either abandon or succeed. The setup wizard produces correct data but gives no sense of progress toward "live," leaving first-time owners unsure whether the AI is actually ready to take calls. The scheduler's hour-column grid, while now left-anchored, still uses <code>text-[10px]</code> labels (6.7px at default zoom) that violate WCAG 2.1 AA minimum 12px body-text requirements across 18+ component files. Mobile support is good at 375px for primary flows but the QuickBook panel and scheduler horizontal scroll are the two surfaces most likely to break on iPad in landscape. Overall: fix the 3 P0s and 5 P1s first — together they represent the highest drop-off risk for a new business owner completing onboarding and booking their first appointment.</p>
+
+<svg viewBox="0 0 560 130" xmlns="http://www.w3.org/2000/svg" style="margin-top:20px;width:100%;max-width:560px">
+  <text x="0" y="16" font-size="12" font-weight="700" fill="#64748b">SEVERITY DISTRIBUTION</text>
+  <!-- P0 bar -->
+  <rect x="0" y="28" width="90" height="30" rx="4" fill="#dc2626"/>
+  <text x="46" y="48" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">P0 × 3</text>
+  <!-- P1 bar -->
+  <rect x="100" y="28" width="150" height="30" rx="4" fill="#ea580c"/>
+  <text x="176" y="48" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">P1 × 5</text>
+  <!-- P2 bar -->
+  <rect x="260" y="28" width="180" height="30" rx="4" fill="#ca8a04"/>
+  <text x="351" y="48" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">P2 × 8</text>
+  <!-- P3 bar -->
+  <rect x="450" y="28" width="110" height="30" rx="4" fill="#6b7280"/>
+  <text x="506" y="48" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">P3 × 4</text>
+  <!-- Labels -->
+  <text x="45" y="76" font-size="11" fill="#dc2626" text-anchor="middle" font-weight="700">Critical</text>
+  <text x="175" y="76" font-size="11" fill="#ea580c" text-anchor="middle" font-weight="700">High</text>
+  <text x="350" y="76" font-size="11" fill="#ca8a04" text-anchor="middle" font-weight="700">Medium</text>
+  <text x="505" y="76" font-size="11" fill="#6b7280" text-anchor="middle" font-weight="700">Low</text>
+  <text x="0" y="100" font-size="11" fill="#94a3b8">Total: 20 findings across 5 categories</text>
+</svg>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     2. VISUAL SITEMAP
+══════════════════════════════════════════════════════ -->
+<h2>2. Visual Sitemap</h2>
+<div class="card">
+<svg viewBox="0 0 920 460" xmlns="http://www.w3.org/2000/svg" style="width:100%;font-size:11px">
+  <!-- Landing / Auth -->
+  <rect x="10" y="10" width="120" height="36" rx="6" fill="#2563eb"/>
+  <text x="70" y="33" text-anchor="middle" fill="#fff" font-weight="700">/ Landing</text>
+
+  <rect x="150" y="10" width="120" height="36" rx="6" fill="#2563eb"/>
+  <text x="210" y="33" text-anchor="middle" fill="#fff" font-weight="700">/register</text>
+
+  <rect x="290" y="10" width="130" height="36" rx="6" fill="#2563eb"/>
+  <text x="355" y="33" text-anchor="middle" fill="#fff" font-weight="700">/forgot-password</text>
+
+  <rect x="440" y="10" width="130" height="36" rx="6" fill="#2563eb"/>
+  <text x="505" y="33" text-anchor="middle" fill="#fff" font-weight="700">/reset-password</text>
+
+  <!-- Dashboard shell -->
+  <rect x="200" y="90" width="500" height="40" rx="6" fill="#0f172a"/>
+  <text x="450" y="116" text-anchor="middle" fill="#fff" font-weight="700">/dashboard (OutlookLayout shell)</text>
+
+  <!-- Arrow landing → dashboard -->
+  <line x1="450" y1="46" x2="450" y2="90" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Primary tabs -->
+  <rect x="10" y="180" width="100" height="32" rx="5" fill="#1e293b"/>
+  <text x="60" y="201" text-anchor="middle" fill="#e2e8f0" font-size="10">Home</text>
+
+  <rect x="120" y="180" width="100" height="32" rx="5" fill="#1e293b"/>
+  <text x="170" y="201" text-anchor="middle" fill="#e2e8f0" font-size="10">Schedule</text>
+
+  <rect x="230" y="180" width="100" height="32" rx="5" fill="#1e293b"/>
+  <text x="280" y="201" text-anchor="middle" fill="#e2e8f0" font-size="10">Customers</text>
+
+  <rect x="340" y="180" width="80" height="32" rx="5" fill="#1e293b"/>
+  <text x="380" y="201" text-anchor="middle" fill="#e2e8f0" font-size="10">Calls</text>
+
+  <!-- Advanced tabs (owner only) -->
+  <rect x="430" y="180" width="110" height="32" rx="5" fill="#334155"/>
+  <text x="485" y="201" text-anchor="middle" fill="#94a3b8" font-size="10">My Business</text>
+
+  <rect x="550" y="180" width="90" height="32" rx="5" fill="#334155"/>
+  <text x="595" y="201" text-anchor="middle" fill="#94a3b8" font-size="10">My Team</text>
+
+  <rect x="650" y="180" width="120" height="32" rx="5" fill="#334155"/>
+  <text x="710" y="201" text-anchor="middle" fill="#94a3b8" font-size="10">Phone Assistant</text>
+
+  <!-- Account (hidden in profile menu) -->
+  <rect x="780" y="180" width="110" height="32" rx="5" fill="#475569"/>
+  <text x="835" y="201" text-anchor="middle" fill="#cbd5e1" font-size="10">Profile / Settings</text>
+
+  <!-- Arrows from shell to tabs -->
+  <line x1="300" y1="130" x2="60" y2="180" stroke="#475569" stroke-width="1"/>
+  <line x1="380" y1="130" x2="170" y2="180" stroke="#475569" stroke-width="1"/>
+  <line x1="430" y1="130" x2="280" y2="180" stroke="#475569" stroke-width="1"/>
+  <line x1="450" y1="130" x2="380" y2="180" stroke="#475569" stroke-width="1"/>
+  <line x1="490" y1="130" x2="485" y2="180" stroke="#475569" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="520" y1="130" x2="595" y2="180" stroke="#475569" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="560" y1="130" x2="710" y2="180" stroke="#475569" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="590" y1="130" x2="835" y2="180" stroke="#475569" stroke-width="1" stroke-dasharray="4,2"/>
+
+  <!-- Sub-views of Schedule -->
+  <rect x="80" y="270" width="80" height="26" rx="4" fill="#1e40af"/>
+  <text x="120" y="287" text-anchor="middle" fill="#bfdbfe" font-size="9">Staff view</text>
+  <rect x="168" y="270" width="80" height="26" rx="4" fill="#1e40af"/>
+  <text x="208" y="287" text-anchor="middle" fill="#bfdbfe" font-size="9">Lines view</text>
+  <rect x="255" y="270" width="70" height="26" rx="4" fill="#1e40af"/>
+  <text x="290" y="287" text-anchor="middle" fill="#bfdbfe" font-size="9">List view</text>
+  <line x1="170" y1="212" x2="120" y2="270" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="170" y1="212" x2="208" y2="270" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="170" y1="212" x2="290" y2="270" stroke="#3b82f6" stroke-width="1"/>
+
+  <!-- Sub-views of My Business -->
+  <rect x="390" y="270" width="75" height="26" rx="4" fill="#1e3a5f"/>
+  <text x="428" y="287" text-anchor="middle" fill="#93c5fd" font-size="9">Services</text>
+  <rect x="472" y="270" width="75" height="26" rx="4" fill="#1e3a5f"/>
+  <text x="510" y="287" text-anchor="middle" fill="#93c5fd" font-size="9">Resources</text>
+  <rect x="554" y="270" width="75" height="26" rx="4" fill="#1e3a5f"/>
+  <text x="592" y="287" text-anchor="middle" fill="#93c5fd" font-size="9">Coverage</text>
+  <line x1="485" y1="212" x2="428" y2="270" stroke="#60a5fa" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="485" y1="212" x2="510" y2="270" stroke="#60a5fa" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="485" y1="212" x2="592" y2="270" stroke="#60a5fa" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- Sub-views of Phone Assistant -->
+  <rect x="630" y="270" width="80" height="26" rx="4" fill="#1e3a5f"/>
+  <text x="670" y="287" text-anchor="middle" fill="#93c5fd" font-size="9">Config/Prompt</text>
+  <rect x="718" y="270" width="80" height="26" rx="4" fill="#1e3a5f"/>
+  <text x="758" y="287" text-anchor="middle" fill="#93c5fd" font-size="9">Knowledge</text>
+  <rect x="806" y="270" width="80" height="26" rx="4" fill="#1e3a5f"/>
+  <text x="846" y="287" text-anchor="middle" fill="#93c5fd" font-size="9">Analytics</text>
+  <line x1="710" y1="212" x2="670" y2="270" stroke="#60a5fa" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="710" y1="212" x2="758" y2="270" stroke="#60a5fa" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="710" y1="212" x2="846" y2="270" stroke="#60a5fa" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- Modals -->
+  <rect x="10" y="360" width="110" height="26" rx="4" fill="#292524"/>
+  <text x="65" y="377" text-anchor="middle" fill="#d6d3d1" font-size="9">QuickBook Panel</text>
+  <rect x="128" y="360" width="110" height="26" rx="4" fill="#292524"/>
+  <text x="183" y="377" text-anchor="middle" fill="#d6d3d1" font-size="9">Setup Wizard (solo/team)</text>
+  <rect x="246" y="360" width="100" height="26" rx="4" fill="#292524"/>
+  <text x="296" y="377" text-anchor="middle" fill="#d6d3d1" font-size="9">First Run Tour</text>
+  <rect x="354" y="360" width="100" height="26" rx="4" fill="#292524"/>
+  <text x="404" y="377" text-anchor="middle" fill="#d6d3d1" font-size="9">Conflict Modal</text>
+
+  <!-- Legend -->
+  <rect x="0" y="430" width="12" height="12" rx="2" fill="#2563eb"/>
+  <text x="16" y="441" font-size="10" fill="#64748b">Auth routes</text>
+  <rect x="90" y="430" width="12" height="12" rx="2" fill="#0f172a"/>
+  <text x="106" y="441" font-size="10" fill="#64748b">Shell</text>
+  <rect x="150" y="430" width="12" height="12" rx="2" fill="#1e293b"/>
+  <text x="166" y="441" font-size="10" fill="#64748b">Primary tabs (all roles)</text>
+  <rect x="320" y="430" width="12" height="12" rx="2" fill="#334155"/>
+  <text x="336" y="441" font-size="10" fill="#64748b">Owner-only tabs</text>
+  <rect x="460" y="430" width="12" height="12" rx="2" fill="#292524"/>
+  <text x="476" y="441" font-size="10" fill="#64748b">Overlays / modals</text>
+
+  <defs>
+    <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     3. TOP 10 PRIORITIZED IMPROVEMENTS
+══════════════════════════════════════════════════════ -->
+<h2>3. Top 10 Prioritized Improvements</h2>
+
+<!-- Finding #1 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#1</span>
+    <span class="finding-title">Setup wizard has no "Go Live" readiness signal — owners don't know if the AI is active</span>
+    <span class="badge p0">P0</span><span class="badge em">M</span>
+  </div>
+  <span class="file-ref">dashboard/components/SetupWizard/Step7GoLive.tsx</span>
+  <span class="file-ref">dashboard/components/SetupProgressPill.tsx</span>
+  <span class="file-ref">dashboard/components/DashboardHome.tsx:141</span>
+  <p class="rationale">Step 7 ("You're live") closes the wizard but leaves the owner on the Home tab with no visual indicator that the phone number is active and receiving calls. <code>needsSetup</code> only checks services/employees/resources — it never checks whether a phone number is provisioned. A new owner who completes the wizard but hasn't provisioned a number still sees the same dashboard as one whose AI is live. The SetupProgressPill disappears on complete without any "You're live" confirmation. Add a persistent "Phone active" / "Phone not yet active" status card on Home that links to provisioning when offline.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <rect x="10" y="10" width="260" height="40" rx="4" fill="#dcfce7"/>
+        <text x="140" y="27" text-anchor="middle" font-size="11" fill="#166534" font-weight="700">Setup complete!</text>
+        <text x="140" y="42" text-anchor="middle" font-size="9" fill="#15803d">Wizard step 7 done</text>
+        <text x="140" y="80" text-anchor="middle" font-size="10" fill="#64748b">Home tab — no phone status</text>
+        <text x="140" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">Owner doesn't know if AI is live</text>
+      </svg>
+      <p class="wireframe-label">Current — no live status</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <rect x="10" y="10" width="260" height="46" rx="4" fill="#dcfce7" stroke="#86efac"/>
+        <circle cx="28" cy="33" r="8" fill="#16a34a"/>
+        <text x="22" y="37" font-size="10" fill="#fff" font-weight="700">✓</text>
+        <text x="44" y="28" font-size="11" fill="#166534" font-weight="700">AI Receptionist LIVE</text>
+        <text x="44" y="44" font-size="9" fill="#15803d">+1-630-937-9478 · receiving calls</text>
+        <rect x="10" y="64" width="260" height="46" rx="4" fill="#fef9c3" stroke="#fde047"/>
+        <circle cx="28" cy="87" r="8" fill="#ca8a04"/>
+        <text x="23" y="91" font-size="10" fill="#fff" font-weight="700">!</text>
+        <text x="44" y="82" font-size="11" fill="#713f12" font-weight="700">No phone number yet</text>
+        <text x="44" y="98" font-size="9" fill="#92400e">Activate a number → Phone Assistant tab</text>
+      </svg>
+      <p class="wireframe-label">Proposed — explicit live status</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #2 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#2</span>
+    <span class="finding-title">Sub-WCAG text sizes (text-[10px]) used for operational data in 18+ files</span>
+    <span class="badge p0">P0</span><span class="badge el">L</span>
+  </div>
+  <span class="file-ref">dashboard/components/DashboardHome.tsx:426,685,707,716</span>
+  <span class="file-ref">dashboard/components/scheduler/NewSchedulerView.tsx (hour labels)</span>
+  <span class="file-ref">dashboard/components/ShiftManagementView.tsx:347,472</span>
+  <span class="file-ref">dashboard/components/ServiceAssignmentView.tsx:390,437</span>
+  <p class="rationale">WCAG 2.1 AA requires minimum 12px for body text. <code>text-[10px]</code> resolves to ~10px (6.7px at 67% zoom common on HiDPI laptops). This class appears on customer names, shift times, service labels, and dashboard card metadata — all operationally critical. At 10px, contrast ratios also effectively drop below 3:1 for light-on-dark text. Replace all <code>text-[10px]</code> informational instances with <code>text-xs</code> (12px). Keep 10px only for decorative uppercase trackers where no data depends on it.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 100" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="100" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="28" font-size="10" fill="#64748b">UPCOMING · 3 BOOKINGS</text>
+        <text x="14" y="50" font-size="10" fill="#94a3b8">John Smith · 9am · Tire Rotation</text>
+        <text x="14" y="66" font-size="10" fill="#94a3b8">Maria Garcia · 11am · Oil Change</text>
+        <rect x="14" y="78" width="180" height="2" rx="1" fill="#fecaca"/>
+        <text x="14" y="92" font-size="9" fill="#dc2626">← 10px text — fails WCAG AA</text>
+      </svg>
+      <p class="wireframe-label">Current — 10px fails contrast</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 100" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="100" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="26" font-size="10" fill="#94a3b8" font-weight="700">UPCOMING · 3 BOOKINGS</text>
+        <text x="14" y="48" font-size="12" fill="#475569">John Smith · 9am · Tire Rotation</text>
+        <text x="14" y="66" font-size="12" fill="#475569">Maria Garcia · 11am · Oil Change</text>
+        <rect x="14" y="78" width="180" height="2" rx="1" fill="#86efac"/>
+        <text x="14" y="92" font-size="9" fill="#16a34a">← 12px text — passes WCAG AA</text>
+      </svg>
+      <p class="wireframe-label">Proposed — 12px passes</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #3 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#3</span>
+    <span class="finding-title">SetupProgressPill hidden on mobile (md:hidden) — new owners on phones lose onboarding path</span>
+    <span class="badge p0">P0</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/SetupProgressPill.tsx (hidden md:flex)</span>
+  <span class="file-ref">dashboard/components/OutlookLayout.tsx:411 (mobile nav)</span>
+  <p class="rationale">The setup progress pill uses <code>hidden md:flex</code>, meaning it is completely invisible on phones (&lt;768px). A new owner signing up on mobile has no affordance to resume the wizard. The mobile bottom nav has no setup entry point either. The fix is a compact icon-only version of the pill for small screens — same link target, just the wand icon + dot-progress — rendered in the mobile bottom nav's overflow or as a floating chip above it.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 180 300" xmlns="http://www.w3.org/2000/svg">
+        <rect width="180" height="300" rx="8" fill="#0f172a"/>
+        <rect x="0" y="0" width="180" height="44" rx="0" fill="#1e293b"/>
+        <text x="90" y="27" text-anchor="middle" font-size="10" fill="#64748b">No setup pill visible here</text>
+        <rect x="0" y="244" width="180" height="56" rx="0" fill="#1e293b"/>
+        <text x="22" y="275" font-size="9" fill="#94a3b8" text-anchor="middle">Home</text>
+        <text x="67" y="275" font-size="9" fill="#94a3b8" text-anchor="middle">Schedule</text>
+        <text x="112" y="275" font-size="9" fill="#94a3b8" text-anchor="middle">Customers</text>
+        <text x="157" y="275" font-size="9" fill="#94a3b8" text-anchor="middle">Calls</text>
+        <text x="90" y="150" text-anchor="middle" font-size="10" fill="#475569">Mobile user has</text>
+        <text x="90" y="165" text-anchor="middle" font-size="10" fill="#475569">no way to reopen wizard</text>
+      </svg>
+      <p class="wireframe-label">Current — pill invisible mobile</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 180 300" xmlns="http://www.w3.org/2000/svg">
+        <rect width="180" height="300" rx="8" fill="#0f172a"/>
+        <rect x="0" y="0" width="180" height="44" rx="0" fill="#1e293b"/>
+        <rect x="0" y="230" width="180" height="70" rx="0" fill="#1e293b"/>
+        <text x="22" y="270" font-size="9" fill="#94a3b8" text-anchor="middle">Home</text>
+        <text x="67" y="270" font-size="9" fill="#94a3b8" text-anchor="middle">Schedule</text>
+        <text x="112" y="270" font-size="9" fill="#94a3b8" text-anchor="middle">Customers</text>
+        <text x="157" y="270" font-size="9" fill="#94a3b8" text-anchor="middle">Calls</text>
+        <!-- Setup chip above nav -->
+        <rect x="30" y="210" width="120" height="24" rx="12" fill="#1d4ed8" stroke="#3b82f6" stroke-width="1"/>
+        <text x="90" y="226" text-anchor="middle" font-size="10" fill="#bfdbfe" font-weight="700">Setup: 3 of 6 ✦✦✦○○○</text>
+        <text x="90" y="150" text-anchor="middle" font-size="10" fill="#94a3b8">Persistent chip above</text>
+        <text x="90" y="164" text-anchor="middle" font-size="10" fill="#94a3b8">mobile nav</text>
+      </svg>
+      <p class="wireframe-label">Proposed — compact chip</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #4 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#4</span>
+    <span class="finding-title">QuickBook panel uses bg-white / dark:bg-[#1a1a1a] — breaks on 6 of 8 custom themes</span>
+    <span class="badge p1">P1</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/scheduler/QuickBookPanel.tsx:249</span>
+  <span class="file-ref">dashboard/components/scheduler/EmployeeDayFocusPanel.tsx:53</span>
+  <p class="rationale">The QuickBook slide-over panel and EmployeeDayFocusPanel hardcode <code>bg-white dark:bg-[#1a1a1a]</code> instead of CSS variables. On Forest, Sunset, Nord, Crimson, Discord, or Midnight themes this creates a bright white (or mismatched dark) panel against the theme's custom surface colors. Replace with <code>style={{backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)'}}</code> and the <code>border-gray-200 dark:border-gray-800</code> classes with <code>border</code> driven by the CSS variable.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#0a110e"/>
+        <text x="10" y="24" font-size="10" fill="#86efac">Forest theme bg</text>
+        <rect x="140" y="0" width="140" height="120" rx="0" fill="#ffffff"/>
+        <text x="210" y="50" text-anchor="middle" font-size="10" fill="#000">QuickBook panel</text>
+        <text x="210" y="66" text-anchor="middle" font-size="9" fill="#dc2626">bg-white on forest theme</text>
+        <text x="210" y="82" text-anchor="middle" font-size="9" fill="#dc2626">jarring contrast</text>
+      </svg>
+      <p class="wireframe-label">Current — hardcoded white</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#0a110e"/>
+        <text x="10" y="24" font-size="10" fill="#86efac">Forest theme bg</text>
+        <rect x="140" y="0" width="140" height="120" rx="0" fill="#111c15" stroke="#16a34a" stroke-width="1"/>
+        <text x="210" y="50" text-anchor="middle" font-size="10" fill="#e8f5ec">QuickBook panel</text>
+        <text x="210" y="66" text-anchor="middle" font-size="9" fill="#86efac">var(--bg-card)</text>
+        <text x="210" y="82" text-anchor="middle" font-size="9" fill="#4ade80">theme-matched</text>
+      </svg>
+      <p class="wireframe-label">Proposed — CSS var</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #5 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#5</span>
+    <span class="finding-title">Login stores role in localStorage but LoginView never stores userRole — ProfileView shows wrong role</span>
+    <span class="badge p1">P1</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/LoginView.tsx:38-45</span>
+  <span class="file-ref">dashboard/app/register/page.tsx:80</span>
+  <span class="file-ref">dashboard/lib/SessionContext.tsx (reads userRole)</span>
+  <p class="rationale">Register page correctly writes <code>localStorage.setItem('userRole', data.role || 'owner')</code>. LoginView does not write <code>userRole</code> at all — it writes tenantId, userName, userEmail, and authToken but skips role. On next session load, SessionContext reads <code>userRole</code> from localStorage and gets the stale value from the last register call (or undefined). Front-desk users who log in fresh may see owner-level tabs until they log out and back in via register. Fix: add <code>if (data.role) localStorage.setItem('userRole', data.role);</code> to LoginView's success handler.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 80" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="80" rx="6" fill="#fef2f2" stroke="#fecaca"/>
+        <text x="14" y="24" font-size="11" fill="#dc2626" font-weight="700">LoginView success handler</text>
+        <text x="14" y="42" font-size="10" fill="#7f1d1d" font-family="monospace">localStorage.set('tenantId', ...)</text>
+        <text x="14" y="56" font-size="10" fill="#7f1d1d" font-family="monospace">localStorage.set('userName', ...)</text>
+        <text x="14" y="70" font-size="10" fill="#dc2626" font-family="monospace">// userRole NOT set ← bug</text>
+      </svg>
+      <p class="wireframe-label">Current — missing userRole</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 80" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="80" rx="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+        <text x="14" y="24" font-size="11" fill="#166534" font-weight="700">LoginView success handler</text>
+        <text x="14" y="42" font-size="10" fill="#166534" font-family="monospace">localStorage.set('tenantId', ...)</text>
+        <text x="14" y="56" font-size="10" fill="#166534" font-family="monospace">localStorage.set('userName', ...)</text>
+        <text x="14" y="70" font-size="10" fill="#16a34a" font-family="monospace">localStorage.set('userRole', data.role)</text>
+      </svg>
+      <p class="wireframe-label">Fix — add userRole</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #6 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#6</span>
+    <span class="finding-title">Scheduler hour slots have no min-height on mobile — touch targets collapse to ~20px</span>
+    <span class="badge p1">P1</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/scheduler/NewSchedulerView.tsx:1105-1160</span>
+  <p class="rationale">Each hour slot in the scheduler grid is laid out as a flex row with no explicit <code>min-height</code>. When content is sparse (no appointments), cells shrink to match the empty inner div height, often &lt;24px on mobile — far below the 44px iOS HIG / WCAG 2.5.5 touch target minimum. Users tapping to create a booking hit the wrong hour. Add <code>min-h-[44px]</code> to each hour slot div. The StaffSwimLaneView already uses <code>min-h-[48px]</code> on its slots — the NewSchedulerView should match.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="18" font-size="10" fill="#64748b" font-weight="700">Hour slots — no min-height</text>
+        <rect x="60" y="26" width="200" height="14" rx="2" fill="#e2e8f0"/>
+        <text x="160" y="37" text-anchor="middle" font-size="8" fill="#94a3b8">8am — 14px row</text>
+        <rect x="60" y="42" width="200" height="14" rx="2" fill="#e2e8f0"/>
+        <text x="160" y="53" text-anchor="middle" font-size="8" fill="#94a3b8">9am — 14px row</text>
+        <rect x="60" y="58" width="200" height="14" rx="2" fill="#dbeafe"/>
+        <text x="160" y="69" text-anchor="middle" font-size="8" fill="#1e40af">10am appt. — slightly bigger</text>
+        <text x="14" y="95" font-size="9" fill="#dc2626">Finger (44px) spans 3+ rows</text>
+        <text x="14" y="110" font-size="9" fill="#dc2626">→ wrong hour selected</text>
+      </svg>
+      <p class="wireframe-label">Current — &lt;20px touch targets</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="18" font-size="10" fill="#64748b" font-weight="700">Hour slots — min-h-[44px]</text>
+        <rect x="60" y="26" width="200" height="40" rx="2" fill="#e2e8f0"/>
+        <text x="160" y="51" text-anchor="middle" font-size="9" fill="#475569">8am — 44px min</text>
+        <rect x="60" y="70" width="200" height="40" rx="2" fill="#dbeafe"/>
+        <text x="160" y="95" text-anchor="middle" font-size="9" fill="#1e40af">9am — 44px min</text>
+        <text x="14" y="115" font-size="9" fill="#16a34a">Each hour = 1 touch target ✓</text>
+      </svg>
+      <p class="wireframe-label">Proposed — 44px min</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #7 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#7</span>
+    <span class="finding-title">Empty state on Customers tab gives no CTA — users don't know how to add first customer</span>
+    <span class="badge p1">P1</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/CRMView.tsx</span>
+  <span class="file-ref">dashboard/components/ui/EmptyState.tsx</span>
+  <p class="rationale">When a tenant has no customers yet, the Customers tab shows an empty list but no instruction or action button pointing toward "Add a customer" or explaining that customers are auto-created when the AI handles calls. New owners on a fresh account will sit confused. Add an <code>EmptyState</code> component with a "Your customers will appear here after your AI handles calls" message plus an "Add customer manually" button that opens the CustomerCreateModal.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="24" font-size="11" fill="#64748b" font-weight="700">Customers</text>
+        <rect x="14" y="34" width="252" height="74" rx="4" fill="#f1f5f9"/>
+        <text x="140" y="76" text-anchor="middle" font-size="10" fill="#94a3b8">No customers found</text>
+      </svg>
+      <p class="wireframe-label">Current — bare empty list</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 120" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="24" font-size="11" fill="#64748b" font-weight="700">Customers</text>
+        <rect x="14" y="34" width="252" height="74" rx="4" fill="#f1f5f9" stroke="#e2e8f0"/>
+        <text x="140" y="58" text-anchor="middle" font-size="10" fill="#475569">Customers appear after</text>
+        <text x="140" y="72" text-anchor="middle" font-size="10" fill="#475569">your AI handles calls.</text>
+        <rect x="90" y="82" width="100" height="20" rx="10" fill="#2563eb"/>
+        <text x="140" y="96" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">+ Add manually</text>
+      </svg>
+      <p class="wireframe-label">Proposed — empty state + CTA</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #8 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#8</span>
+    <span class="finding-title">Shift delete button is hover-only (opacity-0 group-hover) — invisible on iPad/touch</span>
+    <span class="badge p1">P1</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/scheduler/StaffSwimLaneView.tsx:417-428</span>
+  <p class="rationale">The shift delete button uses <code>opacity-0 group-hover/shift:opacity-100</code> — it only appears on mouse hover. On iPad and touch screens, there is no hover event, so the button is permanently invisible. Owners editing their schedule on a tablet cannot delete a shift block. Replace with a tap-to-reveal pattern: show the button at reduced opacity always (<code>opacity-40</code>), full on hover/focus, and keep it accessible via keyboard focus.</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 80" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="80" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <rect x="14" y="20" width="200" height="40" rx="4" fill="#dcfce7" stroke="#86efac"/>
+        <text x="80" y="45" font-size="10" fill="#166534" font-weight="700">8:00 AM – 5:00 PM</text>
+        <!-- delete button invisible -->
+        <text x="14" y="72" font-size="9" fill="#dc2626">Delete button invisible on touch (opacity-0)</text>
+      </svg>
+      <p class="wireframe-label">Current — hover only</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 80" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="80" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <rect x="14" y="20" width="200" height="40" rx="4" fill="#dcfce7" stroke="#86efac"/>
+        <text x="80" y="45" font-size="10" fill="#166534" font-weight="700">8:00 AM – 5:00 PM</text>
+        <rect x="200" y="24" width="40" height="20" rx="4" fill="#fee2e2" stroke="#fca5a5"/>
+        <text x="220" y="38" text-anchor="middle" font-size="9" fill="#dc2626" font-weight="700">✕ Del</text>
+        <text x="14" y="72" font-size="9" fill="#16a34a">opacity-40 always visible → full on hover/focus</text>
+      </svg>
+      <p class="wireframe-label">Proposed — always visible at 40%</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #9 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#9</span>
+    <span class="finding-title">SoloStepReview finalization uses red/yellow/green coverage pills — violates no-grading rule</span>
+    <span class="badge p1">P1</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/SetupWizard/SoloStepReview.tsx</span>
+  <span class="file-ref">dashboard/components/ui/CoverageStatusBadge.tsx</span>
+  <p class="rationale">The wizard's final step shows service coverage as green "full" / yellow "partial" / red "uncovered" pills. This is the exact grading-UI pattern documented in CLAUDE.md and prior UX reviews as prohibited (it reads like a score-card). A business that's just starting needs factual readiness info, not performance grades. Replace with neutral factual labels: "Assigned", "Partially assigned", "Not yet assigned" — with no color semantics. Use neutral gray + accent-blue for "configured" vs "needs attention".</p>
+  <div class="wireframes">
+    <div>
+      <svg viewBox="0 0 280 90" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="90" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="22" font-size="11" fill="#64748b" font-weight="700">Service coverage</text>
+        <rect x="14" y="30" width="60" height="18" rx="9" fill="#16a34a"/>
+        <text x="44" y="43" text-anchor="middle" font-size="9" fill="#fff" font-weight="700">full</text>
+        <rect x="82" y="30" width="64" height="18" rx="9" fill="#ca8a04"/>
+        <text x="114" y="43" text-anchor="middle" font-size="9" fill="#fff" font-weight="700">partial</text>
+        <rect x="154" y="30" width="80" height="18" rx="9" fill="#dc2626"/>
+        <text x="194" y="43" text-anchor="middle" font-size="9" fill="#fff" font-weight="700">uncovered</text>
+        <text x="14" y="72" font-size="9" fill="#dc2626">Color grades look like a pass/fail score card</text>
+      </svg>
+      <p class="wireframe-label">Current — graded colors</p>
+    </div>
+    <div>
+      <svg viewBox="0 0 280 90" xmlns="http://www.w3.org/2000/svg">
+        <rect width="280" height="90" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+        <text x="14" y="22" font-size="11" fill="#64748b" font-weight="700">Service setup</text>
+        <rect x="14" y="30" width="70" height="18" rx="4" fill="#e0e7ff" stroke="#a5b4fc"/>
+        <text x="49" y="43" text-anchor="middle" font-size="9" fill="#3730a3" font-weight="700">Assigned</text>
+        <rect x="92" y="30" width="110" height="18" rx="4" fill="#f1f5f9" stroke="#cbd5e1"/>
+        <text x="147" y="43" text-anchor="middle" font-size="9" fill="#475569" font-weight="700">Partly assigned</text>
+        <rect x="210" y="30" width="56" height="18" rx="4" fill="#f1f5f9" stroke="#cbd5e1"/>
+        <text x="238" y="43" text-anchor="middle" font-size="9" fill="#94a3b8" font-weight="700">Open</text>
+        <text x="14" y="72" font-size="9" fill="#16a34a">Neutral factual labels, no grade semantics</text>
+      </svg>
+      <p class="wireframe-label">Proposed — neutral labels</p>
+    </div>
+  </div>
+</div>
+
+<!-- Finding #10 -->
+<div class="card">
+  <div class="finding-header">
+    <span class="finding-num">#10</span>
+    <span class="finding-title">Profile menu shows only "My Profile" and "Business Settings" — no visible path to Help/Docs</span>
+    <span class="badge p2">P2</span><span class="badge es">S</span>
+  </div>
+  <span class="file-ref">dashboard/components/OutlookLayout.tsx:530-565</span>
+  <p class="rationale">The profile dropdown contains only "My Profile", "Business Settings", and "Sign Out". There is no link to documentation, help, keyboard shortcuts, or support. New users have no discoverable path to learn the product beyond the first-run tour. Add a "Keyboard shortcuts (?)" item that triggers the ShortcutsHelpModal — it's already wired but only discoverable via the <code>?</code> key. Optionally add a "Help / Docs" external link.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     4. FULL FINDINGS BY CATEGORY
+══════════════════════════════════════════════════════ -->
+<h2>4. Full Findings by Category</h2>
+
+<!-- HEATMAP -->
+<div class="card">
+<h3>Severity Heatmap by Category</h3>
+<svg viewBox="0 0 700 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;margin-top:10px">
+  <!-- Headers -->
+  <text x="150" y="20" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle">Flows</text>
+  <text x="270" y="20" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle">Heuristics</text>
+  <text x="390" y="20" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle">Devices</text>
+  <text x="510" y="20" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle">Design</text>
+  <text x="630" y="20" font-size="11" font-weight="700" fill="#64748b" text-anchor="middle">Natural Use</text>
+  <!-- Row labels -->
+  <text x="10" y="52" font-size="11" font-weight="700" fill="#dc2626">P0</text>
+  <text x="10" y="92" font-size="11" font-weight="700" fill="#ea580c">P1</text>
+  <text x="10" y="132" font-size="11" font-weight="700" fill="#ca8a04">P2</text>
+  <text x="10" y="172" font-size="11" font-weight="700" fill="#6b7280">P3</text>
+  <!-- Cells: Flows -->
+  <rect x="100" y="28" width="100" height="36" rx="4" fill="#dc2626" opacity=".8"/>
+  <text x="150" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="100" y="68" width="100" height="36" rx="4" fill="#ea580c" opacity=".7"/>
+  <text x="150" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+  <rect x="100" y="108" width="100" height="36" rx="4" fill="#ca8a04" opacity=".4"/>
+  <text x="150" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="100" y="148" width="100" height="36" rx="4" fill="#6b7280" opacity=".3"/>
+  <text x="150" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <!-- Heuristics -->
+  <rect x="220" y="28" width="100" height="36" rx="4" fill="#dc2626" opacity=".5"/>
+  <text x="270" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="220" y="68" width="100" height="36" rx="4" fill="#ea580c" opacity=".7"/>
+  <text x="270" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+  <rect x="220" y="108" width="100" height="36" rx="4" fill="#ca8a04" opacity=".6"/>
+  <text x="270" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">3</text>
+  <rect x="220" y="148" width="100" height="36" rx="4" fill="#6b7280" opacity=".3"/>
+  <text x="270" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <!-- Devices -->
+  <rect x="340" y="28" width="100" height="36" rx="4" fill="#dc2626" opacity=".8"/>
+  <text x="390" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="340" y="68" width="100" height="36" rx="4" fill="#ea580c" opacity=".8"/>
+  <text x="390" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="340" y="108" width="100" height="36" rx="4" fill="#ca8a04" opacity=".4"/>
+  <text x="390" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="340" y="148" width="100" height="36" rx="4" fill="#6b7280" opacity=".2"/>
+  <text x="390" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">0</text>
+  <!-- Design -->
+  <rect x="460" y="28" width="100" height="36" rx="4" fill="#dc2626" opacity=".3"/>
+  <text x="510" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">0</text>
+  <rect x="460" y="68" width="100" height="36" rx="4" fill="#ea580c" opacity=".3"/>
+  <text x="510" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">0</text>
+  <rect x="460" y="108" width="100" height="36" rx="4" fill="#ca8a04" opacity=".7"/>
+  <text x="510" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+  <rect x="460" y="148" width="100" height="36" rx="4" fill="#6b7280" opacity=".5"/>
+  <text x="510" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">2</text>
+  <!-- Natural Use -->
+  <rect x="580" y="28" width="100" height="36" rx="4" fill="#dc2626" opacity=".3"/>
+  <text x="630" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">0</text>
+  <rect x="580" y="68" width="100" height="36" rx="4" fill="#ea580c" opacity=".5"/>
+  <text x="630" y="92" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">0</text>
+  <rect x="580" y="108" width="100" height="36" rx="4" fill="#ca8a04" opacity=".6"/>
+  <text x="630" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">1</text>
+  <rect x="580" y="148" width="100" height="36" rx="4" fill="#6b7280" opacity=".5"/>
+  <text x="630" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">0</text>
+</svg>
+</div>
+
+<div class="category-section">
+<h3>4.1 Flows</h3>
+<div class="finding-row">
+  <span class="badge p0">P0</span>&nbsp;<strong>#F1 — Setup wizard has no phone-active status post-completion</strong><br>
+  <span class="file-ref">SetupWizard/Step7GoLive.tsx</span> <span class="file-ref">DashboardHome.tsx:141</span><br>
+  <span style="font-size:13px;color:#475569">After completing the wizard, the owner cannot tell if the AI is actually receiving calls. <code>needsSetup</code> only checks entity counts, not phone provisioning. Add a "Phone status" card on Home. (See Top 10 #1.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p1">P1</span>&nbsp;<strong>#F2 — Booking creation: no time-zone disambiguation shown to front-desk</strong><br>
+  <span class="file-ref">scheduler/QuickBookPanel.tsx:170</span><br>
+  <span style="font-size:13px;color:#475569">The QuickBook panel collects start/end time but does not show the tenant's timezone anywhere. A front-desk operator in a different timezone will create bookings relative to their local clock. Show "(America/Chicago)" next to the time inputs.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p1">P1</span>&nbsp;<strong>#F3 — No confirmation after Save in Knowledge Base questionnaire</strong><br>
+  <span class="file-ref">components/KnowledgeBaseView.tsx:50-80</span><br>
+  <span style="font-size:13px;color:#475569">PolicyQuestionField auto-saves on blur/debounce but only shows a fleeting "saved" badge for 2s. On slow connections the save may fail silently. Persist a "saved" + timestamp indicator per field.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#F4 — Customers tab: no guidance on how customers are created</strong><br>
+  <span class="file-ref">components/CRMView.tsx</span><br>
+  <span style="font-size:13px;color:#475569">New owners see an empty customer list with no explanation. (See Top 10 #7.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p3">P3</span>&nbsp;<strong>#F5 — Calls tab: no empty-state message when no voice sessions exist</strong><br>
+  <span class="file-ref">components/VoiceCallsView.tsx</span><br>
+  <span style="font-size:13px;color:#475569">Empty call log with no context about when calls will appear here (after AI is live). Low risk but adds to the "is anything working?" anxiety for new owners.</span>
+</div>
+</div>
+
+<div class="category-section">
+<h3>4.2 Heuristics</h3>
+<div class="finding-row">
+  <span class="badge p0">P0</span>&nbsp;<strong>#H1 — text-[10px] in 18+ components violates WCAG 2.1 AA</strong><br>
+  <span class="file-ref">DashboardHome.tsx:426,685,707</span> <span class="file-ref">ShiftManagementView.tsx:347</span> <span class="file-ref">ServiceAssignmentView.tsx:390</span><br>
+  <span style="font-size:13px;color:#475569">10px fails minimum body-text contrast at any contrast ratio. (See Top 10 #2.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p1">P1</span>&nbsp;<strong>#H2 — Login does not store userRole in localStorage (Nielsen #1: visibility of system status)</strong><br>
+  <span class="file-ref">components/LoginView.tsx:38</span><br>
+  <span style="font-size:13px;color:#475569">Front-desk users see owner-level tabs if localStorage holds a stale owner role from a prior session. (See Top 10 #5.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p1">P1</span>&nbsp;<strong>#H3 — SoloStepReview uses graded color for coverage — violates product rule</strong><br>
+  <span class="file-ref">SetupWizard/SoloStepReview.tsx</span><br>
+  <span style="font-size:13px;color:#475569">Red/yellow/green pills read as pass/fail grades. (See Top 10 #9.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#H4 — Error toasts do not auto-dismiss (by design) but have no "dismiss all" affordance</strong><br>
+  <span class="file-ref">components/ui/Toast.tsx:DURATIONS</span><br>
+  <span style="font-size:13px;color:#475569">Correct that errors stick (CLAUDE.md requirement) but if 5 errors stack, dismissing them individually is tedious. Add a "Dismiss all" button when &gt;2 errors are stacked.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#H5 — Theme selector is a raw &lt;select&gt; in the nav bar — no visual preview</strong><br>
+  <span class="file-ref">components/OutlookLayout.tsx:330-350</span><br>
+  <span style="font-size:13px;color:#475569">8 themes described by name only. A small color swatch next to each option would let users pick without trial-and-error switching.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#H6 — AnalyticsView uses evaluative color semantics for no-show/return-rate metrics</strong><br>
+  <span class="file-ref">components/AnalyticsView.tsx</span><br>
+  <span style="font-size:13px;color:#475569">Red/amber/green return-rate framing violates the no-grading product rule (noted in ux-review-notes.md). Replace with neutral operational colors.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p3">P3</span>&nbsp;<strong>#H7 — Keyboard shortcut discovery: "?" trigger not shown in the UI anywhere</strong><br>
+  <span class="file-ref">dashboard/app/dashboard/page.tsx:shortcuts</span><br>
+  <span style="font-size:13px;color:#475569">The full shortcuts system (g h, g s, /, ?, n) is excellent but 100% invisible without the help modal. Add a tiny "?" icon button or hint in the nav right-rail to surface it.</span>
+</div>
+</div>
+
+<div class="category-section">
+<h3>4.3 Devices</h3>
+<div class="finding-row">
+  <span class="badge p0">P0</span>&nbsp;<strong>#D1 — SetupProgressPill hidden on mobile (hidden md:flex)</strong><br>
+  <span class="file-ref">components/SetupProgressPill.tsx (hidden md:flex)</span><br>
+  <span style="font-size:13px;color:#475569">Zero setup-recovery path on phone. (See Top 10 #3.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p1">P1</span>&nbsp;<strong>#D2 — Scheduler hour slots lack min-height on mobile</strong><br>
+  <span class="file-ref">scheduler/NewSchedulerView.tsx:1105</span><br>
+  <span style="font-size:13px;color:#475569">Touch targets collapse below 44px on empty days. (See Top 10 #6.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#D3 — EmployeeDayFocusPanel fixed width w-96 — clips on phones narrower than 384px</strong><br>
+  <span class="file-ref">scheduler/EmployeeDayFocusPanel.tsx:53</span><br>
+  <span style="font-size:13px;color:#475569">The panel uses fixed <code>w-96</code> (384px) instead of QuickBookPanel's responsive <code>w-full sm:w-96</code>. On iPhone SE (375px) the panel is wider than the screen. Change to <code>w-full sm:w-96</code>.</span>
+</div>
+
+<h4 style="margin:16px 0 8px;font-size:13px;color:#475569">Touch-Target Audit (44px minimum)</h4>
+<svg viewBox="0 0 600 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:600px">
+  <!-- Legend -->
+  <rect x="0" y="0" width="14" height="14" rx="2" fill="#16a34a"/>
+  <text x="18" y="11" font-size="10" fill="#475569">≥44px — pass</text>
+  <rect x="120" y="0" width="14" height="14" rx="2" fill="#ca8a04"/>
+  <text x="138" y="11" font-size="10" fill="#475569">40px — marginal</text>
+  <rect x="260" y="0" width="14" height="14" rx="2" fill="#dc2626"/>
+  <text x="278" y="11" font-size="10" fill="#475569">&lt;44px — fail</text>
+
+  <!-- Button.sm → 40px -->
+  <rect x="0" y="24" width="80" height="40" rx="4" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="40" y="42" text-anchor="middle" font-size="9" fill="#713f12" font-weight="700">Button sm</text>
+  <text x="40" y="56" text-anchor="middle" font-size="9" fill="#92400e">40px ⚠</text>
+
+  <!-- Button.md → 44px -->
+  <rect x="90" y="24" width="80" height="44" rx="4" fill="#dcfce7" stroke="#86efac"/>
+  <text x="130" y="43" text-anchor="middle" font-size="9" fill="#166534" font-weight="700">Button md</text>
+  <text x="130" y="57" text-anchor="middle" font-size="9" fill="#15803d">44px ✓</text>
+
+  <!-- Mobile nav tabs → 56px -->
+  <rect x="180" y="24" width="80" height="56" rx="4" fill="#dcfce7" stroke="#86efac"/>
+  <text x="220" y="49" text-anchor="middle" font-size="9" fill="#166534" font-weight="700">Mobile nav</text>
+  <text x="220" y="63" text-anchor="middle" font-size="9" fill="#15803d">56px ✓</text>
+
+  <!-- Scheduler hour slots → varies -->
+  <rect x="270" y="24" width="100" height="20" rx="4" fill="#fee2e2" stroke="#fca5a5"/>
+  <text x="320" y="38" text-anchor="middle" font-size="9" fill="#7f1d1d" font-weight="700">Sched. slots ~14–20px</text>
+  <text x="320" y="50" text-anchor="middle" font-size="9" fill="#dc2626" opacity=".8">Fail ✗</text>
+
+  <!-- StaffSwimLane slots → 48px -->
+  <rect x="380" y="24" width="100" height="48" rx="4" fill="#dcfce7" stroke="#86efac"/>
+  <text x="430" y="44" text-anchor="middle" font-size="9" fill="#166534" font-weight="700">SwimLane slots</text>
+  <text x="430" y="58" text-anchor="middle" font-size="9" fill="#15803d">48px ✓</text>
+
+  <!-- Profile icon button → 40px -->
+  <rect x="490" y="24" width="80" height="40" rx="4" fill="#fef9c3" stroke="#ca8a04"/>
+  <text x="530" y="42" text-anchor="middle" font-size="9" fill="#713f12" font-weight="700">Profile icon</text>
+  <text x="530" y="56" text-anchor="middle" font-size="9" fill="#92400e">40px ⚠</text>
+</svg>
+</div>
+
+<div class="category-section">
+<h3>4.4 Design</h3>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#DS1 — QuickBookPanel uses hardcoded bg-white / dark:bg-[#1a1a1a], breaks 6 themes</strong><br>
+  <span class="file-ref">scheduler/QuickBookPanel.tsx:249</span> <span class="file-ref">scheduler/EmployeeDayFocusPanel.tsx:53</span><br>
+  <span style="font-size:13px;color:#475569">(See Top 10 #4.)</span>
+</div>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#DS2 — CustomerCombobox uses bg-gray-50 / dark:bg-[#222] — same theme-break pattern</strong><br>
+  <span class="file-ref">components/ui/CustomerCombobox.tsx:117,125</span><br>
+  <span style="font-size:13px;color:#475569">The search input and select within CustomerCombobox hardcode <code>bg-gray-50 dark:bg-[#222]</code>. Replace with <code>var(--bg-raised)</code> and <code>var(--border)</code> per the design system.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p3">P3</span>&nbsp;<strong>#DS3 — Landing page (/app/page.tsx) loads Google Fonts from fonts.googleapis.com — external dep + privacy</strong><br>
+  <span class="file-ref">dashboard/app/page.tsx (LANDING_CSS uses DM Sans, Bebas Neue from CDN)</span><br>
+  <span style="font-size:13px;color:#475569">The landing page inlines a CSS block that references Google Fonts. Self-host via Next.js font loading (<code>next/font</code>) to eliminate the external request and GDPR font-fingerprinting risk.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p3">P3</span>&nbsp;<strong>#DS4 — FirstRunTour uses custom dialog without shared Modal primitives</strong><br>
+  <span class="file-ref">components/FirstRunTour.tsx</span><br>
+  <span style="font-size:13px;color:#475569">The tour modal does not reuse the shared Modal component, so it lacks consistent Escape handling and focus trapping. Noted in prior UX review. Migrate to shared Modal.</span>
+</div>
+</div>
+
+<div class="category-section">
+<h3>4.5 Natural Use</h3>
+<div class="finding-row">
+  <span class="badge p2">P2</span>&nbsp;<strong>#N1 — "Phone Assistant" tab is the wrong name for a new-user's first AI setup task</strong><br>
+  <span class="file-ref">components/OutlookLayout.tsx:ADVANCED_TABS</span><br>
+  <span style="font-size:13px;color:#475569">New users looking for "how to set up the AI voice" won't find it under "Phone Assistant" — they'll look in "My Business" first. Consider renaming to "AI Voice" or adding a cross-link from the wizard's Step 7 directly to the Phone Assistant tab's config page.</span>
+</div>
+<div class="finding-row">
+  <span class="badge p3">P3</span>&nbsp;<strong>#N2 — Profile dropdown has no keyboard shortcut hint — "?" trigger undiscoverable</strong><br>
+  <span class="file-ref">components/OutlookLayout.tsx:530</span><br>
+  <span style="font-size:13px;color:#475569">(See #H7 — add a "Shortcuts" entry to the profile menu.)</span>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     5. 30-DAY ROADMAP
+══════════════════════════════════════════════════════ -->
+<h2>5. 30-Day Quick-Wins Roadmap</h2>
+<div class="card" style="padding:0;overflow:auto">
+<table>
+<thead>
+  <tr>
+    <th>Week</th>
+    <th>Initiative</th>
+    <th>Findings</th>
+    <th>Effort</th>
+    <th>Dependencies</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td><strong>Week 1</strong></td>
+    <td>Fix userRole not stored on login</td>
+    <td>#5, #H2</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Replace all text-[10px] informational text with text-xs</td>
+    <td>#2, #H1</td>
+    <td><span class="badge el">L</span></td>
+    <td>None — grep sweep</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Fix QuickBookPanel + EmployeeDayFocusPanel theme colors</td>
+    <td>#4, #DS1</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Make EmployeeDayFocusPanel responsive (w-full sm:w-96)</td>
+    <td>#D3</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Shift delete button: always-visible at opacity-40</td>
+    <td>#8</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><strong>Week 2</strong></td>
+    <td>Add phone-active status card on Home</td>
+    <td>#1, #F1</td>
+    <td><span class="badge em">M</span></td>
+    <td>Provisioning route check endpoint</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add compact setup pill to mobile nav</td>
+    <td>#3, #D1</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add min-h-[44px] to NewSchedulerView hour slots</td>
+    <td>#6, #D2</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add empty state + CTA to Customers tab</td>
+    <td>#7, #F4</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><strong>Week 3</strong></td>
+    <td>Replace coverage pills in SoloStepReview with neutral labels</td>
+    <td>#9, #H3</td>
+    <td><span class="badge es">S</span></td>
+    <td>CoverageStatusBadge refactor</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add timezone label to QuickBook time inputs</td>
+    <td>#F2</td>
+    <td><span class="badge es">S</span></td>
+    <td>tenantTimezone from VocabularyContext</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Replace evaluative colors in AnalyticsView</td>
+    <td>#H6</td>
+    <td><span class="badge em">M</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Fix CustomerCombobox theme colors (var(--bg-raised))</td>
+    <td>#DS2</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><strong>Week 4 / Backlog</strong></td>
+    <td>Add "Keyboard shortcuts" item to profile dropdown</td>
+    <td>#10, #H7</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add "Dismiss all" to error toast stack</td>
+    <td>#H4</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add color swatches to theme selector</td>
+    <td>#H5</td>
+    <td><span class="badge em">M</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Migrate FirstRunTour to shared Modal primitive</td>
+    <td>#DS4</td>
+    <td><span class="badge em">M</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Self-host fonts on landing page (next/font)</td>
+    <td>#DS3</td>
+    <td><span class="badge em">M</span></td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Add empty-state context to Calls tab</td>
+    <td>#F5</td>
+    <td><span class="badge es">S</span></td>
+    <td>None</td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<p style="margin-top:32px;font-size:13px;color:#94a3b8">Generated by /ux-audit skill · 2026-05-28T08:53 · SecretaryHQ dashboard audit v1</p>
+</div>
+</body>
+</html>

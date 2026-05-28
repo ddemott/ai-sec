@@ -715,8 +715,11 @@ describe('SetupWizard: Step 6 Review', () => {
     for (let i = 0; i < 5; i++) fireEvent.click(screen.getByText('Next'));
 
     await waitFor(() => {
-      expect(screen.getByText('Full Coverage')).toBeInTheDocument();
-      expect(screen.getByText('Uncovered')).toBeInTheDocument();
+      // Labels updated to neutral factual text (2026-05-28 UX audit #9 —
+      // no-grading product rule). "Assigned" replaces "Full Coverage";
+      // "Not yet assigned" replaces "Uncovered".
+      expect(screen.getByText('Assigned')).toBeInTheDocument();
+      expect(screen.getByText('Not yet assigned')).toBeInTheDocument();
     });
   });
 

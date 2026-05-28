@@ -40,7 +40,11 @@ const { mockApi } = vi.hoisted(() => ({
     // list; fetched as part of loadData()'s Promise.allSettled batch.
     customers: { list: vi.fn() },
     templates: { listFull: vi.fn() },
-    tenants: { updateConfig: vi.fn() },
+    tenants: {
+      updateConfig: vi.fn(),
+      // useTenantTimezone (added to QuickBookPanel 2026-05-28) calls getConfig.
+      getConfig: vi.fn().mockResolvedValue({ timezone: 'America/Chicago' }),
+    },
     shifts: { schedule: { forDate: vi.fn() } },
     // QuickBookPanel suggests employees skilled for the picked service,
     // and resources required for the picked service.

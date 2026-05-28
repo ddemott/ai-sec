@@ -456,12 +456,35 @@ export default function CRMView() {
           }}
         >
           {filteredCustomers.length === 0 && !loading && (
-            <EmptyState
-              icon={UserPlus}
-              title={searchQuery ? `No customers match "${searchQuery}"` : 'No customers yet'}
-              description={searchQuery ? undefined : 'Add your first customer to get started.'}
-              variant="compact"
-            />
+            <div className="p-6 text-center">
+              {searchQuery ? (
+                <EmptyState
+                  icon={UserPlus}
+                  title={`No customers match "${searchQuery}"`}
+                  variant="compact"
+                />
+              ) : (
+                <EmptyState
+                  icon={UserPlus}
+                  title="No customers yet"
+                  description="Customers are added automatically when your AI handles calls. You can also add one manually."
+                  variant="compact"
+                  action={
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setIsCreating(true);
+                        setSelectedCustomer(null);
+                      }}
+                    >
+                      <UserPlus className="w-4 h-4 mr-1.5" aria-hidden="true" />
+                      Add customer
+                    </Button>
+                  }
+                />
+              )}
+            </div>
           )}
           {filteredCustomers.map((c, idx) => {
             const isSelected = selectedCustomer?.customer_id === c.customer_id;

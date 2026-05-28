@@ -114,7 +114,12 @@ export function CustomerCombobox({
           disabled={disabled}
           aria-label={placeholder}
           data-testid={searchTestId}
-          className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg text-sm outline-none"
+          className="w-full pl-9 pr-4 py-2 rounded-lg text-sm outline-none border"
+          style={{
+            backgroundColor: 'var(--bg-raised)',
+            borderColor: 'var(--border-soft)',
+            color: 'var(--text-primary)',
+          }}
         />
       </div>
       <select
@@ -122,7 +127,12 @@ export function CustomerCombobox({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         data-testid={selectTestId}
-        className="w-full p-2.5 bg-gray-50 dark:bg-[#222] border border-gray-200 dark:border-gray-800 rounded-lg text-sm font-bold disabled:opacity-60"
+        className="w-full p-2.5 rounded-lg text-sm font-bold disabled:opacity-60 border"
+        style={{
+          backgroundColor: 'var(--bg-raised)',
+          borderColor: 'var(--border-soft)',
+          color: 'var(--text-primary)',
+        }}
       >
         <option value="">{promptLabel}</option>
         {filtered.map((c) => (

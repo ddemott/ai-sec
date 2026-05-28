@@ -253,7 +253,8 @@ describe('SkillMapNode', () => {
         onClick={vi.fn()}
       />
     );
-    expect(screen.getByText('Full Coverage')).toBeInTheDocument();
+    // Label updated to neutral "Assigned" (2026-05-28 UX audit #9).
+    expect(screen.getByText('Assigned')).toBeInTheDocument();
     // WHO: business owner | WHAT: view coverage badge on service | WHEN: service has full coverage | WHERE: SkillMapNode | WHY: missing badge hides coverage status so owner cannot tell if a service is bookable
   });
 

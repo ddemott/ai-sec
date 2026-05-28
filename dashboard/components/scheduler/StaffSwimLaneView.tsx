@@ -413,10 +413,14 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                     {formatHour(cs)} – {formatHour(ce)}
                   </span>
 
-                  {/* Delete button */}
+                  {/* Delete button — always visible at low opacity so
+                      touch/iPad users can tap it. Full opacity on hover/focus.
+                      opacity-0 group-hover was invisible on tablet (no hover
+                      event). 2026-05-28 UX audit #8. */}
                   {onShiftDelete && !isDragging && (
                     <button
-                      className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-0 group-hover/shift:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
+                      aria-label="Delete shift"
+                      className="absolute right-1 top-1 text-[10px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-1.5 py-0.5 z-20"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();

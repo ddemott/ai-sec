@@ -11,6 +11,9 @@ const { mockApi } = vi.hoisted(() => ({
       listServiceEmployee: vi.fn(),
       listServiceResource: vi.fn(),
     },
+    // useTenantTimezone calls Api.tenants.getConfig — stub it so the hook
+    // resolves without error in tests. Timezone display is not under test here.
+    tenants: { getConfig: vi.fn().mockResolvedValue({ timezone: 'America/Chicago' }) },
   },
 }));
 

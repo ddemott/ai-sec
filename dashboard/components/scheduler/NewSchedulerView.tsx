@@ -1138,6 +1138,14 @@ export default function NewSchedulerView({
                               className={`shrink-0${isClickable ? ' cursor-pointer hover:bg-[rgba(59,130,246,0.08)]' : ''}`}
                               style={{
                                 width: colW,
+                                /* min-height ensures each hour slot is at
+                                   least 44px tall (iOS HIG / WCAG 2.5.5
+                                   touch-target minimum) even when the row
+                                   has no appointments. Without this, slots
+                                   collapse to ~14-20px on empty days and
+                                   tapping the wrong hour is common on
+                                   iPad/phone. 2026-05-28 UX audit #6. */
+                                minHeight: '44px',
                                 height: rowH,
                                 background: isOutsideBusiness ? 'rgba(0,0,0,0.35)' : 'transparent',
                                 borderRight: '1px solid var(--border-soft)',

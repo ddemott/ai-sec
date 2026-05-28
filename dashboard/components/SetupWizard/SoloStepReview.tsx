@@ -54,19 +54,28 @@ export function SoloStepReview({
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Service Coverage
             </h4>
+            {/* Neutral factual labels — no red/yellow/green grading.
+                Product rule: show data, don't grade the business.
+                2026-05-28 UX audit #9. */}
             {coverageData.map((item) => {
               const badge = statusToBadge(item.status);
-              const colorClass =
+              const label =
                 badge === 'full'
-                  ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                  ? 'Assigned'
                   : badge === 'partial'
-                    ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400'
-                    : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400';
+                    ? 'Partly assigned'
+                    : 'Not yet assigned';
               return (
                 <div key={item.service_id} className="flex items-center justify-between text-sm">
                   <span className="text-gray-700 dark:text-gray-300">{item.service_name}</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
-                    {item.status}
+                  <span
+                    className="text-xs font-medium px-2 py-0.5 rounded"
+                    style={{
+                      backgroundColor: 'var(--accent-muted)',
+                      color: 'var(--accent-soft)',
+                    }}
+                  >
+                    {label}
                   </span>
                 </div>
               );

@@ -8,15 +8,18 @@ interface CoverageStatusBadgeProps {
   className?: string;
 }
 
+// Neutral factual labels — no pass/fail color semantics.
+// Product rule: show state data, don't grade the business.
+// 2026-05-28 UX audit #9, DESIGN_HANDOFF.md:284.
 const statusConfig: Record<
   CoverageStatus,
   { label: string; variant: 'success' | 'warning' | 'danger' | 'secondary' }
 > = {
-  full: { label: 'Full Coverage', variant: 'success' },
-  partial: { label: 'Partial', variant: 'warning' },
-  uncovered: { label: 'Uncovered', variant: 'danger' },
-  no_staff: { label: 'No Staff', variant: 'danger' },
-  no_resource: { label: 'No Resource', variant: 'danger' },
+  full: { label: 'Assigned', variant: 'secondary' },
+  partial: { label: 'Partly assigned', variant: 'secondary' },
+  uncovered: { label: 'Not yet assigned', variant: 'secondary' },
+  no_staff: { label: 'No staff assigned', variant: 'secondary' },
+  no_resource: { label: 'No resource assigned', variant: 'secondary' },
 };
 
 export const CoverageStatusBadge: React.FC<CoverageStatusBadgeProps> = ({ status, className }) => {

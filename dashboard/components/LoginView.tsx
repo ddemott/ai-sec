@@ -34,6 +34,12 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         localStorage.setItem('userName', data.user_name);
         localStorage.setItem('userEmail', email);
         if (data.token) localStorage.setItem('authToken', data.token);
+        // Persist role so SessionContext reads the right tab set on next
+        // mount. Missing from the original LoginView (register page set it
+        // correctly). Without this, front-desk users saw owner-level tabs
+        // after a fresh login if a prior owner-register left 'owner' in
+        // localStorage. 2026-05-28 UX audit #5.
+        if (data.role) localStorage.setItem('userRole', data.role);
         onLoginSuccess(data);
       } else {
         setError(data.error || 'Sign in failed. Please try again.');

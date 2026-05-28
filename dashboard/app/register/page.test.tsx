@@ -44,6 +44,10 @@ afterEach(() => {
 
 function fillForm() {
   fireEvent.change(screen.getByLabelText('Business name'), { target: { value: 'DynaTire' } });
+  // Business type no longer auto-picks the first option (2026-05-28 UX fix —
+  // the blank default placeholder forces a deliberate selection). Must be
+  // explicitly chosen in tests that assert the submitted body.
+  fireEvent.change(screen.getByLabelText('Business type'), { target: { value: 'salon' } });
   fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Dale Demott' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'dale@dynatire.com' } });
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'hunter2' } });

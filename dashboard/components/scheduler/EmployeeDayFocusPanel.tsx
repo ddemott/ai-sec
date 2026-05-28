@@ -50,10 +50,11 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
 
   return (
     <div
-      className="fixed inset-y-0 right-0 w-96 bg-white dark:bg-[#1a1a1a] shadow-2xl border-l border-gray-200 dark:border-gray-800 z-30 flex flex-col animate-in slide-in-from-right duration-200"
+      className="fixed inset-y-0 right-0 w-full sm:w-96 shadow-2xl border-l z-30 flex flex-col animate-in slide-in-from-right duration-200"
+      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
       data-testid="employee-day-focus-panel"
     >
-      <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+      <header className="px-4 py-3 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <User className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
           <h3 className="font-bold text-gray-900 dark:text-gray-100">{employee.name}</h3>
@@ -130,7 +131,8 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
               {sorted.map((appt) => (
                 <div
                   key={appt.appointment_id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-[#222] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                  className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition hover:brightness-110"
+                  style={{ backgroundColor: 'var(--bg-raised)' }}
                   onClick={(e) => onAppointmentClick?.(appt, e)}
                   data-testid={`focus-item-${appt.appointment_id}`}
                 >

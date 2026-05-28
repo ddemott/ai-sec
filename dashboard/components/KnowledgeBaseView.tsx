@@ -50,6 +50,9 @@ function PolicyQuestionField({
 }) {
   const [value, setValue] = useState(savedAnswer);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // Persist the timestamp of last successful save so users can see "Saved
+  // 2m ago" without waiting for the 2s fade. 2026-05-28 UX audit #F3.
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idRef = useRef(savedId);
@@ -81,6 +84,7 @@ function PolicyQuestionField({
         const newId = await onSave(newVal, idRef.current);
         if (newId) idRef.current = newId;
         setStatus('saved');
+        setSavedAt(new Date());
         fadeTimerRef.current = setTimeout(() => setStatus('idle'), 2000);
       } catch {
         setStatus('error');
@@ -112,19 +116,25 @@ function PolicyQuestionField({
             <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--warning)' }} />
           )}
           {status === 'saved' && (
-            <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--success)' }} />
+            <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--success)' }}>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Saved
+            </span>
           )}
           {status === 'error' && (
             <span
-              className="flex items-center gap-1 text-[10px] font-bold"
+              className="flex items-center gap-1 text-xs font-bold"
               style={{ color: 'var(--danger)' }}
             >
               <AlertCircle className="w-3.5 h-3.5" />
-              Save failed
+              Save failed — check connection
             </span>
           )}
-          {status === 'idle' && savedId && (
-            <Save className="w-3.5 h-3.5 opacity-40" style={{ color: 'var(--text-muted)' }} />
+          {status === 'idle' && savedAt && (
+            <span className="flex items-center gap-1 text-xs opacity-50" style={{ color: 'var(--text-muted)' }}>
+              <CheckCircle2 className="w-3 h-3" />
+              Saved {savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
           )}
         </div>
       </div>

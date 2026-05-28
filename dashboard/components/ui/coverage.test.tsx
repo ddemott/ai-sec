@@ -9,46 +9,51 @@ import type { HourSlot } from './CoverageBar';
 // --- CoverageStatusBadge ---
 
 describe('CoverageStatusBadge', () => {
-  test('renders "Full Coverage" with success styling for full status', () => {
+  // Labels updated to neutral factual text per the no-grading product rule.
+  // Old → new: "Full Coverage" → "Assigned", "Partial" → "Partly assigned",
+  // "Uncovered" → "Not yet assigned", "No Staff" → "No staff assigned",
+  // "No Resource" → "No resource assigned". 2026-05-28 UX audit #9.
+
+  test('renders "Assigned" for full status', () => {
     render(<CoverageStatusBadge status="full" />);
-    const badge = screen.getByText('Full Coverage');
+    const badge = screen.getByText('Assigned');
     expect(badge).toBeInTheDocument();
-    // WHO: business owner | WHAT: views full coverage badge | WHEN: all hours have assigned staff | WHERE: CoverageStatusBadge | WHY: confirms at a glance that no scheduling gaps exist for a service
+    // WHO: business owner | WHAT: views full coverage badge | WHEN: all hours have assigned staff | WHERE: CoverageStatusBadge | WHY: confirms at a glance that all services are configured
   });
 
-  test('renders "Partial" with warning styling for partial status', () => {
+  test('renders "Partly assigned" for partial status', () => {
     render(<CoverageStatusBadge status="partial" />);
-    const badge = screen.getByText('Partial');
+    const badge = screen.getByText('Partly assigned');
     expect(badge).toBeInTheDocument();
-    // WHO: business owner | WHAT: views partial coverage badge | WHEN: some hours lack staff | WHERE: CoverageStatusBadge | WHY: warns owner that certain hours may result in missed bookings
+    // WHO: business owner | WHAT: views partial coverage badge | WHEN: some hours lack staff | WHERE: CoverageStatusBadge | WHY: neutral factual state — owner decides what to do with the info
   });
 
-  test('renders "Uncovered" with danger styling for uncovered status', () => {
+  test('renders "Not yet assigned" for uncovered status', () => {
     render(<CoverageStatusBadge status="uncovered" />);
-    const badge = screen.getByText('Uncovered');
+    const badge = screen.getByText('Not yet assigned');
     expect(badge).toBeInTheDocument();
-    // WHO: business owner | WHAT: views uncovered badge | WHEN: no staff assigned to any hour | WHERE: CoverageStatusBadge | WHY: indicates service cannot accept any bookings until staff are assigned
+    // WHO: business owner | WHAT: views uncovered badge | WHEN: no staff assigned | WHERE: CoverageStatusBadge | WHY: factual state without red danger framing
   });
 
-  test('renders "No Staff" with danger styling for no_staff status', () => {
+  test('renders "No staff assigned" for no_staff status', () => {
     render(<CoverageStatusBadge status="no_staff" />);
-    const badge = screen.getByText('No Staff');
+    const badge = screen.getByText('No staff assigned');
     expect(badge).toBeInTheDocument();
-    // WHO: business owner | WHAT: views no-staff badge | WHEN: zero employees exist for a service | WHERE: CoverageStatusBadge | WHY: signals that hiring or skill assignment is needed before going live
+    // WHO: business owner | WHAT: views no-staff badge | WHEN: zero employees configured | WHERE: CoverageStatusBadge | WHY: actionable fact without grading the business
   });
 
-  test('renders "No Resource" with danger styling for no_resource status', () => {
+  test('renders "No resource assigned" for no_resource status', () => {
     render(<CoverageStatusBadge status="no_resource" />);
-    const badge = screen.getByText('No Resource');
+    const badge = screen.getByText('No resource assigned');
     expect(badge).toBeInTheDocument();
-    // WHO: business owner | WHAT: views no-resource badge | WHEN: no bays/stations configured | WHERE: CoverageStatusBadge | WHY: without resources, appointments cannot be assigned a physical location
+    // WHO: business owner | WHAT: views no-resource badge | WHEN: no bays/stations configured | WHERE: CoverageStatusBadge | WHY: factual state the owner can act on
   });
 
   test('passes className to Badge', () => {
     render(<CoverageStatusBadge status="full" className="mt-2" />);
-    const badge = screen.getByText('Full Coverage');
+    const badge = screen.getByText('Assigned');
     expect(badge.className).toContain('mt-2');
-    // WHO: developer | WHAT: passes custom className | WHEN: badge rendered with extra classes | WHERE: CoverageStatusBadge | WHY: layout integration requires custom spacing without overriding internal styles
+    // WHO: developer | WHAT: passes custom className | WHEN: badge rendered with extra classes | WHERE: CoverageStatusBadge | WHY: layout integration requires custom spacing
   });
 });
 
