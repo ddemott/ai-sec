@@ -664,7 +664,7 @@ const LANDING_HTML = `
 <!-- LOGO BAR -->
 <div class="logo-bar">
   <div class="logo-bar-inner">
-    <span class="logo-bar-label">Built for</span>
+    <span class="logo-bar-label">Works great for:</span>
     <div class="logo-bar-items">
       <span class="logo-bar-item">Auto Shops</span>
       <span class="logo-bar-item">Tire Services</span>
@@ -773,13 +773,6 @@ const LANDING_HTML = `
         <div class="feat-h">Sounds Like a Real Person</div>
         <p class="feat-p">No menus. No &quot;press 1 for service.&quot; Callers can interrupt, ask questions, change their minds — the conversation just flows. Pick the voice that fits your brand.</p>
         <span class="feat-tag blue">Live calls</span>
-      </div>
-
-      <div class="feat-card reveal reveal-delay-1">
-        <div class="feat-icon green"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-        <div class="feat-h">Smart Booking</div>
-        <p class="feat-p">Checks employee schedules, required skills, and resource availability before confirming anything. Never double-books a bay, station, or technician.</p>
-        <span class="feat-tag green">No double-books</span>
       </div>
 
       <div class="feat-card wide reveal reveal-delay-1">
@@ -959,9 +952,9 @@ const LANDING_HTML = `
 <footer>
   <div class="footer-logo">SECRETARY HQ</div>
   <div class="footer-links">
-    <a href="#">Privacy</a>
-    <a href="#">Terms</a>
-    <a href="#">Contact</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="mailto:sales@secretaryhq.com">Contact</a>
   </div>
   <div class="footer-copy">© 2026 Secretary HQ. All rights reserved.</div>
 </footer>
