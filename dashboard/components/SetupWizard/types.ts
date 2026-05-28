@@ -86,6 +86,15 @@ export interface WizardEmployee {
 export interface SetupWizardProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Optional Back-to-BusinessTypePicker callback. When provided, Step 1
+   * renders a "Change business type" link in the footer. Implementations
+   * must delete previously-auto-seeded services/resources before
+   * transitioning so a re-pick lands on an empty catalog (which lets the
+   * wizard reseed for the newly chosen template). When omitted, the link
+   * is hidden (e.g. paths that didn't reach the wizard via the picker).
+   */
+  onBackToPicker?: () => void | Promise<void>;
 }
 
 export interface Step1Props {

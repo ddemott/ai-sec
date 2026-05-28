@@ -24,7 +24,7 @@ const STEP_LABELS: Record<SoloStep, string> = {
   3: 'Look it over',
 };
 
-export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
+export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWizardProps) {
   const tenantId = useActiveTenantId();
   const { userName } = useSessionContext();
   const { services, loading, refresh } = useStaticData(tenantId);
@@ -48,6 +48,10 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
   const [coverageData, setCoverageData] = useState<CoverageItem[]>([]);
 
   const seedingRef = useRef(false);
+  // Track auto-seeded service ids so "Change business type" can roll
+  // them back before reseeding for the new template (matches the team
+  // wizard's autoSeededServiceIdsRef behavior; 2026-05-27).
+  const autoSeededServiceIdsRef = useRef<Set<string>>(new Set());
 
   const ownerName = userName || 'Owner';
   const resourceName =
@@ -65,6 +69,7 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
       setOwnerEmployeeId(null);
       setShifts([]);
       seedingRef.current = false;
+      autoSeededServiceIdsRef.current = new Set();
     }
   }, [isOpen]);
 
@@ -82,7 +87,9 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
         const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
         if (!tpl?.example_services?.length) return;
         for (const name of tpl.example_services) {
-          await Api.services.create(tenantId, { name, duration_minutes: 30 });
+          const result = await Api.services.create(tenantId, { name, duration_minutes: 30 });
+          const newId = result?.service?.service_id;
+          if (newId) autoSeededServiceIdsRef.current.add(String(newId));
         }
         await refresh();
       } catch {
@@ -91,6 +98,22 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tenantId, loading, services.length]);
+
+  // "Change business type" — symmetric to the team wizard's
+  // handleBackToPicker (SetupWizard/index.tsx). Wipes auto-seeded
+  // service rows so the next pick's runSeed reseeds for the chosen
+  // template; user-typed rows remain because their ids never entered
+  // the ref set.
+  async function handleBackToPicker() {
+    if (!onBackToPicker) return;
+    if (tenantId) {
+      const ids = Array.from(autoSeededServiceIdsRef.current);
+      autoSeededServiceIdsRef.current = new Set();
+      await Promise.all(ids.map((id) => Api.services.delete(id, tenantId).catch(() => undefined)));
+      await refresh();
+    }
+    await onBackToPicker();
+  }
 
   // When moving to Step 2, ensure owner employee exists. The hours
   // grid is ephemeral form state — it persists only at finalize.
@@ -418,6 +441,17 @@ export default function SoloWizard({ isOpen, onClose }: SetupWizardProps) {
             <Button variant="secondary" onClick={() => setStep((step - 1) as SoloStep)}>
               <ChevronLeft className="w-4 h-4 mr-1" /> Back
             </Button>
+          ) : step === 1 && onBackToPicker && !finalized ? (
+            // Step 1 owns the back-to-picker affordance — symmetrical to
+            // the team wizard's footer link (SetupWizard/index.tsx).
+            <button
+              type="button"
+              onClick={() => void handleBackToPicker()}
+              className="text-xs underline-offset-2 hover:underline transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              &larr; Change business type
+            </button>
           ) : (
             <div />
           )}

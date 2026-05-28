@@ -44,8 +44,12 @@ type OnboardingAction =
   /** Skip welcome (used by ?wizard=open URL param and the dismissed banner). */
   | { type: 'OPEN_TO_CHOOSER' }
   | { type: 'CHOOSE_MODE'; mode: WizardMode }
+  /** Back arrow in the mode chooser → welcome. */
+  | { type: 'BACK_TO_WELCOME' }
   /** Back arrow in the BusinessTypePicker → chooser. */
   | { type: 'BACK_TO_CHOOSER' }
+  /** Back from inside the wizard → BusinessTypePicker (preserves mode). */
+  | { type: 'BACK_TO_PICKER' }
   /** Business type confirmed → enter the wizard proper. */
   | { type: 'ENTER_WIZARD' }
   /** Wizard finished OR user dismissed at any stage. */
@@ -68,8 +72,18 @@ function reducer(state: OnboardingState, action: OnboardingAction): OnboardingSt
       return { stage: 'chooser', mode: null };
     case 'CHOOSE_MODE':
       return { stage: 'picker', mode: action.mode };
+    case 'BACK_TO_WELCOME':
+      // Reverse of ADVANCE_WELCOME. Only meaningful from the chooser
+      // (any earlier-stage call is a no-op so we don't bounce idle/dismissed
+      // back to welcome unexpectedly).
+      return state.stage === 'chooser' ? { stage: 'welcome', mode: null } : state;
     case 'BACK_TO_CHOOSER':
       return { stage: 'chooser', mode: null };
+    case 'BACK_TO_PICKER':
+      // Reverse of ENTER_WIZARD. Mode is preserved so re-entering the
+      // wizard after a re-pick doesn't dump the user back through the
+      // chooser. Only meaningful from the 'wizard' stage.
+      return state.stage === 'wizard' ? { ...state, stage: 'picker' } : state;
     case 'ENTER_WIZARD':
       // Mode must already be set from CHOOSE_MODE; if not we no-op
       // rather than enter the wizard with a null mode.
@@ -139,7 +153,9 @@ export function useOnboardingState({ needsSetup, loading, autoOpen = true }: Use
   const advanceWelcome = useCallback(() => dispatch({ type: 'ADVANCE_WELCOME' }), []);
   const openToChooser = useCallback(() => dispatch({ type: 'OPEN_TO_CHOOSER' }), []);
   const chooseMode = useCallback((mode: WizardMode) => dispatch({ type: 'CHOOSE_MODE', mode }), []);
+  const backToWelcome = useCallback(() => dispatch({ type: 'BACK_TO_WELCOME' }), []);
   const backToChooser = useCallback(() => dispatch({ type: 'BACK_TO_CHOOSER' }), []);
+  const backToPicker = useCallback(() => dispatch({ type: 'BACK_TO_PICKER' }), []);
   const enterWizard = useCallback(() => dispatch({ type: 'ENTER_WIZARD' }), []);
   const dismiss = useCallback(() => dispatch({ type: 'DISMISS' }), []);
   const closeToIdle = useCallback(() => dispatch({ type: 'CLOSE_TO_IDLE' }), []);
@@ -151,7 +167,9 @@ export function useOnboardingState({ needsSetup, loading, autoOpen = true }: Use
       advanceWelcome,
       openToChooser,
       chooseMode,
+      backToWelcome,
       backToChooser,
+      backToPicker,
       enterWizard,
       dismiss,
       closeToIdle,

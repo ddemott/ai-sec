@@ -335,3 +335,10 @@
 
 - **[high]** This view still asks users to understand both resource inventory and service-to-resource support mappings in the same surface, but unsupported versus partially configured states can blur together once many cards are present → Make mapping completeness much more explicit at the card level so operators can immediately see which resources are actually ready for booking.
 - **[medium]** Resource cards still open an edit modal on click while also functioning as summary tiles, which makes the interaction a little implicit and easy to miss for users who treat cards as read-only summaries → Add a clearer edit affordance or secondary action so the path from browsing resources to modifying one feels more intentional.
+
+## Review — 2026-05-27
+
+### SkillMatrixView (dashboard/components/SkillMatrixView.tsx)
+- **[high]** The matrix lets operators toggle mappings instantly across a wide table, but the current feedback model is still binary and terse, which can make accidental clicks or failed updates feel riskier than they should in a high-density grid → Add stronger per-cell pending, saved, and error feedback so operators can trust rapid mapping changes without rescanning the whole row.
+- **[medium]** The All, People, and Places filter pills are still custom-styled buttons rather than shared segmented controls or button primitives, which makes another dense operational surface rely on bespoke interaction patterns → Rebuild the filter controls from shared primitives so focus, selected state, and keyboard behavior stay consistent with the rest of the dashboard.
+- **[medium]** The footer tip still says toggling a cell “instantly updates the AI’s scheduling logic,” which is useful but phrased more like reassuring persuasion than neutral product state → Keep the helper copy factual and specific about what changes, without leaning into marketing-style reassurance.

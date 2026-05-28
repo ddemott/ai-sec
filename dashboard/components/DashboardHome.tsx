@@ -310,7 +310,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         <WizardWelcome onContinue={transitions.advanceWelcome} onDismiss={transitions.dismiss} />
       )}
       {stage === 'chooser' && (
-        <WizardModeChooser onChoose={transitions.chooseMode} onClose={transitions.dismiss} />
+        <WizardModeChooser
+          onChoose={transitions.chooseMode}
+          onClose={transitions.dismiss}
+          onBack={transitions.backToWelcome}
+        />
       )}
       {stage === 'picker' && (
         <BusinessTypePicker
@@ -320,10 +324,18 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         />
       )}
       {stage === 'wizard' && mode === 'solo' && (
-        <SoloWizard isOpen={true} onClose={handleCloseWizard} />
+        <SoloWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
       {stage === 'wizard' && mode === 'team' && (
-        <SetupWizard isOpen={true} onClose={handleCloseWizard} />
+        <SetupWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
 
       {/* TODAY'S SCHEDULE — the whole header row is a click target
