@@ -84,6 +84,7 @@ export interface Resource {
   is_active: boolean;
   capabilities?: string[];
   created_at?: string;
+  is_auto_seeded?: boolean;
 }
 
 export interface Employee {
@@ -110,6 +111,7 @@ export interface Service {
   price?: number | null;
   required_skills?: string[];
   required_resources?: string[];
+  is_auto_seeded?: boolean;
 }
 
 export interface ScheduleEntry {

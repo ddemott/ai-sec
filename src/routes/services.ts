@@ -18,6 +18,12 @@ const CreateServiceSchema = z.object({
   duration_minutes: z.number().int().min(5).max(480),
   required_skills: z.array(z.string()).optional(),
   required_resources: z.array(z.string()).optional(),
+  // True only for rows created by the setup-wizard's auto-seed pass.
+  // Lets POST /tenants/:id/update-config delete just the template
+  // defaults when the owner picks a new business_type, without
+  // touching anything they typed themselves. See migration
+  // 20260528000000_is_auto_seeded_flag.sql.
+  is_auto_seeded: z.boolean().optional(),
 });
 
 const UpdateServiceSchema = z.object({
@@ -81,7 +87,7 @@ export function registerServiceRoutes(
 
       const res = await withTenantClient(body.tenant_id, async (client) => {
         return client.query(
-          'INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, required_skills, required_resources) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+          'INSERT INTO services (tenant_id, name, subtitle, description, duration_minutes, required_skills, required_resources, is_auto_seeded) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
           [
             body.tenant_id,
             body.name,
@@ -90,6 +96,7 @@ export function registerServiceRoutes(
             body.duration_minutes,
             body.required_skills || [],
             body.required_resources || [],
+            body.is_auto_seeded === true,
           ]
         );
       });
@@ -114,8 +121,12 @@ export function registerServiceRoutes(
       if (!tenantId) return;
 
       const res = await withTenantClient(tenantId, async (client) => {
+        // Any edit promotes an auto-seeded row to "owned by user" by
+        // clearing is_auto_seeded. Without this, a later business_type
+        // change would still wipe the row even though the owner
+        // customized it (name, price, duration, etc.). 2026-05-28.
         return client.query(
-          'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), updated_at = NOW() WHERE service_id = $6 AND tenant_id = $7 RETURNING *',
+          'UPDATE services SET name = COALESCE($1, name), subtitle = COALESCE($2, subtitle), description = COALESCE($3, description), duration_minutes = COALESCE($4, duration_minutes), price = COALESCE($5, price), is_auto_seeded = false, updated_at = NOW() WHERE service_id = $6 AND tenant_id = $7 RETURNING *',
           [
             body.name,
             body.subtitle,

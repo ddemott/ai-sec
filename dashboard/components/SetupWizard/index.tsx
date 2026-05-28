@@ -39,7 +39,7 @@ function getStepLabels(_vocab: {
   };
 }
 
-export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
+export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWizardProps) {
   const tenantId = useActiveTenantId();
   const { services, resources, employees, loading, refresh } = useStaticData(tenantId);
   const vocab = useVocabulary();
@@ -70,13 +70,26 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
   // means a retry after a partial failure finishes the original set without
   // topping-up a user who already has their own services.
   const seedTargetRef = useRef<string[]>([]);
+  // IDs of services + resources THIS wizard instance created via auto-seed,
+  // so "Change business type" can delete them on the way back to the
+  // picker (otherwise the next pick's gate `services.length === 0` would
+  // stay closed and the user would keep seeing the previous template's
+  // services — the exact bug Dale flagged 2026-05-27).
+  const autoSeededServiceIdsRef = useRef<Set<string>>(new Set());
+  const autoSeededResourceIdsRef = useRef<Set<string>>(new Set());
 
-  // Reset on open
+  // Reset on open. seedTargetRef must reset too — leaving it primed from
+  // a prior open would make a re-pick try to recreate the previous
+  // template's example_services instead of refilling from the new
+  // template (auto-seed bug, 2026-05-27).
   useEffect(() => {
     if (isOpen) {
       setStep(1);
       crud.resetAll();
       seedingRef.current = false;
+      seedTargetRef.current = [];
+      autoSeededServiceIdsRef.current = new Set();
+      autoSeededResourceIdsRef.current = new Set();
       setSeedError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,16 +130,30 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
       }
       const missing = seedTargetRef.current.filter((name) => !services.some((s) => s.name === name));
       for (const name of missing) {
-        await Api.services.create(tenantId, { name, duration_minutes: 30 });
+        // is_auto_seeded persists the "I am a template default" tag in
+        // the DB so a business_type change handled server-side (POST
+        // /tenants/:id/update-config) can roll these back even after a
+        // page reload. The in-session autoSeededServiceIdsRef below
+        // still tracks ids for the same-session re-pick rollback path.
+        const result = await Api.services.create(tenantId, {
+          name,
+          duration_minutes: 30,
+          is_auto_seeded: true,
+        });
+        const newId = result?.service?.service_id;
+        if (newId) autoSeededServiceIdsRef.current.add(String(newId));
       }
 
       if (resources.length === 0) {
         const defaultName =
           vocab.resource_label === 'Resource' ? 'Main Location' : `${vocab.resource_label} 1`;
-        await Api.resources.create(tenantId, {
+        const result = await Api.resources.create(tenantId, {
           name: defaultName,
           description: 'Auto-created — rename or add more in this step',
+          is_auto_seeded: true,
         });
+        const newId = result?.resource?.resource_id;
+        if (newId) autoSeededResourceIdsRef.current.add(String(newId));
       }
 
       await refresh();
@@ -217,6 +244,39 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
     setStep(next);
   };
   const goBack = () => setStep((s) => Math.max(s - 1, 1) as WizardStep);
+
+  // "Change business type" — only meaningful on Step 1 and only when
+  // the parent wired an onBackToPicker callback (i.e. the user reached
+  // the wizard via the BusinessTypePicker, not the dismissed-banner
+  // shortcut). Wipes auto-seeded rows so the next pick's runSeed sees
+  // an empty catalog and reseeds for the freshly chosen template;
+  // user-typed rows are left intact because their ids never entered
+  // the autoSeeded* sets in the first place.
+  const handleBackToPicker = useCallback(async () => {
+    if (!onBackToPicker) return;
+    if (tenantId) {
+      const serviceIds = Array.from(autoSeededServiceIdsRef.current);
+      const resourceIds = Array.from(autoSeededResourceIdsRef.current);
+      autoSeededServiceIdsRef.current = new Set();
+      autoSeededResourceIdsRef.current = new Set();
+      seedTargetRef.current = [];
+      // Best-effort: a delete that fails (e.g. the user edited the row
+      // and the backend now considers it user-owned) is swallowed so we
+      // still return the user to the picker. A subsequent reseed will
+      // simply skip the name if it still exists.
+      await Promise.all([
+        ...serviceIds.map((id) =>
+          Api.services.delete(id, tenantId).catch(() => undefined)
+        ),
+        ...resourceIds.map((id) =>
+          Api.resources.delete(id, tenantId).catch(() => undefined)
+        ),
+      ]);
+      await refresh();
+    }
+    await onBackToPicker();
+  }, [onBackToPicker, tenantId, refresh]);
+
   const goToStep = (s: WizardStep) => {
     if (canAdvanceTo(s)) setStep(s);
     else showToast('Complete earlier steps first', 'warning');
@@ -354,7 +414,24 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
 
         {/* Footer */}
         <footer className="px-6 py-4 bg-gray-50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
-          <div className="text-xs text-gray-400">Step {step} of 7</div>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-gray-400">Step {step} of 7</div>
+            {/* Step 1 owns the "go back to the picker" affordance — any
+                later step uses the regular Back button to walk the
+                intra-wizard step strip first. Hidden when the parent
+                didn't wire onBackToPicker (e.g. wizard opened directly
+                without going through the picker). */}
+            {step === 1 && onBackToPicker && (
+              <button
+                type="button"
+                onClick={() => void handleBackToPicker()}
+                className="text-xs underline-offset-2 hover:underline transition-colors"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                &larr; Change business type
+              </button>
+            )}
+          </div>
           <div className="flex gap-2">
             {step > 1 && (
               <Button variant="ghost" size="sm" onClick={goBack}>
@@ -372,6 +449,13 @@ export default function SetupWizard({ isOpen, onClose }: SetupWizardProps) {
                 variant="success"
                 size="sm"
                 onClick={() => {
+                  // Promote auto-seeded rows to user-owned so a later
+                  // business_type change (post-launch, from Settings)
+                  // doesn't wipe the catalog the owner just signed off
+                  // on. Best-effort: a failure here doesn't block close.
+                  if (tenantId) {
+                    Api.tenants.finalizeSetup(tenantId).catch(() => undefined);
+                  }
                   // Arm the first-run tour for this tenant. DashboardHome
                   // picks up the flag on its next mount and shows the
                   // overview modal. Only fires on the step-7 Done path —

@@ -143,7 +143,14 @@ export default function MyBusinessView() {
         <WizardWelcome onContinue={transitions.advanceWelcome} onDismiss={handleCloseWizard} />
       )}
       {stage === 'chooser' && (
-        <WizardModeChooser onChoose={transitions.chooseMode} onClose={handleCloseWizard} />
+        <WizardModeChooser
+          onChoose={transitions.chooseMode}
+          onClose={handleCloseWizard}
+          // MyBusinessView jumps straight to the chooser (no welcome
+          // stage on this page) so we don't surface a Back affordance —
+          // there's nowhere to go back to. Same reasoning as the
+          // openToChooser shortcut.
+        />
       )}
       {stage === 'picker' && (
         <BusinessTypePicker
@@ -153,10 +160,18 @@ export default function MyBusinessView() {
         />
       )}
       {stage === 'wizard' && mode === 'solo' && (
-        <SoloWizard isOpen={true} onClose={handleCloseWizard} />
+        <SoloWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
       {stage === 'wizard' && mode === 'team' && (
-        <SetupWizard isOpen={true} onClose={handleCloseWizard} />
+        <SetupWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
     </div>
   );

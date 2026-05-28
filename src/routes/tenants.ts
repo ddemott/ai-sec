@@ -5,7 +5,7 @@
  */
 
 import type { AppFastifyInstance } from '../types/fastify';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   withHandler,
@@ -63,7 +63,11 @@ const CreateTemplateSchema = z.object({
   example_services: z.array(z.string()).optional(),
 });
 
-export function registerTenantRoutes(app: AppFastifyInstance, pool: Pool) {
+export function registerTenantRoutes(
+  app: AppFastifyInstance,
+  pool: Pool,
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+) {
   app.get(
     '/tenants',
     withHandler(async (req: AppRequest, reply) => {
@@ -170,14 +174,61 @@ export function registerTenantRoutes(app: AppFastifyInstance, pool: Pool) {
           .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
       }
       const body = parsed.data;
-      const res = await withPoolClient(pool, (client) =>
-        client.query(
-          'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE tenant_id = $5 RETURNING tenant_id',
-          [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
-        )
-      );
-      if (!assertRowAffected(res, reply, 'Tenant')) return;
-      logEvent(req, 'tenant_config_updated', { tenantId: id });
+
+      // Read the prior business_type in the same transaction as the UPDATE
+      // so a concurrent write can't slip the "did business_type change?"
+      // check. When the type changes, also wipe wizard-auto-seeded
+      // services and resources (rows where is_auto_seeded = true) so the
+      // next wizard pass reseeds for the new template. User-typed rows
+      // (is_auto_seeded = false, the default) are left untouched.
+      // Origin: 2026-05-28 — picking a new business_type left stale
+      // template defaults visible in step 1 because the wizard's
+      // `services.length > 0` short-circuited re-seeding.
+      const result = await withTenantClient(id, async (client) => {
+        await client.query('BEGIN');
+        try {
+          const priorRes = await client.query<{ business_type: string | null }>(
+            'SELECT business_type FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            [id]
+          );
+          const priorBusinessType = priorRes.rows[0]?.business_type ?? null;
+          const updRes = await client.query(
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE tenant_id = $5 RETURNING tenant_id',
+            [body.system_prompt, body.voice_id, body.business_type, body.first_message, id]
+          );
+
+          let cleanedServices = 0;
+          let cleanedResources = 0;
+          const businessTypeChanged =
+            body.business_type !== undefined && body.business_type !== priorBusinessType;
+          if (businessTypeChanged) {
+            const svcDel = await client.query(
+              'DELETE FROM services WHERE tenant_id = $1 AND is_auto_seeded = true RETURNING service_id',
+              [id]
+            );
+            const resDel = await client.query(
+              'DELETE FROM resources WHERE tenant_id = $1 AND is_auto_seeded = true RETURNING resource_id',
+              [id]
+            );
+            cleanedServices = svcDel.rowCount ?? 0;
+            cleanedResources = resDel.rowCount ?? 0;
+          }
+
+          await client.query('COMMIT');
+          return { updRes, businessTypeChanged, cleanedServices, cleanedResources };
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+      });
+
+      if (!assertRowAffected(result.updRes, reply, 'Tenant')) return;
+      logEvent(req, 'tenant_config_updated', {
+        tenantId: id,
+        businessTypeChanged: result.businessTypeChanged,
+        cleanedServices: result.cleanedServices,
+        cleanedResources: result.cleanedResources,
+      });
       return reply.send({ success: true });
     }, 'Failed to update tenant config')
   );
@@ -216,6 +267,49 @@ export function registerTenantRoutes(app: AppFastifyInstance, pool: Pool) {
       logEvent(req, 'tenant_created', { tenantId: result.tenantId, name: tenantName });
       return reply.send({ success: true, tenant_id: result.tenantId });
     }, 'Failed to create tenant')
+  );
+
+  // Wizard "Done" hook — clears is_auto_seeded on every services +
+  // resources row for the tenant. After this fires, those rows are
+  // treated as user-owned, so a future business_type change (typically
+  // post-launch, from Settings) won't delete them. Called by the
+  // wizard's Done button (solo + team). 2026-05-28.
+  app.post(
+    '/tenants/:id/finalize-setup',
+    withHandler(async (req: AppRequest, reply) => {
+      if (!requireAuth(req, reply)) return;
+      const { id } = req.params as { id: string };
+      const isSuperAdmin = req.auth?.tenant_id === SUPER_ADMIN_TENANT_ID;
+      if (!isSuperAdmin && req.auth?.tenant_id !== id) {
+        return reply
+          .status(403)
+          .send({ success: false, error: 'Forbidden: cross-tenant finalize' });
+      }
+      const result = await withTenantClient(id, async (client) => {
+        await client.query('BEGIN');
+        try {
+          const svc = await client.query(
+            'UPDATE services SET is_auto_seeded = false WHERE tenant_id = $1 AND is_auto_seeded = true RETURNING service_id',
+            [id]
+          );
+          const res = await client.query(
+            'UPDATE resources SET is_auto_seeded = false WHERE tenant_id = $1 AND is_auto_seeded = true RETURNING resource_id',
+            [id]
+          );
+          await client.query('COMMIT');
+          return { services: svc.rowCount ?? 0, resources: res.rowCount ?? 0 };
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+      });
+      logEvent(req, 'tenant_setup_finalized', {
+        tenantId: id,
+        promotedServices: result.services,
+        promotedResources: result.resources,
+      });
+      return reply.send({ success: true, ...result });
+    }, 'Failed to finalize setup')
   );
 
   // Save tenant sort order (admin drag-and-drop reordering)

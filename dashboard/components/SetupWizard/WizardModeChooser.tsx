@@ -6,9 +6,17 @@ import { User, Users, Wand2, X } from 'lucide-react';
 interface WizardModeChooserProps {
   onChoose: (mode: 'solo' | 'team') => void;
   onClose: () => void;
+  /**
+   * Optional Back affordance — returns to the WizardWelcome stage.
+   * Omitted by callers that entered the chooser directly (e.g. the
+   * ?wizard=open URL shortcut, MyBusinessView's "Setup Assistant" click,
+   * or the dismissed-banner re-open), where there is no welcome to
+   * return to.
+   */
+  onBack?: () => void;
 }
 
-export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps) {
+export function WizardModeChooser({ onChoose, onClose, onBack }: WizardModeChooserProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div
@@ -91,6 +99,23 @@ export function WizardModeChooser({ onChoose, onClose }: WizardModeChooserProps)
             </div>
           </button>
         </div>
+
+        {/* Footer — Back link only when there is a prior stage to return
+            to. Mirrors BusinessTypePicker's footer for visual continuity. */}
+        {onBack && (
+          <div
+            className="px-6 py-3 border-t shrink-0 flex justify-start"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <button
+              onClick={onBack}
+              className="text-sm transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              &larr; Back
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

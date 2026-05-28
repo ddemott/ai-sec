@@ -96,6 +96,61 @@ describe('useOnboardingState — mutual exclusivity', () => {
     expect(result.current.mode).toBe(null);
   });
 
+  /**
+   * Back-navigation contract (2026-05-27 — Dale: "there is no back button
+   * the wizard. There should be back buttons.").
+   *
+   * WHO: an owner walking the wizard who realizes they need to revisit
+   *      an earlier choice (mode or business type).
+   * WHAT: every onward transition has a Back that returns to exactly the
+   *       previous stage, without dumping the user to idle.
+   * WHY: pre-2026-05-27 once a user picked a business type they were
+   *      stranded inside the wizard — abandoning was the only way to
+   *      re-pick, which left auto-seeded services from the wrong
+   *      template on the tenant.
+   */
+  it('BACK: chooser → welcome via backToWelcome', () => {
+    const { result } = renderHook(() => useOnboardingState({ needsSetup: true, loading: false }));
+    act(() => result.current.transitions.advanceWelcome());
+    expect(result.current.stage).toBe('chooser');
+
+    act(() => result.current.transitions.backToWelcome());
+    expect(result.current.stage).toBe('welcome');
+    expect(result.current.mode).toBe(null);
+  });
+
+  it('BACK: backToWelcome is a no-op from non-chooser stages', () => {
+    // Don't bounce idle/dismissed/wizard back to a welcome they never saw.
+    const { result } = renderHook(() =>
+      useOnboardingState({ needsSetup: false, loading: false, autoOpen: false })
+    );
+    expect(result.current.stage).toBe('idle');
+    act(() => result.current.transitions.backToWelcome());
+    expect(result.current.stage).toBe('idle');
+  });
+
+  it('BACK: wizard → picker via backToPicker, mode preserved', () => {
+    const { result } = renderHook(() => useOnboardingState({ needsSetup: true, loading: false }));
+    act(() => result.current.transitions.advanceWelcome());
+    act(() => result.current.transitions.chooseMode('team'));
+    act(() => result.current.transitions.enterWizard());
+    expect(result.current.stage).toBe('wizard');
+    expect(result.current.mode).toBe('team');
+
+    act(() => result.current.transitions.backToPicker());
+    expect(result.current.stage).toBe('picker');
+    // Mode is preserved so re-entering the wizard after a re-pick
+    // doesn't dump the user back through the chooser.
+    expect(result.current.mode).toBe('team');
+  });
+
+  it('BACK: backToPicker is a no-op outside the wizard stage', () => {
+    const { result } = renderHook(() => useOnboardingState({ needsSetup: true, loading: false }));
+    expect(result.current.stage).toBe('welcome');
+    act(() => result.current.transitions.backToPicker());
+    expect(result.current.stage).toBe('welcome');
+  });
+
   it('CONTRACT: every reachable state has at most one overlay stage', () => {
     // The reducer's state is a single { stage, mode } pair. By
     // construction at most one OVERLAY_STAGES value is true. This

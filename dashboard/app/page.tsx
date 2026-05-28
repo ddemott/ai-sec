@@ -516,7 +516,7 @@ const LANDING_HTML = `
     <div class="hero-content">
       <div class="hero-eyebrow reveal">
         <div class="hero-eyebrow-dot"></div>
-        AI-Powered Business Reception
+        AI-Powered Phone Receptionist
       </div>
 
       <h1 class="hero-h1 reveal reveal-delay-1">
@@ -527,7 +527,7 @@ const LANDING_HTML = `
       </h1>
 
       <p class="hero-sub reveal reveal-delay-2">
-        A <strong>human-sounding AI secretary</strong> answers every call, books appointments intelligently, and knows your business inside out. From day one, without hiring anyone.
+        A <strong>human-sounding AI secretary</strong> answers every call, books every appointment, and knows your business inside out. From day one, without hiring anyone.
       </p>
 
       <div class="hero-actions reveal reveal-delay-2">
@@ -571,16 +571,16 @@ const LANDING_HTML = `
         <div class="feat-tile-icon green">
           <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         </div>
-        <div class="feat-tile-h">Books Appointments</div>
-        <p class="feat-tile-p">Checks staff availability, skills, and resources in real time. Confirms with an SMS.</p>
+        <div class="feat-tile-h">Smart Bookings</div>
+        <p class="feat-tile-p">Checks staff availability, skills, and resources in real time. Confirms with a text message.</p>
       </div>
 
       <div class="feat-tile">
         <div class="feat-tile-icon amber">
           <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         </div>
-        <div class="feat-tile-h">Knows Returning Callers</div>
-        <p class="feat-tile-p">Matches incoming number to existing customers. Greets them by name and pulls up their history.</p>
+        <div class="feat-tile-h">Personal Touch for Repeat Customers</div>
+        <p class="feat-tile-p">Recognizes past customers the moment they call. Greets them by name, remembers their history, and treats them like the regulars they are.</p>
       </div>
 
       <div class="feat-tile">
@@ -676,7 +676,7 @@ const LANDING_HTML = `
         <div class="step-num">01</div>
         <div class="step-icon"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
         <div class="step-h">Pick your template</div>
-        <p class="step-p">Choose from 30 business types across 6 categories. Auto shop, salon, HVAC, plumber — each has the right vocabulary, services, and defaults pre-loaded.</p>
+        <p class="step-p">Choose from 30 business types across 6 categories. Auto shop, salon, HVAC, plumber — each has the right words, services, and defaults already set up.</p>
       </div>
       <div class="step">
         <div class="step-num">02</div>
@@ -699,7 +699,7 @@ const LANDING_HTML = `
   <div class="section-inner">
     <div class="section-eyebrow reveal">What it does</div>
     <h2 class="section-h2 reveal reveal-delay-1">EVERYTHING YOUR<br>FRONT DESK DOES</h2>
-    <p class="section-sub reveal reveal-delay-2">Minus the salary, the sick days, and the training curve.</p>
+    <p class="section-sub reveal reveal-delay-2">Minus the salary, the sick days, and the weeks of training.</p>
     <div class="features-grid">
 
       <div class="feat-card reveal">
@@ -731,15 +731,15 @@ const LANDING_HTML = `
 
       <div class="feat-card reveal">
         <div class="feat-icon amber"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-        <div class="feat-h">SMS Confirmations</div>
+        <div class="feat-h">Text Message Confirmations</div>
         <p class="feat-p">Sends a confirmation text the moment a booking is made. Customers get the date, time, and service — no manual follow-up needed.</p>
         <span class="feat-tag blue">Instant</span>
       </div>
 
       <div class="feat-card reveal reveal-delay-1">
         <div class="feat-icon purple"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>
-        <div class="feat-h">Customer Recognition</div>
-        <p class="feat-p">Matches the incoming phone number to your existing customer records. Returns their name, visit history, and preferences — so the AI greets them personally from the first word.</p>
+        <div class="feat-h">Treats Repeat Customers Like Regulars</div>
+        <p class="feat-p">When a past customer calls, the AI recognizes their number, pulls up their visit history and preferences, and greets them by name. No &quot;can I get your info again?&quot; ever.</p>
         <span class="feat-tag green">No login required</span>
       </div>
 
@@ -752,7 +752,7 @@ const LANDING_HTML = `
 
       <div class="feat-card reveal reveal-delay-1">
         <div class="feat-icon green"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
-        <div class="feat-h">Knowledge Base</div>
+        <div class="feat-h">Answers Your Callers&apos; Questions</div>
         <p class="feat-p">Upload your policies, service descriptions, and FAQs. The AI answers caller questions directly from your documents — pricing, hours, what to bring, what to expect.</p>
         <span class="feat-tag green">Answers from your docs</span>
       </div>
@@ -776,9 +776,9 @@ const LANDING_HTML = `
         <ul class="price-features">
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>150 AI-handled calls/month</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>1 staff member</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>1 resource / station</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>1 station or workspace</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Phone number included</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>SMS confirmations</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Text message confirmations</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Customer records</li>
         </ul>
         <a href="/register" class="price-btn outline">Start free trial</a>
@@ -786,30 +786,30 @@ const LANDING_HTML = `
       <div class="price-card featured reveal reveal-delay-1">
         <div class="price-name">Growth</div>
         <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num">279</span><span class="price-period">/mo</span></div>
-        <p class="price-desc">Your full front desk. Staff matching, visual schedule, calendar sync, and knowledge base — all included.</p>
+        <p class="price-desc">Your full front desk. Staff matching, visual schedule, calendar sync, and FAQ library — all included.</p>
         <hr class="price-divider">
         <ul class="price-features">
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>500 AI-handled calls/month</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Up to 5 staff members</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Up to 3 resources / stations</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Up to 3 stations or workspaces</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Solo</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Visual schedule for your whole team</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Google Calendar sync</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Knowledge base (PDF / text upload)</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>FAQ library (upload PDFs or text)</li>
         </ul>
         <a href="/register" class="price-btn filled">Start free trial</a>
       </div>
       <div class="price-card reveal reveal-delay-2">
         <div class="price-name">Professional</div>
         <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num">449</span><span class="price-period">/mo</span></div>
-        <p class="price-desc">High-volume teams. Unlimited staff, advanced analytics, and custom AI vocabulary.</p>
+        <p class="price-desc">High-volume teams. Unlimited staff, detailed reports, and custom words for your trade.</p>
         <hr class="price-divider">
         <ul class="price-features">
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>2,000 calls/month</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Unlimited staff members</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Unlimited stations</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Growth</li>
-          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Advanced analytics &amp; business trends</li>
+          <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Detailed reports &amp; business trends</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom words &amp; phrases for your trade</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Priority support</li>
         </ul>
@@ -818,7 +818,7 @@ const LANDING_HTML = `
       <div class="price-card reveal reveal-delay-2" style="border-color:rgba(245,158,11,0.3);background:linear-gradient(180deg,rgba(245,158,11,0.06) 0%,var(--bg3) 100%)">
         <div class="price-name" style="color:var(--amber)">Enterprise</div>
         <div class="price-amount"><span class="price-dollar">\$</span><span class="price-num" style="color:var(--amber)">1,200</span><span class="price-period">+/mo</span></div>
-        <p class="price-desc">Multi-location, franchise, or agency. White-label ready. Custom AI persona. Dedicated support.</p>
+        <p class="price-desc">For multi-location businesses, franchises, or agencies. Your branding on the dashboard. Custom AI voice. Dedicated support.</p>
         <hr class="price-divider">
         <ul class="price-features">
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Everything in Professional</li>
@@ -840,7 +840,7 @@ const LANDING_HTML = `
   <div class="section-inner">
     <div class="section-eyebrow reveal">Industries</div>
     <h2 class="section-h2 reveal reveal-delay-1">BUILT FOR YOUR<br>KIND OF BUSINESS</h2>
-    <p class="section-sub reveal reveal-delay-2">30 business types across 6 categories. Each template uses the right vocabulary, the right defaults, and the right booking logic for your trade.</p>
+    <p class="section-sub reveal reveal-delay-2">30 business types across 6 categories. Each template uses the right words, the right defaults, and the right scheduling rules for your trade.</p>
     <div class="biz-grid reveal reveal-delay-2">
       <div class="biz-chip">Auto Repair Shop</div>
       <div class="biz-chip">Body &amp; Paint Shop</div>
@@ -853,7 +853,7 @@ const LANDING_HTML = `
       <div class="biz-chip">Nail Salon</div>
       <div class="biz-chip">Spa &amp; Wellness</div>
       <div class="biz-chip">Lash &amp; Brow Studio</div>
-      <div class="biz-chip">Med Spa / Aesthetics</div>
+      <div class="biz-chip">Med Spa</div>
       <div class="biz-chip">Personal Training</div>
       <div class="biz-chip">Yoga Studio</div>
       <div class="biz-chip">Bakery</div>
@@ -879,7 +879,7 @@ const LANDING_HTML = `
 <!-- CTA BAND -->
 <section class="cta-band">
   <h2 class="cta-band-h reveal">YOUR NEXT CALL<br>IS ABOUT TO<br><span style="color:var(--blue-lt)">GET ANSWERED.</span></h2>
-  <p class="cta-band-sub reveal reveal-delay-1">Sign up in two minutes. Finish the wizard. Call your new number and hear your AI secretary pick up. It's that fast.</p>
+  <p class="cta-band-sub reveal reveal-delay-1">Sign up in two minutes. Finish the quick setup. Call your new number and hear your AI secretary pick up. It&apos;s that fast.</p>
   <div class="cta-band-actions reveal reveal-delay-2">
     <a href="/register" class="btn-hero">Get started — it's free<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
     <div class="cta-number">

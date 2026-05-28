@@ -59,7 +59,20 @@ function buildApp() {
     (request as unknown as { auth: typeof authStub }).auth = authStub;
   });
 
-  registerTenantRoutes(fastify, mockPool);
+  // Stand-in for the production withTenantClient — bypasses the real
+  // tenant-exists check + RLS set_config dance and just hands the mock
+  // client to the callback. The mock client returns whatever
+  // queryResponses we've pushed for this test.
+  const withTenantClient = async <T>(
+    _tenantId: string,
+    fn: (client: typeof mockClient) => Promise<T>
+  ): Promise<T> => fn(mockClient);
+
+  registerTenantRoutes(
+    fastify,
+    mockPool,
+    withTenantClient as unknown as Parameters<typeof registerTenantRoutes>[2]
+  );
   return fastify;
 }
 
@@ -279,5 +292,174 @@ describe('POST /tenants/reorder — sad paths', () => {
 
     expect(res.statusCode).toBe(401);
     expect(queries).toHaveLength(0);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// POST /tenants/:id/update-config — wizard re-pick cleanup
+// ════════════════════════════════════════════════════════════════════
+//
+// Pinned by the 2026-05-28 bug: Dale picked "Bakery" in the wizard but
+// step 1 kept showing answering-service services because a prior pass
+// had already auto-seeded them and the wizard's `services.length > 0`
+// gate skipped re-seeding. Fix moves the cleanup into the route so any
+// business_type change (any caller, any session) gets the same rollback.
+
+describe('POST /tenants/:id/update-config — business_type change cleanup', () => {
+  beforeEach(() => {
+    // Caller is the tenant's owner — passes the requireAuth + same-tenant gate.
+    authStub = {
+      user_id: 'owner-user',
+      tenant_id: TENANT_ID_A,
+      email: 'owner@test',
+      role: 'owner',
+    };
+  });
+
+  it('HAPPY: a business_type change wipes auto-seeded services + resources in one tx', async () => {
+    // WHO: owner re-picking a different business_type during onboarding
+    //      (or via the Settings business-type changer)
+    // WHAT: route opens a tx, SELECT ... FOR UPDATE pulls the prior
+    //       business_type, UPDATE writes the new one, then DELETE wipes
+    //       services + resources where is_auto_seeded = true. Single tx
+    //       so a crash mid-flow doesn't leave the tenant with the new
+    //       business_type and the OLD template's seeded rows.
+    // WHEN: every business_type change for a tenant that has previously
+    //       auto-seeded rows in the DB.
+    // WHERE: src/routes/tenants.ts → POST /tenants/:id/update-config
+    // WHY: pins the 2026-05-28 fix. A regression that drops the DELETE
+    //      or skips the BEGIN/COMMIT would resurrect the stale-defaults
+    //      bug Dale reported. Pinning the query ORDER (SELECT → UPDATE
+    //      → DELETE services → DELETE resources → COMMIT) also catches
+    //      a refactor that moves cleanup OUTSIDE the tx, where a
+    //      partial-failure rollback would no longer undo it.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({ rows: [{ business_type: 'answering-service' }], rowCount: 1 }); // SELECT FOR UPDATE
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE tenants
+    queryResponses.push({ rows: [{ service_id: 's1' }, { service_id: 's2' }], rowCount: 2 }); // DELETE services
+    queryResponses.push({ rows: [{ resource_id: 'r1' }], rowCount: 1 }); // DELETE resources
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { business_type: 'bakery' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true });
+    // Pin tx boundaries + correct cleanup order.
+    expect(queries[0].text).toBe('BEGIN');
+    expect(queries[1].text).toContain('SELECT business_type FROM tenants');
+    expect(queries[1].text).toContain('FOR UPDATE');
+    expect(queries[2].text).toContain('UPDATE tenants SET');
+    expect(queries[3].text).toContain('DELETE FROM services');
+    expect(queries[3].text).toContain('is_auto_seeded = true');
+    expect(queries[4].text).toContain('DELETE FROM resources');
+    expect(queries[4].text).toContain('is_auto_seeded = true');
+    expect(queries[queries.length - 1].text).toBe('COMMIT');
+  });
+
+  it('HAPPY: same-business_type update does NOT delete anything', async () => {
+    // WHO: caller PATCHing voice_id or system_prompt without changing
+    //      business_type (Settings → Voice tab; a re-save with the
+    //      same template selected).
+    // WHAT: cleanup is gated on `body.business_type !== priorBusinessType`.
+    //       When the value is unchanged (or omitted), the DELETEs are
+    //       skipped entirely — only the UPDATE runs inside the tx.
+    // WHEN: every config edit that touches voice/prompt without
+    //       reselecting a template.
+    // WHERE: src/routes/tenants.ts businessTypeChanged branch.
+    // WHY: protects the owner's typed-in services from being wiped when
+    //      they just want to change a voice setting. A regression that
+    //      drops the equality guard would silently delete is_auto_seeded
+    //      rows on every voice-only save — invisible to the caller,
+    //      catastrophic to a tenant who hasn't typed over the seed yet.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({ rows: [{ business_type: 'bakery' }], rowCount: 1 }); // SELECT FOR UPDATE
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE tenants
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { business_type: 'bakery', voice_id: 'clara' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // No DELETE statements — only the BEGIN, SELECT, UPDATE, COMMIT.
+    const deleteQueries = queries.filter((q) => q.text.startsWith('DELETE'));
+    expect(deleteQueries).toHaveLength(0);
+  });
+
+  it('SAD: ROLLBACK when DELETE fails (no partial cleanup, no stale tenant row)', async () => {
+    // WHO: a DB error (lock timeout, FK violation, RLS denial) hits
+    //      during the DELETE FROM services after the UPDATE has run.
+    // WHAT: the route's try/catch ROLLBACKs and re-throws → withHandler
+    //       turns the throw into a 500. The earlier UPDATE is undone by
+    //       the ROLLBACK, so the tenant is NOT left with the new
+    //       business_type while the old auto-seeded rows still exist.
+    // WHEN: any DB-side failure between the UPDATE and the COMMIT.
+    // WHERE: src/routes/tenants.ts catch arm of the BEGIN/COMMIT block.
+    // WHY: this is the exact reason the cleanup lives inside the same
+    //      tx as the UPDATE. If a refactor accidentally splits them
+    //      into two separate withPoolClient calls, a crash in the
+    //      middle would resurrect the stale-defaults bug for that
+    //      tenant AND make the UI inconsistent ("I picked bakery but I
+    //      still see answering-service services").
+    let callIdx = 0;
+    const originalQuery = mockClient.query;
+    mockClient.query = vi.fn(async (text: string, params?: unknown[]) => {
+      callIdx++;
+      if (text === 'BEGIN') return { rows: [], rowCount: 0 };
+      if (callIdx === 2) return { rows: [{ business_type: 'answering-service' }], rowCount: 1 };
+      if (callIdx === 3) return { rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 };
+      if (callIdx === 4) throw new Error('lock_not_available'); // DELETE services
+      return originalQuery(text, params);
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { business_type: 'bakery' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(queries.some((q) => q.text === 'ROLLBACK')).toBe(true);
+
+    mockClient.query = originalQuery;
+  });
+
+  it('SAD: cross-tenant config update is rejected 403 BEFORE any tx opens', async () => {
+    // WHO: caller authenticated as one tenant trying to mutate another
+    //      tenant's config (a stale token, a hand-crafted request, or
+    //      a malicious browser tab).
+    // WHAT: the same-tenant guard at the top of the handler returns
+    //       403 before withTenantClient is even called — no tx, no
+    //       state mutation, nothing to clean up.
+    // WHEN: every authenticated-but-wrong-tenant request to
+    //       /tenants/:id/update-config.
+    // WHERE: requireAuth + the explicit `req.auth.tenant_id !== id`
+    //        check at the top of the route.
+    // WHY: closes the cross-tenant write surface. Without this guard,
+    //      a tenant-A user could mutate tenant-B's business_type AND
+    //      trigger tenant-B's auto-seed cleanup — a self-serve
+    //      denial-of-data attack. The 401-anon CVE fix from 2026-05-21
+    //      handles unauthenticated; this pins the cross-tenant case.
+    authStub = {
+      user_id: 'other-tenant-user',
+      tenant_id: TENANT_ID_B,
+      email: 'other@test',
+      role: 'owner',
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { business_type: 'bakery' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(queries).toHaveLength(0); // no DB calls — guard fired first
   });
 });

@@ -2708,7 +2708,8 @@ CREATE TABLE public.resources (
     is_deleted boolean DEFAULT false NOT NULL,
     deleted_at timestamp with time zone,
     is_personal boolean DEFAULT false,
-    deleted_by text
+    deleted_by text,
+    is_auto_seeded boolean DEFAULT false NOT NULL
 );
 
 ALTER TABLE ONLY public.resources FORCE ROW LEVEL SECURITY;
@@ -2776,7 +2777,8 @@ CREATE TABLE public.services (
     subtitle text DEFAULT ''::text,
     is_deleted boolean DEFAULT false,
     deleted_at timestamp with time zone,
-    deleted_by text
+    deleted_by text,
+    is_auto_seeded boolean DEFAULT false NOT NULL
 );
 
 ALTER TABLE ONLY public.services FORCE ROW LEVEL SECURITY;
