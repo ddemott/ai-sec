@@ -42,9 +42,9 @@ vi.mock('@/lib/ThemeContext', () => ({
   useTheme: () => ({
     theme: 'dark',
     setTheme: vi.fn(),
-    themeInfo: { name: 'Dark' },
+    themeInfo: { name: 'Dark', preview: { bg: '#000', accent: '#fff' } },
   }),
-  THEMES: [{ id: 'dark', name: 'Dark' }],
+  THEMES: [{ id: 'dark', name: 'Dark', preview: { bg: '#000', accent: '#fff' } }],
 }));
 
 // OutlookLayout pulls tenantsVersion off useSessionContext; the

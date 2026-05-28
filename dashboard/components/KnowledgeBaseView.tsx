@@ -519,6 +519,19 @@ export default function KnowledgeBaseView() {
     }
   }
 
+  function handleDeleteFile(source: string) {
+    const chunks = docs.filter((d) => d.source === source);
+    confirm({
+      title: 'Remove Document',
+      message: `Remove "${source}"? This will delete all ${chunks.length} chunk${chunks.length === 1 ? '' : 's'} from your AI's knowledge.`,
+      confirmLabel: 'Remove',
+      onConfirm: () => {
+        closeConfirm();
+        void Promise.all(chunks.map((c) => doDelete(c.tenant_doc_id)));
+      },
+    });
+  }
+
   function handleDelete(id: string) {
     confirm({
       title: 'Delete Knowledge Entry',
@@ -713,11 +726,44 @@ export default function KnowledgeBaseView() {
                     )}
                   </div>
                 )}
-                <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                  Answer these questions about your business. The AI will use your answers to
-                  respond to callers. Answers auto-save as you type. Add business-specific Q&amp;A
-                  in the Custom Questions section at the bottom.
-                </p>
+                {totalAnswered === totalQuestions && totalQuestions > 0 && (
+                  <div
+                    className="flex items-start gap-3 p-4 rounded-xl border mb-2"
+                    style={{
+                      backgroundColor: 'var(--accent-muted)',
+                      borderColor: 'var(--accent)',
+                    }}
+                  >
+                    <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--accent-soft)' }} />
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--accent-soft)' }}>
+                        Your AI is fully trained on your business
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        To activate your phone line, open the{' '}
+                        <strong style={{ color: 'var(--text-primary)' }}>Phone Assistant</strong>{' '}
+                        tab and go to Go Live.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    Answer these questions about your business. The AI will use your answers to
+                    respond to callers. Answers auto-save as you type.
+                  </p>
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById('custom-questions-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    className="text-xs font-medium shrink-0 ml-4 hover:underline"
+                    style={{ color: 'var(--accent-soft)' }}
+                  >
+                    + Add your own question
+                  </button>
+                </div>
                 {POLICY_CATEGORIES.map((cat, idx) => (
                   <PolicyCategory
                     key={cat}
@@ -728,11 +774,13 @@ export default function KnowledgeBaseView() {
                     defaultOpen={idx === 0}
                   />
                 ))}
-                <CustomQuestionsSection
-                  customDocs={docs.filter((d) => d.source === CUSTOM_QUESTION_SOURCE)}
-                  onAdd={handleAddCustomQuestion}
-                  onDelete={handleDelete}
-                />
+                <div id="custom-questions-section">
+                  <CustomQuestionsSection
+                    customDocs={docs.filter((d) => d.source === CUSTOM_QUESTION_SOURCE)}
+                    onAdd={handleAddCustomQuestion}
+                    onDelete={handleDelete}
+                  />
+                </div>
               </div>
             )}
 
@@ -778,6 +826,59 @@ export default function KnowledgeBaseView() {
                   your business. When a caller asks a question, the AI searches your documents
                   for the answer and reads it back to them.
                 </p>
+                {(() => {
+                  const uploadedDocs = docs.filter(
+                    (d) =>
+                      d.source &&
+                      d.source !== 'policy-questionnaire' &&
+                      d.source !== CUSTOM_QUESTION_SOURCE
+                  );
+                  const byFile = uploadedDocs.reduce<
+                    Record<string, { chunks: KnowledgeEntry[]; oldest: string }>
+                  >((acc, d) => {
+                    const key = d.source!;
+                    if (!acc[key]) acc[key] = { chunks: [], oldest: d.created_at };
+                    acc[key].chunks.push(d);
+                    if (d.created_at < acc[key].oldest) acc[key].oldest = d.created_at;
+                    return acc;
+                  }, {});
+                  const files = Object.entries(byFile);
+                  if (files.length === 0) return null;
+                  return (
+                    <div className="mt-6 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                        Uploaded files
+                      </p>
+                      {files.map(([filename, { chunks, oldest }]) => (
+                        <div
+                          key={filename}
+                          className="flex items-center justify-between p-3 rounded-lg border"
+                          style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--warning)' }} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                                {filename}
+                              </p>
+                              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {chunks.length} chunk{chunks.length === 1 ? '' : 's'} ·{' '}
+                                {new Date(oldest).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteFile(filename)}
+                            aria-label={`Remove ${filename}`}
+                            className="opacity-40 hover:opacity-100 focus:opacity-100 p-1 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center ml-2 shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" style={{ color: 'var(--danger)' }} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

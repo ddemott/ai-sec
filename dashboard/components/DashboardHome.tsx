@@ -527,7 +527,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
           style={{ color: 'var(--text-primary)' }}
         >
           <Calendar className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
-          This Week
+          Next 3 Days
         </h2>
         <WeekView tenantId={tenantId} employees={employees} vocab={vocab} onNavigate={onNavigate} />
       </Card>
@@ -592,14 +592,14 @@ function WeekView({
   async function loadWeekData() {
     const today = new Date();
     const days: string[] = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 3; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       days.push(d.toISOString().split('T')[0]);
     }
 
-    // Fetch appointments for the week
-    const weekEnd = days[6];
+    // Fetch appointments for next 3 days
+    const weekEnd = days[2];
     try {
       const appts = await Api.appointments.list(tenantId, {
         startDate: days[0],
@@ -643,7 +643,7 @@ function WeekView({
       try {
         const shiftPromises = employees.map((emp) =>
           Api.shifts.schedule
-            .forDate(tenantId, emp.employee_id, days[0], days[6])
+            .forDate(tenantId, emp.employee_id, days[0], days[2])
             .then((shifts) => ({
               empId: emp.employee_id,
               empName: emp.first_name || emp.name,
@@ -694,7 +694,7 @@ function WeekView({
   }
 
   return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid grid-cols-3 gap-4">
       {weekAppts.map((day) => {
         const date = new Date(day.date + 'T12:00:00');
         const dayName = DAY_NAMES[date.getDay()];
@@ -743,7 +743,7 @@ function WeekView({
             )}
 
             {/* First few appointments */}
-            {day.appts.slice(0, 2).map((a, i) => (
+            {day.appts.slice(0, 4).map((a, i) => (
               <div
                 key={i}
                 className="text-xs truncate"
@@ -752,16 +752,16 @@ function WeekView({
                 {a.time} {a.desc}
               </div>
             ))}
-            {day.count > 2 && (
+            {day.count > 4 && (
               <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                +{day.count - 2} more
+                +{day.count - 4} more
               </div>
             )}
 
             {/* Who's working */}
             {workingStaff.length > 0 && employees.length > 1 && (
               <div className="mt-1.5 pt-1.5 border-t" style={{ borderColor: 'var(--border-soft)' }}>
-                {workingStaff.slice(0, 2).map((s, i) => (
+                {workingStaff.slice(0, 3).map((s, i) => (
                   <div
                     key={i}
                     className="text-xs truncate"
@@ -770,9 +770,9 @@ function WeekView({
                     {s.name} {formatShiftTime(s.start)}–{formatShiftTime(s.end)}
                   </div>
                 ))}
-                {workingStaff.length > 2 && (
+                {workingStaff.length > 3 && (
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    +{workingStaff.length - 2} more
+                    +{workingStaff.length - 3} more
                   </div>
                 )}
               </div>

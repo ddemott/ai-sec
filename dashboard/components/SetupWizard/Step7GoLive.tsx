@@ -54,8 +54,7 @@ export function Step7GoLive({
           Go Live
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Activate your AI phone line. Once active, callers will reach your AI receptionist who can
-          book appointments, answer questions, and manage your schedule.
+          Assign a phone number to this business. Inbound calls will route to the AI receptionist.
         </p>
       </div>
 
@@ -75,6 +74,11 @@ export function Step7GoLive({
           </div>
           <p className="text-sm text-green-600 dark:text-green-400 mt-4 ml-9">
             Try calling this number to test your AI receptionist.
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 ml-9">
+            To adjust voice, greeting, and AI behavior, open{' '}
+            <strong className="text-gray-700 dark:text-gray-300">Phone Assistant</strong> from the
+            top nav after closing this wizard.
           </p>
         </div>
       ) : phoneStatus === 'provisioning' || activating ? (

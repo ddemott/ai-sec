@@ -11,8 +11,8 @@ export const POLICY_CATEGORIES: string[] = [
   'Scheduling & Appointments',
   'Cancellation & Rescheduling',
   'Payment & Billing',
-  'Warranties & Guarantees',
-  'Preparation & What to Expect',
+  'Your Guarantee',
+  'Before Your Visit',
   'Discounts & Promotions',
   'Emergency & After-Hours',
 ];
@@ -209,64 +209,64 @@ export const POLICY_QUESTIONS: PolicyQuestion[] = [
     category: 'Payment & Billing',
   },
 
-  // ── Warranties & Guarantees ────────────────────────────────────────
+  // ── Your Guarantee ────────────────────────────────────────
   {
     id: 'service-warranty',
     question: 'Do you offer a warranty on your work?',
     placeholder:
       "Yes, all our work comes with a 12-month or 12,000-mile warranty, whichever comes first. If something isn't right, bring it back and we'll make it right.",
-    category: 'Warranties & Guarantees',
+    category: 'Your Guarantee',
   },
   {
     id: 'satisfaction-guarantee',
     question: "What if I'm not satisfied with the service?",
     placeholder:
       "Your satisfaction is our priority. If something doesn't meet your expectations, let us know right away and we'll address it at no extra charge.",
-    category: 'Warranties & Guarantees',
+    category: 'Your Guarantee',
   },
   {
     id: 'parts-warranty',
     question: 'Are parts covered under warranty?',
     placeholder:
       "Yes, parts we install carry the manufacturer's warranty. We'll handle the replacement if a part fails within the warranty period.",
-    category: 'Warranties & Guarantees',
+    category: 'Your Guarantee',
   },
   {
     id: 'warranty-claim-process',
     question: 'How do I make a warranty claim?',
     placeholder:
       'Just give us a call or bring it back in. We keep records of all services, so we can look up your history and take care of it quickly.',
-    category: 'Warranties & Guarantees',
+    category: 'Your Guarantee',
   },
 
-  // ── Preparation & What to Expect ───────────────────────────────────
+  // ── Before Your Visit ───────────────────────────────────
   {
     id: 'what-to-bring',
     question: 'What should I bring to my appointment?',
     placeholder:
       "Just bring your vehicle and any relevant paperwork, like a warranty card or previous service records. We'll take care of the rest.",
-    category: 'Preparation & What to Expect',
+    category: 'Before Your Visit',
   },
   {
     id: 'pre-appointment-prep',
     question: 'Is there anything I need to do before my appointment?',
     placeholder:
       "No special prep needed. Just make sure the area we'll be working on is accessible. If anything changes before your visit, give us a heads up.",
-    category: 'Preparation & What to Expect',
+    category: 'Before Your Visit',
   },
   {
     id: 'what-to-expect-during',
     question: 'What should I expect during my visit?',
     placeholder:
       "When you arrive, we'll check you in, review the work to be done, and give you a time estimate. We'll contact you if anything comes up during the service.",
-    category: 'Preparation & What to Expect',
+    category: 'Before Your Visit',
   },
   {
     id: 'post-service-care',
     question: 'Is there anything I should do after the service?',
     placeholder:
       "We'll walk you through any follow-up care or next steps before you leave. For most services, you're good to go right away.",
-    category: 'Preparation & What to Expect',
+    category: 'Before Your Visit',
   },
 
   // ── Discounts & Promotions ─────────────────────────────────────────

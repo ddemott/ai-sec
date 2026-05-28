@@ -129,14 +129,14 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
 ### P2 — copy / trust polish
 
 - [x] `SetupWizard/WizardWelcome.tsx` — DONE 2026-05-28 (`c804025`). Removed inaccurate "10 minutes / 6 quick questions" copy.
-- [ ] `SkillMatrixView.tsx` footer + `Step7GoLive.tsx` — drop persuasive/reassurance phrasing; state what changes factually.
+- [x] `SkillMatrixView.tsx` footer + `Step7GoLive.tsx` — drop persuasive/reassurance phrasing; state what changes factually. Done 2026-05-28.
 - [x] `SetupProgressPill.tsx` — DONE 2026-05-28 (`bdd549e`). Removed `hidden` class; pill visible on all screen sizes.
 - [ ] `ProfileView.tsx` — "Security" card "coming soon" placeholder; replace with real account facts or collapse.
 
 ### P2.5 — Wizard Phase B: full draft commit model
 
 - [ ] **`SetupWizard` + `SoloWizard` draft state.** Phase A (2026-05-27) added back-at-every-stage + auto-seed rollback on re-pick, which solves the visible bug Dale flagged ("all of the businesses have the same data when picking services"). Phase B is the principled fix for the parallel ask ("data shouldn't be solid until we are out of the wizard"): hold services/resources/employees/shifts/mappings in local state during the wizard, commit to DB only on the Step 7 Done click, discard on dismiss. Touches ~5K lines of wizard infrastructure (`useWizardCrud.ts` rewrite, `WizardStepContent` props, all `Step*.tsx` components, 5 test files). Needs `VocabularyProvider` to accept an `overrideTemplate` so vocab follows draft business_type without DB write. Open in a fresh branch; coordinate with P1 Cluster C (Modal primitive migration) since both touch overlay shells. See `dashboard/components/SetupWizard/SetupWizard.backToPicker.test.tsx` for the auto-seed-rollback contract Phase B must preserve.
-- [ ] **`tenants /update-config` partial-update safety.** `src/routes/tenants.ts:174-177` does an absolute `UPDATE tenants SET system_prompt=$1, voice_id=$2, business_type=$3, first_message=$4` — any field omitted in the body lands as NULL (data corruption if a caller patches one field). Convert to read-then-merge (same pattern as `src/routes/customers.ts` UPDATE after 2026-05-27 fix) or use COALESCE. Standalone small PR.
+- [x] **`tenants /update-config` partial-update safety.** Already implemented — read-then-merge in place (lines 204–207 `body.field !== undefined` check inside the `FOR UPDATE` transaction). Verified 2026-05-28. Standalone small PR.
 
 ### P3 — large structural decomposition (defer; medium-high effort, vague-per-finding)
 

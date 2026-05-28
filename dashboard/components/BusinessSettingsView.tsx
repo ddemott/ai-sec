@@ -358,6 +358,13 @@ export default function BusinessSettingsView() {
           </Card>
         )}
 
+        {/* ─── CONNECTIONS ─── Calendar + CRM integrations grouped under one heading */}
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--text-muted)' }}>
+            Connections
+          </h2>
+          <div className="space-y-4">
+
         {/* ─── MY CALENDAR ─── */}
         <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
           <div className="flex items-center justify-between mb-6">
@@ -515,6 +522,9 @@ export default function BusinessSettingsView() {
             connectedParam: 'servicetitanConnected',
           }}
         />
+
+          </div>{/* end Connections space-y-4 */}
+        </div>{/* end Connections section */}
 
         {/* ─── RESOURCES & CAPACITY (team mode only) ─── */}
         {!isSolo && (

@@ -273,14 +273,7 @@ export default function AnalyticsView() {
                             {svc}
                           </span>
                           <span
-                            style={{
-                              color:
-                                rate > 50
-                                  ? 'var(--green)'
-                                  : rate > 25
-                                    ? 'var(--yellow)'
-                                    : 'var(--red)',
-                            }}
+                            style={{ color: 'var(--text-primary)' }}
                             className="font-medium shrink-0"
                           >
                             {rate}% ({data.returned}/{data.first})
@@ -294,12 +287,7 @@ export default function AnalyticsView() {
                             className="h-full rounded-full"
                             style={{
                               width: `${rate}%`,
-                              backgroundColor:
-                                rate > 50
-                                  ? 'var(--green)'
-                                  : rate > 25
-                                    ? 'var(--yellow)'
-                                    : 'var(--red)',
+                              backgroundColor: 'var(--accent-soft)',
                               opacity: 0.7,
                             }}
                           />
@@ -333,23 +321,13 @@ export default function AnalyticsView() {
                         <div
                           className="text-xs font-bold rounded-md py-1 mb-1"
                           style={{
-                            backgroundColor:
-                              rate > 20
-                                ? 'rgba(248,113,113,0.15)'
-                                : rate > 10
-                                  ? 'rgba(252,211,77,0.15)'
-                                  : 'rgba(52,211,153,0.1)',
-                            color:
-                              rate > 20
-                                ? 'var(--red)'
-                                : rate > 10
-                                  ? 'var(--yellow)'
-                                  : 'var(--green)',
+                            backgroundColor: 'var(--bg-raised)',
+                            color: 'var(--text-primary)',
                           }}
                         >
                           {count}
                         </div>
-                        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                           {day}
                         </span>
                       </div>

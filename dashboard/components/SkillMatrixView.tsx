@@ -321,7 +321,7 @@ export default function SkillMatrixView() {
             {vocab.resource_label}
           </div>
         </div>
-        <p>Tip: Toggling a cell instantly updates the AI&apos;s scheduling logic.</p>
+        <p>Changes save immediately.</p>
       </footer>
     </div>
   );

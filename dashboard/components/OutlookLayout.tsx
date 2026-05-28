@@ -106,14 +106,17 @@ export function OutlookLayout({
   >([]);
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [themeSelectorOpen, setThemeSelectorOpen] = useState(false);
   const tenantBtnRef = useRef<HTMLButtonElement>(null);
   const profileBtnRef = useRef<HTMLButtonElement>(null);
+  const themeBtnRef = useRef<HTMLButtonElement>(null);
 
   const { tenantsVersion } = useSessionContext();
   // Anchor rects for the floating dropdowns. Track scroll/resize so
   // the menus stay glued to their triggers (UX audit 4.2 row 7).
   const tenantBtnRect = useAnchorRect(tenantBtnRef, tenantDropdownOpen);
   const profileBtnRect = useAnchorRect(profileBtnRef, profileMenuOpen);
+  const themeBtnRect = useAnchorRect(themeBtnRef, themeSelectorOpen);
   const [unansweredCount, setUnansweredCount] = useState(0);
   // E3 (2026-05-17): count of currently-active voice calls, used as a
   // badge on the Calls tab so front-desk can see live activity at a
@@ -316,26 +319,23 @@ export function OutlookLayout({
                 </button>
               )}
               <SetupProgressPill />
-              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as typeof theme)}
-                aria-label={`Theme (currently ${themeInfo.name})`}
+              <button
+                ref={themeBtnRef}
+                aria-label={`Theme: ${themeInfo.name}`}
                 title={`Theme: ${themeInfo.name}`}
-                className="text-xs rounded-md px-2 py-1.5 min-h-[40px] cursor-pointer outline-none transition-all"
-                style={{
-                  backgroundColor: 'var(--bg-raised)',
-                  borderColor: 'var(--border-soft)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-soft)',
-                  fontFamily: 'var(--font-body)',
-                }}
+                onClick={() => setThemeSelectorOpen(!themeSelectorOpen)}
+                className="inline-flex items-center gap-1.5 min-h-[40px] px-2 rounded-md transition-all hover:brightness-110"
+                style={{ color: 'var(--text-secondary)' }}
               >
-                {THEMES.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+                <span
+                  className="flex rounded overflow-hidden shrink-0"
+                  style={{ width: 22, height: 14, border: '1px solid rgba(255,255,255,0.15)' }}
+                >
+                  <span style={{ flex: 2, backgroundColor: themeInfo.preview.bg }} />
+                  <span style={{ flex: 1, backgroundColor: themeInfo.preview.accent }} />
+                </span>
+                <span className="text-xs hidden sm:inline">{themeInfo.name}</span>
+              </button>
               <button
                 ref={profileBtnRef}
                 aria-label={userName ? `Account menu for ${userName}` : 'Account menu'}
@@ -623,6 +623,57 @@ export function OutlookLayout({
                 </button>
               </div>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Theme swatch picker */}
+      {themeSelectorOpen && (
+        <>
+          <div className="fixed inset-0 z-[99]" onClick={() => setThemeSelectorOpen(false)} />
+          <div
+            className="fixed z-[100] rounded-xl shadow-2xl border p-3"
+            style={{
+              backgroundColor: 'var(--bg-raised)',
+              borderColor: 'var(--border-soft)',
+              top: themeBtnRect ? themeBtnRect.bottom + 4 : 0,
+              left: themeBtnRect ? themeBtnRect.left : 0,
+            }}
+          >
+            <div className="grid grid-cols-4 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setTheme(t.id);
+                    setThemeSelectorOpen(false);
+                  }}
+                  title={t.name}
+                  aria-label={t.name}
+                  aria-pressed={theme === t.id}
+                  className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all hover:brightness-110"
+                  style={
+                    theme === t.id
+                      ? { boxShadow: '0 0 0 2px var(--accent)', backgroundColor: 'var(--accent-muted)' }
+                      : undefined
+                  }
+                >
+                  <span
+                    className="flex rounded overflow-hidden shrink-0"
+                    style={{ width: 36, height: 24, border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    <span style={{ flex: 2, backgroundColor: t.preview.bg }} />
+                    <span style={{ flex: 1, backgroundColor: t.preview.accent }} />
+                  </span>
+                  <span
+                    className="text-xs leading-none whitespace-nowrap"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {t.name}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </>
       )}

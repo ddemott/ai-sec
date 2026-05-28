@@ -820,7 +820,7 @@ describe('SetupWizard: Step 8 Go Live', () => {
     goToStep7();
     expect(
       screen.getByText(
-        'Activate your AI phone line. Once active, callers will reach your AI receptionist who can book appointments, answer questions, and manage your schedule.'
+        'Assign a phone number to this business. Inbound calls will route to the AI receptionist.'
       )
     ).toBeInTheDocument();
     expect(screen.getByText('Step 8 of 8')).toBeInTheDocument();

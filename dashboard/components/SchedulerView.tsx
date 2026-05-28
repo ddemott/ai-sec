@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Users, Columns3, List, Calendar, RefreshCw, Plus, ZoomIn, ZoomOut, ChevronDown } from 'lucide-react';
 import { Api } from '../lib/api';
 import { useStaticData, useTenantTimezone } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
@@ -47,6 +47,9 @@ export default function SchedulerView() {
     { key: 'resources', label: vocab.resource_plural, icon: Columns3 },
     { key: 'list', label: 'List', icon: List },
   ];
+  const primaryTabs = viewTabs.filter((t) => t.key === 'staff' || t.key === 'calendar');
+  const overflowTabs = viewTabs.filter((t) => t.key === 'resources' || t.key === 'list');
+  const overflowActive = overflowTabs.some((t) => t.key === activeView);
   const {
     customers,
     resources,
@@ -70,6 +73,8 @@ export default function SchedulerView() {
   // /dashboard?tab=schedule lands with the URL telling the truth.
   const [activeView, setActiveView] = useState<SchedulerViewTab>(resolveInitialView);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
+  const overflowBtnRef = useRef<HTMLButtonElement>(null);
 
   // Write the active view to ?subtab=… whenever it changes (including
   // the initial render, so a bare URL gets stamped with the resolved
@@ -361,7 +366,7 @@ export default function SchedulerView() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              {viewTabs.map(({ key, label, icon: Icon }) => (
+              {primaryTabs.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   onClick={() => setActiveView(key)}
@@ -381,6 +386,51 @@ export default function SchedulerView() {
                   {label}
                 </button>
               ))}
+              <div className="relative">
+                <button
+                  ref={overflowBtnRef}
+                  onClick={() => setOverflowMenuOpen(!overflowMenuOpen)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                    !overflowActive
+                      ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      : ''
+                  }`}
+                  style={
+                    overflowActive
+                      ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
+                      : undefined
+                  }
+                  data-testid="view-tab-overflow"
+                >
+                  More
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {overflowMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[99]" onClick={() => setOverflowMenuOpen(false)} />
+                    <div
+                      className="absolute top-full left-0 mt-1 z-[100] rounded-xl shadow-2xl border py-1 min-w-[140px]"
+                      style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+                    >
+                      {overflowTabs.map(({ key, label, icon: Icon }) => (
+                        <button
+                          key={key}
+                          onClick={() => { setActiveView(key); setOverflowMenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition hover:brightness-125"
+                          style={{
+                            color: activeView === key ? 'var(--accent-soft)' : 'var(--text-primary)',
+                            backgroundColor: activeView === key ? 'var(--accent-muted)' : 'transparent',
+                          }}
+                          data-testid={`view-tab-${key}`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <Button size="sm" onClick={() => handleNewQuickBook()} data-testid="quick-book-trigger">
               <Plus className="w-4 h-4 mr-1" />
@@ -393,7 +443,7 @@ export default function SchedulerView() {
       {(activeView === 'resources' || activeView === 'list') && (
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111] flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-1">
-            {viewTabs.map(({ key, label, icon: Icon }) => (
+            {primaryTabs.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setActiveView(key)}
@@ -413,6 +463,50 @@ export default function SchedulerView() {
                 {label}
               </button>
             ))}
+            <div className="relative">
+              <button
+                onClick={() => setOverflowMenuOpen(!overflowMenuOpen)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                  !overflowActive
+                    ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    : ''
+                }`}
+                style={
+                  overflowActive
+                    ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
+                    : undefined
+                }
+                data-testid="view-tab-overflow"
+              >
+                More
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {overflowMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[99]" onClick={() => setOverflowMenuOpen(false)} />
+                  <div
+                    className="absolute top-full left-0 mt-1 z-[100] rounded-xl shadow-2xl border py-1 min-w-[140px]"
+                    style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+                  >
+                    {overflowTabs.map(({ key, label, icon: Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => { setActiveView(key); setOverflowMenuOpen(false); }}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition hover:brightness-125"
+                        style={{
+                          color: activeView === key ? 'var(--accent-soft)' : 'var(--text-primary)',
+                          backgroundColor: activeView === key ? 'var(--accent-muted)' : 'transparent',
+                        }}
+                        data-testid={`view-tab-${key}`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <SchedulerDateNav

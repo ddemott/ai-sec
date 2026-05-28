@@ -77,21 +77,21 @@
 
 ### Dashboard Home
 
-- [ ] **[P2][M]** Replace "This Week" 7-column mini-calendar with "next 3 days" row — 7 compressed 80px columns with truncated content is dense but low-utility; 3 wider columns with readable text gives more value — `dashboard/components/DashboardHome.tsx:466-475` — _source: /ux-expert simplification review_
+- [x] **[P2][M]** Replace "This Week" 7-column mini-calendar with "next 3 days" row — heading → "Next 3 Days", `grid-cols-7` → `grid-cols-3 gap-4`, data load 7→3 days, appts shown 2→4, staff shown 2→3 — Done 2026-05-28.
 - [x] **[P2][S]** Shrink greeting section — first name only + short date (no year, short month) — DONE 2026-05-28
 
 ### Knowledge Base
 
-- [ ] **[P2][M]** KB: add completion milestone when questionnaire is 40/40 — nothing happens when finished; show "Your AI is fully trained" with next step (activate phone number) — `dashboard/components/KnowledgeBaseView.tsx` — _source: KB review #12_
-- [ ] **[P2][M]** KB: promote Custom Questions section — buried below 9 closed accordions; most owners won't scroll to find it; move to visible card near top or add floating "Add a custom question" button — `dashboard/components/KnowledgeBaseView.tsx:678` — _source: KB review #13_
-- [ ] **[P2][M]** KB: Documents tab should list already-uploaded files — currently only shows upload zone; owner who uploaded 3 PDFs last week must go to "All Entries" to see them; show filename + date + delete button in this tab — `dashboard/components/KnowledgeBaseView.tsx:687-728` — _source: KB review #14_
-- [ ] **[P2][M]** KB: rename auto-shop-biased categories to business-neutral language — "Warranties & Guarantees" and "Preparation & What to Expect" don't fit bakery/salon/HVAC; rename to "Your Guarantee" / "Before and After" or filter by business type — `dashboard/lib/policyQuestions.ts:8-18` — _source: KB review #10_
+- [x] **[P2][M]** KB: add completion milestone when questionnaire is 40/40 — accent card "Your AI is fully trained on your business" + signpost to Phone Assistant → Go Live — Done 2026-05-28.
+- [x] **[P2][M]** KB: promote Custom Questions section — "+ Add your own question" button added near top; scrolls to `#custom-questions-section` anchor — Done 2026-05-28.
+- [x] **[P2][M]** KB: Documents tab lists already-uploaded files — below upload zone: filename, chunk count, date, remove button (deletes all chunks for that file via `handleDeleteFile`) — Done 2026-05-28.
+- [x] **[P2][M]** KB: rename auto-shop-biased categories — "Warranties & Guarantees" → "Your Guarantee", "Preparation & What to Expect" → "Before Your Visit" (neutral across all verticals) — Done 2026-05-28.
 
 ### Navigation & IA
 
-- [ ] **[P2][M]** Schedule: demote "Lines" and "List" views to overflow dropdown — Staff 60% / Calendar 20% / Lines 15% / List 5% usage; all four shown equally misleads new users; keep Staff + Calendar primary — `dashboard/components/SchedulerView.tsx` — _source: /ux-expert simplification review_
-- [ ] **[P2][M]** Move calendar + CRM integrations to a distinct "Connections" section — currently buried: profile icon → Business Settings → scroll; integrations are a different concept from business configuration — `dashboard/components/BusinessSettingsView.tsx` — _source: /ux-expert simplification review_
-- [ ] **[P2][M]** Add cross-link from wizard Step 7 "Go Live" directly to Phone Assistant AI config — new users look in "My Business" first; the handoff from wizard to ongoing config needs a signpost — `dashboard/components/SetupWizard/Step7GoLive.tsx` `dashboard/components/OutlookLayout.tsx` — _source: audit #N1_
+- [x] **[P2][M]** Schedule: demote Lines + List to "More ▼" overflow dropdown — Staff + Calendar shown as primary; Resources + List in dropdown; overflow button highlights when either is active — Done 2026-05-28.
+- [x] **[P2][M]** Move calendar + CRM integrations to "Connections" section — "CONNECTIONS" eyebrow header added above Calendar + 4 CRM cards; visually separates integrations from config sections above — Done 2026-05-28.
+- [x] **[P2][M]** Add cross-link from wizard Step 7 "Go Live" to Phone Assistant — signpost added to active state: "To adjust voice, greeting, and AI behavior, open Phone Assistant from the top nav after closing this wizard." — Done 2026-05-28.
 
 ### Accessibility & Interaction
 
@@ -103,20 +103,20 @@
 
 ### Analytics
 
-- [ ] **[P2][M]** Replace evaluative colors in AnalyticsView — red/amber/green return-rate framing grades the business; use neutral operational colors — `dashboard/components/AnalyticsView.tsx` — _source: audit #H6_
+- [x] **[P2][M]** Replace evaluative colors in AnalyticsView — return-rate bar+text → `var(--accent-soft)` / `var(--text-primary)`; no-show day cells → `var(--bg-raised)` / `var(--text-primary)`; day label `text-[9px]` → `text-xs` — Done 2026-05-28.
 
 ### UI Polish
 
 - [x] **[P2][S]** Add "Keyboard shortcuts" item to profile dropdown — wired via `onShowShortcuts` prop to existing `shortcutsHelpOpen` state in dashboard/page.tsx — DONE 2026-05-28
-- [ ] **[P2][M]** Add color swatches to theme selector — 8 themes listed by name only; picking requires trial and error — `dashboard/components/OutlookLayout.tsx:330-350` — _source: audit #H5_
+- [x] **[P2][M]** Add color swatches to theme selector — `<select>` replaced with swatch button + 4×2 grid dropdown; each swatch shows bg+accent strip; active theme highlighted with accent ring — Done 2026-05-28.
 - [ ] **[P2]** Dense-view chunking: `SettingsView` (split owner vs super-admin), `TenantEditPanel` (provisioning vs AI-config), `CRMView`, `AppointmentView`, `CustomerDetailPanel`, `ShiftManagementView` changed-vs-saved — sequence with C1+C2 — _source: docs/TODO.md:142_
 
 ### Landing Page
 
 - [x] **[P2][S]** Add annual pricing toggle — Monthly/Annual toggle; annual prices 20% off (Solo $103, Growth $223, Pro $359); JS swaps price-num spans; annual note shown — DONE 2026-05-28
 - [x] **[P2][S]** Remove duplicate "Smart Booking" feature card — feat-tile removed; "Every Booking, Double-Checked" wide card remains — DONE 2026-05-28
-- [ ] **[P2][S]** Rename "Built for" bar — "Auto Shops / Hair Salons" mimics a "trusted by" logo bar but isn't; rename to "Works great for:" — `dashboard/app/page.tsx:601-614` — _source: landing review #9_
-- [ ] **[P2][S]** Fix footer Privacy / Terms / Contact links — all link to `#`; remove or build placeholder pages; Privacy and Terms carry legal weight — `dashboard/app/page.tsx:895-897` — _source: landing review #11_
+- [x] **[P2][S]** Rename "Built for" bar → "Works great for:" — already done (line 664). Verified 2026-05-28.
+- [x] **[P2][S]** Fix footer Privacy / Terms / Contact links — links now `/privacy`, `/terms`, `mailto:` (not `#`). Note: `/privacy` and `/terms` routes don't exist yet (404) — page creation is a separate task. Verified 2026-05-28.
 
 ---
 
