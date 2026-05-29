@@ -70,13 +70,13 @@ export default function RegisterPage() {
           password,
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; tenant_id?: string; user_name?: string; role?: string; token?: string; error?: string };
 
       if (res.ok && data.success) {
         // Same keys LoginView writes — the dashboard authenticates off these
         // on mount, so the new owner lands signed-in.
-        localStorage.setItem('tenantId', data.tenant_id);
-        localStorage.setItem('userName', data.user_name);
+        localStorage.setItem('tenantId', data.tenant_id ?? '');
+        localStorage.setItem('userName', data.user_name ?? '');
         localStorage.setItem('userEmail', email.trim());
         // Register always returns an owner; persist it so SessionContext
         // (which reads 'userRole' on mount) shows owner/advanced nav

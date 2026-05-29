@@ -185,7 +185,7 @@ test('owner-config-happy: fresh tenant configures employee + shifts + service, t
     await expandWeeklyShifts(request, tenant.token, tenant.tenantId, empId, startDate);
 
     // 3. Create supporting service + resource
-    const svcId = await createServiceViaApi(request, tenant.token, tenant.tenantId, 'New Test Service');
+    const _svcId = await createServiceViaApi(request, tenant.token, tenant.tenantId, 'New Test Service');
     const resId = await createResourceViaApi(request, tenant.token, tenant.tenantId, 'New Bay');
 
     // 4. Book on the first Monday (covered 09:00-17:00) — guaranteed to be in the expanded window.

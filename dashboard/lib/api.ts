@@ -101,8 +101,7 @@ function decodeJwtPayload(token: string): { exp?: number } | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    return payload;
+    return JSON.parse(atob(parts[1])) as { exp?: number } | null;
   } catch {
     return null;
   }
@@ -147,7 +146,7 @@ async function ensureTokenFresh(): Promise<void> {
         },
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { success?: boolean; token?: string };
         if (data.success && data.token) {
           localStorage.setItem('authToken', data.token);
         }
@@ -173,7 +172,7 @@ async function checkAuthFailure(response: Response): Promise<string | null> {
   }
   if (response.status === 404) {
     try {
-      const body = await response.clone().json();
+      const body = (await response.clone().json()) as { code?: string };
       if (body.code === 'TENANT_NOT_FOUND') {
         forceLogout();
         return 'Your business account was not found. Please log in again.';
@@ -234,7 +233,7 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
     const errorText = await response.text();
     throw new Error(errorText || `API Error: ${response.status}`);
   }
-  return response.json();
+  return response.json() as Promise<T>;
 }
 
 /**
@@ -267,11 +266,13 @@ async function apiMutate<T>(
   if (authError)
     return { success: false, error: authError } as { success: boolean; error?: string } & T;
 
-  const data = await response.json();
+  const json = (await response.json()) as unknown;
+  const obj = json as Record<string, unknown>;
   if (!response.ok) {
-    return { success: false, error: data.error || `Error: ${response.status}`, ...data };
+    const errMsg = typeof obj['error'] === 'string' ? obj['error'] : `Error: ${response.status}`;
+    return { success: false, error: errMsg, ...obj } as { success: boolean; error?: string } & T;
   }
-  return { success: true, ...data };
+  return { success: true, ...obj } as { success: boolean; error?: string } & T;
 }
 
 /**

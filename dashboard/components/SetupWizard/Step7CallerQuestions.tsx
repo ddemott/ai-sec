@@ -49,7 +49,7 @@ export function Step7CallerQuestions({ tenantId }: Props) {
         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">What will callers ask?</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Answer a few common questions so your AI knows what to say. Each answer saves when you
-          leave the field. Skip any you're not ready for — you can finish in the Phone Assistant tab.
+          leave the field. Skip any you&apos;re not ready for — you can finish in the Phone Assistant tab.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export function Step7CallerQuestions({ tenantId }: Props) {
                 )}
                 {errors[q.id] && (
                   <span className="text-xs text-red-500 dark:text-red-400 shrink-0">
-                    Couldn't save
+                    Couldn&apos;t save
                   </span>
                 )}
               </div>

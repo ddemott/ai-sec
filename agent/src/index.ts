@@ -135,12 +135,21 @@ export default defineAgent({
     //    any failure (5xx, 401, missing fields, unknown tenant) it
     //    soft-falls to "this business" / America/Chicago so a config
     //    blip never hangs up a live caller. See agent/src/tenantConfig.ts.
-    const client = new ToolsClient({
+    //
+    //    Outer try/catch: if anything from here through session.start throws
+    //    unexpectedly (e.g. a constructor error, a rejected promise slipping
+    //    past fetchTenantConfig's internal guard), propagation out of entry
+    //    kills the LiveKit job and leaves the caller in dead air. The outer
+    //    catch degrades to a fallback message instead of silence.
+    let client: ToolsClient;
+    let tenantConfig: Awaited<ReturnType<typeof fetchTenantConfig>>;
+    try {
+    client = new ToolsClient({
       backendUrl: config.BACKEND_URL,
       agentSecret: config.AGENT_SECRET,
     });
     const tools = buildTools(sessionCtx, client);
-    const tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
+    tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
     callLog.info(
       {
         event: 'tenant_config_fetched',
@@ -208,6 +217,29 @@ export default defineAgent({
       });
       await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
       return;
+    }
+    } catch (err) {
+      // Outer catch: unexpected throw from tool-client setup, buildTools,
+      // fetchTenantConfig, or buildSystemPrompt. Inner session.start errors
+      // are caught above and never reach here. Log + degrade to fallback so
+      // the caller is not left in silence.
+      callLog.error(
+        {
+          event: 'fallback_triggered',
+          reason: 'entry_setup_failed',
+          tenant_id: sessionCtx.tenantId,
+          room: ctx.room.name,
+          error_message: err instanceof Error ? err.message : String(err),
+        },
+        'unexpected error in agent entry setup — running fallback'
+      );
+      captureSentry(err instanceof Error ? err : new Error(String(err)), {
+        event: 'fallback_triggered',
+        reason: 'entry_setup_failed',
+        tenant_id: sessionCtx.tenantId,
+        room: ctx.room.name,
+      });
+      await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
     }
   },
 });

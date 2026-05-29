@@ -5,7 +5,6 @@ import {
   Calendar,
   Users,
   Clock,
-  Wrench,
   ChevronRight,
   Wand2,
   ArrowRight,
@@ -784,35 +783,3 @@ function WeekView({
   );
 }
 
-function QuickAction({
-  icon: Icon,
-  label,
-  description,
-  onClick,
-}: {
-  icon: React.ElementType;
-  label: string;
-  description: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-3 p-4 rounded-xl border transition-colors text-left"
-      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-    >
-      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--bg-raised)' }}>
-        <Icon className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
-      </div>
-      <div>
-        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-          {label}
-        </div>
-        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-          {description}
-        </div>
-      </div>
-      <ArrowRight className="w-4 h-4 ml-auto" style={{ color: 'var(--text-muted)' }} />
-    </button>
-  );
-}

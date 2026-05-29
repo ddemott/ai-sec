@@ -314,8 +314,6 @@ export default function AnalyticsView() {
                 <div className="flex gap-2 mt-1">
                   {DAY_NAMES.map((day) => {
                     const count = summary.noShowsByDay[day] || 0;
-                    const total = summary.byDay[day] || 0;
-                    const rate = total > 0 ? Math.round((count / total) * 100) : 0;
                     return (
                       <div key={day} className="flex-1 text-center">
                         <div

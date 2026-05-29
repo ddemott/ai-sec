@@ -243,7 +243,7 @@ test('cancel-ui-list: Cancel button in AppointmentPopover from List sub-tab soft
 // 2. Cancel from Customer history (CRMView path)
 // ────────────────────────────────────────────────────────────────────────────
 test('cancel-ui-customer-history: Cancel from the Customer detail history panel', async ({
-  page,
+  page: _page,
   request,
 }) => {
   // WHO: operator who found the customer via search or previous context

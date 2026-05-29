@@ -23,8 +23,8 @@ export default function ForgotPasswordPage() {
       if (res.ok) {
         setSubmitted(true);
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Something went wrong. Please try again.');
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? 'Something went wrong. Please try again.');
       }
     } catch {
       setError('Connection error. Please try again.');

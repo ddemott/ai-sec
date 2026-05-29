@@ -263,8 +263,8 @@ test.describe('Quick Book with employee_schedule', () => {
     // Robust wait: the customer list can be slow to populate right after tenant switch in E2E.
     // Wait until the select/combobox actually has selectable options.
     await page.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="quick-book-customer"]') as HTMLSelectElement | null;
-      return el && el.options && el.options.length > 1;
+      const el = document.querySelector('[data-testid="quick-book-customer"]');
+      return el && (el as HTMLSelectElement).options && (el as HTMLSelectElement).options.length > 1;
     }, { timeout: 10000 });
 
     await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
@@ -312,8 +312,8 @@ test.describe('Quick Book with employee_schedule', () => {
     // Robust wait: the customer list can be slow to populate right after tenant switch in E2E.
     // Wait until the select/combobox actually has selectable options.
     await page.waitForFunction(() => {
-      const el = document.querySelector('[data-testid="quick-book-customer"]') as HTMLSelectElement | null;
-      return el && el.options && el.options.length > 1;
+      const el = document.querySelector('[data-testid="quick-book-customer"]');
+      return el && (el as HTMLSelectElement).options && (el as HTMLSelectElement).options.length > 1;
     }, { timeout: 10000 });
 
     await page.getByTestId('quick-book-customer').selectOption({ index: 1 });

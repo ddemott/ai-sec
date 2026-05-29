@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   MessageSquare,
-  Save,
   Plus,
   X,
 } from 'lucide-react';

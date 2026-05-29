@@ -37,7 +37,7 @@ function ResetPasswordInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, new_password: password }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
       if (res.ok && data.success) {
         setDone(true);
         setTimeout(() => router.push('/dashboard'), 2500);

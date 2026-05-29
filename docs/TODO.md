@@ -60,11 +60,11 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 **Gap 2 — CI / deploy gate (prioritized; agent job already DONE above):**
 - [ ] **P0 — Gate Railway deploy on CI green.** Today Railway auto-deploys on push to `main` *independently* of GitHub Actions — a red CI run does NOT stop the deploy. Fix via Railway "Wait for CI" / check-suite gating, or branch-protect `main` + deploy from a CI step. **Needs Dale (Railway dashboard + GitHub branch protection).** Highest priority — without it every other CI improvement is advisory only.
-- [ ] **P1 — Add E2E (Playwright) job to CI.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
+- [x] **P1 — Add E2E (Playwright) job to CI.** DONE 2026-05-28. `e2e` job added to `.github/workflows/ci.yml`: pgvector service, migrations + seed, backend build + start, dashboard build + start, `wait-on`, Playwright chromium install + test run, artifact upload on failure. **Needs first-run green in Actions before marking required.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
 - [ ] **P2 — Repoint Railway `healthcheckPath` → `/ready`.** `railway.json` currently `/health` (shallow); `/ready` would gate deploy *promotion* on DB reachability. Behavior change (could block promotion during a DB blip) — Dale's call.
 
 **Gap 1 — agent resilience (1A done; remainder):**
-- [ ] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** `agent/src/index.ts` ~143-181 (`fetchTenantConfig`→`buildTools`→`session.start`→greeting) is outside the fallback try/catch; an unexpected throw there propagates out of `entry`, the LiveKit job dies, and the caller hits dead air. Catch → fallback message. Low risk, real dead-air path.
+- [x] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** DONE 2026-05-28. Added outer try/catch around ToolsClient + buildTools + fetchTenantConfig + buildSystemPrompt. Inner session.start catch retained; outer catch catches setup failures before session.start. Agent TS clean, 1397 tests passing.
 - [ ] **P3 — (B) idempotent-read retry** in `toolsClient` — one retry on a transient 5xx for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Backed out 2026-05-21 (not approved); revisit.
 - [ ] **P3 — (C) latency filler** — speak a short "one sec while I check that" before known-slow tool calls to cut the up-to-8s silence window. Pairs with reconsidering `toolsClient` `timeoutMs` (8s is long for voice).
 
@@ -95,7 +95,7 @@ Closed: `pw.txt` decision (`ac61161` — deleted, NEEDS-REFACTORING #14 closed);
 Closed items in `RESOLVED.md` under 2026-05-16 + 2026-05-17.
 
 Open:
-- [ ] **B4** Reconsider sub-tab URL persistence (verify usage first)
+- [x] **B4** Sub-tab URL persistence — verified working (2026-05-28). `?tab=` init + `history.pushState` on change + `popstate` for back/forward all wired in `dashboard/app/dashboard/page.tsx:70–95`. No changes needed.
 - [ ] **C1 + C2** Schedule: 4 sub-views → 2 (Day/Month), unify the 3 separate headers
 - [ ] **E1** Threaded demo-mode (sample data via session flag, obsoletes static `/demo`)
 
@@ -115,23 +115,23 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
   - `scheduler/EmployeeDayFocusPanel.tsx` — utilization color-graded green/yellow/gray
   - `AnalyticsView.tsx` — keep summaries neutral, no implicit scoring
   - (related medium) `AppointmentDetailPanel.tsx` — alignment-blocked message reads as warning banner; make factual
-- [ ] **Cluster B — verified defects** (3 sites, independent fixes)
+- [x] **Cluster B — verified defects** (3 sites, all done)
   - [x] `SetupWizard/StepServices.tsx` — DONE 2026-05-21. Duration field now uses a raw-text display state; clearing leaves it empty (was forced to `0`), empty propagates `0` (saveService's `< 1` guard rejects it), never NaN. +3-test regression spec `StepServices.test.tsx`. (Note: it was an input-UX bug, not silent data loss — `saveService` already rejected `0`.)
   - [x] `SuperAdminDashboard.tsx` — DONE 2026-05-21. Search input now controlled; filters sidebar cards by name (case-insensitive), shows a no-match message, and **disables drag-reorder while filtering** (added `draggable` prop to `TenantCard`; reorder math is by full-array index so a filtered subset would corrupt order). +3 tests in `superadmin.test.tsx`.
   - [x] `SetupWizard/index.tsx` — DONE 2026-05-21. Seed hoisted to `runSeed` (reconcile by name-diff via `seedTargetRef`, so partial-failure retry finishes without topping-up a user's own services); failure now surfaces a Retry banner instead of a silent `console.warn`. +2 tests. **All three Cluster-B defects closed.**
 
 ### P1 — a11y + shared-primitive consistency (cluster fixes)
 
-- [ ] **Cluster C — overlay/dialog focus management.** Move custom overlays onto the shared Modal primitive (Escape/backdrop close, focus trap, initial focus, visible close affordance): `WizardModeChooser` (high — no focus trap), `WizardWelcome`, `FirstRunTour`, `SetupWizard/index` shell, `scheduler/AppointmentPopover`, `scheduler/StaffProfileCard`, `scheduler/EmployeeDayFocusPanel` (dialog/landmark role), `skill-map/SkillMapFixPanel` (bare `✕`).
-- [ ] **Cluster D — accessible action controls.** Replace icon-only / hover-only action buttons with shared button/icon-button primitives + `aria-label` + visible focus; route destructive actions through the shared confirm: `SetupWizard/StepEmployees`, `StepServices`, `StepResources`, `SkillManagementView`, `scheduler/StaffSwimLaneView` (hover-only delete), `ResourceManagerView`, `scheduler/AppointmentBlock` (no keyboard move path).
-- [ ] **Cluster E — empty / loading / filtered-no-results distinctness.** Make "no data yet" vs "no matches" vs "still loading" visually distinct (recurring medium): `AppointmentListSidebar`, `KnowledgeBaseView`, `VoiceCallsView`, `Step2Resources`, `EmployeeManagementView`, `MyTeamView`, `CustomerDetailPanel` empty fields, `DeletedRecordsPanel`.
+- [x] **Cluster C — overlay/dialog focus management.** DONE 2026-05-28. `useFocusTrap` hook (`dashboard/lib/useFocusTrap.ts`) added; all 8 surfaces updated: `WizardModeChooser` (role/aria + trap + backdrop), `WizardWelcome` (trap + Escape + backdrop), `FirstRunTour` (trap + Escape + backdrop), `SetupWizard/index` (trap + Escape), `AppointmentPopover` (Tab trap + X button), `StaffProfileCard` (role + X + focus management), `EmployeeDayFocusPanel` (role + aria-labelledby + trap), `SkillMapFixPanel` (aria-label on ✕). 743 tests passing (+17 new).
+- [x] **Cluster D — accessible action controls.** DONE 2026-05-28. All 7 surfaces: Step{Employees,Services,Resources} — `onMouseEnter/Leave` → CSS `hover:` + `focus-visible:` + rings; SkillManagementView delete — `focus-visible:ring-2`; StaffSwimLaneView — aria-label specific with shift times; AppointmentBlock — `role="button"`, `tabIndex=0`, `onKeyDown` Enter/Space, `aria-label`. 746 tests (+3 new).
+- [x] **Cluster E — empty / loading / filtered-no-results distinctness.** DONE 2026-05-28. `AppointmentListSidebar` — skeleton rows during load; `VoiceCallsView` — Filter icon + "Clear filter" CTA for no-results (vs PhoneOff for "no calls ever"); `EmployeeManagementView` — dashed empty state after load; `CustomerDetailPanel` — 3 italic-text empties → `EmptyState` compact with icons. `KnowledgeBaseView`/`DeletedRecordsPanel` already had strong distinction; `MyTeamView` is routing-only. 746 tests passing.
 
 ### P2 — copy / trust polish
 
 - [x] `SetupWizard/WizardWelcome.tsx` — DONE 2026-05-28 (`c804025`). Removed inaccurate "10 minutes / 6 quick questions" copy.
 - [x] `SkillMatrixView.tsx` footer + `Step7GoLive.tsx` — drop persuasive/reassurance phrasing; state what changes factually. Done 2026-05-28.
 - [x] `SetupProgressPill.tsx` — DONE 2026-05-28 (`bdd549e`). Removed `hidden` class; pill visible on all screen sizes.
-- [ ] `ProfileView.tsx` — "Security" card "coming soon" placeholder; replace with real account facts or collapse.
+- [x] `ProfileView.tsx` — "Security" card "coming soon" placeholder → replaced with factual account info (session expiry 8h + password-change instruction). DONE 2026-05-28.
 
 ### P2.5 — Wizard Phase B: full draft commit model
 
@@ -149,7 +149,7 @@ Small mechanical hygiene pass completed: cleaned up remaining references to the 
 
 Most of the 2026-05-17 lint adoption already promoted to `error`. Still at `warn`:
 
-- [ ] `@typescript-eslint/no-explicit-any` + `no-unsafe-*` family (~1100 sites — batch-N cleanup ongoing)
+- [x] `@typescript-eslint/no-explicit-any` + `no-unsafe-*` family — DONE 2026-05-28. Fixed all 13 files / 59 warnings: typed `response.json()` casts in `api.ts`, `hooks.ts`, `LoginView`, `register`, `forgot-password`, `reset-password`; cast `JSON.parse` returns in `NewSchedulerView`; eslint-disable for `react-big-calendar` third-party `any` (unfixable at source); removed unused `Wrench`/`QuickAction`/`Save`/`rate` symbols; fixed unescaped entities in `Step7CallerQuestions`. Dashboard lint: **0 warnings, 0 errors**.
 - [ ] `@typescript-eslint/no-misused-promises`
 - [ ] `@typescript-eslint/await-thenable`
 - [ ] `@typescript-eslint/unbound-method` (heavy in tests — may stay warn forever)

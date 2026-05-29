@@ -184,7 +184,7 @@ export default function NewSchedulerView({
     if (!storageKey) return [];
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : [];
+      return stored ? (JSON.parse(stored) as string[]) : [];
     } catch {
       return [];
     }
@@ -193,7 +193,7 @@ export default function NewSchedulerView({
     if (!storageKey) return [];
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : [];
+      return stored ? (JSON.parse(stored) as string[]) : [];
     } catch {
       return [];
     }
