@@ -1,10 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Building2, RefreshCw, Search, Globe, ShieldAlert } from 'lucide-react';
-import { Api } from '../lib/api';
-import { useSessionContext } from '@/lib/SessionContext';
-import { formatPhone, normalizePhone } from '../lib/phone';
+import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
@@ -12,14 +10,7 @@ import { LoadingState } from './ui/LoadingState';
 import { TenantCard } from './TenantCard';
 import { TenantCreateForm } from './TenantCreateForm';
 import { TenantEditPanel } from './TenantEditPanel';
-import type { TenantFull } from '../lib/types';
-
-type Tenant = TenantFull;
-
-type Template = {
-  business_type: string;
-  display_name: string;
-};
+import { useSuperAdminTenants } from '../lib/useSuperAdminTenants';
 
 interface SuperAdminProps {
   onSelectTenant?: (id: string, name: string) => void;
@@ -27,237 +18,44 @@ interface SuperAdminProps {
 }
 
 export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }: SuperAdminProps) {
-  const { notifyTenantsChanged } = useSessionContext();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  // Edit form state
-  const [form, setForm] = useState<Tenant | null>(null);
-
-  // Drag-and-drop reorder state
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [, setOverIndex] = useState<number | null>(null);
-  const [originalOrder, setOriginalOrder] = useState<Tenant[]>([]);
-  const [hasReordered, setHasReordered] = useState(false);
-  const [savingOrder, setSavingOrder] = useState(false);
-
-  // Business-list search. Filters the displayed cards by name; drag-reorder is
-  // disabled while a filter is active (reorder math is by full-array index).
-  const [search, setSearch] = useState('');
-
-  // Delete confirmation state
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleting, setDeleting] = useState(false);
-
-  // Create Modal State
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newBusiness, setNewBusiness] = useState({
-    tenant_name: '',
-    business_type: '',
-    owner_first_name: '',
-    owner_last_name: '',
-    owner_email: '',
-    owner_pass: '',
-  });
-
-  useEffect(() => {
-    void fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (selectedTenant) {
-      setForm({
-        ...selectedTenant,
-        owner_phone: formatPhone(selectedTenant.owner_phone),
-      });
-      setIsEditing(false); // Default to read-only when switching tenants
-      setSuccess(false);
-      setError(null);
-    }
-  }, [selectedTenant]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [tData, tempData] = await Promise.all([Api.tenants.list(), Api.templates.list()]);
-
-      const tenantsArray = Array.isArray(tData) ? tData : [];
-      const templatesArray = Array.isArray(tempData) ? tempData : [];
-
-      setTenants(tenantsArray);
-      setTemplates(templatesArray);
-
-      if (tenantsArray.length > 0 && !selectedTenant) {
-        const initial = currentTenantId
-          ? tenantsArray.find((t) => t.tenant_id === currentTenantId) || tenantsArray[0]
-          : tenantsArray[0];
-        setSelectedTenant(initial);
-        if (onSelectTenant && !currentTenantId) onSelectTenant(initial.tenant_id, initial.name);
-      }
-    } catch (e) {
-      console.error('Fetch error:', e);
-      setError('Failed to load data from backend. Ensure server is reachable.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // --- Drag-and-drop reorder ---
-  function handleDragStart(index: number) {
-    setDragIndex(index);
-    if (!hasReordered) setOriginalOrder([...tenants]);
-  }
-
-  function handleDragOver(e: React.DragEvent, index: number) {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === index) return;
-    setOverIndex(index);
-
-    const updated = [...tenants];
-    const [moved] = updated.splice(dragIndex, 1);
-    updated.splice(index, 0, moved);
-    setTenants(updated);
-    setDragIndex(index);
-    setHasReordered(true);
-  }
-
-  function handleDragEnd() {
-    setDragIndex(null);
-    setOverIndex(null);
-  }
-
-  async function handleSaveOrder() {
-    setSavingOrder(true);
-    try {
-      const order = tenants.map((t) => t.tenant_id);
-      const res = await Api.tenants.reorder(order);
-      if (res.success) {
-        setHasReordered(false);
-        setOriginalOrder([]);
-        notifyTenantsChanged();
-      }
-    } catch {
-      setError('Failed to save order');
-    } finally {
-      setSavingOrder(false);
-    }
-  }
-
-  function handleDiscardOrder() {
-    setTenants(originalOrder);
-    setHasReordered(false);
-    setOriginalOrder([]);
-  }
-
-  async function handleSave() {
-    if (!form) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(false);
-
-    const normalizedForm = {
-      ...form,
-      owner_phone: form.owner_phone ? normalizePhone(form.owner_phone) : null,
-      inbound_phone: form.inbound_phone ? normalizePhone(form.inbound_phone) : null,
-    };
-
-    try {
-      const res = await Api.tenants.update(form.tenant_id, normalizedForm as unknown as TenantFull);
-
-      if (res.success) {
-        setSuccess(true);
-        setIsEditing(false);
-        const updatedTenants = tenants.map((t) =>
-          t.tenant_id === form.tenant_id ? { ...normalizedForm } : t
-        );
-        setTenants(updatedTenants);
-        setSelectedTenant({ ...normalizedForm } as Tenant);
-        if (onSelectTenant) onSelectTenant(form.tenant_id, form.name);
-      } else {
-        setError(res.error || 'Failed to update business attributes');
-      }
-    } catch {
-      setError('Connection error');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function handleDelete() {
-    if (!selectedTenant) return;
-    setDeleteConfirmText('');
-    setIsDeleteModalOpen(true);
-  }
-
-  async function confirmDelete() {
-    if (!selectedTenant) return;
-    setDeleting(true);
-    try {
-      const res = await Api.tenants.delete(selectedTenant.tenant_id);
-      if (res.success) {
-        setSelectedTenant(null);
-        setIsDeleteModalOpen(false);
-        setDeleteConfirmText('');
-        void fetchData();
-        notifyTenantsChanged();
-      } else {
-        setError(res.error || 'Failed to delete business');
-      }
-    } catch {
-      setError('Failed to delete business');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  async function handleCreate() {
-    setSaving(true);
-    setError(null);
-
-    // Prevent duplicate tenant names
-    const nameExists = tenants.some(
-      (t) => t.name.toLowerCase() === newBusiness.tenant_name.trim().toLowerCase()
-    );
-    if (nameExists) {
-      setError(
-        `A business named "${newBusiness.tenant_name.trim()}" already exists. Choose a different name.`
-      );
-      setSaving(false);
-      return;
-    }
-
-    try {
-      const res = await Api.tenants.create(newBusiness);
-      if (res.success) {
-        setIsCreateModalOpen(false);
-        setNewBusiness({
-          tenant_name: '',
-          business_type: '',
-          owner_first_name: '',
-          owner_last_name: '',
-          owner_email: '',
-          owner_pass: '',
-        });
-        void fetchData();
-        notifyTenantsChanged();
-      } else {
-        setError(res.error || 'Failed to create new business');
-      }
-    } catch {
-      setError('Connection error');
-    } finally {
-      setSaving(false);
-    }
-  }
+  const {
+    tenants,
+    selectedTenant,
+    setSelectedTenant,
+    templates,
+    loading,
+    saving,
+    isEditing,
+    setIsEditing,
+    error,
+    success,
+    form,
+    setForm,
+    dragIndex,
+    hasReordered,
+    savingOrder,
+    search,
+    setSearch,
+    isDeleteModalOpen,
+    setIsDeleteModalOpen,
+    deleteConfirmText,
+    setDeleteConfirmText,
+    deleting,
+    isCreateModalOpen,
+    setIsCreateModalOpen,
+    newBusiness,
+    setNewBusiness,
+    fetchData,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+    handleSaveOrder,
+    handleDiscardOrder,
+    handleSave,
+    handleDelete,
+    confirmDelete,
+    handleCreate,
+  } = useSuperAdminTenants(onSelectTenant, currentTenantId);
 
   if (loading) return <LoadingState message="Loading all businesses…" />;
 
@@ -367,8 +165,6 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
           {(() => {
             const q = search.trim().toLowerCase();
             const isFiltering = q.length > 0;
-            // When not filtering, this IS `tenants` (same indices → drag math
-            // stays valid). When filtering, drag is disabled so index is moot.
             const visible = isFiltering
               ? tenants.filter((t) => t.name.toLowerCase().includes(q))
               : tenants;
@@ -376,7 +172,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
             if (isFiltering && visible.length === 0) {
               return (
                 <div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  No businesses match “{search.trim()}”.
+                  No businesses match "{search.trim()}".
                 </div>
               );
             }
