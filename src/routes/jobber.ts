@@ -7,8 +7,8 @@
 import type { Pool, PoolClient } from 'pg';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
-import * as jobberClient from '../services/jobberClient';
-import * as jobberSync from '../services/jobberSync';
+import * as jobberClient from '../services/crm/jobberClient';
+import * as jobberSync from '../services/crm/jobberSync';
 import { registerCrmScaffoldRoutes } from './crmRouteScaffold';
 
 export function registerJobberRoutes(

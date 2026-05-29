@@ -7,8 +7,8 @@
 import type { Pool, PoolClient } from 'pg';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
-import * as servicetitanClient from '../services/servicetitanClient';
-import * as servicetitanSync from '../services/servicetitanSync';
+import * as servicetitanClient from '../services/crm/servicetitanClient';
+import * as servicetitanSync from '../services/crm/servicetitanSync';
 import { registerCrmScaffoldRoutes } from './crmRouteScaffold';
 
 export function registerServiceTitanRoutes(

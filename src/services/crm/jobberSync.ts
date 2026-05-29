@@ -14,8 +14,8 @@ import {
   getIntegrationTokens,
   TOKEN_BUFFER_MS,
   withSyncContext,
-} from './tokenManagement';
-import { splitName, joinName } from './nameUtils';
+} from '../tokenManagement';
+import { splitName, joinName } from '../nameUtils';
 import {
   syncMapUpsertOnCreate,
   syncMapUpdateAfterPush,
@@ -29,8 +29,8 @@ import {
   isAlreadySynced,
   isRemoteNewer,
   updateLastSyncAt,
-} from './syncMapHelpers';
-import { paginateSync } from './syncPaginate';
+} from '../syncMapHelpers';
+import { paginateSync } from '../syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('jobber', tenantId, entityType, action);

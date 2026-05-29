@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock squareClient before importing squareSync
-vi.mock('./services/squareClient', () => ({
+vi.mock('./services/crm/squareClient', () => ({
   refreshAccessToken: vi.fn(),
   createCustomer: vi.fn(),
   updateCustomer: vi.fn(),
@@ -18,8 +18,8 @@ import {
   syncAppointmentToSquare,
   pullSquareCustomer,
   fullSync,
-} from './services/squareSync';
-import * as square from './services/squareClient';
+} from './services/crm/squareSync';
+import * as square from './services/crm/squareClient';
 
 // ---- Mock helpers ----
 
@@ -705,7 +705,7 @@ describe('Square Sync — Sad Paths', () => {
 // PULL BOOKING — HAPPY + SAD PATHS
 // =============================================
 
-import { pullSquareBooking } from './services/squareSync';
+import { pullSquareBooking } from './services/crm/squareSync';
 
 describe('Square Sync — Pull Booking', () => {
   it('PULL-BOOKING-CREATE: When Square booking has no local match, system creates appointment locally with correct start/end times calculated from duration_minutes', async () => {

@@ -5,7 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock jobberClient and jobberSync modules before importing routes ---
-vi.mock('./services/jobberClient', () => ({
+vi.mock('./services/crm/jobberClient', () => ({
   isJobberEnabled: vi.fn(),
   getAuthUrl: vi.fn(),
   verifyState: vi.fn(),
@@ -17,15 +17,15 @@ vi.mock('./services/jobberClient', () => ({
   },
 }));
 
-vi.mock('./services/jobberSync', () => ({
+vi.mock('./services/crm/jobberSync', () => ({
   fullSync: vi.fn(),
   getTokensWithRefresh: vi.fn(),
   pullJobberClient: vi.fn(),
 }));
 
 import { registerJobberRoutes } from './routes/jobber';
-import * as jobberClient from './services/jobberClient';
-import * as jobberSync from './services/jobberSync';
+import * as jobberClient from './services/crm/jobberClient';
+import * as jobberSync from './services/crm/jobberSync';
 
 // --- Constants ---
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

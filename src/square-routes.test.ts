@@ -5,7 +5,7 @@ import type { Pool, PoolClient } from 'pg';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock squareClient and squareSync modules before importing routes ---
-vi.mock('./services/squareClient', () => ({
+vi.mock('./services/crm/squareClient', () => ({
   isSquareEnabled: vi.fn(),
   getAuthUrl: vi.fn(),
   verifyState: vi.fn(),
@@ -14,15 +14,15 @@ vi.mock('./services/squareClient', () => ({
   getCustomer: vi.fn(),
 }));
 
-vi.mock('./services/squareSync', () => ({
+vi.mock('./services/crm/squareSync', () => ({
   fullSync: vi.fn(),
   getTokensWithRefresh: vi.fn(),
   pullSquareCustomer: vi.fn(),
 }));
 
 import { registerSquareRoutes } from './routes/square';
-import * as squareClient from './services/squareClient';
-import * as squareSync from './services/squareSync';
+import * as squareClient from './services/crm/squareClient';
+import * as squareSync from './services/crm/squareSync';
 
 // --- Constants ---
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

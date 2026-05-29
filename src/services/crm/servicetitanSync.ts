@@ -14,7 +14,7 @@ import {
   getIntegrationTokens,
   TOKEN_BUFFER_MS,
   withSyncContext,
-} from './tokenManagement';
+} from '../tokenManagement';
 import {
   syncMapUpsertOnCreate,
   syncMapUpdateAfterPush,
@@ -28,8 +28,8 @@ import {
   pullRemoteCustomer,
   isAlreadySynced,
   updateLastSyncAt,
-} from './syncMapHelpers';
-import { paginateSync } from './syncPaginate';
+} from '../syncMapHelpers';
+import { paginateSync } from '../syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('servicetitan', tenantId, entityType, action);

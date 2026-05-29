@@ -7,8 +7,8 @@
 import type { Pool, PoolClient } from 'pg';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
-import * as squareClient from '../services/squareClient';
-import * as squareSync from '../services/squareSync';
+import * as squareClient from '../services/crm/squareClient';
+import * as squareSync from '../services/crm/squareSync';
 import { registerCrmScaffoldRoutes } from './crmRouteScaffold';
 
 export function registerSquareRoutes(

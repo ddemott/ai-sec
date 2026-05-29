@@ -4,7 +4,7 @@
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
-import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
+import { signOAuthState, verifyOAuthState } from '../oauthStateJwt';
 
 const AUTHORIZE_URL = 'https://auth.servicetitan.io/connect/authorize';
 const TOKEN_URL = 'https://auth.servicetitan.io/connect/token';

@@ -18,19 +18,19 @@ import type { Pool } from 'pg';
 vi.mock('./services/calendarSync', () => ({
   syncAppointmentToCalendar: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('./services/jobberSync', () => ({
+vi.mock('./services/crm/jobberSync', () => ({
   syncAppointmentToJobber: vi.fn().mockResolvedValue(undefined),
   syncCustomerToJobber: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('./services/hubspotSync', () => ({
+vi.mock('./services/crm/hubspotSync', () => ({
   syncAppointmentToHubSpot: vi.fn().mockResolvedValue(undefined),
   syncCustomerToHubSpot: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('./services/squareSync', () => ({
+vi.mock('./services/crm/squareSync', () => ({
   syncAppointmentToSquare: vi.fn().mockResolvedValue(undefined),
   syncCustomerToSquare: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('./services/servicetitanSync', () => ({
+vi.mock('./services/crm/servicetitanSync', () => ({
   syncAppointmentToServiceTitan: vi.fn().mockResolvedValue(undefined),
   syncCustomerToServiceTitan: vi.fn().mockResolvedValue(undefined),
 }));

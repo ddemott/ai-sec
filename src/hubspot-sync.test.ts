@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock hubspotClient before importing hubspotSync
-vi.mock('./services/hubspotClient', () => ({
+vi.mock('./services/crm/hubspotClient', () => ({
   refreshAccessToken: vi.fn(),
   createContact: vi.fn(),
   updateContact: vi.fn(),
@@ -17,8 +17,8 @@ import {
   syncAppointmentToHubSpot,
   pullHubSpotContact,
   fullSync,
-} from './services/hubspotSync';
-import * as hubspot from './services/hubspotClient';
+} from './services/crm/hubspotSync';
+import * as hubspot from './services/crm/hubspotClient';
 
 // ---- Mock helpers ----
 

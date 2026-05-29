@@ -21,7 +21,7 @@ import {
   createMeeting,
   updateMeeting,
   associateMeetingToContact,
-} from './services/hubspotClient';
+} from './services/crm/hubspotClient';
 
 const JWT_SECRET = 'test-jwt-secret';
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

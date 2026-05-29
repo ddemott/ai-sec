@@ -20,7 +20,7 @@ import {
   createJob,
   updateJob,
   cancelJob,
-} from './services/servicetitanClient';
+} from './services/crm/servicetitanClient';
 
 const JWT_SECRET = 'test-jwt-secret';
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

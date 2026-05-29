@@ -7,8 +7,8 @@
 import type { Pool, PoolClient } from 'pg';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
-import * as hubspotClient from '../services/hubspotClient';
-import * as hubspotSync from '../services/hubspotSync';
+import * as hubspotClient from '../services/crm/hubspotClient';
+import * as hubspotSync from '../services/crm/hubspotSync';
 import { registerCrmScaffoldRoutes } from './crmRouteScaffold';
 
 export function registerHubSpotRoutes(

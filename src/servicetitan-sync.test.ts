@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock servicetitanClient before importing servicetitanSync
-vi.mock('./services/servicetitanClient', () => ({
+vi.mock('./services/crm/servicetitanClient', () => ({
   refreshAccessToken: vi.fn(),
   createCustomer: vi.fn(),
   updateCustomer: vi.fn(),
@@ -18,9 +18,9 @@ import {
   syncAppointmentToServiceTitan,
   pullServiceTitanCustomer,
   fullSync,
-} from './services/servicetitanSync';
-import * as servicetitan from './services/servicetitanClient';
-import type { ServiceTitanJob } from './services/servicetitanClient';
+} from './services/crm/servicetitanSync';
+import * as servicetitan from './services/crm/servicetitanClient';
+import type { ServiceTitanJob } from './services/crm/servicetitanClient';
 
 // ---- Mock helpers ----
 
@@ -721,7 +721,7 @@ describe('ServiceTitan Sync — Sad Paths', () => {
 import {
   pullServiceTitanJob,
   syncAppointmentToServiceTitan as syncApptST,
-} from './services/servicetitanSync';
+} from './services/crm/servicetitanSync';
 
 describe('ServiceTitan Sync — Pull Job', () => {
   it('PULL-JOB-CREATE: When ServiceTitan job has mapped customer, system creates local appointment with summary and scheduled date', async () => {

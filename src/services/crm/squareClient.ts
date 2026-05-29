@@ -7,7 +7,7 @@
  */
 
 import crypto from 'crypto';
-import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
+import { signOAuthState, verifyOAuthState } from '../oauthStateJwt';
 
 const AUTHORIZE_URL = 'https://connect.squareup.com/oauth2/authorize';
 const TOKEN_URL = 'https://connect.squareup.com/oauth2/token';

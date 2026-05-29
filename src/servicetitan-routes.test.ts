@@ -5,14 +5,14 @@ import type { Pool, PoolClient } from 'pg';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock servicetitanClient and servicetitanSync modules before importing routes ---
-vi.mock('./services/servicetitanClient', () => ({
+vi.mock('./services/crm/servicetitanClient', () => ({
   isServiceTitanEnabled: vi.fn(),
   getAuthUrl: vi.fn(),
   verifyState: vi.fn(),
   exchangeCodeForTokens: vi.fn(),
 }));
 
-vi.mock('./services/servicetitanSync', () => ({
+vi.mock('./services/crm/servicetitanSync', () => ({
   fullSync: vi.fn(),
   getTokensWithRefresh: vi.fn(),
   pullServiceTitanCustomer: vi.fn(),
@@ -20,8 +20,8 @@ vi.mock('./services/servicetitanSync', () => ({
 }));
 
 import { registerServiceTitanRoutes } from './routes/servicetitan';
-import * as servicetitanClient from './services/servicetitanClient';
-import * as servicetitanSync from './services/servicetitanSync';
+import * as servicetitanClient from './services/crm/servicetitanClient';
+import * as servicetitanSync from './services/crm/servicetitanSync';
 
 // --- Constants ---
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

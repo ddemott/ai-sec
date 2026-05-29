@@ -5,7 +5,7 @@ import type { Pool, PoolClient } from 'pg';
 import { createMockClient, createMockPool, createMockWithTenantClient } from './test-utils-mock';
 
 // --- Mock hubspotClient and hubspotSync modules before importing routes ---
-vi.mock('./services/hubspotClient', () => ({
+vi.mock('./services/crm/hubspotClient', () => ({
   isHubSpotEnabled: vi.fn(),
   getAuthUrl: vi.fn(),
   verifyState: vi.fn(),
@@ -14,15 +14,15 @@ vi.mock('./services/hubspotClient', () => ({
   getContact: vi.fn(),
 }));
 
-vi.mock('./services/hubspotSync', () => ({
+vi.mock('./services/crm/hubspotSync', () => ({
   fullSync: vi.fn(),
   getTokensWithRefresh: vi.fn(),
   pullHubSpotContact: vi.fn(),
 }));
 
 import { registerHubSpotRoutes } from './routes/hubspot';
-import * as hubspotClient from './services/hubspotClient';
-import * as hubspotSync from './services/hubspotSync';
+import * as hubspotClient from './services/crm/hubspotClient';
+import * as hubspotSync from './services/crm/hubspotSync';
 
 // --- Constants ---
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

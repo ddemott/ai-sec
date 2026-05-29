@@ -5,7 +5,7 @@
  */
 
 import crypto from 'crypto';
-import { signOAuthState, verifyOAuthState } from './oauthStateJwt';
+import { signOAuthState, verifyOAuthState } from '../oauthStateJwt';
 
 const AUTHORIZE_URL = 'https://api.getjobber.com/api/oauth/authorize';
 const TOKEN_URL = 'https://api.getjobber.com/api/oauth/token';

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock jobberClient before importing jobberSync
-vi.mock('./services/jobberClient', () => ({
+vi.mock('./services/crm/jobberClient', () => ({
   refreshAccessToken: vi.fn(),
   graphql: vi.fn(),
   QUERIES: {
@@ -20,8 +20,8 @@ import {
   pullJobberClient,
   pullJobberVisit,
   fullSync,
-} from './services/jobberSync';
-import * as jobber from './services/jobberClient';
+} from './services/crm/jobberSync';
+import * as jobber from './services/crm/jobberClient';
 
 // ---- Mock helpers ----
 

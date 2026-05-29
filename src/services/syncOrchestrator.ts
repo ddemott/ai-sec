@@ -6,10 +6,10 @@
 
 import type { Pool } from 'pg';
 import { syncAppointmentToCalendar } from './calendarSync';
-import { syncAppointmentToJobber, syncCustomerToJobber } from './jobberSync';
-import { syncAppointmentToHubSpot, syncCustomerToHubSpot } from './hubspotSync';
-import { syncAppointmentToSquare, syncCustomerToSquare } from './squareSync';
-import { syncAppointmentToServiceTitan, syncCustomerToServiceTitan } from './servicetitanSync';
+import { syncAppointmentToJobber, syncCustomerToJobber } from './crm/jobberSync';
+import { syncAppointmentToHubSpot, syncCustomerToHubSpot } from './crm/hubspotSync';
+import { syncAppointmentToSquare, syncCustomerToSquare } from './crm/squareSync';
+import { syncAppointmentToServiceTitan, syncCustomerToServiceTitan } from './crm/servicetitanSync';
 import { syncDispatchesTotal } from './metrics';
 
 interface SyncLogger {

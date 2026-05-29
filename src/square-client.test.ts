@@ -22,7 +22,7 @@ import {
   createBooking,
   updateBooking,
   cancelBooking,
-} from './services/squareClient';
+} from './services/crm/squareClient';
 
 const JWT_SECRET = 'test-jwt-secret';
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';

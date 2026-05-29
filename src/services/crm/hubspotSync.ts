@@ -8,8 +8,8 @@
 
 import type { Pool } from 'pg';
 import * as hubspot from './hubspotClient';
-import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from './tokenManagement';
-import { splitName, joinName } from './nameUtils';
+import { type SyncLogger, syncCtx, getIntegrationTokens, TOKEN_BUFFER_MS } from '../tokenManagement';
+import { splitName, joinName } from '../nameUtils';
 import {
   syncMapUpsertOnCreate,
   syncMapUpdateAfterPush,
@@ -18,8 +18,8 @@ import {
   ensureRemoteCustomer,
   pullRemoteCustomer,
   updateLastSyncAt,
-} from './syncMapHelpers';
-import { paginateSync } from './syncPaginate';
+} from '../syncMapHelpers';
+import { paginateSync } from '../syncPaginate';
 
 function ctx(tenantId: string, entityType: string, action: string) {
   return syncCtx('hubspot', tenantId, entityType, action);
