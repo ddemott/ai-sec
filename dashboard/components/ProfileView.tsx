@@ -1,13 +1,19 @@
 'use client';
 
 import React from 'react';
-import { User, Mail, Shield } from 'lucide-react';
+import { User, Mail, Shield, Lock } from 'lucide-react';
+import Link from 'next/link';
 import { useSessionContext } from '../lib/SessionContext';
 import { useTheme, THEMES } from '@/lib/ThemeContext';
 import { Card } from './ui/Card';
 
+const ROLE_LABELS: Record<string, string> = {
+  owner: 'Owner',
+  front_desk: 'Front Desk',
+};
+
 export default function ProfileView() {
-  const { userName, userEmail, isAdmin } = useSessionContext();
+  const { userName, userEmail, isAdmin, role } = useSessionContext();
   const { theme, setTheme } = useTheme();
 
   return (
@@ -56,15 +62,25 @@ export default function ProfileView() {
                     {userEmail || 'Not set'}
                   </div>
                 </div>
-                {isAdmin && (
-                  <div
-                    className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
-                    style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
-                  >
-                    <Shield className="w-3 h-3" />
-                    Admin
-                  </div>
-                )}
+                <div className="ml-auto flex items-center gap-2">
+                  {!isAdmin && (
+                    <span
+                      className="px-2.5 py-1 rounded-full text-xs font-medium"
+                      style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-secondary)' }}
+                    >
+                      {ROLE_LABELS[role] ?? role}
+                    </span>
+                  )}
+                  {isAdmin && (
+                    <div
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
+                      style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
+                    >
+                      <Shield className="w-3 h-3" />
+                      Admin
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </fieldset>
@@ -133,10 +149,14 @@ export default function ProfileView() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  To change your password, log out and use the login page.
-                </span>
+                <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                <Link
+                  href="/forgot-password"
+                  className="text-sm hover:underline"
+                  style={{ color: 'var(--accent-soft)' }}
+                >
+                  Change password
+                </Link>
               </div>
             </div>
           </fieldset>
