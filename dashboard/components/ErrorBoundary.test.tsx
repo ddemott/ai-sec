@@ -25,11 +25,21 @@ function Boom({
 // in tests so the output stays readable.
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
+// React dev-mode calls window.dispatchEvent(new ErrorEvent('error', ...)) when a
+// component throws, even when caught by an ErrorBoundary. jsdom re-throws this as
+// an unhandled error that vitest counts in the "Errors" summary. Calling
+// preventDefault() on the event stops jsdom's default unhandled-error action.
+function suppressReactBoundaryError(e: ErrorEvent) {
+  e.preventDefault();
+}
+
 beforeEach(() => {
   consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  window.addEventListener('error', suppressReactBoundaryError);
 });
 afterEach(() => {
   consoleErrorSpy.mockRestore();
+  window.removeEventListener('error', suppressReactBoundaryError);
 });
 
 describe('ErrorBoundary — user-facing message', () => {

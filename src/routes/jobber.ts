@@ -7,90 +7,26 @@
 import type { Pool, PoolClient } from 'pg';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import * as jobberClient from '../services/jobberClient';
 import * as jobberSync from '../services/jobberSync';
-import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
-import { getCrmSyncStatus } from '../services/crmSyncStatus';
-import { disconnectCrmIntegration } from '../services/crmDisconnect';
+import { registerCrmScaffoldRoutes } from './crmRouteScaffold';
 
 export function registerJobberRoutes(
   app: AppFastifyInstance,
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
-  // --- Jobber OAuth: Initiate ---
-  app.get(
-    '/jobber/auth',
-    withHandler(async (req: AppRequest, reply) => {
-      const tenantId = requireTenantId(req, reply);
-      if (!tenantId) return;
+  registerCrmScaffoldRoutes(app, pool, withTenantClient, {
+    provider: 'jobber',
+    displayName: 'Jobber',
+    isEnabled: jobberClient.isJobberEnabled,
+    getAuthUrl: jobberClient.getAuthUrl,
+    verifyState: jobberClient.verifyState,
+    exchangeCodeForTokens: jobberClient.exchangeCodeForTokens,
+    fullSync: (pool, tenantId) => jobberSync.fullSync(pool, tenantId),
+  });
 
-      if (!jobberClient.isJobberEnabled()) {
-        return reply.status(503).send({
-          success: false,
-          error:
-            'Jobber integration is not configured. Set JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET, and JOBBER_CALLBACK_URL.',
-        });
-      }
-
-      const url = jobberClient.getAuthUrl(tenantId);
-      if (!url) {
-        return reply
-          .status(500)
-          .send({ success: false, error: 'Failed to generate Jobber auth URL' });
-      }
-
-      logEvent(req, 'jobber_oauth_initiated', {});
-      return reply.send({ success: true, authUrl: url });
-    }, 'Failed to initiate Jobber auth')
-  );
-
-  // --- Jobber OAuth: Callback (Jobber redirects here) ---
-  app.get(
-    '/jobber/auth/callback',
-    createOAuthCallbackHandler(pool, app, {
-      provider: 'jobber',
-      verifyState: jobberClient.verifyState,
-      exchangeCodeForTokens: jobberClient.exchangeCodeForTokens,
-    })
-  );
-
-  // --- Get Jobber integration settings (strip tokens) ---
-  app.get(
-    '/jobber/settings',
-    withHandler(async (req: AppRequest, reply) => {
-      const tenantId = requireTenantId(req, reply);
-      if (!tenantId) return;
-
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query(
-          `SELECT tenant_id, provider, is_active, last_sync_at, created_at, updated_at
-         FROM tenant_integration_settings WHERE tenant_id = $1 AND provider = 'jobber'`,
-          [tenantId]
-        );
-      });
-      return reply.send(res.rows[0] || null);
-    }, 'Failed to fetch Jobber settings')
-  );
-
-  // --- Disconnect Jobber ---
-  app.post(
-    '/jobber/settings/disconnect',
-    withHandler(async (req: AppRequest, reply) => {
-      const tenantId = requireTenantId(req, reply);
-      if (!tenantId) return;
-
-      await withTenantClient(tenantId, (client) =>
-        disconnectCrmIntegration(client, tenantId, 'jobber')
-      );
-
-      logEvent(req, 'jobber_disconnected', {});
-      return reply.send({ success: true });
-    }, 'Failed to disconnect Jobber')
-  );
-
-  // --- Jobber webhook receiver ---
+  // --- Jobber webhook receiver (provider-specific: HMAC-SHA256, :tenantId URL param) ---
   app.post(
     '/jobber/webhook/:tenantId',
     async (req: FastifyRequest<{ Params: { tenantId: string } }>, reply: FastifyReply) => {
@@ -177,7 +113,6 @@ export function registerJobberRoutes(
             await jobberSync.pullJobberClient(pool, tenantId, clientData);
           }
         }
-        // VISIT_CREATE, VISIT_UPDATE would need a getVisit query — add when needed
       } catch (err) {
         app.log.error({
           event: 'jobber_webhook_processing_failed',
@@ -188,31 +123,5 @@ export function registerJobberRoutes(
         });
       }
     }
-  );
-
-  // --- Trigger full sync ---
-  app.post(
-    '/jobber/sync',
-    withHandler(async (req: AppRequest, reply) => {
-      const tenantId = requireTenantId(req, reply);
-      if (!tenantId) return;
-
-      const result = await jobberSync.fullSync(pool, tenantId);
-      return reply.send({ success: true, ...result });
-    }, 'Failed to trigger Jobber sync')
-  );
-
-  // --- Get sync status ---
-  app.get(
-    '/jobber/sync/status',
-    withHandler(async (req: AppRequest, reply) => {
-      const tenantId = requireTenantId(req, reply);
-      if (!tenantId) return;
-
-      const res = await withTenantClient(tenantId, (client) =>
-        getCrmSyncStatus(client, tenantId, 'jobber')
-      );
-      return reply.send(res);
-    }, 'Failed to get Jobber sync status')
   );
 }
