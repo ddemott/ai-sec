@@ -346,6 +346,58 @@ describe('AppointmentBlock', () => {
     // WHO: receptionist | WHAT: see neutral color for unassigned appointments | WHEN: employee_id is null | WHERE: AppointmentBlock (getEmployeeColor) | WHY: crash or missing color on unassigned blocks hides walk-in appointments
   });
 
+  test('HAPPY: block has role=button, tabIndex=0, and descriptive aria-label (Cluster D)', () => {
+    // WHO: keyboard and screen-reader user navigating the scheduler
+    // WHAT: the appointment block is reachable via Tab and announced as
+    //       "scheduled: Alice Smith, Oil Change" by screen readers
+    // WHERE: AppointmentBlock outer div
+    // WHY: without role=button the div is not in the tab order; without
+    //      aria-label screen readers can only read the truncated visible text
+    const appt = makeAppointment({ description: 'Oil Change' });
+    render(
+      <div style={{ position: 'relative', width: 800, height: 50 }}>
+        <AppointmentBlock appointment={appt} />
+      </div>
+    );
+    const block = screen.getByRole('button', { name: /scheduled.*Alice Smith.*Oil Change/i });
+    expect(block).toHaveAttribute('tabIndex', '0');
+  });
+
+  test('HAPPY: Enter key triggers onClick handler (keyboard activate path)', () => {
+    // WHO: keyboard user who has focused an appointment block and presses Enter
+    // WHAT: pressing Enter fires onClick with the appointment object
+    // WHERE: AppointmentBlock onKeyDown handler
+    // WHY: without onKeyDown, keyboard users can tab to the block but cannot
+    //      activate it — the only interaction path was mouse click
+    const appt = makeAppointment();
+    const onClick = vi.fn();
+    render(
+      <div style={{ position: 'relative', width: 800, height: 50 }}>
+        <AppointmentBlock appointment={appt} onClick={onClick} />
+      </div>
+    );
+    const block = screen.getByRole('button', { name: /scheduled.*Alice Smith/i });
+    fireEvent.keyDown(block, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledWith(appt, expect.any(Object));
+  });
+
+  test('HAPPY: Space key triggers onClick handler', () => {
+    // WHO: keyboard user who activates via Space (standard button activation key)
+    // WHAT: pressing Space fires onClick
+    // WHERE: AppointmentBlock onKeyDown handler
+    // WHY: both Enter and Space must work — WCAG requires both for role=button
+    const appt = makeAppointment();
+    const onClick = vi.fn();
+    render(
+      <div style={{ position: 'relative', width: 800, height: 50 }}>
+        <AppointmentBlock appointment={appt} onClick={onClick} />
+      </div>
+    );
+    const block = screen.getByRole('button', { name: /scheduled.*Alice Smith/i });
+    fireEvent.keyDown(block, { key: ' ' });
+    expect(onClick).toHaveBeenCalledWith(appt, expect.any(Object));
+  });
+
   test('getTimeSpan calculates correct position', () => {
     const { left, width } = getTimeSpan('2026-03-19T09:00:00', '2026-03-19T10:00:00', 7, 20);
     // 9am is 2 hours into the 13-hour range (7-20), so left ≈ 0.154
@@ -638,6 +690,49 @@ describe('AppointmentListView', () => {
 });
 
 // --- EmployeeDayFocusPanel ---
+
+describe('EmployeeDayFocusPanel — accessibility (Cluster C)', () => {
+  test('HAPPY: has role=dialog and aria-labelledby pointing at employee name heading', () => {
+    // WHO: screen-reader user who opened the focus panel by clicking a staff row
+    // WHAT: panel exposes role=dialog + aria-labelledby -> h3 with employee name
+    // WHERE: EmployeeDayFocusPanel outer div + h3#focus-panel-title
+    // WHY: without dialog role, AT treats the panel as inline content rather than an
+    //      overlay; without the label, the focus shift is unannounced
+    render(
+      <EmployeeDayFocusPanel
+        isOpen={true}
+        onClose={() => {}}
+        employee={employees[0]}
+        appointments={[]}
+        shifts={[]}
+      />
+    );
+    const panel = screen.getByRole('dialog');
+    expect(panel).toHaveAttribute('aria-labelledby', 'focus-panel-title');
+    const title = document.getElementById('focus-panel-title');
+    expect(title).toHaveTextContent('Mike Jones');
+  });
+
+  test('HAPPY: Escape key fires onClose', () => {
+    // WHO: keyboard user who wants to dismiss the focus panel
+    // WHAT: pressing Escape calls onClose once
+    // WHERE: EmployeeDayFocusPanel Escape handler (via useFocusTrap)
+    // WHY: Escape is the universal dialog dismiss key; without it, keyboard users
+    //      must tab to the close button, which is especially slow in a dense panel
+    const onClose = vi.fn();
+    render(
+      <EmployeeDayFocusPanel
+        isOpen={true}
+        onClose={onClose}
+        employee={employees[0]}
+        appointments={[]}
+        shifts={[]}
+      />
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('EmployeeDayFocusPanel', () => {
   test('renders nothing when not open', () => {

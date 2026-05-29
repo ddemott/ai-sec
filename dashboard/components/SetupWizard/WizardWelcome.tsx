@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Wand2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface WizardWelcomeProps {
   onContinue: () => void;
@@ -10,14 +11,19 @@ interface WizardWelcomeProps {
 }
 
 export function WizardWelcome({ onContinue, onDismiss }: WizardWelcomeProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, true, onDismiss, true);
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="wizard-welcome-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onDismiss}
     >
       <div
+        ref={containerRef}
         className="rounded-2xl shadow-xl border max-w-lg w-full overflow-hidden"
         style={{
           backgroundColor: 'var(--surface)',

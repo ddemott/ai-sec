@@ -47,6 +47,34 @@ function renderPopover(props: Partial<React.ComponentProps<typeof AppointmentPop
   );
 }
 
+describe('AppointmentPopover — keyboard + accessibility (Cluster C)', () => {
+  test('HAPPY: Escape key fires onClose', () => {
+    // WHO: keyboard user who opened a popover and wants to dismiss
+    // WHAT: pressing Escape calls onClose once
+    // WHERE: AppointmentPopover keydown listener
+    // WHY: without Escape support, keyboard users have no way to dismiss the popover
+    //      without clicking outside (which is mouse-only behavior)
+    const onClose = vi.fn();
+    renderPopover({ onClose });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('HAPPY: visible X close button is accessible by aria-label', () => {
+    // WHO: keyboard and screen-reader users
+    // WHAT: a "Close appointment details" button exists and fires onClose when clicked
+    // WHERE: AppointmentPopover header row
+    // WHY: without a labeled close button, the popover has no explicit dismiss affordance
+    //      for users who cannot click outside to dismiss
+    const onClose = vi.fn();
+    renderPopover({ onClose });
+    const closeBtn = screen.getByRole('button', { name: /close appointment details/i });
+    expect(closeBtn).toBeInTheDocument();
+    fireEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('AppointmentPopover — Edit + Cancel actions', () => {
   test('renders neither Edit nor Cancel button when callbacks are omitted', () => {
     renderPopover();

@@ -595,6 +595,58 @@ describe('disconnectConnection', () => {
 // ==========================================
 // SkillMapFixPanel tests
 // ==========================================
+describe('SkillMapFixPanel — accessibility (Cluster C)', () => {
+  const brokenChainA = {
+    skillId: 'skill-svc-uuid-3',
+    skillName: 'Brake Service',
+    missingEmployees: true,
+    missingResources: false,
+  };
+
+  test('HAPPY: close button has an accessible aria-label (not a bare ✕)', () => {
+    // WHO: keyboard or screen-reader user interacting with the fix panel
+    // WHAT: close button is discoverable by role=button + name "Close fix panel"
+    // WHERE: SkillMapFixPanel close button
+    // WHY: the previous implementation used a bare ✕ text node with no aria-label —
+    //      screen readers announced "cross" or "times" instead of the intended action
+    render(
+      <SkillMapFixPanel
+        chain={brokenChainA}
+        employees={mockEmployees}
+        resources={mockResources}
+        tenantId="test-tenant"
+        empMappings={[]}
+        resMappings={[]}
+        onFixed={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /close fix panel/i })).toBeInTheDocument();
+  });
+
+  test('HAPPY: close button fires onClose when clicked', () => {
+    // WHO: user who opened the fix panel and wants to dismiss without assigning
+    // WHAT: clicking the close button calls onClose once
+    // WHERE: SkillMapFixPanel close button click handler
+    // WHY: the accessible label only matters if the button also does what it says
+    const onClose = vi.fn();
+    render(
+      <SkillMapFixPanel
+        chain={brokenChainA}
+        employees={mockEmployees}
+        resources={mockResources}
+        tenantId="test-tenant"
+        empMappings={[]}
+        resMappings={[]}
+        onFixed={vi.fn()}
+        onClose={onClose}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /close fix panel/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('SkillMapFixPanel', () => {
   const brokenChain = {
     skillId: 'skill-svc-uuid-3',

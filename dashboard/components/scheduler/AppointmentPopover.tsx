@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Clock, User, MapPin, Wrench, Calendar, Edit, Trash2 } from 'lucide-react';
+import { Clock, User, MapPin, Wrench, Calendar, Edit, Trash2, X } from 'lucide-react';
 import { formatPhone } from '../../lib/phone';
 import type { SchedulerAppointment } from './useSchedulerData';
 
@@ -51,8 +51,31 @@ export function AppointmentPopover({
         onClose();
       }
     }
+    const FOCUSABLE =
+      'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && cardRef.current) {
+        const nodes = cardRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
+        if (nodes.length === 0) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     }
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick);
@@ -121,18 +144,28 @@ export function AppointmentPopover({
         color: 'var(--text-primary, #fff)',
       }}
     >
-      {/* Header: service + status */}
-      <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center justify-between">
+      {/* Header: service + status + close */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
             {appointment.description || 'Appointment'}
           </div>
-          <span
-            className="text-xs font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ml-2"
-            style={{ background: statusColor, color: '#fff', opacity: 0.9 }}
-          >
-            {statusLabel}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span
+              className="text-xs font-bold uppercase px-2 py-0.5 rounded-full"
+              style={{ background: statusColor, color: '#fff', opacity: 0.9 }}
+            >
+              {statusLabel}
+            </span>
+            <button
+              onClick={onClose}
+              aria-label="Close appointment details"
+              className="p-0.5 rounded transition-opacity hover:opacity-70"
+              style={{ color: 'var(--text-muted, #888)' }}
+            >
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
 

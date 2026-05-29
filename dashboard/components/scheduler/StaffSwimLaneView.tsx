@@ -419,8 +419,8 @@ export const StaffSwimLaneView: React.FC<StaffSwimLaneViewProps> = ({
                       event). 2026-05-28 UX audit #8. */}
                   {onShiftDelete && !isDragging && (
                     <button
-                      aria-label="Delete shift"
-                      className="absolute right-1 top-1 text-xs font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity bg-white/90 dark:bg-black/50 rounded px-3 z-20 min-h-[44px] flex items-center"
+                      aria-label={`Delete shift ${formatHour(cs)}–${formatHour(ce)}`}
+                      className="absolute right-1 top-1 text-xs font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 opacity-40 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none transition-opacity bg-white/90 dark:bg-black/50 rounded px-3 z-20 min-h-[44px] flex items-center"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();

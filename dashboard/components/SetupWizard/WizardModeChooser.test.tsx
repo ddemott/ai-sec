@@ -19,6 +19,59 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { WizardModeChooser } from './WizardModeChooser';
 
+describe('WizardModeChooser — accessibility + keyboard (Cluster C)', () => {
+  test('HAPPY: has role=dialog, aria-modal, aria-labelledby pointing at heading', () => {
+    // WHO: screen-reader user entering the mode chooser
+    // WHAT: overlay exposes role=dialog + aria-modal=true + labelledby -> h2 text
+    // WHERE: WizardModeChooser outer div / heading
+    // WHY: without these, screen readers cannot announce "How is your business set up?" on open
+    render(<WizardModeChooser onChoose={vi.fn()} onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const title = document.getElementById('mode-chooser-title');
+    expect(title).toBeTruthy();
+    expect(dialog).toHaveAttribute('aria-labelledby', 'mode-chooser-title');
+  });
+
+  test('HAPPY: Escape key fires onClose', () => {
+    // WHO: keyboard user who opened the chooser and changed their mind
+    // WHAT: pressing Escape calls onClose exactly once
+    // WHERE: WizardModeChooser keydown listener
+    // WHY: Escape-to-close is the universal keyboard contract for dialogs; without it
+    //      keyboard users are forced to tab to the X button to exit
+    const onClose = vi.fn();
+    render(<WizardModeChooser onChoose={vi.fn()} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('HAPPY: clicking the backdrop (outside the card) fires onClose', () => {
+    // WHO: mouse user who wants to dismiss without reaching the X button
+    // WHAT: click on the dark overlay (role=dialog) calls onClose
+    // WHERE: WizardModeChooser backdrop onClick
+    // WHY: standard modal behavior; missing backdrop-close creates a perception that
+    //      the overlay is "stuck" and forces users to hunt for the X
+    const onClose = vi.fn();
+    render(<WizardModeChooser onChoose={vi.fn()} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('HAPPY: clicking inside the card does NOT fire onClose (stopPropagation)', () => {
+    // WHO: mouse user clicking a mode card
+    // WHAT: click on a mode button reaches onChoose, NOT onClose
+    // WHERE: WizardModeChooser inner card stopPropagation
+    // WHY: without stopPropagation, selecting a mode would simultaneously fire onClose
+    //      and close the entire wizard before the parent could act on the chosen mode
+    const onClose = vi.fn();
+    const onChoose = vi.fn();
+    render(<WizardModeChooser onChoose={onChoose} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: /just me/i }));
+    expect(onChoose).toHaveBeenCalledWith('solo');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
 describe('WizardModeChooser — Back affordance', () => {
   test('renders Back link when onBack is provided and invokes it on click', () => {
     const onBack = vi.fn();

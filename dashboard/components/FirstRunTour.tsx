@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Calendar, Users, Phone, Wrench, Wand2, X, ArrowRight, Sparkles } from 'lucide-react';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import { Button } from './ui/Button';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
@@ -34,6 +35,8 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
   const tenantId = useActiveTenantId();
   const vocab = useVocabulary();
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, open, () => setOpen(false), true);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -61,8 +64,10 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
       aria-modal="true"
       aria-labelledby="first-run-tour-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={() => setOpen(false)}
     >
       <div
+        ref={containerRef}
         className="rounded-2xl shadow-2xl border max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
         style={{
           backgroundColor: 'var(--surface)',

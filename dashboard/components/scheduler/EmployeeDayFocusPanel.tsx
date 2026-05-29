@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { X, Clock, User } from 'lucide-react';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { shiftTimeToHour } from '../../lib/utils';
@@ -28,6 +29,9 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
   shifts,
   onAppointmentClick,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, isOpen && !!employee, onClose, false);
+
   if (!isOpen || !employee) return null;
 
   const sorted = [...appointments]
@@ -50,14 +54,17 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
 
   return (
     <div
+      ref={containerRef}
+      role="dialog"
+      aria-labelledby="focus-panel-title"
       className="fixed inset-y-0 right-0 w-full sm:w-96 shadow-2xl border-l z-30 flex flex-col animate-in slide-in-from-right duration-200"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
       data-testid="employee-day-focus-panel"
     >
       <header className="px-4 py-3 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <User className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
-          <h3 className="font-bold text-gray-900 dark:text-gray-100">{employee.name}</h3>
+          <User className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
+          <h3 id="focus-panel-title" className="font-bold text-gray-900 dark:text-gray-100">{employee.name}</h3>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close focus panel">
           <X className="w-4 h-4" />

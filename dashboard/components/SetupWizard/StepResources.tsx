@@ -72,16 +72,14 @@ export function Step2Resources({
                 <button
                   onClick={() => onEdit(res)}
                   aria-label={`Edit ${res.name}`}
-                  className="p-1.5 text-gray-400 transition-colors"
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-soft)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = ''; }}
+                  className="p-1.5 text-gray-400 transition-colors rounded-sm hover:[color:var(--accent-soft)] focus-visible:[color:var(--accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent-soft]"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(res)}
                   aria-label={`Remove ${res.name}`}
-                  className="p-1.5 text-gray-400 hover:[color:var(--danger)] transition-colors"
+                  className="p-1.5 text-gray-400 transition-colors rounded-sm hover:[color:var(--danger)] focus-visible:[color:var(--danger)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--danger]"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -134,15 +132,7 @@ export function Step2Resources({
       ) : (
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 transition-colors"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = 'var(--accent-soft)';
-            e.currentTarget.style.color = 'var(--accent-soft)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '';
-            e.currentTarget.style.color = '';
-          }}
+          className="flex items-center gap-2 px-4 py-2.5 w-full rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 transition-colors hover:[border-color:var(--accent-soft)] hover:[color:var(--accent-soft)] focus-visible:[border-color:var(--accent-soft)] focus-visible:[color:var(--accent-soft)] focus-visible:outline-none"
         >
           <Plus className="w-4 h-4" />
           Add a {vocab.resource_label.toLowerCase()}

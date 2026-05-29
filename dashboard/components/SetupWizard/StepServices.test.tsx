@@ -47,6 +47,7 @@ function renderStep(onChange: (form: ServiceForm) => void, duration = 30) {
     />
   );
   // The only type=number field in the form is the duration input.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   return screen.getByRole('spinbutton') as HTMLInputElement;
 }
 

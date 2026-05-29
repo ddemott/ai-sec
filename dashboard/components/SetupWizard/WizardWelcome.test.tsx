@@ -81,6 +81,30 @@ describe('WizardWelcome', () => {
     expect(onContinue).not.toHaveBeenCalled();
   });
 
+  test('HAPPY: Escape key fires onDismiss', async () => {
+    // WHO: keyboard user who opened the welcome but changed their mind
+    // WHAT: pressing Escape calls onDismiss once — same as clicking X or "set up later"
+    // WHERE: WizardWelcome Escape handler (via useFocusTrap)
+    // WHY: without Escape support keyboard users must tab through the dialog to reach the
+    //      X button — slower and less discoverable than the universal dialog escape
+    const onDismiss = vi.fn();
+    render(<WizardWelcome onContinue={vi.fn()} onDismiss={onDismiss} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  test('HAPPY: clicking the backdrop fires onDismiss', async () => {
+    // WHO: mouse user who clicks outside the welcome card to dismiss
+    // WHAT: click on the dark overlay (role=dialog) calls onDismiss once
+    // WHERE: WizardWelcome backdrop onClick
+    // WHY: backdrop-close is standard modal behavior; its absence creates the
+    //      perception the overlay is stuck and forces users to find the X button
+    const onDismiss = vi.fn();
+    render(<WizardWelcome onContinue={vi.fn()} onDismiss={onDismiss} />);
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
   test('HAPPY: dialog is marked role="dialog" and aria-modal for screen readers', async () => {
     // WHO: Screen-reader user landing on the new-tenant dashboard
     // WHAT: The welcome modal exposes role=dialog + aria-modal=true so AT

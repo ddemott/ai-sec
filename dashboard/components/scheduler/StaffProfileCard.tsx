@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { CalendarX } from 'lucide-react';
+import { CalendarX, X } from 'lucide-react';
 import type { Employee } from '../../lib/types';
 import { useVocabulary } from '@/lib/VocabularyContext';
 
@@ -47,26 +47,61 @@ export function StaffProfileCard({
 }: StaffProfileCardProps) {
   const vocab = useVocabulary();
   const cardRef = useRef<HTMLDivElement>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
 
-  // Dismiss on outside click or Escape key
+  // Dismiss on outside click, Escape, Tab trap; focus the card on open.
   useEffect(() => {
+    prevFocusRef.current = document.activeElement as HTMLElement;
+
+    const FOCUSABLE =
+      'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     function handleClick(e: MouseEvent) {
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && cardRef.current) {
+        const nodes = cardRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
+        if (nodes.length === 0) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     }
-    // Delay click listener to avoid catching the click that opened the card
+
+    // Focus first interactive element inside the card on open.
+    requestAnimationFrame(() => {
+      cardRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    });
+
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick);
     }, 0);
     document.addEventListener('keydown', handleKeyDown);
+
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus to the element that opened the card.
+      const prev = prevFocusRef.current;
+      if (prev && document.body.contains(prev)) prev.focus();
     };
   }, [onClose]);
 
@@ -97,6 +132,8 @@ export function StaffProfileCard({
     <div
       ref={cardRef}
       data-testid="staff-profile-card"
+      role="dialog"
+      aria-label={`${employee.name} — staff profile`}
       className="fixed z-50 rounded-lg shadow-xl"
       style={{
         top,
@@ -108,8 +145,9 @@ export function StaffProfileCard({
         color: 'var(--text-primary, #fff)',
       }}
     >
-      {/* Header: avatar + name + role */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+      {/* Header: avatar + name + role + close */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3">
+        <div className="flex items-center gap-3 min-w-0">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
           style={{
@@ -137,6 +175,15 @@ export function StaffProfileCard({
             {employee.type === 'user' ? 'Admin' : vocab.employee_label}
           </div>
         </div>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close staff profile"
+          className="shrink-0 p-0.5 rounded transition-opacity hover:opacity-70"
+          style={{ color: 'var(--text-muted, #888)' }}
+        >
+          <X className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
       </div>
 
       {/* Divider */}

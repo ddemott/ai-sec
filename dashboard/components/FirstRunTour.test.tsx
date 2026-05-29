@@ -83,6 +83,34 @@ describe('FirstRunTour — visibility gating', () => {
   });
 });
 
+describe('FirstRunTour — keyboard + backdrop (Cluster C)', () => {
+  test('HAPPY: Escape key closes the tour', () => {
+    // WHO: keyboard user who launched the tour and wants to dismiss
+    // WHAT: pressing Escape closes the modal (queryByRole returns null after)
+    // WHERE: FirstRunTour Escape handler (via useFocusTrap)
+    // WHY: Escape-to-close is the universal keyboard dialog contract; without it
+    //      keyboard users must tab through all tour cards to reach "Got it"
+    localStorage.setItem(KEY, 'pending');
+    render(<FirstRunTour onNavigate={vi.fn()} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('HAPPY: clicking the backdrop closes the tour without navigating', () => {
+    // WHO: mouse user who clicks outside the tour card to dismiss
+    // WHAT: click on the dark overlay (role=dialog) closes the tour; onNavigate not called
+    // WHERE: FirstRunTour backdrop onClick
+    // WHY: backdrop-close is expected modal behavior; missing it leaves the tour stuck
+    //      and forces users to click "Got it" or the X button
+    localStorage.setItem(KEY, 'pending');
+    const onNavigate = vi.fn();
+    render(<FirstRunTour onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+});
+
 describe('FirstRunTour — interactions', () => {
   test('HAPPY: clicking a tab card calls onNavigate AND closes the modal', () => {
     // WHO: tenant who reads the tour and wants to jump straight to the

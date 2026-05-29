@@ -211,9 +211,14 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
       ? `${customerName} — ${appointment.description ?? ''}\nDrag to move · click for details`
       : `${customerName} — ${appointment.description ?? ''}`;
 
+  const blockLabel = `${appointment.status}: ${customerName}${appointment.description ? `, ${appointment.description}` : ''}`;
+
   return (
     <div
-      className={`group absolute top-1 bottom-1 rounded px-1.5 py-0.5 text-xs font-bold truncate hover:opacity-90 transition-opacity ${colorClass || ''} ${isCanceled ? 'opacity-40 line-through cursor-pointer' : onMove ? 'cursor-move' : 'cursor-pointer'}`}
+      role="button"
+      tabIndex={0}
+      aria-label={blockLabel}
+      className={`group absolute top-1 bottom-1 rounded px-1.5 py-0.5 text-xs font-bold truncate hover:opacity-90 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none transition-opacity ${colorClass || ''} ${isCanceled ? 'opacity-40 line-through cursor-pointer' : onMove ? 'cursor-move' : 'cursor-pointer'}`}
       style={{
         left: `${left * 100}%`,
         width: `${width * 100}%`,
@@ -223,6 +228,12 @@ export const AppointmentBlock: React.FC<AppointmentBlockProps> = ({
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.(appointment, e as unknown as React.MouseEvent);
+        }
+      }}
       title={moveHintTitle}
       data-testid={`appointment-block-${appointment.appointment_id}`}
     >

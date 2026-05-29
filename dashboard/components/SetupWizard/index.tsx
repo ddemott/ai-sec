@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 import { ChevronRight, ChevronLeft, Check, X, Wand2 } from 'lucide-react';
 import { Api } from '../../lib/api';
 import { useStaticData } from '../../lib/hooks';
@@ -46,6 +47,10 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   const vocab = useVocabulary();
   const STEP_LABELS = getStepLabels(vocab);
   const [step, setStep] = useState<WizardStep>(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Focus trap: Escape closes, Tab stays in wizard. lockScroll=false because
+  // SetupWizard manages body overflow itself (see useEffect below).
+  useFocusTrap(containerRef, isOpen, onClose, false);
   // Surfaced when auto-seeding the starter services/resource fails. Pre-fix
   // the failure was swallowed (console.warn only), leaving setup half-seeded
   // with no signal or recovery. Drives the retry banner in the body.
@@ -293,6 +298,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       aria-labelledby="wizard-title"
     >
       <div
+        ref={containerRef}
         className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >

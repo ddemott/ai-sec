@@ -46,6 +46,45 @@ function renderCard(props: Partial<React.ComponentProps<typeof StaffProfileCard>
   );
 }
 
+describe('StaffProfileCard — accessibility + keyboard (Cluster C)', () => {
+  test('HAPPY: has role=dialog and aria-label naming the employee', () => {
+    // WHO: screen-reader user who opened the staff profile card
+    // WHAT: card exposes role=dialog + aria-label "<name> — staff profile"
+    // WHERE: StaffProfileCard outer div
+    // WHY: without a dialog role the overlay is announced as generic content;
+    //      without a label, screen readers cannot tell whose profile is open
+    renderCard();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-label', 'Carlos Rivera — staff profile');
+  });
+
+  test('HAPPY: visible X close button fires onClose', () => {
+    // WHO: keyboard user who wants to dismiss without clicking outside
+    // WHAT: "Close staff profile" button is present and calls onClose when clicked
+    // WHERE: StaffProfileCard header X button
+    // WHY: anchored popovers have no backdrop; without a visible close affordance
+    //      keyboard users can only dismiss via Escape
+    const onClose = vi.fn();
+    renderCard({ onClose });
+    const closeBtn = screen.getByRole('button', { name: /close staff profile/i });
+    expect(closeBtn).toBeInTheDocument();
+    fireEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('HAPPY: Escape key fires onClose', () => {
+    // WHO: keyboard user reviewing a staff card who wants to dismiss
+    // WHAT: pressing Escape calls onClose once
+    // WHERE: StaffProfileCard keydown listener
+    // WHY: Escape-to-close is the universal keyboard dialog contract;
+    //      the previous implementation already had this but focus management was missing
+    const onClose = vi.fn();
+    renderCard({ onClose });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('StaffProfileCard — Mark off action (front-desk audit P0 #2)', () => {
   test('does not render Mark off button when onMarkOff is omitted', () => {
     renderCard();

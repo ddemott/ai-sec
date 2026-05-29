@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { User, Users, Wand2, X } from 'lucide-react';
+import { useFocusTrap } from '../../lib/useFocusTrap';
 
 interface WizardModeChooserProps {
   onChoose: (mode: 'solo' | 'team') => void;
@@ -17,9 +18,19 @@ interface WizardModeChooserProps {
 }
 
 export function WizardModeChooser({ onChoose, onClose, onBack }: WizardModeChooserProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, true, onClose, true);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mode-chooser-title"
+      onClick={onClose}
+    >
       <div
+        ref={containerRef}
         className="rounded-2xl shadow-xl border max-w-lg w-full overflow-hidden"
         style={{
           backgroundColor: 'var(--surface)',
@@ -34,8 +45,8 @@ export function WizardModeChooser({ onChoose, onClose, onBack }: WizardModeChoos
           style={{ borderColor: 'var(--border)' }}
         >
           <div className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
-            <h2 className="text-lg font-bold">How is your business set up?</h2>
+            <Wand2 className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
+            <h2 id="mode-chooser-title" className="text-lg font-bold">How is your business set up?</h2>
           </div>
           <button
             onClick={onClose}

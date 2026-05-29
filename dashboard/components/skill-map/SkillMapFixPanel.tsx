@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { Api } from '../../lib/api';
 import { Button } from '../ui/Button';
 import { showToast } from '../ui/Toast';
@@ -103,8 +104,12 @@ export default function SkillMapFixPanel({
         <h4 className="text-xs font-bold text-amber-700 dark:text-amber-400">
           Fix: {chain.skillName}
         </h4>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xs">
-          ✕
+        <button
+          onClick={onClose}
+          aria-label="Close fix panel"
+          className="p-0.5 rounded text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-3 h-3" aria-hidden="true" />
         </button>
       </div>
 
