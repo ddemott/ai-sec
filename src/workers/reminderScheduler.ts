@@ -17,7 +17,8 @@
  *   stopReminderScheduler();  // Stop processing (for graceful shutdown)
  */
 
-import { createDatabaseService, type DatabaseService } from '../database/index.js';
+import type { Pool } from 'pg';
+import { createDatabaseService, type DatabaseService, getPool } from '../database/index.js';
 import { ReminderService } from '../services/reminders/index.js';
 import { decideRetry, MAX_RETRIES } from '../services/reminders/retryPolicy.js';
 import { createTenantConfigService, type TenantConfigService } from '../services/tenants/index.js';
@@ -119,6 +120,31 @@ async function processBatch(): Promise<number> {
 }
 
 /**
+ * Delete demo tenants whose demo_expires_at has passed.
+ * Uses the raw pool with no RLS tenant context — this is an admin sweep.
+ * CASCADE on tenants covers all child rows automatically.
+ * Exported for direct testing; the scheduler tick also calls it on every cycle.
+ *
+ * The optional `poolOverride` parameter lets tests pass the test-DB pool
+ * instead of the production pool (which reads DATABASE_URL from env).
+ */
+export async function cleanupExpiredDemoTenants(poolOverride?: Pool): Promise<void> {
+  try {
+    const pool = poolOverride ?? getPool();
+    const res = await pool.query(
+      `DELETE FROM tenants
+       WHERE is_demo = true AND demo_expires_at < NOW()
+       RETURNING tenant_id`
+    );
+    if ((res.rowCount ?? 0) > 0) {
+      console.log(`🧹 Removed ${res.rowCount} expired demo tenant(s)`);
+    }
+  } catch (err) {
+    console.error('❌ Demo tenant cleanup error:', err);
+  }
+}
+
+/**
  * Main scheduler tick - called on each interval.
  */
 async function tick(): Promise<void> {
@@ -130,6 +156,7 @@ async function tick(): Promise<void> {
   isRunning = true;
   try {
     await processBatch();
+    await cleanupExpiredDemoTenants();
   } finally {
     isRunning = false;
   }

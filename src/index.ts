@@ -49,6 +49,7 @@ import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
 import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { registerAgentToolRoutes } from './routes/agentTools';
+import { registerDemoRoutes } from './routes/demo';
 import { registerVoiceRoutes } from './routes/voice';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { registerCommunicationRoutes } from './routes/communications';
@@ -261,6 +262,7 @@ registerVersionHistoryRoutes(app, pool, withTenantClient);
 registerCommunicationRoutes(app, pool, withTenantClient);
 registerReminderRoutes(app, pool, withTenantClient);
 registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
+registerDemoRoutes(app, pool, generateToken);
 
 // --- Start Reminder Scheduler ---
 // Only start in production or if explicitly enabled

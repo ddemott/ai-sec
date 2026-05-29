@@ -94,8 +94,29 @@ export function clearSyncRecorder(): void {
 }
 
 /**
+ * Returns true if the tenant has is_demo=true.
+ * Defaults to false on any DB error so a broken pool doesn't block real syncs.
+ */
+async function isDemoTenant(pool: Pool, tenantId: string): Promise<boolean> {
+  try {
+    const res = await pool.query<{ is_demo: boolean }>(
+      'SELECT is_demo FROM tenants WHERE tenant_id = $1',
+      [tenantId]
+    );
+    return res.rows[0]?.is_demo === true;
+  } catch {
+    return false; // fail open — real tenants should not lose sync on a transient lookup error
+  }
+}
+
+/**
  * Sync an appointment to all connected providers (calendars + CRMs).
  * Fire-and-forget — never throws, never blocks the caller.
+ *
+ * record() + meter() are called synchronously so the SYNC_TEST_RECORDER
+ * capture is available immediately (used by Playwright e2e assertions).
+ * Actual provider calls are gated on an async is_demo lookup so demo
+ * tenants never reach real external endpoints.
  */
 export function syncAppointmentToAll(
   pool: Pool,
@@ -112,18 +133,27 @@ export function syncAppointmentToAll(
     { name: 'servicetitan', fn: syncAppointmentToServiceTitan },
   ];
 
-  for (const { name, fn } of providers) {
+  for (const { name } of providers) {
     record(name, 'appointment', action, tenantId, appointmentId);
     meter(name, 'appointment', action);
-    fn(pool, tenantId, appointmentId, action).catch((e) =>
-      logSyncError(logger, name, 'appointment', action, appointmentId, e)
-    );
   }
+
+  isDemoTenant(pool, tenantId)
+    .then((isDemo) => {
+      if (isDemo) return; // demo tenants must not touch real external endpoints
+      for (const { name, fn } of providers) {
+        fn(pool, tenantId, appointmentId, action).catch((e) =>
+          logSyncError(logger, name, 'appointment', action, appointmentId, e)
+        );
+      }
+    })
+    .catch((e) => logSyncError(logger, 'orchestrator', 'appointment', action, appointmentId, e));
 }
 
 /**
  * Sync a customer to all connected CRM providers.
  * Fire-and-forget — never throws, never blocks the caller.
+ * Same record-first, gate-later pattern as syncAppointmentToAll.
  */
 export function syncCustomerToAll(
   pool: Pool,
@@ -139,11 +169,19 @@ export function syncCustomerToAll(
     { name: 'servicetitan', fn: syncCustomerToServiceTitan },
   ];
 
-  for (const { name, fn } of providers) {
+  for (const { name } of providers) {
     record(name, 'customer', action, tenantId, customerId);
     meter(name, 'customer', action);
-    fn(pool, tenantId, customerId, action).catch((e) =>
-      logSyncError(logger, name, 'customer', action, customerId, e)
-    );
   }
+
+  isDemoTenant(pool, tenantId)
+    .then((isDemo) => {
+      if (isDemo) return;
+      for (const { name, fn } of providers) {
+        fn(pool, tenantId, customerId, action).catch((e) =>
+          logSyncError(logger, name, 'customer', action, customerId, e)
+        );
+      }
+    })
+    .catch((e) => logSyncError(logger, 'orchestrator', 'customer', action, customerId, e));
 }

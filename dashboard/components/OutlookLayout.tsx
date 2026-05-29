@@ -23,6 +23,7 @@ import { useTheme, THEMES } from '@/lib/ThemeContext';
 import { useSessionContext, type UserRole } from '@/lib/SessionContext';
 import { FeedbackButton } from './ui/FeedbackButton';
 import { SetupProgressPill } from './SetupProgressPill';
+import { DemoBanner } from './DemoBanner';
 import { useAnchorRect } from '../lib/useAnchorRect';
 
 type Tab =
@@ -393,6 +394,9 @@ export function OutlookLayout({
             </span>
           ))}
         </FolderTabBar>
+
+        {/* DEMO BANNER — renders only when demoTenantId is in localStorage */}
+        <DemoBanner />
 
         {/* CONTENT AREA */}
         <div role="main" className="flex-1 flex overflow-hidden">

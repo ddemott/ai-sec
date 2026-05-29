@@ -228,6 +228,7 @@ const TENANT_EXEMPT_ROUTES = [
   '/login',
   '/register',
   '/',
+  '/demo/start',
   '/billing/webhook',
   // OAuth callbacks (redirects from external providers)
   '/calendar/auth/google/callback',
@@ -522,6 +523,7 @@ const PUBLIC_ROUTES = [
   '/reset-password',
   '/',
   '/demo',
+  '/demo/start',
   '/billing/webhook',
   // Prometheus scrape endpoint — auth is via METRICS_TOKEN bearer header
   // checked inside the route handler (not JWT). When the env var is unset

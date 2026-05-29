@@ -606,9 +606,7 @@ const LANDING_HTML = `
           Start free trial
           <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
-        <a href="tel:+16309379478" class="hero-link">
-          Call (630) 937-9478 — try it live
-        </a>
+        <a href="/demo" class="btn-ghost">Try live demo</a>
       </div>
 
       <div class="hero-stats reveal reveal-delay-3">
