@@ -399,6 +399,7 @@ export default function KnowledgeBaseView() {
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showUnansweredOnly, setShowUnansweredOnly] = useState(false);
   const [savedAnswers, setSavedAnswers] = useState<Map<string, { id: string; answer: string }>>(
     new Map()
   );
@@ -751,23 +752,55 @@ export default function KnowledgeBaseView() {
                     Answer these questions about your business. The AI will use your answers to
                     respond to callers. Answers auto-save as you type.
                   </p>
-                  <button
-                    onClick={() =>
-                      document
-                        .getElementById('custom-questions-section')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
-                    className="text-xs font-medium shrink-0 ml-4 hover:underline"
-                    style={{ color: 'var(--accent-soft)' }}
-                  >
-                    + Add your own question
-                  </button>
+                  <div className="flex items-center gap-3 shrink-0 ml-4">
+                    {totalAnswered < totalQuestions && (
+                      <button
+                        onClick={() => setShowUnansweredOnly((v) => !v)}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors"
+                        style={
+                          showUnansweredOnly
+                            ? {
+                                backgroundColor: 'var(--accent-muted)',
+                                borderColor: 'var(--accent)',
+                                color: 'var(--accent-soft)',
+                              }
+                            : {
+                                backgroundColor: 'transparent',
+                                borderColor: 'var(--border)',
+                                color: 'var(--text-secondary)',
+                              }
+                        }
+                      >
+                        {showUnansweredOnly ? 'Showing unanswered' : 'Show unanswered only'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        document
+                          .getElementById('custom-questions-section')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }
+                      className="text-xs font-medium hover:underline"
+                      style={{ color: 'var(--accent-soft)' }}
+                    >
+                      + Add your own question
+                    </button>
+                  </div>
                 </div>
-                {POLICY_CATEGORIES.map((cat, idx) => (
+                {POLICY_CATEGORIES.filter((cat) => {
+                  if (!showUnansweredOnly) return true;
+                  return POLICY_QUESTIONS.filter(
+                    (q) => q.category === cat && !savedAnswers.has(q.question)
+                  ).length > 0;
+                }).map((cat, idx) => (
                   <PolicyCategory
                     key={cat}
                     category={cat}
-                    questions={POLICY_QUESTIONS.filter((q) => q.category === cat)}
+                    questions={POLICY_QUESTIONS.filter(
+                      (q) =>
+                        q.category === cat &&
+                        (!showUnansweredOnly || !savedAnswers.has(q.question))
+                    )}
                     savedAnswers={savedAnswers}
                     onSave={handleSaveAnswer}
                     defaultOpen={idx === 0}

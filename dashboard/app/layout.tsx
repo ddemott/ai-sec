@@ -1,8 +1,30 @@
 import type { Metadata } from 'next';
+import { Bebas_Neue, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { Providers } from './providers';
+
+const bebasNeue = Bebas_Neue({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-bebas-neue',
+  display: 'swap',
+});
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-dm-sans',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Secretary HQ',
@@ -15,13 +37,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="navy" className="dark">
+    <html
+      lang="en"
+      data-theme="navy"
+      className={`dark ${bebasNeue.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
+    >
       <head>
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-          rel="stylesheet"
-        />
         {/* Inline critical theme to prevent white flash before React hydrates */}
         <style
           dangerouslySetInnerHTML={{

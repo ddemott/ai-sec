@@ -9,7 +9,7 @@ html { scroll-behavior: smooth; }
 body {
   background: #090E1A;
   color: #e8e8e8;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-dm-sans), sans-serif;
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -33,9 +33,9 @@ body {
   --green: #34D399;
   --red: #F87171;
   --amber: #F59E0B;
-  --ff-display: 'Bebas Neue', sans-serif;
-  --ff-body: 'DM Sans', sans-serif;
-  --ff-mono: 'JetBrains Mono', monospace;
+  --ff-display: var(--font-bebas-neue), sans-serif;
+  --ff-body: var(--font-dm-sans), sans-serif;
+  --ff-mono: var(--font-jetbrains-mono), monospace;
 }
 
 .grid-bg {

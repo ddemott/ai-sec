@@ -28,8 +28,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* Components must use var(--xxx) — never hardcode colors or fonts */
 
 :root {
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
 }
 
 /* --- Navy (default dark) --- */
@@ -54,8 +54,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #34D399;
   --red: #F87171;
   --yellow: #FCD34D;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   /* Legacy mappings for existing components */
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
@@ -93,8 +93,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #34D399;
   --red: #F87171;
   --yellow: #FCD34D;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
@@ -131,8 +131,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #34D399;
   --red: #F87171;
   --yellow: #FCD34D;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
@@ -169,8 +169,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #23A55A;
   --red: #F23F43;
   --yellow: #F0B232;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
@@ -207,8 +207,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #A3BE8C;
   --red: #BF616A;
   --yellow: #EBCB8B;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
@@ -245,8 +245,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #6ABF69;
   --red: #E05252;
   --yellow: #E8C44F;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
@@ -283,8 +283,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #00E676;
   --red: #FF1744;
   --yellow: #FFD60A;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
@@ -321,8 +321,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --green: #859900;
   --red: #DC322F;
   --yellow: #B58900;
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: var(--font-bebas-neue), sans-serif;
+  --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
   --surface: var(--bg-surface);
   --surface-elevated: var(--bg-raised);
