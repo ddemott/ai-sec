@@ -145,3 +145,120 @@ describe('GET /coverage', () => {
     expect(startParam).not.toBe('not-a-date');
   });
 });
+
+// =============================================
+// /call-summaries
+// =============================================
+
+describe('GET /call-summaries', () => {
+  it('SAD: returns 400 when customer_id is missing', async () => {
+    // WHO: dashboard component that forgot to pass customer_id
+    // WHAT: handler checks for customer_id before any DB query and returns 400
+    // WHEN: GET /call-summaries with no query param
+    // WHERE: analytics.ts early-exit guard `if (!customerId)`
+    // WHY: without the guard, the query would run with undefined customer_id
+    //      and potentially return all call summaries for the tenant
+    const res = await app.inject({
+      method: 'GET',
+      url: `/call-summaries?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ success: false, error: 'customer_id is required' });
+    expect(queries).toHaveLength(0);
+  });
+
+  it('HAPPY: returns call summaries scoped to tenant and customer', async () => {
+    // WHO: tenant user viewing call history for a specific customer
+    // WHAT: SELECT from call_summaries + call_transcripts WHERE tenant_id = $1 AND customer_id = $2
+    // WHEN: customer detail panel opens the Calls tab
+    // WHERE: GET /call-summaries?customer_id=<uuid> handler
+    // WHY: tenant_id scoping prevents one tenant reading another's call records;
+    //      customer_id scoping returns only the relevant customer's history
+    const customerId = 'cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa';
+    queryResponses.push({
+      rows: [
+        {
+          call_id: 'call-1',
+          tenant_id: TENANT_ID,
+          customer_id: customerId,
+          summary: 'Caller booked an oil change.',
+          has_transcript: true,
+        },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/call-summaries?tenant_id=${TENANT_ID}&customer_id=${customerId}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as unknown[];
+    expect(body).toHaveLength(1);
+    expect(queries[0].text).toContain('tenant_id = $1');
+    expect(queries[0].text).toContain('customer_id = $2');
+    expect(queries[0].params).toEqual([TENANT_ID, customerId]);
+  });
+});
+
+// =============================================
+// /feedback GET — access branching
+// =============================================
+
+const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+describe('GET /feedback', () => {
+  it('HAPPY: normal tenant sees only own-tenant feedback (tenant-scoped query)', async () => {
+    // WHO: a tenant owner viewing the feedback log for their business
+    // WHAT: SELECT from user_feedback WHERE tenant_id = $1 — scoped to caller
+    // WHEN: GET /feedback for a normal (non-super-admin) tenant
+    // WHERE: the else branch of `if (isSuperAdmin)` in the handler
+    // WHY: without the WHERE clause, every tenant would see every other tenant's
+    //      internal feedback — a data isolation failure
+    queryResponses.push({
+      rows: [{ feedback_id: 1, tenant_id: TENANT_ID, page: 'customers', comment: 'Looks great' }],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/feedback?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as unknown[];
+    expect(body).toHaveLength(1);
+    const dataQuery = queries.find((q) => q.text.includes('user_feedback'));
+    expect(dataQuery).toBeDefined();
+    expect(dataQuery!.text).toContain('WHERE f.tenant_id = $1');
+    expect(dataQuery!.params).toEqual([TENANT_ID]);
+  });
+
+  it('HAPPY: super-admin sees cross-tenant feedback (no WHERE tenant_id)', async () => {
+    // WHO: platform super-admin auditing feedback across all tenants
+    // WHAT: SELECT from user_feedback with no tenant filter — all rows visible
+    // WHEN: GET /feedback from the super-admin dashboard tenant
+    // WHERE: `if (isSuperAdmin)` branch; tenantId === SUPER_ADMIN_TENANT_ID
+    // WHY: the super-admin view is the only legitimate cross-tenant read;
+    //      any non-super-admin caller hitting this branch would be a privilege escalation
+    queryResponses.push({
+      rows: [
+        { feedback_id: 1, tenant_id: TENANT_ID, page: 'home', comment: 'Smooth' },
+        { feedback_id: 2, tenant_id: 'other-tenant', page: 'calls', comment: 'Good' },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/feedback?tenant_id=${SUPER_ADMIN_TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as unknown[];
+    expect(body).toHaveLength(2);
+    const dataQuery = queries.find((q) => q.text.includes('user_feedback'));
+    expect(dataQuery).toBeDefined();
+    // Super-admin query has no tenant_id WHERE clause
+    expect(dataQuery!.text).not.toContain('WHERE f.tenant_id');
+  });
+});
