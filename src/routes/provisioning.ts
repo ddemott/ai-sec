@@ -9,6 +9,7 @@ import type { AppFastifyInstance } from '../types/fastify';
 import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
 import { type TelnyxNumbersClient } from '../services/telnyxNumbers';
+import { activatePhone, deactivatePhone } from '../services/provisioningService';
 
 const ActivateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -48,119 +49,60 @@ export function registerProvisioningRoutes(
       }
       const { tenant_id, area_code } = parsed.data;
 
-      const client = await pool.connect();
-      try {
-        const tenantRes = await client.query(
-          `SELECT tenant_id, name, phone_status FROM tenants WHERE tenant_id = $1`,
-          [tenant_id]
-        );
-        if (tenantRes.rows.length === 0) {
+      const result = await activatePhone(pool, telnyx, tenant_id, area_code);
+
+      switch (result.status) {
+        case 'ok':
+          logEvent(req, 'phone_provisioned', {
+            tenant_id,
+            phone: result.phone_number,
+            telnyx_phone_number_id: result.telnyx_phone_number_id,
+          });
+          return reply.send({
+            success: true,
+            phone_number: result.phone_number,
+            telnyx_phone_number_id: result.telnyx_phone_number_id,
+          });
+
+        case 'not_found':
           return reply.status(404).send({
             success: false,
             error: 'Tenant not found',
             tenant_id,
             timestamp: new Date().toISOString(),
           });
-        }
 
-        const tenant = tenantRes.rows[0];
-
-        if (tenant.phone_status === 'active') {
+        case 'conflict':
           return reply.status(409).send({
-            error: 'Phone is already active for this tenant',
+            error:
+              result.reason === 'already_active'
+                ? 'Phone is already active for this tenant'
+                : 'Phone provisioning is already in progress',
             tenant_id,
-            tenant_name: tenant.name,
-            current_status: tenant.phone_status,
+            tenant_name: result.tenant_name,
+            current_status: result.current_status,
             timestamp: new Date().toISOString(),
           });
-        }
-        if (tenant.phone_status === 'provisioning') {
-          return reply.status(409).send({
-            error: 'Phone provisioning is already in progress',
-            tenant_id,
-            tenant_name: tenant.name,
-            current_status: tenant.phone_status,
-            timestamp: new Date().toISOString(),
-          });
-        }
 
-        await client.query('UPDATE tenants SET phone_status = $1 WHERE tenant_id = $2', [
-          'provisioning',
-          tenant_id,
-        ]);
-
-        let purchasedId: string | null = null;
-        let purchasedNumber: string | null = null;
-
-        try {
-          const available = await telnyx.client.searchAvailable(area_code);
-          if (!available) {
-            throw new Error(
-              area_code
-                ? `No available phone numbers in area code ${area_code}`
-                : 'No available phone numbers in Telnyx inventory'
-            );
+        case 'failed':
+          if (result.cleanup_error !== undefined) {
+            logError(req, 'telnyx_number_cleanup_failed', result.cleanup_error, {
+              purchasedId: result.purchased_id,
+            });
           }
-
-          const ordered = await telnyx.client.orderNumber(available.phone_number);
-          purchasedId = ordered.id;
-          purchasedNumber = ordered.phone_number;
-
-          await telnyx.client.assignToConnection(ordered.id, telnyx.sipConnectionId);
-
-          await client.query(
-            `UPDATE tenants SET
-            telnyx_phone_number_id = $1,
-            inbound_phone = $2,
-            phone_status = 'active'
-          WHERE tenant_id = $3`,
-            [ordered.id, ordered.phone_number, tenant_id]
-          );
-
-          logEvent(req, 'phone_provisioned', {
+          logError(req, 'phone_provisioning_failed', result.error, {
             tenant_id,
-            phone: ordered.phone_number,
-            telnyx_phone_number_id: ordered.id,
+            purchasedId: result.purchased_id,
           });
-
-          return reply.send({
-            success: true,
-            phone_number: ordered.phone_number,
-            telnyx_phone_number_id: ordered.id,
-          });
-        } catch (err: unknown) {
-          // Best-effort rollback: release the number if it was purchased before
-          // the connection assignment failed.
-          if (purchasedId) {
-            try {
-              await telnyx.client.release(purchasedId);
-            } catch (cleanupError) {
-              logError(req, 'telnyx_number_cleanup_failed', cleanupError, {
-                purchasedId,
-                purchasedNumber,
-              });
-            }
-          }
-
-          await client.query('UPDATE tenants SET phone_status = $1 WHERE tenant_id = $2', [
-            'failed',
-            tenant_id,
-          ]);
-
-          const detail = err instanceof Error ? err.message : String(err);
-          logError(req, 'phone_provisioning_failed', err, { tenant_id, purchasedId });
           return reply.status(502).send({
             error: 'Phone provisioning failed',
-            detail,
+            detail: result.detail,
             tenant_id,
-            tenant_name: tenant.name,
-            number_purchased: !!purchasedId,
-            rolled_back: !!purchasedId,
+            tenant_name: result.tenant_name,
+            number_purchased: result.number_purchased,
+            rolled_back: result.rolled_back,
             timestamp: new Date().toISOString(),
           });
-        }
-      } finally {
-        client.release();
       }
     }, 'Failed to activate phone')
   );
@@ -187,50 +129,24 @@ export function registerProvisioningRoutes(
       }
       const { tenant_id } = deactiveParsed.data;
 
-      const client = await pool.connect();
-      try {
-        const tenantRes = await client.query(
-          'SELECT telnyx_phone_number_id FROM tenants WHERE tenant_id = $1',
-          [tenant_id]
-        );
-        if (tenantRes.rows.length === 0) {
+      const result = await deactivatePhone(pool, telnyx, tenant_id);
+
+      switch (result.status) {
+        case 'not_found':
           return reply.status(404).send({ success: false, error: 'Tenant not found' });
-        }
 
-        const { telnyx_phone_number_id } = tenantRes.rows[0];
-        const warnings: string[] = [];
-
-        if (telnyx_phone_number_id) {
-          try {
-            await telnyx.client.release(telnyx_phone_number_id);
-          } catch (err) {
-            const msg = `Failed to release Telnyx number ${telnyx_phone_number_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Telnyx portal.`;
-            warnings.push(msg);
-            logError(req, 'telnyx_number_release_failed', err, {
-              telnyx_phone_number_id,
+        case 'ok':
+          if (result.release_error !== undefined) {
+            logError(req, 'telnyx_number_release_failed', result.release_error, {
+              telnyx_phone_number_id: result.release_phone_number_id,
               tenant_id,
             });
           }
-        }
-
-        // Clear tenant columns — DB deactivation always succeeds even if Telnyx cleanup failed
-        await client.query(
-          `UPDATE tenants SET
-          telnyx_phone_number_id = NULL,
-          inbound_phone = NULL,
-          phone_status = 'deprovisioned'
-        WHERE tenant_id = $1`,
-          [tenant_id]
-        );
-
-        logEvent(req, 'phone_deprovisioned', { tenant_id, warnings_count: warnings.length });
-
-        return reply.send({
-          success: true,
-          ...(warnings.length > 0 ? { warnings } : {}),
-        });
-      } finally {
-        client.release();
+          logEvent(req, 'phone_deprovisioned', { tenant_id, warnings_count: result.warnings.length });
+          return reply.send({
+            success: true,
+            ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+          });
       }
     }, 'Failed to deactivate phone')
   );

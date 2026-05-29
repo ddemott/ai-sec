@@ -1,0 +1,245 @@
+/**
+ * Phone provisioning state machine.
+ *
+ * Extracted from src/routes/provisioning.ts so the orchestration logic
+ * (tenant-fetch, status-transition, Telnyx order/assign/release, rollback)
+ * is testable without HTTP overhead.
+ *
+ * The route layer is responsible for:
+ *   - Telnyx null-check (503)
+ *   - Zod schema validation (400)
+ *   - Mapping result variants to HTTP status codes + bodies
+ *   - All logEvent / logError calls (result carries the raw error objects
+ *     and context fields the route needs to reconstruct every log call)
+ */
+
+import type { Pool } from 'pg';
+import type { TelnyxProvisioningConfig } from '../routes/provisioning';
+
+// ── Result types ─────────────────────────────────────────────────────────────
+
+export type ActivateResult =
+  | {
+      status: 'ok';
+      phone_number: string;
+      telnyx_phone_number_id: string;
+      tenant_id: string;
+    }
+  | { status: 'not_found'; tenant_id: string }
+  | {
+      status: 'conflict';
+      reason: 'already_active' | 'already_provisioning';
+      tenant_id: string;
+      tenant_name: string;
+      current_status: string;
+    }
+  | {
+      status: 'failed';
+      detail: string;
+      /** Original provisioning error — pass to logError('phone_provisioning_failed') */
+      error: unknown;
+      tenant_id: string;
+      tenant_name: string;
+      number_purchased: boolean;
+      rolled_back: boolean;
+      purchased_id: string | null;
+      /** Set when the rollback release itself threw — pass to logError('telnyx_number_cleanup_failed') */
+      cleanup_error?: unknown;
+    };
+
+export type DeactivateResult =
+  | {
+      status: 'ok';
+      tenant_id: string;
+      warnings: string[];
+      /** Set when telnyx.client.release threw — pass to logError('telnyx_number_release_failed') */
+      release_error?: unknown;
+      /** phone number id that failed release — for logError context */
+      release_phone_number_id?: string;
+    }
+  | { status: 'not_found' };
+
+// ── activatePhone ─────────────────────────────────────────────────────────────
+
+/**
+ * Purchase and assign a Telnyx phone number to a tenant's SIP connection.
+ *
+ * State transitions:
+ *   inactive / failed / deprovisioned → provisioning → active   (success)
+ *   inactive / failed / deprovisioned → provisioning → failed   (error)
+ *   active / provisioning → conflict (409)
+ */
+export async function activatePhone(
+  pool: Pool,
+  telnyx: TelnyxProvisioningConfig,
+  tenantId: string,
+  areaCode?: string
+): Promise<ActivateResult> {
+  const client = await pool.connect();
+  try {
+    const tenantRes = await client.query<{
+      tenant_id: string;
+      name: string;
+      phone_status: string;
+    }>(`SELECT tenant_id, name, phone_status FROM tenants WHERE tenant_id = $1`, [tenantId]);
+
+    if (tenantRes.rows.length === 0) {
+      return { status: 'not_found', tenant_id: tenantId };
+    }
+
+    const tenant = tenantRes.rows[0];
+
+    if (tenant.phone_status === 'active') {
+      return {
+        status: 'conflict',
+        reason: 'already_active',
+        tenant_id: tenantId,
+        tenant_name: tenant.name,
+        current_status: tenant.phone_status,
+      };
+    }
+    if (tenant.phone_status === 'provisioning') {
+      return {
+        status: 'conflict',
+        reason: 'already_provisioning',
+        tenant_id: tenantId,
+        tenant_name: tenant.name,
+        current_status: tenant.phone_status,
+      };
+    }
+
+    await client.query('UPDATE tenants SET phone_status = $1 WHERE tenant_id = $2', [
+      'provisioning',
+      tenantId,
+    ]);
+
+    let purchasedId: string | null = null;
+    let purchasedNumber: string | null = null;
+
+    try {
+      const available = await telnyx.client.searchAvailable(areaCode);
+      if (!available) {
+        throw new Error(
+          areaCode
+            ? `No available phone numbers in area code ${areaCode}`
+            : 'No available phone numbers in Telnyx inventory'
+        );
+      }
+
+      const ordered = await telnyx.client.orderNumber(available.phone_number);
+      purchasedId = ordered.id;
+      purchasedNumber = ordered.phone_number;
+
+      await telnyx.client.assignToConnection(ordered.id, telnyx.sipConnectionId);
+
+      await client.query(
+        `UPDATE tenants SET
+          telnyx_phone_number_id = $1,
+          inbound_phone = $2,
+          phone_status = 'active'
+        WHERE tenant_id = $3`,
+        [ordered.id, ordered.phone_number, tenantId]
+      );
+
+      return {
+        status: 'ok',
+        phone_number: ordered.phone_number,
+        telnyx_phone_number_id: ordered.id,
+        tenant_id: tenantId,
+      };
+    } catch (err: unknown) {
+      let cleanupError: unknown;
+
+      if (purchasedId) {
+        try {
+          await telnyx.client.release(purchasedId);
+        } catch (releaseErr) {
+          cleanupError = releaseErr;
+        }
+      }
+
+      await client.query('UPDATE tenants SET phone_status = $1 WHERE tenant_id = $2', [
+        'failed',
+        tenantId,
+      ]);
+
+      return {
+        status: 'failed',
+        detail: err instanceof Error ? err.message : String(err),
+        error: err,
+        tenant_id: tenantId,
+        tenant_name: tenant.name,
+        number_purchased: !!purchasedId,
+        rolled_back: !!purchasedId,
+        purchased_id: purchasedId,
+        ...(cleanupError !== undefined ? { cleanup_error: cleanupError } : {}),
+        // purchasedNumber is informational context kept for callers that want it
+        // (currently unused by the route, but available for future logError fields)
+      } satisfies ActivateResult & { status: 'failed' };
+    }
+  } finally {
+    client.release();
+  }
+}
+
+// ── deactivatePhone ───────────────────────────────────────────────────────────
+
+/**
+ * Release a tenant's Telnyx number and clear provisioning columns.
+ *
+ * The DB deactivation always completes even if the Telnyx API release fails —
+ * the failure is captured in `warnings[]` and `release_error` so the caller
+ * can surface it and log it, without leaving the tenant stuck in "active" state.
+ */
+export async function deactivatePhone(
+  pool: Pool,
+  telnyx: TelnyxProvisioningConfig,
+  tenantId: string
+): Promise<DeactivateResult> {
+  const client = await pool.connect();
+  try {
+    const tenantRes = await client.query<{ telnyx_phone_number_id: string | null }>(
+      'SELECT telnyx_phone_number_id FROM tenants WHERE tenant_id = $1',
+      [tenantId]
+    );
+
+    if (tenantRes.rows.length === 0) {
+      return { status: 'not_found' };
+    }
+
+    const { telnyx_phone_number_id } = tenantRes.rows[0];
+    const warnings: string[] = [];
+    let releaseError: unknown;
+
+    if (telnyx_phone_number_id) {
+      try {
+        await telnyx.client.release(telnyx_phone_number_id);
+      } catch (err) {
+        releaseError = err;
+        warnings.push(
+          `Failed to release Telnyx number ${telnyx_phone_number_id}: ${err instanceof Error ? err.message : 'unknown error'}. It may need manual cleanup in the Telnyx portal.`
+        );
+      }
+    }
+
+    await client.query(
+      `UPDATE tenants SET
+        telnyx_phone_number_id = NULL,
+        inbound_phone = NULL,
+        phone_status = 'deprovisioned'
+      WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    return {
+      status: 'ok',
+      tenant_id: tenantId,
+      warnings,
+      ...(releaseError !== undefined
+        ? { release_error: releaseError, release_phone_number_id: telnyx_phone_number_id ?? undefined }
+        : {}),
+    };
+  } finally {
+    client.release();
+  }
+}
