@@ -13,16 +13,8 @@ import { useStaticData } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { validateAppointmentTimeRange } from '../lib/appointmentValidation';
-import {
-  Calendar as BigCalendar,
-  dateFnsLocalizer,
-  type View as CalendarViewType,
-} from 'react-big-calendar';
+import { Calendar as BigCalendar, type View as CalendarViewType } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
-
-import { format } from 'date-fns';
-import { enUS } from 'date-fns/locale/en-US';
-import { parse, startOfWeek, getDay } from 'date-fns';
 
 import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
@@ -36,30 +28,18 @@ import { ConfirmModal } from './ui/ConfirmModal';
 import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
 import { isSlotOnFifteenMinuteGrid } from '../lib/calendarSlot';
-
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales: { 'en-US': enUS },
-});
+import {
+  localizer,
+  type CalendarEvent,
+  ZOOM_LEVELS,
+  CALENDAR_TIMESLOTS,
+  CALENDAR_MIN,
+  CALENDAR_MAX,
+  CALENDAR_SCROLL_TO,
+  toCalendarEvent,
+} from '../lib/appointments/calendarConfig';
 
 const DnDCalendar = withDragAndDrop(BigCalendar);
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  resource_id: string;
-  employee_id?: string | null;
-  customers?: Appointment['customers'];
-  resources?: Appointment['resources'];
-  status: string;
-  location?: string;
-}
 
 interface DnDEventArgs {
   event: CalendarEvent;
@@ -128,21 +108,11 @@ function AppointmentViewInner({
   // Appointments state
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   // Calendar events for react-big-calendar
-  const calendarEvents = useMemo(() => {
-    return appointments.map((a: Appointment) => ({
-      id: a.appointment_id,
-      title: a.description || a.customers?.name || vocab.booking_label,
-      start: new Date(a.start_time),
-      end: new Date(a.end_time),
-      resource_id: a.resource_id,
-      employee_id: a.employee_id,
-      customers: a.customers,
-      resources: a.resources,
-      status: a.status,
-      location: a.location,
-    }));
+  const calendarEvents = useMemo(
+    () => appointments.map((a: Appointment) => toCalendarEvent(a, vocab.booking_label)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointments, vocab.booking_label]);
+    [appointments, vocab.booking_label]
+  );
   // Loading state
   const [loading, setLoading] = useState<boolean>(false);
   // Mock data state
@@ -170,15 +140,8 @@ function AppointmentViewInner({
   const [nextAvailable, setNextAvailable] = useState<AvailableAlternative[]>([]);
   // Calendar date state
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
-  // Zoom: step in minutes per slot (smaller = more zoomed in)
-  const ZOOM_LEVELS = [60, 30, 15, 10, 5];
-  const [zoomIndex, setZoomIndex] = useState(1); // default 30min
+  const [zoomIndex, setZoomIndex] = useState(1); // default 30min (index into ZOOM_LEVELS)
   const calendarStep = ZOOM_LEVELS[zoomIndex];
-  const calendarTimeslots = 1;
-  // 24-hour day boundaries
-  const calendarMin = new Date(2000, 0, 1, 0, 0, 0);
-  const calendarMax = new Date(2000, 0, 1, 23, 59, 59);
-  const calendarScrollTo = new Date(2000, 0, 1, 7, 0, 0);
 
   const findCustomerById = (id: string) => customers.find((c) => c.customer_id === id);
 
@@ -588,11 +551,11 @@ function AppointmentViewInner({
               style={{ height: calendarView === 'month' ? 500 : 'calc(100vh - 200px)' }}
               view={calendarView}
               date={calendarDate}
-              min={calendarMin}
-              max={calendarMax}
+              min={CALENDAR_MIN}
+              max={CALENDAR_MAX}
               step={calendarStep}
-              timeslots={calendarTimeslots}
-              scrollToTime={calendarScrollTo}
+              timeslots={CALENDAR_TIMESLOTS}
+              scrollToTime={CALENDAR_SCROLL_TO}
               resizable
               selectable={!!onSelectSlot}
               onSelectSlot={
